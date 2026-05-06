@@ -1,0 +1,137 @@
+import Dexie, { type EntityTable } from 'dexie';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface Project {
+  localId: string;
+  sourceType: string;
+  sourceId: string;
+  remoteId?: string;
+  createdAt: string;
+  updatedAt: string;
+  dirtyLocal: boolean;
+  deleted: boolean;
+}
+
+export interface Observation {
+  localId: string;
+  projectLocalId: string;
+  sourceType: string;
+  sourceId: string;
+  remoteId?: string;
+  createdAt: string;
+  updatedAt: string;
+  dirtyLocal: boolean;
+  deleted: boolean;
+}
+
+export interface Alert {
+  localId: string;
+  projectLocalId: string;
+  sourceType: string;
+  sourceId: string;
+  remoteId?: string;
+  createdAt: string;
+  updatedAt: string;
+  dirtyLocal: boolean;
+  deleted: boolean;
+}
+
+export interface Attachment {
+  localId: string;
+  projectLocalId: string;
+  observationLocalId: string;
+  sourceType: string;
+  sourceId: string;
+  remoteId?: string;
+  createdAt: string;
+  updatedAt: string;
+  dirtyLocal: boolean;
+  deleted: boolean;
+}
+
+export interface RemoteServer {
+  id: string;
+  baseUrl: string;
+  status: string;
+  lastSyncedAt: string;
+}
+
+export interface SyncMetadata {
+  id: string;
+  serverId: string;
+  status: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Database class
+// ---------------------------------------------------------------------------
+
+class AppDatabase extends Dexie {
+  projects!: EntityTable<Project, 'localId'>;
+  observations!: EntityTable<Observation, 'localId'>;
+  alerts!: EntityTable<Alert, 'localId'>;
+  attachments!: EntityTable<Attachment, 'localId'>;
+  remoteServers!: EntityTable<RemoteServer, 'id'>;
+  syncMetadata!: EntityTable<SyncMetadata, 'id'>;
+
+  constructor() {
+    super('comapeo-cloud-app');
+
+    this.version(1).stores({
+      projects:
+        '&localId, [sourceType+sourceId+remoteId], [sourceType+sourceId+updatedAt], [dirtyLocal+updatedAt]',
+      observations:
+        '&localId, projectLocalId, [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
+      alerts:
+        '&localId, projectLocalId, [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
+      attachments:
+        '&localId, projectLocalId, observationLocalId, [sourceType+sourceId+remoteId]',
+      remoteServers: '&id, baseUrl, status, lastSyncedAt',
+      syncMetadata: '&id, serverId, status, updatedAt',
+    });
+  }
+}
+
+export type { AppDatabase };
+
+// ---------------------------------------------------------------------------
+// Singleton
+// ---------------------------------------------------------------------------
+
+let _db: AppDatabase | null = null;
+
+export function getDb(): AppDatabase {
+  if (!_db) {
+    _db = new AppDatabase();
+  }
+  return _db;
+}
+
+// ---------------------------------------------------------------------------
+// Reset helper (for tests)
+// ---------------------------------------------------------------------------
+
+export async function resetDb(): Promise<void> {
+  const db = getDb();
+  await db.transaction(
+    'rw',
+    db.projects,
+    db.observations,
+    db.alerts,
+    db.attachments,
+    db.remoteServers,
+    db.syncMetadata,
+    async () => {
+      await db.projects.clear();
+      await db.observations.clear();
+      await db.alerts.clear();
+      await db.attachments.clear();
+      await db.remoteServers.clear();
+      await db.syncMetadata.clear();
+    },
+  );
+}
