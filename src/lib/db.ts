@@ -9,6 +9,7 @@ export interface Project {
   sourceType: string;
   sourceId: string;
   remoteId?: string;
+  name?: string;
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
@@ -21,6 +22,7 @@ export interface Observation {
   sourceType: string;
   sourceId: string;
   remoteId?: string;
+  tags?: Record<string, string>;
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
