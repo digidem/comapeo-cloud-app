@@ -67,4 +67,26 @@ describe('router', () => {
       expect(childPaths).toContain('settings');
     });
   });
+
+  describe('local mode access', () => {
+    it('dashboard is reachable without auth redirect', () => {
+      // No beforeLoad guard on dashboard route — local mode works immediately
+      expect(dashboardRoute.options.beforeLoad).toBeUndefined();
+    });
+
+    it('projects is reachable without auth redirect', () => {
+      expect(projectsRoute.options.beforeLoad).toBeUndefined();
+    });
+
+    it('settings is reachable without auth redirect', () => {
+      expect(settingsRoute.options.beforeLoad).toBeUndefined();
+    });
+
+    it('login route does not gate access to other routes', () => {
+      // Login route is just another route — no redirect logic
+      expect(loginRoute.options.beforeLoad).toBeUndefined();
+      // Login is a flat sibling route, not a parent guard
+      expect(loginRoute.path).toBe('login');
+    });
+  });
 });
