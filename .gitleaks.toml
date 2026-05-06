@@ -1,0 +1,20 @@
+# Extend the default ruleset
+[extend]
+useDefault = true
+
+# Allowlist for false positives
+[[ruleset.allowlist]]
+description = "Allow Cloudflare Pages deploy token placeholder in CI workflow"
+paths = [
+  '''.github/workflows/ci\.yml''',
+]
+regexTarget = "line"
+regexes = [
+    '''CLOUDFLARE_API_TOKEN''',
+]
+
+[[ruleset.allowlist]]
+description = "Allow test fixture data"
+paths = [
+    '''tests/''',
+]
