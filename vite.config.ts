@@ -30,7 +30,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
       manifest: false,
       workbox: {
-        globPatterns: ['**/*.{js,css,svg,png,html,webmanifest}'],
+        globPatterns: ['**/*.{js,css,svg,png,html,webmanifest,woff2}'],
         runtimeCaching: [
           {
             urlPattern: ({ url, sameOrigin }) =>
