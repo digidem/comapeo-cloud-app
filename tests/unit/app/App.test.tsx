@@ -8,4 +8,16 @@ describe('App', () => {
     render(<App />);
     expect(screen.getByText('CoMapeo Cloud')).toBeInTheDocument();
   });
+
+  it('renders a main landmark', () => {
+    render(<App />);
+    expect(screen.getByRole('main')).toBeInTheDocument();
+  });
+
+  it('renders a skip-to-content link', () => {
+    render(<App />);
+    const skipLink = screen.getByText('Skip to main content');
+    expect(skipLink).toBeInTheDocument();
+    expect(skipLink).toHaveAttribute('href', '#main-content');
+  });
 });
