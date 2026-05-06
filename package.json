@@ -25,7 +25,8 @@
     "deploy": "npm run build && npx wrangler pages deploy dist/",
     "deploy:preview": "npm run build && npx wrangler pages deploy dist/ --branch preview",
     "prepare": "husky",
-    "extract-messages": "formatjs extract 'src/**/*.{ts,tsx}' --out-file src/i18n/messages/en.json"
+    "extract-messages": "formatjs extract 'src/**/*.{ts,tsx}' --out-file src/i18n/messages/en.json",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -41,6 +42,7 @@
     "@tanstack/react-router": "^1.169.2",
     "@tanstack/react-virtual": "^3.13.24",
     "date-fns": "^4.1.0",
+    "dexie": "^4.4.2",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-hook-form": "^7.75.0",
@@ -68,6 +70,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "eslint-plugin-testing-library": "^7.16.2",
+    "fake-indexeddb": "^6.2.5",
     "globals": "^17.6.0",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
