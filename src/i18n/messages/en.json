@@ -1,27 +1,26 @@
 {
-  "app.title": "CoMapeo Cloud",
-  "auth.title": "Sign in to CoMapeo Cloud",
-  "auth.tokenLabel": "Bearer Token",
-  "auth.tokenPlaceholder": "Enter your bearer token",
-  "auth.serverUrlLabel": "Server URL",
-  "auth.submit": "Sign In",
-  "auth.errors.invalidToken": "Invalid token. Please check and try again.",
-  "auth.errors.network": "Unable to connect to server.",
-  "auth.errors.required": "This field is required.",
-  "auth.showToken": "Show token",
-  "auth.hideToken": "Hide token",
-  "auth.backToHome": "Back to home",
-  "nav.dashboard": "Dashboard",
-  "nav.projects": "Projects",
-  "nav.settings": "Settings",
-  "common.loading": "Loading...",
-  "common.error": "Something went wrong",
-  "common.retry": "Retry",
-  "common.save": "Save",
-  "common.cancel": "Cancel",
-  "common.delete": "Delete",
-  "common.edit": "Edit",
-  "common.close": "Close",
-  "common.confirm": "Confirm",
-  "common.noData": "No data available"
+  "settings.addServer": {
+    "defaultMessage": "Add Server"
+  },
+  "settings.archiveServers": {
+    "defaultMessage": "Archive Servers"
+  },
+  "settings.remove": {
+    "defaultMessage": "Remove"
+  },
+  "settings.serverToken": {
+    "defaultMessage": "Bearer Token"
+  },
+  "settings.serverUrl": {
+    "defaultMessage": "Server URL"
+  },
+  "settings.sync": {
+    "defaultMessage": "Sync Now"
+  },
+  "settings.syncing": {
+    "defaultMessage": "Syncing..."
+  },
+  "settings.title": {
+    "defaultMessage": "Settings"
+  }
 }
