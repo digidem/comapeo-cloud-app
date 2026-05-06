@@ -22,6 +22,16 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
+// Pointer capture APIs used by Radix UI primitives
+if (typeof HTMLElement !== 'undefined') {
+  HTMLElement.prototype.hasPointerCapture =
+    HTMLElement.prototype.hasPointerCapture ?? (() => false);
+  HTMLElement.prototype.setPointerCapture =
+    HTMLElement.prototype.setPointerCapture ?? (() => {});
+  HTMLElement.prototype.releasePointerCapture =
+    HTMLElement.prototype.releasePointerCapture ?? (() => {});
+}
+
 Object.defineProperty(window, 'IntersectionObserver', {
   writable: true,
   value: class IntersectionObserver {
@@ -40,9 +50,11 @@ Object.defineProperty(window, 'ResizeObserver', {
   },
 });
 
+// Use getOwnPropertyDescriptor to allow user-event to redefine clipboard
 Object.defineProperty(navigator, 'clipboard', {
   value: {
     writeText: () => Promise.resolve(),
     readText: () => Promise.resolve(''),
   },
+  configurable: true,
 });
