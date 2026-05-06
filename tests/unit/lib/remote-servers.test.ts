@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { resetDb } from '@/lib/db';
+import { getDb, resetDb } from '@/lib/db';
 import {
   createRemoteServer,
   deleteRemoteServer,

@@ -1,23 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { resetDb } from '@/lib/db';
 import { useAuthStore } from '@/stores/auth-store';
 
-const STORAGE_KEY = 'comapeo-auth';
-
-describe('useAuthStore', () => {
-  beforeEach(() => {
-    sessionStorage.clear();
-    useAuthStore.setState({
-      token: null,
-      baseUrl: null,
-      isAuthenticated: false,
-    });
+beforeEach(async () => {
+  sessionStorage.clear();
+  await resetDb();
+  useAuthStore.setState({
+    tier: 'local',
+    servers: [],
+    activeServerId: null,
+    token: null,
+    baseUrl: null,
+    isAuthenticated: false,
   });
+});
 
-  afterEach(() => {
-    sessionStorage.clear();
-  });
+afterEach(() => {
+  sessionStorage.clear();
+});
 
+// ---------------------------------------------------------------------------
+// Backward compat tests (old api-client consumers)
+// ---------------------------------------------------------------------------
+
+describe('backward compat — token/baseUrl/isAuthenticated', () => {
   it('initial state has no token and no baseUrl', () => {
     const state = useAuthStore.getState();
     expect(state.token).toBeNull();
@@ -34,7 +41,7 @@ describe('useAuthStore', () => {
     expect(useAuthStore.getState().baseUrl).toBe('https://api.example.com');
   });
 
-  it('clearAuth resets to initial state', () => {
+  it('clearAuth resets to null state', () => {
     useAuthStore.getState().setToken('some-token');
     useAuthStore.getState().setBaseUrl('https://api.example.com');
 
@@ -45,52 +52,111 @@ describe('useAuthStore', () => {
     expect(state.baseUrl).toBeNull();
   });
 
-  it('token persists to sessionStorage', () => {
-    useAuthStore.getState().setToken('persisted-token');
-    useAuthStore.getState().setBaseUrl('https://api.example.com');
-
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    expect(stored).not.toBeNull();
-
-    const parsed = JSON.parse(stored!);
-    expect(parsed.token).toBe('persisted-token');
-    expect(parsed.baseUrl).toBe('https://api.example.com');
-  });
-
-  it('clearAuth removes from sessionStorage', () => {
-    useAuthStore.getState().setToken('to-be-cleared');
-    useAuthStore.getState().setBaseUrl('https://api.example.com');
-
-    useAuthStore.getState().clearAuth();
-
-    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
-  });
-
-  it('store rehydrates from sessionStorage on creation', () => {
-    const persistedState = {
-      token: 'rehydrated-token',
-      baseUrl: 'https://rehydrated.example.com',
-    };
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(persistedState));
-
-    // Re-import to trigger rehydration from sessionStorage.
-    // We test this by verifying that a fresh store reads from sessionStorage.
-    // Since Zustand stores are singletons, we simulate rehydration by
-    // directly testing the rehydration logic through the store's behavior.
-    useAuthStore.getState().setToken('rehydrated-token');
-
-    // Verify the token was persisted
-    const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY)!);
-    expect(stored.token).toBe('rehydrated-token');
-  });
-
-  it('isAuthenticated returns true when token exists', () => {
+  it('isAuthenticated returns false in local tier', () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+});
 
-    useAuthStore.getState().setToken('valid-token');
-    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+// ---------------------------------------------------------------------------
+// Tier-aware tests
+// ---------------------------------------------------------------------------
 
-    useAuthStore.getState().clearAuth();
-    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+describe('tier-aware connection store', () => {
+  it('default tier is local', () => {
+    expect(useAuthStore.getState().tier).toBe('local');
+  });
+
+  it('no token is required for app access', () => {
+    const state = useAuthStore.getState();
+    expect(state.token).toBeNull();
+    expect(state.tier).toBe('local');
+  });
+
+  it('adds a remote archive server', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'My Server',
+      baseUrl: 'https://archive.example.com',
+      token: 'my-token',
+    });
+
+    const state = useAuthStore.getState();
+    expect(state.servers).toHaveLength(1);
+    expect(state.servers[0]!.baseUrl).toBe('https://archive.example.com');
+    expect(state.servers[0]!.token).toBe('my-token');
+  });
+
+  it('removes a remote archive server', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'To Remove',
+      baseUrl: 'https://remove.example.com',
+      token: 'tok',
+    });
+
+    const { servers } = useAuthStore.getState();
+    const id = servers[0]!.id;
+
+    await useAuthStore.getState().removeServer(id);
+
+    expect(useAuthStore.getState().servers).toHaveLength(0);
+  });
+
+  it('sets active server and updates computed fields', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Active Test',
+      baseUrl: 'https://active.example.com',
+      token: 'active-token',
+    });
+
+    const { servers } = useAuthStore.getState();
+    const id = servers[0]!.id;
+
+    useAuthStore.getState().setActiveServer(id);
+
+    const state = useAuthStore.getState();
+    expect(state.activeServerId).toBe(id);
+    expect(state.baseUrl).toBe('https://active.example.com');
+    expect(state.token).toBe('active-token');
+  });
+
+  it('sets active server to null clears computed fields', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Test',
+      baseUrl: 'https://test.example.com',
+      token: 'test-token',
+    });
+
+    const { servers } = useAuthStore.getState();
+    useAuthStore.getState().setActiveServer(servers[0]!.id);
+
+    expect(useAuthStore.getState().baseUrl).toBe('https://test.example.com');
+
+    useAuthStore.getState().setActiveServer(null);
+    expect(useAuthStore.getState().baseUrl).toBeNull();
+    expect(useAuthStore.getState().token).toBeNull();
+  });
+
+  it('updates server sync status', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Status Test',
+      baseUrl: 'https://status.example.com',
+      token: 'tok',
+    });
+
+    const { servers } = useAuthStore.getState();
+    const id = servers[0]!.id;
+
+    await useAuthStore.getState().updateServerStatus(id, 'connected');
+
+    const updated = useAuthStore.getState().servers.find((s) => s.id === id);
+    expect(updated?.status).toBe('connected');
+    expect(updated?.lastSyncedAt).toBeDefined();
+
+    await useAuthStore
+      .getState()
+      .updateServerStatus(id, 'error', 'Connection failed');
+
+    const errored = useAuthStore.getState().servers.find((s) => s.id === id);
+    expect(errored?.status).toBe('error');
+    expect(errored?.errorMessage).toBe('Connection failed');
   });
 });

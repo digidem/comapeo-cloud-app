@@ -212,6 +212,7 @@ export async function getAttachments(
 
 export interface CreateRemoteServerInput {
   baseUrl: string;
+  label?: string;
   status?: string;
 }
 
@@ -222,6 +223,7 @@ export async function createRemoteServer(
   const server: RemoteServer = {
     id: crypto.randomUUID(),
     baseUrl: input.baseUrl,
+    label: input.label,
     status: input.status ?? 'idle',
     lastSyncedAt: '',
   };
@@ -239,6 +241,13 @@ export async function getRemoteServer(
 ): Promise<RemoteServer | undefined> {
   const db = getDb();
   return db.remoteServers.get(id);
+}
+
+export async function getRemoteServerByBaseUrl(
+  baseUrl: string,
+): Promise<RemoteServer | undefined> {
+  const db = getDb();
+  return db.remoteServers.where('baseUrl').equals(baseUrl).first();
 }
 
 export async function updateRemoteServer(

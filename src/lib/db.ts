@@ -57,6 +57,7 @@ export interface Attachment {
 export interface RemoteServer {
   id: string;
   baseUrl: string;
+  label?: string;
   status: string;
   lastSyncedAt: string;
 }
