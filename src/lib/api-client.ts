@@ -1,0 +1,207 @@
+import * as v from 'valibot';
+
+import {
+  alertsResponseSchema,
+  createAlertBodySchema,
+  errorResponseSchema,
+  observationsResponseSchema,
+  projectsResponseSchema,
+  serverInfoResponseSchema,
+} from '@/lib/schemas';
+import { useAuthStore } from '@/stores/auth-store';
+
+// ---------------------------------------------------------------------------
+// ApiError
+// ---------------------------------------------------------------------------
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getBaseUrl(): string {
+  const { baseUrl } = useAuthStore.getState();
+  if (baseUrl) return baseUrl;
+  return window.location.origin;
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const { token } = useAuthStore.getState();
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
+function isNetworkError(error: unknown): boolean {
+  return error instanceof TypeError && error.message === 'Failed to fetch';
+}
+
+function throwNetworkError(): never {
+  throw new Error('Unable to connect');
+}
+
+async function handleResponse<T>(
+  response: Response,
+  schema: v.GenericSchema<T>,
+): Promise<T> {
+  if (response.status === 401) {
+    useAuthStore.getState().clearAuth();
+  }
+
+  if (!response.ok) {
+    let code = 'UNKNOWN';
+    let message = `Request failed with status ${response.status}`;
+
+    try {
+      const body = await response.json();
+      const parsed = v.safeParse(errorResponseSchema, body);
+      if (parsed.success) {
+        code = parsed.output.error.code;
+        message = parsed.output.error.message;
+      }
+    } catch {
+      // Response body is not JSON or unparseable — keep defaults
+    }
+
+    throw new ApiError(response.status, code, message);
+  }
+
+  const body: unknown = await response.json();
+  return v.parse(schema, body);
+}
+
+// ---------------------------------------------------------------------------
+// ApiClient
+// ---------------------------------------------------------------------------
+
+export const apiClient = {
+  async getServerInfo() {
+    try {
+      const response = await fetch(`${getBaseUrl()}/info`);
+      return handleResponse(response, serverInfoResponseSchema);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
+  async healthCheck(): Promise<boolean> {
+    try {
+      const response = await fetch(`${getBaseUrl()}/healthcheck`);
+      return response.status === 200;
+    } catch {
+      return false;
+    }
+  },
+
+  async getProjects() {
+    try {
+      const response = await fetch(`${getBaseUrl()}/projects`, {
+        headers: { ...getAuthHeaders() },
+      });
+      return handleResponse(response, projectsResponseSchema);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
+  async getObservations(projectId: string) {
+    try {
+      const response = await fetch(
+        `${getBaseUrl()}/projects/${projectId}/observations`,
+        { headers: { ...getAuthHeaders() } },
+      );
+      return handleResponse(response, observationsResponseSchema);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
+  async getAlerts(projectId: string) {
+    try {
+      const response = await fetch(
+        `${getBaseUrl()}/projects/${projectId}/remoteDetectionAlerts`,
+        { headers: { ...getAuthHeaders() } },
+      );
+      return handleResponse(response, alertsResponseSchema);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
+  async createAlert(
+    projectId: string,
+    body: v.InferInput<typeof createAlertBodySchema>,
+  ): Promise<{ success: true }> {
+    try {
+      const response = await fetch(
+        `${getBaseUrl()}/projects/${projectId}/remoteDetectionAlerts`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify(body),
+        },
+      );
+
+      if (response.status === 401) {
+        useAuthStore.getState().clearAuth();
+      }
+
+      if (response.status === 201) {
+        return { success: true };
+      }
+
+      // Non-201 is treated as an error
+      let code = 'UNKNOWN';
+      let message = `Request failed with status ${response.status}`;
+
+      try {
+        const responseBody = await response.json();
+        const parsed = v.safeParse(errorResponseSchema, responseBody);
+        if (parsed.success) {
+          code = parsed.output.error.code;
+          message = parsed.output.error.message;
+        }
+      } catch {
+        // keep defaults
+      }
+
+      throw new ApiError(response.status, code, message);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+} as const;
+
+// ---------------------------------------------------------------------------
+// getAttachmentUrl (URL builder, no fetch)
+// ---------------------------------------------------------------------------
+
+export function getAttachmentUrl(
+  projectId: string,
+  driveId: string,
+  type: string,
+  name: string,
+  variant?: string,
+): string {
+  const base = getBaseUrl();
+  const path = `${base}/projects/${projectId}/attachments/${driveId}/${type}/${name}`;
+  return variant ? `${path}/${variant}` : path;
+}
