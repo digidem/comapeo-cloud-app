@@ -438,6 +438,126 @@ describe('base URL from auth store', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Explicit RequestConfig
+// ---------------------------------------------------------------------------
+
+describe('explicit RequestConfig', () => {
+  const archiveUrl = 'https://archive.example.com';
+  const archiveToken = 'archive-token';
+
+  it('uses baseUrl from RequestConfig for getProjects', async () => {
+    let capturedUrl: string | null = null;
+    server.use(
+      http.get(`${archiveUrl}/projects`, ({ request }) => {
+        capturedUrl = request.url;
+        return HttpResponse.json({
+          data: [{ projectId: 'archive-proj-1' }],
+        });
+      }),
+    );
+
+    const result = await apiClient.getProjects({
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    expect(capturedUrl).toContain(archiveUrl);
+    expect(result.data).toHaveLength(1);
+  });
+
+  it('sends bearer auth from RequestConfig', async () => {
+    let capturedAuth: string | null = null;
+    server.use(
+      http.get(`${archiveUrl}/projects`, ({ request }) => {
+        capturedAuth = request.headers.get('Authorization');
+        return HttpResponse.json({ data: [] });
+      }),
+    );
+
+    await apiClient.getProjects({
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    expect(capturedAuth).toBe(`Bearer ${archiveToken}`);
+  });
+
+  it('RequestConfig overrides auth store values', async () => {
+    // Auth store has different credentials
+    useAuthStore.setState({
+      token: 'wrong-token',
+      baseUrl: 'https://wrong.com',
+    });
+    let capturedAuth: string | null = null;
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, ({ request }) => {
+        capturedAuth = request.headers.get('Authorization');
+        return HttpResponse.json({ data: [] });
+      }),
+    );
+
+    await apiClient.getProjects({
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    expect(capturedAuth).toBe(`Bearer ${archiveToken}`);
+  });
+
+  it('explicit RequestConfig works with getObservations', async () => {
+    const projectId = 'archive-proj';
+    server.use(
+      http.get(`${archiveUrl}/projects/${projectId}/observations`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await apiClient.getObservations(projectId, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    expect(result.data).toEqual([]);
+  });
+
+  it('explicit RequestConfig works with getAlerts', async () => {
+    const projectId = 'archive-proj';
+    server.use(
+      http.get(
+        `${archiveUrl}/projects/${projectId}/remoteDetectionAlerts`,
+        () => HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await apiClient.getAlerts(projectId, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    expect(result.data).toEqual([]);
+  });
+
+  it('explicit RequestConfig works with createAlert', async () => {
+    const projectId = 'archive-proj';
+    server.use(
+      http.post(
+        `${archiveUrl}/projects/${projectId}/remoteDetectionAlerts`,
+        () => new HttpResponse(null, { status: 201 }),
+      ),
+    );
+
+    const result = await apiClient.createAlert(
+      projectId,
+      { geometry: { type: 'Point', coordinates: [0, 0] } },
+      { baseUrl: archiveUrl, token: archiveToken },
+    );
+
+    expect(result.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // getAttachmentUrl
 // ---------------------------------------------------------------------------
 describe('getAttachmentUrl', () => {

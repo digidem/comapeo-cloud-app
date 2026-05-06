@@ -11,6 +11,15 @@ import {
 import { useAuthStore } from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
+// RequestConfig — explicit credentials for remote archive calls
+// ---------------------------------------------------------------------------
+
+export interface RequestConfig {
+  baseUrl: string;
+  token: string;
+}
+
+// ---------------------------------------------------------------------------
 // ApiError
 // ---------------------------------------------------------------------------
 
@@ -30,13 +39,15 @@ export class ApiError extends Error {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getBaseUrl(): string {
+function getBaseUrl(config?: RequestConfig): string {
+  if (config?.baseUrl) return config.baseUrl;
   const { baseUrl } = useAuthStore.getState();
   if (baseUrl) return baseUrl;
   return window.location.origin;
 }
 
-function getAuthHeaders(): Record<string, string> {
+function getAuthHeaders(config?: RequestConfig): Record<string, string> {
+  if (config?.token) return { Authorization: `Bearer ${config.token}` };
   const { token } = useAuthStore.getState();
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
@@ -53,8 +64,9 @@ function throwNetworkError(): never {
 async function handleResponse<T>(
   response: Response,
   schema: v.GenericSchema<T>,
+  config?: RequestConfig,
 ): Promise<T> {
-  if (response.status === 401) {
+  if (response.status === 401 && !config) {
     useAuthStore.getState().clearAuth();
   }
 
@@ -85,57 +97,57 @@ async function handleResponse<T>(
 // ---------------------------------------------------------------------------
 
 export const apiClient = {
-  async getServerInfo() {
+  async getServerInfo(config?: RequestConfig) {
     try {
-      const response = await fetch(`${getBaseUrl()}/info`);
-      return handleResponse(response, serverInfoResponseSchema);
+      const response = await fetch(`${getBaseUrl(config)}/info`);
+      return handleResponse(response, serverInfoResponseSchema, config);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
     }
   },
 
-  async healthCheck(): Promise<boolean> {
+  async healthCheck(config?: RequestConfig): Promise<boolean> {
     try {
-      const response = await fetch(`${getBaseUrl()}/healthcheck`);
+      const response = await fetch(`${getBaseUrl(config)}/healthcheck`);
       return response.status === 200;
     } catch {
       return false;
     }
   },
 
-  async getProjects() {
+  async getProjects(config?: RequestConfig) {
     try {
-      const response = await fetch(`${getBaseUrl()}/projects`, {
-        headers: { ...getAuthHeaders() },
+      const response = await fetch(`${getBaseUrl(config)}/projects`, {
+        headers: { ...getAuthHeaders(config) },
       });
-      return handleResponse(response, projectsResponseSchema);
+      return handleResponse(response, projectsResponseSchema, config);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
     }
   },
 
-  async getObservations(projectId: string) {
+  async getObservations(projectId: string, config?: RequestConfig) {
     try {
       const response = await fetch(
-        `${getBaseUrl()}/projects/${projectId}/observations`,
-        { headers: { ...getAuthHeaders() } },
+        `${getBaseUrl(config)}/projects/${projectId}/observations`,
+        { headers: { ...getAuthHeaders(config) } },
       );
-      return handleResponse(response, observationsResponseSchema);
+      return handleResponse(response, observationsResponseSchema, config);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
     }
   },
 
-  async getAlerts(projectId: string) {
+  async getAlerts(projectId: string, config?: RequestConfig) {
     try {
       const response = await fetch(
-        `${getBaseUrl()}/projects/${projectId}/remoteDetectionAlerts`,
-        { headers: { ...getAuthHeaders() } },
+        `${getBaseUrl(config)}/projects/${projectId}/remoteDetectionAlerts`,
+        { headers: { ...getAuthHeaders(config) } },
       );
-      return handleResponse(response, alertsResponseSchema);
+      return handleResponse(response, alertsResponseSchema, config);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -145,21 +157,22 @@ export const apiClient = {
   async createAlert(
     projectId: string,
     body: v.InferInput<typeof createAlertBodySchema>,
+    config?: RequestConfig,
   ): Promise<{ success: true }> {
     try {
       const response = await fetch(
-        `${getBaseUrl()}/projects/${projectId}/remoteDetectionAlerts`,
+        `${getBaseUrl(config)}/projects/${projectId}/remoteDetectionAlerts`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...getAuthHeaders(),
+            ...getAuthHeaders(config),
           },
           body: JSON.stringify(body),
         },
       );
 
-      if (response.status === 401) {
+      if (response.status === 401 && !config) {
         useAuthStore.getState().clearAuth();
       }
 
@@ -201,7 +214,8 @@ export function getAttachmentUrl(
   name: string,
   variant?: string,
 ): string {
-  const base = getBaseUrl();
+  const { baseUrl } = useAuthStore.getState();
+  const base = baseUrl || window.location.origin;
   const path = `${base}/projects/${projectId}/attachments/${driveId}/${type}/${name}`;
   return variant ? `${path}/${variant}` : path;
 }
