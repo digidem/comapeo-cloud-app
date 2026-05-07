@@ -120,21 +120,7 @@ export function getDb(): AppDatabase {
 
 export async function resetDb(): Promise<void> {
   const db = getDb();
-  await db.transaction(
-    'rw',
-    db.projects,
-    db.observations,
-    db.alerts,
-    db.attachments,
-    db.remoteServers,
-    db.syncMetadata,
-    async () => {
-      await db.projects.clear();
-      await db.observations.clear();
-      await db.alerts.clear();
-      await db.attachments.clear();
-      await db.remoteServers.clear();
-      await db.syncMetadata.clear();
-    },
-  );
+  await db.transaction('rw', db.tables, async () => {
+    await Promise.all(db.tables.map((table) => table.clear()));
+  });
 }

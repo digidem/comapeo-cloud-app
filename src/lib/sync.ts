@@ -29,7 +29,7 @@ async function ensureServerInStore(
       token: options.token,
     });
     const updated = useAuthStore.getState().servers;
-    server = updated.find((s) => s.baseUrl === options.baseUrl) ?? null;
+    server = updated.find((s) => s.baseUrl === options.baseUrl);
   }
   return server?.id ?? null;
 }

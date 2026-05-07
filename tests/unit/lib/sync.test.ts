@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { getDb, resetDb } from '@/lib/db';
 import { createRemoteServer } from '@/lib/local-repositories';
 import { syncRemoteArchive } from '@/lib/sync';
+import { useAuthStore } from '@/stores/auth-store';
 
 const archiveUrl = 'https://archive.example.com';
 const archiveToken = 'my-sync-token';
@@ -194,5 +195,62 @@ describe('syncRemoteArchive', () => {
     const localProject = await db.projects.get('local-proj-1');
     expect(localProject).toBeDefined();
     expect(localProject!.sourceType).toBe('local');
+  });
+
+  it('adds server to store when not already present', async () => {
+    const serverRecord = await seedServer();
+    // Reset auth store to ensure no servers from previous tests
+    useAuthStore.setState({
+      servers: [],
+      activeServerId: null,
+      token: null,
+      baseUrl: null,
+    });
+    expect(
+      useAuthStore.getState().servers.find((s) => s.baseUrl === archiveUrl),
+    ).toBeUndefined();
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () => HttpResponse.json({ data: [] })),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Auto-added Server',
+    });
+
+    expect(result.success).toBe(true);
+    const found = useAuthStore
+      .getState()
+      .servers.find((s) => s.baseUrl === archiveUrl);
+    expect(found).toBeDefined();
+    expect(found!.token).toBe(archiveToken);
+  });
+
+  it('returns error when server record not found in database', async () => {
+    // Ensure the server is in the auth store so ensureServerInStore passes
+    useAuthStore.setState({
+      servers: [],
+      activeServerId: null,
+      token: null,
+      baseUrl: null,
+    });
+    await useAuthStore.getState().addServer({
+      label: 'Ghost Server',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    // Use a non-existent DB id — getRemoteServer will return undefined
+    const fakeId = 'nonexistent-server-id';
+
+    const result = await syncRemoteArchive(fakeId, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
   });
 });

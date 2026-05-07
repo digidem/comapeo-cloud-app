@@ -160,3 +160,129 @@ describe('tier-aware connection store', () => {
     expect(errored?.errorMessage).toBe('Connection failed');
   });
 });
+
+// ---------------------------------------------------------------------------
+// setTier
+// ---------------------------------------------------------------------------
+
+describe('setTier', () => {
+  it('changes tier to remoteArchive', () => {
+    useAuthStore.getState().setTier('remoteArchive');
+    expect(useAuthStore.getState().tier).toBe('remoteArchive');
+  });
+
+  it('changes tier to cloud', () => {
+    useAuthStore.getState().setTier('cloud');
+    expect(useAuthStore.getState().tier).toBe('cloud');
+  });
+
+  it('changes tier back to local', () => {
+    useAuthStore.getState().setTier('cloud');
+    useAuthStore.getState().setTier('local');
+    expect(useAuthStore.getState().tier).toBe('local');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// clearAll
+// ---------------------------------------------------------------------------
+
+describe('clearAll', () => {
+  it('resets everything to defaults', async () => {
+    // Set up non-default state
+    useAuthStore.getState().setTier('cloud');
+    await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://example.com',
+      token: 'tok',
+    });
+    const { servers } = useAuthStore.getState();
+    useAuthStore.getState().setActiveServer(servers[0]!.id);
+
+    // Verify state is non-default
+    const before = useAuthStore.getState();
+    expect(before.tier).toBe('cloud');
+    expect(before.servers.length).toBeGreaterThan(0);
+    expect(before.activeServerId).not.toBeNull();
+
+    // Clear
+    useAuthStore.getState().clearAll();
+
+    const state = useAuthStore.getState();
+    expect(state.tier).toBe('local');
+    expect(state.servers).toEqual([]);
+    expect(state.activeServerId).toBeNull();
+    expect(state.token).toBeNull();
+    expect(state.baseUrl).toBeNull();
+    expect(state.isAuthenticated).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setToken — backward-compat with activeServerId
+// ---------------------------------------------------------------------------
+
+describe('setToken — backward compat with active server', () => {
+  it('updates the active server token when activeServerId is set', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://example.com',
+      token: 'old-token',
+    });
+    const { servers } = useAuthStore.getState();
+    const id = servers[0]!.id;
+    useAuthStore.getState().setActiveServer(id);
+
+    useAuthStore.getState().setToken('new-token');
+
+    const state = useAuthStore.getState();
+    expect(state.token).toBe('new-token');
+    const updated = state.servers.find((s) => s.id === id);
+    expect(updated?.token).toBe('new-token');
+  });
+
+  it('sets token directly when no activeServerId', () => {
+    expect(useAuthStore.getState().activeServerId).toBeNull();
+
+    useAuthStore.getState().setToken('standalone-token');
+
+    const state = useAuthStore.getState();
+    expect(state.token).toBe('standalone-token');
+    // No servers should be affected
+    expect(state.servers).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setBaseUrl — backward-compat with activeServerId
+// ---------------------------------------------------------------------------
+
+describe('setBaseUrl — backward compat with active server', () => {
+  it('updates the active server baseUrl when activeServerId is set', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://old.example.com',
+      token: 'tok',
+    });
+    const { servers } = useAuthStore.getState();
+    const id = servers[0]!.id;
+    useAuthStore.getState().setActiveServer(id);
+
+    useAuthStore.getState().setBaseUrl('https://new.example.com');
+
+    const state = useAuthStore.getState();
+    expect(state.baseUrl).toBe('https://new.example.com');
+    const updated = state.servers.find((s) => s.id === id);
+    expect(updated?.baseUrl).toBe('https://new.example.com');
+  });
+
+  it('sets baseUrl directly when no activeServerId', () => {
+    expect(useAuthStore.getState().activeServerId).toBeNull();
+
+    useAuthStore.getState().setBaseUrl('https://standalone.example.com');
+
+    const state = useAuthStore.getState();
+    expect(state.baseUrl).toBe('https://standalone.example.com');
+    expect(state.servers).toEqual([]);
+  });
+});

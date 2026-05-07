@@ -43,12 +43,18 @@ function createTestRouter() {
   });
 }
 
+// Flatten { id: { defaultMessage: string } } to { id: string } for IntlProvider
+const flatMessages: Record<string, string> = {};
+for (const [key, value] of Object.entries(enMessages)) {
+  flatMessages[key] = (value as { defaultMessage: string }).defaultMessage;
+}
+
 function TestProviders({ children }: { children: React.ReactNode }) {
   const queryClient = createTestQueryClient();
   const testRouter = createTestRouter();
   return (
     <QueryClientProvider client={queryClient}>
-      <IntlProvider locale="en" defaultLocale="en" messages={enMessages}>
+      <IntlProvider locale="en" defaultLocale="en" messages={flatMessages}>
         <RouterProvider router={testRouter} />
         {children}
       </IntlProvider>
