@@ -131,7 +131,7 @@ export const apiClient = {
   async getObservations(projectId: string, config?: RequestConfig) {
     try {
       const response = await fetch(
-        `${getBaseUrl(config)}/projects/${projectId}/observations`,
+        `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}/observations`,
         { headers: { ...getAuthHeaders(config) } },
       );
       return handleResponse(response, observationsResponseSchema, config);
@@ -144,7 +144,7 @@ export const apiClient = {
   async getAlerts(projectId: string, config?: RequestConfig) {
     try {
       const response = await fetch(
-        `${getBaseUrl(config)}/projects/${projectId}/remoteDetectionAlerts`,
+        `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}/remoteDetectionAlerts`,
         { headers: { ...getAuthHeaders(config) } },
       );
       return handleResponse(response, alertsResponseSchema, config);
@@ -161,7 +161,7 @@ export const apiClient = {
   ): Promise<{ success: true }> {
     try {
       const response = await fetch(
-        `${getBaseUrl(config)}/projects/${projectId}/remoteDetectionAlerts`,
+        `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}/remoteDetectionAlerts`,
         {
           method: 'POST',
           headers: {
@@ -216,6 +216,6 @@ export function getAttachmentUrl(
 ): string {
   const { baseUrl } = useAuthStore.getState();
   const base = baseUrl || window.location.origin;
-  const path = `${base}/projects/${projectId}/attachments/${driveId}/${type}/${name}`;
+  const path = `${base}/projects/${encodeURIComponent(projectId)}/attachments/${encodeURIComponent(driveId)}/${encodeURIComponent(type)}/${encodeURIComponent(name)}`;
   return variant ? `${path}/${variant}` : path;
 }

@@ -11,6 +11,7 @@ import {
   getSyncStatus,
 } from '@/lib/data-layer';
 import { resetDb } from '@/lib/db';
+import { useAuthStore } from '@/stores/auth-store';
 
 beforeEach(async () => {
   await resetDb();
@@ -97,10 +98,29 @@ describe('data-layer', () => {
 
   describe('sync status', () => {
     it('getSyncStatus returns the status object', () => {
+      useAuthStore.setState({
+        servers: [],
+      });
       const status = getSyncStatus();
       expect(status).toHaveProperty('isSyncing');
       expect(status).toHaveProperty('lastSyncedAt');
       expect(status).toHaveProperty('errors');
+    });
+
+    it('getSyncStatus reflects syncing state from auth store', () => {
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 's1',
+            label: 'Test',
+            baseUrl: 'https://test.com',
+            token: 'tok',
+            status: 'syncing',
+          },
+        ],
+      });
+      const status = getSyncStatus();
+      expect(status.isSyncing).toBe(true);
     });
   });
 });

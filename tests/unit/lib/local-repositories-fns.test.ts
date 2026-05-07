@@ -91,6 +91,15 @@ describe('local-repositories functions — projects', () => {
     expect(updated!.updatedAt).not.toBe(originalUpdatedAt);
   });
 
+  it('excludes soft-deleted projects from getProjects', async () => {
+    await createProject({ name: 'Active' });
+    const p2 = await createProject({ name: 'Deleted' });
+    await updateProject(p2.localId, { deleted: true });
+    const projects = await getProjects();
+    expect(projects).toHaveLength(1);
+    expect(projects[0]!.name).toBe('Active');
+  });
+
   it('deleteProject — removes the project', async () => {
     const created = await createProject({ name: 'ToDelete' });
     await deleteProject(created.localId);
@@ -170,6 +179,16 @@ describe('local-repositories functions — observations', () => {
     expect(updated!.updatedAt).not.toBe(originalUpdatedAt);
   });
 
+  it('excludes soft-deleted observations from getObservations', async () => {
+    const project = await createProject({ name: 'ObsProject' });
+    const o1 = await createObservation({ projectLocalId: project.localId });
+    const o2 = await createObservation({ projectLocalId: project.localId });
+    await updateObservation(o2.localId, { deleted: true });
+    const observations = await getObservations(project.localId);
+    expect(observations).toHaveLength(1);
+    expect(observations[0]!.localId).toBe(o1.localId);
+  });
+
   it('deleteObservation — removes the observation', async () => {
     const project = await createProject({});
     const created = await createObservation({
@@ -233,6 +252,16 @@ describe('local-repositories functions — alerts', () => {
     expect(updated).toBeDefined();
     expect(updated!.deleted).toBe(true);
     expect(updated!.updatedAt).not.toBe(originalUpdatedAt);
+  });
+
+  it('excludes soft-deleted alerts from getAlerts', async () => {
+    const project = await createProject({ name: 'AlertProject' });
+    const a1 = await createAlert({ projectLocalId: project.localId });
+    const a2 = await createAlert({ projectLocalId: project.localId });
+    await updateAlert(a2.localId, { deleted: true });
+    const alerts = await getAlerts(project.localId);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]!.localId).toBe(a1.localId);
   });
 
   it('deleteAlert — removes the alert', async () => {

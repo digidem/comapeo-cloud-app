@@ -27,6 +27,11 @@ function localMeta() {
   };
 }
 
+type ImmutableFields = 'localId' | 'sourceType' | 'sourceId' | 'createdAt';
+export type ProjectUpdates = Omit<Partial<Project>, ImmutableFields>;
+export type ObservationUpdates = Omit<Partial<Observation>, ImmutableFields>;
+export type AlertUpdates = Omit<Partial<Alert>, ImmutableFields>;
+
 // ---------------------------------------------------------------------------
 // Projects
 // ---------------------------------------------------------------------------
@@ -50,7 +55,7 @@ export async function createProject(
 
 export async function getProjects(): Promise<Project[]> {
   const db = getDb();
-  return db.projects.toArray();
+  return db.projects.filter((p) => !p.deleted).toArray();
 }
 
 export async function getProject(
@@ -62,7 +67,7 @@ export async function getProject(
 
 export async function updateProject(
   localId: string,
-  updates: Partial<Project>,
+  updates: ProjectUpdates,
 ): Promise<Project | undefined> {
   const db = getDb();
   await db.projects.update(localId, { ...updates, updatedAt: timestamp() });
@@ -104,6 +109,7 @@ export async function getObservations(
   return db.observations
     .where('projectLocalId')
     .equals(projectLocalId)
+    .filter((o) => !o.deleted)
     .toArray();
 }
 
@@ -116,7 +122,7 @@ export async function getObservation(
 
 export async function updateObservation(
   localId: string,
-  updates: Partial<Observation>,
+  updates: ObservationUpdates,
 ): Promise<Observation | undefined> {
   const db = getDb();
   await db.observations.update(localId, {
@@ -152,7 +158,11 @@ export async function createAlert(input: CreateAlertInput): Promise<Alert> {
 
 export async function getAlerts(projectLocalId: string): Promise<Alert[]> {
   const db = getDb();
-  return db.alerts.where('projectLocalId').equals(projectLocalId).toArray();
+  return db.alerts
+    .where('projectLocalId')
+    .equals(projectLocalId)
+    .filter((a) => !a.deleted)
+    .toArray();
 }
 
 export async function getAlert(localId: string): Promise<Alert | undefined> {
@@ -162,7 +172,7 @@ export async function getAlert(localId: string): Promise<Alert | undefined> {
 
 export async function updateAlert(
   localId: string,
-  updates: Partial<Alert>,
+  updates: AlertUpdates,
 ): Promise<Alert | undefined> {
   const db = getDb();
   await db.alerts.update(localId, { ...updates, updatedAt: timestamp() });

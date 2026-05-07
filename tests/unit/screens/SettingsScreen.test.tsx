@@ -40,10 +40,10 @@ describe('SettingsScreen', () => {
     expect(buttons.length).toBeGreaterThan(0);
   });
 
-  it('shows server URL and token inputs', () => {
+  it('shows server URL and token inputs with accessible labels', () => {
     render(<SettingsScreen />);
-    expect(screen.getByPlaceholderText('Server URL')).toBeDefined();
-    expect(screen.getByPlaceholderText('Bearer Token')).toBeDefined();
+    expect(screen.getByLabelText('Server URL')).toBeDefined();
+    expect(screen.getByLabelText('Bearer Token')).toBeDefined();
   });
 
   it('shows add server submit button', () => {
@@ -57,6 +57,13 @@ describe('SettingsScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Add Server' }));
     // No server should be added — no list items
     expect(screen.queryByRole('listitem')).toBeNull();
+  });
+
+  it('shows validation error when URL is empty', async () => {
+    const user = userEvent.setup();
+    render(<SettingsScreen />);
+    await user.click(screen.getByRole('button', { name: 'Add Server' }));
+    expect(await screen.findByText('URL and token are required')).toBeDefined();
   });
 
   it('adds a server when URL and token are provided', async () => {

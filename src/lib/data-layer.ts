@@ -7,6 +7,8 @@ import {
   getObservations as repoGetObservations,
   getProjects as repoGetProjects,
 } from '@/lib/local-repositories';
+import { syncRemoteArchive as doSync } from '@/lib/sync';
+import { useAuthStore } from '@/stores/auth-store';
 
 // Re-export types from db
 export type { Alert, Attachment, Observation, Project } from '@/lib/db';
@@ -70,17 +72,27 @@ export function getSyncStatus(): {
   lastSyncedAt: string | null;
   errors: string[];
 } {
+  const { servers } = useAuthStore.getState();
+  const syncing = servers.some((s) => s.status === 'syncing');
+  const lastSynced =
+    servers
+      .filter((s) => s.lastSyncedAt)
+      .sort((a, b) =>
+        (b.lastSyncedAt ?? '').localeCompare(a.lastSyncedAt ?? ''),
+      )[0]?.lastSyncedAt ?? null;
+  const errors = servers
+    .filter((s) => s.status === 'error' && s.errorMessage)
+    .map((s) => s.errorMessage!);
   return {
-    isSyncing: false,
-    lastSyncedAt: null,
-    errors: [],
+    isSyncing: syncing,
+    lastSyncedAt: lastSynced,
+    errors,
   };
 }
 
-export async function syncRemoteArchive(_serverId: string): Promise<{
-  success: boolean;
-  error?: string;
-}> {
-  // Stub — real implementation in sync.ts (Task 8)
-  return { success: true };
+export async function syncRemoteArchive(
+  serverId: string,
+  options: { baseUrl: string; token: string; serverLabel?: string },
+): Promise<{ success: boolean; error?: string }> {
+  return doSync(serverId, options);
 }

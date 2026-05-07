@@ -7,13 +7,17 @@ import type { Alert, Observation, Project } from '@/lib/db';
 // Fetch archive data and store locally
 // ---------------------------------------------------------------------------
 
-export async function pullProjects(config: RequestConfig): Promise<Project[]> {
+export async function pullProjects(
+  serverId: string,
+  config: RequestConfig,
+): Promise<Project[]> {
   const response = await apiClient.getProjects(config);
   const db = getDb();
+  const sourceType = 'remoteArchive' as const;
   const projects: Project[] = response.data.map((item) => ({
-    localId: crypto.randomUUID(),
-    sourceType: 'remoteArchive' as const,
-    sourceId: crypto.randomUUID(), // unique per archive source instance
+    localId: `${sourceType}:${serverId}:${item.projectId}`,
+    sourceType,
+    sourceId: serverId,
     remoteId: item.projectId,
     name: item.name ?? undefined,
     createdAt: new Date().toISOString(),
@@ -22,21 +26,24 @@ export async function pullProjects(config: RequestConfig): Promise<Project[]> {
     deleted: false,
   }));
 
-  await db.projects.bulkAdd(projects);
+  await db.projects.bulkPut(projects);
   return projects;
 }
 
 export async function pullObservations(
+  serverId: string,
   projectRemoteId: string,
+  projectLocalId: string,
   config: RequestConfig,
 ): Promise<Observation[]> {
   const response = await apiClient.getObservations(projectRemoteId, config);
   const db = getDb();
+  const sourceType = 'remoteArchive' as const;
   const observations: Observation[] = response.data.map((item) => ({
-    localId: crypto.randomUUID(),
-    projectLocalId: projectRemoteId,
-    sourceType: 'remoteArchive' as const,
-    sourceId: crypto.randomUUID(),
+    localId: `${sourceType}:${serverId}:${item.docId}`,
+    projectLocalId,
+    sourceType,
+    sourceId: serverId,
     remoteId: item.docId,
     tags: (item.tags as Record<string, string>) ?? undefined,
     createdAt: item.createdAt,
@@ -45,21 +52,24 @@ export async function pullObservations(
     deleted: item.deleted,
   }));
 
-  await db.observations.bulkAdd(observations);
+  await db.observations.bulkPut(observations);
   return observations;
 }
 
 export async function pullAlerts(
+  serverId: string,
   projectRemoteId: string,
+  projectLocalId: string,
   config: RequestConfig,
 ): Promise<Alert[]> {
   const response = await apiClient.getAlerts(projectRemoteId, config);
   const db = getDb();
+  const sourceType = 'remoteArchive' as const;
   const alerts: Alert[] = response.data.map((item) => ({
-    localId: crypto.randomUUID(),
-    projectLocalId: projectRemoteId,
-    sourceType: 'remoteArchive' as const,
-    sourceId: crypto.randomUUID(),
+    localId: `${sourceType}:${serverId}:${item.docId}`,
+    projectLocalId,
+    sourceType,
+    sourceId: serverId,
     remoteId: item.docId,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -67,6 +77,6 @@ export async function pullAlerts(
     deleted: item.deleted,
   }));
 
-  await db.alerts.bulkAdd(alerts);
+  await db.alerts.bulkPut(alerts);
   return alerts;
 }

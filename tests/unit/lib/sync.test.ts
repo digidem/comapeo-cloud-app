@@ -80,10 +80,18 @@ describe('syncRemoteArchive', () => {
     const db = getDb();
     const projects = await db.projects.toArray();
     expect(projects.length).toBeGreaterThan(0);
+    // Projects should have sourceId equal to serverDbId
+    expect(projects[0]!.sourceId).toBe(serverRecord.id);
     const observations = await db.observations.toArray();
     expect(observations.length).toBeGreaterThan(0);
+    // Observations should have projectLocalId matching the project's localId
+    expect(observations[0]!.projectLocalId).toBe(projects[0]!.localId);
+    expect(observations[0]!.sourceId).toBe(serverRecord.id);
     const alerts = await db.alerts.toArray();
     expect(alerts.length).toBeGreaterThan(0);
+    // Alerts should have projectLocalId matching the project's localId
+    expect(alerts[0]!.projectLocalId).toBe(projects[0]!.localId);
+    expect(alerts[0]!.sourceId).toBe(serverRecord.id);
   });
 
   it('returns success false on network failure', async () => {
@@ -150,11 +158,8 @@ describe('syncRemoteArchive', () => {
     expect(r2.success).toBe(true);
 
     const countAfterSecond = await db.projects.count();
-    // Should not duplicate — each remoteId is unique per source, but
-    // our v1 implementation generates new localIds each pull
-    // so for now we accept that duplicates are possible
-    // In future: upsert by [sourceType+sourceId+remoteId]
-    expect(countAfterSecond).toBeGreaterThanOrEqual(countAfterFirst);
+    // Should not duplicate — deterministic localId + bulkPut upserts
+    expect(countAfterSecond).toBe(countAfterFirst);
   });
 
   it('preserves existing local data after sync', async () => {

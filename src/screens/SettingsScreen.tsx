@@ -47,9 +47,14 @@ export function SettingsScreen() {
   const [label, setLabel] = useState('');
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleAddServer = async () => {
-    if (!url || !token) return;
+    if (!url || !token) {
+      setFormError('URL and token are required');
+      return;
+    }
+    setFormError(null);
     await addServer({ label: label || url, baseUrl: url, token });
     setUrl('');
     setToken('');
@@ -108,7 +113,8 @@ export function SettingsScreen() {
         </ul>
       )}
 
-      {syncError && <p>{syncError}</p>}
+      {syncError && <p role="alert">{syncError}</p>}
+      {formError && <p role="alert">{formError}</p>}
 
       <form
         onSubmit={(e) => {
@@ -118,12 +124,14 @@ export function SettingsScreen() {
       >
         <input
           type="text"
+          aria-label={intl.formatMessage(_messages.serverUrl)}
           placeholder={intl.formatMessage(_messages.serverUrl)}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
         <input
           type="password"
+          aria-label={intl.formatMessage(_messages.serverToken)}
           placeholder={intl.formatMessage(_messages.serverToken)}
           value={token}
           onChange={(e) => setToken(e.target.value)}

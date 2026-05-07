@@ -2,7 +2,7 @@ import { server } from '@tests/mocks/node';
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { resetDb } from '@/lib/db';
+import { getDb, resetDb } from '@/lib/db';
 import {
   pullAlerts,
   pullObservations,
@@ -58,13 +58,15 @@ describe('remote-archive', () => {
       ),
     );
 
-    const projects = await pullProjects(archiveConfig);
+    const projects = await pullProjects('server-1', archiveConfig);
 
     expect(projects).toHaveLength(2);
     expect(projects[0]!.remoteId).toBe('proj-1');
     expect(projects[0]!.name).toBe('Forest Monitoring');
     expect(projects[0]!.sourceType).toBe('remoteArchive');
+    expect(projects[0]!.sourceId).toBe('server-1');
     expect(projects[0]!.dirtyLocal).toBe(false);
+    expect(projects[0]!.localId).toBe('remoteArchive:server-1:proj-1');
   });
 
   it('sends bearer auth header when pulling projects', async () => {
@@ -76,7 +78,7 @@ describe('remote-archive', () => {
       }),
     );
 
-    await pullProjects(archiveConfig);
+    await pullProjects('server-1', archiveConfig);
 
     expect(capturedAuth).toBe(`Bearer ${archiveConfig.token}`);
   });
@@ -88,12 +90,20 @@ describe('remote-archive', () => {
       ),
     );
 
-    const observations = await pullObservations('proj-1', archiveConfig);
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
 
     expect(observations).toHaveLength(1);
     expect(observations[0]!.remoteId).toBe('obs-1');
     expect(observations[0]!.tags?.species).toBe('tree');
     expect(observations[0]!.sourceType).toBe('remoteArchive');
+    expect(observations[0]!.sourceId).toBe('server-1');
+    expect(observations[0]!.projectLocalId).toBe('local-proj-1');
+    expect(observations[0]!.localId).toBe('remoteArchive:server-1:obs-1');
   });
 
   it('pulls alerts from archive and stores them locally', async () => {
@@ -104,11 +114,19 @@ describe('remote-archive', () => {
       ),
     );
 
-    const alerts = await pullAlerts('proj-1', archiveConfig);
+    const alerts = await pullAlerts(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
 
     expect(alerts).toHaveLength(1);
     expect(alerts[0]!.remoteId).toBe('alert-1');
     expect(alerts[0]!.sourceType).toBe('remoteArchive');
+    expect(alerts[0]!.sourceId).toBe('server-1');
+    expect(alerts[0]!.projectLocalId).toBe('local-proj-1');
+    expect(alerts[0]!.localId).toBe('remoteArchive:server-1:alert-1');
   });
 
   it('throws when archive returns error', async () => {
@@ -121,21 +139,25 @@ describe('remote-archive', () => {
       ),
     );
 
-    await expect(pullProjects(archiveConfig)).rejects.toThrow();
+    await expect(pullProjects('server-1', archiveConfig)).rejects.toThrow();
   });
 
-  it('validates response schema and maps to local records', async () => {
+  it('is idempotent — calling pullProjects twice with same serverId upserts, not duplicates', async () => {
     server.use(
       http.get(`${archiveConfig.baseUrl}/projects`, () =>
         HttpResponse.json(PROJECTS_RESPONSE),
       ),
     );
 
-    const projects = await pullProjects(archiveConfig);
+    const first = await pullProjects('server-1', archiveConfig);
+    const second = await pullProjects('server-1', archiveConfig);
 
-    expect(projects[0]).toHaveProperty('localId');
-    expect(projects[0]).toHaveProperty('sourceType', 'remoteArchive');
-    expect(projects[0]).toHaveProperty('remoteId', 'proj-1');
-    expect(projects[0]).toHaveProperty('dirtyLocal', false);
+    // Same deterministic localIds
+    expect(second.map((p) => p.localId)).toEqual(first.map((p) => p.localId));
+
+    // No duplicates in DB
+    const db = getDb();
+    const all = await db.projects.toArray();
+    expect(all).toHaveLength(2);
   });
 });

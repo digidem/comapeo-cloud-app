@@ -100,6 +100,25 @@ describe('tier-aware connection store', () => {
     expect(useAuthStore.getState().servers).toHaveLength(0);
   });
 
+  it('removing the active server clears activeServerId and derived fields', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Active',
+      baseUrl: 'https://active.example.com',
+      token: 'tok',
+    });
+    const { servers } = useAuthStore.getState();
+    const id = servers[0]!.id;
+    useAuthStore.getState().setActiveServer(id);
+    expect(useAuthStore.getState().activeServerId).toBe(id);
+
+    await useAuthStore.getState().removeServer(id);
+    const state = useAuthStore.getState();
+    expect(state.servers).toHaveLength(0);
+    expect(state.activeServerId).toBeNull();
+    expect(state.token).toBeNull();
+    expect(state.baseUrl).toBeNull();
+  });
+
   it('sets active server and updates computed fields', async () => {
     await useAuthStore.getState().addServer({
       label: 'Active Test',

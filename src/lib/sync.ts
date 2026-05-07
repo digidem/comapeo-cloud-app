@@ -56,13 +56,18 @@ export async function syncRemoteArchive(
     const config = { baseUrl: options.baseUrl, token: options.token };
 
     // Pull projects
-    const projects = await pullProjects(config);
+    const projects = await pullProjects(serverDbId, config);
 
     // Pull observations and alerts for each project
     for (const project of projects) {
       if (project.remoteId) {
-        await pullObservations(project.remoteId, config);
-        await pullAlerts(project.remoteId, config);
+        await pullObservations(
+          serverDbId,
+          project.remoteId,
+          project.localId,
+          config,
+        );
+        await pullAlerts(serverDbId, project.remoteId, project.localId, config);
       }
     }
 

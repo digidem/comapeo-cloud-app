@@ -92,9 +92,16 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   removeServer: async (id) => {
     await deleteRemoteServer(id);
-    set((state) => ({
-      servers: state.servers.filter((s) => s.id !== id),
-    }));
+    set((state) => {
+      const remaining = state.servers.filter((s) => s.id !== id);
+      const wasActive = state.activeServerId === id;
+      return {
+        servers: remaining,
+        ...(wasActive
+          ? { activeServerId: null, token: null, baseUrl: null }
+          : {}),
+      };
+    });
   },
 
   setActiveServer: (id) => {
