@@ -38,7 +38,7 @@ export async function pullObservations(
     sourceType: 'remoteArchive' as const,
     sourceId: crypto.randomUUID(),
     remoteId: item.docId,
-    tags: item.tags ?? undefined,
+    tags: (item.tags as Record<string, string>) ?? undefined,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     dirtyLocal: false,
