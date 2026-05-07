@@ -46,8 +46,9 @@ jobs:
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v6
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: .node-version
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -62,11 +63,7 @@ jobs:
         run: npm run test:coverage
 
       - name: i18n message extraction check
-        run: |
-          cp src/i18n/messages/en.json src/i18n/messages/en.json.bak
-          npm run extract-messages
-          diff src/i18n/messages/en.json.bak src/i18n/messages/en.json
-          rm src/i18n/messages/en.json.bak
+        run: npm run check:i18n
 
       - name: Build
         run: npm run build:ci
@@ -87,6 +84,17 @@ jobs:
 
       - name: E2E tests
         run: npx playwright test --project=chromium --project=firefox --project=webkit
+
+      - name: Generate screenshots for visual review
+        run: npm run test:screenshots
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: tests/e2e/screenshots/
+          retention-days: 14
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
@@ -272,8 +280,9 @@ jobs:
       - name: Setup Node.js 22
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -326,8 +335,9 @@ jobs:
       - name: Setup Node.js 22
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
