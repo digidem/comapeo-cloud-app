@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "npm@11.5.2",
   "engines": {
     "node": ">=22.0.0"
   },
@@ -26,6 +27,8 @@
     "deploy:preview": "npm run build && npx wrangler pages deploy dist/ --branch preview",
     "prepare": "husky",
     "extract-messages": "formatjs extract 'src/**/*.{ts,tsx}' --out-file src/i18n/messages/en.json",
+    "check:i18n": "npm run extract-messages && git diff --exit-code -- src/i18n/messages/en.json",
+    "verify:handoff": "npm run lint && npm run test:coverage && npm run build",
     "test:unit": "vitest run"
   },
   "dependencies": {
