@@ -6,12 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [22]
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -23,11 +28,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: .node-version
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -42,11 +48,7 @@ jobs:
         run: npm run test:coverage
 
       - name: i18n message extraction check
-        run: |
-          cp src/i18n/messages/en.json src/i18n/messages/en.json.bak
-          npm run extract-messages
-          diff src/i18n/messages/en.json.bak src/i18n/messages/en.json
-          rm src/i18n/messages/en.json.bak
+        run: npm run check:i18n
 
       - name: Build
         run: npm run build
@@ -58,7 +60,6 @@ jobs:
         run: npm run test:e2e
 
       - name: Generate screenshots for visual review
-        continue-on-error: true
         run: npm run test:screenshots
 
       - name: Upload screenshots
@@ -81,14 +82,16 @@ jobs:
     needs: check
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -105,14 +108,16 @@ jobs:
   lighthouse:
     needs: check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
