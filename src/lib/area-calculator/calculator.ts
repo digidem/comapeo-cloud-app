@@ -9,7 +9,11 @@ import type {
 } from 'geojson';
 import polygonClipping from 'polygon-clipping';
 
-import type { CalculationParams, MethodDescriptor } from './types';
+import type {
+  CalculationParams,
+  CalculationResult,
+  MethodDescriptor,
+} from './types';
 
 type PolygonClippingGeom =
   | polygonClipping.Polygon
@@ -50,7 +54,6 @@ export function extractPoints(geojson: unknown): Feature<Point>[] {
 export function calculateAllMethods(
   points: Feature<Point>[],
   params: CalculationParams,
-  onProgress: (methodId: string, message: string) => void,
 ): MethodDescriptor[] {
   const fc: FeatureCollection<Point> = {
     type: 'FeatureCollection',
@@ -60,7 +63,7 @@ export function calculateAllMethods(
   const methods: Array<{
     id: string;
     progress: string;
-    run: () => MethodDescriptor;
+    run: () => CalculationResult;
   }> = [
     {
       id: 'observed',
@@ -68,22 +71,22 @@ export function calculateAllMethods(
       run: () => buildObservedResult(fc, params.observedBufferMeters),
     },
     {
-      id: 'connectA',
+      id: 'connectivity10',
       progress: `Calculating ${params.connectivity10Km} km connectivity...`,
       run: () =>
         buildConnectivityResult(
-          'connectA',
+          'connectivity10',
           `${params.connectivity10Km} km connectivity`,
           fc,
           params.connectivity10Km,
         ),
     },
     {
-      id: 'connectB',
+      id: 'connectivity30',
       progress: `Calculating ${params.connectivity30Km} km connectivity...`,
       run: () =>
         buildConnectivityResult(
-          'connectB',
+          'connectivity30',
           `${params.connectivity30Km} km connectivity`,
           fc,
           params.connectivity30Km,
@@ -101,36 +104,62 @@ export function calculateAllMethods(
     },
   ];
 
-  return methods.map(({ id, progress, run }) => {
-    onProgress(id, progress);
-    return run();
-  });
+  return methods;
 }
 
 function explodePointFeature(feature: Feature): Feature<Point>[] {
   const geometry = feature.geometry;
   if (!geometry) return [];
-  if (geometry.type === 'Point') return [feature as Feature<Point>];
+  if (geometry.type === 'Point') {
+    const coordinates = validLonLat(geometry.coordinates);
+    if (!coordinates) return [];
+    return [
+      {
+        type: 'Feature',
+        properties: feature.properties ?? {},
+        geometry: {
+          type: 'Point',
+          coordinates,
+        },
+      },
+    ];
+  }
   if (geometry.type === 'MultiPoint') {
-    return geometry.coordinates.map((coordinates, index) => ({
-      type: 'Feature' as const,
-      properties: {
-        ...(feature.properties ?? {}),
-        multipointIndex: index,
-      },
-      geometry: {
-        type: 'Point' as const,
-        coordinates,
-      },
-    }));
+    return geometry.coordinates.flatMap((coordinates, index) => {
+      const validCoordinates = validLonLat(coordinates);
+      if (!validCoordinates) return [];
+      return [
+        {
+          type: 'Feature' as const,
+          properties: {
+            ...(feature.properties ?? {}),
+            multipointIndex: index,
+          },
+          geometry: {
+            type: 'Point' as const,
+            coordinates: validCoordinates,
+          },
+        },
+      ];
+    });
   }
   return [];
+}
+
+function validLonLat(coordinates: unknown): [number, number] | null {
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+  const [lon, lat] = coordinates;
+  if (typeof lon !== 'number' || typeof lat !== 'number') return null;
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+  if (lon < -180 || lon > 180) return null;
+  if (lat < -90 || lat > 90) return null;
+  return [lon, lat];
 }
 
 function buildObservedResult(
   points: FeatureCollection<Point>,
   bufferMeters: number,
-): MethodDescriptor {
+): CalculationResult {
   const radiusKm = bufferMeters / 1000;
   const geometry = buildBufferedUnionGeometry(points, radiusKm);
   return resultFromGeometry({
@@ -150,7 +179,7 @@ function buildConnectivityResult(
   label: string,
   points: FeatureCollection<Point>,
   connectDistanceKm: number,
-): MethodDescriptor {
+): CalculationResult {
   const radiusKm = connectDistanceKm / 2;
   const geometry = buildBufferedUnionGeometry(points, radiusKm);
   return resultFromGeometry({
@@ -169,7 +198,7 @@ function buildConnectivityResult(
 function buildClusterHullResult(
   points: FeatureCollection<Point>,
   params: CalculationParams,
-): MethodDescriptor {
+): CalculationResult {
   const turfFc = toTurfFc(points);
   const clustered = turf.clustersDbscan(turfFc, params.clusterDistanceKm, {
     units: 'kilometers',
@@ -273,12 +302,18 @@ function buildBufferedUnionGeometry(
 function buildGridResult(
   points: FeatureCollection<Point>,
   gridCellKm: number,
-): MethodDescriptor {
+): CalculationResult {
+  if (!points.features.length) {
+    throw new Error('No points were available for occupied grid calculation');
+  }
+  if (!Number.isFinite(gridCellKm) || gridCellKm <= 0) {
+    throw new Error('Grid cell size must be greater than zero');
+  }
+
   const turfFc = toTurfFc(points);
   const bbox = turf.bbox(turfFc);
-  const [minLng, minLat, maxLng, maxLat] = bbox;
+  const [minLng, minLat] = bbox;
   const minXY = projectMercator(minLng!, minLat!);
-  const maxXY = projectMercator(maxLng!, maxLat!);
   const cellSizeMeters = gridCellKm * 1000;
   const occupiedByCell = new Map<string, number>();
 
@@ -300,8 +335,8 @@ function buildGridResult(
     const row = Number(parts[1]);
     const x0 = minXY.x + col * cellSizeMeters;
     const y0 = minXY.y + row * cellSizeMeters;
-    const x1 = Math.min(x0 + cellSizeMeters, maxXY.x);
-    const y1 = Math.min(y0 + cellSizeMeters, maxXY.y);
+    const x1 = x0 + cellSizeMeters;
+    const y1 = y0 + cellSizeMeters;
     return turf.polygon(
       [
         [
@@ -383,7 +418,7 @@ function resultFromGeometry({
   description: string;
   geometry: Polygon | MultiPolygon;
   metadata: Record<string, unknown>;
-}): MethodDescriptor {
+}): CalculationResult {
   const feature: Feature<Polygon | MultiPolygon> = {
     type: 'Feature',
     properties: {
@@ -464,10 +499,12 @@ function mergePolygonSets(
 function toPolygonClippingGeometry(
   geometry: Polygon | MultiPolygon,
 ): PolygonClippingGeom {
-  if (geometry.type === 'Polygon')
-    {return [geometry.coordinates] as unknown as polygonClipping.Polygon;}
-  if (geometry.type === 'MultiPolygon')
-    {return geometry.coordinates as unknown as polygonClipping.MultiPolygon;}
+  if (geometry.type === 'Polygon') {
+    return [geometry.coordinates] as unknown as polygonClipping.Polygon;
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates as unknown as polygonClipping.MultiPolygon;
+  }
   throw new Error(`Unsupported geometry type for union`);
 }
 
@@ -543,7 +580,6 @@ function bufferPointFeature(
   const result = turf.buffer(feature as any, radiusKm, {
     units: 'kilometers',
     steps: 4,
-     
   }) as Feature<Polygon | MultiPolygon> | undefined;
   const g = result?.geometry;
   return g && g.type === 'Polygon' ? g : null;

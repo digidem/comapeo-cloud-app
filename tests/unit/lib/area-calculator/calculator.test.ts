@@ -1,5 +1,5 @@
 import * as turf from '@turf/turf';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   calculateAllMethods,
@@ -75,22 +75,77 @@ describe('extractPoints', () => {
     const result = extractPoints(fc);
     expect(result).toHaveLength(1);
   });
+
+  it('filters malformed, non-finite, and out-of-range coordinates', () => {
+    const fc = {
+      type: 'FeatureCollection' as const,
+      features: [
+        makePointFeature(-74.006, 40.7128),
+        {
+          type: 'Feature' as const,
+          properties: {},
+          geometry: { type: 'Point' as const, coordinates: [181, 40] },
+        },
+        {
+          type: 'Feature' as const,
+          properties: {},
+          geometry: { type: 'Point' as const, coordinates: [-74, 91] },
+        },
+        {
+          type: 'Feature' as const,
+          properties: {},
+          geometry: { type: 'Point' as const, coordinates: [Number.NaN, 40] },
+        },
+        {
+          type: 'Feature' as const,
+          properties: {},
+          geometry: { type: 'Point' as const, coordinates: [-74] },
+        },
+        {
+          type: 'Feature' as const,
+          properties: {},
+          geometry: {
+            type: 'MultiPoint' as const,
+            coordinates: [
+              [-73.985, 40.758],
+              [-200, 40],
+              [-74, Number.POSITIVE_INFINITY],
+            ],
+          },
+        },
+      ],
+    };
+
+    const result = extractPoints(fc);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((feature) => feature.geometry.coordinates)).toEqual([
+      [-74.006, 40.7128],
+      [-73.985, 40.758],
+    ]);
+  });
 });
 
 describe('calculateAllMethods', () => {
-  it('returns 5 method results for valid points', () => {
+  it('returns 5 lazy method descriptors for valid points', () => {
     const fc = makePointFeatureCollection();
     const points = extractPoints(fc);
-    const onProgress = vi.fn();
-    const results = calculateAllMethods(points, DEFAULTS, onProgress);
-    expect(results).toHaveLength(5);
+    const descriptors = calculateAllMethods(points, DEFAULTS);
+
+    expect(descriptors).toHaveLength(5);
+    for (const descriptor of descriptors) {
+      expect(typeof descriptor.id).toBe('string');
+      expect(typeof descriptor.progress).toBe('string');
+      expect(typeof descriptor.run).toBe('function');
+    }
   });
 
   it('each method result has areaM2 > 0', () => {
     const fc = makePointFeatureCollection();
     const points = extractPoints(fc);
-    const onProgress = vi.fn();
-    const results = calculateAllMethods(points, DEFAULTS, onProgress);
+    const results = calculateAllMethods(points, DEFAULTS).map((method) =>
+      method.run(),
+    );
     for (const result of results) {
       expect(result.areaM2).toBeGreaterThan(0);
     }
@@ -99,8 +154,9 @@ describe('calculateAllMethods', () => {
   it('each method result has required fields', () => {
     const fc = makePointFeatureCollection();
     const points = extractPoints(fc);
-    const onProgress = vi.fn();
-    const results = calculateAllMethods(points, DEFAULTS, onProgress);
+    const results = calculateAllMethods(points, DEFAULTS).map((method) =>
+      method.run(),
+    );
     for (const result of results) {
       expect(typeof result.id).toBe('string');
       expect(typeof result.label).toBe('string');
@@ -112,28 +168,38 @@ describe('calculateAllMethods', () => {
     }
   });
 
-  it('calls onProgress at least once per method', () => {
-    const fc = makePointFeatureCollection();
-    const points = extractPoints(fc);
-    const onProgress = vi.fn();
-    const results = calculateAllMethods(points, DEFAULTS, onProgress);
-    expect(onProgress).toHaveBeenCalledTimes(results.length);
+  it('does not execute method calculations eagerly', () => {
+    expect(() => calculateAllMethods([], DEFAULTS)).not.toThrow();
   });
 
-  it('returns results for all 5 expected method ids', () => {
+  it('returns descriptors for all 5 expected method ids', () => {
     const fc = makePointFeatureCollection();
     const points = extractPoints(fc);
-    const results = calculateAllMethods(points, DEFAULTS, () => {});
-    const ids = results.map((r) => r.id);
-    expect(ids).toContain('observed');
-    expect(ids).toContain('connectA');
-    expect(ids).toContain('connectB');
-    expect(ids).toContain('clusterHull');
-    expect(ids).toContain('grid');
+    const descriptors = calculateAllMethods(points, DEFAULTS);
+    const ids = descriptors.map((r) => r.id);
+    expect(ids).toEqual([
+      'observed',
+      'connectivity10',
+      'connectivity30',
+      'clusterHull',
+      'grid',
+    ]);
   });
 
   it('does not throw for a single point input', () => {
     const points = extractPoints(makePointFeature(-74.006, 40.7128));
-    expect(() => calculateAllMethods(points, DEFAULTS, () => {})).not.toThrow();
+    expect(() =>
+      calculateAllMethods(points, DEFAULTS).map((method) => method.run()),
+    ).not.toThrow();
+  });
+
+  it('creates a full occupied grid cell for a single point', () => {
+    const points = extractPoints(makePointFeature(-74.006, 40.7128));
+    const grid = calculateAllMethods(points, DEFAULTS).find(
+      (method) => method.id === 'grid',
+    );
+
+    expect(grid).toBeDefined();
+    expect(grid!.run().areaM2).toBeGreaterThan(0);
   });
 });

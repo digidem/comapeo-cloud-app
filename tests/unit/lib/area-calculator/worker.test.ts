@@ -6,7 +6,10 @@ import type {
   WorkerInMessage,
   WorkerOutMessage,
 } from '@/lib/area-calculator/types';
-import { handleWorkerMessage } from '@/lib/area-calculator/worker';
+import {
+  createWorkerRequestState,
+  handleWorkerMessage,
+} from '@/lib/area-calculator/worker';
 
 const testPoints = turf.featureCollection([
   turf.point([-74.006, 40.7128]),
@@ -24,7 +27,7 @@ describe('handleWorkerMessage', () => {
     const event = makeEvent({
       type: 'calculate',
       requestId: 'req-1',
-      geojson: testPoints,
+      points: testPoints,
       params: DEFAULTS,
     });
 
@@ -48,7 +51,7 @@ describe('handleWorkerMessage', () => {
     const event = makeEvent({
       type: 'calculate',
       requestId: 'req-2',
-      geojson: testPoints,
+      points: testPoints,
       params: DEFAULTS,
     });
 
@@ -72,7 +75,7 @@ describe('handleWorkerMessage', () => {
     const event = makeEvent({
       type: 'calculate',
       requestId: 'req-3',
-      geojson: testPoints,
+      points: testPoints,
       params: DEFAULTS,
     });
 
@@ -87,12 +90,12 @@ describe('handleWorkerMessage', () => {
     }
   });
 
-  it('posts an error message when calculation fails', async () => {
+  it('posts methodError messages with message fields and still completes', async () => {
     const posted: WorkerOutMessage[] = [];
     const event = makeEvent({
       type: 'calculate',
-      requestId: 'req-err',
-      geojson: { type: 'FeatureCollection', features: [] },
+      requestId: 'req-method-error',
+      points: { type: 'FeatureCollection', features: [] },
       params: DEFAULTS,
     });
 
@@ -100,11 +103,43 @@ describe('handleWorkerMessage', () => {
       posted.push(msg as WorkerOutMessage),
     );
 
-    const errorOrDone = posted.filter(
-      (m) =>
-        m.type === 'error' || m.type === 'methodError' || m.type === 'done',
+    const methodErrors = posted.filter((m) => m.type === 'methodError');
+    expect(methodErrors.length).toBeGreaterThan(0);
+    for (const msg of methodErrors) {
+      if (msg.type === 'methodError') {
+        expect(msg.requestId).toBe('req-method-error');
+        expect(typeof msg.methodId).toBe('string');
+        expect(typeof msg.message).toBe('string');
+        expect('error' in msg).toBe(false);
+      }
+    }
+    expect(posted.some((m) => m.type === 'error')).toBe(false);
+    expect(posted.at(-1)).toEqual({
+      type: 'done',
+      requestId: 'req-method-error',
+    });
+  });
+
+  it('posts fatal worker errors with message fields', async () => {
+    const posted: WorkerOutMessage[] = [];
+    const event = makeEvent({
+      type: 'calculate',
+      requestId: 'req-fatal',
+      points: null as unknown as typeof testPoints,
+      params: DEFAULTS,
+    });
+
+    await handleWorkerMessage(event, (msg) =>
+      posted.push(msg as WorkerOutMessage),
     );
-    expect(errorOrDone.length).toBeGreaterThan(0);
+
+    expect(posted).toEqual([
+      {
+        type: 'error',
+        requestId: 'req-fatal',
+        message: 'Worker received invalid point collection',
+      },
+    ]);
   });
 
   it('ignores events with non-matching type', async () => {
@@ -125,8 +160,8 @@ describe('handleWorkerMessage', () => {
     const event = makeEvent({
       type: 'calculate',
       requestId: 'req-partial',
-      geojson: turf.featureCollection([turf.point([-74.006, 40.7128])]),
-      params: DEFAULTS,
+      points: turf.featureCollection([turf.point([-74.006, 40.7128])]),
+      params: { ...DEFAULTS, gridCellKm: 0 },
     });
 
     await handleWorkerMessage(event, (msg) =>
@@ -135,5 +170,40 @@ describe('handleWorkerMessage', () => {
 
     const types = posted.map((m) => m.type);
     expect(types).toContain('done');
+    expect(types).toContain('methodError');
+    expect(types).not.toContain('error');
+  });
+
+  it('stops posting stale request messages after a newer request starts', async () => {
+    const state = createWorkerRequestState();
+    const posted: WorkerOutMessage[] = [];
+
+    const staleRequest = handleWorkerMessage(
+      makeEvent({
+        type: 'calculate',
+        requestId: 'req-old',
+        points: testPoints,
+        params: DEFAULTS,
+      }),
+      (msg) => posted.push(msg as WorkerOutMessage),
+      state,
+    );
+
+    await handleWorkerMessage(
+      makeEvent({
+        type: 'calculate',
+        requestId: 'req-new',
+        points: testPoints,
+        params: DEFAULTS,
+      }),
+      (msg) => posted.push(msg as WorkerOutMessage),
+      state,
+    );
+    await staleRequest;
+
+    const oldMessages = posted.filter((msg) => msg.requestId === 'req-old');
+    expect(oldMessages.length).toBeLessThan(11);
+    expect(oldMessages.some((msg) => msg.type === 'done')).toBe(false);
+    expect(posted.at(-1)).toEqual({ type: 'done', requestId: 'req-new' });
   });
 });

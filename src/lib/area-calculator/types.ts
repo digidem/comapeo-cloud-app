@@ -31,24 +31,25 @@ export interface Preset {
 
 export interface MethodDescriptor {
   id: string;
-  label: string;
-  description: string;
-  featureCollection: FeatureCollection;
-  previewFeatureCollection: FeatureCollection;
-  areaM2: number;
-  metadata: Record<string, unknown>;
+  progress: string;
+  run: () => CalculationResult;
 }
 
 export type WorkerInMessage = {
   type: 'calculate';
   requestId: string;
-  geojson: unknown;
+  points: FeatureCollection;
   params: CalculationParams;
 };
 
 export type WorkerOutMessage =
   | { type: 'progress'; requestId: string; methodId: string; message: string }
-  | { type: 'result'; requestId: string; result: MethodDescriptor }
-  | { type: 'methodError'; requestId: string; methodId: string; error: string }
+  | { type: 'result'; requestId: string; result: CalculationResult }
+  | {
+      type: 'methodError';
+      requestId: string;
+      methodId: string;
+      message: string;
+    }
   | { type: 'done'; requestId: string }
-  | { type: 'error'; requestId: string; error: string };
+  | { type: 'error'; requestId: string; message: string };
