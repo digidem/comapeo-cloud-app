@@ -1,0 +1,198 @@
+import { useEffect, useReducer, useRef } from 'react';
+
+import type {
+  CalculationParams,
+  CalculationResult,
+  WorkerOutMessage,
+} from '@/lib/area-calculator/types';
+import { getProjectPoints } from '@/lib/data-layer';
+
+export interface CoverageMethodResult {
+  methodId: string;
+  result?: CalculationResult;
+  error?: string;
+  progress?: string;
+}
+
+interface CoverageState {
+  results: CoverageMethodResult[];
+  isCalculating: boolean;
+  error: string | null;
+}
+
+type CoverageAction =
+  | { type: 'START' }
+  | { type: 'WORKER_MSG'; msg: WorkerOutMessage; requestId: string };
+
+const EMPTY_STATE: CoverageState = {
+  results: [],
+  isCalculating: false,
+  error: null,
+};
+
+function coverageReducer(
+  state: CoverageState,
+  action: CoverageAction,
+): CoverageState {
+  if (action.type === 'START') {
+    return { results: [], isCalculating: true, error: null };
+  }
+  return handleCoverageMessage(action.msg, action.requestId, state);
+}
+
+export function handleCoverageMessage(
+  msg: WorkerOutMessage,
+  currentRequestId: string,
+  state: CoverageState,
+): CoverageState {
+  if (msg.requestId !== currentRequestId) return state;
+
+  switch (msg.type) {
+    case 'progress': {
+      const existing = state.results.find((r) => r.methodId === msg.methodId);
+      if (existing) {
+        return {
+          ...state,
+          results: state.results.map((r) =>
+            r.methodId === msg.methodId ? { ...r, progress: msg.message } : r,
+          ),
+        };
+      }
+      return {
+        ...state,
+        results: [
+          ...state.results,
+          { methodId: msg.methodId, progress: msg.message },
+        ],
+      };
+    }
+    case 'result': {
+      const methodId = msg.result.id;
+      const existing = state.results.find((r) => r.methodId === methodId);
+      if (existing) {
+        return {
+          ...state,
+          results: state.results.map((r) =>
+            r.methodId === methodId
+              ? { ...r, result: msg.result as unknown as CalculationResult }
+              : r,
+          ),
+        };
+      }
+      return {
+        ...state,
+        results: [
+          ...state.results,
+          { methodId, result: msg.result as unknown as CalculationResult },
+        ],
+      };
+    }
+    case 'methodError': {
+      const existing = state.results.find((r) => r.methodId === msg.methodId);
+      if (existing) {
+        return {
+          ...state,
+          results: state.results.map((r) =>
+            r.methodId === msg.methodId ? { ...r, error: msg.error } : r,
+          ),
+        };
+      }
+      return {
+        ...state,
+        results: [
+          ...state.results,
+          { methodId: msg.methodId, error: msg.error },
+        ],
+      };
+    }
+    case 'done':
+      return { ...state, isCalculating: false };
+    case 'error':
+      return { ...state, isCalculating: false, error: msg.error };
+    default:
+      return state;
+  }
+}
+
+export function useProjectCoverage(
+  projectLocalId: string | null,
+  params: CalculationParams,
+): CoverageState {
+  const [state, dispatch] = useReducer(coverageReducer, EMPTY_STATE);
+  const workerRef = useRef<Worker | null>(null);
+  const requestIdRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!projectLocalId) {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+      return;
+    }
+
+    if (workerRef.current) {
+      workerRef.current.terminate();
+      workerRef.current = null;
+    }
+
+    const requestId = crypto.randomUUID();
+    requestIdRef.current = requestId;
+
+    dispatch({ type: 'START' });
+
+    const worker = new Worker(
+      new URL('../lib/area-calculator/worker.ts', import.meta.url),
+      { type: 'module' },
+    );
+    workerRef.current = worker;
+
+    worker.onmessage = (event: MessageEvent<WorkerOutMessage>) => {
+      dispatch({
+        type: 'WORKER_MSG',
+        msg: event.data,
+        requestId: requestIdRef.current,
+      });
+    };
+
+    worker.onerror = () => {
+      dispatch({
+        type: 'WORKER_MSG',
+        msg: { type: 'error', requestId, error: 'Worker failed to start' },
+        requestId,
+      });
+    };
+
+    let aborted = false;
+
+    getProjectPoints(projectLocalId)
+      .then((points) => {
+        if (aborted) return;
+        worker.postMessage({
+          type: 'calculate',
+          requestId,
+          geojson: { type: 'FeatureCollection', features: points },
+          params,
+        });
+      })
+      .catch((err: unknown) => {
+        if (aborted) return;
+        dispatch({
+          type: 'WORKER_MSG',
+          msg: { type: 'error', requestId, error: String(err) },
+          requestId,
+        });
+      });
+
+    return () => {
+      aborted = true;
+      worker.terminate();
+      workerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectLocalId, JSON.stringify(params)]);
+
+  if (projectLocalId === null) return EMPTY_STATE;
+
+  return state;
+}
