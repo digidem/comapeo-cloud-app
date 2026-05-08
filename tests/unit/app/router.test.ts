@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   dashboardRoute,
+  homeRoute,
   loginRoute,
   projectsRoute,
   routeTree,
@@ -13,6 +14,7 @@ describe('router', () => {
   describe('route paths', () => {
     it('has correct route paths', () => {
       // TanStack Router strips leading slash from child route paths
+      expect(homeRoute.path).toBe('/');
       expect(loginRoute.path).toBe('login');
       expect(dashboardRoute.path).toBe('dashboard');
       expect(projectsRoute.path).toBe('projects');
@@ -23,6 +25,7 @@ describe('router', () => {
   describe('route components', () => {
     it('each route path resolves to its component', () => {
       const routes = [
+        { path: '/', route: homeRoute, name: 'Home' },
         { path: '/login', route: loginRoute, name: 'Login' },
         { path: '/dashboard', route: dashboardRoute, name: 'Dashboard' },
         { path: '/projects', route: projectsRoute, name: 'Projects' },
@@ -57,10 +60,11 @@ describe('router', () => {
       // All child routes are registered
       const childRoutes = routeTree.children;
       expect(childRoutes).toBeDefined();
-      expect(childRoutes!).toHaveLength(4);
+      expect(childRoutes!).toHaveLength(5);
 
-      // TanStack Router stores paths without leading slash
+      // TanStack Router stores paths without leading slash (except '/')
       const childPaths = childRoutes!.map((child) => child.path);
+      expect(childPaths).toContain('/');
       expect(childPaths).toContain('login');
       expect(childPaths).toContain('dashboard');
       expect(childPaths).toContain('projects');
@@ -69,6 +73,10 @@ describe('router', () => {
   });
 
   describe('local mode access', () => {
+    it('home is reachable without auth redirect', () => {
+      expect(homeRoute.options.beforeLoad).toBeUndefined();
+    });
+
     it('dashboard is reachable without auth redirect', () => {
       // No beforeLoad guard on dashboard route — local mode works immediately
       expect(dashboardRoute.options.beforeLoad).toBeUndefined();

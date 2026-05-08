@@ -1,10 +1,12 @@
 import {
+  Outlet,
   createRootRouteWithContext,
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
 
 import { DashboardScreen } from '@/screens/DashboardScreen';
+import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { ProjectsScreen } from '@/screens/ProjectsScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
@@ -18,10 +20,16 @@ interface RouterContext {
 
 // Root route
 const rootRoute = createRootRouteWithContext<RouterContext>()({
-  component: () => <div>Root</div>,
+  component: () => <Outlet />,
 });
 
 // Route definitions
+const homeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: HomeScreen,
+});
+
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
@@ -48,6 +56,7 @@ const settingsRoute = createRoute({
 
 // Route tree
 const routeTree = rootRoute.addChildren([
+  homeRoute,
   loginRoute,
   dashboardRoute,
   projectsRoute,
@@ -63,7 +72,7 @@ export const router = createRouter({
 });
 
 // Type-safe route aliases for external use
-export { loginRoute, dashboardRoute, projectsRoute, settingsRoute };
+export { homeRoute, loginRoute, dashboardRoute, projectsRoute, settingsRoute };
 
 // Export route tree for testing
 export { routeTree };

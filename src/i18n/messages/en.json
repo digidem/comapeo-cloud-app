@@ -1,4 +1,64 @@
 {
+  "home.title": {
+    "defaultMessage": "Home"
+  },
+  "home.noProjects": {
+    "defaultMessage": "No projects yet"
+  },
+  "home.noProjects.cta": {
+    "defaultMessage": "Create your first project"
+  },
+  "home.newProject": {
+    "defaultMessage": "New Project"
+  },
+  "home.newProject.dialog.title": {
+    "defaultMessage": "Create Project"
+  },
+  "home.newProject.dialog.namePlaceholder": {
+    "defaultMessage": "Project name (optional)"
+  },
+  "home.newProject.dialog.create": {
+    "defaultMessage": "Create"
+  },
+  "home.newProject.dialog.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "home.import.button": {
+    "defaultMessage": "Import Data"
+  },
+  "home.import.processing": {
+    "defaultMessage": "Importing..."
+  },
+  "home.import.success": {
+    "defaultMessage": "Imported {imported} observations"
+  },
+  "home.import.error": {
+    "defaultMessage": "Import failed"
+  },
+  "home.coverage.title": {
+    "defaultMessage": "Coverage Analysis"
+  },
+  "home.coverage.calculating": {
+    "defaultMessage": "Calculating..."
+  },
+  "home.coverage.noCoordinates": {
+    "defaultMessage": "No mappable coordinates found"
+  },
+  "home.archive.sync": {
+    "defaultMessage": "Sync Now"
+  },
+  "home.archive.syncing": {
+    "defaultMessage": "Syncing..."
+  },
+  "home.archive.error": {
+    "defaultMessage": "Sync error"
+  },
+  "home.archive.credentialsUnavailable": {
+    "defaultMessage": "Credentials unavailable"
+  },
+  "home.observations.count": {
+    "defaultMessage": "{count, plural, one {# observation} other {# observations}}"
+  },
   "settings.addServer": {
     "defaultMessage": "Add Server"
   },
