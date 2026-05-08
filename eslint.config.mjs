@@ -63,4 +63,13 @@ export default pluginTs.config(
       'testing-library/render-result-naming-convention': 'off',
     },
   },
+  // E2E tests use Playwright page.getBy*() — disable Testing Library rules
+  // that misfire on identically-named Playwright query methods.
+  {
+    name: 'e2e',
+    files: ['tests/e2e/**/*.{js,jsx,ts,tsx}'],
+    rules: {
+      'testing-library/prefer-screen-queries': 'off',
+    },
+  },
 );

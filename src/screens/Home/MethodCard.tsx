@@ -29,12 +29,22 @@ function renderAreaValue(
   }
   if (hasResult) {
     return (
-      <span className="text-lg font-bold text-[#1F6FFF]">
+      <span
+        data-testid="method-area-value"
+        className="text-lg font-bold text-[#1F6FFF]"
+      >
         {convertArea(result!.result!.areaM2, unit)}
       </span>
     );
   }
-  return <span className="text-lg font-bold text-gray-300">—</span>;
+  return (
+    <span
+      data-testid="method-area-value"
+      className="text-lg font-bold text-gray-300"
+    >
+      —
+    </span>
+  );
 }
 
 export function MethodCard({
