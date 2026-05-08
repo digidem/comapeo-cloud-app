@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { Select } from '@/components/ui/select';
 import { PARAM_FIELDS } from '@/lib/area-calculator/config';
@@ -12,6 +13,78 @@ interface CalculationSettingsProps {
   onParamsChange: (params: CalculationParams) => void;
 }
 
+const messages = defineMessages({
+  preset: {
+    id: 'home.settings.preset',
+    defaultMessage: 'Preset',
+  },
+  advanced: {
+    id: 'home.settings.advanced',
+    defaultMessage: 'Advanced',
+  },
+  presetBalanced: {
+    id: 'home.preset.balanced',
+    defaultMessage: 'Balanced Comparison',
+  },
+  presetFootprint: {
+    id: 'home.preset.footprint',
+    defaultMessage: 'Observed Footprint',
+  },
+  presetConnectivity10: {
+    id: 'home.preset.connectivity',
+    defaultMessage: '10 km Connectivity',
+  },
+  presetGrid5: {
+    id: 'home.preset.grid',
+    defaultMessage: '5 km Grid',
+  },
+  observedBufferMeters: {
+    id: 'home.param.observedBufferMeters',
+    defaultMessage: 'observedBufferMeters',
+  },
+  connectivity10Km: {
+    id: 'home.param.connectivity10Km',
+    defaultMessage: 'connectivity10Km',
+  },
+  connectivity30Km: {
+    id: 'home.param.connectivity30Km',
+    defaultMessage: 'connectivity30Km',
+  },
+  clusterDistanceKm: {
+    id: 'home.param.clusterDistanceKm',
+    defaultMessage: 'clusterDistanceKm',
+  },
+  hullMaxEdgeKm: {
+    id: 'home.param.hullMaxEdgeKm',
+    defaultMessage: 'hullMaxEdgeKm',
+  },
+  hullFallbackBufferKm: {
+    id: 'home.param.hullFallbackBufferKm',
+    defaultMessage: 'hullFallbackBufferKm',
+  },
+  gridCellKm: {
+    id: 'home.param.gridCellKm',
+    defaultMessage: 'gridCellKm',
+  },
+});
+
+const PRESET_MESSAGES: Record<string, keyof typeof messages> = {
+  balanced: 'presetBalanced',
+  footprint: 'presetFootprint',
+  connectivity: 'presetConnectivity10',
+  grid: 'presetGrid5',
+};
+
+const PARAM_MESSAGES: Record<keyof CalculationParams, keyof typeof messages> = {
+  observedBufferMeters: 'observedBufferMeters',
+  connectivity10Km: 'connectivity10Km',
+  connectivity30Km: 'connectivity30Km',
+  clusterDistanceKm: 'clusterDistanceKm',
+  hullMaxEdgeKm: 'hullMaxEdgeKm',
+  hullFallbackBufferKm: 'hullFallbackBufferKm',
+  gridCellKm: 'gridCellKm',
+};
+
 function CalculationSettings({
   presets,
   selectedPresetId,
@@ -19,6 +92,7 @@ function CalculationSettings({
   onPresetChange,
   onParamsChange,
 }: CalculationSettingsProps) {
+  const intl = useIntl();
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   function handlePresetChange(presetId: string) {
@@ -43,12 +117,14 @@ function CalculationSettings({
           className="text-sm font-medium text-text"
           htmlFor="preset-select"
         >
-          Preset
+          {intl.formatMessage(messages.preset)}
         </label>
         <Select value={selectedPresetId} onValueChange={handlePresetChange}>
           {presets.map((preset) => (
             <Select.Item key={preset.id} value={preset.id}>
-              {preset.label}
+              {intl.formatMessage(
+                messages[PRESET_MESSAGES[preset.id] ?? 'presetBalanced'],
+              )}
             </Select.Item>
           ))}
         </Select>
@@ -74,7 +150,7 @@ function CalculationSettings({
               clipRule="evenodd"
             />
           </svg>
-          Advanced
+          {intl.formatMessage(messages.advanced)}
         </button>
 
         {advancedOpen && (
@@ -85,7 +161,7 @@ function CalculationSettings({
                   htmlFor={`param-${field}`}
                   className="text-xs font-medium text-text-muted"
                 >
-                  {field}
+                  {intl.formatMessage(messages[PARAM_MESSAGES[field]])}
                 </label>
                 <input
                   id={`param-${field}`}

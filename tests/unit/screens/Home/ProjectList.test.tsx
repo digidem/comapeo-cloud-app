@@ -96,7 +96,11 @@ describe('ProjectList', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '+ New Project' }));
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Create new project from project list',
+      }),
+    );
     expect(onCreateNew).toHaveBeenCalledOnce();
   });
 });

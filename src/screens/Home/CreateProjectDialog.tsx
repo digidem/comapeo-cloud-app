@@ -1,4 +1,5 @@
 import { useReducer, useRef } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
@@ -21,6 +22,33 @@ type DialogAction =
   | { type: 'error'; message: string }
   | { type: 'reset' };
 
+const messages = defineMessages({
+  title: {
+    id: 'home.newProject.dialog.title',
+    defaultMessage: 'New Project',
+  },
+  nameLabel: {
+    id: 'home.newProject.dialog.nameLabel',
+    defaultMessage: 'Project Name',
+  },
+  namePlaceholder: {
+    id: 'home.newProject.dialog.namePlaceholder',
+    defaultMessage: 'Enter project name',
+  },
+  create: {
+    id: 'home.newProject.dialog.create',
+    defaultMessage: 'Create',
+  },
+  cancel: {
+    id: 'home.newProject.dialog.cancel',
+    defaultMessage: 'Cancel',
+  },
+  failed: {
+    id: 'home.newProject.dialog.error',
+    defaultMessage: 'Failed to create project',
+  },
+});
+
 function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
   switch (action.type) {
     case 'submit':
@@ -39,6 +67,7 @@ function CreateProjectDialog({
   onClose,
   onCreated,
 }: CreateProjectDialogProps) {
+  const intl = useIntl();
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -53,7 +82,9 @@ function CreateProjectDialog({
       },
       (err: unknown) => {
         const message =
-          err instanceof Error ? err.message : 'Failed to create project';
+          err instanceof Error
+            ? err.message
+            : intl.formatMessage(messages.failed);
         dispatch({ type: 'error', message });
       },
     );
@@ -70,7 +101,7 @@ function CreateProjectDialog({
       onOpenChange={(open) => {
         if (!open) handleClose();
       }}
-      title="New Project"
+      title={intl.formatMessage(messages.title)}
     >
       <form
         onSubmit={(e) => {
@@ -84,13 +115,13 @@ function CreateProjectDialog({
             htmlFor="project-name"
             className="text-sm font-medium text-text"
           >
-            Project Name
+            {intl.formatMessage(messages.nameLabel)}
           </label>
           <input
             id="project-name"
             ref={inputRef}
             type="text"
-            placeholder="Enter project name"
+            placeholder={intl.formatMessage(messages.namePlaceholder)}
             defaultValue=""
             className="w-full rounded-[12px] border border-border bg-white px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
           />
@@ -107,7 +138,7 @@ function CreateProjectDialog({
             size="sm"
             onClick={handleClose}
           >
-            Cancel
+            {intl.formatMessage(messages.cancel)}
           </Button>
           <Button
             type="submit"
@@ -115,7 +146,7 @@ function CreateProjectDialog({
             size="sm"
             loading={state.status === 'loading'}
           >
-            Create
+            {intl.formatMessage(messages.create)}
           </Button>
         </div>
       </form>

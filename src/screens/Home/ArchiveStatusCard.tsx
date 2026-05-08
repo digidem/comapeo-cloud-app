@@ -1,3 +1,5 @@
+import { defineMessages, useIntl } from 'react-intl';
+
 import { Link } from '@tanstack/react-router';
 
 import { Button } from '@/components/ui/button';
@@ -8,11 +10,51 @@ interface ArchiveStatusCardProps {
   onSync: (serverId: string) => void;
 }
 
+const messages = defineMessages({
+  statusOk: {
+    id: 'home.archive.status.ok',
+    defaultMessage: 'OK',
+  },
+  statusError: {
+    id: 'home.archive.status.error',
+    defaultMessage: 'Error',
+  },
+  statusSyncing: {
+    id: 'home.archive.status.syncing',
+    defaultMessage: 'Syncing',
+  },
+  statusIdle: {
+    id: 'home.archive.status.idle',
+    defaultMessage: 'Idle',
+  },
+  lastSynced: {
+    id: 'home.archive.lastSynced',
+    defaultMessage: 'Last synced: {date}',
+  },
+  credentialsUnavailable: {
+    id: 'home.archive.credentialsUnavailable',
+    defaultMessage: 'Credentials unavailable.',
+  },
+  settingsLink: {
+    id: 'home.archive.settingsLink',
+    defaultMessage: 'Go to Settings',
+  },
+  sync: {
+    id: 'home.archive.sync',
+    defaultMessage: 'Sync Now',
+  },
+  syncing: {
+    id: 'home.archive.syncing',
+    defaultMessage: 'Syncing...',
+  },
+});
+
 function StatusBadge({
   status,
 }: {
   status: 'ok' | 'error' | 'syncing' | 'idle';
 }) {
+  const intl = useIntl();
   const styles: Record<string, string> = {
     ok: 'bg-green-100 text-green-700',
     error: 'bg-red-100 text-red-700',
@@ -20,23 +62,24 @@ function StatusBadge({
     idle: 'bg-gray-100 text-gray-600',
   };
 
-  const labels: Record<string, string> = {
-    ok: 'OK',
-    error: 'Error',
-    syncing: 'Syncing',
-    idle: 'Idle',
+  const labels: Record<string, keyof typeof messages> = {
+    ok: 'statusOk',
+    error: 'statusError',
+    syncing: 'statusSyncing',
+    idle: 'statusIdle',
   };
 
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] ?? styles['idle']}`}
     >
-      {labels[status] ?? status}
+      {intl.formatMessage(messages[labels[status] ?? 'statusIdle'])}
     </span>
   );
 }
 
 function ArchiveStatusCard({ server, onSync }: ArchiveStatusCardProps) {
+  const intl = useIntl();
   function resolveStatus() {
     if (server.isSyncing) return 'syncing';
     if (server.error) return 'error';
@@ -56,7 +99,9 @@ function ArchiveStatusCard({ server, onSync }: ArchiveStatusCardProps) {
 
       {server.lastSyncedAt && (
         <p className="text-xs text-text-muted">
-          Last synced: {new Date(server.lastSyncedAt).toLocaleString()}
+          {intl.formatMessage(messages.lastSynced, {
+            date: new Date(server.lastSyncedAt).toLocaleString(),
+          })}
         </p>
       )}
 
@@ -64,25 +109,25 @@ function ArchiveStatusCard({ server, onSync }: ArchiveStatusCardProps) {
 
       {!server.hasCredentials && (
         <p className="text-xs text-text-muted">
-          Credentials unavailable.{' '}
+          {intl.formatMessage(messages.credentialsUnavailable)}{' '}
           <Link
             to="/settings"
             className="text-primary underline hover:no-underline"
           >
-            Go to Settings
+            {intl.formatMessage(messages.settingsLink)}
           </Link>
         </p>
       )}
 
       {server.hasCredentials && server.isSyncing && (
         <Button variant="secondary" size="sm" loading disabled>
-          Syncing...
+          {intl.formatMessage(messages.syncing)}
         </Button>
       )}
 
       {server.hasCredentials && !server.isSyncing && (
         <Button variant="secondary" size="sm" onClick={() => onSync(server.id)}>
-          Sync Now
+          {intl.formatMessage(messages.sync)}
         </Button>
       )}
     </div>

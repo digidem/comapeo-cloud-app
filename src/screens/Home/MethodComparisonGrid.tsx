@@ -1,4 +1,5 @@
-import { Skeleton } from '@/components/ui/skeleton';
+import { defineMessages, useIntl } from 'react-intl';
+
 import type { CoverageMethodResult } from '@/hooks/useProjectCoverage';
 import type { AreaUnit } from '@/lib/area-format';
 
@@ -13,34 +14,81 @@ interface MethodComparisonGridProps {
   onExport: (methodId: string) => void;
 }
 
+const messages = defineMessages({
+  observedLabel: {
+    id: 'home.method.observed.label',
+    defaultMessage: 'Observed Footprint',
+  },
+  observedDescription: {
+    id: 'home.method.observed.description',
+    defaultMessage: 'Buffer around each observation',
+  },
+  connectivity10Label: {
+    id: 'home.method.connectivity10.label',
+    defaultMessage: '10km Connectivity',
+  },
+  connectivity10Description: {
+    id: 'home.method.connectivity10.description',
+    defaultMessage: 'Points reachable within 10km',
+  },
+  connectivity30Label: {
+    id: 'home.method.connectivity30.label',
+    defaultMessage: '30km Connectivity',
+  },
+  connectivity30Description: {
+    id: 'home.method.connectivity30.description',
+    defaultMessage: 'Points reachable within 30km',
+  },
+  clusterHullLabel: {
+    id: 'home.method.clusterHull.label',
+    defaultMessage: 'Cluster Hull',
+  },
+  clusterHullDescription: {
+    id: 'home.method.clusterHull.description',
+    defaultMessage: 'Concave hull per cluster',
+  },
+  gridLabel: {
+    id: 'home.method.grid.label',
+    defaultMessage: 'Occupied Grid',
+  },
+  gridDescription: {
+    id: 'home.method.grid.description',
+    defaultMessage: 'Grid cells with observations',
+  },
+});
+
 const METHOD_META: Record<
   string,
-  { label: string; description: string; color: string }
+  {
+    label: keyof typeof messages;
+    description: keyof typeof messages;
+    color: string;
+  }
 > = {
   observed: {
-    label: 'Observed Footprint',
-    description: 'Buffer around each observation',
-    color: '#1F6FFF',
+    label: 'observedLabel',
+    description: 'observedDescription',
+    color: '#c35b2d',
   },
   connectivity10: {
-    label: '10km Connectivity',
-    description: 'Points reachable within 10km',
-    color: '#7C3AED',
+    label: 'connectivity10Label',
+    description: 'connectivity10Description',
+    color: '#0f7b6c',
   },
   connectivity30: {
-    label: '30km Connectivity',
-    description: 'Points reachable within 30km',
-    color: '#059669',
+    label: 'connectivity30Label',
+    description: 'connectivity30Description',
+    color: '#b33f62',
   },
   clusterHull: {
-    label: 'Cluster Hull',
-    description: 'Concave hull per cluster',
-    color: '#D97706',
+    label: 'clusterHullLabel',
+    description: 'clusterHullDescription',
+    color: '#1d4ed8',
   },
   grid: {
-    label: 'Occupied Grid',
-    description: 'Grid cells with observations',
-    color: '#DC2626',
+    label: 'gridLabel',
+    description: 'gridDescription',
+    color: '#8860d0',
   },
 };
 
@@ -60,6 +108,7 @@ export function MethodComparisonGrid({
   onActivate,
   onExport,
 }: MethodComparisonGridProps) {
+  const intl = useIntl();
   const showSkeletons = isCalculating && results.length === 0;
 
   return (
@@ -68,24 +117,16 @@ export function MethodComparisonGrid({
         const meta = METHOD_META[methodId];
         if (!meta) return null;
 
-        if (showSkeletons) {
-          return (
-            <div key={methodId} className="rounded-[18px] p-4">
-              <Skeleton height={80} />
-            </div>
-          );
-        }
-
         const result = results.find((r) => r.methodId === methodId);
 
         return (
           <MethodCard
             key={methodId}
             methodId={methodId}
-            label={meta.label}
-            description={meta.description}
+            label={intl.formatMessage(messages[meta.label])}
+            description={intl.formatMessage(messages[meta.description])}
             color={meta.color}
-            result={result}
+            result={showSkeletons ? { methodId, progress: '' } : result}
             isActive={activeMethodId === methodId}
             unit={unit}
             onActivate={onActivate}

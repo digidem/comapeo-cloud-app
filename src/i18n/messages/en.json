@@ -8,14 +8,35 @@
   "home.noProjects.cta": {
     "defaultMessage": "Create your first project"
   },
+  "home.empty.noProjects": {
+    "defaultMessage": "No projects yet"
+  },
+  "home.empty.noObservations": {
+    "defaultMessage": "No observations yet"
+  },
+  "home.empty.noMappableCoordinates": {
+    "defaultMessage": "No mappable coordinates found"
+  },
+  "home.noProjects.listCtaAria": {
+    "defaultMessage": "Create your first project from project list"
+  },
   "home.newProject": {
     "defaultMessage": "New Project"
   },
+  "home.newProject.topbarAria": {
+    "defaultMessage": "Create new project from topbar"
+  },
+  "home.newProject.listAria": {
+    "defaultMessage": "Create new project from project list"
+  },
   "home.newProject.dialog.title": {
-    "defaultMessage": "Create Project"
+    "defaultMessage": "New Project"
+  },
+  "home.newProject.dialog.nameLabel": {
+    "defaultMessage": "Project Name"
   },
   "home.newProject.dialog.namePlaceholder": {
-    "defaultMessage": "Project name (optional)"
+    "defaultMessage": "Enter project name"
   },
   "home.newProject.dialog.create": {
     "defaultMessage": "Create"
@@ -23,17 +44,38 @@
   "home.newProject.dialog.cancel": {
     "defaultMessage": "Cancel"
   },
+  "home.newProject.dialog.error": {
+    "defaultMessage": "Failed to create project"
+  },
+  "home.untitledProject": {
+    "defaultMessage": "Untitled Project"
+  },
+  "home.localMode": {
+    "defaultMessage": "Local Mode"
+  },
   "home.import.button": {
     "defaultMessage": "Import Data"
   },
   "home.import.processing": {
-    "defaultMessage": "Importing..."
+    "defaultMessage": "Processing..."
   },
   "home.import.success": {
     "defaultMessage": "Imported {imported} observations"
   },
+  "home.import.successWithSkipped": {
+    "defaultMessage": "{imported} imported, {skipped} skipped"
+  },
+  "home.import.another": {
+    "defaultMessage": "Import another"
+  },
   "home.import.error": {
     "defaultMessage": "Import failed"
+  },
+  "home.import.errorPrefix": {
+    "defaultMessage": "Error: {message}"
+  },
+  "home.import.tryAgain": {
+    "defaultMessage": "Try again"
   },
   "home.coverage.title": {
     "defaultMessage": "Coverage Analysis"
@@ -50,14 +92,182 @@
   "home.archive.syncing": {
     "defaultMessage": "Syncing..."
   },
+  "home.archive.status.ok": {
+    "defaultMessage": "OK"
+  },
+  "home.archive.status.error": {
+    "defaultMessage": "Error"
+  },
+  "home.archive.status.syncing": {
+    "defaultMessage": "Syncing"
+  },
+  "home.archive.status.idle": {
+    "defaultMessage": "Idle"
+  },
+  "home.archive.lastSynced": {
+    "defaultMessage": "Last synced: {date}"
+  },
   "home.archive.error": {
     "defaultMessage": "Sync error"
   },
+  "home.archive.syncFailed": {
+    "defaultMessage": "Sync failed"
+  },
   "home.archive.credentialsUnavailable": {
-    "defaultMessage": "Credentials unavailable"
+    "defaultMessage": "Credentials unavailable."
+  },
+  "home.archiveNoCredentials": {
+    "defaultMessage": "Credentials unavailable."
+  },
+  "home.archive.settingsLink": {
+    "defaultMessage": "Go to Settings"
+  },
+  "home.connectArchive": {
+    "defaultMessage": "Connect archive server"
+  },
+  "home.uploadGeoJson": {
+    "defaultMessage": "Upload GeoJSON/ZIP"
   },
   "home.observations.count": {
     "defaultMessage": "{count, plural, one {# observation} other {# observations}}"
+  },
+  "home.source.local": {
+    "defaultMessage": "Local"
+  },
+  "home.source.archive": {
+    "defaultMessage": "Archive"
+  },
+  "home.sourceBadge.local": {
+    "defaultMessage": "Local"
+  },
+  "home.sourceBadge.remote": {
+    "defaultMessage": "Remote archive"
+  },
+  "home.nav.home": {
+    "defaultMessage": "Home"
+  },
+  "home.nav.data": {
+    "defaultMessage": "Data"
+  },
+  "home.nav.alerts": {
+    "defaultMessage": "Alerts"
+  },
+  "home.nav.settings": {
+    "defaultMessage": "Settings"
+  },
+  "home.areaUnit.ha": {
+    "defaultMessage": "ha"
+  },
+  "home.areaUnit.m2": {
+    "defaultMessage": "m²"
+  },
+  "home.areaUnit.km2": {
+    "defaultMessage": "km²"
+  },
+  "home.method.observed.label": {
+    "defaultMessage": "Observed Footprint"
+  },
+  "home.method.observed": {
+    "defaultMessage": "Observed Footprint"
+  },
+  "home.method.observed.description": {
+    "defaultMessage": "Buffer around each observation"
+  },
+  "home.method.connectivity10.label": {
+    "defaultMessage": "10km Connectivity"
+  },
+  "home.method.connectA": {
+    "defaultMessage": "10km Connectivity"
+  },
+  "home.method.connectivity10.description": {
+    "defaultMessage": "Points reachable within 10km"
+  },
+  "home.method.connectA.description": {
+    "defaultMessage": "Points reachable within 10km"
+  },
+  "home.method.connectivity30.label": {
+    "defaultMessage": "30km Connectivity"
+  },
+  "home.method.connectB": {
+    "defaultMessage": "30km Connectivity"
+  },
+  "home.method.connectivity30.description": {
+    "defaultMessage": "Points reachable within 30km"
+  },
+  "home.method.connectB.description": {
+    "defaultMessage": "Points reachable within 30km"
+  },
+  "home.method.clusterHull.label": {
+    "defaultMessage": "Cluster Hull"
+  },
+  "home.method.clusterHull": {
+    "defaultMessage": "Cluster Hull"
+  },
+  "home.method.clusterHull.description": {
+    "defaultMessage": "Concave hull per cluster"
+  },
+  "home.method.grid.label": {
+    "defaultMessage": "Occupied Grid"
+  },
+  "home.method.grid": {
+    "defaultMessage": "Occupied Grid"
+  },
+  "home.method.grid.description": {
+    "defaultMessage": "Grid cells with observations"
+  },
+  "home.method.export": {
+    "defaultMessage": "Export"
+  },
+  "home.settings.preset": {
+    "defaultMessage": "Preset"
+  },
+  "home.settings.advanced": {
+    "defaultMessage": "Advanced"
+  },
+  "home.preset.balanced": {
+    "defaultMessage": "Balanced Comparison"
+  },
+  "home.preset.balanced.description": {
+    "defaultMessage": "Keeps the original comparison set for direct side-by-side evaluation."
+  },
+  "home.preset.footprint": {
+    "defaultMessage": "Observed Footprint"
+  },
+  "home.preset.footprint.description": {
+    "defaultMessage": "Optimized to emphasize the direct observation buffer and tighter derived areas."
+  },
+  "home.preset.connectivity": {
+    "defaultMessage": "10 km Connectivity"
+  },
+  "home.preset.connectivity.description": {
+    "defaultMessage": "Prioritizes near-neighbor reach while keeping hull and grid outputs moderate."
+  },
+  "home.preset.grid": {
+    "defaultMessage": "5 km Grid"
+  },
+  "home.preset.grid.description": {
+    "defaultMessage": "Centers the analysis on occupied grid cells for reporting-style coverage maps."
+  },
+  "home.param.observedBufferMeters": {
+    "defaultMessage": "observedBufferMeters"
+  },
+  "home.param.connectivity10Km": {
+    "defaultMessage": "connectivity10Km"
+  },
+  "home.param.connectivity30Km": {
+    "defaultMessage": "connectivity30Km"
+  },
+  "home.param.clusterDistanceKm": {
+    "defaultMessage": "clusterDistanceKm"
+  },
+  "home.param.hullMaxEdgeKm": {
+    "defaultMessage": "hullMaxEdgeKm"
+  },
+  "home.param.hullFallbackBufferKm": {
+    "defaultMessage": "hullFallbackBufferKm"
+  },
+  "home.param.gridCellKm": {
+    "defaultMessage": "gridCellKm"
   },
   "settings.addServer": {
     "defaultMessage": "Add Server"

@@ -1,3 +1,5 @@
+import { defineMessages, useIntl } from 'react-intl';
+
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -9,6 +11,33 @@ interface ProjectListProps {
   isLoading?: boolean;
 }
 
+const messages = defineMessages({
+  newProject: {
+    id: 'home.newProject',
+    defaultMessage: 'New Project',
+  },
+  newProjectListAria: {
+    id: 'home.newProject.listAria',
+    defaultMessage: 'Create new project from project list',
+  },
+  noProjects: {
+    id: 'home.noProjects',
+    defaultMessage: 'No projects yet',
+  },
+  firstProject: {
+    id: 'home.noProjects.cta',
+    defaultMessage: 'Create your first project',
+  },
+  firstProjectListAria: {
+    id: 'home.noProjects.listCtaAria',
+    defaultMessage: 'Create your first project from project list',
+  },
+  untitledProject: {
+    id: 'home.untitledProject',
+    defaultMessage: 'Untitled Project',
+  },
+});
+
 function ProjectList({
   projects,
   selectedProjectId,
@@ -16,10 +45,17 @@ function ProjectList({
   onCreateNew,
   isLoading = false,
 }: ProjectListProps) {
+  const intl = useIntl();
+
   return (
     <div className="flex flex-col gap-2">
-      <Button variant="secondary" size="sm" onClick={onCreateNew}>
-        + New Project
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={onCreateNew}
+        aria-label={intl.formatMessage(messages.newProjectListAria)}
+      >
+        + {intl.formatMessage(messages.newProject)}
       </Button>
 
       {isLoading && (
@@ -32,9 +68,16 @@ function ProjectList({
 
       {!isLoading && projects.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
-          <p className="text-sm text-text-muted">No projects yet</p>
-          <Button variant="primary" size="sm" onClick={onCreateNew}>
-            Create your first project
+          <p className="text-sm text-text-muted">
+            {intl.formatMessage(messages.noProjects)}
+          </p>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onCreateNew}
+            aria-label={intl.formatMessage(messages.firstProjectListAria)}
+          >
+            {intl.formatMessage(messages.firstProject)}
           </Button>
         </div>
       )}
@@ -54,7 +97,7 @@ function ProjectList({
                       : 'text-text hover:bg-surface'
                   }`}
                 >
-                  {project.name ?? 'Untitled Project'}
+                  {project.name ?? intl.formatMessage(messages.untitledProject)}
                 </button>
               </li>
             );

@@ -1,4 +1,5 @@
 import { useReducer, useRef } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
 import { importGeoJsonPoints } from '@/lib/data-layer';
@@ -19,6 +20,37 @@ type ImportAction =
   | { type: 'success'; imported: number; skipped: number }
   | { type: 'error'; message: string }
   | { type: 'reset' };
+
+const messages = defineMessages({
+  importButton: {
+    id: 'home.import.button',
+    defaultMessage: 'Import Data',
+  },
+  processing: {
+    id: 'home.import.processing',
+    defaultMessage: 'Processing...',
+  },
+  success: {
+    id: 'home.import.successWithSkipped',
+    defaultMessage: '{imported} imported, {skipped} skipped',
+  },
+  importAnother: {
+    id: 'home.import.another',
+    defaultMessage: 'Import another',
+  },
+  errorPrefix: {
+    id: 'home.import.errorPrefix',
+    defaultMessage: 'Error: {message}',
+  },
+  failed: {
+    id: 'home.import.error',
+    defaultMessage: 'Import failed',
+  },
+  tryAgain: {
+    id: 'home.import.tryAgain',
+    defaultMessage: 'Try again',
+  },
+});
 
 function importReducer(_state: ImportState, action: ImportAction): ImportState {
   switch (action.type) {
@@ -41,6 +73,7 @@ function ImportDataButton({
   projectLocalId,
   onImportComplete,
 }: ImportDataButtonProps) {
+  const intl = useIntl();
   const [state, dispatch] = useReducer(importReducer, { status: 'idle' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,7 +97,10 @@ function ImportDataButton({
         onImportComplete?.(result);
       },
       (err: unknown) => {
-        const message = err instanceof Error ? err.message : 'Import failed';
+        const message =
+          err instanceof Error
+            ? err.message
+            : intl.formatMessage(messages.failed);
         dispatch({ type: 'error', message });
       },
     );
@@ -85,40 +121,47 @@ function ImportDataButton({
 
       {state.status === 'idle' && (
         <Button variant="secondary" size="sm" onClick={handleButtonClick}>
-          Import Data
+          {intl.formatMessage(messages.importButton)}
         </Button>
       )}
 
       {state.status === 'processing' && (
         <Button variant="secondary" size="sm" loading disabled>
-          Processing...
+          {intl.formatMessage(messages.processing)}
         </Button>
       )}
 
       {state.status === 'success' && (
         <div className="flex flex-col gap-1">
           <p className="text-sm text-green-600">
-            {state.imported} imported, {state.skipped} skipped
+            {intl.formatMessage(messages.success, {
+              imported: state.imported,
+              skipped: state.skipped,
+            })}
           </p>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => dispatch({ type: 'reset' })}
           >
-            Import another
+            {intl.formatMessage(messages.importAnother)}
           </Button>
         </div>
       )}
 
       {state.status === 'error' && (
         <div className="flex flex-col gap-1">
-          <p className="text-sm text-red-500">Error: {state.message}</p>
+          <p className="text-sm text-red-500">
+            {intl.formatMessage(messages.errorPrefix, {
+              message: state.message,
+            })}
+          </p>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => dispatch({ type: 'reset' })}
           >
-            Try again
+            {intl.formatMessage(messages.tryAgain)}
           </Button>
         </div>
       )}

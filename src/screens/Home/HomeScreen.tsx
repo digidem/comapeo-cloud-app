@@ -1,8 +1,10 @@
 import { useReducer } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { useQueryClient } from '@tanstack/react-query';
 
 import { AppShell } from '@/components/layout/app-shell';
+import { Button } from '@/components/ui/button';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
@@ -67,6 +69,7 @@ interface HomeState {
   params: CalculationParams;
   activeMethodId: string;
   unit: AreaUnit;
+  coverageRefreshKey: number;
 }
 
 type HomeAction =
@@ -76,7 +79,9 @@ type HomeAction =
   | { type: 'PROJECT_CREATED'; id: string }
   | { type: 'SET_PRESET'; presetId: string }
   | { type: 'SET_PARAMS'; params: CalculationParams }
-  | { type: 'SET_ACTIVE_METHOD'; methodId: string };
+  | { type: 'SET_ACTIVE_METHOD'; methodId: string }
+  | { type: 'SET_UNIT'; unit: AreaUnit }
+  | { type: 'INCREMENT_COVERAGE_REFRESH' };
 
 function homeReducer(state: HomeState, action: HomeAction): HomeState {
   switch (action.type) {
@@ -98,6 +103,10 @@ function homeReducer(state: HomeState, action: HomeAction): HomeState {
       return { ...state, params: action.params };
     case 'SET_ACTIVE_METHOD':
       return { ...state, activeMethodId: action.methodId };
+    case 'SET_UNIT':
+      return { ...state, unit: action.unit };
+    case 'INCREMENT_COVERAGE_REFRESH':
+      return { ...state, coverageRefreshKey: state.coverageRefreshKey + 1 };
     default:
       return state;
   }
@@ -110,7 +119,59 @@ const INITIAL_STATE: HomeState = {
   params: { ...DEFAULTS },
   activeMethodId: 'observed',
   unit: 'ha',
+  coverageRefreshKey: 0,
 };
+
+const messages = defineMessages({
+  appTitle: {
+    id: 'app.title',
+    defaultMessage: 'CoMapeo Cloud',
+  },
+  homeTitle: {
+    id: 'home.title',
+    defaultMessage: 'Home',
+  },
+  settingsTitle: {
+    id: 'settings.title',
+    defaultMessage: 'Settings',
+  },
+  localMode: {
+    id: 'home.localMode',
+    defaultMessage: 'Local Mode',
+  },
+  newProject: {
+    id: 'home.newProject',
+    defaultMessage: 'New Project',
+  },
+  newProjectTopbarAria: {
+    id: 'home.newProject.topbarAria',
+    defaultMessage: 'Create new project from topbar',
+  },
+  noProjects: {
+    id: 'home.noProjects',
+    defaultMessage: 'No projects yet',
+  },
+  firstProject: {
+    id: 'home.noProjects.cta',
+    defaultMessage: 'Create your first project',
+  },
+  noCoordinates: {
+    id: 'home.coverage.noCoordinates',
+    defaultMessage: 'No mappable coordinates found',
+  },
+  calculating: {
+    id: 'home.coverage.calculating',
+    defaultMessage: 'Calculating...',
+  },
+  untitledProject: {
+    id: 'home.untitledProject',
+    defaultMessage: 'Untitled Project',
+  },
+  syncFailed: {
+    id: 'home.archive.syncFailed',
+    defaultMessage: 'Sync failed',
+  },
+});
 
 const NAV_ITEMS = [
   { path: '/', label: 'Home', icon: <HomeIcon /> },
@@ -121,10 +182,15 @@ const NAV_ITEMS = [
 
 function HomeScreen() {
   const [state, dispatch] = useReducer(homeReducer, INITIAL_STATE);
+  const intl = useIntl();
 
   const queryClient = useQueryClient();
   const projectsQuery = useProjects();
-  const coverage = useProjectCoverage(state.selectedProjectId, state.params);
+  const coverage = useProjectCoverage(
+    state.selectedProjectId,
+    state.params,
+    state.coverageRefreshKey,
+  );
   const archiveStatus = useArchiveStatus();
   const updateServerStatus = useAuthStore((s) => s.updateServerStatus);
   const servers = useAuthStore((s) => s.servers);
@@ -154,7 +220,9 @@ function HomeScreen() {
         void updateServerStatus(
           serverId,
           'error',
-          err instanceof Error ? err.message : 'Sync failed',
+          err instanceof Error
+            ? err.message
+            : intl.formatMessage(messages.syncFailed),
         );
       },
     );
@@ -181,7 +249,12 @@ function HomeScreen() {
       />
 
       {state.selectedProjectId && (
-        <ImportDataButton projectLocalId={state.selectedProjectId} />
+        <ImportDataButton
+          projectLocalId={state.selectedProjectId}
+          onImportComplete={() =>
+            dispatch({ type: 'INCREMENT_COVERAGE_REFRESH' })
+          }
+        />
       )}
 
       {archiveStatus.servers.length > 0 && (
@@ -202,37 +275,46 @@ function HomeScreen() {
   function renderMainContent() {
     if (!state.selectedProjectId) {
       return (
-        <div className="flex flex-col items-center justify-center h-full py-20 text-center">
-          <p className="text-text-muted text-sm">No projects yet.</p>
-          <p className="text-text-muted text-sm">Create your first project.</p>
+        <div className="flex h-full flex-col items-center justify-center gap-3 py-20 text-center">
+          <p className="text-text-muted text-sm">
+            {intl.formatMessage(messages.noProjects)}
+          </p>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => dispatch({ type: 'OPEN_CREATE_DIALOG' })}
+          >
+            {intl.formatMessage(messages.firstProject)}
+          </Button>
         </div>
       );
     }
 
-    const hasResults = coverage.results.length > 0;
+    const hasMethodResults = coverage.results.length > 0;
+    const hasCompletedResult = coverage.results.some((r) => r.result);
     const showNoCoordinates =
-      !coverage.isCalculating && !hasResults && coverage.error === null;
+      !coverage.isCalculating && !hasMethodResults && coverage.error === null;
 
     if (showNoCoordinates) {
       return (
         <div className="flex flex-col gap-6">
           {selectedProject && (
             <ProjectOverviewHeader
-              projectName={selectedProject.name ?? 'Untitled Project'}
+              projectName={
+                selectedProject.name ??
+                intl.formatMessage(messages.untitledProject)
+              }
               observationCount={0}
               sourceType="local"
             />
           )}
           <p className="text-text-muted text-sm">
-            No mappable coordinates found
+            {intl.formatMessage(messages.noCoordinates)}
           </p>
         </div>
       );
     }
 
-    const activeResult = coverage.results.find(
-      (r) => r.methodId === state.activeMethodId,
-    );
     const observationCount = coverage.results.reduce((acc, r) => {
       if (r.result?.metadata?.pointCount !== undefined) {
         return Math.max(acc, Number(r.result.metadata.pointCount));
@@ -244,16 +326,27 @@ function HomeScreen() {
       <div className="flex flex-col gap-6">
         {selectedProject && (
           <ProjectOverviewHeader
-            projectName={selectedProject.name ?? 'Untitled Project'}
+            projectName={
+              selectedProject.name ??
+              intl.formatMessage(messages.untitledProject)
+            }
             observationCount={observationCount}
             sourceType="local"
           />
+        )}
+
+        {coverage.isCalculating && (
+          <div role="status" aria-live="polite" className="sr-only">
+            {intl.formatMessage(messages.calculating)}
+          </div>
         )}
 
         <CoverageSummary
           activeMethodId={state.activeMethodId}
           results={coverage.results}
           isCalculating={coverage.isCalculating}
+          unit={state.unit}
+          onUnitChange={(unit) => dispatch({ type: 'SET_UNIT', unit })}
         />
 
         <MethodComparisonGrid
@@ -267,7 +360,7 @@ function HomeScreen() {
           onExport={handleExport}
         />
 
-        {activeResult?.result && (
+        {hasCompletedResult && (
           <CalculationSettings
             presets={BUILT_IN_PRESETS}
             selectedPresetId={state.selectedPresetId}
@@ -287,8 +380,31 @@ function HomeScreen() {
   return (
     <>
       <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={NAV_ITEMS}
+        topbarTitle={intl.formatMessage(messages.appTitle)}
+        topbarWorkspaceName={
+          selectedProject?.name ??
+          (selectedProject
+            ? intl.formatMessage(messages.untitledProject)
+            : intl.formatMessage(messages.localMode))
+        }
+        topbarModeLabel={intl.formatMessage(messages.homeTitle)}
+        topbarActions={
+          <Button
+            variant="primary"
+            size="sm"
+            aria-label={intl.formatMessage(messages.newProjectTopbarAria)}
+            onClick={() => dispatch({ type: 'OPEN_CREATE_DIALOG' })}
+          >
+            {intl.formatMessage(messages.newProject)}
+          </Button>
+        }
+        navItems={[
+          { ...NAV_ITEMS[0]!, label: intl.formatMessage(messages.homeTitle) },
+          {
+            ...NAV_ITEMS[1]!,
+            label: intl.formatMessage(messages.settingsTitle),
+          },
+        ]}
         activeNavPath="/"
         secondaryContent={secondaryContent}
       >

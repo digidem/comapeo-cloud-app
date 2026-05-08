@@ -1,3 +1,5 @@
+import { defineMessages, useIntl } from 'react-intl';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import type { CoverageMethodResult } from '@/hooks/useProjectCoverage';
 import { type AreaUnit, convertArea } from '@/lib/area-format';
@@ -13,6 +15,13 @@ interface MethodCardProps {
   onExport?: (methodId: string) => void;
   color?: string;
 }
+
+const messages = defineMessages({
+  export: {
+    id: 'home.method.export',
+    defaultMessage: 'Export',
+  },
+});
 
 function renderAreaValue(
   hasError: boolean,
@@ -58,6 +67,7 @@ export function MethodCard({
   onExport,
   color = '#1F6FFF',
 }: MethodCardProps) {
+  const intl = useIntl();
   const hasResult = result?.result !== undefined;
   const hasError = result?.error !== undefined;
   const isLoading = result?.progress !== undefined && !hasResult && !hasError;
@@ -93,11 +103,11 @@ export function MethodCard({
       {hasResult && onExport && (
         <button
           type="button"
-          aria-label="Export"
+          aria-label={intl.formatMessage(messages.export)}
           onClick={handleExportClick}
           className="absolute right-3 top-3 rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          Export
+          {intl.formatMessage(messages.export)}
         </button>
       )}
     </div>

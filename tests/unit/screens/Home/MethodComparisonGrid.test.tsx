@@ -90,7 +90,7 @@ describe('MethodComparisonGrid', () => {
     expect(onActivate).toHaveBeenCalledWith('connectivity10');
   });
 
-  it('renders skeleton cards when isCalculating is true and no results', () => {
+  it('renders method card shells when isCalculating is true and no results', () => {
     render(
       <MethodComparisonGrid
         {...defaultProps}
@@ -98,7 +98,45 @@ describe('MethodComparisonGrid', () => {
         isCalculating={true}
       />,
     );
+    expect(screen.getByText('Observed Footprint')).toBeInTheDocument();
+    expect(screen.getByText('10km Connectivity')).toBeInTheDocument();
+    expect(screen.getByText('30km Connectivity')).toBeInTheDocument();
+    expect(screen.getByText('Cluster Hull')).toBeInTheDocument();
+    expect(screen.getByText('Occupied Grid')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-method-id="grid"]'),
+    ).toBeInTheDocument();
     const skeletons = screen.getAllByTestId('skeleton');
     expect(skeletons.length).toBeGreaterThan(0);
+  });
+
+  it('uses the spec color palette for method card borders', () => {
+    render(<MethodComparisonGrid {...defaultProps} />);
+
+    expect(
+      document
+        .querySelector('[data-method-id="observed"] button')
+        ?.getAttribute('style'),
+    ).toContain('rgb(195, 91, 45)');
+    expect(
+      document
+        .querySelector('[data-method-id="connectivity10"] button')
+        ?.getAttribute('style'),
+    ).toContain('rgb(15, 123, 108)');
+    expect(
+      document
+        .querySelector('[data-method-id="connectivity30"] button')
+        ?.getAttribute('style'),
+    ).toContain('rgb(179, 63, 98)');
+    expect(
+      document
+        .querySelector('[data-method-id="clusterHull"] button')
+        ?.getAttribute('style'),
+    ).toContain('rgb(29, 78, 216)');
+    expect(
+      document
+        .querySelector('[data-method-id="grid"] button')
+        ?.getAttribute('style'),
+    ).toContain('rgb(136, 96, 208)');
   });
 });
