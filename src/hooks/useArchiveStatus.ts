@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { getRemoteServers } from '@/lib/local-repositories';
 import { useAuthStore } from '@/stores/auth-store';
@@ -51,24 +51,35 @@ export function useArchiveStatus(): ArchiveStatus {
     };
   }, []);
 
-  const mapped: ArchiveServerStatus[] = servers.map((s) => ({
-    id: s.id,
-    label: s.label,
-    baseUrl: s.baseUrl,
-    isSyncing: s.status === 'syncing',
-    lastSyncedAt: s.lastSyncedAt ?? null,
-    error: s.status === 'error' ? (s.errorMessage ?? 'Unknown error') : null,
-    hasCredentials: typeof s.token === 'string' && s.token.length > 0,
-  }));
-  const authServerIds = new Set(mapped.map((s) => s.id));
-  const merged = [
-    ...mapped,
-    ...cachedServers.filter((s) => !authServerIds.has(s.id)),
-  ];
+  const mapped: ArchiveServerStatus[] = useMemo(
+    () =>
+      servers.map((s) => ({
+        id: s.id,
+        label: s.label,
+        baseUrl: s.baseUrl,
+        isSyncing: s.status === 'syncing',
+        lastSyncedAt: s.lastSyncedAt ?? null,
+        error:
+          s.status === 'error' ? (s.errorMessage ?? 'Unknown error') : null,
+        hasCredentials: typeof s.token === 'string' && s.token.length > 0,
+      })),
+    [servers],
+  );
 
-  return {
-    servers: merged,
-    anyError: merged.some((s) => s.error !== null),
-    anySyncing: merged.some((s) => s.isSyncing),
-  };
+  const merged = useMemo(() => {
+    const authServerIds = new Set(mapped.map((s) => s.id));
+    return [
+      ...mapped,
+      ...cachedServers.filter((s) => !authServerIds.has(s.id)),
+    ];
+  }, [mapped, cachedServers]);
+
+  return useMemo(
+    () => ({
+      servers: merged,
+      anyError: merged.some((s) => s.error !== null),
+      anySyncing: merged.some((s) => s.isSyncing),
+    }),
+    [merged],
+  );
 }

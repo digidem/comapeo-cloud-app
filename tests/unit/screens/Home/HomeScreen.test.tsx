@@ -7,11 +7,49 @@ import {
 } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ReactNode } from 'react';
+
+import {
+  ShellSlotProvider,
+  useShellOverrides,
+} from '@/components/layout/shell-slot';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
 import type { CalculationResult } from '@/lib/area-calculator/types';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
+
+// Renders HomeScreen inside a ShellSlotProvider + a "shell reader" that exposes
+// the slot overrides to the DOM so topbar assertions remain possible.
+function ShellReader() {
+  const {
+    topbarWorkspaceName,
+    topbarModeLabel,
+    topbarActions,
+    secondaryContent,
+  } = useShellOverrides();
+  return (
+    <>
+      {topbarWorkspaceName && (
+        <div data-testid="shell-workspace">{topbarWorkspaceName}</div>
+      )}
+      {topbarModeLabel && <div data-testid="shell-mode">{topbarModeLabel}</div>}
+      {topbarActions && <div data-testid="shell-actions">{topbarActions}</div>}
+      {secondaryContent && (
+        <div data-testid="shell-secondary">{secondaryContent}</div>
+      )}
+    </>
+  );
+}
+
+function renderWithShell(ui: ReactNode) {
+  return render(
+    <ShellSlotProvider>
+      <ShellReader />
+      {ui}
+    </ShellSlotProvider>,
+  );
+}
 
 // Mock TanStack Router Link + Outlet
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -134,7 +172,7 @@ describe('HomeScreen', () => {
     expect(screen.getAllByText('No projects yet').length).toBeGreaterThan(0);
   });
 
-  it('shows project list when projects exist', () => {
+  it('shows project list when projects exist', async () => {
     mockUseProjects.mockReturnValue({
       data: [
         { localId: 'p1', name: 'Alpha Project' },
@@ -146,12 +184,15 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
-    expect(screen.getByText('Alpha Project')).toBeDefined();
+    renderWithShell(<HomeScreen />);
+    // Project list is in secondary sidebar — wait for shell slot effect to flush
+    await waitFor(() => {
+      expect(screen.getByText('Alpha Project')).toBeDefined();
+    });
     expect(screen.getByText('Beta Project')).toBeDefined();
   });
 
-  it('shows loading skeletons when projects are loading', () => {
+  it('shows loading skeletons when projects are loading', async () => {
     mockUseProjects.mockReturnValue({
       data: undefined,
       isLoading: true,
@@ -160,17 +201,19 @@ describe('HomeScreen', () => {
       status: 'pending',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
-    const skeletons = screen.getAllByTestId('skeleton');
-    expect(skeletons.length).toBeGreaterThan(0);
+    renderWithShell(<HomeScreen />);
+    await waitFor(() => {
+      const skeletons = screen.getAllByTestId('skeleton');
+      expect(skeletons.length).toBeGreaterThan(0);
+    });
   });
 
   it('opens create dialog when the secondary new project button is clicked', async () => {
     const user = userEvent.setup();
 
-    render(<HomeScreen />);
+    renderWithShell(<HomeScreen />);
 
-    const newProjectBtn = screen.getByRole('button', {
+    const newProjectBtn = await screen.findByRole('button', {
       name: 'Create new project from project list',
     });
     await user.click(newProjectBtn);
@@ -205,10 +248,15 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderWithShell(<HomeScreen />);
 
-    expect(screen.getByText('Local Mode')).toBeInTheDocument();
-    expect(screen.getByText('Home')).toBeInTheDocument();
+    // Shell slot overrides are set via useEffect — wait for them to appear
+    await waitFor(() => {
+      expect(screen.getByTestId('shell-workspace')).toHaveTextContent(
+        'Local Mode',
+      );
+    });
+    expect(screen.getByTestId('shell-mode')).toHaveTextContent('Home');
 
     await user.click(screen.getByRole('button', { name: 'My Project' }));
     expect(screen.getAllByText('My Project').length).toBeGreaterThan(0);
@@ -248,10 +296,10 @@ describe('HomeScreen', () => {
       error: null,
     });
 
-    render(<HomeScreen />);
+    renderWithShell(<HomeScreen />);
 
-    // Select the project
-    await user.click(screen.getByRole('button', { name: 'My Project' }));
+    // Select the project via the secondary sidebar
+    await user.click(await screen.findByRole('button', { name: 'My Project' }));
 
     expect(screen.getByText('No mappable coordinates found')).toBeDefined();
   });
@@ -266,8 +314,10 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
-    await user.click(screen.getByRole('button', { name: 'Import Project' }));
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Import Project' }),
+    );
 
     selectFile(
       new File(['{"type":"FeatureCollection","features":[]}'], 'data.geojson', {
@@ -299,8 +349,10 @@ describe('HomeScreen', () => {
       error: null,
     });
 
-    render(<HomeScreen />);
-    await user.click(screen.getByRole('button', { name: 'Unit Project' }));
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Unit Project' }),
+    );
     await user.click(screen.getByRole('button', { name: 'm²' }));
 
     const values = screen.getAllByText(/50[.,\s]?000/);
@@ -322,8 +374,10 @@ describe('HomeScreen', () => {
       error: null,
     });
 
-    render(<HomeScreen />);
-    await user.click(screen.getByRole('button', { name: 'Settings Project' }));
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Settings Project' }),
+    );
 
     expect(screen.getByText('Preset')).toBeInTheDocument();
   });
@@ -344,8 +398,10 @@ describe('HomeScreen', () => {
       error: null,
     });
 
-    render(<HomeScreen />);
-    await user.click(screen.getByRole('button', { name: 'Calc Project' }));
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Calc Project' }),
+    );
 
     expect(screen.getByRole('status')).toHaveTextContent('Calculating');
   });
@@ -366,8 +422,10 @@ describe('HomeScreen', () => {
       error: null,
     });
 
-    render(<HomeScreen />);
-    await user.click(screen.getByRole('button', { name: 'Calc Project' }));
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Calc Project' }),
+    );
 
     // CoverageSummary renders when isCalculating=true (shows skeleton for area)
     const skeletons = screen.getAllByTestId('skeleton');

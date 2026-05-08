@@ -1,9 +1,9 @@
-import { useReducer } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { useQueryClient } from '@tanstack/react-query';
 
-import { AppShell } from '@/components/layout/app-shell';
+import { useShellSlot } from '@/components/layout/shell-slot';
 import { Button } from '@/components/ui/button';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
@@ -23,42 +23,6 @@ import { ImportDataButton } from './ImportDataButton';
 import { MethodComparisonGrid } from './MethodComparisonGrid';
 import { ProjectList } from './ProjectList';
 import { ProjectOverviewHeader } from './ProjectOverviewHeader';
-
-// ---- Nav icons ----
-
-function HomeIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={20}
-      height={20}
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7A1 1 0 003 11h1v6a1 1 0 001 1h4v-4h2v4h4a1 1 0 001-1v-6h1a1 1 0 00.707-1.707l-7-7z" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={20}
-      height={20}
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        fillRule="evenodd"
-        d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
-}
 
 // ---- State management ----
 
@@ -173,11 +137,6 @@ const messages = defineMessages({
   },
 });
 
-const NAV_ITEMS = [
-  { path: '/', label: 'Home', icon: <HomeIcon /> },
-  { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
-];
-
 // ---- Component ----
 
 function HomeScreen() {
@@ -195,9 +154,22 @@ function HomeScreen() {
   const updateServerStatus = useAuthStore((s) => s.updateServerStatus);
   const servers = useAuthStore((s) => s.servers);
 
-  const projects = projectsQuery.data ?? [];
+  const projects = useMemo(
+    () => projectsQuery.data ?? [],
+    [projectsQuery.data],
+  );
   const selectedProject = projects.find(
     (p) => p.localId === state.selectedProjectId,
+  );
+
+  const handleOpenCreateDialog = useCallback(
+    () => dispatch({ type: 'OPEN_CREATE_DIALOG' }),
+    [],
+  );
+
+  const handleIncrementRefresh = useCallback(
+    () => dispatch({ type: 'INCREMENT_COVERAGE_REFRESH' }),
+    [],
   );
 
   function handleSync(serverId: string) {
@@ -237,66 +209,118 @@ function HomeScreen() {
     );
   }
 
-  // ---- Secondary sidebar content ----
-  const secondaryContent = (
-    <div className="flex flex-col gap-4 p-4">
-      <ProjectList
-        projects={projects}
-        selectedProjectId={state.selectedProjectId}
-        onSelect={(id) => dispatch({ type: 'SELECT_PROJECT', id })}
-        onCreateNew={() => dispatch({ type: 'OPEN_CREATE_DIALOG' })}
-        isLoading={projectsQuery.isLoading}
-      />
+  // ---- Shell slot: inject topbar + secondary sidebar into layout's AppShell ----
 
-      {state.selectedProjectId && (
-        <ImportDataButton
-          projectLocalId={state.selectedProjectId}
-          onImportComplete={() =>
-            dispatch({ type: 'INCREMENT_COVERAGE_REFRESH' })
-          }
-        />
-      )}
+  const topbarWorkspaceName =
+    selectedProject?.name ??
+    (selectedProject
+      ? intl.formatMessage(messages.untitledProject)
+      : intl.formatMessage(messages.localMode));
 
-      {archiveStatus.servers.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {archiveStatus.servers.map((server) => (
-            <ArchiveStatusCard
-              key={server.id}
-              server={server}
-              onSync={handleSync}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+  const topbarActions = useMemo(
+    () => (
+      <Button
+        variant="primary"
+        size="sm"
+        aria-label={intl.formatMessage(messages.newProjectTopbarAria)}
+        onClick={handleOpenCreateDialog}
+      >
+        {intl.formatMessage(messages.newProject)}
+      </Button>
+    ),
+    // intl reference is stable within a session; handleOpenCreateDialog is stable (useCallback)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [handleOpenCreateDialog],
   );
 
+  const secondaryContent = useMemo(
+    () => (
+      <div className="flex flex-col gap-4 p-4">
+        <ProjectList
+          projects={projects}
+          selectedProjectId={state.selectedProjectId}
+          onSelect={(id) => dispatch({ type: 'SELECT_PROJECT', id })}
+          onCreateNew={handleOpenCreateDialog}
+          isLoading={projectsQuery.isLoading}
+        />
+
+        {state.selectedProjectId && (
+          <ImportDataButton
+            projectLocalId={state.selectedProjectId}
+            onImportComplete={handleIncrementRefresh}
+          />
+        )}
+
+        {archiveStatus.servers.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {archiveStatus.servers.map((server) => (
+              <ArchiveStatusCard
+                key={server.id}
+                server={server}
+                onSync={handleSync}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      projects,
+      state.selectedProjectId,
+      projectsQuery.isLoading,
+      archiveStatus.servers,
+      handleOpenCreateDialog,
+      handleIncrementRefresh,
+    ],
+  );
+
+  const shellSlot = useMemo(
+    () => ({
+      topbarWorkspaceName,
+      topbarModeLabel: intl.formatMessage(messages.homeTitle),
+      topbarActions,
+      secondaryContent,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [topbarWorkspaceName, topbarActions, secondaryContent],
+  );
+
+  useShellSlot(shellSlot);
+
   // ---- Main content area ----
-  function renderMainContent() {
-    if (!state.selectedProjectId) {
-      return (
+  if (!state.selectedProjectId) {
+    return (
+      <>
         <div className="flex h-full flex-col items-center justify-center gap-3 py-20 text-center">
           <p className="text-text-muted text-sm">
             {intl.formatMessage(messages.noProjects)}
           </p>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => dispatch({ type: 'OPEN_CREATE_DIALOG' })}
-          >
+          <Button variant="primary" size="sm" onClick={handleOpenCreateDialog}>
             {intl.formatMessage(messages.firstProject)}
           </Button>
         </div>
-      );
-    }
 
-    const hasMethodResults = coverage.results.length > 0;
-    const hasCompletedResult = coverage.results.some((r) => r.result);
-    const showNoCoordinates =
-      !coverage.isCalculating && !hasMethodResults && coverage.error === null;
+        <CreateProjectDialog
+          isOpen={state.isCreateDialogOpen}
+          onClose={() => dispatch({ type: 'CLOSE_CREATE_DIALOG' })}
+          onCreated={(id) => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_CREATED', id });
+          }}
+        />
+      </>
+    );
+  }
 
-    if (showNoCoordinates) {
-      return (
+  const hasMethodResults = coverage.results.length > 0;
+  const hasCompletedResult = coverage.results.some((r) => r.result);
+  const showNoCoordinates =
+    !coverage.isCalculating && !hasMethodResults && coverage.error === null;
+
+  if (showNoCoordinates) {
+    return (
+      <>
         <div className="flex flex-col gap-6">
           {selectedProject && (
             <ProjectOverviewHeader
@@ -312,17 +336,28 @@ function HomeScreen() {
             {intl.formatMessage(messages.noCoordinates)}
           </p>
         </div>
-      );
+
+        <CreateProjectDialog
+          isOpen={state.isCreateDialogOpen}
+          onClose={() => dispatch({ type: 'CLOSE_CREATE_DIALOG' })}
+          onCreated={(id) => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_CREATED', id });
+          }}
+        />
+      </>
+    );
+  }
+
+  const observationCount = coverage.results.reduce((acc, r) => {
+    if (r.result?.metadata?.pointCount !== undefined) {
+      return Math.max(acc, Number(r.result.metadata.pointCount));
     }
+    return acc;
+  }, 0);
 
-    const observationCount = coverage.results.reduce((acc, r) => {
-      if (r.result?.metadata?.pointCount !== undefined) {
-        return Math.max(acc, Number(r.result.metadata.pointCount));
-      }
-      return acc;
-    }, 0);
-
-    return (
+  return (
+    <>
       <div className="flex flex-col gap-6">
         {selectedProject && (
           <ProjectOverviewHeader
@@ -374,42 +409,6 @@ function HomeScreen() {
           />
         )}
       </div>
-    );
-  }
-
-  return (
-    <>
-      <AppShell
-        topbarTitle={intl.formatMessage(messages.appTitle)}
-        topbarWorkspaceName={
-          selectedProject?.name ??
-          (selectedProject
-            ? intl.formatMessage(messages.untitledProject)
-            : intl.formatMessage(messages.localMode))
-        }
-        topbarModeLabel={intl.formatMessage(messages.homeTitle)}
-        topbarActions={
-          <Button
-            variant="primary"
-            size="sm"
-            aria-label={intl.formatMessage(messages.newProjectTopbarAria)}
-            onClick={() => dispatch({ type: 'OPEN_CREATE_DIALOG' })}
-          >
-            {intl.formatMessage(messages.newProject)}
-          </Button>
-        }
-        navItems={[
-          { ...NAV_ITEMS[0]!, label: intl.formatMessage(messages.homeTitle) },
-          {
-            ...NAV_ITEMS[1]!,
-            label: intl.formatMessage(messages.settingsTitle),
-          },
-        ]}
-        activeNavPath="/"
-        secondaryContent={secondaryContent}
-      >
-        {renderMainContent()}
-      </AppShell>
 
       <CreateProjectDialog
         isOpen={state.isCreateDialogOpen}
