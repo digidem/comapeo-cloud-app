@@ -20,16 +20,19 @@ export default defineConfig({
     },
     {
       name: 'chromium',
+      testMatch: /.*\.e2e\.ts/,
       testIgnore: /.*\.screenshots\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'firefox',
+      testMatch: /.*\.e2e\.ts/,
       testIgnore: /.*\.screenshots\.ts/,
       use: { ...devices['Desktop Firefox'] },
     },
     {
       name: 'webkit',
+      testMatch: /.*\.e2e\.ts/,
       testIgnore: /.*\.screenshots\.ts/,
       use: { ...devices['Desktop Safari'] },
     },

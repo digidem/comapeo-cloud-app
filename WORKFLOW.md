@@ -16,11 +16,11 @@ tracker:
 polling:
   interval_ms: 5000
 workspace:
-  root: ~/Dev/digidem/comapeo-cloud-app-workspaces
-  repo: https://github.com/digidem/comapeo-cloud-app
+  root: ~/Dev/workspaces/comapeo-cloud-app
+  repo: git@github.com:digidem/comapeo-cloud-app.git
 hooks:
   after_create: |
-    git clone --no-hardlinks /home/luandro/Dev/digidem/comapeo-cloud-app .
+    git clone git@github.com:digidem/comapeo-cloud-app.git .
     npm ci
   before_remove: |
     true

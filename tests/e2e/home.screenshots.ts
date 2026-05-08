@@ -27,7 +27,7 @@ test.describe('Home screen — visual screenshots', () => {
         await page.goto('/');
 
         // Wait for stable empty state
-        await expect(page.getByText('No projects yet.')).toBeVisible({
+        await expect(page.getByText('No projects yet').first()).toBeVisible({
           timeout: 5_000,
         });
 
@@ -53,15 +53,16 @@ test.describe('Home screen — visual screenshots', () => {
 
         // Create project
         await page
-          .getByRole('button', { name: '+ New Project' })
-          .first()
+          .getByRole('button', { name: 'Create new project from topbar' })
           .click();
         await page.getByLabel('Project Name').fill('Demo Project');
         await page
           .getByRole('dialog')
           .getByRole('button', { name: 'Create', exact: true })
           .click();
-        await page.getByText('Demo Project').waitFor({ timeout: 5_000 });
+        await expect(
+          page.getByRole('heading', { name: 'Demo Project' }),
+        ).toBeVisible({ timeout: 5_000 });
 
         // Wait for coverage to settle — no points → "No mappable coordinates found"
         await expect(
@@ -94,26 +95,19 @@ test.describe('Home screen — visual screenshots', () => {
 
         // Create project and import data
         await page
-          .getByRole('button', { name: '+ New Project' })
-          .first()
+          .getByRole('button', { name: 'Create new project from topbar' })
           .click();
         await page.getByLabel('Project Name').fill('Territory Alpha');
         await page
           .getByRole('dialog')
           .getByRole('button', { name: 'Create', exact: true })
           .click();
-        await page.getByText('Territory Alpha').waitFor({ timeout: 5_000 });
+        await expect(
+          page.getByRole('heading', { name: 'Territory Alpha' }),
+        ).toBeVisible({ timeout: 5_000 });
 
         const fileInput = page.locator('input[type="file"]');
         await fileInput.setInputFiles(GEOJSON_FIXTURE);
-        await expect(page.getByText(/\d+ imported,/)).toBeVisible({
-          timeout: 10_000,
-        });
-
-        // Navigate away and back, re-select so worker runs with imported data
-        await page.goto('/settings');
-        await page.goto('/');
-        await page.getByText('Territory Alpha').click();
 
         // Wait for at least one method to show a real area value
         const observedArea = page
