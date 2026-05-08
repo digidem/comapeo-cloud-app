@@ -11,10 +11,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-white border border-primary',
-  secondary: 'bg-white border border-border text-text',
-  ghost: 'bg-transparent text-text',
-  danger: 'bg-red-600 text-white border border-red-600',
+  primary:
+    'bg-primary text-white border border-primary hover:bg-[#1A5FE6] hover:border-[#1A5FE6]',
+  secondary:
+    'bg-white border border-border text-text hover:bg-surface hover:border-border',
+  ghost: 'bg-transparent text-text hover:bg-surface',
+  danger:
+    'bg-red-600 text-white border border-red-600 hover:bg-red-700 hover:border-red-700',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -64,7 +67,7 @@ function Button({
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={`inline-flex items-center justify-center font-semibold rounded-[12px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`inline-flex items-center justify-center font-semibold rounded-[12px] transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...rest}
     >
       {loading && <Spinner />}

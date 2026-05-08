@@ -57,7 +57,7 @@ function CalculationSettings({
       <div className="flex flex-col gap-2">
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-sm font-medium text-text-muted hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary w-fit"
+          className="inline-flex items-center gap-1 text-sm font-medium text-text-muted hover:text-text cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary w-fit"
           onClick={() => setAdvancedOpen((prev) => !prev)}
           aria-expanded={advancedOpen}
         >

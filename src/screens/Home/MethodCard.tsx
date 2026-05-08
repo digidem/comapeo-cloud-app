@@ -77,7 +77,7 @@ export function MethodCard({
         type="button"
         aria-pressed={isActive}
         onClick={handleCardClick}
-        className={`w-full rounded-[18px] border bg-white p-4 text-left shadow-[0_8px_24px_rgba(9,30,66,0.08)] transition-all ${
+        className={`w-full rounded-[18px] border bg-white p-4 text-left shadow-[0_8px_24px_rgba(9,30,66,0.08)] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
           isActive
             ? 'ring-2 ring-[#1F6FFF] ring-offset-1'
             : 'border-[#D9DEE8] hover:border-[#1F6FFF]'
@@ -95,7 +95,7 @@ export function MethodCard({
           type="button"
           aria-label="Export"
           onClick={handleExportClick}
-          className="absolute right-3 top-3 rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
+          className="absolute right-3 top-3 rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           Export
         </button>

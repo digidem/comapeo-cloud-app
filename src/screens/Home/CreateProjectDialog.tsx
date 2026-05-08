@@ -72,7 +72,13 @@ function CreateProjectDialog({
       }}
       title="New Project"
     >
-      <div className="flex flex-col gap-4">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleCreate();
+        }}
+        className="flex flex-col gap-4"
+      >
         <div className="flex flex-col gap-1">
           <label
             htmlFor="project-name"
@@ -95,19 +101,24 @@ function CreateProjectDialog({
         )}
 
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" size="sm" onClick={handleClose}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleClose}
+          >
             Cancel
           </Button>
           <Button
+            type="submit"
             variant="primary"
             size="sm"
             loading={state.status === 'loading'}
-            onClick={handleCreate}
           >
             Create
           </Button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }

@@ -100,12 +100,17 @@ export function SettingsScreen() {
                 type="button"
                 disabled={syncingId === s.id}
                 onClick={() => handleSync(s.id)}
+                className="cursor-pointer hover:underline disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {syncingId === s.id
                   ? intl.formatMessage(_messages.syncing)
                   : intl.formatMessage(_messages.sync)}
               </button>
-              <button type="button" onClick={() => removeServer(s.id)}>
+              <button
+                type="button"
+                onClick={() => removeServer(s.id)}
+                className="cursor-pointer hover:underline"
+              >
                 {intl.formatMessage(_messages.remove)}
               </button>
             </li>
@@ -136,7 +141,9 @@ export function SettingsScreen() {
           value={token}
           onChange={(e) => setToken(e.target.value)}
         />
-        <button type="submit">{intl.formatMessage(_messages.addServer)}</button>
+        <button type="submit" className="cursor-pointer hover:underline">
+          {intl.formatMessage(_messages.addServer)}
+        </button>
       </form>
     </section>
   );

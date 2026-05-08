@@ -48,7 +48,7 @@ function ProjectList({
                 <button
                   type="button"
                   onClick={() => onSelect(project.localId)}
-                  className={`w-full text-left px-3 py-2 rounded-[12px] text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                  className={`w-full text-left px-3 py-2 rounded-[12px] text-sm font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                     isActive
                       ? 'bg-[#EAF2FF] text-[#1F6FFF]'
                       : 'text-text hover:bg-surface'
