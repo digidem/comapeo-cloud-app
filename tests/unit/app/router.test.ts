@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  _authenticatedRoute,
   dashboardRoute,
   homeRoute,
   loginRoute,
@@ -19,6 +20,8 @@ describe('router', () => {
       expect(dashboardRoute.path).toBe('dashboard');
       expect(projectsRoute.path).toBe('projects');
       expect(settingsRoute.path).toBe('settings');
+      // Layout route uses id instead of path; TanStack Router prefixes with parent path
+      expect(_authenticatedRoute.id).toBe('/_authenticated');
     });
   });
 
@@ -57,18 +60,32 @@ describe('router', () => {
       // Root route should be the base of the tree
       expect(routeTree.id).toBe('__root__');
 
-      // All child routes are registered
-      const childRoutes = routeTree.children;
+      // Root has two direct children: loginRoute + _authenticatedRoute (layout)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const childRoutes = routeTree.children as unknown as any[];
       expect(childRoutes).toBeDefined();
-      expect(childRoutes!).toHaveLength(5);
+      expect(childRoutes).toHaveLength(2);
 
-      // TanStack Router stores paths without leading slash (except '/')
-      const childPaths = childRoutes!.map((child) => child.path);
-      expect(childPaths).toContain('/');
-      expect(childPaths).toContain('login');
-      expect(childPaths).toContain('dashboard');
-      expect(childPaths).toContain('projects');
-      expect(childPaths).toContain('settings');
+      const rootChildIds = childRoutes.map((child) => child.id);
+      expect(rootChildIds).toContain('/_authenticated');
+
+      // Authenticated screens live under the layout route
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const authChildren = _authenticatedRoute.children as unknown as any[];
+      expect(authChildren).toBeDefined();
+      const authPaths = authChildren.map(
+        (child: { path: string }) => child.path,
+      );
+      expect(authPaths).toContain('/');
+      expect(authPaths).toContain('dashboard');
+      expect(authPaths).toContain('projects');
+      expect(authPaths).toContain('settings');
+
+      // Login stays at root (no shell)
+      const loginChild = childRoutes.find(
+        (c: { path?: string }) => c.path === 'login',
+      );
+      expect(loginChild).toBeDefined();
     });
   });
 
