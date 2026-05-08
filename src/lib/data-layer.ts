@@ -1,4 +1,4 @@
-import type { Feature, Point } from 'geojson';
+import type { FeatureCollection, Geometry, Point } from 'geojson';
 import JSZip from 'jszip';
 
 import { extractPoints } from '@/lib/area-calculator/calculator';
@@ -59,9 +59,9 @@ function isValidCoord(lat: number, lon: number): boolean {
 
 export async function getProjectPoints(
   projectLocalId: string,
-): Promise<Feature<Point>[]> {
+): Promise<FeatureCollection<Point>> {
   const observations = await repoGetObservations(projectLocalId);
-  return observations
+  const features = observations
     .filter(
       (o) =>
         o.lat !== undefined &&
@@ -76,6 +76,53 @@ export async function getProjectPoints(
         coordinates: [o.lon!, o.lat!],
       },
     }));
+
+  return {
+    type: 'FeatureCollection',
+    features,
+  };
+}
+
+function countPointGeometries(value: unknown): number {
+  const geometry = value as Partial<Geometry> | null;
+  if (!geometry) return 0;
+
+  if (geometry.type === 'Point') return 1;
+
+  if (geometry.type === 'MultiPoint' && Array.isArray(geometry.coordinates)) {
+    return geometry.coordinates.length;
+  }
+
+  return 0;
+}
+
+function countGeoJsonPointCandidates(value: unknown): number {
+  if (!value || typeof value !== 'object') return 0;
+
+  const geojson = value as {
+    type?: unknown;
+    features?: unknown;
+    geometry?: unknown;
+  };
+
+  if (geojson.type === 'FeatureCollection' && Array.isArray(geojson.features)) {
+    return geojson.features.reduce(
+      (sum, feature) =>
+        sum +
+        (feature && typeof feature === 'object'
+          ? countPointGeometries(
+              (feature as { geometry?: unknown }).geometry ?? null,
+            )
+          : 0),
+      0,
+    );
+  }
+
+  if (geojson.type === 'Feature') {
+    return countPointGeometries(geojson.geometry);
+  }
+
+  return countPointGeometries(value);
 }
 
 export async function importGeoJsonPoints(
@@ -85,7 +132,12 @@ export async function importGeoJsonPoints(
   let geojsonText: string;
 
   if (file.name.toLowerCase().endsWith('.zip')) {
-    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    let zip: JSZip;
+    try {
+      zip = await JSZip.loadAsync(await file.arrayBuffer());
+    } catch {
+      return { imported: 0, skipped: 0 };
+    }
     const geojsonFile = Object.values(zip.files).find((f) => {
       const lower = f.name.toLowerCase();
       return lower.endsWith('.geojson') || lower.endsWith('.json');
@@ -105,21 +157,17 @@ export async function importGeoJsonPoints(
     return { imported: 0, skipped: 0 };
   }
   const points = extractPoints(parsed);
+  const candidateCount = countGeoJsonPointCandidates(parsed);
 
   let imported = 0;
-  let skipped = 0;
 
   for (const point of points) {
     const [lon, lat] = point.geometry.coordinates as [number, number];
-    if (lat === undefined || lon === undefined || !isValidCoord(lat, lon)) {
-      skipped++;
-      continue;
-    }
     await repoCreateObservation({ projectLocalId, lat, lon });
     imported++;
   }
 
-  return { imported, skipped };
+  return { imported, skipped: Math.max(0, candidateCount - imported) };
 }
 
 // ---------------------------------------------------------------------------

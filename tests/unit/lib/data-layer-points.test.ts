@@ -24,10 +24,13 @@ describe('getProjectPoints', () => {
     });
     await createObservation({ projectLocalId: project.localId });
 
-    const points = await getProjectPoints(project.localId);
-    expect(points).toHaveLength(2);
-    expect(points[0]!.geometry.type).toBe('Point');
-    const coords = points.map((p) => p.geometry.coordinates);
+    const featureCollection = await getProjectPoints(project.localId);
+    expect(featureCollection.type).toBe('FeatureCollection');
+    expect(featureCollection.features).toHaveLength(2);
+    expect(featureCollection.features[0]!.geometry.type).toBe('Point');
+    const coords = featureCollection.features.map(
+      (p) => p.geometry.coordinates,
+    );
     expect(coords).toContainEqual([-60.5, -3.1]);
     expect(coords).toContainEqual([-61.3, -4.2]);
   });
@@ -44,8 +47,11 @@ describe('getProjectPoints', () => {
     const db = getDb();
     await db.observations.update(obs.localId, { deleted: true });
 
-    const points = await getProjectPoints(project.localId);
-    expect(points).toHaveLength(0);
+    const featureCollection = await getProjectPoints(project.localId);
+    expect(featureCollection).toMatchObject({
+      type: 'FeatureCollection',
+      features: [],
+    });
   });
 
   it('returns empty array when no observations have coordinates', async () => {
@@ -55,8 +61,8 @@ describe('getProjectPoints', () => {
       tags: { note: 'no coords' },
     });
 
-    const points = await getProjectPoints(project.localId);
-    expect(points).toHaveLength(0);
+    const featureCollection = await getProjectPoints(project.localId);
+    expect(featureCollection.features).toHaveLength(0);
   });
 
   it('filters out observations with invalid coordinate bounds', async () => {
@@ -83,9 +89,11 @@ describe('getProjectPoints', () => {
       lon: 0,
     });
 
-    const points = await getProjectPoints(project.localId);
-    expect(points).toHaveLength(1);
-    expect(points[0]!.geometry.coordinates).toEqual([-60.5, -3.1]);
+    const featureCollection = await getProjectPoints(project.localId);
+    expect(featureCollection.features).toHaveLength(1);
+    expect(featureCollection.features[0]!.geometry.coordinates).toEqual([
+      -60.5, -3.1,
+    ]);
   });
 
   it('filters out non-finite coordinates', async () => {
@@ -105,8 +113,8 @@ describe('getProjectPoints', () => {
       await db.observations.update(withNaN.localId, { lat: NaN });
     }
 
-    const points = await getProjectPoints(project.localId);
-    expect(points).toHaveLength(0);
+    const featureCollection = await getProjectPoints(project.localId);
+    expect(featureCollection.features).toHaveLength(0);
   });
 });
 
@@ -138,8 +146,8 @@ describe('importGeoJsonPoints', () => {
     expect(result.imported).toBe(2);
     expect(result.skipped).toBe(0);
 
-    const points = await getProjectPoints(project.localId);
-    expect(points).toHaveLength(2);
+    const featureCollection = await getProjectPoints(project.localId);
+    expect(featureCollection.features).toHaveLength(2);
   });
 
   it('skips features with invalid coordinates', async () => {
@@ -232,5 +240,17 @@ describe('importGeoJsonPoints', () => {
 
     expect(result.imported).toBe(1);
     expect(result.skipped).toBe(0);
+  });
+
+  it('returns zero counts for malformed ZIP files', async () => {
+    const project = await createProject({ name: 'Test' });
+    const file = new File(['not a zip'], 'archive.zip', {
+      type: 'application/zip',
+    });
+
+    await expect(importGeoJsonPoints(project.localId, file)).resolves.toEqual({
+      imported: 0,
+      skipped: 0,
+    });
   });
 });
