@@ -1,7 +1,9 @@
+import type { ReactNode } from 'react';
+
 interface NavItem {
   path: string;
   label: string;
-  icon?: string;
+  icon: ReactNode;
 }
 
 interface PrimaryNavProps {
@@ -22,19 +24,15 @@ function PrimaryNav({ items, activePath }: PrimaryNavProps) {
           <a
             key={item.path}
             href={item.path}
-            className={`flex w-full flex-col items-center py-3 text-xs ${
-              isActive
-                ? 'font-semibold text-primary'
-                : 'text-[#172033] hover:text-primary'
-            }`}
+            aria-label={item.label}
             aria-current={isActive ? 'page' : undefined}
+            className={`flex w-[54px] h-[54px] items-center justify-center rounded-xl ${
+              isActive
+                ? 'bg-[#EAF2FF] text-[#1F6FFF] border-l-4 border-[#1F6FFF]'
+                : 'text-[#172033] hover:text-[#1F6FFF]'
+            }`}
           >
-            {item.icon && (
-              <span className="mb-1 text-lg" aria-hidden="true">
-                {item.icon}
-              </span>
-            )}
-            <span>{item.label}</span>
+            {item.icon}
           </a>
         );
       })}

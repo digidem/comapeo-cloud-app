@@ -46,6 +46,8 @@ export async function pullObservations(
     sourceId: serverId,
     remoteId: item.docId,
     tags: (item.tags as Record<string, string>) ?? undefined,
+    lat: item.lat,
+    lon: item.lon,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     dirtyLocal: false,

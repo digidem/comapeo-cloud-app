@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { AppShell } from '@/components/layout/app-shell';
 
 const navItems = [
-  { path: '/dashboard', label: 'Dashboard' },
-  { path: '/projects', label: 'Projects' },
-  { path: '/settings', label: 'Settings' },
+  { path: '/dashboard', label: 'Dashboard', icon: <span>D</span> },
+  { path: '/projects', label: 'Projects', icon: <span>P</span> },
+  { path: '/settings', label: 'Settings', icon: <span>S</span> },
 ];
 
 describe('AppShell', () => {
@@ -33,9 +33,9 @@ describe('AppShell', () => {
         <div>Main content</div>
       </AppShell>,
     );
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Projects')).toBeInTheDocument();
-    expect(screen.getByText('Settings')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Projects' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
   });
 
   it('renders main content area with children', () => {
@@ -92,5 +92,46 @@ describe('AppShell', () => {
     );
     const topbar = screen.getByRole('banner');
     expect(topbar.className).toContain('h-14');
+  });
+
+  it('renders secondaryContent when provided', () => {
+    render(
+      <AppShell
+        topbarTitle="CoMapeo Cloud"
+        navItems={navItems}
+        activeNavPath="/dashboard"
+        secondaryContent={<div data-testid="secondary-panel">Project list</div>}
+      >
+        <div>Main content</div>
+      </AppShell>,
+    );
+    expect(screen.getByTestId('secondary-panel')).toBeInTheDocument();
+  });
+
+  it('does not render secondary panel when secondaryContent not provided', () => {
+    render(
+      <AppShell
+        topbarTitle="CoMapeo Cloud"
+        navItems={navItems}
+        activeNavPath="/dashboard"
+      >
+        <div>Main content</div>
+      </AppShell>,
+    );
+    expect(screen.queryByTestId('secondary-panel')).not.toBeInTheDocument();
+  });
+
+  it('renders workspace badge via topbarWorkspaceName', () => {
+    render(
+      <AppShell
+        topbarTitle="CoMapeo Cloud"
+        navItems={navItems}
+        activeNavPath="/dashboard"
+        topbarWorkspaceName="Rainforest Monitoring"
+      >
+        <div>Main content</div>
+      </AppShell>,
+    );
+    expect(screen.getByText('Rainforest Monitoring')).toBeInTheDocument();
   });
 });

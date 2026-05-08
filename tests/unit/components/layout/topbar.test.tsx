@@ -24,9 +24,35 @@ describe('Topbar', () => {
     expect(topbar.className).toContain('h-14');
   });
 
-  it('has border-bottom', () => {
+  it('has navy background', () => {
     render(<Topbar title="Test" />);
     const topbar = screen.getByRole('banner');
-    expect(topbar.className).toContain('border-b');
+    expect(topbar.className).toContain('bg-[#04145C]');
+  });
+
+  it('renders workspace badge when workspaceName provided', () => {
+    render(<Topbar title="Test" workspaceName="My Workspace" />);
+    expect(screen.getByText('My Workspace')).toBeInTheDocument();
+    const badge = screen.getByText('My Workspace');
+    expect(badge.className).toContain('rounded-full');
+  });
+
+  it('renders mode label pill when modeLabel provided', () => {
+    render(<Topbar title="Test" modeLabel="Beta" />);
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+  });
+
+  it('does not render workspace badge when workspaceName not provided', () => {
+    render(<Topbar title="Test" />);
+    expect(screen.queryByText(/workspace/i)).not.toBeInTheDocument();
+  });
+
+  it('renders topbarActions via children prop', () => {
+    render(
+      <Topbar title="Test">
+        <button data-testid="action-btn">Sync</button>
+      </Topbar>,
+    );
+    expect(screen.getByTestId('action-btn')).toBeInTheDocument();
   });
 });

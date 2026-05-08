@@ -117,6 +117,50 @@ describe('AppDatabase', () => {
     expect(retrieved!.projectLocalId).toBe('proj-1');
   });
 
+  it('stores observation with lat/lon fields', async () => {
+    const db = getDb();
+
+    const observation: Parameters<typeof db.observations.add>[0] = {
+      localId: 'obs-latlon',
+      projectLocalId: 'proj-1',
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: true,
+      deleted: false,
+      lat: -3.123,
+      lon: -60.456,
+    };
+
+    await db.observations.add(observation);
+    const retrieved = await db.observations.get('obs-latlon');
+    expect(retrieved).toBeDefined();
+    expect(retrieved!.lat).toBe(-3.123);
+    expect(retrieved!.lon).toBe(-60.456);
+  });
+
+  it('stores observation without lat/lon (backward compatibility)', async () => {
+    const db = getDb();
+
+    const observation: Parameters<typeof db.observations.add>[0] = {
+      localId: 'obs-nolatlon',
+      projectLocalId: 'proj-1',
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: true,
+      deleted: false,
+    };
+
+    await db.observations.add(observation);
+    const retrieved = await db.observations.get('obs-nolatlon');
+    expect(retrieved).toBeDefined();
+    expect(retrieved!.lat).toBeUndefined();
+    expect(retrieved!.lon).toBeUndefined();
+  });
+
   it('stores and retrieves an alert record', async () => {
     const db = getDb();
 

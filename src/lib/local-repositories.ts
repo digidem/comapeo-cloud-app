@@ -86,6 +86,8 @@ export async function deleteProject(localId: string): Promise<void> {
 export interface CreateObservationInput {
   projectLocalId: string;
   tags?: Record<string, string>;
+  lat?: number;
+  lon?: number;
 }
 
 export async function createObservation(
@@ -97,6 +99,8 @@ export async function createObservation(
     projectLocalId: input.projectLocalId,
     ...localMeta(),
     tags: input.tags ?? {},
+    lat: input.lat,
+    lon: input.lon,
   };
   await db.observations.add(observation);
   return observation;

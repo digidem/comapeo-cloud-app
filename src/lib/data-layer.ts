@@ -1,3 +1,7 @@
+import type { Feature, Point } from 'geojson';
+import JSZip from 'jszip';
+
+import { extractPoints } from '@/lib/area-calculator/calculator';
 import {
   createAttachment,
   createAlert as repoCreateAlert,
@@ -32,12 +36,90 @@ export async function getProjects() {
 export async function createObservation(input: {
   projectLocalId: string;
   tags?: Record<string, string>;
+  lat?: number;
+  lon?: number;
 }) {
   return repoCreateObservation(input);
 }
 
 export async function getObservations(projectLocalId: string) {
   return repoGetObservations(projectLocalId);
+}
+
+function isValidCoord(lat: number, lon: number): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lon >= -180 &&
+    lon <= 180
+  );
+}
+
+export async function getProjectPoints(
+  projectLocalId: string,
+): Promise<Feature<Point>[]> {
+  const observations = await repoGetObservations(projectLocalId);
+  return observations
+    .filter(
+      (o) =>
+        o.lat !== undefined &&
+        o.lon !== undefined &&
+        isValidCoord(o.lat, o.lon),
+    )
+    .map((o) => ({
+      type: 'Feature' as const,
+      properties: { localId: o.localId },
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [o.lon!, o.lat!],
+      },
+    }));
+}
+
+export async function importGeoJsonPoints(
+  projectLocalId: string,
+  file: File,
+): Promise<{ imported: number; skipped: number }> {
+  let geojsonText: string;
+
+  if (file.name.toLowerCase().endsWith('.zip')) {
+    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    const geojsonFile = Object.values(zip.files).find((f) => {
+      const lower = f.name.toLowerCase();
+      return lower.endsWith('.geojson') || lower.endsWith('.json');
+    });
+    if (!geojsonFile) {
+      return { imported: 0, skipped: 0 };
+    }
+    geojsonText = await geojsonFile.async('text');
+  } else {
+    geojsonText = await file.text();
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(geojsonText);
+  } catch {
+    return { imported: 0, skipped: 0 };
+  }
+  const points = extractPoints(parsed);
+
+  let imported = 0;
+  let skipped = 0;
+
+  for (const point of points) {
+    const [lon, lat] = point.geometry.coordinates as [number, number];
+    if (lat === undefined || lon === undefined || !isValidCoord(lat, lon)) {
+      skipped++;
+      continue;
+    }
+    await repoCreateObservation({ projectLocalId, lat, lon });
+    imported++;
+  }
+
+  return { imported, skipped };
 }
 
 // ---------------------------------------------------------------------------

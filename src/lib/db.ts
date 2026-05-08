@@ -23,6 +23,8 @@ export interface Observation {
   sourceId: string;
   remoteId?: string;
   tags?: Record<string, string>;
+  lat?: number;
+  lon?: number;
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
@@ -96,6 +98,8 @@ class AppDatabase extends Dexie {
       remoteServers: '&id, baseUrl, status, lastSyncedAt',
       syncMetadata: '&id, serverId, status, updatedAt',
     });
+
+    this.version(2).stores({});
   }
 }
 
