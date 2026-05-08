@@ -1,3 +1,6 @@
+import { useEffect, useState } from 'react';
+
+import { getRemoteServers } from '@/lib/local-repositories';
 import { useAuthStore } from '@/stores/auth-store';
 
 export interface ArchiveServerStatus {
@@ -18,6 +21,35 @@ export interface ArchiveStatus {
 
 export function useArchiveStatus(): ArchiveStatus {
   const servers = useAuthStore((s) => s.servers);
+  const [cachedServers, setCachedServers] = useState<ArchiveServerStatus[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getRemoteServers().then(
+      (records) => {
+        if (cancelled) return;
+        setCachedServers(
+          records.map((record) => ({
+            id: record.id,
+            label: record.label ?? record.baseUrl,
+            baseUrl: record.baseUrl,
+            isSyncing: record.status === 'syncing',
+            lastSyncedAt: record.lastSyncedAt ?? null,
+            error: record.status === 'error' ? 'Sync error' : null,
+            hasCredentials: false,
+          })),
+        );
+      },
+      () => {
+        if (!cancelled) setCachedServers([]);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const mapped: ArchiveServerStatus[] = servers.map((s) => ({
     id: s.id,
@@ -28,10 +60,15 @@ export function useArchiveStatus(): ArchiveStatus {
     error: s.status === 'error' ? (s.errorMessage ?? 'Unknown error') : null,
     hasCredentials: typeof s.token === 'string' && s.token.length > 0,
   }));
+  const authServerIds = new Set(mapped.map((s) => s.id));
+  const merged = [
+    ...mapped,
+    ...cachedServers.filter((s) => !authServerIds.has(s.id)),
+  ];
 
   return {
-    servers: mapped,
-    anyError: mapped.some((s) => s.error !== null),
-    anySyncing: mapped.some((s) => s.isSyncing),
+    servers: merged,
+    anyError: merged.some((s) => s.error !== null),
+    anySyncing: merged.some((s) => s.isSyncing),
   };
 }

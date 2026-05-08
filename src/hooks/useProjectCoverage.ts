@@ -93,7 +93,7 @@ export function handleCoverageMessage(
         return {
           ...state,
           results: state.results.map((r) =>
-            r.methodId === msg.methodId ? { ...r, error: msg.error } : r,
+            r.methodId === msg.methodId ? { ...r, error: msg.message } : r,
           ),
         };
       }
@@ -101,14 +101,14 @@ export function handleCoverageMessage(
         ...state,
         results: [
           ...state.results,
-          { methodId: msg.methodId, error: msg.error },
+          { methodId: msg.methodId, error: msg.message },
         ],
       };
     }
     case 'done':
       return { ...state, isCalculating: false };
     case 'error':
-      return { ...state, isCalculating: false, error: msg.error };
+      return { ...state, isCalculating: false, error: msg.message };
     default:
       return state;
   }
@@ -117,6 +117,7 @@ export function handleCoverageMessage(
 export function useProjectCoverage(
   projectLocalId: string | null,
   params: CalculationParams,
+  refreshKey: string | number = 0,
 ): CoverageState {
   const [state, dispatch] = useReducer(coverageReducer, EMPTY_STATE);
   const workerRef = useRef<Worker | null>(null);
@@ -158,7 +159,7 @@ export function useProjectCoverage(
     worker.onerror = () => {
       dispatch({
         type: 'WORKER_MSG',
-        msg: { type: 'error', requestId, error: 'Worker failed to start' },
+        msg: { type: 'error', requestId, message: 'Worker failed to start' },
         requestId,
       });
     };
@@ -168,10 +169,20 @@ export function useProjectCoverage(
     getProjectPoints(projectLocalId)
       .then((points) => {
         if (aborted) return;
+        if (points.features.length === 0) {
+          worker.terminate();
+          if (workerRef.current === worker) workerRef.current = null;
+          dispatch({
+            type: 'WORKER_MSG',
+            msg: { type: 'done', requestId },
+            requestId,
+          });
+          return;
+        }
         worker.postMessage({
           type: 'calculate',
           requestId,
-          geojson: { type: 'FeatureCollection', features: points },
+          points,
           params,
         });
       })
@@ -179,7 +190,7 @@ export function useProjectCoverage(
         if (aborted) return;
         dispatch({
           type: 'WORKER_MSG',
-          msg: { type: 'error', requestId, error: String(err) },
+          msg: { type: 'error', requestId, message: String(err) },
           requestId,
         });
       });
@@ -190,7 +201,7 @@ export function useProjectCoverage(
       workerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectLocalId, JSON.stringify(params)]);
+  }, [projectLocalId, JSON.stringify(params), refreshKey]);
 
   if (projectLocalId === null) return EMPTY_STATE;
 

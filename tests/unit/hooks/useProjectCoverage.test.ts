@@ -1,12 +1,49 @@
-import { describe, expect, it } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import type { FeatureCollection, Point } from 'geojson';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleCoverageMessage } from '@/hooks/useProjectCoverage';
+import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import type { CoverageMethodResult } from '@/hooks/useProjectCoverage';
 import { DEFAULTS } from '@/lib/area-calculator/config';
 import type { WorkerOutMessage } from '@/lib/area-calculator/types';
+import { getProjectPoints } from '@/lib/data-layer';
+
+vi.mock('@/lib/data-layer', () => ({
+  getProjectPoints: vi.fn(),
+}));
 
 const requestId = 'req-1';
 const staleId = 'req-old';
+const mockedGetProjectPoints = vi.mocked(getProjectPoints);
+
+const featureCollection: FeatureCollection<Point> = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: { localId: 'obs-1' },
+      geometry: { type: 'Point', coordinates: [-60.5, -3.1] },
+    },
+  ],
+};
+
+class MockWorker {
+  static instances: MockWorker[] = [];
+
+  onmessage: ((event: MessageEvent<WorkerOutMessage>) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  postMessage = vi.fn();
+  terminate = vi.fn();
+
+  constructor() {
+    MockWorker.instances.push(this);
+  }
+
+  emit(data: WorkerOutMessage) {
+    this.onmessage?.({ data } as MessageEvent<WorkerOutMessage>);
+  }
+}
 
 function makeState(): {
   results: CoverageMethodResult[];
@@ -73,7 +110,7 @@ describe('handleCoverageMessage', () => {
       type: 'methodError',
       requestId,
       methodId: 'grid',
-      error: 'failed',
+      message: 'failed',
     };
     const next = handleCoverageMessage(msg, requestId, state);
     expect(next.results[0]).toMatchObject({
@@ -94,11 +131,154 @@ describe('handleCoverageMessage', () => {
     const msg: WorkerOutMessage = {
       type: 'error',
       requestId,
-      error: 'worker crashed',
+      message: 'worker crashed',
     };
     const next = handleCoverageMessage(msg, requestId, state);
     expect(next.isCalculating).toBe(false);
     expect(next.error).toBe('worker crashed');
+  });
+});
+
+describe('useProjectCoverage', () => {
+  beforeEach(() => {
+    MockWorker.instances = [];
+    mockedGetProjectPoints.mockReset();
+    mockedGetProjectPoints.mockResolvedValue(featureCollection);
+    vi.stubGlobal('Worker', MockWorker);
+    vi.stubGlobal('crypto', {
+      randomUUID: vi
+        .fn()
+        .mockReturnValueOnce('req-1')
+        .mockReturnValueOnce('req-2')
+        .mockReturnValueOnce('req-3'),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns the empty state and does not create a worker when projectLocalId is null', () => {
+    const { result } = renderHook(() => useProjectCoverage(null, DEFAULTS));
+
+    expect(result.current).toEqual({
+      results: [],
+      isCalculating: false,
+      error: null,
+    });
+    expect(MockWorker.instances).toHaveLength(0);
+  });
+
+  it('posts the project FeatureCollection with params to the worker', async () => {
+    renderHook(() => useProjectCoverage('project-1', DEFAULTS));
+
+    await waitFor(() => {
+      expect(MockWorker.instances[0]?.postMessage).toHaveBeenCalledWith({
+        type: 'calculate',
+        requestId,
+        points: featureCollection,
+        params: DEFAULTS,
+      });
+    });
+  });
+
+  it('finishes with empty results and does not post to worker when no points exist', async () => {
+    mockedGetProjectPoints.mockResolvedValueOnce({
+      type: 'FeatureCollection',
+      features: [],
+    });
+
+    const { result } = renderHook(() =>
+      useProjectCoverage('project-1', DEFAULTS),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isCalculating).toBe(false);
+    });
+    expect(result.current.results).toEqual([]);
+    expect(result.current.error).toBeNull();
+    expect(MockWorker.instances[0]?.postMessage).not.toHaveBeenCalled();
+    expect(MockWorker.instances[0]?.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it('terminates and recreates the worker when the project changes', async () => {
+    const { rerender } = renderHook(
+      ({ projectLocalId }) => useProjectCoverage(projectLocalId, DEFAULTS),
+      { initialProps: { projectLocalId: 'project-1' } },
+    );
+
+    await waitFor(() => {
+      expect(MockWorker.instances[0]?.postMessage).toHaveBeenCalled();
+    });
+
+    rerender({ projectLocalId: 'project-2' });
+
+    await waitFor(() => {
+      expect(MockWorker.instances).toHaveLength(2);
+    });
+    expect(MockWorker.instances[0]?.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it('terminates and recreates the worker when refreshKey changes', async () => {
+    const { rerender } = renderHook(
+      ({ refreshKey }) => useProjectCoverage('project-1', DEFAULTS, refreshKey),
+      { initialProps: { refreshKey: 0 } },
+    );
+
+    await waitFor(() => {
+      expect(MockWorker.instances[0]?.postMessage).toHaveBeenCalled();
+    });
+
+    rerender({ refreshKey: 1 });
+
+    await waitFor(() => {
+      expect(MockWorker.instances).toHaveLength(2);
+    });
+    expect(MockWorker.instances[0]?.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it('terminates and recreates the worker when params change', async () => {
+    const { rerender } = renderHook(
+      ({ gridCellKm }) =>
+        useProjectCoverage('project-1', { ...DEFAULTS, gridCellKm }),
+      { initialProps: { gridCellKm: DEFAULTS.gridCellKm } },
+    );
+
+    await waitFor(() => {
+      expect(MockWorker.instances[0]?.postMessage).toHaveBeenCalled();
+    });
+
+    rerender({ gridCellKm: DEFAULTS.gridCellKm + 1 });
+
+    await waitFor(() => {
+      expect(MockWorker.instances).toHaveLength(2);
+    });
+    expect(MockWorker.instances[0]?.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores stale worker messages from replaced requests', async () => {
+    const { result, rerender } = renderHook(
+      ({ projectLocalId }) => useProjectCoverage(projectLocalId, DEFAULTS),
+      { initialProps: { projectLocalId: 'project-1' } },
+    );
+
+    await waitFor(() => {
+      expect(MockWorker.instances[0]?.postMessage).toHaveBeenCalled();
+    });
+
+    rerender({ projectLocalId: 'project-2' });
+
+    await waitFor(() => {
+      expect(MockWorker.instances[1]?.postMessage).toHaveBeenCalled();
+    });
+
+    MockWorker.instances[0]?.emit({
+      type: 'error',
+      requestId: 'req-1',
+      message: 'stale failure',
+    });
+
+    expect(result.current.error).toBeNull();
   });
 });
 

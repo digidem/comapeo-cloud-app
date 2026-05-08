@@ -1,10 +1,16 @@
-import { renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
+import { resetDb } from '@/lib/db';
+import { createRemoteServer } from '@/lib/local-repositories';
 import { useAuthStore } from '@/stores/auth-store';
 
 const setState = useAuthStore.setState;
+
+beforeEach(async () => {
+  await resetDb();
+});
 
 afterEach(() => {
   useAuthStore.setState({ servers: [] });
@@ -89,5 +95,24 @@ describe('useArchiveStatus', () => {
     });
     const { result } = renderHook(() => useArchiveStatus());
     expect(result.current.servers[0]?.hasCredentials).toBe(false);
+  });
+
+  it('includes cached servers without credentials after reload', async () => {
+    const cached = await createRemoteServer({
+      baseUrl: 'http://archive.test',
+      label: 'Archive Test',
+    });
+
+    const { result } = renderHook(() => useArchiveStatus());
+
+    await waitFor(() => {
+      expect(result.current.servers).toHaveLength(1);
+    });
+    expect(result.current.servers[0]).toMatchObject({
+      id: cached.id,
+      label: 'Archive Test',
+      baseUrl: 'http://archive.test',
+      hasCredentials: false,
+    });
   });
 });
