@@ -66,23 +66,23 @@ describe('PrimaryNav', () => {
     expect(textEl).not.toBeInTheDocument();
   });
 
-  it('active item has EAF2FF background class', () => {
+  it('active item has primary-soft background class', () => {
     render(<PrimaryNav items={navItems} activePath="/dashboard" />);
     const dashboardLink = screen.getByRole('link', { name: 'Dashboard' });
-    expect(dashboardLink.className).toContain('bg-[#EAF2FF]');
+    expect(dashboardLink.className).toContain('bg-primary-soft');
   });
 
   it('active item has blue left border indicator', () => {
     render(<PrimaryNav items={navItems} activePath="/dashboard" />);
     const dashboardLink = screen.getByRole('link', { name: 'Dashboard' });
     expect(dashboardLink.className).toContain('border-l-4');
-    expect(dashboardLink.className).toContain('border-[#1F6FFF]');
+    expect(dashboardLink.className).toContain('border-primary');
   });
 
   it('inactive items do not have active background', () => {
     render(<PrimaryNav items={navItems} activePath="/dashboard" />);
     const projectsLink = screen.getByRole('link', { name: 'Projects' });
-    expect(projectsLink.className).not.toContain('bg-[#EAF2FF]');
+    expect(projectsLink.className).not.toContain('bg-primary-soft');
   });
 
   it('nav items are 54x54px', () => {

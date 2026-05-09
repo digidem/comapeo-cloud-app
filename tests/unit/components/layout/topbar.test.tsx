@@ -27,7 +27,7 @@ describe('Topbar', () => {
   it('has navy background', () => {
     render(<Topbar title="Test" />);
     const topbar = screen.getByRole('banner');
-    expect(topbar.className).toContain('bg-[#04145C]');
+    expect(topbar.className).toContain('bg-primary-navy');
   });
 
   it('renders workspace badge when workspaceName provided', () => {

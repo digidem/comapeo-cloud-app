@@ -34,7 +34,7 @@ describe('Card', () => {
     render(<Card>Content</Card>);
     const el = screen.getByText('Content').closest('div');
     expect(el?.className).toContain('bg-white');
-    expect(el?.className).toContain('rounded-[18px]');
+    expect(el?.className).toContain('rounded-card');
     expect(el?.className).toContain('shadow-sm');
     expect(el?.className).toContain('border');
   });
