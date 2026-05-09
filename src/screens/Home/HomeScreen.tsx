@@ -1,3 +1,5 @@
+import type { FeatureCollection } from 'geojson';
+
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -16,13 +18,33 @@ import { exportFeatureCollection } from '@/lib/geojson-export';
 import { useAuthStore } from '@/stores/auth-store';
 
 import { ArchiveStatusCard } from './ArchiveStatusCard';
+import { AreaMap } from './AreaMap';
 import { CalculationSettings } from './CalculationSettings';
 import { CoverageSummary } from './CoverageSummary';
 import { CreateProjectDialog } from './CreateProjectDialog';
 import { ImportDataButton } from './ImportDataButton';
-import { MethodComparisonGrid } from './MethodComparisonGrid';
+import { MethodSelector } from './MethodSelector';
+import { ProjectBannerCard } from './ProjectBannerCard';
 import { ProjectList } from './ProjectList';
-import { ProjectOverviewHeader } from './ProjectOverviewHeader';
+import { RecentActivityList } from './RecentActivityList';
+import { StatCard } from './StatCard';
+
+const MOCK_ACTIVITIES = [
+  {
+    id: '1',
+    title: 'New record uploaded by Maria',
+    description: 'Sighting of illegal logging activity near sector 4.',
+    timestamp: '10 MIN AGO',
+    type: 'record' as const,
+  },
+  {
+    id: '2',
+    title: 'Map boundary updated',
+    description: 'Northern perimeter adjusted based on recent GPS track.',
+    timestamp: '2 HRS AGO',
+    type: 'map' as const,
+  },
+];
 
 // ---- State management ----
 
@@ -332,15 +354,15 @@ function HomeScreen() {
   if (showNoCoordinates) {
     return (
       <>
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 p-6">
           {selectedProject && (
-            <ProjectOverviewHeader
+            <ProjectBannerCard
               projectName={
                 selectedProject.name ??
                 intl.formatMessage(messages.untitledProject)
               }
-              observationCount={0}
-              sourceType="local"
+              areaSize="0 ha"
+              teamMembersCount={0}
             />
           )}
           <p className="text-text-muted text-sm">
@@ -369,56 +391,108 @@ function HomeScreen() {
 
   return (
     <>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 p-6">
+        {/* Top Stat Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            title="Mode"
+            value="Cloud Sync Active"
+            valueColor="text-blue-600"
+            icon={
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+              </svg>
+            }
+          />
+          <StatCard
+            title="Total Assets"
+            value={observationCount.toLocaleString()}
+          />
+          <StatCard title="Categories" value="18" />
+          <StatCard title="Active Alerts" value="3" valueColor="text-red-500" />
+        </div>
+
+        {/* Project Banner */}
         {selectedProject && (
-          <ProjectOverviewHeader
+          <ProjectBannerCard
             projectName={
               selectedProject.name ??
               intl.formatMessage(messages.untitledProject)
             }
-            observationCount={observationCount}
-            sourceType="local"
+            areaSize="45,000 ha"
+            lastSync="2 hours ago"
+            teamMembersCount={8}
           />
         )}
 
-        {coverage.isCalculating && (
-          <div role="status" aria-live="polite" className="sr-only">
-            {intl.formatMessage(messages.calculating)}
+        <div className="flex flex-col gap-6">
+          <RecentActivityList activities={MOCK_ACTIVITIES} />
+        </div>
+
+        {/* Area Calculator Section */}
+        <div className="mt-8 flex flex-col gap-6">
+          <h2 className="text-xl font-bold text-gray-900">Area Calculator</h2>
+
+          <div className="relative">
+            <AreaMap
+              featureCollection={
+                coverage.results.find(
+                  (r) => r.methodId === state.activeMethodId,
+                )?.result?.featureCollection as FeatureCollection | undefined
+              }
+            >
+              <div className="flex flex-col gap-4 bg-white/95 backdrop-blur-md p-5 rounded-card border border-border/20 shadow-xl">
+                {coverage.isCalculating && (
+                  <div role="status" aria-live="polite" className="sr-only">
+                    {intl.formatMessage(messages.calculating)}
+                  </div>
+                )}
+
+                <CoverageSummary
+                  activeMethodId={state.activeMethodId}
+                  results={coverage.results}
+                  isCalculating={coverage.isCalculating}
+                  unit={state.unit}
+                  onUnitChange={(unit) => dispatch({ type: 'SET_UNIT', unit })}
+                />
+
+                {hasCompletedResult && (
+                  <CalculationSettings
+                    presets={BUILT_IN_PRESETS}
+                    selectedPresetId={state.selectedPresetId}
+                    params={state.params}
+                    onPresetChange={(presetId) =>
+                      dispatch({ type: 'SET_PRESET', presetId })
+                    }
+                    onParamsChange={(params) =>
+                      dispatch({ type: 'SET_PARAMS', params })
+                    }
+                  />
+                )}
+              </div>
+            </AreaMap>
+
+            <div className="absolute top-4 left-4 z-20">
+              <MethodSelector
+                results={coverage.results}
+                activeMethodId={state.activeMethodId}
+                onActivate={(methodId) =>
+                  dispatch({ type: 'SET_ACTIVE_METHOD', methodId })
+                }
+                onExport={() => handleExport(state.activeMethodId)}
+              />
+            </div>
           </div>
-        )}
-
-        <CoverageSummary
-          activeMethodId={state.activeMethodId}
-          results={coverage.results}
-          isCalculating={coverage.isCalculating}
-          unit={state.unit}
-          onUnitChange={(unit) => dispatch({ type: 'SET_UNIT', unit })}
-        />
-
-        <MethodComparisonGrid
-          results={coverage.results}
-          activeMethodId={state.activeMethodId}
-          isCalculating={coverage.isCalculating}
-          unit={state.unit}
-          onActivate={(methodId) =>
-            dispatch({ type: 'SET_ACTIVE_METHOD', methodId })
-          }
-          onExport={handleExport}
-        />
-
-        {hasCompletedResult && (
-          <CalculationSettings
-            presets={BUILT_IN_PRESETS}
-            selectedPresetId={state.selectedPresetId}
-            params={state.params}
-            onPresetChange={(presetId) =>
-              dispatch({ type: 'SET_PRESET', presetId })
-            }
-            onParamsChange={(params) =>
-              dispatch({ type: 'SET_PARAMS', params })
-            }
-          />
-        )}
+        </div>
       </div>
 
       <CreateProjectDialog
