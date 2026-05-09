@@ -30,8 +30,8 @@ function PrimaryNav({ items, activePath }: PrimaryNavProps) {
             aria-current={isActive ? 'page' : undefined}
             className={`flex w-[54px] h-[54px] items-center justify-center rounded-xl ${
               isActive
-                ? 'bg-[#EAF2FF] text-[#1F6FFF] border-l-4 border-[#1F6FFF]'
-                : 'text-[#172033] hover:text-[#1F6FFF]'
+                ? 'bg-primary-soft text-primary border-l-4 border-primary'
+                : 'text-text hover:text-primary'
             }`}
           >
             {item.icon}

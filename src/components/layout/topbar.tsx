@@ -11,7 +11,7 @@ function Topbar({ title, workspaceName, modeLabel, children }: TopbarProps) {
   return (
     <header
       role="banner"
-      className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between bg-[#04145C] px-4"
+      className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between bg-primary-navy px-4"
     >
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-semibold text-white">{title}</h1>

@@ -41,7 +41,7 @@ function AppShell({
       <div className="flex flex-1 pt-14">
         <PrimaryNav items={navItems} activePath={activeNavPath} />
         {secondaryContent !== undefined && (
-          <aside className="hidden w-[268px] flex-col border-r border-[#D9DEE8] bg-white lg:flex">
+          <aside className="hidden w-[268px] flex-col border-r border-border bg-white lg:flex">
             {secondaryContent}
           </aside>
         )}
@@ -50,7 +50,7 @@ function AppShell({
             {subnavContent}
           </ContextualSubnav>
         )}
-        <main className="flex-1 overflow-y-auto bg-[#F4F6FA] p-4 lg:p-6">
+        <main className="flex-1 overflow-y-auto bg-surface p-4 lg:p-6">
           {children}
         </main>
       </div>

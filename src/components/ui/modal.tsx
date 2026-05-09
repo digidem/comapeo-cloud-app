@@ -22,8 +22,8 @@ function Modal({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[18px] bg-white p-6 shadow-lg focus:outline-none w-full max-w-md"
-          aria-describedby={undefined}
+          className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-card bg-white p-6 shadow-lg focus:outline-none w-full max-w-md"
+          {...(description ? {} : { 'aria-describedby': undefined })}
         >
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold text-text">
