@@ -1,7 +1,32 @@
 import { render, screen } from '@tests/mocks/test-utils';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import React from 'react';
 
 import { AppShell } from '@/components/layout/app-shell';
+
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@tanstack/react-router')>();
+  return {
+    ...actual,
+    Link: ({
+      to,
+      children,
+      className,
+      ...rest
+    }: {
+      to: string;
+      children: React.ReactNode;
+      className?: string;
+      [key: string]: unknown;
+    }) => (
+      <a href={to} className={className} {...rest}>
+        {children}
+      </a>
+    ),
+  };
+});
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: <span>D</span> },

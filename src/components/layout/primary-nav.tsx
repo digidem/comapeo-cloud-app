@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { Link } from '@tanstack/react-router';
+
 interface NavItem {
   path: string;
   label: string;
@@ -21,9 +23,9 @@ function PrimaryNav({ items, activePath }: PrimaryNavProps) {
       {items.map((item) => {
         const isActive = activePath === item.path;
         return (
-          <a
+          <Link
             key={item.path}
-            href={item.path}
+            to={item.path}
             aria-label={item.label}
             aria-current={isActive ? 'page' : undefined}
             className={`flex w-[54px] h-[54px] items-center justify-center rounded-xl ${
@@ -33,7 +35,7 @@ function PrimaryNav({ items, activePath }: PrimaryNavProps) {
             }`}
           >
             {item.icon}
-          </a>
+          </Link>
         );
       })}
     </nav>
