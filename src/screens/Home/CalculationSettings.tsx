@@ -16,7 +16,7 @@ interface CalculationSettingsProps {
 const messages = defineMessages({
   preset: {
     id: 'home.settings.preset',
-    defaultMessage: 'Preset',
+    defaultMessage: 'Calculation Preset',
   },
   advanced: {
     id: 'home.settings.advanced',

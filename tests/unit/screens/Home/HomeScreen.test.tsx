@@ -5,7 +5,7 @@ import {
   userEvent,
   waitFor,
 } from '@tests/mocks/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ReactNode } from 'react';
 
@@ -13,7 +13,9 @@ import {
   ShellSlotProvider,
   useShellOverrides,
 } from '@/components/layout/shell-slot';
+import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
+import { useObservations } from '@/hooks/useObservations';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
 import type { CalculationResult } from '@/lib/area-calculator/types';
@@ -78,6 +80,14 @@ vi.mock('@/hooks/useArchiveStatus', () => ({
   useArchiveStatus: vi.fn(),
 }));
 
+vi.mock('@/hooks/useObservations', () => ({
+  useObservations: vi.fn(),
+}));
+
+vi.mock('@/hooks/useAlerts', () => ({
+  useAlerts: vi.fn(),
+}));
+
 // Mock data-layer createProject
 vi.mock('@/lib/data-layer', () => ({
   createProject: vi.fn().mockResolvedValue({ localId: 'new-project-id' }),
@@ -99,6 +109,8 @@ vi.mock('@/lib/sync', () => ({
 const mockUseProjects = vi.mocked(useProjects);
 const mockUseProjectCoverage = vi.mocked(useProjectCoverage);
 const mockUseArchiveStatus = vi.mocked(useArchiveStatus);
+const mockUseObservations = vi.mocked(useObservations);
+const mockUseAlerts = vi.mocked(useAlerts);
 
 const defaultCoverageState = {
   results: [],
@@ -111,6 +123,10 @@ const defaultArchiveStatus = {
   anyError: false,
   anySyncing: false,
 };
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 function makeResult(methodId: string, areaM2: number) {
   return {
@@ -150,6 +166,20 @@ beforeEach(() => {
 
   mockUseProjectCoverage.mockReturnValue(defaultCoverageState);
   mockUseArchiveStatus.mockReturnValue(defaultArchiveStatus);
+  mockUseObservations.mockReturnValue({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+    status: 'success',
+  } as unknown as ReturnType<typeof useObservations>);
+  mockUseAlerts.mockReturnValue({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+    status: 'success',
+  } as unknown as ReturnType<typeof useAlerts>);
 });
 
 describe('HomeScreen', () => {
@@ -431,7 +461,111 @@ describe('HomeScreen', () => {
       await screen.findByRole('button', { name: 'Settings Project' }),
     );
 
-    expect(screen.getByText('Preset')).toBeInTheDocument();
+    expect(screen.getByText('Calculation Preset')).toBeInTheDocument();
+  });
+
+  it('keeps calculator method controls in the main settings panel only', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Controls Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000), makeResult('grid', 75000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Controls Project' }),
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'Algorithm Options' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Map Layer')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Export map layer' }),
+    ).toBeInTheDocument();
+  });
+
+  it('uses monitored area language for the section title', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Monitored Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Monitored Project' }),
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Monitored Area' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Area Calculator' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('switches the map layer when a focused calculation preset is selected', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Preset Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000), makeResult('grid', 75000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Preset Project' }),
+    );
+
+    const [mapLayerSelect, presetSelect] = screen.getAllByRole('combobox');
+    expect(mapLayerSelect).toHaveTextContent('Observed Footprint');
+
+    await user.click(presetSelect!);
+    await user.click(screen.getByRole('option', { name: '5 km Grid' }));
+
+    expect(mapLayerSelect).toHaveTextContent('Occupied Grid');
   });
 
   it('announces calculation progress in an aria-live region', async () => {

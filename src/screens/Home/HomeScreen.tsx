@@ -1,18 +1,21 @@
 import type { FeatureCollection } from 'geojson';
 
-import { useCallback, useEffect, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Button } from '@/components/ui/button';
+import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
+import { useObservations } from '@/hooks/useObservations';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
 import { BUILT_IN_PRESETS, DEFAULTS } from '@/lib/area-calculator/config';
 import type { CalculationParams } from '@/lib/area-calculator/types';
 import type { AreaUnit } from '@/lib/area-format';
+import { convertArea } from '@/lib/area-format';
 import { syncRemoteArchive } from '@/lib/data-layer';
 import { exportFeatureCollection } from '@/lib/geojson-export';
 import { useAuthStore } from '@/stores/auth-store';
@@ -29,22 +32,18 @@ import { ProjectList } from './ProjectList';
 import { RecentActivityList } from './RecentActivityList';
 import { StatCard } from './StatCard';
 
-const MOCK_ACTIVITIES = [
-  {
-    id: '1',
-    title: 'New record uploaded by Maria',
-    description: 'Sighting of illegal logging activity near sector 4.',
-    timestamp: '10 MIN AGO',
-    type: 'record' as const,
-  },
-  {
-    id: '2',
-    title: 'Map boundary updated',
-    description: 'Northern perimeter adjusted based on recent GPS track.',
-    timestamp: '2 HRS AGO',
-    type: 'map' as const,
-  },
-];
+// ---- Helpers ----
+
+function formatRelativeTime(ageMs: number): string {
+  const seconds = Math.floor(ageMs / 1000);
+  if (seconds < 60) return 'JUST NOW';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} MIN AGO`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} HR${hours > 1 ? 'S' : ''} AGO`;
+  const days = Math.floor(hours / 24);
+  return `${days} DAY${days > 1 ? 'S' : ''} AGO`;
+}
 
 // ---- State management ----
 
@@ -108,6 +107,12 @@ const INITIAL_STATE: HomeState = {
   coverageRefreshKey: 0,
 };
 
+const PRESET_TO_METHOD: Record<string, string> = {
+  footprint: 'observed',
+  connectivity: 'connectivity10',
+  grid: 'grid',
+};
+
 const messages = defineMessages({
   appTitle: {
     id: 'app.title',
@@ -157,6 +162,30 @@ const messages = defineMessages({
     id: 'home.archive.syncFailed',
     defaultMessage: 'Sync failed',
   },
+  monitoredArea: {
+    id: 'home.monitoredArea.title',
+    defaultMessage: 'Monitored Area',
+  },
+  activityObservation: {
+    id: 'home.activity.observation',
+    defaultMessage: 'New observation recorded',
+  },
+  activityObservationWithCoords: {
+    id: 'home.activity.observationWithCoords',
+    defaultMessage: 'New geolocated observation',
+  },
+  activityNoLocation: {
+    id: 'home.activity.noLocation',
+    defaultMessage: 'No location data',
+  },
+  activityAlert: {
+    id: 'home.activity.alert',
+    defaultMessage: 'Alert registered',
+  },
+  activityAlertDesc: {
+    id: 'home.activity.alertDesc',
+    defaultMessage: 'New alert event detected in project area.',
+  },
 });
 
 // ---- Component ----
@@ -164,6 +193,13 @@ const messages = defineMessages({
 function HomeScreen() {
   const [state, dispatch] = useReducer(homeReducer, INITIAL_STATE);
   const intl = useIntl();
+  const [now, setNow] = useState(() => Date.now());
+
+  // Refresh relative timestamps every minute
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const queryClient = useQueryClient();
   const projectsQuery = useProjects();
@@ -172,6 +208,8 @@ function HomeScreen() {
     state.params,
     state.coverageRefreshKey,
   );
+  const observationsQuery = useObservations(state.selectedProjectId);
+  const alertsQuery = useAlerts(state.selectedProjectId);
   const archiveStatus = useArchiveStatus();
   const updateServerStatus = useAuthStore((s) => s.updateServerStatus);
   const servers = useAuthStore((s) => s.servers);
@@ -183,6 +221,106 @@ function HomeScreen() {
   const selectedProject = projects.find(
     (p) => p.localId === state.selectedProjectId,
   );
+
+  const observations = useMemo(
+    () => observationsQuery.data ?? [],
+    [observationsQuery.data],
+  );
+
+  const alerts = useMemo(() => alertsQuery.data ?? [], [alertsQuery.data]);
+
+  // Derive unique tag categories from observations
+  const categoryCount = useMemo(() => {
+    const tagKeys = new Set<string>();
+    for (const obs of observations) {
+      if (obs.tags) {
+        for (const key of Object.keys(obs.tags)) {
+          tagKeys.add(key);
+        }
+      }
+    }
+    return tagKeys.size;
+  }, [observations]);
+
+  // Build recent activity from real observations and alerts
+  const recentActivities = useMemo(() => {
+    const items: Array<{
+      id: string;
+      title: string;
+      description: string;
+      timestamp: string;
+      type: 'record' | 'map' | 'sync';
+      _sortKey: number;
+    }> = [];
+
+    for (const obs of observations) {
+      const createdMs = new Date(obs.createdAt).getTime();
+      const ageMs = now - createdMs;
+      const hasCoords = obs.lat !== undefined && obs.lon !== undefined;
+      items.push({
+        id: obs.localId,
+        title: hasCoords
+          ? intl.formatMessage(messages.activityObservationWithCoords)
+          : intl.formatMessage(messages.activityObservation),
+        description: hasCoords
+          ? `${obs.lat!.toFixed(4)}, ${obs.lon!.toFixed(4)}`
+          : intl.formatMessage(messages.activityNoLocation),
+        timestamp: formatRelativeTime(ageMs),
+        type: 'record',
+        _sortKey: createdMs,
+      });
+    }
+
+    for (const alert of alerts) {
+      const createdMs = new Date(alert.createdAt).getTime();
+      const ageMs = now - createdMs;
+      items.push({
+        id: alert.localId,
+        title: intl.formatMessage(messages.activityAlert),
+        description: intl.formatMessage(messages.activityAlertDesc),
+        timestamp: formatRelativeTime(ageMs),
+        type: 'sync',
+        _sortKey: createdMs,
+      });
+    }
+
+    // Sort by most recent first, keep top 10
+    items.sort((a, b) => b._sortKey - a._sortKey);
+
+    return items.slice(0, 10).map(({ _sortKey: _, ...rest }) => rest);
+  }, [observations, alerts, intl, now]);
+
+  // Derive territory area from coverage results
+  const territoryArea = useMemo(() => {
+    const activeResult = coverage.results.find(
+      (r) => r.methodId === state.activeMethodId,
+    );
+    if (activeResult?.result?.areaM2) {
+      return convertArea(activeResult.result.areaM2, state.unit);
+    }
+    return '0 ha';
+  }, [coverage.results, state.activeMethodId, state.unit]);
+
+  const completedMapLayers = useMemo(() => {
+    const mapLayers: Array<{
+      id: string;
+      featureCollection: FeatureCollection;
+      isActive: boolean;
+    }> = [];
+
+    for (const item of coverage.results) {
+      if (item.result) {
+        mapLayers.push({
+          id: item.methodId,
+          featureCollection: item.result
+            .previewFeatureCollection as FeatureCollection,
+          isActive: item.methodId === state.activeMethodId,
+        });
+      }
+    }
+
+    return mapLayers;
+  }, [coverage.results, state.activeMethodId]);
 
   // Auto-select the last updated project when projects load and none is selected
   useEffect(() => {
@@ -240,6 +378,15 @@ function HomeScreen() {
       result.result.featureCollection,
       `${methodId}.geojson`,
     );
+  }
+
+  function handlePresetChange(presetId: string) {
+    dispatch({ type: 'SET_PRESET', presetId });
+
+    const matchingMethodId = PRESET_TO_METHOD[presetId];
+    if (matchingMethodId) {
+      dispatch({ type: 'SET_ACTIVE_METHOD', methodId: matchingMethodId });
+    }
   }
 
   // ---- Shell slot: inject topbar + secondary sidebar into layout's AppShell ----
@@ -382,12 +529,7 @@ function HomeScreen() {
     );
   }
 
-  const observationCount = coverage.results.reduce((acc, r) => {
-    if (r.result?.metadata?.pointCount !== undefined) {
-      return Math.max(acc, Number(r.result.metadata.pointCount));
-    }
-    return acc;
-  }, 0);
+  const observationCount = observations.length;
 
   return (
     <>
@@ -417,8 +559,12 @@ function HomeScreen() {
             title="Total Assets"
             value={observationCount.toLocaleString()}
           />
-          <StatCard title="Categories" value="18" />
-          <StatCard title="Active Alerts" value="3" valueColor="text-red-500" />
+          <StatCard title="Categories" value={categoryCount} />
+          <StatCard
+            title="Active Alerts"
+            value={alerts.length}
+            valueColor="text-red-500"
+          />
         </div>
 
         {/* Project Banner */}
@@ -428,19 +574,31 @@ function HomeScreen() {
               selectedProject.name ??
               intl.formatMessage(messages.untitledProject)
             }
-            areaSize="45,000 ha"
-            lastSync="2 hours ago"
-            teamMembersCount={8}
+            areaSize={territoryArea}
+            lastSync={
+              archiveStatus.servers.find((s) => s.lastSyncedAt)?.lastSyncedAt
+                ? formatRelativeTime(
+                    now -
+                      new Date(
+                        archiveStatus.servers.find((s) => s.lastSyncedAt)!
+                          .lastSyncedAt!,
+                      ).getTime(),
+                  )
+                : undefined
+            }
+            teamMembersCount={archiveStatus.servers.length || 1}
           />
         )}
 
         <div className="flex flex-col gap-6">
-          <RecentActivityList activities={MOCK_ACTIVITIES} />
+          <RecentActivityList activities={recentActivities} />
         </div>
 
         {/* Area Calculator Section */}
         <div className="mt-8 flex flex-col gap-6">
-          <h2 className="text-xl font-bold text-gray-900">Area Calculator</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            {intl.formatMessage(messages.monitoredArea)}
+          </h2>
 
           <div className="relative">
             <AreaMap
@@ -449,6 +607,8 @@ function HomeScreen() {
                   (r) => r.methodId === state.activeMethodId,
                 )?.result?.featureCollection as FeatureCollection | undefined
               }
+              layers={completedMapLayers}
+              activeMethodId={state.activeMethodId}
             >
               <div className="flex flex-col gap-4 bg-white/95 backdrop-blur-md p-5 rounded-card border border-border/20 shadow-xl">
                 {coverage.isCalculating && (
@@ -456,6 +616,15 @@ function HomeScreen() {
                     {intl.formatMessage(messages.calculating)}
                   </div>
                 )}
+
+                <MethodSelector
+                  results={coverage.results}
+                  activeMethodId={state.activeMethodId}
+                  onActivate={(methodId) =>
+                    dispatch({ type: 'SET_ACTIVE_METHOD', methodId })
+                  }
+                  onExport={() => handleExport(state.activeMethodId)}
+                />
 
                 <CoverageSummary
                   activeMethodId={state.activeMethodId}
@@ -470,9 +639,7 @@ function HomeScreen() {
                     presets={BUILT_IN_PRESETS}
                     selectedPresetId={state.selectedPresetId}
                     params={state.params}
-                    onPresetChange={(presetId) =>
-                      dispatch({ type: 'SET_PRESET', presetId })
-                    }
+                    onPresetChange={handlePresetChange}
                     onParamsChange={(params) =>
                       dispatch({ type: 'SET_PARAMS', params })
                     }
@@ -480,17 +647,6 @@ function HomeScreen() {
                 )}
               </div>
             </AreaMap>
-
-            <div className="absolute top-4 left-4 z-20">
-              <MethodSelector
-                results={coverage.results}
-                activeMethodId={state.activeMethodId}
-                onActivate={(methodId) =>
-                  dispatch({ type: 'SET_ACTIVE_METHOD', methodId })
-                }
-                onExport={() => handleExport(state.activeMethodId)}
-              />
-            </div>
           </div>
         </div>
       </div>

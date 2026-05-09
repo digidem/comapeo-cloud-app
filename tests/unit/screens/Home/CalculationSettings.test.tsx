@@ -29,6 +29,13 @@ describe('CalculationSettings', () => {
     }
   });
 
+  it('labels presets as calculation presets', () => {
+    render(<CalculationSettings {...defaultProps} />);
+
+    expect(screen.getByText('Calculation Preset')).toBeInTheDocument();
+    expect(screen.queryByText('Preset')).not.toBeInTheDocument();
+  });
+
   it('advanced section is collapsed by default', () => {
     render(<CalculationSettings {...defaultProps} />);
 
