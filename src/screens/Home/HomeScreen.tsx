@@ -130,14 +130,6 @@ const messages = defineMessages({
     id: 'home.localMode',
     defaultMessage: 'Local Mode',
   },
-  newProject: {
-    id: 'home.newProject',
-    defaultMessage: 'New Project',
-  },
-  newProjectTopbarAria: {
-    id: 'home.newProject.topbarAria',
-    defaultMessage: 'Create new project from topbar',
-  },
   noProjects: {
     id: 'home.noProjects',
     defaultMessage: 'No projects yet',
@@ -397,22 +389,6 @@ function HomeScreen() {
       ? intl.formatMessage(messages.untitledProject)
       : intl.formatMessage(messages.localMode));
 
-  const topbarActions = useMemo(
-    () => (
-      <Button
-        variant="primary"
-        size="sm"
-        aria-label={intl.formatMessage(messages.newProjectTopbarAria)}
-        onClick={handleOpenCreateDialog}
-      >
-        {intl.formatMessage(messages.newProject)}
-      </Button>
-    ),
-    // intl reference is stable within a session; handleOpenCreateDialog is stable (useCallback)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [handleOpenCreateDialog],
-  );
-
   const secondaryContent = useMemo(
     () => (
       <div className="flex flex-col gap-4 p-4">
@@ -459,11 +435,10 @@ function HomeScreen() {
     () => ({
       topbarWorkspaceName,
       topbarModeLabel: intl.formatMessage(messages.homeTitle),
-      topbarActions,
       secondaryContent,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [topbarWorkspaceName, topbarActions, secondaryContent],
+    [topbarWorkspaceName, secondaryContent],
   );
 
   useShellSlot(shellSlot);

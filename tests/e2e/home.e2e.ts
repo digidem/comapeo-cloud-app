@@ -18,9 +18,7 @@ async function createProject(
   page: import('@playwright/test').Page,
   name: string,
 ) {
-  await page
-    .getByRole('button', { name: 'Create new project from topbar' })
-    .click();
+  await page.getByRole('button', { name: 'Create your first project' }).click();
   await page.getByLabel('Project Name').fill(name);
   // Scope to dialog to avoid matching other "Create" text on page
   await page

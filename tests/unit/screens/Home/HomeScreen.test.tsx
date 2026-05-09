@@ -293,8 +293,7 @@ describe('HomeScreen', () => {
     expect(screen.queryByText('No projects yet')).toBeNull();
   });
 
-  it('wires Home topbar workspace, mode, and topbar new project action', async () => {
-    const user = userEvent.setup();
+  it('wires Home topbar workspace and mode labels', async () => {
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -318,13 +317,6 @@ describe('HomeScreen', () => {
       );
     });
     expect(screen.getByTestId('shell-mode')).toHaveTextContent('Home');
-
-    await user.click(
-      screen.getByRole('button', {
-        name: 'Create new project from topbar',
-      }),
-    );
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('shows a main empty-state new project CTA', async () => {
