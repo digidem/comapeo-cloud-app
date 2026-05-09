@@ -8,6 +8,11 @@
 
 @import 'tailwindcss';
 
+/* Prevent flash of unstyled background during route transitions */
+body {
+  background-color: var(--color-surface, #f4f6fa);
+}
+
 @theme {
   /* Surface hierarchy — tonal nesting, no lines */
   --color-surface: #f4f6fa;
