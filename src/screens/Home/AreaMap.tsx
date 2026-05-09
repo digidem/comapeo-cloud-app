@@ -2,25 +2,135 @@ import bbox from '@turf/bbox';
 import type { FeatureCollection } from 'geojson';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import Map, { Layer, type MapRef, Source } from 'react-map-gl/maplibre';
 
+const EMPTY_FEATURE_COLLECTION: FeatureCollection = {
+  type: 'FeatureCollection',
+  features: [],
+};
+
 interface AreaMapProps {
   featureCollection?: FeatureCollection;
+  layers?: AreaMapLayer[];
+  activeMethodId?: string;
   children?: ReactNode;
 }
 
-export function AreaMap({ featureCollection, children }: AreaMapProps) {
+interface AreaMapLayer {
+  id: string;
+  featureCollection: FeatureCollection;
+  isActive?: boolean;
+}
+
+interface RenderableAreaLayer {
+  id: string;
+  sourceId: string;
+  fillLayerId: string;
+  outlineLayerId: string;
+  featureCollection: FeatureCollection;
+  isActive: boolean;
+  color: string;
+  legacy: boolean;
+}
+
+const LAYER_COLORS: Record<string, string> = {
+  observed: '#1F6FFF',
+  connectivity10: '#0F9D58',
+  connectivity30: '#FF6B00',
+  clusterHull: '#7C3AED',
+  grid: '#04145C',
+};
+
+function getFillOpacity(layer: RenderableAreaLayer): number {
+  if (layer.legacy) return 0.3;
+  return layer.isActive ? 0.38 : 0.18;
+}
+
+function getOutlineWidth(layer: RenderableAreaLayer): number {
+  if (layer.legacy) return 2;
+  return layer.isActive ? 3 : 2;
+}
+
+function getSourceKey(
+  layer: RenderableAreaLayer,
+  activeMethodId: string | undefined,
+): string {
+  if (layer.legacy) return activeMethodId ?? 'legacy';
+  return `${layer.sourceId}-${layer.isActive ? 'active' : 'inactive'}`;
+}
+
+export function AreaMap({
+  featureCollection,
+  layers,
+  activeMethodId,
+  children,
+}: AreaMapProps) {
   const mapRef = useRef<MapRef>(null);
-  const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const isMapLoadedRef = useRef(false);
+
+  const mapLayers = useMemo<RenderableAreaLayer[]>(() => {
+    if (layers && layers.length > 0) {
+      const orderedLayers: AreaMapLayer[] = [];
+
+      for (const layer of layers) {
+        if (!layer.isActive) orderedLayers.push(layer);
+      }
+
+      for (const layer of layers) {
+        if (layer.isActive) orderedLayers.push(layer);
+      }
+
+      const renderedLayers: RenderableAreaLayer[] = [];
+
+      for (const layer of orderedLayers) {
+        renderedLayers.push({
+          id: layer.id,
+          sourceId: `calculated-area-${layer.id}`,
+          fillLayerId: `area-fill-${layer.id}`,
+          outlineLayerId: `area-outline-${layer.id}`,
+          featureCollection: layer.featureCollection,
+          isActive: Boolean(layer.isActive),
+          color: LAYER_COLORS[layer.id] ?? '#1F6FFF',
+          legacy: false,
+        });
+      }
+
+      return renderedLayers;
+    }
+
+    return [
+      {
+        id: activeMethodId ?? 'active',
+        sourceId: 'calculated-area',
+        fillLayerId: 'area-fill',
+        outlineLayerId: 'area-outline',
+        featureCollection: featureCollection ?? EMPTY_FEATURE_COLLECTION,
+        isActive: true,
+        color: '#1F6FFF',
+        legacy: true,
+      },
+    ];
+  }, [activeMethodId, featureCollection, layers]);
 
   const mapBounds = useMemo(() => {
-    if (!featureCollection || featureCollection.features.length === 0) {
+    const features: FeatureCollection['features'] = [];
+
+    for (const layer of mapLayers) {
+      features.push(...layer.featureCollection.features);
+    }
+
+    if (features.length === 0) {
       return undefined;
     }
+
     try {
-      const [minLng, minLat, maxLng, maxLat] = bbox(featureCollection);
+      const [minLng, minLat, maxLng, maxLat] = bbox({
+        type: 'FeatureCollection',
+        features,
+      });
+
       return [
         [minLng, minLat],
         [maxLng, maxLat],
@@ -29,13 +139,17 @@ export function AreaMap({ featureCollection, children }: AreaMapProps) {
       console.error('Failed to calculate bbox for featureCollection', e);
       return undefined;
     }
-  }, [featureCollection]);
+  }, [mapLayers]);
+
+  const fitMapToBounds = useCallback((bounds: typeof mapBounds) => {
+    if (bounds && isMapLoadedRef.current && mapRef.current) {
+      mapRef.current.fitBounds(bounds, { padding: 50, duration: 1000 });
+    }
+  }, []);
 
   useEffect(() => {
-    if (isMapLoaded && mapBounds && mapRef.current) {
-      mapRef.current.fitBounds(mapBounds, { padding: 50, duration: 1000 });
-    }
-  }, [mapBounds, isMapLoaded]);
+    fitMapToBounds(mapBounds);
+  }, [fitMapToBounds, mapBounds]);
 
   return (
     <div className="relative h-[600px] w-full overflow-hidden rounded-card border border-border/15 shadow-sm">
@@ -48,31 +162,40 @@ export function AreaMap({ featureCollection, children }: AreaMapProps) {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
         interactive={true}
-        onLoad={() => setIsMapLoaded(true)}
+        onLoad={() => {
+          isMapLoadedRef.current = true;
+          fitMapToBounds(mapBounds);
+        }}
       >
-        {featureCollection && (
-          <Source id="calculated-area" type="geojson" data={featureCollection}>
+        {mapLayers.map((layer) => (
+          <Source
+            key={getSourceKey(layer, activeMethodId)}
+            id={layer.sourceId}
+            type="geojson"
+            data={layer.featureCollection}
+          >
             <Layer
-              id="area-fill"
+              id={layer.fillLayerId}
               type="fill"
-              source="calculated-area"
               paint={{
-                'fill-color': '#1F6FFF',
-                'fill-opacity': 0.3,
-                'fill-outline-color': '#04145C',
+                'fill-color': layer.color,
+                'fill-opacity': getFillOpacity(layer),
+                'fill-outline-color': layer.legacy ? '#04145C' : layer.color,
               }}
             />
             <Layer
-              id="area-outline"
+              id={layer.outlineLayerId}
               type="line"
-              source="calculated-area"
               paint={{
-                'line-color': '#04145C',
-                'line-width': 2,
+                'line-color': layer.legacy ? '#04145C' : layer.color,
+                'line-width': getOutlineWidth(layer),
+                ...(layer.legacy
+                  ? {}
+                  : { 'line-opacity': layer.isActive ? 0.95 : 0.7 }),
               }}
             />
           </Source>
-        )}
+        ))}
       </Map>
 
       {/* Settings overlay menu */}
