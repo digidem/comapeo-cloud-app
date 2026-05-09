@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { resetDb } from '@/lib/db';
+import { DbError } from '@/lib/db-error';
 import {
   createAlert,
   createAttachment,
@@ -106,6 +107,30 @@ describe('local-repositories functions — projects', () => {
     const found = await getProject(created.localId);
     expect(found).toBeUndefined();
   });
+
+  it('deleteProject — cascades and removes child observations, alerts, and attachments', async () => {
+    const project = await createProject({ name: 'CascadeProject' });
+    const obs = await createObservation({
+      projectLocalId: project.localId,
+    });
+    const alert = await createAlert({ projectLocalId: project.localId });
+    await createAttachment({
+      projectLocalId: project.localId,
+      observationLocalId: obs.localId,
+    });
+
+    await deleteProject(project.localId);
+
+    // Project should be gone
+    expect(await getProject(project.localId)).toBeUndefined();
+    // Child records should be gone
+    expect(await getObservation(obs.localId)).toBeUndefined();
+    expect(await getAlert(alert.localId)).toBeUndefined();
+    expect(await getAttachments(obs.localId)).toHaveLength(0);
+    // Observations/alerts lists should be empty
+    expect(await getObservations(project.localId)).toHaveLength(0);
+    expect(await getAlerts(project.localId)).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -198,6 +223,42 @@ describe('local-repositories functions — observations', () => {
     const found = await getObservation(created.localId);
     expect(found).toBeUndefined();
   });
+
+  it('deleteObservation — cascades and removes child attachments', async () => {
+    const project = await createProject({ name: 'CascadeObs' });
+    const obs = await createObservation({ projectLocalId: project.localId });
+    await createAttachment({
+      projectLocalId: project.localId,
+      observationLocalId: obs.localId,
+    });
+    await createAttachment({
+      projectLocalId: project.localId,
+      observationLocalId: obs.localId,
+    });
+
+    // Should have 2 attachments before delete
+    expect(await getAttachments(obs.localId)).toHaveLength(2);
+
+    await deleteObservation(obs.localId);
+
+    // Observation should be gone
+    expect(await getObservation(obs.localId)).toBeUndefined();
+    // Attachments should be gone
+    expect(await getAttachments(obs.localId)).toHaveLength(0);
+  });
+
+  it('createObservation — throws DbError FK_VIOLATION when projectLocalId does not exist', async () => {
+    await expect(
+      createObservation({ projectLocalId: 'non-existent-project' }),
+    ).rejects.toThrow(DbError);
+
+    try {
+      await createObservation({ projectLocalId: 'non-existent-project' });
+    } catch (err) {
+      expect(err).toBeInstanceOf(DbError);
+      expect((err as DbError).code).toBe('FK_VIOLATION');
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -271,6 +332,19 @@ describe('local-repositories functions — alerts', () => {
     const found = await getAlert(created.localId);
     expect(found).toBeUndefined();
   });
+
+  it('createAlert — throws DbError FK_VIOLATION when projectLocalId does not exist', async () => {
+    await expect(
+      createAlert({ projectLocalId: 'non-existent-project' }),
+    ).rejects.toThrow(DbError);
+
+    try {
+      await createAlert({ projectLocalId: 'non-existent-project' });
+    } catch (err) {
+      expect(err).toBeInstanceOf(DbError);
+      expect((err as DbError).code).toBe('FK_VIOLATION');
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -315,6 +389,49 @@ describe('local-repositories functions — attachments', () => {
 
     const attach2 = await getAttachments(obs2.localId);
     expect(attach2).toHaveLength(1);
+  });
+
+  it('createAttachment — throws DbError FK_VIOLATION when projectLocalId does not exist', async () => {
+    const project = await createProject({});
+    const obs = await createObservation({ projectLocalId: project.localId });
+
+    await expect(
+      createAttachment({
+        projectLocalId: 'non-existent-project',
+        observationLocalId: obs.localId,
+      }),
+    ).rejects.toThrow(DbError);
+
+    try {
+      await createAttachment({
+        projectLocalId: 'non-existent-project',
+        observationLocalId: obs.localId,
+      });
+    } catch (err) {
+      expect(err).toBeInstanceOf(DbError);
+      expect((err as DbError).code).toBe('FK_VIOLATION');
+    }
+  });
+
+  it('createAttachment — throws DbError FK_VIOLATION when observationLocalId does not exist', async () => {
+    const project = await createProject({});
+
+    await expect(
+      createAttachment({
+        projectLocalId: project.localId,
+        observationLocalId: 'non-existent-obs',
+      }),
+    ).rejects.toThrow(DbError);
+
+    try {
+      await createAttachment({
+        projectLocalId: project.localId,
+        observationLocalId: 'non-existent-obs',
+      });
+    } catch (err) {
+      expect(err).toBeInstanceOf(DbError);
+      expect((err as DbError).code).toBe('FK_VIOLATION');
+    }
   });
 });
 
