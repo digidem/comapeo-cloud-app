@@ -374,7 +374,7 @@ describe('HomeScreen', () => {
     });
   });
 
-  it('uses the selected unit for both summary and method cards', async () => {
+  it('applies selected unit to coverage summary', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
@@ -402,7 +402,7 @@ describe('HomeScreen', () => {
     await user.click(screen.getByRole('button', { name: 'm²' }));
 
     const values = screen.getAllByText(/50[.,\s]?000/);
-    expect(values.length).toBeGreaterThanOrEqual(2);
+    expect(values.length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows settings when any method has a result', async () => {

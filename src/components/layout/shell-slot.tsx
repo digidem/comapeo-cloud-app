@@ -52,6 +52,5 @@ export function useShellSlot(overrides: AppShellOverrides) {
   useEffect(() => {
     setOverrides(overrides);
     return clear;
-     
   }, [overrides, setOverrides, clear]);
 }
