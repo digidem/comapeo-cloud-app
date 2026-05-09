@@ -175,8 +175,16 @@ describe('HomeScreen', () => {
   it('shows project list when projects exist', async () => {
     mockUseProjects.mockReturnValue({
       data: [
-        { localId: 'p1', name: 'Alpha Project' },
-        { localId: 'p2', name: 'Beta Project' },
+        {
+          localId: 'p1',
+          name: 'Alpha Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+        {
+          localId: 'p2',
+          name: 'Beta Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
       ],
       isLoading: false,
       isError: false,
@@ -187,9 +195,9 @@ describe('HomeScreen', () => {
     renderWithShell(<HomeScreen />);
     // Project list is in secondary sidebar — wait for shell slot effect to flush
     await waitFor(() => {
-      expect(screen.getByText('Alpha Project')).toBeDefined();
+      expect(screen.getAllByText('Alpha Project').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('Beta Project')).toBeDefined();
+    expect(screen.getAllByText('Beta Project').length).toBeGreaterThan(0);
   });
 
   it('shows loading skeletons when projects are loading', async () => {
@@ -223,25 +231,20 @@ describe('HomeScreen', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows empty main area with "No projects yet" when no project selected', () => {
+  it('auto-selects the last updated project when projects exist', async () => {
     mockUseProjects.mockReturnValue({
-      data: [{ localId: 'p1', name: 'My Project' }],
-      isLoading: false,
-      isError: false,
-      error: null,
-      status: 'success',
-    } as unknown as ReturnType<typeof useProjects>);
-
-    render(<HomeScreen />);
-
-    // No project is selected, so coverage section not shown
-    expect(screen.queryByText('No mappable coordinates found')).toBeNull();
-  });
-
-  it('wires Home topbar workspace, mode, and topbar new project action', async () => {
-    const user = userEvent.setup();
-    mockUseProjects.mockReturnValue({
-      data: [{ localId: 'p1', name: 'My Project' }],
+      data: [
+        {
+          localId: 'p1',
+          name: 'Older Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+        {
+          localId: 'p2',
+          name: 'Newer Project',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+        },
+      ],
       isLoading: false,
       isError: false,
       error: null,
@@ -250,16 +253,41 @@ describe('HomeScreen', () => {
 
     renderWithShell(<HomeScreen />);
 
-    // Shell slot overrides are set via useEffect — wait for them to appear
+    // Should auto-select the most recently updated project (p2)
     await waitFor(() => {
       expect(screen.getByTestId('shell-workspace')).toHaveTextContent(
-        'Local Mode',
+        'Newer Project',
+      );
+    });
+    // Should NOT show "No projects yet" since a project is auto-selected
+    expect(screen.queryByText('No projects yet')).toBeNull();
+  });
+
+  it('wires Home topbar workspace, mode, and topbar new project action', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'My Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    renderWithShell(<HomeScreen />);
+
+    // Auto-selects the project, so workspace shows project name
+    await waitFor(() => {
+      expect(screen.getByTestId('shell-workspace')).toHaveTextContent(
+        'My Project',
       );
     });
     expect(screen.getByTestId('shell-mode')).toHaveTextContent('Home');
-
-    await user.click(screen.getByRole('button', { name: 'My Project' }));
-    expect(screen.getAllByText('My Project').length).toBeGreaterThan(0);
 
     await user.click(
       screen.getByRole('button', {
@@ -283,7 +311,13 @@ describe('HomeScreen', () => {
   it('shows "No mappable coordinates found" when project is selected but no results', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
-      data: [{ localId: 'p1', name: 'My Project' }],
+      data: [
+        {
+          localId: 'p1',
+          name: 'My Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
       isLoading: false,
       isError: false,
       error: null,
@@ -307,7 +341,13 @@ describe('HomeScreen', () => {
   it('refreshes coverage immediately after a successful import', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
-      data: [{ localId: 'p1', name: 'Import Project' }],
+      data: [
+        {
+          localId: 'p1',
+          name: 'Import Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
       isLoading: false,
       isError: false,
       error: null,
@@ -337,7 +377,13 @@ describe('HomeScreen', () => {
   it('uses the selected unit for both summary and method cards', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
-      data: [{ localId: 'p1', name: 'Unit Project' }],
+      data: [
+        {
+          localId: 'p1',
+          name: 'Unit Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
       isLoading: false,
       isError: false,
       error: null,
@@ -362,7 +408,13 @@ describe('HomeScreen', () => {
   it('shows settings when any method has a result', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
-      data: [{ localId: 'p1', name: 'Settings Project' }],
+      data: [
+        {
+          localId: 'p1',
+          name: 'Settings Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
       isLoading: false,
       isError: false,
       error: null,
@@ -385,7 +437,13 @@ describe('HomeScreen', () => {
   it('announces calculation progress in an aria-live region', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
-      data: [{ localId: 'p1', name: 'Calc Project' }],
+      data: [
+        {
+          localId: 'p1',
+          name: 'Calc Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
       isLoading: false,
       isError: false,
       error: null,
@@ -409,7 +467,13 @@ describe('HomeScreen', () => {
   it('shows coverage summary when project is selected and calculating', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
-      data: [{ localId: 'p1', name: 'Calc Project' }],
+      data: [
+        {
+          localId: 'p1',
+          name: 'Calc Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
       isLoading: false,
       isError: false,
       error: null,

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { useQueryClient } from '@tanstack/react-query';
@@ -161,6 +161,17 @@ function HomeScreen() {
   const selectedProject = projects.find(
     (p) => p.localId === state.selectedProjectId,
   );
+
+  // Auto-select the last updated project when projects load and none is selected
+  useEffect(() => {
+    if (!state.selectedProjectId && projects.length > 0) {
+      const sorted = [...projects].sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+      dispatch({ type: 'SELECT_PROJECT', id: sorted[0]!.localId });
+    }
+  }, [state.selectedProjectId, projects]);
 
   const handleOpenCreateDialog = useCallback(
     () => dispatch({ type: 'OPEN_CREATE_DIALOG' }),
