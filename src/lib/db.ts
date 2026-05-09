@@ -99,7 +99,16 @@ class AppDatabase extends Dexie {
       syncMetadata: '&id, serverId, status, updatedAt',
     });
 
-    this.version(2).stores({});
+    this.version(2).upgrade(async (tx) => {
+      // Backfill `lat` and `lon` as `undefined` on existing observation
+      // records that lack these fields so that downstream code can safely
+      // check `o.lat !== undefined` without worrying about missing keys.
+      const table = tx.table('observations');
+      await table.toCollection().modify((obs: Record<string, unknown>) => {
+        if (!('lat' in obs)) obs.lat = undefined;
+        if (!('lon' in obs)) obs.lon = undefined;
+      });
+    });
   }
 }
 

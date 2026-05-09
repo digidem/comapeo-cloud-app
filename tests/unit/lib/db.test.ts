@@ -259,4 +259,45 @@ describe('AppDatabase', () => {
     const retrieved = await db.projects.get('proj-to-clear');
     expect(retrieved).toBeUndefined();
   });
+
+  it('version 2 migration backfills lat/lon as undefined on observations that lack them', async () => {
+    const db = getDb();
+
+    // Simulate a v1 observation record without lat/lon keys by inserting
+    // raw data and then running the migration modify logic manually.
+    await db.observations.add({
+      localId: 'obs-migration-test',
+      projectLocalId: 'proj-1',
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    // Verify it was inserted without lat/lon
+    const before = await db.observations.get('obs-migration-test');
+    expect(before).toBeDefined();
+    expect(before!.lat).toBeUndefined();
+    expect(before!.lon).toBeUndefined();
+
+    // Run the same backfill logic the migration uses
+    await db.observations.toCollection().modify((obs) => {
+      // Use `any` to bypass strict Observation typing for migration simulation
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rec = obs as any;
+      if (!('lat' in rec)) rec.lat = undefined;
+      if (!('lon' in rec)) rec.lon = undefined;
+    });
+
+    // Verify the record now has explicit lat/lon keys
+    const after = await db.observations.get('obs-migration-test');
+    expect(after).toBeDefined();
+    expect(after!.lat).toBeUndefined();
+    expect(after!.lon).toBeUndefined();
+    // Verify keys exist even though values are undefined
+    expect('lat' in after!).toBe(true);
+    expect('lon' in after!).toBe(true);
+  });
 });
