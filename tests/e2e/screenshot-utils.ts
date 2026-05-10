@@ -15,6 +15,26 @@ export const VIEWPORTS = {
 
 export type ViewportName = keyof typeof VIEWPORTS;
 
+/** Theme IDs for multi-theme screenshot generation. */
+export const THEME_IDS = ['cloud', 'mobile', 'sentinel'] as const;
+export type ThemeId = (typeof THEME_IDS)[number];
+
+/**
+ * Sets the theme by writing to localStorage and reloading.
+ * The theme store (Zustand persist) reads from localStorage on init,
+ * so a reload applies the new theme class to <html>.
+ */
+export async function setTheme(page: Page, themeId: ThemeId): Promise<void> {
+  await page.evaluate((id) => {
+    const stored = localStorage.getItem('comapeo-theme');
+    const parsed = stored ? JSON.parse(stored) : {};
+    parsed.state = { ...parsed.state, theme: id };
+    localStorage.setItem('comapeo-theme', JSON.stringify(parsed));
+  }, themeId);
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+}
+
 /**
  * Captures a full-page screenshot after waiting for fonts and network idle.
  *
