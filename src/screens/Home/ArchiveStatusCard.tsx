@@ -59,7 +59,7 @@ function StatusBadge({
     ok: 'bg-green-100 text-green-700',
     error: 'bg-red-100 text-red-700',
     syncing: 'bg-blue-100 text-blue-700',
-    idle: 'bg-gray-100 text-gray-600',
+    idle: 'bg-tag-neutral-bg text-tag-neutral-text',
   };
 
   const labels: Record<string, keyof typeof messages> = {

@@ -43,12 +43,12 @@ function renderAreaDisplay(
   }
   if (areaM2 !== undefined) {
     return (
-      <span className="text-4xl font-bold text-[#172033]">
+      <span className="text-4xl font-bold text-text">
         {convertArea(areaM2, unit)}
       </span>
     );
   }
-  return <span className="text-4xl font-bold text-gray-400">—</span>;
+  return <span className="text-4xl font-bold text-text-muted">—</span>;
 }
 
 export function CoverageSummary({
@@ -78,8 +78,8 @@ export function CoverageSummary({
             onClick={() => onUnitChange(u)}
             className={`rounded-md px-3 py-1 text-sm font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
               unit === u
-                ? 'bg-[#1F6FFF] text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-primary text-white'
+                : 'bg-tag-neutral-bg text-tag-neutral-text hover:bg-surface'
             }`}
           >
             {intl.formatMessage(messages[UNIT_MESSAGES[u]])}

@@ -36,6 +36,8 @@ body {
   /* Functional status */
   --color-success: #0f9d58;
   --color-success-soft: #e8f7ee;
+  --color-error: #dc2626;
+  --color-error-soft: #fef2f2;
   --color-warning: #ff6b00;
   --color-warning-soft: #fff1e8;
   --color-info: #1f6fff;
