@@ -177,3 +177,56 @@ test('7.4 export GeoJSON from method card triggers browser download', async ({
 
   expect(download.suggestedFilename()).toMatch(/\.geojson$/);
 });
+
+// ---------------------------------------------------------------------------
+// 7.5 — network error handling shows error state
+// ---------------------------------------------------------------------------
+
+test('7.5 network error on projects endpoint shows error state', async ({
+  page,
+}) => {
+  // Set up mock server but override projects endpoint to fail
+  await setupMockServer(page);
+  await page.route('**/projects', (route) => route.abort('failed'));
+
+  await page.goto('/');
+
+  // The app should render but the project list should show error or empty state
+  // The ErrorBoundary or query error should be visible
+  await expect(page.getByText(/error|failed|unable/i).first()).toBeVisible({
+    timeout: 10_000,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7.6 — server removal in Settings
+// ---------------------------------------------------------------------------
+
+test('7.6 add then remove archive server in settings', async ({ page }) => {
+  await setupMockServer(page);
+
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Settings' }).click();
+
+  // Add a server
+  await page.getByLabel('Server URL').fill('http://removable.test');
+  await page.getByLabel('Bearer Token').fill('bearer-abc');
+  await page.getByRole('button', { name: 'Add Server' }).click();
+
+  // Confirm server was added
+  await expect(
+    page.locator('li').filter({ hasText: 'http://removable.test' }),
+  ).toBeVisible({ timeout: 10_000 });
+
+  // Remove the server
+  await page
+    .locator('li')
+    .filter({ hasText: 'http://removable.test' })
+    .getByRole('button', { name: 'Remove' })
+    .click();
+
+  // Server should no longer be in the list
+  await expect(
+    page.locator('li').filter({ hasText: 'http://removable.test' }),
+  ).not.toBeVisible({ timeout: 5_000 });
+});
