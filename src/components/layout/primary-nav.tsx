@@ -18,7 +18,7 @@ function PrimaryNav({ items, activePath }: PrimaryNavProps) {
     <nav
       role="navigation"
       aria-label="Primary navigation"
-      className="hidden w-[76px] flex-col items-center border-r border-[#D9DEE8] bg-white pt-4 lg:flex"
+      className="hidden w-[76px] flex-col items-center border-r border-border bg-surface-card pt-4 lg:flex"
     >
       {items.map((item) => {
         const isActive = activePath === item.path;

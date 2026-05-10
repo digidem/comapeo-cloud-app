@@ -19,7 +19,7 @@ function TooltipRoot({ content, children, side = 'top' }: TooltipProps) {
           <TooltipPrimitive.Content
             side={side}
             sideOffset={4}
-            className="z-50 rounded-[8px] bg-text px-3 py-1.5 text-xs text-white shadow-md animate-in fade-in-0 zoom-in-95"
+            className="z-50 rounded-btn bg-text px-3 py-1.5 text-xs text-white shadow-elevated animate-in fade-in-0 zoom-in-95"
           >
             {content}
           </TooltipPrimitive.Content>

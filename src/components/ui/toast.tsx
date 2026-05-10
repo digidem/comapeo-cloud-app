@@ -21,7 +21,7 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 const variantClasses: Record<ToastVariant, string> = {
   success: 'bg-success-soft text-success border-success',
-  error: 'bg-red-50 text-red-700 border-red-400',
+  error: 'bg-error-soft text-error border-error',
   info: 'bg-info-soft text-info border-info',
 };
 
@@ -56,7 +56,7 @@ function ToastProvider({ children }: { children: ReactNode }) {
             onOpenChange={(open) => {
               if (!open) removeToast(toast.id);
             }}
-            className={`rounded-[12px] border p-4 shadow-md flex items-start gap-3 data-[state=open]:animate-slideIn ${variantClasses[toast.variant]}`}
+            className={`rounded-btn border p-4 shadow-elevated flex items-start gap-3 data-[state=open]:animate-slideIn ${variantClasses[toast.variant]}`}
             role="status"
           >
             <div className="flex-1">
@@ -91,7 +91,7 @@ function ToastProvider({ children }: { children: ReactNode }) {
             </ToastPrimitive.Close>
           </ToastPrimitive.Root>
         ))}
-        <ToastPrimitive.Viewport className="fixed bottom-0 right-0 z-50 flex flex-col gap-2 p-4 m-0 list-none outline-none w-[390px] max-w-[100vw]" />
+        <ToastPrimitive.Viewport className="fixed bottom-0 right-0 z-50 flex flex-col gap-2 p-4 m-0 list-none outline-none w-full max-w-[390px] max-w-[100vw]" />
       </ToastPrimitive.Provider>
     </ToastContext.Provider>
   );

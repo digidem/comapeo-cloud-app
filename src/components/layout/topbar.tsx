@@ -1,4 +1,7 @@
+// TEMPORARY: ThemeToggle import for theme comparison
 import type { ReactNode } from 'react';
+
+import { ThemeToggle } from '@/components/shared/theme-toggle';
 
 interface TopbarProps {
   title: string;
@@ -16,7 +19,7 @@ function Topbar({ title, workspaceName, modeLabel, children }: TopbarProps) {
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-semibold text-white">{title}</h1>
         {workspaceName && (
-          <span className="bg-white text-[#04145C] rounded-full px-3 py-0.5 text-sm font-medium">
+          <span className="bg-white text-primary-navy rounded-full px-3 py-0.5 text-sm font-medium">
             {workspaceName}
           </span>
         )}
@@ -26,7 +29,16 @@ function Topbar({ title, workspaceName, modeLabel, children }: TopbarProps) {
           </span>
         )}
       </div>
-      {children && <div className="flex items-center gap-2">{children}</div>}
+      <div className="flex items-center gap-2">
+        {/* TEMPORARY: Theme toggle for comparison */}
+        <ThemeToggle />
+        {children && (
+          <>
+            <div className="h-4 w-px bg-white/20" />
+            {children}
+          </>
+        )}
+      </div>
     </header>
   );
 }

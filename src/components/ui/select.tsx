@@ -50,7 +50,7 @@ function SelectRoot({
         <SelectPrimitive.Content
           position="popper"
           sideOffset={4}
-          className="z-50 rounded-btn border border-border bg-white shadow-[0_8px_24px_rgba(9,30,66,0.08)] overflow-hidden"
+          className="z-50 rounded-btn border border-border bg-surface-card shadow-dropdown overflow-hidden"
         >
           <SelectPrimitive.Viewport className="p-1">
             {children}
@@ -66,7 +66,7 @@ function SelectItem({ value, children, disabled }: SelectItemProps) {
     <SelectPrimitive.Item
       value={value}
       disabled={disabled}
-      className="relative flex items-center rounded-[8px] px-3 py-2 text-sm text-text cursor-pointer outline-none data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed"
+      className="relative flex items-center rounded-lg px-3 py-2 text-sm text-text cursor-pointer outline-none data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed"
     >
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
     </SelectPrimitive.Item>

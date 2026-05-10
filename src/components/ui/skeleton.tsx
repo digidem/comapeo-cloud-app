@@ -19,7 +19,7 @@ function Skeleton({
   return (
     <div
       data-testid="skeleton"
-      className={`animate-pulse rounded bg-gray-200 ${className}`}
+      className={`animate-pulse rounded bg-surface-container-low ${className}`}
       style={style}
     />
   );
