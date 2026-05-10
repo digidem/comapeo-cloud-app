@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
+
 interface CopyButtonProps {
   text: string;
   label?: string;
@@ -21,9 +23,9 @@ export function CopyButton({
   }, [text]);
 
   return (
-    <button type="button" onClick={handleCopy}>
+    <Button type="button" variant="ghost" size="sm" onClick={handleCopy}>
       {copied ? successLabel : label}
-    </button>
+    </Button>
   );
 }
 

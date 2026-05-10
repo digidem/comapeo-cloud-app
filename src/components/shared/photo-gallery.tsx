@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { getAttachmentUrl } from '@/lib/api-client';
 
 interface Photo {
@@ -30,7 +31,7 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
             key={photo.driveId}
             type="button"
             onClick={() => setPreviewIndex(index)}
-            className="cursor-pointer"
+            className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-card"
           >
             <img
               src={getAttachmentUrl(
@@ -41,14 +42,18 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
                 'thumbnail',
               )}
               alt={photo.name}
-              className="w-full rounded"
+              className="w-full rounded-card"
             />
           </button>
         ))}
       </div>
 
       {selectedPhoto && (
-        <div role="dialog" aria-modal="true">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
+        >
           <img
             src={getAttachmentUrl(
               projectId,
@@ -58,14 +63,18 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
               'original',
             )}
             alt={`${selectedPhoto.name} preview`}
+            className="rounded-card shadow-modal overflow-hidden max-h-[90vh] max-w-[90vw]"
           />
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => setPreviewIndex(null)}
             aria-label="Close preview"
+            className="absolute top-4 right-4"
           >
             Close
-          </button>
+          </Button>
         </div>
       )}
     </div>

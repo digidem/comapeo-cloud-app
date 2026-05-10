@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { getAttachmentUrl } from '@/lib/api-client';
 
 interface AudioPlayerProps {
@@ -64,19 +65,22 @@ export function AudioPlayer({ driveId, name, projectId }: AudioPlayerProps) {
 
   return (
     <div className="flex items-center gap-2">
-      <button
+      <Button
         type="button"
+        variant="primary"
+        size="sm"
         onClick={togglePlay}
         aria-label={isPlaying ? 'Pause' : 'Play'}
+        className="min-h-[44px] min-w-[44px]"
       >
         {isPlaying ? 'Pause' : 'Play'}
-      </button>
+      </Button>
       <div
         role="progressbar"
         aria-valuenow={Math.round(currentTime)}
         aria-valuemin={0}
         aria-valuemax={Math.round(duration)}
-        className="h-1.5 flex-1 rounded bg-gray-200"
+        className="h-1.5 flex-1 rounded-input bg-surface-container-low"
       >
         <div
           className="h-full rounded bg-primary transition-all"
