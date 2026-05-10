@@ -1,4 +1,4 @@
-import * as turf from '@turf/turf';
+import { featureCollection, multiPoint, point } from '@turf/helpers';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -14,11 +14,11 @@ const testPoints = [
 ];
 
 function makePointFeature(lon: number, lat: number) {
-  return turf.point([lon, lat]);
+  return point([lon, lat]);
 }
 
 function makePointFeatureCollection() {
-  return turf.featureCollection(
+  return featureCollection(
     testPoints.map((p) => makePointFeature(p.lon, p.lat)),
   );
 }
@@ -42,11 +42,11 @@ describe('extractPoints', () => {
   });
 
   it('handles a MultiPoint geometry wrapped in a Feature', () => {
-    const multiPoint = turf.multiPoint([
+    const mp = multiPoint([
       [-74.006, 40.7128],
       [-73.985, 40.758],
     ]);
-    const result = extractPoints(multiPoint);
+    const result = extractPoints(mp);
     expect(result).toHaveLength(2);
     for (const feature of result) {
       expect(feature.geometry.type).toBe('Point');
@@ -54,7 +54,7 @@ describe('extractPoints', () => {
   });
 
   it('returns empty array for empty FeatureCollection', () => {
-    const empty = turf.featureCollection([]);
+    const empty = featureCollection([]);
     const result = extractPoints(empty);
     expect(result).toHaveLength(0);
   });
@@ -201,5 +201,21 @@ describe('calculateAllMethods', () => {
 
     expect(grid).toBeDefined();
     expect(grid!.run().areaM2).toBeGreaterThan(0);
+  });
+
+  it('observed buffer area is within 1% of theoretical circle area', () => {
+    const points = extractPoints(makePointFeature(-60.5, -3.1));
+    const observed = calculateAllMethods(points, DEFAULTS).find(
+      (method) => method.id === 'observed',
+    );
+
+    expect(observed).toBeDefined();
+    const result = observed!.run();
+
+    const radiusM = DEFAULTS.observedBufferMeters;
+    const theoreticalAreaM2 = Math.PI * radiusM * radiusM;
+    const tolerance = theoreticalAreaM2 * 0.01;
+    expect(result.areaM2).toBeGreaterThan(theoreticalAreaM2 - tolerance);
+    expect(result.areaM2).toBeLessThan(theoreticalAreaM2 + tolerance);
   });
 });

@@ -206,8 +206,8 @@ function buildClusterHullResult(
   });
 
   const groups = new Map<string | number, Feature[]>();
-  clustered.features.forEach((feature, index) => {
-    const clusterId = getClusterId(asTurf<Feature>(feature), index);
+  clustered.features.forEach((feature) => {
+    const clusterId = getClusterId(asTurf<Feature>(feature));
     if (!groups.has(clusterId)) groups.set(clusterId, []);
     groups.get(clusterId)!.push(asTurf<Feature>(feature));
   });
@@ -395,11 +395,11 @@ function toTurfFc(points: FeatureCollection<Point>): TurfPointFc {
   );
 }
 
-function getClusterId(feature: Feature, index: number): string | number {
+function getClusterId(feature: Feature): number {
   const props = feature.properties ?? {};
   const cluster = (props as Record<string, unknown>)['cluster'];
-  if (typeof cluster === 'number') return cluster;
-  return `noise-${index}`;
+  // With minPoints: 1, DBSCAN never produces noise — cluster is always a number
+  return cluster as number;
 }
 
 // Feature with any geometry, used for turf function compatibility
@@ -562,8 +562,8 @@ function groupPointsByOverlap(
   });
 
   const groups = new Map<string | number, Feature<Point>[]>();
-  clustered.features.forEach((feature, index) => {
-    const clusterId = getClusterId(asTurf<Feature>(feature), index);
+  clustered.features.forEach((feature) => {
+    const clusterId = getClusterId(asTurf<Feature>(feature));
     if (!groups.has(clusterId)) groups.set(clusterId, []);
     groups.get(clusterId)!.push(asTurf<Feature<Point>>(feature));
   });
@@ -579,8 +579,17 @@ function bufferPointFeature(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = turf.buffer(feature as any, radiusKm, {
     units: 'kilometers',
-    steps: 4,
+    steps: 8,
   }) as Feature<Polygon | MultiPolygon> | undefined;
   const g = result?.geometry;
-  return g && g.type === 'Polygon' ? g : null;
+  if (!g) return null;
+  if (g.type === 'Polygon') return g;
+  // turf.buffer may wrap a single polygon in a MultiPolygon (e.g. near antimeridian)
+  if (g.type === 'MultiPolygon' && g.coordinates.length === 1) {
+    return {
+      type: 'Polygon',
+      coordinates: g.coordinates[0]!,
+    };
+  }
+  return null;
 }
