@@ -1,7 +1,11 @@
 import { AppProviders } from '@/app/providers';
+import { useThemeClass } from '@/hooks/useThemeClass';
 
 import './styles.css';
 
-export function App() {
+function App() {
+  useThemeClass();
   return <AppProviders />;
 }
+
+export { App };
