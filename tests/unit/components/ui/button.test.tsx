@@ -36,7 +36,7 @@ describe('Button', () => {
   it('renders danger variant with correct classes', () => {
     render(<Button variant="danger">Danger</Button>);
     const btn = screen.getByRole('button');
-    expect(btn.className).toContain('bg-red-600');
+    expect(btn.className).toContain('bg-error');
     expect(btn.className).toContain('text-white');
   });
 

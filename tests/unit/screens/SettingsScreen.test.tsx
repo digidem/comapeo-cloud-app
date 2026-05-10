@@ -70,11 +70,8 @@ describe('SettingsScreen', () => {
     const user = userEvent.setup();
     render(<SettingsScreen />);
 
-    await user.type(
-      screen.getByPlaceholderText('Server URL'),
-      'https://example.com',
-    );
-    await user.type(screen.getByPlaceholderText('Bearer Token'), 'my-token');
+    await user.type(screen.getByLabelText('Server URL'), 'https://example.com');
+    await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
     await user.click(screen.getByRole('button', { name: 'Add Server' }));
 
     // Server should appear in the list
@@ -87,11 +84,8 @@ describe('SettingsScreen', () => {
     const user = userEvent.setup();
     render(<SettingsScreen />);
 
-    await user.type(
-      screen.getByPlaceholderText('Server URL'),
-      'https://example.com',
-    );
-    await user.type(screen.getByPlaceholderText('Bearer Token'), 'my-token');
+    await user.type(screen.getByLabelText('Server URL'), 'https://example.com');
+    await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
     await user.click(screen.getByRole('button', { name: 'Add Server' }));
 
     const items = await screen.findAllByRole('listitem');
@@ -211,16 +205,13 @@ describe('SettingsScreen', () => {
     const user = userEvent.setup();
     render(<SettingsScreen />);
 
-    await user.type(
-      screen.getByPlaceholderText('Server URL'),
-      'https://example.com',
-    );
-    await user.type(screen.getByPlaceholderText('Bearer Token'), 'my-token');
+    await user.type(screen.getByLabelText('Server URL'), 'https://example.com');
+    await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
     await user.click(screen.getByRole('button', { name: 'Add Server' }));
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('Server URL')).toHaveValue('');
+      expect(screen.getByLabelText('Server URL')).toHaveValue('');
     });
-    expect(screen.getByPlaceholderText('Bearer Token')).toHaveValue('');
+    expect(screen.getByLabelText('Bearer Token')).toHaveValue('');
   });
 });

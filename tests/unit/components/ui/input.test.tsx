@@ -18,7 +18,7 @@ describe('Input', () => {
   it('error state adds red border class', () => {
     render(<Input label="Email" error="Required field" />);
     const input = screen.getByLabelText('Email');
-    expect(input.className).toContain('border-red-500');
+    expect(input.className).toContain('border-error');
   });
 
   it('disabled state', () => {

@@ -67,8 +67,8 @@ describe('Toast', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Show Toast' }));
     const toast = getVisibleToast();
-    expect(toast.className).toContain('bg-red-50');
-    expect(toast.className).toContain('text-red-700');
+    expect(toast.className).toContain('bg-error-soft');
+    expect(toast.className).toContain('text-error');
   });
 
   it('renders info variant with correct styling classes', async () => {

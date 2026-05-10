@@ -51,8 +51,8 @@ describe('ProjectList', () => {
     );
 
     const activeItem = screen.getByRole('button', { name: 'Alpha Project' });
-    expect(activeItem.className).toContain('bg-[#EAF2FF]');
-    expect(activeItem.className).toContain('text-[#1F6FFF]');
+    expect(activeItem.className).toContain('bg-primary-soft');
+    expect(activeItem.className).toContain('text-primary');
   });
 
   it('shows empty state when no projects', () => {

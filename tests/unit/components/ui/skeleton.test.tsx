@@ -32,6 +32,6 @@ describe('Skeleton', () => {
     render(<Skeleton width={100} height={20} />);
     const skeleton = screen.getByTestId('skeleton');
     expect(skeleton.className).toContain('rounded');
-    expect(skeleton.className).toContain('bg-gray-200');
+    expect(skeleton.className).toContain('bg-surface-container-low');
   });
 });

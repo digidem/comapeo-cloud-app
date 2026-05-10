@@ -33,9 +33,9 @@ describe('Card', () => {
   it('Card has correct base classes', () => {
     render(<Card>Content</Card>);
     const el = screen.getByText('Content').closest('div');
-    expect(el?.className).toContain('bg-white');
+    expect(el?.className).toContain('bg-surface-card');
     expect(el?.className).toContain('rounded-card');
-    expect(el?.className).toContain('shadow-sm');
+    expect(el?.className).toContain('shadow-card');
     expect(el?.className).toContain('border');
   });
 
