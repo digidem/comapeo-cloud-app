@@ -1,10 +1,12 @@
+import { alertsFixture } from '@tests/fixtures/alerts';
+import { observationsFixture } from '@tests/fixtures/observations';
+import { projectsFixture } from '@tests/fixtures/projects';
+import { serverInfoFixture } from '@tests/fixtures/server-info';
 import { HttpResponse, http } from 'msw';
 
 export const handlers = [
   http.get('*/info', () => {
-    return HttpResponse.json({
-      data: { deviceId: 'test-device-id', name: 'Test Server' },
-    });
+    return HttpResponse.json(serverInfoFixture);
   }),
 
   http.get('*/healthcheck', () => {
@@ -24,12 +26,23 @@ export const handlers = [
         { status: 401 },
       );
     }
-    return HttpResponse.json({
-      data: [
-        { projectId: 'test-project-id-1', name: 'Test Project 1' },
-        { projectId: 'test-project-id-2' },
-      ],
-    });
+    return HttpResponse.json(projectsFixture);
+  }),
+
+  http.get('*/projects/*/observations', ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid bearer token',
+          },
+        },
+        { status: 401 },
+      );
+    }
+    return HttpResponse.json(observationsFixture);
   }),
 
   http.get('*/projects/*/remoteDetectionAlerts', ({ request }) => {
@@ -45,16 +58,6 @@ export const handlers = [
         { status: 401 },
       );
     }
-    return HttpResponse.json({
-      data: [
-        {
-          docId: 'test-alert-id-1',
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z',
-          deleted: false,
-          geometry: { type: 'Point', coordinates: [0, 0] },
-        },
-      ],
-    });
+    return HttpResponse.json(alertsFixture);
   }),
 ];
