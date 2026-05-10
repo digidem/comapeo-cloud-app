@@ -75,7 +75,63 @@ describe('ImportDataButton', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/error/i)).toBeDefined();
+      expect(screen.getByText(/parse error/i)).toBeDefined();
     });
+  });
+
+  it('shows default error message when rejected with non-Error', async () => {
+    const { importGeoJsonPoints } = await import('@/lib/data-layer');
+    vi.mocked(importGeoJsonPoints).mockRejectedValue('unknown');
+
+    render(<ImportDataButton projectLocalId="p1" />);
+
+    simulateFileSelect(
+      new File(['{}'], 'data.geojson', { type: 'application/json' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/import failed/i)).toBeDefined();
+    });
+  });
+
+  it('resets to idle from success state', async () => {
+    const { importGeoJsonPoints } = await import('@/lib/data-layer');
+    vi.mocked(importGeoJsonPoints).mockResolvedValue({
+      imported: 3,
+      skipped: 0,
+    });
+
+    render(<ImportDataButton projectLocalId="p1" />);
+
+    simulateFileSelect(
+      new File(['{}'], 'data.geojson', { type: 'application/json' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/import another/i)).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /import another/i }));
+
+    expect(screen.getByRole('button', { name: /import data/i })).toBeDefined();
+  });
+
+  it('resets to idle from error state', async () => {
+    const { importGeoJsonPoints } = await import('@/lib/data-layer');
+    vi.mocked(importGeoJsonPoints).mockRejectedValue(new Error('fail'));
+
+    render(<ImportDataButton projectLocalId="p1" />);
+
+    simulateFileSelect(
+      new File(['{}'], 'data.geojson', { type: 'application/json' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /try again/i })).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(screen.getByRole('button', { name: /import data/i })).toBeDefined();
   });
 });

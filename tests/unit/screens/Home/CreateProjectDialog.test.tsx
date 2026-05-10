@@ -92,4 +92,40 @@ describe('CreateProjectDialog', () => {
       expect(onCreated).toHaveBeenCalledWith('empty-id');
     });
   });
+
+  it('shows error message when createProject fails with Error', async () => {
+    const { createProject } = await import('@/lib/data-layer');
+    vi.mocked(createProject).mockRejectedValue(
+      new Error('Database write failed'),
+    );
+
+    const user = userEvent.setup();
+
+    render(
+      <CreateProjectDialog isOpen onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Database write failed')).toBeInTheDocument();
+    });
+  });
+
+  it('shows default error message when createProject fails with non-Error', async () => {
+    const { createProject } = await import('@/lib/data-layer');
+    vi.mocked(createProject).mockRejectedValue('unknown error');
+
+    const user = userEvent.setup();
+
+    render(
+      <CreateProjectDialog isOpen onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to create project')).toBeInTheDocument();
+    });
+  });
 });

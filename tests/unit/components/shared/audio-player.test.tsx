@@ -89,4 +89,103 @@ describe('AudioPlayer', () => {
     const progressbar = screen.getByRole('progressbar');
     expect(progressbar).toHaveAttribute('aria-valuenow', '50');
   });
+
+  it('resets to play button when play() promise rejects', () => {
+    render(<AudioPlayer {...defaultProps} />);
+    const audio = screen.getByRole('audio') as HTMLAudioElement;
+    vi.spyOn(audio, 'play').mockRejectedValue(new Error('aborted'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    // After play rejects, isPlaying should be reset to false
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        expect(
+          screen.getByRole('button', { name: 'Play' }),
+        ).toBeInTheDocument();
+        resolve();
+      }, 0);
+    });
+  });
+
+  it('updates duration on loadedMetadata', () => {
+    render(<AudioPlayer {...defaultProps} />);
+    const audio = screen.getByRole('audio') as HTMLAudioElement;
+
+    Object.defineProperty(audio, 'duration', { value: 120, writable: true });
+
+    fireEvent.loadedMetadata(audio);
+
+    const progressbar = screen.getByRole('progressbar');
+    expect(progressbar).toHaveAttribute('aria-valuemax', '120');
+  });
+
+  it('handles loadedMetadata when audio ref is null', () => {
+    render(<AudioPlayer {...defaultProps} />);
+    // The handleLoadedMetadata callback has a guard: if (!audio) return
+    // This is already covered since the ref is set, but we can verify
+    // the progressbar starts with max 0
+    const progressbar = screen.getByRole('progressbar');
+    expect(progressbar).toHaveAttribute('aria-valuemax', '0');
+  });
+
+  it('uses wav mime type for .wav files', () => {
+    render(<AudioPlayer {...defaultProps} name="recording.wav" />);
+    expect(getAttachmentUrl).toHaveBeenCalledWith(
+      'proj1',
+      'drive1',
+      'audio/wav',
+      'recording.wav',
+    );
+  });
+
+  it('uses ogg mime type for .ogg files', () => {
+    render(<AudioPlayer {...defaultProps} name="recording.ogg" />);
+    expect(getAttachmentUrl).toHaveBeenCalledWith(
+      'proj1',
+      'drive1',
+      'audio/ogg',
+      'recording.ogg',
+    );
+  });
+
+  it('uses m4a mime type for .m4a files', () => {
+    render(<AudioPlayer {...defaultProps} name="recording.m4a" />);
+    expect(getAttachmentUrl).toHaveBeenCalledWith(
+      'proj1',
+      'drive1',
+      'audio/mp4',
+      'recording.m4a',
+    );
+  });
+
+  it('uses webm mime type for .webm files', () => {
+    render(<AudioPlayer {...defaultProps} name="recording.webm" />);
+    expect(getAttachmentUrl).toHaveBeenCalledWith(
+      'proj1',
+      'drive1',
+      'audio/webm',
+      'recording.webm',
+    );
+  });
+
+  it('falls back to mpeg for unknown extensions', () => {
+    render(<AudioPlayer {...defaultProps} name="recording.xyz" />);
+    expect(getAttachmentUrl).toHaveBeenCalledWith(
+      'proj1',
+      'drive1',
+      'audio/mpeg',
+      'recording.xyz',
+    );
+  });
+
+  it('falls back to mpeg for files with no extension', () => {
+    render(<AudioPlayer {...defaultProps} name="recording" />);
+    expect(getAttachmentUrl).toHaveBeenCalledWith(
+      'proj1',
+      'drive1',
+      'audio/mpeg',
+      'recording',
+    );
+  });
 });

@@ -7,8 +7,10 @@ import {
   createProject,
   getAlerts,
   getObservations,
+  getProjectPoints,
   getProjects,
   getSyncStatus,
+  importGeoJsonPoints,
 } from '@/lib/data-layer';
 import { resetDb } from '@/lib/db';
 import { useAuthStore } from '@/stores/auth-store';
@@ -121,6 +123,226 @@ describe('data-layer', () => {
       });
       const status = getSyncStatus();
       expect(status.isSyncing).toBe(true);
+    });
+
+    it('getSyncStatus returns lastSyncedAt from most recent server', () => {
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 's1',
+            label: 'Old',
+            baseUrl: 'https://old.com',
+            token: 'tok',
+            status: 'idle',
+            lastSyncedAt: '2024-01-01T00:00:00Z',
+          },
+          {
+            id: 's2',
+            label: 'New',
+            baseUrl: 'https://new.com',
+            token: 'tok',
+            status: 'idle',
+            lastSyncedAt: '2024-06-01T00:00:00Z',
+          },
+        ],
+      });
+      const status = getSyncStatus();
+      expect(status.lastSyncedAt).toBe('2024-06-01T00:00:00Z');
+    });
+
+    it('getSyncStatus collects error messages from servers', () => {
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 's1',
+            label: 'Err',
+            baseUrl: 'https://err.com',
+            token: 'tok',
+            status: 'error',
+            errorMessage: 'Connection refused',
+          },
+        ],
+      });
+      const status = getSyncStatus();
+      expect(status.errors).toContain('Connection refused');
+    });
+  });
+
+  describe('getProjectPoints', () => {
+    it('returns FeatureCollection with points from observations', async () => {
+      const project = await createProject({ name: 'P' });
+      await createObservation({
+        projectLocalId: project.localId,
+        lat: 10,
+        lon: 20,
+      });
+      await createObservation({
+        projectLocalId: project.localId,
+        lat: -30,
+        lon: 40,
+      });
+
+      const fc = await getProjectPoints(project.localId);
+      expect(fc.type).toBe('FeatureCollection');
+      expect(fc.features).toHaveLength(2);
+      const coords = fc.features.map((f) => f.geometry.coordinates);
+      expect(coords).toContainEqual([20, 10]);
+      expect(coords).toContainEqual([40, -30]);
+    });
+
+    it('filters out observations without lat/lon', async () => {
+      const project = await createProject({ name: 'P' });
+      await createObservation({ projectLocalId: project.localId });
+      await createObservation({
+        projectLocalId: project.localId,
+        lat: 10,
+        lon: 20,
+      });
+
+      const fc = await getProjectPoints(project.localId);
+      expect(fc.features).toHaveLength(1);
+    });
+
+    it('filters out observations with invalid coords', async () => {
+      const project = await createProject({ name: 'P' });
+      await createObservation({
+        projectLocalId: project.localId,
+        lat: 999,
+        lon: 20,
+      });
+
+      const fc = await getProjectPoints(project.localId);
+      expect(fc.features).toHaveLength(0);
+    });
+
+    it('returns empty FeatureCollection when no observations', async () => {
+      const project = await createProject({ name: 'P' });
+      const fc = await getProjectPoints(project.localId);
+      expect(fc.type).toBe('FeatureCollection');
+      expect(fc.features).toEqual([]);
+    });
+  });
+
+  describe('importGeoJsonPoints', () => {
+    it('imports points from a GeoJSON file', async () => {
+      const project = await createProject({ name: 'P' });
+      const geojson = JSON.stringify({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [10, 20] },
+            properties: {},
+          },
+        ],
+      });
+      const file = new File([geojson], 'data.geojson', {
+        type: 'application/json',
+      });
+
+      const result = await importGeoJsonPoints(project.localId, file);
+      expect(result.imported).toBe(1);
+      expect(result.skipped).toBe(0);
+    });
+
+    it('returns 0 imported for invalid JSON', async () => {
+      const project = await createProject({ name: 'P' });
+      const file = new File(['not json'], 'data.geojson', {
+        type: 'application/json',
+      });
+
+      const result = await importGeoJsonPoints(project.localId, file);
+      expect(result.imported).toBe(0);
+      expect(result.skipped).toBe(0);
+    });
+
+    it('imports from a Feature (not FeatureCollection)', async () => {
+      const project = await createProject({ name: 'P' });
+      const geojson = JSON.stringify({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [10, 20] },
+        properties: {},
+      });
+      const file = new File([geojson], 'data.geojson', {
+        type: 'application/json',
+      });
+
+      const result = await importGeoJsonPoints(project.localId, file);
+      expect(result.imported).toBe(1);
+    });
+
+    it('imports from a bare Point geometry', async () => {
+      const project = await createProject({ name: 'P' });
+      const geojson = JSON.stringify({
+        type: 'Point',
+        coordinates: [10, 20],
+      });
+      const file = new File([geojson], 'data.json', {
+        type: 'application/json',
+      });
+
+      const result = await importGeoJsonPoints(project.localId, file);
+      expect(result.imported).toBe(1);
+    });
+
+    it('counts skipped when FeatureCollection has non-Point features', async () => {
+      const project = await createProject({ name: 'P' });
+      const geojson = JSON.stringify({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [10, 20] },
+            properties: {},
+          },
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [0, 0],
+                [1, 1],
+              ],
+            },
+            properties: {},
+          },
+        ],
+      });
+      const file = new File([geojson], 'data.geojson', {
+        type: 'application/json',
+      });
+
+      const result = await importGeoJsonPoints(project.localId, file);
+      expect(result.imported).toBe(1);
+      // LineString is not a Point/MultiPoint so candidateCount=1, imported=1, skipped=0
+      expect(result.skipped).toBe(0);
+    });
+
+    it('handles MultiPoint geometry in FeatureCollection', async () => {
+      const project = await createProject({ name: 'P' });
+      const geojson = JSON.stringify({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'MultiPoint',
+              coordinates: [
+                [10, 20],
+                [30, 40],
+              ],
+            },
+            properties: {},
+          },
+        ],
+      });
+      const file = new File([geojson], 'data.geojson', {
+        type: 'application/json',
+      });
+
+      const result = await importGeoJsonPoints(project.localId, file);
+      expect(result.imported).toBe(2);
+      expect(result.skipped).toBe(0);
     });
   });
 });
