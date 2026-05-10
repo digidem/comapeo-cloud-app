@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import Map, { Layer, type MapRef, Source } from 'react-map-gl/maplibre';
 
+import { useThemeTokens } from '@/hooks/useThemeTokens';
+
 const EMPTY_FEATURE_COLLECTION: FeatureCollection = {
   type: 'FeatureCollection',
   features: [],
@@ -35,14 +37,6 @@ interface RenderableAreaLayer {
   legacy: boolean;
 }
 
-const LAYER_COLORS: Record<string, string> = {
-  observed: '#1F6FFF',
-  connectivity10: '#0F9D58',
-  connectivity30: '#FF6B00',
-  clusterHull: '#7C3AED',
-  grid: '#04145C',
-};
-
 function getFillOpacity(layer: RenderableAreaLayer): number {
   if (layer.legacy) return 0.3;
   return layer.isActive ? 0.38 : 0.18;
@@ -69,6 +63,15 @@ export function AreaMap({
 }: AreaMapProps) {
   const mapRef = useRef<MapRef>(null);
   const isMapLoadedRef = useRef(false);
+  const { mapColors } = useThemeTokens();
+
+  const LAYER_COLORS: Record<string, string> = {
+    observed: mapColors.observed,
+    connectivity10: mapColors.connectivity,
+    connectivity30: mapColors.warning,
+    clusterHull: mapColors.cluster,
+    grid: mapColors.grid,
+  };
 
   const mapLayers = useMemo<RenderableAreaLayer[]>(() => {
     if (layers && layers.length > 0) {
@@ -92,7 +95,7 @@ export function AreaMap({
           outlineLayerId: `area-outline-${layer.id}`,
           featureCollection: layer.featureCollection,
           isActive: Boolean(layer.isActive),
-          color: LAYER_COLORS[layer.id] ?? '#1F6FFF',
+          color: LAYER_COLORS[layer.id] ?? mapColors.observed,
           legacy: false,
         });
       }
@@ -108,11 +111,12 @@ export function AreaMap({
         outlineLayerId: 'area-outline',
         featureCollection: featureCollection ?? EMPTY_FEATURE_COLLECTION,
         isActive: true,
-        color: '#1F6FFF',
+        color: mapColors.observed,
         legacy: true,
       },
     ];
-  }, [activeMethodId, featureCollection, layers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMethodId, featureCollection, layers, mapColors]);
 
   const mapBounds = useMemo(() => {
     const features: FeatureCollection['features'] = [];
@@ -152,7 +156,7 @@ export function AreaMap({
   }, [fitMapToBounds, mapBounds]);
 
   return (
-    <div className="relative h-[600px] w-full overflow-hidden rounded-card border border-border/15 shadow-sm">
+    <div className="relative h-[600px] w-full overflow-hidden rounded-card border border-border/15 shadow-card">
       <Map
         ref={mapRef}
         initialViewState={{
@@ -180,14 +184,16 @@ export function AreaMap({
               paint={{
                 'fill-color': layer.color,
                 'fill-opacity': getFillOpacity(layer),
-                'fill-outline-color': layer.legacy ? '#04145C' : layer.color,
+                'fill-outline-color': layer.legacy
+                  ? mapColors.grid
+                  : layer.color,
               }}
             />
             <Layer
               id={layer.outlineLayerId}
               type="line"
               paint={{
-                'line-color': layer.legacy ? '#04145C' : layer.color,
+                'line-color': layer.legacy ? mapColors.grid : layer.color,
                 'line-width': getOutlineWidth(layer),
                 ...(layer.legacy
                   ? {}

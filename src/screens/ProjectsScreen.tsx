@@ -1,3 +1,3 @@
 export function ProjectsScreen() {
-  return <div>Projects</div>;
+  return <div className="text-text">Projects</div>;
 }

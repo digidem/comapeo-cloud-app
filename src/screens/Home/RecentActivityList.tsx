@@ -46,7 +46,7 @@ export function RecentActivityList({ activities }: RecentActivityListProps) {
               key={activity.id}
               className={`flex items-start gap-4 p-5 ${index !== activities.length - 1 ? 'border-b border-border' : ''}`}
             >
-              <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+              <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
                 {activity.type === 'record' && (
                   <svg
                     width="20"

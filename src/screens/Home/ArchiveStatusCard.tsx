@@ -56,9 +56,9 @@ function StatusBadge({
 }) {
   const intl = useIntl();
   const styles: Record<string, string> = {
-    ok: 'bg-green-100 text-green-700',
-    error: 'bg-red-100 text-red-700',
-    syncing: 'bg-blue-100 text-blue-700',
+    ok: 'bg-success-soft text-success',
+    error: 'bg-error-soft text-error',
+    syncing: 'bg-info-soft text-info',
     idle: 'bg-tag-neutral-bg text-tag-neutral-text',
   };
 
@@ -89,7 +89,7 @@ function ArchiveStatusCard({ server, onSync }: ArchiveStatusCardProps) {
   const currentStatus = resolveStatus();
 
   return (
-    <div className="rounded-[18px] bg-white p-4 shadow-[0_8px_24px_rgba(9,30,66,0.08)] flex flex-col gap-3">
+    <div className="rounded-card bg-surface-card p-4 shadow-card flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium text-text truncate">
           {server.label}
@@ -105,7 +105,7 @@ function ArchiveStatusCard({ server, onSync }: ArchiveStatusCardProps) {
         </p>
       )}
 
-      {server.error && <p className="text-xs text-red-500">{server.error}</p>}
+      {server.error && <p className="text-xs text-error">{server.error}</p>}
 
       {!server.hasCredentials && (
         <p className="text-xs text-text-muted">

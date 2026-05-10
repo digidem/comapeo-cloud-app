@@ -1,3 +1,3 @@
 export function DashboardScreen() {
-  return <div>Dashboard</div>;
+  return <div className="text-text">Dashboard</div>;
 }

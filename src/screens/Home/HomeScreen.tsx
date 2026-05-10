@@ -38,14 +38,16 @@ function formatRelativeTime(ageMs: number, intl: IntlShape): string {
   const seconds = Math.floor(ageMs / 1000);
   if (seconds < 60) return intl.formatMessage(messages.timeJustNow);
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60)
-    {return intl.formatMessage(messages.timeMinutesAgo, { count: minutes });}
+  if (minutes < 60) {
+    return intl.formatMessage(messages.timeMinutesAgo, { count: minutes });
+  }
   const hours = Math.floor(minutes / 60);
-  if (hours < 24)
-    {return intl.formatMessage(messages.timeHoursAgo, {
+  if (hours < 24) {
+    return intl.formatMessage(messages.timeHoursAgo, {
       count: hours,
       plural: hours,
-    });}
+    });
+  }
   const days = Math.floor(hours / 24);
   return intl.formatMessage(messages.timeDaysAgo, {
     count: days,
@@ -646,7 +648,7 @@ function HomeScreen() {
               layers={completedMapLayers}
               activeMethodId={state.activeMethodId}
             >
-              <div className="flex flex-col gap-4 bg-white/95 backdrop-blur-md p-5 rounded-card border border-border/20 shadow-xl">
+              <div className="flex flex-col gap-4 bg-surface-card/95 backdrop-blur-md p-5 rounded-card border border-border/20 shadow-elevated">
                 {coverage.isCalculating && (
                   <div role="status" aria-live="polite" className="sr-only">
                     {intl.formatMessage(messages.calculating)}

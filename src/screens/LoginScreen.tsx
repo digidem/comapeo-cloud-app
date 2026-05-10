@@ -1,3 +1,3 @@
 export function LoginScreen() {
-  return <div>Login</div>;
+  return <div className="text-text">Login</div>;
 }

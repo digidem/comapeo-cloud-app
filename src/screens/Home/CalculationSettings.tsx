@@ -168,7 +168,7 @@ function CalculationSettings({
                   type="number"
                   value={params[field]}
                   onChange={(e) => handleParamChange(field, e.target.value)}
-                  className="w-full rounded-[12px] border border-border bg-white px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full rounded-input border border-border bg-surface-card px-3 py-1.5 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
               </div>
             ))}

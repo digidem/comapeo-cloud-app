@@ -123,12 +123,12 @@ function CreateProjectDialog({
             type="text"
             placeholder={intl.formatMessage(messages.namePlaceholder)}
             defaultValue=""
-            className="w-full rounded-[12px] border border-border bg-white px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+            className="w-full rounded-input border border-border bg-surface-card px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary"
           />
         </div>
 
         {state.status === 'error' && (
-          <p className="text-sm text-red-500">{state.message}</p>
+          <p className="text-sm text-error">{state.message}</p>
         )}
 
         <div className="flex justify-end gap-2">

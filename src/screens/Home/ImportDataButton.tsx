@@ -133,7 +133,7 @@ function ImportDataButton({
 
       {state.status === 'success' && (
         <div className="flex flex-col gap-1">
-          <p className="text-sm text-green-600">
+          <p className="text-sm text-success">
             {intl.formatMessage(messages.success, {
               imported: state.imported,
               skipped: state.skipped,
@@ -151,7 +151,7 @@ function ImportDataButton({
 
       {state.status === 'error' && (
         <div className="flex flex-col gap-1">
-          <p className="text-sm text-red-500">
+          <p className="text-sm text-error">
             {intl.formatMessage(messages.errorPrefix, {
               message: state.message,
             })}

@@ -46,7 +46,7 @@ export function ProjectBannerCard({
     description ?? intl.formatMessage(messages.defaultDescription);
 
   return (
-    <Card className="relative overflow-hidden border-none shadow-md">
+    <Card className="relative overflow-hidden border-none shadow-card">
       {/* Background Image */}
       <div
         className="absolute inset-0 z-0"
@@ -73,7 +73,7 @@ export function ProjectBannerCard({
 
         {/* Stats Pills */}
         <div className="flex flex-wrap gap-4 mt-auto">
-          <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-6 py-2.5 shadow-sm">
+          <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-6 py-2.5 shadow-pill">
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-0.5">
               {intl.formatMessage(messages.territoryArea)}
             </span>
@@ -81,18 +81,18 @@ export function ProjectBannerCard({
           </div>
 
           {lastSync && (
-            <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-6 py-2.5 shadow-sm">
+            <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-6 py-2.5 shadow-pill">
               <span className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-0.5">
                 {intl.formatMessage(messages.lastSync)}
               </span>
               <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-blue-500" />
+                <div className="h-2 w-2 rounded-full bg-primary" />
                 <span className="text-lg font-bold text-text">{lastSync}</span>
               </div>
             </div>
           )}
 
-          <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-6 py-2.5 shadow-sm">
+          <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-6 py-2.5 shadow-pill">
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-0.5">
               {intl.formatMessage(messages.teamMembers)}
             </span>
