@@ -280,6 +280,42 @@ describe('useProjectCoverage', () => {
 
     expect(result.current.error).toBeNull();
   });
+
+  it('terminates the worker when getProjectPoints rejects', async () => {
+    mockedGetProjectPoints.mockRejectedValueOnce(new Error('db failed'));
+
+    const { result } = renderHook(() =>
+      useProjectCoverage('project-1', DEFAULTS),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isCalculating).toBe(false);
+    });
+
+    expect(result.current.error).toBe('Error: db failed');
+    expect(MockWorker.instances[0]?.terminate).toHaveBeenCalled();
+  });
+
+  it('ignores stale onerror from replaced worker', async () => {
+    const { result, rerender } = renderHook(
+      ({ projectLocalId }) => useProjectCoverage(projectLocalId, DEFAULTS),
+      { initialProps: { projectLocalId: 'project-1' } },
+    );
+
+    await waitFor(() => {
+      expect(MockWorker.instances[0]?.postMessage).toHaveBeenCalled();
+    });
+
+    rerender({ projectLocalId: 'project-2' });
+
+    await waitFor(() => {
+      expect(MockWorker.instances[1]?.postMessage).toHaveBeenCalled();
+    });
+
+    MockWorker.instances[0]?.onerror?.(new Event('error'));
+
+    expect(result.current.error).toBeNull();
+  });
 });
 
 // Smoke test for DEFAULTS usage

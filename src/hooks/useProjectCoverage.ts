@@ -156,15 +156,20 @@ export function useProjectCoverage(
       });
     };
 
+    let aborted = false;
+
     worker.onerror = () => {
+      if (aborted) return;
       dispatch({
         type: 'WORKER_MSG',
-        msg: { type: 'error', requestId, message: 'Worker failed to start' },
-        requestId,
+        msg: {
+          type: 'error',
+          requestId: requestIdRef.current,
+          message: 'Worker failed to start',
+        },
+        requestId: requestIdRef.current,
       });
     };
-
-    let aborted = false;
 
     getProjectPoints(projectLocalId)
       .then((points) => {
@@ -188,6 +193,8 @@ export function useProjectCoverage(
       })
       .catch((err: unknown) => {
         if (aborted) return;
+        worker.terminate();
+        if (workerRef.current === worker) workerRef.current = null;
         dispatch({
           type: 'WORKER_MSG',
           msg: { type: 'error', requestId, message: String(err) },
