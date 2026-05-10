@@ -17,6 +17,16 @@ export interface SyncResult {
   error?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Per-server concurrency lock
+// ---------------------------------------------------------------------------
+
+const activeSyncs = new Map<string, Promise<SyncResult>>();
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 async function ensureServerInStore(
   options: SyncOptions,
 ): Promise<string | null> {
@@ -34,7 +44,7 @@ async function ensureServerInStore(
   return server?.id ?? null;
 }
 
-export async function syncRemoteArchive(
+async function doSync(
   serverDbId: string,
   options: SyncOptions,
 ): Promise<SyncResult> {
@@ -89,4 +99,30 @@ export async function syncRemoteArchive(
     }
     return { success: false, error: errorMessage };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Public API — sync with concurrency guard
+// ---------------------------------------------------------------------------
+
+export async function syncRemoteArchive(
+  serverDbId: string,
+  options: SyncOptions,
+): Promise<SyncResult> {
+  // Check the lock BEFORE any side effects (ensureServerInStore, status updates)
+  const existingSync = activeSyncs.get(serverDbId);
+  if (existingSync) {
+    return {
+      success: false,
+      error: 'Sync already in progress',
+    };
+  }
+
+  const syncPromise = doSync(serverDbId, options).finally(() => {
+    activeSyncs.delete(serverDbId);
+  });
+
+  activeSyncs.set(serverDbId, syncPromise);
+
+  return syncPromise;
 }

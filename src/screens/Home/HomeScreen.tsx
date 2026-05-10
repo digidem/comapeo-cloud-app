@@ -203,7 +203,6 @@ function HomeScreen() {
   const observationsQuery = useObservations(state.selectedProjectId);
   const alertsQuery = useAlerts(state.selectedProjectId);
   const archiveStatus = useArchiveStatus();
-  const updateServerStatus = useAuthStore((s) => s.updateServerStatus);
   const servers = useAuthStore((s) => s.servers);
 
   const projects = useMemo(
@@ -339,28 +338,13 @@ function HomeScreen() {
     const server = servers.find((s) => s.id === serverId);
     if (!server) return;
 
-    void updateServerStatus(serverId, 'syncing');
+    // UX guard: skip if already syncing (the real lock is in sync.ts)
+    if (server.status === 'syncing') return;
+
     syncRemoteArchive(serverId, {
       baseUrl: server.baseUrl,
       token: server.token,
-    }).then(
-      (result) => {
-        void updateServerStatus(
-          serverId,
-          result.success ? 'connected' : 'error',
-          result.error,
-        );
-      },
-      (err: unknown) => {
-        void updateServerStatus(
-          serverId,
-          'error',
-          err instanceof Error
-            ? err.message
-            : intl.formatMessage(messages.syncFailed),
-        );
-      },
-    );
+    });
   }
 
   function handleExport(methodId: string) {

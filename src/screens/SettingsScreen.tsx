@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { syncRemoteArchive } from '@/lib/sync';
+import { syncRemoteArchive } from '@/lib/data-layer';
 import { useAuthStore } from '@/stores/auth-store';
 
 const _messages = defineMessages({

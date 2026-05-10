@@ -258,4 +258,132 @@ describe('syncRemoteArchive', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
   });
+
+  it('rejects concurrent sync for the same server', async () => {
+    const serverRecord = await seedServer();
+    useAuthStore.setState({
+      servers: [],
+      activeServerId: null,
+      token: null,
+      baseUrl: null,
+    });
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    // Make the projects endpoint slow so the first sync stays in-flight
+    let resolveProjects: () => void;
+    const projectsPromise = new Promise<void>(
+      (resolve) => (resolveProjects = resolve),
+    );
+    server.use(
+      http.get(`${archiveUrl}/projects`, async () => {
+        await projectsPromise;
+        return HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Slow' }],
+        });
+      }),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    // Start first sync (will hang until we resolve)
+    const first = syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    // Start second sync while first is still in-flight
+    const second = syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    // Second should fail immediately
+    const secondResult = await second;
+    expect(secondResult.success).toBe(false);
+    expect(secondResult.error).toContain('already in progress');
+
+    // Release the first sync
+    resolveProjects!();
+    const firstResult = await first;
+    expect(firstResult.success).toBe(true);
+  });
+
+  it('uses baseUrl as fallback label when serverLabel is not provided', async () => {
+    const serverRecord = await seedServer();
+    useAuthStore.setState({
+      servers: [],
+      activeServerId: null,
+      token: null,
+      baseUrl: null,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () => HttpResponse.json({ data: [] })),
+    );
+
+    // No serverLabel provided — should use baseUrl as label
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      // serverLabel intentionally omitted
+    });
+
+    expect(result.success).toBe(true);
+    const found = useAuthStore
+      .getState()
+      .servers.find((s) => s.baseUrl === archiveUrl);
+    expect(found).toBeDefined();
+    // The label should fall back to the baseUrl since serverLabel was omitted
+    expect(found!.label).toBe(archiveUrl);
+  });
+
+  it('handles non-Error thrown during sync', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    // Provide a valid projects mock so the sync starts, then throw a non-Error
+    // from the observations handler by using a response that will be parsed
+    // by Valibot which throws ValiError (an Error subclass). To get a true
+    // non-Error, we need to make fetch itself throw one.
+    // We'll override globalThis.fetch temporarily.
+    const originalFetch = globalThis.fetch;
+    let callCount = 0;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    globalThis.fetch = (..._args: Parameters<typeof fetch>) => {
+      callCount++;
+      // First call is projects — return valid data
+      if (callCount === 1) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ data: [{ projectId: 'proj-1', name: 'Test' }] }),
+            { headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }
+      // Second call is observations — throw a non-Error
+      throw 'unexpected string error';
+    };
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    globalThis.fetch = originalFetch;
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Unknown sync error');
+  });
 });
