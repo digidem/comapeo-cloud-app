@@ -40,6 +40,10 @@ const messages = defineMessages({
     id: 'home.method.grid.label',
     defaultMessage: 'Occupied Grid',
   },
+  methodError: {
+    id: 'home.method.error',
+    defaultMessage: 'Error',
+  },
 });
 
 const METHOD_META: Record<string, { label: keyof typeof messages }> = {
@@ -113,7 +117,7 @@ export function MethodSelector({
             strokeLinejoin="round"
           />
         </svg>
-        Export
+        {intl.formatMessage(messages.exportMapLayer)}
       </Button>
     </div>
   );

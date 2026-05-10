@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { Outlet, useRouterState } from '@tanstack/react-router';
 
@@ -7,6 +8,12 @@ import {
   ShellSlotProvider,
   useShellOverrides,
 } from '@/components/layout/shell-slot';
+
+const messages = defineMessages({
+  home: { id: 'home.title', defaultMessage: 'Home' },
+  settings: { id: 'settings.title', defaultMessage: 'Settings' },
+  appTitle: { id: 'app.title', defaultMessage: 'CoMapeo Cloud' },
+});
 
 function HomeIcon(): ReactNode {
   return (
@@ -42,12 +49,8 @@ function SettingsIcon(): ReactNode {
   );
 }
 
-const NAV_ITEMS = [
-  { path: '/', label: 'Home', icon: <HomeIcon /> },
-  { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
-];
-
 function AuthenticatedLayoutInner() {
+  const intl = useIntl();
   const pathname = useRouterState({
     select: (s) => s.location.pathname,
   });
@@ -58,9 +61,22 @@ function AuthenticatedLayoutInner() {
     secondaryContent,
   } = useShellOverrides();
 
+  const NAV_ITEMS = [
+    {
+      path: '/',
+      label: intl.formatMessage(messages.home),
+      icon: <HomeIcon />,
+    },
+    {
+      path: '/settings',
+      label: intl.formatMessage(messages.settings),
+      icon: <SettingsIcon />,
+    },
+  ];
+
   return (
     <AppShell
-      topbarTitle="CoMapeo Cloud"
+      topbarTitle={intl.formatMessage(messages.appTitle)}
       topbarWorkspaceName={topbarWorkspaceName}
       topbarModeLabel={topbarModeLabel}
       topbarActions={topbarActions}

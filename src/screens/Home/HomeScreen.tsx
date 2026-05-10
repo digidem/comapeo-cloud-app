@@ -1,7 +1,7 @@
 import type { FeatureCollection } from 'geojson';
 
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
-import { defineMessages, useIntl } from 'react-intl';
+import { type IntlShape, defineMessages, useIntl } from 'react-intl';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -34,15 +34,23 @@ import { StatCard } from './StatCard';
 
 // ---- Helpers ----
 
-function formatRelativeTime(ageMs: number): string {
+function formatRelativeTime(ageMs: number, intl: IntlShape): string {
   const seconds = Math.floor(ageMs / 1000);
-  if (seconds < 60) return 'JUST NOW';
+  if (seconds < 60) return intl.formatMessage(messages.timeJustNow);
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} MIN AGO`;
+  if (minutes < 60)
+    {return intl.formatMessage(messages.timeMinutesAgo, { count: minutes });}
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} HR${hours > 1 ? 'S' : ''} AGO`;
+  if (hours < 24)
+    {return intl.formatMessage(messages.timeHoursAgo, {
+      count: hours,
+      plural: hours,
+    });}
   const days = Math.floor(hours / 24);
-  return `${days} DAY${days > 1 ? 'S' : ''} AGO`;
+  return intl.formatMessage(messages.timeDaysAgo, {
+    count: days,
+    plural: days,
+  });
 }
 
 // ---- State management ----
@@ -122,10 +130,6 @@ const messages = defineMessages({
     id: 'home.title',
     defaultMessage: 'Home',
   },
-  settingsTitle: {
-    id: 'settings.title',
-    defaultMessage: 'Settings',
-  },
   localMode: {
     id: 'home.localMode',
     defaultMessage: 'Local Mode',
@@ -173,6 +177,50 @@ const messages = defineMessages({
   activityAlert: {
     id: 'home.activity.alert',
     defaultMessage: 'Alert registered',
+  },
+  coverageError: {
+    id: 'home.coverage.error',
+    defaultMessage: 'Coverage calculation failed',
+  },
+  coverageRetry: {
+    id: 'home.coverage.retry',
+    defaultMessage: 'Retry calculation',
+  },
+  statMode: {
+    id: 'home.stat.mode',
+    defaultMessage: 'Mode',
+  },
+  statCloudSyncActive: {
+    id: 'home.stat.cloudSyncActive',
+    defaultMessage: 'Cloud Sync Active',
+  },
+  statTotalAssets: {
+    id: 'home.stat.totalAssets',
+    defaultMessage: 'Total Assets',
+  },
+  statCategories: {
+    id: 'home.stat.categories',
+    defaultMessage: 'Categories',
+  },
+  statActiveAlerts: {
+    id: 'home.stat.activeAlerts',
+    defaultMessage: 'Active Alerts',
+  },
+  timeJustNow: {
+    id: 'home.time.justNow',
+    defaultMessage: 'JUST NOW',
+  },
+  timeMinutesAgo: {
+    id: 'home.time.minutesAgo',
+    defaultMessage: '{count} MIN AGO',
+  },
+  timeHoursAgo: {
+    id: 'home.time.hoursAgo',
+    defaultMessage: '{count} HR{plural, plural, one {} other {S}} AGO',
+  },
+  timeDaysAgo: {
+    id: 'home.time.daysAgo',
+    defaultMessage: '{count} DAY{plural, plural, one {} other {S}} AGO',
   },
   activityAlertDesc: {
     id: 'home.activity.alertDesc',
@@ -256,7 +304,7 @@ function HomeScreen() {
         description: hasCoords
           ? `${obs.lat!.toFixed(4)}, ${obs.lon!.toFixed(4)}`
           : intl.formatMessage(messages.activityNoLocation),
-        timestamp: formatRelativeTime(ageMs),
+        timestamp: formatRelativeTime(ageMs, intl),
         type: 'record',
         _sortKey: createdMs,
       });
@@ -269,7 +317,7 @@ function HomeScreen() {
         id: alert.localId,
         title: intl.formatMessage(messages.activityAlert),
         description: intl.formatMessage(messages.activityAlertDesc),
-        timestamp: formatRelativeTime(ageMs),
+        timestamp: formatRelativeTime(ageMs, intl),
         type: 'sync',
         _sortKey: createdMs,
       });
@@ -341,9 +389,11 @@ function HomeScreen() {
     // UX guard: skip if already syncing (the real lock is in sync.ts)
     if (server.status === 'syncing') return;
 
-    syncRemoteArchive(serverId, {
+    void syncRemoteArchive(serverId, {
       baseUrl: server.baseUrl,
       token: server.token,
+    }).catch(() => {
+      /* sync errors are surfaced via store status updates */
     });
   }
 
@@ -382,6 +432,7 @@ function HomeScreen() {
           onSelect={(id) => dispatch({ type: 'SELECT_PROJECT', id })}
           onCreateNew={handleOpenCreateDialog}
           isLoading={projectsQuery.isLoading}
+          hideEmptyState={!state.selectedProjectId}
         />
 
         {state.selectedProjectId && (
@@ -454,8 +505,34 @@ function HomeScreen() {
 
   const hasMethodResults = coverage.results.length > 0;
   const hasCompletedResult = coverage.results.some((r) => r.result);
+  const showCoverageError =
+    coverage.error !== null && !coverage.isCalculating && !hasMethodResults;
   const showNoCoordinates =
     !coverage.isCalculating && !hasMethodResults && coverage.error === null;
+
+  if (showCoverageError) {
+    return (
+      <>
+        <div className="flex h-full flex-col items-center justify-center gap-3 py-20 text-center">
+          <p className="text-error text-sm" role="alert">
+            {intl.formatMessage(messages.coverageError)}
+          </p>
+          <Button variant="primary" size="sm" onClick={handleIncrementRefresh}>
+            {intl.formatMessage(messages.coverageRetry)}
+          </Button>
+        </div>
+
+        <CreateProjectDialog
+          isOpen={state.isCreateDialogOpen}
+          onClose={() => dispatch({ type: 'CLOSE_CREATE_DIALOG' })}
+          onCreated={(id) => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_CREATED', id });
+          }}
+        />
+      </>
+    );
+  }
 
   if (showNoCoordinates) {
     return (
@@ -496,9 +573,9 @@ function HomeScreen() {
         {/* Top Stat Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
-            title="Mode"
-            value="Cloud Sync Active"
-            valueColor="text-blue-600"
+            title={intl.formatMessage(messages.statMode)}
+            value={intl.formatMessage(messages.statCloudSyncActive)}
+            valueColor="text-info"
             icon={
               <svg
                 width="20"
@@ -515,14 +592,17 @@ function HomeScreen() {
             }
           />
           <StatCard
-            title="Total Assets"
+            title={intl.formatMessage(messages.statTotalAssets)}
             value={observationCount.toLocaleString()}
           />
-          <StatCard title="Categories" value={categoryCount} />
           <StatCard
-            title="Active Alerts"
+            title={intl.formatMessage(messages.statCategories)}
+            value={categoryCount}
+          />
+          <StatCard
+            title={intl.formatMessage(messages.statActiveAlerts)}
             value={alerts.length}
-            valueColor="text-red-500"
+            valueColor="text-error"
           />
         </div>
 
@@ -534,17 +614,14 @@ function HomeScreen() {
               intl.formatMessage(messages.untitledProject)
             }
             areaSize={territoryArea}
-            lastSync={
-              archiveStatus.servers.find((s) => s.lastSyncedAt)?.lastSyncedAt
-                ? formatRelativeTime(
-                    now -
-                      new Date(
-                        archiveStatus.servers.find((s) => s.lastSyncedAt)!
-                          .lastSyncedAt!,
-                      ).getTime(),
-                  )
-                : undefined
-            }
+            lastSync={(() => {
+              const synced = archiveStatus.servers.find((s) => s.lastSyncedAt);
+              if (!synced?.lastSyncedAt) return undefined;
+              return formatRelativeTime(
+                now - new Date(synced.lastSyncedAt).getTime(),
+                intl,
+              );
+            })()}
             teamMembersCount={archiveStatus.servers.length || 1}
           />
         )}
@@ -555,7 +632,7 @@ function HomeScreen() {
 
         {/* Area Calculator Section */}
         <div className="mt-8 flex flex-col gap-6">
-          <h2 className="text-xl font-bold text-gray-900">
+          <h2 className="text-xl font-bold text-text">
             {intl.formatMessage(messages.monitoredArea)}
           </h2>
 

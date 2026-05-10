@@ -9,6 +9,7 @@ interface ProjectListProps {
   onSelect: (id: string) => void;
   onCreateNew: () => void;
   isLoading?: boolean;
+  hideEmptyState?: boolean;
 }
 
 const messages = defineMessages({
@@ -44,6 +45,7 @@ function ProjectList({
   onSelect,
   onCreateNew,
   isLoading = false,
+  hideEmptyState = false,
 }: ProjectListProps) {
   const intl = useIntl();
 
@@ -66,7 +68,7 @@ function ProjectList({
         </div>
       )}
 
-      {!isLoading && projects.length === 0 && (
+      {!isLoading && projects.length === 0 && !hideEmptyState && (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
           <p className="text-sm text-text-muted">
             {intl.formatMessage(messages.noProjects)}

@@ -5,6 +5,9 @@
   "dashboard.banner.active": {
     "defaultMessage": "Active"
   },
+  "dashboard.banner.defaultDescription": {
+    "defaultMessage": "A controlled environment for onboarding new rangers and testing field data collection protocols."
+  },
   "dashboard.banner.lastSync": {
     "defaultMessage": "Last Sync"
   },
@@ -20,6 +23,9 @@
   "home.activity.alertDesc": {
     "defaultMessage": "New alert event detected in project area."
   },
+  "home.activity.empty": {
+    "defaultMessage": "No recent activity"
+  },
   "home.activity.noLocation": {
     "defaultMessage": "No location data"
   },
@@ -28,6 +34,9 @@
   },
   "home.activity.observationWithCoords": {
     "defaultMessage": "New geolocated observation"
+  },
+  "home.activity.recentTitle": {
+    "defaultMessage": "Recent Activity"
   },
   "home.archive.credentialsUnavailable": {
     "defaultMessage": "Credentials unavailable."
@@ -71,8 +80,14 @@
   "home.coverage.calculating": {
     "defaultMessage": "Calculating..."
   },
+  "home.coverage.error": {
+    "defaultMessage": "Coverage calculation failed"
+  },
   "home.coverage.noCoordinates": {
     "defaultMessage": "No mappable coordinates found"
+  },
+  "home.coverage.retry": {
+    "defaultMessage": "Retry calculation"
   },
   "home.import.another": {
     "defaultMessage": "Import another"
@@ -106,6 +121,9 @@
   },
   "home.method.connectivity30.label": {
     "defaultMessage": "30km Connectivity"
+  },
+  "home.method.error": {
+    "defaultMessage": "Error"
   },
   "home.method.exportMapLayer": {
     "defaultMessage": "Export map layer"
@@ -145,9 +163,6 @@
   },
   "home.newProject.listAria": {
     "defaultMessage": "Create new project from project list"
-  },
-  "home.newProject.topbarAria": {
-    "defaultMessage": "Create new project from topbar"
   },
   "home.noProjects": {
     "defaultMessage": "No projects yet"
@@ -196,6 +211,33 @@
   },
   "home.settings.preset": {
     "defaultMessage": "Calculation Preset"
+  },
+  "home.stat.activeAlerts": {
+    "defaultMessage": "Active Alerts"
+  },
+  "home.stat.categories": {
+    "defaultMessage": "Categories"
+  },
+  "home.stat.cloudSyncActive": {
+    "defaultMessage": "Cloud Sync Active"
+  },
+  "home.stat.mode": {
+    "defaultMessage": "Mode"
+  },
+  "home.stat.totalAssets": {
+    "defaultMessage": "Total Assets"
+  },
+  "home.time.daysAgo": {
+    "defaultMessage": "{count} DAY{plural, plural, one {} other {S}} AGO"
+  },
+  "home.time.hoursAgo": {
+    "defaultMessage": "{count} HR{plural, plural, one {} other {S}} AGO"
+  },
+  "home.time.justNow": {
+    "defaultMessage": "JUST NOW"
+  },
+  "home.time.minutesAgo": {
+    "defaultMessage": "{count} MIN AGO"
   },
   "home.title": {
     "defaultMessage": "Home"
