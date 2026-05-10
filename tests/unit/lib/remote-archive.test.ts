@@ -160,4 +160,88 @@ describe('remote-archive', () => {
     const all = await db.projects.toArray();
     expect(all).toHaveLength(2);
   });
+
+  it('preserves createdAt across repeated syncs', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects`, () =>
+        HttpResponse.json(PROJECTS_RESPONSE),
+      ),
+    );
+
+    const db = getDb();
+
+    // First pull
+    await pullProjects('server-1', archiveConfig);
+    const afterFirst = await db.projects.toArray();
+    const firstCreatedAt = afterFirst[0]!.createdAt;
+
+    // Wait a bit so new Date().toISOString() would differ
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Second pull with same data
+    await pullProjects('server-1', archiveConfig);
+    const afterSecond = await db.projects.toArray();
+
+    // createdAt must NOT change on subsequent syncs
+    expect(afterSecond[0]!.createdAt).toBe(firstCreatedAt);
+  });
+
+  it('preserves updatedAt when project data has not changed', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects`, () =>
+        HttpResponse.json(PROJECTS_RESPONSE),
+      ),
+    );
+
+    const db = getDb();
+
+    // First pull
+    await pullProjects('server-1', archiveConfig);
+    const afterFirst = await db.projects.toArray();
+    const firstUpdatedAt = afterFirst[0]!.updatedAt;
+
+    // Wait a bit so new Date().toISOString() would differ
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Second pull with same data
+    await pullProjects('server-1', archiveConfig);
+    const afterSecond = await db.projects.toArray();
+
+    // updatedAt must NOT change when name is the same
+    expect(afterSecond[0]!.updatedAt).toBe(firstUpdatedAt);
+  });
+
+  it('updates updatedAt when project name changes', async () => {
+    const db = getDb();
+
+    // First pull with name "Forest Monitoring"
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitoring' }],
+        }),
+      ),
+    );
+    await pullProjects('server-1', archiveConfig);
+    const afterFirst = await db.projects.toArray();
+    const firstUpdatedAt = afterFirst[0]!.updatedAt;
+
+    // Wait a bit
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Second pull with changed name
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Updated Forest Name' }],
+        }),
+      ),
+    );
+    await pullProjects('server-1', archiveConfig);
+    const afterSecond = await db.projects.toArray();
+
+    // updatedAt should change when name changed
+    expect(afterSecond[0]!.updatedAt).not.toBe(firstUpdatedAt);
+    expect(afterSecond[0]!.name).toBe('Updated Forest Name');
+  });
 });

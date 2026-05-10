@@ -14,17 +14,38 @@ export async function pullProjects(
   const response = await apiClient.getProjects(config);
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
-  const projects: Project[] = response.data.map((item) => ({
-    localId: `${sourceType}:${serverId}:${item.projectId}`,
-    sourceType,
-    sourceId: serverId,
-    remoteId: item.projectId,
-    name: item.name ?? undefined,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    dirtyLocal: false,
-    deleted: false,
-  }));
+
+  const localIds = response.data.map(
+    (item) => `${sourceType}:${serverId}:${item.projectId}`,
+  );
+
+  // Fetch existing records to preserve timestamps
+  const existingRecords = await db.projects.bulkGet(localIds);
+  const existingMap = new Map<string, Project>();
+  for (const record of existingRecords) {
+    if (record) existingMap.set(record.localId, record);
+  }
+
+  const now = new Date().toISOString();
+  const projects: Project[] = response.data.map((item) => {
+    const localId = `${sourceType}:${serverId}:${item.projectId}`;
+    const existing = existingMap.get(localId);
+    const nameChanged = existing
+      ? existing.name !== (item.name ?? undefined)
+      : true;
+
+    return {
+      localId,
+      sourceType,
+      sourceId: serverId,
+      remoteId: item.projectId,
+      name: item.name ?? undefined,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
+      dirtyLocal: false,
+      deleted: false,
+    };
+  });
 
   await db.projects.bulkPut(projects);
   return projects;
