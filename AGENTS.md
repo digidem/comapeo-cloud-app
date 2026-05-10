@@ -118,8 +118,8 @@ Managed by Prettier via `@trivago/prettier-plugin-sort-imports`:
 | GET | `/projects` | Bearer | `{ data: [{ projectId, name? }] }` |
 | GET | `/projects/:id` | Bearer | `{ data: { projectId, name? } }` |
 | GET | `/projects/:id/observations` | Bearer | `{ data: [{ docId, createdAt, updatedAt, deleted, lat?, lon?, attachments, tags }] }` |
-| GET | `/projects/:id/alerts` | Bearer | `{ data: [{ docId, createdAt, updatedAt, deleted, detectionDateStart, detectionDateEnd, sourceId, metadata, geometry }] }` |
-| POST | `/projects/:id/alerts` | Bearer | Body: `{ geometry, metadata?, detectionDateStart?, detectionDateEnd? }` -> 201 empty |
+| GET | `/projects/:id/remoteDetectionAlerts` | Bearer | `{ data: [{ docId, createdAt, updatedAt, deleted, detectionDateStart, detectionDateEnd, sourceId, metadata, geometry }] }` |
+| POST | `/projects/:id/remoteDetectionAlerts` | Bearer | Body: `{ geometry, metadata?, detectionDateStart?, detectionDateEnd? }` -> 201 empty |
 
 ## Design System
 

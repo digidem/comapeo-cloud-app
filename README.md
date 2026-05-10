@@ -137,8 +137,8 @@ Key endpoints from [comapeo-cloud](https://github.com/digidem/comapeo-cloud):
 | `GET` | `/projects` | Bearer |
 | `GET` | `/projects/:id` | Bearer |
 | `GET` | `/projects/:id/observations` | Bearer |
-| `GET` | `/projects/:id/alerts` | Bearer |
-| `POST` | `/projects/:id/alerts` | Bearer |
+| `GET` | `/projects/:id/remoteDetectionAlerts` | Bearer |
+| `POST` | `/projects/:id/remoteDetectionAlerts` | Bearer |
 
 ## Contributing
 

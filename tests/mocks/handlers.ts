@@ -31,4 +31,30 @@ export const handlers = [
       ],
     });
   }),
+
+  http.get('*/projects/*/remoteDetectionAlerts', ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid bearer token',
+          },
+        },
+        { status: 401 },
+      );
+    }
+    return HttpResponse.json({
+      data: [
+        {
+          docId: 'test-alert-id-1',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          deleted: false,
+          geometry: { type: 'Point', coordinates: [0, 0] },
+        },
+      ],
+    });
+  }),
 ];

@@ -35,7 +35,7 @@ export async function setupMockServer(page: Page): Promise<void> {
     }),
   );
 
-  await page.route('**/projects/*/alerts', (route) =>
+  await page.route('**/projects/*/remoteDetectionAlerts', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

@@ -2,7 +2,12 @@ import { server } from '@tests/mocks/node';
 import { HttpResponse, http } from 'msw';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ApiError, apiClient, getAttachmentUrl } from '@/lib/api-client';
+import {
+  ALERTS_PATH,
+  ApiError,
+  apiClient,
+  getAttachmentUrl,
+} from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 
 const BASE_URL = 'http://localhost:3000';
@@ -225,6 +230,17 @@ describe('getObservations', () => {
     await expect(apiClient.getObservations(projectId)).rejects.toThrow(
       'Unable to connect',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ALERTS_PATH constant
+// ---------------------------------------------------------------------------
+describe('ALERTS_PATH constant', () => {
+  it('matches the canonical comapeo-cloud server route', () => {
+    // The comapeo-cloud server uses /remoteDetectionAlerts, not /alerts.
+    // This test ensures the constant stays in sync with the server.
+    expect(ALERTS_PATH).toBe('/remoteDetectionAlerts');
   });
 });
 
@@ -554,6 +570,30 @@ describe('explicit RequestConfig', () => {
     );
 
     expect(result.success).toBe(true);
+  });
+
+  it('does NOT clear auth store on 401 with RequestConfig', async () => {
+    // Auth store has a valid session
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(useAuthStore.getState().token).toBe('test-token');
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json(
+          { error: { code: 'UNAUTHORIZED', message: 'Token expired' } },
+          { status: 401 },
+        ),
+      ),
+    );
+
+    // Call with explicit RequestConfig — should NOT clear auth
+    await expect(
+      apiClient.getProjects({ baseUrl: archiveUrl, token: archiveToken }),
+    ).rejects.toThrow(ApiError);
+
+    // Auth store should remain intact
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(useAuthStore.getState().token).toBe('test-token');
   });
 });
 

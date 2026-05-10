@@ -11,6 +11,13 @@ import {
 import { useAuthStore } from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Canonical path for remote detection alerts, matching comapeo-cloud server. */
+export const ALERTS_PATH = '/remoteDetectionAlerts' as const;
+
+// ---------------------------------------------------------------------------
 // RequestConfig — explicit credentials for remote archive calls
 // ---------------------------------------------------------------------------
 
@@ -144,7 +151,7 @@ export const apiClient = {
   async getAlerts(projectId: string, config?: RequestConfig) {
     try {
       const response = await fetch(
-        `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}/remoteDetectionAlerts`,
+        `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
         { headers: { ...getAuthHeaders(config) } },
       );
       return handleResponse(response, alertsResponseSchema, config);
@@ -161,7 +168,7 @@ export const apiClient = {
   ): Promise<{ success: true }> {
     try {
       const response = await fetch(
-        `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}/remoteDetectionAlerts`,
+        `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
         {
           method: 'POST',
           headers: {
