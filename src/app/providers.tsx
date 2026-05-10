@@ -4,21 +4,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 
 import { router } from '@/app/router';
-import enMessages from '@/i18n/messages/en.json';
+import { getMessages } from '@/i18n/load-messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
 const queryClient = new QueryClient();
 
-// Convert { id: { defaultMessage: string } } to { id: string }
-const flatMessages = {};
-for (const [key, value] of Object.entries(enMessages)) {
-  // @ts-expect-error - we know the structure
-  flatMessages[key] = value.defaultMessage;
-}
-
 export function AppProviders() {
+  const locale = useLocaleStore((s) => s.locale);
+  const messages = getMessages(locale);
+
   return (
     <QueryClientProvider client={queryClient}>
-      <IntlProvider locale="en" messages={flatMessages}>
+      <IntlProvider locale={locale} defaultLocale="en" messages={messages}>
         <RouterProvider router={router} />
       </IntlProvider>
     </QueryClientProvider>

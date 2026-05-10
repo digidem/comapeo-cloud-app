@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { SUPPORTED_LOCALES } from '@/i18n/load-messages';
 import { syncRemoteArchive } from '@/lib/data-layer';
 import { useAuthStore } from '@/stores/auth-store';
+import { useLocaleStore } from '@/stores/locale-store';
 
 const _messages = defineMessages({
   settings: { id: 'settings.title', defaultMessage: 'Settings' },
@@ -82,9 +84,41 @@ export function SettingsScreen() {
     }
   };
 
+  const locale = useLocaleStore((s) => s.locale);
+  const setLocale = useLocaleStore((s) => s.setLocale);
+
+  const LOCALE_LABELS: Record<string, string> = {
+    en: 'English',
+    pt: 'Português',
+    es: 'Español',
+  };
+
   return (
     <section aria-label={intl.formatMessage(_messages.archiveServers)}>
       <h1>{intl.formatMessage(_messages.settings)}</h1>
+
+      <h2>Language / Idioma</h2>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+        {SUPPORTED_LOCALES.map((loc) => (
+          <button
+            key={loc}
+            type="button"
+            onClick={() => setLocale(loc)}
+            disabled={locale === loc}
+            style={{
+              padding: '0.25rem 0.75rem',
+              border:
+                locale === loc ? '2px solid #1f6fff' : '1px solid #d9dee8',
+              borderRadius: '8px',
+              cursor: locale === loc ? 'default' : 'pointer',
+              fontWeight: locale === loc ? 'bold' : 'normal',
+              opacity: locale === loc ? 1 : 0.8,
+            }}
+          >
+            {LOCALE_LABELS[loc] ?? loc}
+          </button>
+        ))}
+      </div>
 
       <h2>{intl.formatMessage(_messages.archiveServers)}</h2>
 
