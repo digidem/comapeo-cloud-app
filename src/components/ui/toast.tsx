@@ -3,6 +3,8 @@ import * as ToastPrimitive from '@radix-ui/react-toast';
 import { createContext, useCallback, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { uuid } from '@/lib/uuid';
+
 type ToastVariant = 'success' | 'error' | 'info';
 
 interface ToastData {
@@ -37,7 +39,7 @@ function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastData[]>([]);
 
   const addToast = useCallback((toast: Omit<ToastData, 'id'>) => {
-    const id = crypto.randomUUID();
+    const id = uuid();
     setToasts((prev) => [...prev, { ...toast, id }]);
   }, []);
 

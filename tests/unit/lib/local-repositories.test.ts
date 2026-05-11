@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getDb, resetDb } from '@/lib/db';
 import type { Alert, Observation, Project } from '@/lib/db';
+import { uuid } from '@/lib/uuid';
 
 function makeId(): string {
-  return crypto.randomUUID();
+  return uuid();
 }
 
 beforeEach(async () => {

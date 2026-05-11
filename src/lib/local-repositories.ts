@@ -8,6 +8,7 @@ import type {
   SyncMetadata,
 } from '@/lib/db';
 import { DbError, wrapDb } from '@/lib/db-error';
+import { uuid } from '@/lib/uuid';
 
 export { DbError } from '@/lib/db-error';
 
@@ -49,7 +50,7 @@ export async function createProject(
   return wrapDb(async () => {
     const db = getDb();
     const project: Project = {
-      localId: crypto.randomUUID(),
+      localId: uuid(),
       ...localMeta(),
       ...input,
     };
@@ -125,7 +126,7 @@ export async function createObservation(
       );
     }
     const observation: Observation = {
-      localId: crypto.randomUUID(),
+      localId: uuid(),
       projectLocalId: input.projectLocalId,
       ...localMeta(),
       tags: input.tags ?? {},
@@ -202,7 +203,7 @@ export async function createAlert(input: CreateAlertInput): Promise<Alert> {
       );
     }
     const alert: Alert = {
-      localId: crypto.randomUUID(),
+      localId: uuid(),
       projectLocalId: input.projectLocalId,
       ...localMeta(),
     };
@@ -276,7 +277,7 @@ export async function createAttachment(
       );
     }
     const attachment: Attachment = {
-      localId: crypto.randomUUID(),
+      localId: uuid(),
       ...input,
       ...localMeta(),
     };
@@ -313,7 +314,7 @@ export async function createRemoteServer(
   return wrapDb(async () => {
     const db = getDb();
     const server: RemoteServer = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       baseUrl: input.baseUrl,
       label: input.label,
       status: input.status ?? 'idle',

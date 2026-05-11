@@ -6,6 +6,7 @@ import type {
   WorkerOutMessage,
 } from '@/lib/area-calculator/types';
 import { getProjectPoints } from '@/lib/data-layer';
+import { uuid } from '@/lib/uuid';
 
 export interface CoverageMethodResult {
   methodId: string;
@@ -137,7 +138,7 @@ export function useProjectCoverage(
       workerRef.current = null;
     }
 
-    const requestId = crypto.randomUUID();
+    const requestId = uuid();
     requestIdRef.current = requestId;
 
     dispatch({ type: 'START' });
