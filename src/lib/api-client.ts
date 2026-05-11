@@ -1,6 +1,10 @@
 import * as v from 'valibot';
 
 import {
+  ARCHIVE_TARGET_HEADER,
+  normalizeArchiveBaseUrl,
+} from '@/lib/archive-proxy';
+import {
   alertsResponseSchema,
   createAlertBodySchema,
   errorResponseSchema,
@@ -43,32 +47,41 @@ export class ApiError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Request resolution — determines baseUrl and extra headers per request
 // ---------------------------------------------------------------------------
 
-function getBaseUrl(config?: RequestConfig): string {
-  if (config?.baseUrl) {
-    // In development (but not in test environments), route remote archive
-    // requests through the Vite proxy to avoid CORS issues and HTML
-    // responses from remote servers.
-    if (import.meta.env.DEV && !import.meta.env.VITEST) {
-      return '/api';
-    }
-    return config.baseUrl;
-  }
-  const { baseUrl } = useAuthStore.getState();
-  if (baseUrl) return baseUrl;
-  return window.location.origin;
+interface ApiRuntimeEnv {
+  readonly VITEST?: boolean;
 }
 
-function getExtraHeaders(config?: RequestConfig): Record<string, string> {
-  // In development (but not in test environments), pass the real target URL
-  // via a custom header so the Vite proxy can route to the correct server.
-  if (import.meta.env.DEV && !import.meta.env.VITEST && config?.baseUrl) {
-    return { 'x-target-url': config.baseUrl };
+export function resolveApiRequest(
+  config?: RequestConfig,
+  env?: ApiRuntimeEnv,
+): { baseUrl: string; extraHeaders: Record<string, string> } {
+  const isVitest = env ? !!env.VITEST : !!import.meta.env.VITEST;
+  if (config?.baseUrl) {
+    if (!isVitest) {
+      const normalized = normalizeArchiveBaseUrl(config.baseUrl);
+      return {
+        baseUrl: '/api',
+        extraHeaders: {
+          [ARCHIVE_TARGET_HEADER]: normalized.ok
+            ? normalized.value
+            : config.baseUrl,
+        },
+      };
+    }
+    return { baseUrl: config.baseUrl, extraHeaders: {} };
   }
-  return {};
+
+  const { baseUrl } = useAuthStore.getState();
+  if (baseUrl) return { baseUrl, extraHeaders: {} };
+  return { baseUrl: window.location.origin, extraHeaders: {} };
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function getAuthHeaders(config?: RequestConfig): Record<string, string> {
   if (config?.token) return { Authorization: `Bearer ${config.token}` };
@@ -123,8 +136,9 @@ async function handleResponse<T>(
 export const apiClient = {
   async getServerInfo(config?: RequestConfig) {
     try {
-      const response = await fetch(`${getBaseUrl(config)}/info`, {
-        headers: { ...getExtraHeaders(config) },
+      const request = resolveApiRequest(config);
+      const response = await fetch(`${request.baseUrl}/info`, {
+        headers: { ...request.extraHeaders },
       });
       return handleResponse(response, serverInfoResponseSchema, config);
     } catch (error) {
@@ -135,8 +149,9 @@ export const apiClient = {
 
   async healthCheck(config?: RequestConfig): Promise<boolean> {
     try {
-      const response = await fetch(`${getBaseUrl(config)}/healthcheck`, {
-        headers: { ...getExtraHeaders(config) },
+      const request = resolveApiRequest(config);
+      const response = await fetch(`${request.baseUrl}/healthcheck`, {
+        headers: { ...request.extraHeaders },
       });
       return response.status === 200;
     } catch {
@@ -146,8 +161,9 @@ export const apiClient = {
 
   async getProjects(config?: RequestConfig) {
     try {
-      const response = await fetch(`${getBaseUrl(config)}/projects`, {
-        headers: { ...getAuthHeaders(config), ...getExtraHeaders(config) },
+      const request = resolveApiRequest(config);
+      const response = await fetch(`${request.baseUrl}/projects`, {
+        headers: { ...getAuthHeaders(config), ...request.extraHeaders },
       });
       return handleResponse(response, projectsResponseSchema, config);
     } catch (error) {
@@ -158,9 +174,10 @@ export const apiClient = {
 
   async getObservations(projectId: string, config?: RequestConfig) {
     try {
+      const request = resolveApiRequest(config);
       const response = await fetch(
-        `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}/observations`,
-        { headers: { ...getAuthHeaders(config), ...getExtraHeaders(config) } },
+        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/observations`,
+        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
       );
       return handleResponse(response, observationsResponseSchema, config);
     } catch (error) {
@@ -171,9 +188,10 @@ export const apiClient = {
 
   async getAlerts(projectId: string, config?: RequestConfig) {
     try {
+      const request = resolveApiRequest(config);
       const response = await fetch(
-        `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
-        { headers: { ...getAuthHeaders(config), ...getExtraHeaders(config) } },
+        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
+        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
       );
       return handleResponse(response, alertsResponseSchema, config);
     } catch (error) {
@@ -188,14 +206,15 @@ export const apiClient = {
     config?: RequestConfig,
   ): Promise<{ success: true }> {
     try {
+      const request = resolveApiRequest(config);
       const response = await fetch(
-        `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
+        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...getAuthHeaders(config),
-            ...getExtraHeaders(config),
+            ...request.extraHeaders,
           },
           body: JSON.stringify(body),
         },

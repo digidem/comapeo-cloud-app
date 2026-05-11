@@ -7,6 +7,7 @@ import {
   ApiError,
   apiClient,
   getAttachmentUrl,
+  resolveApiRequest,
 } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -594,6 +595,28 @@ describe('explicit RequestConfig', () => {
     // Auth store should remain intact
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
     expect(useAuthStore.getState().token).toBe('test-token');
+  });
+
+  it('routes explicit archive calls through /api outside Vitest', () => {
+    const resolved = resolveApiRequest(
+      { baseUrl: 'https://archive.example.com/', token: archiveToken },
+      { VITEST: false },
+    );
+
+    expect(resolved.baseUrl).toBe('/api');
+    expect(resolved.extraHeaders).toEqual({
+      'x-target-url': 'https://archive.example.com',
+    });
+  });
+
+  it('keeps direct archive URLs in Vitest so MSW tests stay simple', () => {
+    const resolved = resolveApiRequest(
+      { baseUrl: archiveUrl, token: archiveToken },
+      { VITEST: true },
+    );
+
+    expect(resolved.baseUrl).toBe(archiveUrl);
+    expect(resolved.extraHeaders).toEqual({});
   });
 });
 
