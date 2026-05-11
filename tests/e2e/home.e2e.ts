@@ -111,36 +111,38 @@ test('7.2 select project with data → calculations appear → preset change rec
 });
 
 // ---------------------------------------------------------------------------
-// 7.3 — add archive server in settings → ArchiveStatusCard appears on home
+// 7.3 — add archive server from sidebar dialog → ArchiveStatusCard appears
 // ---------------------------------------------------------------------------
 
-test('7.3 configure archive server in settings → card visible on home screen', async ({
+test('7.3 configure archive server from sidebar → card visible on home screen', async ({
   page,
 }) => {
   await setupMockServer(page);
-
-  // Add a server via the Settings screen, using SPA navigation so the token
-  // remains available for the Home archive status card.
   await page.goto('/');
-  await page.getByRole('link', { name: 'Settings' }).click();
 
+  // Create a project first so sidebar is visible
+  await createProject(page, 'Archive Test');
+
+  // Click the Add Server button in sidebar
+  await page.getByRole('button', { name: /add server/i }).click();
+
+  // Dialog appears
+  await expect(page.getByRole('dialog')).toBeVisible();
+
+  // Fill in the form
   await page.getByLabel('Server URL').fill('http://archive.test');
   await page.getByLabel('Bearer Token').fill('bearer-xyz');
-  await page.getByRole('button', { name: 'Add Server' }).click();
 
-  // Confirm server was added to the list
-  await expect(
-    page.locator('li').filter({ hasText: 'http://archive.test' }),
-  ).toBeVisible({ timeout: 10_000 });
+  // Submit
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^add$/i })
+    .click();
 
-  await page.goBack();
-
-  // ArchiveStatusCard rendered in sidebar. Credentials are intentionally not
-  // persisted across reload/history restoration, so the card prompts re-entry.
+  // Dialog closes and server card appears in sidebar
   await expect(page.getByText('http://archive.test')).toBeVisible({
-    timeout: 5_000,
+    timeout: 10_000,
   });
-  await expect(page.getByText(/Credentials unavailable/)).toBeVisible();
 });
 
 // ---------------------------------------------------------------------------
@@ -199,34 +201,80 @@ test('7.5 network error on projects endpoint shows error state', async ({
 });
 
 // ---------------------------------------------------------------------------
-// 7.6 — server removal in Settings
+// 7.6 — server removal from sidebar detail view
 // ---------------------------------------------------------------------------
 
-test('7.6 add then remove archive server in settings', async ({ page }) => {
+test('7.6 add then remove archive server from sidebar', async ({ page }) => {
   await setupMockServer(page);
-
   await page.goto('/');
-  await page.getByRole('link', { name: 'Settings' }).click();
 
-  // Add a server
+  // Create a project first so sidebar is visible
+  await createProject(page, 'Remove Test');
+
+  // Add a server via sidebar dialog
+  await page.getByRole('button', { name: /add server/i }).click();
   await page.getByLabel('Server URL').fill('http://removable.test');
   await page.getByLabel('Bearer Token').fill('bearer-abc');
-  await page.getByRole('button', { name: 'Add Server' }).click();
-
-  // Confirm server was added
-  await expect(
-    page.locator('li').filter({ hasText: 'http://removable.test' }),
-  ).toBeVisible({ timeout: 10_000 });
-
-  // Remove the server
   await page
-    .locator('li')
-    .filter({ hasText: 'http://removable.test' })
+    .getByRole('dialog')
+    .getByRole('button', { name: /^add$/i })
+    .click();
+
+  // Server card appears in sidebar
+  await expect(page.getByText('http://removable.test')).toBeVisible({
+    timeout: 10_000,
+  });
+
+  // Click the server card to select it and show detail view
+  await page.getByText('http://removable.test').click();
+
+  // Click Remove button in detail view
+  await page.getByRole('button', { name: 'Remove' }).first().click();
+
+  // Confirmation dialog appears — click confirm Remove
+  await page
+    .getByRole('dialog')
     .getByRole('button', { name: 'Remove' })
     .click();
 
-  // Server should no longer be in the list
-  await expect(
-    page.locator('li').filter({ hasText: 'http://removable.test' }),
-  ).not.toBeVisible({ timeout: 5_000 });
+  // Server should no longer be in the sidebar
+  await expect(page.getByText('http://removable.test')).not.toBeVisible({
+    timeout: 5_000,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7.7 — add archive server from sidebar dialog (duplicate of 7.3 flow)
+// ---------------------------------------------------------------------------
+
+test('7.7 add archive server from sidebar dialog', async ({ page }) => {
+  await setupMockServer(page);
+  await page.goto('/');
+
+  // Create a project first so sidebar is visible
+  await createProject(page, 'Sidebar Test');
+
+  // Archive Servers section is always visible
+  await expect(page.getByText('Archive Servers')).toBeVisible();
+
+  // Click the Add Server button in sidebar
+  await page.getByRole('button', { name: /add server/i }).click();
+
+  // Dialog appears
+  await expect(page.getByRole('dialog')).toBeVisible();
+
+  // Fill in the form
+  await page.getByLabel('Server URL').fill('http://archive.test');
+  await page.getByLabel('Bearer Token').fill('bearer-xyz');
+
+  // Submit
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^add$/i })
+    .click();
+
+  // Dialog closes and server card appears in sidebar
+  await expect(page.getByText('http://archive.test')).toBeVisible({
+    timeout: 10_000,
+  });
 });
