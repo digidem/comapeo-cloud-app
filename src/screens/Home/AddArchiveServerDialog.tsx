@@ -4,6 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface AddArchiveServerDialogProps {
@@ -76,6 +77,18 @@ const messages = defineMessages({
     id: 'home.archive.dialog.duplicateServer',
     defaultMessage: 'This server has already been added',
   },
+  invalidUrl: {
+    id: 'home.archive.dialog.invalidUrl',
+    defaultMessage: 'Enter a full URL including http:// or https://',
+  },
+  unsupportedProtocol: {
+    id: 'home.archive.dialog.unsupportedProtocol',
+    defaultMessage: 'Archive server URL must start with http:// or https://',
+  },
+  urlCredentials: {
+    id: 'home.archive.dialog.urlCredentials',
+    defaultMessage: 'Archive server URL must not include credentials',
+  },
 });
 
 function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
@@ -88,6 +101,25 @@ function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
       return { status: 'error', message: action.message };
     case 'reset':
       return { status: 'idle' };
+  }
+}
+
+function getUrlValidationMessage(
+  code: Exclude<
+    ReturnType<typeof normalizeArchiveBaseUrl>,
+    { ok: true }
+  >['code'],
+) {
+  switch (code) {
+    case 'UNSUPPORTED_ARCHIVE_PROTOCOL':
+      return messages.unsupportedProtocol;
+    case 'UNSUPPORTED_ARCHIVE_URL_CREDENTIALS':
+      return messages.urlCredentials;
+    case 'INVALID_ARCHIVE_URL':
+    case 'MISSING_ARCHIVE_TARGET':
+    case 'UNSUPPORTED_ARCHIVE_PROXY_METHOD':
+    case 'UNSUPPORTED_ARCHIVE_PROXY_PATH':
+      return messages.invalidUrl;
   }
 }
 
@@ -124,10 +156,23 @@ function AddArchiveServerDialog({
       return;
     }
 
-    // Check for duplicate URL
-    const existing = useAuthStore
-      .getState()
-      .servers.find((s) => s.baseUrl === url);
+    // Validate URL format and protocol
+    const normalizedUrl = normalizeArchiveBaseUrl(url);
+    if (!normalizedUrl.ok) {
+      setUrlError(
+        intl.formatMessage(getUrlValidationMessage(normalizedUrl.code)),
+      );
+      return;
+    }
+
+    // Check for duplicate URL (normalized comparison)
+    const existing = useAuthStore.getState().servers.find((s) => {
+      const normalizedExisting = normalizeArchiveBaseUrl(s.baseUrl);
+      return (
+        normalizedExisting.ok &&
+        normalizedExisting.value === normalizedUrl.value
+      );
+    });
     if (existing) {
       dispatch({
         type: 'error',
@@ -140,8 +185,8 @@ function AddArchiveServerDialog({
 
     const addServer = useAuthStore.getState().addServer;
     addServer({
-      label: label || url,
-      baseUrl: url,
+      label: label || normalizedUrl.value,
+      baseUrl: normalizedUrl.value,
       token,
     }).then(
       (serverId) => {

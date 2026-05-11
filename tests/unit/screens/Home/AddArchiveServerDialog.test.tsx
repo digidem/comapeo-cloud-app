@@ -317,4 +317,131 @@ describe('AddArchiveServerDialog', () => {
     const addBtn = screen.getByRole('button', { name: /add/i });
     expect(addBtn).toHaveAttribute('aria-busy', 'true');
   });
+
+  it('rejects a server URL without a protocol', async () => {
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Server URL'), 'archive.test');
+    await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      screen.getByText('Enter a full URL including http:// or https://'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-http archive URL', async () => {
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Server URL'), 'ftp://archive.test');
+    await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      screen.getByText(
+        'Archive server URL must start with http:// or https://',
+      ),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
+  it('rejects an archive URL with embedded credentials', async () => {
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://user:pass@archive.test',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      screen.getByText('Archive server URL must not include credentials'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
+  it('normalizes trailing slash before saving and checking duplicates', async () => {
+    const user = userEvent.setup();
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'existing-id',
+          label: 'Existing',
+          baseUrl: 'https://archive.test',
+          token: 'existing-token',
+          status: 'idle' as const,
+        },
+      ],
+    });
+
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://archive.test/',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'new-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      screen.getByText('This server has already been added'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
+  it('saves a normalized archive URL', async () => {
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://archive.test/',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => {
+      expect(mockCreateRemoteServer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: 'https://archive.test',
+          label: 'https://archive.test',
+        }),
+      );
+    });
+  });
 });

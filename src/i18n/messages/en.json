@@ -83,6 +83,9 @@
   "home.archive.dialog.error": {
     "defaultMessage": "Failed to add server"
   },
+  "home.archive.dialog.invalidUrl": {
+    "defaultMessage": "Enter a full URL including http:// or https://"
+  },
   "home.archive.dialog.label": {
     "defaultMessage": "Label (optional)"
   },
@@ -100,6 +103,12 @@
   },
   "home.archive.dialog.tokenRequired": {
     "defaultMessage": "Bearer Token is required"
+  },
+  "home.archive.dialog.unsupportedProtocol": {
+    "defaultMessage": "Archive server URL must start with http:// or https://"
+  },
+  "home.archive.dialog.urlCredentials": {
+    "defaultMessage": "Archive server URL must not include credentials"
   },
   "home.archive.dialog.url": {
     "defaultMessage": "Server URL"
