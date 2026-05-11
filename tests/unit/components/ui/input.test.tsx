@@ -2,6 +2,8 @@ import { render, screen } from '@tests/mocks/test-utils';
 import { userEvent } from '@tests/mocks/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
+import { createRef } from 'react';
+
 import { Input } from '@/components/ui/input';
 
 describe('Input', () => {
@@ -44,5 +46,21 @@ describe('Input', () => {
     render(<Input label="Password" type="password" />);
     const input = screen.getByLabelText('Password');
     expect(input).toHaveAttribute('type', 'password');
+  });
+
+  it('forwards ref to underlying input element', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(<Input ref={ref} label="Test Label" />);
+
+    expect(ref.current).toBeInstanceOf(HTMLInputElement);
+    expect(ref.current).toBe(screen.getByLabelText('Test Label'));
+  });
+
+  it('ref can focus the input element', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(<Input ref={ref} label="Focusable" />);
+
+    ref.current?.focus();
+    expect(ref.current).toHaveFocus();
   });
 });
