@@ -20,6 +20,8 @@ import { syncRemoteArchive } from '@/lib/data-layer';
 import { exportFeatureCollection } from '@/lib/geojson-export';
 import { useAuthStore } from '@/stores/auth-store';
 
+import { AddArchiveServerDialog } from './AddArchiveServerDialog';
+import { ArchiveServerDetail } from './ArchiveServerDetail';
 import { ArchiveStatusCard } from './ArchiveStatusCard';
 import { AreaMap } from './AreaMap';
 import { CalculationSettings } from './CalculationSettings';
@@ -60,11 +62,13 @@ function formatRelativeTime(ageMs: number, intl: IntlShape): string {
 interface HomeState {
   selectedProjectId: string | null;
   isCreateDialogOpen: boolean;
+  isAddServerDialogOpen: boolean;
   selectedPresetId: string;
   params: CalculationParams;
   activeMethodId: string;
   unit: AreaUnit;
   coverageRefreshKey: number;
+  selectedServerId: string | null;
 }
 
 type HomeAction =
@@ -76,12 +80,19 @@ type HomeAction =
   | { type: 'SET_PARAMS'; params: CalculationParams }
   | { type: 'SET_ACTIVE_METHOD'; methodId: string }
   | { type: 'SET_UNIT'; unit: AreaUnit }
-  | { type: 'INCREMENT_COVERAGE_REFRESH' };
+  | { type: 'INCREMENT_COVERAGE_REFRESH' }
+  | { type: 'OPEN_ADD_SERVER_DIALOG' }
+  | { type: 'CLOSE_ADD_SERVER_DIALOG' }
+  | { type: 'SELECT_SERVER'; id: string | null };
 
 function homeReducer(state: HomeState, action: HomeAction): HomeState {
   switch (action.type) {
     case 'SELECT_PROJECT':
-      return { ...state, selectedProjectId: action.id };
+      return {
+        ...state,
+        selectedProjectId: action.id,
+        selectedServerId: null,
+      };
     case 'OPEN_CREATE_DIALOG':
       return { ...state, isCreateDialogOpen: true };
     case 'CLOSE_CREATE_DIALOG':
@@ -102,6 +113,12 @@ function homeReducer(state: HomeState, action: HomeAction): HomeState {
       return { ...state, unit: action.unit };
     case 'INCREMENT_COVERAGE_REFRESH':
       return { ...state, coverageRefreshKey: state.coverageRefreshKey + 1 };
+    case 'OPEN_ADD_SERVER_DIALOG':
+      return { ...state, isAddServerDialogOpen: true };
+    case 'CLOSE_ADD_SERVER_DIALOG':
+      return { ...state, isAddServerDialogOpen: false };
+    case 'SELECT_SERVER':
+      return { ...state, selectedServerId: action.id };
     default:
       return state;
   }
@@ -110,11 +127,13 @@ function homeReducer(state: HomeState, action: HomeAction): HomeState {
 const INITIAL_STATE: HomeState = {
   selectedProjectId: null,
   isCreateDialogOpen: false,
+  isAddServerDialogOpen: false,
   selectedPresetId: BUILT_IN_PRESETS[0]?.id ?? 'balanced',
   params: { ...DEFAULTS },
   activeMethodId: 'observed',
   unit: 'ha',
   coverageRefreshKey: 0,
+  selectedServerId: null,
 };
 
 const PRESET_TO_METHOD: Record<string, string> = {
@@ -224,6 +243,14 @@ const messages = defineMessages({
     id: 'home.time.daysAgo',
     defaultMessage: '{count} DAY{plural, plural, one {} other {S}} AGO',
   },
+  archiveSectionTitle: {
+    id: 'home.archive.sectionTitle',
+    defaultMessage: 'Archive Servers',
+  },
+  archiveAddServer: {
+    id: 'home.archive.addServer',
+    defaultMessage: 'Add Server',
+  },
   activityAlertDesc: {
     id: 'home.activity.alertDesc',
     defaultMessage: 'New alert event detected in project area.',
@@ -254,6 +281,7 @@ function HomeScreen() {
   const alertsQuery = useAlerts(state.selectedProjectId);
   const archiveStatus = useArchiveStatus();
   const servers = useAuthStore((s) => s.servers);
+  const removeServer = useAuthStore((s) => s.removeServer);
 
   const projects = useMemo(
     () => projectsQuery.data ?? [],
@@ -428,6 +456,40 @@ function HomeScreen() {
   const secondaryContent = useMemo(
     () => (
       <div className="flex flex-col gap-4 p-4">
+        {/* Archive Servers Section — always visible */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-text">
+              {intl.formatMessage(messages.archiveSectionTitle)}
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' })}
+              aria-label={intl.formatMessage(messages.archiveAddServer)}
+            >
+              + {intl.formatMessage(messages.archiveAddServer)}
+            </Button>
+          </div>
+          {archiveStatus.servers.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {archiveStatus.servers.map((server) => (
+                <ArchiveStatusCard
+                  key={server.id}
+                  server={server}
+                  isSelected={state.selectedServerId === server.id}
+                  onSelect={(id) =>
+                    dispatch({
+                      type: 'SELECT_SERVER',
+                      id: state.selectedServerId === id ? null : id,
+                    })
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
         <ProjectList
           projects={projects}
           selectedProjectId={state.selectedProjectId}
@@ -443,24 +505,13 @@ function HomeScreen() {
             onImportComplete={handleIncrementRefresh}
           />
         )}
-
-        {archiveStatus.servers.length > 0 && (
-          <div className="flex flex-col gap-3">
-            {archiveStatus.servers.map((server) => (
-              <ArchiveStatusCard
-                key={server.id}
-                server={server}
-                onSync={handleSync}
-              />
-            ))}
-          </div>
-        )}
       </div>
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       projects,
       state.selectedProjectId,
+      state.selectedServerId,
       projectsQuery.isLoading,
       archiveStatus.servers,
       handleOpenCreateDialog,
@@ -481,10 +532,63 @@ function HomeScreen() {
   useShellSlot(shellSlot);
 
   // ---- Main content area ----
+
+  // When an archive server is selected, show its detail view
+  const selectedArchiveServer = archiveStatus.servers.find(
+    (s) => s.id === state.selectedServerId,
+  );
+
+  if (selectedArchiveServer) {
+    return (
+      <>
+        <ArchiveServerDetail
+          server={selectedArchiveServer}
+          onSync={handleSync}
+          onRemove={(id) => {
+            void removeServer(id);
+            dispatch({ type: 'SELECT_SERVER', id: null });
+          }}
+        />
+
+        <CreateProjectDialog
+          isOpen={state.isCreateDialogOpen}
+          onClose={() => dispatch({ type: 'CLOSE_CREATE_DIALOG' })}
+          onCreated={(id) => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_CREATED', id });
+          }}
+        />
+
+        <AddArchiveServerDialog
+          isOpen={state.isAddServerDialogOpen}
+          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
+          onAdded={(serverId) => {
+            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
+            const server = useAuthStore
+              .getState()
+              .servers.find((s) => s.id === serverId);
+            if (server) {
+              void syncRemoteArchive(serverId, {
+                baseUrl: server.baseUrl,
+                token: server.token,
+              }).then(() => {
+                void queryClient.invalidateQueries({ queryKey: ['projects'] });
+                void queryClient.invalidateQueries({
+                  queryKey: ['observations'],
+                });
+                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+              });
+            }
+          }}
+        />
+      </>
+    );
+  }
+
   if (!state.selectedProjectId) {
     return (
       <>
-        <div className="flex h-full flex-col items-center justify-center gap-3 py-20 text-center">
+        <div className="flex h-full flex-col items-center justify-center gap-3 py-12 sm:py-16 lg:py-20 text-center">
           <p className="text-text-muted text-sm">
             {intl.formatMessage(messages.noProjects)}
           </p>
@@ -501,6 +605,29 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_CREATED', id });
           }}
         />
+
+        <AddArchiveServerDialog
+          isOpen={state.isAddServerDialogOpen}
+          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
+          onAdded={(serverId) => {
+            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
+            const server = useAuthStore
+              .getState()
+              .servers.find((s) => s.id === serverId);
+            if (server) {
+              void syncRemoteArchive(serverId, {
+                baseUrl: server.baseUrl,
+                token: server.token,
+              }).then(() => {
+                void queryClient.invalidateQueries({ queryKey: ['projects'] });
+                void queryClient.invalidateQueries({
+                  queryKey: ['observations'],
+                });
+                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+              });
+            }
+          }}
+        />
       </>
     );
   }
@@ -515,7 +642,7 @@ function HomeScreen() {
   if (showCoverageError) {
     return (
       <>
-        <div className="flex h-full flex-col items-center justify-center gap-3 py-20 text-center">
+        <div className="flex h-full flex-col items-center justify-center gap-3 py-12 sm:py-16 lg:py-20 text-center">
           <p className="text-error text-sm" role="alert">
             {intl.formatMessage(messages.coverageError)}
           </p>
@@ -532,6 +659,29 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_CREATED', id });
           }}
         />
+
+        <AddArchiveServerDialog
+          isOpen={state.isAddServerDialogOpen}
+          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
+          onAdded={(serverId) => {
+            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
+            const server = useAuthStore
+              .getState()
+              .servers.find((s) => s.id === serverId);
+            if (server) {
+              void syncRemoteArchive(serverId, {
+                baseUrl: server.baseUrl,
+                token: server.token,
+              }).then(() => {
+                void queryClient.invalidateQueries({ queryKey: ['projects'] });
+                void queryClient.invalidateQueries({
+                  queryKey: ['observations'],
+                });
+                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+              });
+            }
+          }}
+        />
       </>
     );
   }
@@ -539,7 +689,7 @@ function HomeScreen() {
   if (showNoCoordinates) {
     return (
       <>
-        <div className="flex flex-col gap-6 p-6">
+        <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
           {selectedProject && (
             <ProjectBannerCard
               projectName={
@@ -563,6 +713,29 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_CREATED', id });
           }}
         />
+
+        <AddArchiveServerDialog
+          isOpen={state.isAddServerDialogOpen}
+          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
+          onAdded={(serverId) => {
+            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
+            const server = useAuthStore
+              .getState()
+              .servers.find((s) => s.id === serverId);
+            if (server) {
+              void syncRemoteArchive(serverId, {
+                baseUrl: server.baseUrl,
+                token: server.token,
+              }).then(() => {
+                void queryClient.invalidateQueries({ queryKey: ['projects'] });
+                void queryClient.invalidateQueries({
+                  queryKey: ['observations'],
+                });
+                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+              });
+            }
+          }}
+        />
       </>
     );
   }
@@ -571,7 +744,7 @@ function HomeScreen() {
 
   return (
     <>
-      <div className="flex flex-col gap-6 p-6">
+      <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
         {/* Top Stat Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
@@ -695,6 +868,29 @@ function HomeScreen() {
         onCreated={(id) => {
           void queryClient.invalidateQueries({ queryKey: ['projects'] });
           dispatch({ type: 'PROJECT_CREATED', id });
+        }}
+      />
+
+      <AddArchiveServerDialog
+        isOpen={state.isAddServerDialogOpen}
+        onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
+        onAdded={(serverId) => {
+          dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
+          const server = useAuthStore
+            .getState()
+            .servers.find((s) => s.id === serverId);
+          if (server) {
+            void syncRemoteArchive(serverId, {
+              baseUrl: server.baseUrl,
+              token: server.token,
+            }).then(() => {
+              void queryClient.invalidateQueries({ queryKey: ['projects'] });
+              void queryClient.invalidateQueries({
+                queryKey: ['observations'],
+              });
+              void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+            });
+          }
         }}
       />
     </>

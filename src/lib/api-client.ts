@@ -47,10 +47,27 @@ export class ApiError extends Error {
 // ---------------------------------------------------------------------------
 
 function getBaseUrl(config?: RequestConfig): string {
-  if (config?.baseUrl) return config.baseUrl;
+  if (config?.baseUrl) {
+    // In development (but not in test environments), route remote archive
+    // requests through the Vite proxy to avoid CORS issues and HTML
+    // responses from remote servers.
+    if (import.meta.env.DEV && !import.meta.env.VITEST) {
+      return '/api';
+    }
+    return config.baseUrl;
+  }
   const { baseUrl } = useAuthStore.getState();
   if (baseUrl) return baseUrl;
   return window.location.origin;
+}
+
+function getExtraHeaders(config?: RequestConfig): Record<string, string> {
+  // In development (but not in test environments), pass the real target URL
+  // via a custom header so the Vite proxy can route to the correct server.
+  if (import.meta.env.DEV && !import.meta.env.VITEST && config?.baseUrl) {
+    return { 'x-target-url': config.baseUrl };
+  }
+  return {};
 }
 
 function getAuthHeaders(config?: RequestConfig): Record<string, string> {
@@ -106,7 +123,9 @@ async function handleResponse<T>(
 export const apiClient = {
   async getServerInfo(config?: RequestConfig) {
     try {
-      const response = await fetch(`${getBaseUrl(config)}/info`);
+      const response = await fetch(`${getBaseUrl(config)}/info`, {
+        headers: { ...getExtraHeaders(config) },
+      });
       return handleResponse(response, serverInfoResponseSchema, config);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
@@ -116,7 +135,9 @@ export const apiClient = {
 
   async healthCheck(config?: RequestConfig): Promise<boolean> {
     try {
-      const response = await fetch(`${getBaseUrl(config)}/healthcheck`);
+      const response = await fetch(`${getBaseUrl(config)}/healthcheck`, {
+        headers: { ...getExtraHeaders(config) },
+      });
       return response.status === 200;
     } catch {
       return false;
@@ -126,7 +147,7 @@ export const apiClient = {
   async getProjects(config?: RequestConfig) {
     try {
       const response = await fetch(`${getBaseUrl(config)}/projects`, {
-        headers: { ...getAuthHeaders(config) },
+        headers: { ...getAuthHeaders(config), ...getExtraHeaders(config) },
       });
       return handleResponse(response, projectsResponseSchema, config);
     } catch (error) {
@@ -139,7 +160,7 @@ export const apiClient = {
     try {
       const response = await fetch(
         `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}/observations`,
-        { headers: { ...getAuthHeaders(config) } },
+        { headers: { ...getAuthHeaders(config), ...getExtraHeaders(config) } },
       );
       return handleResponse(response, observationsResponseSchema, config);
     } catch (error) {
@@ -152,7 +173,7 @@ export const apiClient = {
     try {
       const response = await fetch(
         `${getBaseUrl(config)}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
-        { headers: { ...getAuthHeaders(config) } },
+        { headers: { ...getAuthHeaders(config), ...getExtraHeaders(config) } },
       );
       return handleResponse(response, alertsResponseSchema, config);
     } catch (error) {
@@ -174,6 +195,7 @@ export const apiClient = {
           headers: {
             'Content-Type': 'application/json',
             ...getAuthHeaders(config),
+            ...getExtraHeaders(config),
           },
           body: JSON.stringify(body),
         },

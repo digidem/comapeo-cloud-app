@@ -40,13 +40,17 @@ export interface AuthState {
     label: string;
     baseUrl: string;
     token: string;
-  }) => Promise<void>;
+  }) => Promise<string>;
   removeServer: (id: string) => Promise<void>;
   setActiveServer: (id: string | null) => void;
   updateServerStatus: (
     id: string,
     status: RemoteArchiveServer['status'],
     errorMessage?: string,
+  ) => Promise<void>;
+  updateServer: (
+    id: string,
+    updates: { label?: string; baseUrl?: string; token?: string },
   ) => Promise<void>;
   clearAll: () => void;
 
@@ -88,6 +92,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set((state) => ({
       servers: [...state.servers, newServer],
     }));
+    return server.id;
   },
 
   removeServer: async (id) => {
@@ -132,6 +137,23 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
               status,
               ...(errorMessage !== undefined ? { errorMessage } : {}),
               ...(now ? { lastSyncedAt: now } : {}),
+            }
+          : s,
+      ),
+    }));
+  },
+
+  updateServer: async (id, updates) => {
+    await updateRemoteServer(id, {
+      ...(updates.label !== undefined ? { label: updates.label } : {}),
+      ...(updates.baseUrl !== undefined ? { baseUrl: updates.baseUrl } : {}),
+    });
+    set((state) => ({
+      servers: state.servers.map((s) =>
+        s.id === id
+          ? {
+              ...s,
+              ...updates,
             }
           : s,
       ),

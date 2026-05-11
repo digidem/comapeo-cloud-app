@@ -85,6 +85,17 @@ describe('tier-aware connection store', () => {
     expect(state.servers[0]!.token).toBe('my-token');
   });
 
+  it('addServer returns the created server ID', async () => {
+    const serverId = await useAuthStore.getState().addServer({
+      label: 'Return Test',
+      baseUrl: 'https://return.example.com',
+      token: 'my-token',
+    });
+
+    const state = useAuthStore.getState();
+    expect(serverId).toBe(state.servers[0]!.id);
+  });
+
   it('removes a remote archive server', async () => {
     await useAuthStore.getState().addServer({
       label: 'To Remove',

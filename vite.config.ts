@@ -22,6 +22,46 @@ const vendorChunks: Record<string, string[]> = {
 };
 
 export default defineConfig({
+  server: {
+    proxy: {
+      // Proxy /api requests to the archive server in development to avoid CORS issues.
+      // The api-client prepends /api when baseUrl is a remote URL in dev mode.
+      // The target is determined dynamically via the x-target-url header.
+      '/api': {
+        target: 'http://placeholder',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        secure: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            // Read the target URL from the custom header set by the api-client
+            const targetUrl = req.headers['x-target-url'] as string | undefined;
+            if (targetUrl) {
+              try {
+                const parsed = new URL(targetUrl);
+                proxyReq.setHeader('host', parsed.host);
+              } catch {
+                // Invalid URL, use default
+              }
+            }
+          });
+        },
+        router: (req) => {
+          // Dynamically route based on the x-target-url header
+          const targetUrl = req.headers['x-target-url'] as string | undefined;
+          if (targetUrl) {
+            try {
+              const parsed = new URL(targetUrl);
+              return `${parsed.protocol}//${parsed.host}`;
+            } catch {
+              // Invalid URL, fall through to default
+            }
+          }
+          return 'http://placeholder';
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -40,6 +80,18 @@ export default defineConfig({
               cacheName: 'api-cache',
               expiration: {
                 maxAgeSeconds: 60 * 60 * 24, // 24 hours
+              },
+              networkTimeoutSeconds: 10,
+            },
+          },
+          {
+            urlPattern: ({ url, sameOrigin }) =>
+              !sameOrigin && url.protocol === 'https:',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'remote-api-cache',
+              expiration: {
+                maxAgeSeconds: 60 * 60 * 24,
               },
               networkTimeoutSeconds: 10,
             },

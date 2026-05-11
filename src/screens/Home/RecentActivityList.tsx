@@ -44,6 +44,7 @@ export function RecentActivityList({ activities }: RecentActivityListProps) {
           activities.map((activity, index) => (
             <div
               key={activity.id}
+              data-activity-item
               className={`flex items-start gap-4 p-5 ${index !== activities.length - 1 ? 'border-b border-border' : ''}`}
             >
               <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
@@ -98,7 +99,7 @@ export function RecentActivityList({ activities }: RecentActivityListProps) {
                 )}
               </div>
               <div className="flex flex-1 flex-col">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-start sm:items-center justify-between gap-2">
                   <span className="font-semibold text-text">
                     {activity.title}
                   </span>

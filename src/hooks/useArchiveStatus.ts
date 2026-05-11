@@ -49,7 +49,7 @@ export function useArchiveStatus(): ArchiveStatus {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [servers]);
 
   const mapped: ArchiveServerStatus[] = useMemo(
     () =>

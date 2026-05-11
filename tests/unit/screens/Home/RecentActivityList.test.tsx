@@ -57,7 +57,9 @@ describe('RecentActivityList', () => {
       />,
     );
     // record SVG contains a <polyline> element
-    const container = screen.getByText('Record').closest('.flex.items-start');
+    const container = screen
+      .getByText('Record')
+      .closest('[data-activity-item]');
     expect(container?.querySelector('polyline')).toBeInTheDocument();
   });
 
@@ -76,7 +78,7 @@ describe('RecentActivityList', () => {
       />,
     );
     // map SVG contains a <polygon> element
-    const container = screen.getByText('Map').closest('.flex.items-start');
+    const container = screen.getByText('Map').closest('[data-activity-item]');
     expect(container?.querySelector('polygon')).toBeInTheDocument();
   });
 
@@ -95,7 +97,7 @@ describe('RecentActivityList', () => {
       />,
     );
     // sync SVG does NOT contain polyline or polygon, but has multiple <path> elements
-    const container = screen.getByText('Sync').closest('.flex.items-start');
+    const container = screen.getByText('Sync').closest('[data-activity-item]');
     const paths = container?.querySelectorAll('svg path');
     expect(paths?.length).toBeGreaterThanOrEqual(2);
   });
@@ -114,7 +116,7 @@ describe('RecentActivityList', () => {
     );
 
     // eslint-disable-next-line testing-library/no-container
-    const items = container.querySelectorAll('.flex.items-start');
+    const items = container.querySelectorAll('[data-activity-item]');
     expect(items).toHaveLength(3);
 
     // First item should have border-b

@@ -621,4 +621,75 @@ describe('HomeScreen', () => {
     const skeletons = screen.getAllByTestId('skeleton');
     expect(skeletons.length).toBeGreaterThan(0);
   });
+
+  // Archive Servers sidebar section tests
+
+  it('shows "Archive Servers" section header in sidebar', async () => {
+    renderWithShell(<HomeScreen />);
+    await waitFor(() => {
+      expect(screen.getByText('Archive Servers')).toBeInTheDocument();
+    });
+  });
+
+  it('shows "Add Server" button in sidebar', async () => {
+    renderWithShell(<HomeScreen />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Add Server' }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('clicking "Add Server" opens the dialog', async () => {
+    const user = userEvent.setup();
+    renderWithShell(<HomeScreen />);
+
+    await user.click(await screen.findByRole('button', { name: 'Add Server' }));
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Add Archive Server' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows archive status cards when servers exist', async () => {
+    mockUseArchiveStatus.mockReturnValue({
+      servers: [
+        {
+          id: 's1',
+          label: 'Test Server',
+          baseUrl: 'https://archive.test',
+          isSyncing: false,
+          lastSyncedAt: null,
+          error: null,
+          hasCredentials: true,
+        },
+      ],
+      anyError: false,
+      anySyncing: false,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await waitFor(() => {
+      // ArchiveStatusCard renders the server label
+      expect(screen.getByText('Test Server')).toBeInTheDocument();
+    });
+  });
+
+  it('does not render archive status cards when no servers', async () => {
+    mockUseArchiveStatus.mockReturnValue({
+      servers: [],
+      anyError: false,
+      anySyncing: false,
+    });
+
+    renderWithShell(<HomeScreen />);
+
+    // The section header should exist, but no status cards
+    await waitFor(() => {
+      expect(screen.getByText('Archive Servers')).toBeInTheDocument();
+    });
+    // No "Sync Now" buttons (which would indicate status cards)
+    expect(screen.queryByText('Sync Now')).not.toBeInTheDocument();
+  });
 });

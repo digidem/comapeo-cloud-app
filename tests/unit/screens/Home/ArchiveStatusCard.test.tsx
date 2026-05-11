@@ -1,31 +1,8 @@
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
-import React from 'react';
-
 import type { ArchiveServerStatus } from '@/hooks/useArchiveStatus';
 import { ArchiveStatusCard } from '@/screens/Home/ArchiveStatusCard';
-
-vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@tanstack/react-router')>();
-  return {
-    ...actual,
-    Link: ({
-      to,
-      children,
-      className,
-    }: {
-      to: string;
-      children: React.ReactNode;
-      className?: string;
-    }) => (
-      <a href={to} className={className}>
-        {children}
-      </a>
-    ),
-  };
-});
 
 function makeServer(
   overrides: Partial<ArchiveServerStatus> = {},
@@ -42,60 +19,105 @@ function makeServer(
   };
 }
 
+const noop = vi.fn();
+
 describe('ArchiveStatusCard', () => {
   it('renders server label', () => {
-    render(<ArchiveStatusCard server={makeServer()} onSync={vi.fn()} />);
+    render(
+      <ArchiveStatusCard
+        server={makeServer()}
+        isSelected={false}
+        onSelect={noop}
+      />,
+    );
     expect(screen.getByText('My Archive Server')).toBeDefined();
   });
 
-  it('shows sync button when idle', () => {
-    render(<ArchiveStatusCard server={makeServer()} onSync={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /sync/i })).toBeDefined();
-  });
-
-  it('calls onSync with server id when sync button clicked', async () => {
-    const user = userEvent.setup();
-    const onSync = vi.fn();
-
-    render(<ArchiveStatusCard server={makeServer()} onSync={onSync} />);
-    await user.click(screen.getByRole('button', { name: /sync/i }));
-
-    expect(onSync).toHaveBeenCalledWith('srv-1');
-  });
-
-  it('shows syncing state when isSyncing', () => {
+  it('shows green dot when status is ok', () => {
     render(
       <ArchiveStatusCard
-        server={makeServer({ isSyncing: true })}
-        onSync={vi.fn()}
+        server={makeServer({ lastSyncedAt: '2025-01-01' })}
+        isSelected={false}
+        onSelect={noop}
       />,
     );
-    const syncingElements = screen.getAllByText(/syncing/i);
-    expect(syncingElements.length).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: /sync now/i })).toBeNull();
+    const dot = screen.getByRole('button').querySelector('span');
+    expect(dot?.className).toContain('bg-success');
   });
 
-  it('shows error badge and message when error', () => {
+  it('shows red dot when status is error', () => {
     render(
       <ArchiveStatusCard
         server={makeServer({ error: 'Connection refused' })}
-        onSync={vi.fn()}
+        isSelected={false}
+        onSelect={noop}
       />,
     );
-    expect(screen.getByText('Connection refused')).toBeDefined();
-    const badge = screen.getByText(/error/i);
-    expect(badge).toBeDefined();
+    const dot = screen.getByRole('button').querySelector('span');
+    expect(dot?.className).toContain('bg-error');
   });
 
-  it('shows credentials unavailable state with settings link', () => {
+  it('shows blue dot when syncing', () => {
     render(
       <ArchiveStatusCard
-        server={makeServer({ hasCredentials: false })}
-        onSync={vi.fn()}
+        server={makeServer({ isSyncing: true })}
+        isSelected={false}
+        onSelect={noop}
       />,
     );
-    expect(screen.getByText(/credentials unavailable/i)).toBeDefined();
-    const link = screen.getByRole('link');
-    expect(link.getAttribute('href')).toContain('/settings');
+    const dot = screen.getByRole('button').querySelector('span');
+    expect(dot?.className).toContain('bg-info');
+  });
+
+  it('shows gray dot when idle', () => {
+    render(
+      <ArchiveStatusCard
+        server={makeServer()}
+        isSelected={false}
+        onSelect={noop}
+      />,
+    );
+    const dot = screen.getByRole('button').querySelector('span');
+    expect(dot?.className).toContain('bg-tag-neutral-text');
+  });
+
+  it('calls onSelect with server id when clicked', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+
+    render(
+      <ArchiveStatusCard
+        server={makeServer()}
+        isSelected={false}
+        onSelect={onSelect}
+      />,
+    );
+    await user.click(screen.getByRole('button'));
+
+    expect(onSelect).toHaveBeenCalledWith('srv-1');
+  });
+
+  it('applies selected styles when isSelected is true', () => {
+    render(
+      <ArchiveStatusCard
+        server={makeServer()}
+        isSelected={true}
+        onSelect={noop}
+      />,
+    );
+    const btn = screen.getByRole('button');
+    expect(btn.className).toContain('bg-primary-soft');
+  });
+
+  it('does not apply selected styles when isSelected is false', () => {
+    render(
+      <ArchiveStatusCard
+        server={makeServer()}
+        isSelected={false}
+        onSelect={noop}
+      />,
+    );
+    const btn = screen.getByRole('button');
+    expect(btn.className).not.toContain('bg-primary-soft');
   });
 });
