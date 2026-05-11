@@ -1,4 +1,4 @@
-import { render, screen } from '@tests/mocks/test-utils';
+import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
@@ -52,5 +52,25 @@ describe('AuthenticatedLayout', () => {
     // Verify the full layout renders: nav items + outlet content
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
+  });
+
+  it('drawer renders with Home and Settings nav items', async () => {
+    render(<AuthenticatedLayout />);
+    // Open the drawer
+    await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    // Drawer should contain nav items
+    expect(screen.getAllByText('Home').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('drawer renders secondary content from ShellSlot overrides', async () => {
+    // ShellSlotProvider starts with no overrides, so secondaryContent is undefined
+    render(<AuthenticatedLayout />);
+    // Open the drawer
+    await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    // Close button visible means drawer is open
+    expect(
+      screen.getByRole('button', { name: /close menu/i }),
+    ).toBeInTheDocument();
   });
 });

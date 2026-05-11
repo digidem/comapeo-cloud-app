@@ -38,26 +38,95 @@
   "home.activity.recentTitle": {
     "defaultMessage": "Recent Activity"
   },
+  "home.archive.addServer": {
+    "defaultMessage": "Add Server"
+  },
+  "home.archive.confirmRemove.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "home.archive.confirmRemove.confirm": {
+    "defaultMessage": "Remove"
+  },
+  "home.archive.confirmRemove.description": {
+    "defaultMessage": "Are you sure you want to remove \"{name}\"? This action cannot be undone."
+  },
+  "home.archive.confirmRemove.title": {
+    "defaultMessage": "Remove Server"
+  },
   "home.archive.credentialsUnavailable": {
     "defaultMessage": "Credentials unavailable."
   },
-  "home.archive.lastSynced": {
-    "defaultMessage": "Last synced: {date}"
-  },
-  "home.archive.settingsLink": {
-    "defaultMessage": "Go to Settings"
-  },
-  "home.archive.status.error": {
+  "home.archive.detail.error": {
     "defaultMessage": "Error"
   },
-  "home.archive.status.idle": {
-    "defaultMessage": "Idle"
+  "home.archive.detail.lastSynced": {
+    "defaultMessage": "Last synced"
   },
-  "home.archive.status.ok": {
-    "defaultMessage": "OK"
+  "home.archive.detail.never": {
+    "defaultMessage": "Never"
   },
-  "home.archive.status.syncing": {
-    "defaultMessage": "Syncing"
+  "home.archive.detail.status": {
+    "defaultMessage": "Status"
+  },
+  "home.archive.detail.url": {
+    "defaultMessage": "URL"
+  },
+  "home.archive.dialog.add": {
+    "defaultMessage": "Add"
+  },
+  "home.archive.dialog.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "home.archive.dialog.duplicateServer": {
+    "defaultMessage": "This server has already been added"
+  },
+  "home.archive.dialog.error": {
+    "defaultMessage": "Failed to add server"
+  },
+  "home.archive.dialog.label": {
+    "defaultMessage": "Label (optional)"
+  },
+  "home.archive.dialog.labelPlaceholder": {
+    "defaultMessage": "e.g. Production Server"
+  },
+  "home.archive.dialog.title": {
+    "defaultMessage": "Add Archive Server"
+  },
+  "home.archive.dialog.token": {
+    "defaultMessage": "Bearer Token"
+  },
+  "home.archive.dialog.tokenPlaceholder": {
+    "defaultMessage": "Enter bearer token"
+  },
+  "home.archive.dialog.tokenRequired": {
+    "defaultMessage": "Bearer Token is required"
+  },
+  "home.archive.dialog.url": {
+    "defaultMessage": "Server URL"
+  },
+  "home.archive.dialog.urlPlaceholder": {
+    "defaultMessage": "https://archive.example.com"
+  },
+  "home.archive.dialog.urlRequired": {
+    "defaultMessage": "Server URL is required"
+  },
+  "home.archive.edit": {
+    "defaultMessage": "Edit"
+  },
+  "home.archive.editDialog.error": {
+    "defaultMessage": "Failed to update server"
+  },
+  "home.archive.editDialog.save": {
+    "defaultMessage": "Save"
+  },
+  "home.archive.editDialog.title": {
+    "defaultMessage": "Edit Archive Server"
+  },
+  "home.archive.remove": {
+    "defaultMessage": "Remove"
+  },
+  "home.archive.sectionTitle": {
+    "defaultMessage": "Archive Servers"
   },
   "home.archive.sync": {
     "defaultMessage": "Sync Now"
@@ -245,26 +314,8 @@
   "home.untitledProject": {
     "defaultMessage": "Untitled Project"
   },
-  "settings.addServer": {
-    "defaultMessage": "Add Server"
-  },
-  "settings.archiveServers": {
-    "defaultMessage": "Archive Servers"
-  },
-  "settings.remove": {
-    "defaultMessage": "Remove"
-  },
-  "settings.serverToken": {
-    "defaultMessage": "Bearer Token"
-  },
-  "settings.serverUrl": {
-    "defaultMessage": "Server URL"
-  },
-  "settings.sync": {
-    "defaultMessage": "Sync Now"
-  },
-  "settings.syncing": {
-    "defaultMessage": "Syncing..."
+  "menu.theme": {
+    "defaultMessage": "Theme"
   },
   "settings.title": {
     "defaultMessage": "Settings"

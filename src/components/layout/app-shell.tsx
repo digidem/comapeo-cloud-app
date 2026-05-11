@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ContextualSubnav } from '@/components/layout/contextual-subnav';
+import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer';
 import { PrimaryNav } from '@/components/layout/primary-nav';
 import { Topbar } from '@/components/layout/topbar';
 
@@ -29,12 +31,25 @@ function AppShell({
   secondaryContent,
   children,
 }: AppShellProps) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const prevNavPathRef = useRef(activeNavPath);
+
+  // Close drawer on route change (handles browser back/forward)
+  // Read the previous value before updating the ref, all within one effect
+  useEffect(() => {
+    if (prevNavPathRef.current !== activeNavPath) {
+      setMobileMenuOpen(false);
+      prevNavPathRef.current = activeNavPath;
+    }
+  }, [activeNavPath]);
+
   return (
     <div className="flex h-screen flex-col">
       <Topbar
         title={topbarTitle}
         workspaceName={topbarWorkspaceName}
         modeLabel={topbarModeLabel}
+        onMenuClick={() => setMobileMenuOpen(true)}
       >
         {topbarActions}
       </Topbar>
@@ -50,10 +65,18 @@ function AppShell({
             {subnavContent}
           </ContextualSubnav>
         )}
-        <main className="flex-1 overflow-y-auto bg-surface p-4 lg:p-6">
+        <main className="flex-1 overflow-y-auto bg-surface p-3 sm:p-4 lg:p-6">
           {children}
         </main>
       </div>
+      <MobileNavDrawer
+        open={mobileMenuOpen}
+        onOpenChange={setMobileMenuOpen}
+        navItems={navItems}
+        activePath={activeNavPath}
+        secondaryContent={secondaryContent}
+        onNavigate={() => setMobileMenuOpen(false)}
+      />
     </div>
   );
 }
