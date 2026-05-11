@@ -76,7 +76,7 @@ export function CoverageSummary({
             aria-pressed={unit === u}
             aria-label={intl.formatMessage(messages[UNIT_MESSAGES[u]])}
             onClick={() => onUnitChange(u)}
-            className={`rounded-md px-3 py-1 text-sm font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+            className={`rounded-md px-3 py-1 min-h-[44px] text-sm font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
               unit === u
                 ? 'bg-primary text-white'
                 : 'bg-tag-neutral-bg text-tag-neutral-text hover:bg-surface'

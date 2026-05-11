@@ -63,7 +63,7 @@ export function ProjectBannerCard({
       {/* Content */}
       <div className="relative z-10 flex flex-col p-6 pt-24 md:p-8 md:pt-32">
         <div className="mb-8 max-w-2xl">
-          <h2 className="mb-2 text-3xl font-bold text-text md:text-4xl tracking-tight">
+          <h2 className="mb-2 text-2xl font-bold text-text md:text-3xl lg:text-4xl tracking-tight">
             {projectName}
           </h2>
           <p className="text-text-muted md:text-lg max-w-lg">
@@ -73,7 +73,7 @@ export function ProjectBannerCard({
 
         {/* Stats Pills */}
         <div className="flex flex-wrap gap-4 mt-auto">
-          <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-6 py-2.5 shadow-pill">
+          <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-4 py-2 sm:px-6 sm:py-2.5 shadow-pill">
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-0.5">
               {intl.formatMessage(messages.territoryArea)}
             </span>
@@ -81,7 +81,7 @@ export function ProjectBannerCard({
           </div>
 
           {lastSync && (
-            <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-6 py-2.5 shadow-pill">
+            <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-4 py-2 sm:px-6 sm:py-2.5 shadow-pill">
               <span className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-0.5">
                 {intl.formatMessage(messages.lastSync)}
               </span>
@@ -92,7 +92,7 @@ export function ProjectBannerCard({
             </div>
           )}
 
-          <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-6 py-2.5 shadow-pill">
+          <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-4 py-2 sm:px-6 sm:py-2.5 shadow-pill">
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-0.5">
               {intl.formatMessage(messages.teamMembers)}
             </span>

@@ -226,4 +226,21 @@ describe('AreaMap', () => {
       'line-opacity': 0.95,
     });
   });
+
+  it('container has responsive height classes', () => {
+    const { container } = render(<AreaMap />);
+    const mapContainer = container.firstElementChild as HTMLElement;
+    expect(mapContainer.className).toContain('h-[300px]');
+    expect(mapContainer.className).toContain('sm:h-[400px]');
+    expect(mapContainer.className).toContain('lg:h-[600px]');
+  });
+
+  it('overlay container exists and renders children', () => {
+    render(
+      <AreaMap>
+        <div data-testid="overlay-child">Overlay content</div>
+      </AreaMap>,
+    );
+    expect(screen.getByTestId('overlay-child')).toBeInTheDocument();
+  });
 });

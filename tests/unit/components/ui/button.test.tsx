@@ -110,4 +110,22 @@ describe('Button', () => {
     render(<Button type="submit">Submit</Button>);
     expect(screen.getByRole('button')).toHaveAttribute('type', 'submit');
   });
+
+  it('sm size has min-h-[44px] class for touch target', () => {
+    render(<Button size="sm">Small</Button>);
+    const btn = screen.getByRole('button');
+    expect(btn.className).toContain('min-h-[44px]');
+  });
+
+  it('md (default) size has min-h-[44px] class for touch target', () => {
+    render(<Button>Default</Button>);
+    const btn = screen.getByRole('button');
+    expect(btn.className).toContain('min-h-[44px]');
+  });
+
+  it('lg size does NOT have min-h-[44px] class', () => {
+    render(<Button size="lg">Large</Button>);
+    const btn = screen.getByRole('button');
+    expect(btn.className).not.toContain('min-h-[44px]');
+  });
 });

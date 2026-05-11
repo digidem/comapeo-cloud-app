@@ -156,7 +156,7 @@ export function AreaMap({
   }, [fitMapToBounds, mapBounds]);
 
   return (
-    <div className="relative h-[600px] w-full overflow-hidden rounded-card border border-border/15 shadow-card">
+    <div className="relative h-[300px] w-full overflow-hidden rounded-card border border-border/15 shadow-card sm:h-[400px] lg:h-[600px]">
       <Map
         ref={mapRef}
         initialViewState={{
@@ -205,7 +205,7 @@ export function AreaMap({
       </Map>
 
       {/* Settings overlay menu */}
-      <div className="absolute right-4 top-4 z-10 flex max-h-[calc(100%-2rem)] w-96 flex-col gap-4 overflow-y-auto pr-2 pb-4">
+      <div className="absolute z-10 flex flex-col gap-4 overflow-y-auto bottom-0 right-0 left-0 w-full max-h-[50vh] p-4 pb-6 rounded-t-card border-t border-border/20 bg-surface-card/95 backdrop-blur-md shadow-elevated lg:static lg:bottom-auto lg:right-4 lg:top-4 lg:left-auto lg:w-96 lg:max-h-[calc(100%-2rem)] lg:p-5 lg:pb-4 lg:rounded-card lg:border lg:border-border/20">
         {children}
       </div>
     </div>
