@@ -28,6 +28,7 @@ describe('ArchiveStatusCard', () => {
         server={makeServer()}
         isSelected={false}
         onSelect={noop}
+        onRemove={noop}
       />,
     );
     expect(screen.getByText('My Archive Server')).toBeDefined();
@@ -39,9 +40,11 @@ describe('ArchiveStatusCard', () => {
         server={makeServer({ lastSyncedAt: '2025-01-01' })}
         isSelected={false}
         onSelect={noop}
+        onRemove={noop}
       />,
     );
-    const dot = screen.getByRole('button').querySelector('span');
+    const card = screen.getByTestId('archive-status-card');
+    const dot = card.querySelector('span');
     expect(dot?.className).toContain('bg-success');
   });
 
@@ -51,9 +54,11 @@ describe('ArchiveStatusCard', () => {
         server={makeServer({ error: 'Connection refused' })}
         isSelected={false}
         onSelect={noop}
+        onRemove={noop}
       />,
     );
-    const dot = screen.getByRole('button').querySelector('span');
+    const card = screen.getByTestId('archive-status-card');
+    const dot = card.querySelector('span');
     expect(dot?.className).toContain('bg-error');
   });
 
@@ -63,9 +68,11 @@ describe('ArchiveStatusCard', () => {
         server={makeServer({ isSyncing: true })}
         isSelected={false}
         onSelect={noop}
+        onRemove={noop}
       />,
     );
-    const dot = screen.getByRole('button').querySelector('span');
+    const card = screen.getByTestId('archive-status-card');
+    const dot = card.querySelector('span');
     expect(dot?.className).toContain('bg-info');
   });
 
@@ -75,13 +82,15 @@ describe('ArchiveStatusCard', () => {
         server={makeServer()}
         isSelected={false}
         onSelect={noop}
+        onRemove={noop}
       />,
     );
-    const dot = screen.getByRole('button').querySelector('span');
+    const card = screen.getByTestId('archive-status-card');
+    const dot = card.querySelector('span');
     expect(dot?.className).toContain('bg-tag-neutral-text');
   });
 
-  it('calls onSelect with server id when clicked', async () => {
+  it('calls onSelect with server id when card is clicked', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
 
@@ -90,9 +99,10 @@ describe('ArchiveStatusCard', () => {
         server={makeServer()}
         isSelected={false}
         onSelect={onSelect}
+        onRemove={noop}
       />,
     );
-    await user.click(screen.getByRole('button'));
+    await user.click(screen.getByTestId('archive-status-card'));
 
     expect(onSelect).toHaveBeenCalledWith('srv-1');
   });
@@ -103,10 +113,11 @@ describe('ArchiveStatusCard', () => {
         server={makeServer()}
         isSelected={true}
         onSelect={noop}
+        onRemove={noop}
       />,
     );
-    const btn = screen.getByRole('button');
-    expect(btn.className).toContain('bg-primary-soft');
+    const card = screen.getByTestId('archive-status-card');
+    expect(card.className).toContain('bg-primary-soft');
   });
 
   it('does not apply selected styles when isSelected is false', () => {
@@ -115,9 +126,66 @@ describe('ArchiveStatusCard', () => {
         server={makeServer()}
         isSelected={false}
         onSelect={noop}
+        onRemove={noop}
       />,
     );
-    const btn = screen.getByRole('button');
-    expect(btn.className).not.toContain('bg-primary-soft');
+    const card = screen.getByTestId('archive-status-card');
+    expect(card.className).not.toContain('bg-primary-soft');
+  });
+
+  it('renders edit and remove buttons', () => {
+    render(
+      <ArchiveStatusCard
+        server={makeServer()}
+        isSelected={false}
+        onSelect={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(screen.getByText('Edit')).toBeDefined();
+    expect(screen.getByText('Remove')).toBeDefined();
+  });
+
+  it('opens confirmation dialog on remove click', async () => {
+    const user = userEvent.setup();
+    render(
+      <ArchiveStatusCard
+        server={makeServer()}
+        isSelected={false}
+        onSelect={noop}
+        onRemove={noop}
+      />,
+    );
+
+    await user.click(screen.getByText('Remove'));
+
+    expect(
+      screen.getByText(
+        'Are you sure you want to remove "My Archive Server"? This action cannot be undone.',
+      ),
+    ).toBeDefined();
+  });
+
+  it('calls onRemove when remove is confirmed', async () => {
+    const user = userEvent.setup();
+    const onRemove = vi.fn();
+
+    render(
+      <ArchiveStatusCard
+        server={makeServer()}
+        isSelected={false}
+        onSelect={noop}
+        onRemove={onRemove}
+      />,
+    );
+
+    // Click remove to open confirmation dialog
+    await user.click(screen.getByText('Remove'));
+
+    // Click the confirm button in the dialog (the last "Remove" button)
+    const removeButtons = screen.getAllByText('Remove');
+    await user.click(removeButtons[removeButtons.length - 1]!);
+
+    expect(onRemove).toHaveBeenCalledWith('srv-1');
   });
 });
