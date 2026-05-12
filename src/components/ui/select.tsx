@@ -1,6 +1,33 @@
 import * as SelectPrimitive from '@radix-ui/react-select';
 
-import { type ReactNode } from 'react';
+import { type ReactNode, createContext, useContext } from 'react';
+
+/** Context to allow nested components (e.g. inside a Dialog) to
+ *  provide a container element for Select dropdown portals.
+ *  This prevents the Dialog's DismissableLayer from intercepting
+ *  clicks on Select options rendered outside the Dialog content. */
+const SelectPortalContext = createContext<HTMLElement | null>(null);
+
+/** Provider that tells child Selects which DOM element to portal into. */
+function SelectPortalProvider({
+  container,
+  children,
+}: {
+  container: HTMLElement | null;
+  children: ReactNode;
+}) {
+  return (
+    <SelectPortalContext.Provider value={container}>
+      {children}
+    </SelectPortalContext.Provider>
+  );
+}
+
+/** Hook for Select to retrieve an explicit portal container. */
+function useSelectPortalContainer(): HTMLElement | undefined {
+  const container = useContext(SelectPortalContext);
+  return container ?? undefined;
+}
 
 interface SelectProps {
   value?: string;
@@ -23,6 +50,7 @@ function SelectRoot({
   disabled,
   children,
 }: SelectProps) {
+  const portalContainer = useSelectPortalContainer();
   return (
     <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
       <SelectPrimitive.Trigger
@@ -46,7 +74,7 @@ function SelectRoot({
           </svg>
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
-      <SelectPrimitive.Portal>
+      <SelectPrimitive.Portal container={portalContainer}>
         <SelectPrimitive.Content
           position="popper"
           sideOffset={4}
@@ -77,5 +105,5 @@ const Select = Object.assign(SelectRoot, {
   Item: SelectItem,
 });
 
-export { Select };
+export { Select, SelectPortalProvider };
 export type { SelectProps };
