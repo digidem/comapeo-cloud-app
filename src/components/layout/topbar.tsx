@@ -18,14 +18,14 @@ function Topbar({
   return (
     <header
       role="banner"
-      className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between bg-primary-navy px-4"
+      className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between border-b border-border bg-white px-4"
     >
       <div className="flex items-center gap-3">
         {onMenuClick && (
           <button
             type="button"
             onClick={onMenuClick}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-white hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white lg:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-text-muted hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-white lg:hidden"
             aria-label="Open menu"
           >
             <svg
@@ -45,16 +45,16 @@ function Topbar({
             </svg>
           </button>
         )}
-        <h1 className="truncate max-w-[140px] text-lg font-semibold text-white sm:max-w-[200px] lg:max-w-none">
+        <h1 className="truncate max-w-[140px] text-lg font-semibold text-text sm:max-w-[200px] lg:max-w-none">
           {title}
         </h1>
         {workspaceName && (
-          <span className="hidden bg-white text-primary-navy rounded-full px-3 py-0.5 text-sm font-medium sm:inline-flex">
+          <span className="hidden bg-primary-soft text-primary rounded-full px-3 py-0.5 text-sm font-medium sm:inline-flex">
             {workspaceName}
           </span>
         )}
         {modeLabel && (
-          <span className="hidden bg-white/20 text-white rounded-full px-3 py-0.5 text-xs font-medium md:inline-flex">
+          <span className="hidden bg-surface-container-low text-text-muted rounded-full px-3 py-0.5 text-xs font-medium md:inline-flex">
             {modeLabel}
           </span>
         )}
@@ -62,7 +62,7 @@ function Topbar({
       <div className="flex items-center gap-2">
         {children && (
           <>
-            <div className="h-4 w-px bg-white/20" />
+            <div className="h-4 w-px bg-border" />
             {children}
           </>
         )}

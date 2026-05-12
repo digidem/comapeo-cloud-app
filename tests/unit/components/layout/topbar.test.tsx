@@ -24,10 +24,10 @@ describe('Topbar', () => {
     expect(topbar.className).toContain('h-14');
   });
 
-  it('has navy background', () => {
+  it('has white background', () => {
     render(<Topbar title="Test" />);
     const topbar = screen.getByRole('banner');
-    expect(topbar.className).toContain('bg-primary-navy');
+    expect(topbar.className).toContain('bg-white');
   });
 
   it('renders workspace badge when workspaceName provided', () => {

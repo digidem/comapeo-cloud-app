@@ -18,7 +18,7 @@ function PrimaryNav({ items, activePath }: PrimaryNavProps) {
     <nav
       role="navigation"
       aria-label="Primary navigation"
-      className="hidden w-[76px] flex-col items-center border-r border-border bg-surface-card pt-4 lg:flex"
+      className="hidden w-[76px] flex-col items-center border-r border-white/10 bg-primary-navy pt-4 lg:flex"
     >
       {items.map((item) => {
         const isActive = activePath === item.path;
@@ -28,10 +28,10 @@ function PrimaryNav({ items, activePath }: PrimaryNavProps) {
             to={item.path}
             aria-label={item.label}
             aria-current={isActive ? 'page' : undefined}
-            className={`flex w-[54px] h-[54px] items-center justify-center rounded-xl ${
+            className={`flex w-[54px] h-[54px] items-center justify-center rounded-xl focus-visible:ring-2 focus-visible:ring-white/40 ${
               isActive
-                ? 'bg-primary-soft text-primary border-l-4 border-primary'
-                : 'text-text hover:text-primary'
+                ? 'bg-white/15 text-white'
+                : 'text-white/60 hover:text-white hover:bg-white/8'
             }`}
           >
             {item.icon}
