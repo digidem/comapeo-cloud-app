@@ -106,7 +106,10 @@ export function SettingsScreen() {
   const onGenerate = useCallback(async (data: GenerateInviteForm) => {
     const hash = await sha256(data.remoteArchiveUrl + data.bearerToken);
     const shortHash = hash.slice(0, 24);
-    setInviteUrl(`${data.remoteArchiveUrl}/invite?hash=${hash}`);
+    const appOrigin = window.location.origin;
+    setInviteUrl(
+      `${appOrigin}/invite?hash=${hash}&url=${encodeURIComponent(data.remoteArchiveUrl)}`,
+    );
     setInviteCode(shortHash);
   }, []);
 
@@ -123,8 +126,10 @@ export function SettingsScreen() {
     [],
   );
 
-  const handleConnect = useCallback(() => {
+  const handleConnect = useCallback(async () => {
     if (useCode.trim()) {
+      // In a real flow, the invite code is the hash — we'd resolve the URL
+      // from the code. For now, we just show the connected state.
       setConnected(useCode.trim());
     }
   }, [useCode]);

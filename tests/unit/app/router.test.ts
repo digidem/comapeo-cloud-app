@@ -4,6 +4,7 @@ import {
   _authenticatedRoute,
   dashboardRoute,
   homeRoute,
+  inviteRoute,
   loginRoute,
   projectsRoute,
   routeTree,
@@ -17,6 +18,7 @@ describe('router', () => {
       // TanStack Router strips leading slash from child route paths
       expect(homeRoute.path).toBe('/');
       expect(loginRoute.path).toBe('login');
+      expect(inviteRoute.path).toBe('invite');
       expect(dashboardRoute.path).toBe('dashboard');
       expect(projectsRoute.path).toBe('projects');
       expect(settingsRoute.path).toBe('settings');
@@ -30,6 +32,7 @@ describe('router', () => {
       const routes = [
         { path: '/', route: homeRoute, name: 'Home' },
         { path: '/login', route: loginRoute, name: 'Login' },
+        { path: '/invite', route: inviteRoute, name: 'Invite' },
         { path: '/dashboard', route: dashboardRoute, name: 'Dashboard' },
         { path: '/projects', route: projectsRoute, name: 'Projects' },
         { path: '/settings', route: settingsRoute, name: 'Settings' },
@@ -60,14 +63,15 @@ describe('router', () => {
       // Root route should be the base of the tree
       expect(routeTree.id).toBe('__root__');
 
-      // Root has two direct children: loginRoute + _authenticatedRoute (layout)
+      // Root has three direct children: loginRoute + inviteRoute + _authenticatedRoute (layout)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const childRoutes = routeTree.children as unknown as any[];
       expect(childRoutes).toBeDefined();
-      expect(childRoutes).toHaveLength(2);
+      expect(childRoutes).toHaveLength(3);
 
       const rootChildIds = childRoutes.map((child) => child.id);
       expect(rootChildIds).toContain('/_authenticated');
+      expect(rootChildIds).toContain('/invite');
 
       // Authenticated screens live under the layout route
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

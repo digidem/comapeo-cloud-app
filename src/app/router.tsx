@@ -11,6 +11,7 @@ import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { ProjectsScreen } from '@/screens/ProjectsScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
+import { InviteScreen } from '@/screens/InviteScreen';
 
 // Context type for future auth integration
 interface RouterContext {
@@ -62,9 +63,16 @@ const settingsRoute = createRoute({
   component: SettingsScreen,
 });
 
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invite',
+  component: InviteScreen,
+});
+
 // Route tree
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  inviteRoute,
   _authenticatedRoute.addChildren([
     homeRoute,
     dashboardRoute,
@@ -86,6 +94,7 @@ export {
   _authenticatedRoute,
   homeRoute,
   loginRoute,
+  inviteRoute,
   dashboardRoute,
   projectsRoute,
   settingsRoute,

@@ -94,9 +94,9 @@ describe('SettingsScreen', () => {
     const inviteCodeLabels = screen.getAllByText('Invite Code');
     expect(inviteCodeLabels.length).toBe(2);
 
-    // Should show invite URL
+    // Should show invite URL (now points to app with url param)
     expect(
-      screen.getByText(/https:\/\/archive\.example\.com\/invite\?hash=/),
+      screen.getByText(/\/invite\?hash=.*&url=https%3A%2F%2Farchive\.example\.com/),
     ).toBeInTheDocument();
   });
 
@@ -137,7 +137,7 @@ describe('SettingsScreen', () => {
     await user.click(copyButtons[0]!);
 
     expect(writeText).toHaveBeenCalledWith(
-      expect.stringContaining('https://archive.example.com/invite?hash='),
+      expect.stringContaining('/invite?hash='),
     );
 
     // Should show "Copied!" feedback

@@ -412,5 +412,14 @@
   },
   "settings.invites.use.connected": {
     "defaultMessage": "Connected to {archive}"
+  },
+  "invite.connecting": {
+    "defaultMessage": "Connecting to archive..."
+  },
+  "invite.connected": {
+    "defaultMessage": "Connected! Redirecting..."
+  },
+  "invite.error": {
+    "defaultMessage": "Invalid invite link. Missing archive URL."
   }
 }
