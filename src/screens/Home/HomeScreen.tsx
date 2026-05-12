@@ -19,6 +19,7 @@ import { convertArea } from '@/lib/area-format';
 import { syncRemoteArchive } from '@/lib/data-layer';
 import { exportFeatureCollection } from '@/lib/geojson-export';
 import { useAuthStore } from '@/stores/auth-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { AddArchiveServerDialog } from './AddArchiveServerDialog';
 import { ArchiveBrowser } from './ArchiveBrowser';
@@ -260,6 +261,10 @@ const messages = defineMessages({
 
 function HomeScreen() {
   const [state, dispatch] = useReducer(homeReducer, INITIAL_STATE);
+  const persistedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const persistedServerId = useProjectStore((s) => s.selectedServerId);
+  const setSelectedProjectId = useProjectStore((s) => s.setSelectedProjectId);
+  const setSelectedServerId = useProjectStore((s) => s.setSelectedServerId);
   const intl = useIntl();
   const [now, setNow] = useState(() => Date.now());
 
@@ -267,6 +272,16 @@ function HomeScreen() {
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Restore persisted project/server selection on mount
+  useEffect(() => {
+    if (persistedProjectId) {
+      dispatch({ type: 'SELECT_PROJECT', id: persistedProjectId });
+    }
+    if (persistedServerId) {
+      dispatch({ type: 'SELECT_SERVER', id: persistedServerId });
+    }
   }, []);
 
   const queryClient = useQueryClient();
@@ -400,6 +415,15 @@ function HomeScreen() {
       dispatch({ type: 'SELECT_PROJECT', id: sorted[0]!.localId });
     }
   }, [state.selectedProjectId, projects]);
+
+  // Sync selected project/server to persisted store whenever they change
+  useEffect(() => {
+    setSelectedProjectId(state.selectedProjectId);
+  }, [state.selectedProjectId, setSelectedProjectId]);
+
+  useEffect(() => {
+    setSelectedServerId(state.selectedServerId);
+  }, [state.selectedServerId, setSelectedServerId]);
 
   const handleOpenCreateDialog = useCallback(
     () => dispatch({ type: 'OPEN_CREATE_DIALOG' }),

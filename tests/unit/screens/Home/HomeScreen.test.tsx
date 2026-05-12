@@ -21,6 +21,7 @@ import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
 import type { CalculationResult } from '@/lib/area-calculator/types';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
+import { useProjectStore } from '@/stores/project-store';
 
 // Renders HomeScreen inside a ShellSlotProvider + a "shell reader" that exposes
 // the slot overrides to the DOM so topbar assertions remain possible.
@@ -172,6 +173,8 @@ function selectFile(file: File) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+  useProjectStore.setState({ selectedProjectId: null, selectedServerId: null });
   mockUseProjects.mockReturnValue({
     data: [],
     isLoading: false,
