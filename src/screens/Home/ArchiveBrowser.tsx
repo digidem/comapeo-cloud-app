@@ -186,14 +186,19 @@ function ArchiveBrowser({
           <p className="text-sm text-text-muted">
             {intl.formatMessage(messages.emptyDesc)}
           </p>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onCreateNew}
-            aria-label={intl.formatMessage(messages.firstProjectListAria)}
-          >
-            {intl.formatMessage(messages.emptyCta)}
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3 mt-1">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onCreateNew}
+              aria-label={intl.formatMessage(messages.firstProjectListAria)}
+            >
+              {intl.formatMessage(messages.emptyCta)}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={onAddServer}>
+              + {intl.formatMessage(messages.addServer)}
+            </Button>
+          </div>
         </div>
       ) : (
         <>

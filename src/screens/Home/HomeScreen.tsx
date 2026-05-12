@@ -28,6 +28,7 @@ import { AreaMap } from './AreaMap';
 import { CalculationSettings } from './CalculationSettings';
 import { CoverageSummary } from './CoverageSummary';
 import { CreateProjectDialog } from './CreateProjectDialog';
+import { HomeScreenSkeleton } from './HomeScreenSkeleton';
 import { ImportDataButton } from './ImportDataButton';
 import { MethodSelector } from './MethodSelector';
 import { ProjectBannerCard } from './ProjectBannerCard';
@@ -274,7 +275,8 @@ function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Restore persisted project/server selection on mount
+  // Restore persisted project/server selection on mount — intentional [] deps
+  // (only run once on mount; adding persistedProjectId would re-restore on every change)
   useEffect(() => {
     if (persistedProjectId) {
       dispatch({ type: 'SELECT_PROJECT', id: persistedProjectId });
@@ -282,6 +284,7 @@ function HomeScreen() {
     if (persistedServerId) {
       dispatch({ type: 'SELECT_SERVER', id: persistedServerId });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const queryClient = useQueryClient();
@@ -515,6 +518,12 @@ function HomeScreen() {
   );
 
   useShellSlot(shellSlot);
+
+  // Loading state — full-page skeleton while projects query resolves
+  // Must be after all hooks (useShellSlot) to avoid Rules of Hooks violations
+  if (projectsQuery.isLoading || projectsQuery.isFetching) {
+    return <HomeScreenSkeleton />;
+  }
 
   // ---- Main content area ----
 
