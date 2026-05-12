@@ -86,6 +86,23 @@ export function useRemoteArchives(): UseRemoteArchivesReturn {
     }
   }
 
+  // Surface known servers from the auth store even if they have no projects
+  // synced yet (e.g. just connected via invite, sync still pending, or the
+  // remote archive currently has zero projects). Without this, a newly added
+  // archive would be invisible in the sidebar until projects appear.
+  const knownArchiveIds = new Set(archives.map((a) => a.archiveId));
+  for (const server of servers) {
+    if (!knownArchiveIds.has(server.baseUrl)) {
+      archives.push({
+        archiveId: server.baseUrl,
+        name: server.label || extractHostname(server.baseUrl),
+        url: server.baseUrl,
+        projectCount: 0,
+      });
+      knownArchiveIds.add(server.baseUrl);
+    }
+  }
+
   // Sort: '_local' first (pinned), then alphabetical by name
   archives.sort((a, b) => {
     if (a.archiveId === '_local') return -1;

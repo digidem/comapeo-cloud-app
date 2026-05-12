@@ -193,6 +193,30 @@ describe('useRemoteArchives', () => {
     expect(remoteArchive?.name).toBe('some-remote-server.com');
   });
 
+  it('shows server-only archives even when no projects are synced yet', async () => {
+    // Add a server to the auth store without any projects in the DB
+    await useAuthStore.getState().addServer({
+      label: 'Just Connected',
+      baseUrl: 'https://just-added.example.com',
+      token: 'fresh-token',
+    });
+
+    const { result } = renderHook(() => useRemoteArchives(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.archives.length).toBeGreaterThan(0);
+    });
+
+    const archives = result.current.archives;
+    const serverArchive = archives.find(
+      (a) => a.archiveId === 'https://just-added.example.com',
+    );
+    expect(serverArchive).toBeDefined();
+    expect(serverArchive!.name).toBe('Just Connected');
+    expect(serverArchive!.projectCount).toBe(0);
+    expect(serverArchive!.url).toBe('https://just-added.example.com');
+  });
+
   it('sorts remote archives alphabetically by name', async () => {
     const db = getDb();
 
