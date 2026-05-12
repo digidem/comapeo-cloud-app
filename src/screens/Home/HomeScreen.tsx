@@ -12,6 +12,7 @@ import { useArchiveStatus } from '@/hooks/useArchiveStatus';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
+import { useRemoteArchives } from '@/hooks/useRemoteArchives';
 import { BUILT_IN_PRESETS, DEFAULTS } from '@/lib/area-calculator/config';
 import type { CalculationParams } from '@/lib/area-calculator/types';
 import type { AreaUnit } from '@/lib/area-format';
@@ -20,7 +21,6 @@ import { syncRemoteArchive } from '@/lib/data-layer';
 import { exportFeatureCollection } from '@/lib/geojson-export';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useRemoteArchives } from '@/hooks/useRemoteArchives';
 
 import { AddArchiveServerDialog } from './AddArchiveServerDialog';
 import { ArchiveBrowser } from './ArchiveBrowser';
@@ -374,7 +374,9 @@ function HomeScreen() {
   );
   const { archives: allArchives, selectedArchiveId } = useRemoteArchives();
   const archiveServerUrl = useMemo(
-    () => allArchives.find((a) => a.archiveId === selectedArchiveId)?.url ?? undefined,
+    () =>
+      allArchives.find((a) => a.archiveId === selectedArchiveId)?.url ??
+      undefined,
     [allArchives, selectedArchiveId],
   );
 
@@ -559,6 +561,7 @@ function HomeScreen() {
           onAddServer={() => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' })}
           onEditProject={(id) => dispatch({ type: 'OPEN_EDIT_DIALOG', id })}
           onDeleteProject={(id) => dispatch({ type: 'OPEN_DELETE_DIALOG', id })}
+          onSelectServer={(id) => dispatch({ type: 'SELECT_SERVER', id })}
         />
 
         {state.selectedProjectId && (
