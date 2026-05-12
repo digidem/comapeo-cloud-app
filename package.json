@@ -26,6 +26,7 @@
     "deploy:preview": "npm run build && npx wrangler pages deploy dist/ --branch preview",
     "prepare": "husky",
     "extract-messages": "formatjs extract 'src/**/*.{ts,tsx}' --out-file src/i18n/messages/en.json",
+    "translate:locale": "npx tsx scripts/translate-locale.ts",
     "test:unit": "vitest run"
   },
   "dependencies": {
