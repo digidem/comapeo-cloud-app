@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import { useNavigate } from '@tanstack/react-router';
@@ -22,6 +23,7 @@ const messages = defineMessages({
 export function InviteScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<'loading' | 'connected' | 'error'>(
     'loading',
   );
@@ -55,6 +57,10 @@ export function InviteScreen() {
       })
       .then(() => {
         if (cancelled) return;
+        // Invalidate TanStack Query caches so HomeScreen shows fresh data
+        queryClient.invalidateQueries({ queryKey: ['projects'] });
+        queryClient.invalidateQueries({ queryKey: ['observations'] });
+        queryClient.invalidateQueries({ queryKey: ['alerts'] });
         setStatus('connected');
         setTimeout(() => {
           if (!cancelled) navigate({ to: '/' });

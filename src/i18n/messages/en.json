@@ -150,10 +150,10 @@
     "defaultMessage": "ha"
   },
   "home.areaUnit.km2": {
-    "defaultMessage": "km²"
+    "defaultMessage": "km\u00b2"
   },
   "home.areaUnit.m2": {
-    "defaultMessage": "m²"
+    "defaultMessage": "m\u00b2"
   },
   "home.coverage.calculating": {
     "defaultMessage": "Calculating..."
@@ -420,6 +420,6 @@
     "defaultMessage": "Connected! Redirecting..."
   },
   "invite.error": {
-    "defaultMessage": "Invalid invite link. Missing archive URL."
+    "defaultMessage": "Failed to connect to archive."
   }
 }
