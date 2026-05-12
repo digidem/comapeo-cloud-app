@@ -72,6 +72,10 @@ function resolveStatus(server: {
   return 'idle';
 }
 
+function normalizeUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
 function ArchiveBrowser({
   selectedProjectId,
   onSelect,
@@ -91,7 +95,7 @@ function ArchiveBrowser({
   const statusMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const server of archiveStatus.servers) {
-      map.set(server.baseUrl, resolveStatus(server));
+      map.set(normalizeUrl(server.baseUrl), resolveStatus(server));
     }
     return map;
   }, [archiveStatus.servers]);
@@ -100,7 +104,7 @@ function ArchiveBrowser({
   const serverIdByUrl = useMemo(() => {
     const map = new Map<string, string>();
     for (const server of servers) {
-      map.set(server.baseUrl, server.id);
+      map.set(normalizeUrl(server.baseUrl), server.id);
     }
     return map;
   }, [servers]);
@@ -184,7 +188,7 @@ function ArchiveBrowser({
         /* Accordion archive sections */
         <div className="flex flex-col gap-1">
           {archives.map((archive) => {
-            const status = archive.url ? statusMap.get(archive.url) : null;
+            const status = archive.url ? statusMap.get(normalizeUrl(archive.url)) : null;
             const archiveProjects = getProjectsForArchive(archive.archiveId);
             const isExpanded = expandedArchives.has(archive.archiveId);
 
@@ -227,7 +231,7 @@ function ArchiveBrowser({
                   </span>
                   {/* Server settings button — only for remote archives */}
                   {archive.url && onSelectServer && (() => {
-                    const sid = serverIdByUrl.get(archive.url);
+                    const sid = serverIdByUrl.get(normalizeUrl(archive.url));
                     return sid ? (
                       <button
                         type="button"
