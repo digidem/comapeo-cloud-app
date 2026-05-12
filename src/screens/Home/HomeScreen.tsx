@@ -481,7 +481,7 @@ function HomeScreen() {
 
   // Auto-select the last updated project when projects load and none is selected
   useEffect(() => {
-    if (!state.selectedProjectId && projects.length > 0) {
+    if ((!state.selectedProjectId || !projects.find(p => p.localId === state.selectedProjectId)) && projects.length > 0) {
       const sorted = [...projects].sort(
         (a, b) =>
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -676,7 +676,7 @@ function HomeScreen() {
     );
   }
 
-  if (!state.selectedProjectId) {
+  if (!state.selectedProjectId && servers.length === 0) {
     return (
       <>
         <div className="flex h-full flex-col items-center justify-center gap-3 py-12 sm:py-16 lg:py-20 text-center">
@@ -927,10 +927,11 @@ function HomeScreen() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             title={intl.formatMessage(messages.statMode)}
-            value={selectedProject?.serverUrl ? 'Connected' : 'Local'}
+            value={selectedProject?.serverUrl ? intl.formatMessage(messages.statConnectedToArchive) : 'Local'}
             valueColor={
               selectedProject?.serverUrl ? 'text-success' : 'text-text-muted'
             }
+            staggerIndex={0}
             icon={
               <svg
                 width="20"
@@ -949,15 +950,18 @@ function HomeScreen() {
           <StatCard
             title={intl.formatMessage(messages.statTotalObservations)}
             value={observationCount.toLocaleString()}
+            staggerIndex={1}
           />
           <StatCard
             title={intl.formatMessage(messages.statCategories)}
             value={categoryCount}
+            staggerIndex={2}
           />
           <StatCard
             title={intl.formatMessage(messages.statActiveAlerts)}
             value={alerts.length}
             valueColor="text-error"
+            staggerIndex={3}
           />
         </div>
 
