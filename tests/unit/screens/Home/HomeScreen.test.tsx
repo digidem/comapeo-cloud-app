@@ -222,6 +222,7 @@ describe('HomeScreen', () => {
   });
 
   it('shows project list when projects exist', async () => {
+    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -242,6 +243,7 @@ describe('HomeScreen', () => {
     } as unknown as ReturnType<typeof useProjects>);
 
     renderWithShell(<HomeScreen />);
+    // Archives are expanded by default — project list is visible
     // Project list is in secondary sidebar — wait for shell slot effect to flush
     await waitFor(() => {
       expect(screen.getAllByText('Alpha Project').length).toBeGreaterThan(0);
@@ -374,7 +376,6 @@ describe('HomeScreen', () => {
 
     renderWithShell(<HomeScreen />);
 
-    // Select the project via the secondary sidebar
     await user.click(await screen.findByRole('button', { name: 'My Project' }));
 
     expect(screen.getByText('No mappable coordinates found')).toBeDefined();
@@ -691,6 +692,7 @@ describe('HomeScreen', () => {
   });
 
   it('shows archive tabs grouped by server when projects exist', async () => {
+    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -725,7 +727,7 @@ describe('HomeScreen', () => {
 
     renderWithShell(<HomeScreen />);
     await waitFor(() => {
-      // The archive tab should show the hostname of the server
+      // The archive accordion header should show the hostname of the server
       expect(screen.getByText('archive.test')).toBeInTheDocument();
     });
     // The remote project should appear in the project list (secondary section)

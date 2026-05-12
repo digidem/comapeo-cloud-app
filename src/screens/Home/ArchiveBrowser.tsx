@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
@@ -6,8 +6,7 @@ import { useArchiveStatus } from '@/hooks/useArchiveStatus';
 import { useProjects } from '@/hooks/useProjects';
 import { useRemoteArchives } from '@/hooks/useRemoteArchives';
 import { useAuthStore } from '@/stores/auth-store';
-
-import { ProjectList } from './ProjectList';
+import type { Project } from '@/lib/db';
 
 const messages = defineMessages({
   archives: {
@@ -81,8 +80,7 @@ function ArchiveBrowser({
   onDeleteProject,
 }: ArchiveBrowserProps) {
   const intl = useIntl();
-  const { archives, selectedArchiveId, selectArchive, localProjects } =
-    useRemoteArchives();
+  const { archives, selectedArchiveId, selectArchive } = useRemoteArchives();
   const { data: projects = [], isLoading } = useProjects();
   const servers = useAuthStore((s) => s.servers);
   const archiveStatus = useArchiveStatus();
@@ -96,17 +94,36 @@ function ArchiveBrowser({
     return map;
   }, [archiveStatus.servers]);
 
-  // Filter projects based on selected archive
-  const filteredProjects = useMemo(() => {
-    if (!selectedArchiveId) {
-      // No archive selected — show all projects
-      return projects;
+  // Group projects by archive (serverUrl or '_local')
+  const projectsByArchive = useMemo(() => {
+    const map = new Map<string, Project[]>();
+    for (const p of projects) {
+      const key = p.serverUrl || '_local';
+      const existing = map.get(key);
+      if (existing) existing.push(p);
+      else map.set(key, [p]);
     }
-    if (selectedArchiveId === '_local') {
-      return localProjects;
-    }
-    return projects.filter((p) => p.serverUrl === selectedArchiveId);
-  }, [selectedArchiveId, projects, localProjects]);
+    return map;
+  }, [projects]);
+
+  function getProjectsForArchive(archiveId: string) {
+    return projectsByArchive.get(archiveId) ?? [];
+  }
+
+  // Expanded archives state — initialise all expanded by default
+  const [expandedArchives, setExpandedArchives] = useState<Set<string>>(
+    () => new Set(archives.map((a) => a.archiveId)),
+  );
+
+  function toggleArchive(id: string) {
+    setExpandedArchives((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    selectArchive(id);
+  }
 
   const hasProjects = projects.length > 0;
   const hasServers = servers.length > 0;
@@ -128,58 +145,6 @@ function ArchiveBrowser({
           + {intl.formatMessage(messages.addServer)}
         </Button>
       </div>
-
-      {/* Archive Tabs — horizontal scrolling row */}
-      {archives.length > 0 && (
-        <div className="overflow-x-auto">
-          <div className="flex gap-2 pb-1">
-            {archives.map((archive) => {
-              const isSelected = archive.archiveId === selectedArchiveId;
-              const status = archive.url ? statusMap.get(archive.url) : null;
-              return (
-                <button
-                  key={archive.archiveId}
-                  type="button"
-                  onClick={() => selectArchive(archive.archiveId)}
-                  className={`inline-flex items-center gap-1.5 min-h-[36px] px-3 rounded-pill text-sm font-medium transition-colors cursor-pointer whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                    isSelected
-                      ? 'bg-primary-soft text-primary'
-                      : 'text-text hover:bg-surface border border-border'
-                  }`}
-                >
-                  {archive.archiveId === '_local' && (
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="2" y1="12" x2="22" y2="12" />
-                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                    </svg>
-                  )}
-                  <span>{archive.name}</span>
-                  <span className="text-xs text-text-muted">
-                    ({archive.projectCount})
-                  </span>
-                  {status && (
-                    <span
-                      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT_COLORS[status] ?? DOT_COLORS['idle']}`}
-                      aria-hidden="true"
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Empty state when no projects AND no servers */}
       {isEmpty ? (
@@ -205,24 +170,134 @@ function ArchiveBrowser({
           </div>
         </div>
       ) : (
-        <>
-          <ProjectList
-            projects={filteredProjects}
-            selectedProjectId={selectedProjectId}
-            onSelect={onSelect}
-            onCreateNew={onCreateNew}
-            onEdit={onEditProject}
-            onDelete={onDeleteProject}
-            isLoading={isLoading}
-            hideEmptyState={!selectedProjectId}
-          />
-          {/* No projects message for selected archive that has none */}
-          {!isLoading && filteredProjects.length === 0 && selectedArchiveId && (
-            <p className="text-sm text-text-muted text-center py-4">
-              {intl.formatMessage(messages.noProjects)}
-            </p>
-          )}
-        </>
+        /* Accordion archive sections */
+        <div className="flex flex-col gap-1">
+          {archives.map((archive) => {
+            const status = archive.url ? statusMap.get(archive.url) : null;
+            const archiveProjects = getProjectsForArchive(archive.archiveId);
+            const isExpanded = expandedArchives.has(archive.archiveId);
+
+            return (
+              <div key={archive.archiveId}>
+                {/* Archive header — clickable toggle */}
+                <button
+                  type="button"
+                  onClick={() => toggleArchive(archive.archiveId)}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-btn text-sm font-medium text-text hover:bg-surface transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {/* Chevron icon — rotates when expanded */}
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className={`transition-transform shrink-0 ${
+                      isExpanded ? 'rotate-90' : ''
+                    }`}
+                  >
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                  {/* Status dot (if applicable) */}
+                  {status && (
+                    <span
+                      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT_COLORS[status] ?? DOT_COLORS['idle']}`}
+                      aria-hidden="true"
+                    />
+                  )}
+                  {/* Archive name */}
+                  <span className="flex-1 text-left truncate">
+                    {archive.name}
+                  </span>
+                  {/* Project count badge */}
+                  <span className="text-xs text-text-muted shrink-0">
+                    ({archive.projectCount})
+                  </span>
+                </button>
+
+                {/* Collapsible project list */}
+                {isExpanded && (
+                  <div className="ml-4 mt-1 flex flex-col gap-0.5">
+                    {archiveProjects.map((project) => {
+                      const isActive = project.localId === selectedProjectId;
+                      return (
+                        <div
+                          key={project.localId}
+                          className={`flex items-center gap-1 px-3 py-1.5 rounded-btn text-sm transition-colors ${
+                            isActive
+                              ? 'bg-primary-soft text-primary font-medium'
+                              : 'text-text hover:bg-surface'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onSelect(project.localId)}
+                            className="flex-1 text-left truncate cursor-pointer focus:outline-none"
+                          >
+                            {project.name ?? 'Untitled'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditProject(project.localId);
+                            }}
+                            className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface inline-flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            aria-label="Edit project"
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteProject(project.localId);
+                            }}
+                            className="h-6 w-6 rounded-full text-text-muted hover:text-error hover:bg-surface inline-flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            aria-label="Delete project"
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M3 6h18" />
+                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {/* Empty state for an archive with no projects */}
+                    {archiveProjects.length === 0 && (
+                      <p className="text-xs text-text-muted px-3 py-2">
+                        {intl.formatMessage(messages.noProjects)}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
