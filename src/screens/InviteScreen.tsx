@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import { useNavigate } from '@tanstack/react-router';
+import { syncRemoteArchive } from '@/lib/data-layer';
 import { useAuthStore } from '@/stores/auth-store';
 
 const messages = defineMessages({
@@ -14,7 +15,7 @@ const messages = defineMessages({
   },
   error: {
     id: 'invite.error',
-    defaultMessage: 'Invalid invite link. Missing archive URL.',
+    defaultMessage: 'Failed to connect to archive.',
   },
 });
 
@@ -43,6 +44,14 @@ export function InviteScreen() {
         label: new URL(archiveUrl).hostname,
         baseUrl: archiveUrl,
         token: hash ?? '',
+      })
+      .then((serverId) => {
+        if (cancelled) return;
+        // After adding the server, trigger a sync to actually connect
+        return syncRemoteArchive(serverId, {
+          baseUrl: archiveUrl,
+          token: hash ?? '',
+        });
       })
       .then(() => {
         if (cancelled) return;
