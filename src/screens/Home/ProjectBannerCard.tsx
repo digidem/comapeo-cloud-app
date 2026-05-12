@@ -46,7 +46,7 @@ export function ProjectBannerCard({
     description ?? intl.formatMessage(messages.defaultDescription);
 
   return (
-    <Card className="relative overflow-hidden border-none shadow-card">
+    <Card className="relative overflow-hidden border-none shadow-card motion-safe:hover:scale-[1.01] motion-safe:hover:shadow-elevated transition-all duration-150">
       {/* Background Image */}
       <div
         className="absolute inset-0 z-0"

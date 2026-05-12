@@ -45,7 +45,7 @@ function MobileNavDrawer({
             maxWidth: '24rem',
             zIndex: 50,
             transform: open ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform 200ms ease-out',
+            transition: 'transform 200ms cubic-bezier(0.16, 1, 0.3, 1)',
           }}
           className="flex flex-col bg-surface-card shadow-elevated focus:outline-none"
         >
