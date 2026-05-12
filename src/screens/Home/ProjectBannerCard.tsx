@@ -1,6 +1,7 @@
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Card } from '@/components/ui/card';
+import { ImportDataButton } from '@/screens/Home/ImportDataButton';
 
 interface ProjectBannerCardProps {
   projectName: string;
@@ -8,6 +9,11 @@ interface ProjectBannerCardProps {
   areaSize?: string;
   lastSync?: string | null;
   teamMembersCount?: number;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  projectLocalId?: string;
+  onImportComplete?: (result: { imported: number; skipped: number }) => void;
+  isLocalProject?: boolean;
 }
 
 const messages = defineMessages({
@@ -32,6 +38,14 @@ const messages = defineMessages({
     defaultMessage:
       'A controlled environment for onboarding new rangers and testing field data collection protocols.',
   },
+  editProject: {
+    id: 'dashboard.banner.editProject',
+    defaultMessage: 'Edit Project',
+  },
+  deleteProject: {
+    id: 'dashboard.banner.deleteProject',
+    defaultMessage: 'Delete Project',
+  },
 });
 
 export function ProjectBannerCard({
@@ -40,6 +54,11 @@ export function ProjectBannerCard({
   areaSize = '0 ha',
   lastSync,
   teamMembersCount = 1,
+  onEdit,
+  onDelete,
+  projectLocalId,
+  onImportComplete,
+  isLocalProject = false,
 }: ProjectBannerCardProps) {
   const intl = useIntl();
   const resolvedDescription =
@@ -70,6 +89,67 @@ export function ProjectBannerCard({
             {resolvedDescription}
           </p>
         </div>
+
+        {/* Action Bar */}
+        {(onEdit || onDelete || isLocalProject) && (
+          <div className="flex items-center gap-2 mt-4 mb-4">
+            <div className="flex items-center gap-2">
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="inline-flex items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-white/90 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                  </svg>
+                  {intl.formatMessage(messages.editProject)}
+                </button>
+              )}
+              {isLocalProject && projectLocalId && (
+                <ImportDataButton
+                  projectLocalId={projectLocalId}
+                  projectName={projectName}
+                  onImportComplete={onImportComplete}
+                />
+              )}
+            </div>
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                aria-label={intl.formatMessage(messages.deleteProject)}
+                className="ml-auto inline-flex items-center justify-center h-8 w-8 rounded-full text-text-muted hover:text-error hover:bg-white/60 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Stats Pills */}
         <div className="flex flex-wrap gap-4 mt-auto">
