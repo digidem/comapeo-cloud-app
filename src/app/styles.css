@@ -315,6 +315,27 @@ html {
 }
 
 /* ---------------------------------------------------------------------------
+   Bottom sheet animations (MapConfigSheet)
+   --------------------------------------------------------------------------- */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Sentinel-specific: ghost border override
    When the sentinel theme is active, borders use reduced opacity.
    This is applied via a CSS rule that overrides the border-color on elements
