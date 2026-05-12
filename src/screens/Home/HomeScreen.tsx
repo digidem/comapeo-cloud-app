@@ -210,13 +210,13 @@ const messages = defineMessages({
     id: 'home.stat.mode',
     defaultMessage: 'Mode',
   },
-  statCloudSyncActive: {
-    id: 'home.stat.cloudSyncActive',
-    defaultMessage: 'Cloud Sync Active',
+  statConnectedToArchive: {
+    id: 'home.stat.connectedToArchive',
+    defaultMessage: 'Connected to Archive',
   },
-  statTotalAssets: {
-    id: 'home.stat.totalAssets',
-    defaultMessage: 'Total Assets',
+  statTotalObservations: {
+    id: 'home.stat.totalObservations',
+    defaultMessage: 'Observations',
   },
   statCategories: {
     id: 'home.stat.categories',
@@ -710,8 +710,10 @@ function HomeScreen() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             title={intl.formatMessage(messages.statMode)}
-            value={intl.formatMessage(messages.statCloudSyncActive)}
-            valueColor="text-info"
+            value={selectedProject?.serverUrl ? 'Connected' : 'Local'}
+            valueColor={
+              selectedProject?.serverUrl ? 'text-success' : 'text-text-muted'
+            }
             icon={
               <svg
                 width="20"
@@ -728,7 +730,7 @@ function HomeScreen() {
             }
           />
           <StatCard
-            title={intl.formatMessage(messages.statTotalAssets)}
+            title={intl.formatMessage(messages.statTotalObservations)}
             value={observationCount.toLocaleString()}
           />
           <StatCard

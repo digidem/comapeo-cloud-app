@@ -305,14 +305,14 @@
   "home.stat.categories": {
     "defaultMessage": "Categories"
   },
-  "home.stat.cloudSyncActive": {
-    "defaultMessage": "Cloud Sync Active"
+  "home.stat.connectedToArchive": {
+    "defaultMessage": "Connected to Archive"
   },
   "home.stat.mode": {
     "defaultMessage": "Mode"
   },
-  "home.stat.totalAssets": {
-    "defaultMessage": "Total Assets"
+  "home.stat.totalObservations": {
+    "defaultMessage": "Observations"
   },
   "home.time.daysAgo": {
     "defaultMessage": "{count} DAY{plural, plural, one {} other {S}} AGO"
