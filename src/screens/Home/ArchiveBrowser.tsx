@@ -101,13 +101,15 @@ function ArchiveBrowser({
   }, [archiveStatus.servers]);
 
   // Build a map of archive URL to server ID (for detail view)
+  // Uses archiveStatus.servers (merged auth store + IndexedDB) so it
+  // survives page reloads where auth store is in-memory only.
   const serverIdByUrl = useMemo(() => {
     const map = new Map<string, string>();
-    for (const server of servers) {
+    for (const server of archiveStatus.servers) {
       map.set(normalizeUrl(server.baseUrl), server.id);
     }
     return map;
-  }, [servers]);
+  }, [archiveStatus.servers]);
 
   // Group projects by archive (serverUrl or '_local')
   const projectsByArchive = useMemo(() => {
@@ -233,15 +235,22 @@ function ArchiveBrowser({
                   {archive.url && onSelectServer && (() => {
                     const sid = serverIdByUrl.get(normalizeUrl(archive.url));
                     return sid ? (
-                      <button
-                        type="button"
+                      <span
+                        role="button"
+                        tabIndex={0}
                         onClick={(e) => {
                           e.stopPropagation();
                           onSelectServer(sid);
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            onSelectServer(sid);
+                          }
+                        }}
                         className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface
                                    inline-flex items-center justify-center shrink-0
-                                   focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                   cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                         aria-label={`Manage ${archive.name}`}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -250,7 +259,7 @@ function ArchiveBrowser({
                           <circle cx="12" cy="12" r="3"/>
                           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                         </svg>
-                      </button>
+                      </span>
                     ) : null;
                   })()}
                 </button>
