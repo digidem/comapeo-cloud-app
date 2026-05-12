@@ -2,16 +2,34 @@ import bbox from '@turf/bbox';
 import type { FeatureCollection } from 'geojson';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 import Map, { Layer, type MapRef, Source } from 'react-map-gl/maplibre';
 
 import { useThemeTokens } from '@/hooks/useThemeTokens';
+
+import { MapConfigSheet } from './MapConfigSheet';
 
 const EMPTY_FEATURE_COLLECTION: FeatureCollection = {
   type: 'FeatureCollection',
   features: [],
 };
+
+const messages = defineMessages({
+  configMenu: {
+    id: 'home.monitoredArea.configMenu',
+    defaultMessage: 'Map settings',
+  },
+  configTitle: {
+    id: 'home.monitoredArea.configTitle',
+    defaultMessage: 'Monitored Area Settings',
+  },
+  closeConfig: {
+    id: 'home.monitoredArea.closeConfig',
+    defaultMessage: 'Close settings',
+  },
+});
 
 interface AreaMapProps {
   featureCollection?: FeatureCollection;
@@ -55,6 +73,24 @@ function getSourceKey(
   return `${layer.sourceId}-${layer.isActive ? 'active' : 'inactive'}`;
 }
 
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(min-width: 1024px)').matches;
+  });
+
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 1024px)');
+    const handler = (e: MediaQueryListEvent) => {
+      setIsDesktop(e.matches);
+    };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
+
+  return isDesktop;
+}
+
 export function AreaMap({
   featureCollection,
   layers,
@@ -64,6 +100,14 @@ export function AreaMap({
   const mapRef = useRef<MapRef>(null);
   const isMapLoadedRef = useRef(false);
   const { mapColors } = useThemeTokens();
+  const intl = useIntl();
+  const isDesktop = useIsDesktop();
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+
+  // On desktop the sheet is never shown — derive effective open state
+  const isSheetOpen = isDesktop ? false : isConfigOpen;
+
+  const hasChildren = Boolean(children);
 
   const LAYER_COLORS: Record<string, string> = {
     observed: mapColors.observed,
@@ -156,58 +200,101 @@ export function AreaMap({
   }, [fitMapToBounds, mapBounds]);
 
   return (
-    <div className="relative h-[300px] w-full overflow-hidden rounded-card border border-border/15 shadow-card sm:h-[400px] lg:h-[600px]">
-      <Map
-        ref={mapRef}
-        initialViewState={{
-          longitude: -60, // Fallback roughly Amazon
-          latitude: -3,
-          zoom: 4,
-        }}
-        mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-        interactive={true}
-        onLoad={() => {
-          isMapLoadedRef.current = true;
-          fitMapToBounds(mapBounds);
-        }}
-      >
-        {mapLayers.map((layer) => (
-          <Source
-            key={getSourceKey(layer, activeMethodId)}
-            id={layer.sourceId}
-            type="geojson"
-            data={layer.featureCollection}
-          >
-            <Layer
-              id={layer.fillLayerId}
-              type="fill"
-              paint={{
-                'fill-color': layer.color,
-                'fill-opacity': getFillOpacity(layer),
-                'fill-outline-color': layer.legacy
-                  ? mapColors.grid
-                  : layer.color,
-              }}
-            />
-            <Layer
-              id={layer.outlineLayerId}
-              type="line"
-              paint={{
-                'line-color': layer.legacy ? mapColors.grid : layer.color,
-                'line-width': getOutlineWidth(layer),
-                ...(layer.legacy
-                  ? {}
-                  : { 'line-opacity': layer.isActive ? 0.95 : 0.7 }),
-              }}
-            />
-          </Source>
-        ))}
-      </Map>
+    <div
+      data-testid="area-map-container"
+      className="relative -mx-3 w-[calc(100%+1.5rem)] h-[min(60vh,500px)] overflow-hidden sm:-mx-4 sm:w-[calc(100%+2rem)] sm:h-[400px] lg:mx-0 lg:w-full lg:h-[600px] lg:flex lg:flex-row lg:overflow-visible lg:rounded-card lg:border lg:border-border/15 lg:shadow-card"
+    >
+      <div className="relative h-full min-h-0 flex-1 lg:min-w-0">
+        <Map
+          ref={mapRef}
+          initialViewState={{
+            longitude: -60, // Fallback roughly Amazon
+            latitude: -3,
+            zoom: 4,
+          }}
+          mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+          interactive={true}
+          onLoad={() => {
+            isMapLoadedRef.current = true;
+            fitMapToBounds(mapBounds);
+          }}
+        >
+          {mapLayers.map((layer) => (
+            <Source
+              key={getSourceKey(layer, activeMethodId)}
+              id={layer.sourceId}
+              type="geojson"
+              data={layer.featureCollection}
+            >
+              <Layer
+                id={layer.fillLayerId}
+                type="fill"
+                paint={{
+                  'fill-color': layer.color,
+                  'fill-opacity': getFillOpacity(layer),
+                  'fill-outline-color': layer.legacy
+                    ? mapColors.grid
+                    : layer.color,
+                }}
+              />
+              <Layer
+                id={layer.outlineLayerId}
+                type="line"
+                paint={{
+                  'line-color': layer.legacy ? mapColors.grid : layer.color,
+                  'line-width': getOutlineWidth(layer),
+                  ...(layer.legacy
+                    ? {}
+                    : { 'line-opacity': layer.isActive ? 0.95 : 0.7 }),
+                }}
+              />
+            </Source>
+          ))}
+        </Map>
 
-      {/* Settings overlay menu */}
-      <div className="absolute z-10 flex flex-col gap-4 overflow-y-auto bottom-0 right-0 left-0 w-full max-h-[50vh] p-4 pb-6 rounded-t-card border-t border-border/20 bg-surface-card/95 backdrop-blur-md shadow-elevated lg:static lg:bottom-auto lg:right-4 lg:top-4 lg:left-auto lg:w-96 lg:max-h-[calc(100%-2rem)] lg:p-5 lg:pb-4 lg:rounded-card lg:border lg:border-border/20">
-        {children}
+        {/* Three-dots config button — mobile only, inside map wrapper */}
+        {hasChildren && !isDesktop && (
+          <button
+            type="button"
+            className="absolute top-3 right-3 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-card/90 text-text-muted backdrop-blur-sm shadow-card hover:bg-surface-card hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
+            aria-label={intl.formatMessage(messages.configMenu)}
+            onClick={() => setIsConfigOpen(true)}
+            data-testid="config-menu-button"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </button>
+        )}
       </div>
+
+      {/* Desktop sidebar — always visible on lg+ */}
+      {hasChildren && isDesktop && (
+        <div className="absolute z-10 hidden flex-col gap-4 overflow-y-auto rounded-card border border-border/20 bg-surface-card/95 p-5 backdrop-blur-md shadow-elevated lg:static lg:flex lg:w-96 lg:shrink-0 lg:max-h-none lg:overflow-y-auto lg:border-l lg:border-border/20 lg:rounded-none lg:shadow-none">
+          {children}
+        </div>
+      )}
+
+      {/* Mobile bottom sheet */}
+      {hasChildren && !isDesktop && (
+        <MapConfigSheet
+          open={isSheetOpen}
+          onOpenChange={setIsConfigOpen}
+          title={intl.formatMessage(messages.configTitle)}
+          closeLabel={intl.formatMessage(messages.closeConfig)}
+        >
+          {children}
+        </MapConfigSheet>
+      )}
     </div>
   );
 }

@@ -107,11 +107,11 @@
   "home.archive.dialog.unsupportedProtocol": {
     "defaultMessage": "Archive server URL must start with http:// or https://"
   },
-  "home.archive.dialog.urlCredentials": {
-    "defaultMessage": "Archive server URL must not include credentials"
-  },
   "home.archive.dialog.url": {
     "defaultMessage": "Server URL"
+  },
+  "home.archive.dialog.urlCredentials": {
+    "defaultMessage": "Archive server URL must not include credentials"
   },
   "home.archive.dialog.urlPlaceholder": {
     "defaultMessage": "https://archive.example.com"
@@ -214,6 +214,15 @@
   },
   "home.method.observed.label": {
     "defaultMessage": "Observed Footprint"
+  },
+  "home.monitoredArea.closeConfig": {
+    "defaultMessage": "Close settings"
+  },
+  "home.monitoredArea.configMenu": {
+    "defaultMessage": "Map settings"
+  },
+  "home.monitoredArea.configTitle": {
+    "defaultMessage": "Monitored Area Settings"
   },
   "home.monitoredArea.title": {
     "defaultMessage": "Monitored Area"

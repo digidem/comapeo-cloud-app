@@ -1,6 +1,6 @@
-import { render, screen } from '@tests/mocks/test-utils';
+import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import type { FeatureCollection } from 'geojson';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AreaMap } from '@/screens/Home/AreaMap';
 
@@ -70,6 +70,30 @@ vi.mock('react-map-gl/maplibre', () => {
   };
 });
 
+// Mock MapConfigSheet to avoid Radix Dialog portal issues in jsdom
+vi.mock('@/screens/Home/MapConfigSheet', () => {
+  return {
+    MapConfigSheet: ({
+      open,
+      children,
+      title,
+    }: {
+      open: boolean;
+      onOpenChange: (open: boolean) => void;
+      children: React.ReactNode;
+      title: string;
+      closeLabel?: string;
+    }) => {
+      if (!open) return null;
+      return (
+        <div data-testid="mock-config-sheet" role="dialog" aria-label={title}>
+          {children}
+        </div>
+      );
+    },
+  };
+});
+
 const TEST_POLYGON: FeatureCollection = {
   type: 'FeatureCollection',
   features: [
@@ -91,6 +115,43 @@ const TEST_POLYGON: FeatureCollection = {
     },
   ],
 };
+
+// Default: desktop mode for existing tests
+function mockDesktopMatchMedia() {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(min-width: 1024px)',
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+function mockMobileMatchMedia() {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((_query: string) => ({
+      matches: false,
+      media: _query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+beforeAll(() => {
+  mockDesktopMatchMedia();
+});
 
 describe('AreaMap', () => {
   it('renders without crashing when featureCollection is undefined', () => {
@@ -146,7 +207,7 @@ describe('AreaMap', () => {
     });
   });
 
-  it('renders children in the settings overlay', () => {
+  it('renders children in the desktop sidebar', () => {
     render(
       <AreaMap>
         <div data-testid="child-content">Settings Panel</div>
@@ -228,19 +289,143 @@ describe('AreaMap', () => {
   });
 
   it('container has responsive height classes', () => {
-    const { container } = render(<AreaMap />);
-    const mapContainer = container.firstElementChild as HTMLElement;
-    expect(mapContainer.className).toContain('h-[300px]');
+    render(<AreaMap />);
+    const mapContainer = screen.getByTestId('area-map-container');
+    expect(mapContainer.className).toContain('h-[min(60vh,500px)]');
     expect(mapContainer.className).toContain('sm:h-[400px]');
     expect(mapContainer.className).toContain('lg:h-[600px]');
   });
 
-  it('overlay container exists and renders children', () => {
+  it('container has full-width on mobile and card styling on desktop', () => {
+    render(<AreaMap />);
+    const mapContainer = screen.getByTestId('area-map-container');
+    // Mobile: full-width with negative margins to punch through parent padding
+    expect(mapContainer.className).toContain('-mx-3');
+    expect(mapContainer.className).toContain('w-[calc(100%+1.5rem)]');
+    // Card styling only on desktop (lg+)
+    expect(mapContainer.className).toContain('lg:rounded-card');
+    expect(mapContainer.className).toContain('lg:border');
+    expect(mapContainer.className).toContain('lg:shadow-card');
+  });
+
+  it('map wrapper has flex-1 on desktop', () => {
+    render(<AreaMap />);
+    const mapWrapper = screen.getByTestId('mock-map')
+      .parentElement as HTMLElement;
+    expect(mapWrapper).toBeTruthy();
+    expect(mapWrapper.className).toContain('h-full');
+    expect(mapWrapper.className).toContain('flex-1');
+    expect(mapWrapper.className).toContain('lg:min-w-0');
+  });
+
+  it('config panel has desktop sidebar classes', () => {
     render(
       <AreaMap>
-        <div data-testid="overlay-child">Overlay content</div>
+        <div data-testid="config-child">Config</div>
       </AreaMap>,
     );
-    expect(screen.getByTestId('overlay-child')).toBeInTheDocument();
+    const configPanel = screen.getByTestId('config-child')
+      .parentElement as HTMLElement;
+    expect(configPanel.className).toContain('lg:static');
+    expect(configPanel.className).toContain('lg:w-96');
+    expect(configPanel.className).toContain('lg:shrink-0');
+    expect(configPanel.className).toContain('lg:overflow-y-auto');
+  });
+
+  it('desktop sidebar renders children without a sheet', () => {
+    render(
+      <AreaMap>
+        <div data-testid="sidebar-child">Sidebar content</div>
+      </AreaMap>,
+    );
+    expect(screen.getByTestId('sidebar-child')).toBeInTheDocument();
+    // No mobile sheet should be rendered
+    expect(screen.queryByTestId('mock-config-sheet')).not.toBeInTheDocument();
+  });
+
+  // --- Mobile-specific tests ---
+
+  describe('mobile mode', () => {
+    beforeEach(() => {
+      mockMobileMatchMedia();
+    });
+
+    it('three-dots button is present when children are provided', () => {
+      render(
+        <AreaMap>
+          <div data-testid="child">Content</div>
+        </AreaMap>,
+      );
+      expect(screen.getByTestId('config-menu-button')).toBeInTheDocument();
+    });
+
+    it('three-dots button is NOT present when children are not provided', () => {
+      render(<AreaMap />);
+      expect(
+        screen.queryByTestId('config-menu-button'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('three-dots button has correct aria-label', () => {
+      render(
+        <AreaMap>
+          <div>Content</div>
+        </AreaMap>,
+      );
+      const btn = screen.getByTestId('config-menu-button');
+      expect(btn).toHaveAttribute('aria-label', 'Map settings');
+    });
+
+    it('three-dots button has lg:hidden class', () => {
+      render(
+        <AreaMap>
+          <div>Content</div>
+        </AreaMap>,
+      );
+      const btn = screen.getByTestId('config-menu-button');
+      expect(btn.className).toContain('lg:hidden');
+    });
+
+    it('clicking three-dots button opens the config sheet', async () => {
+      const user = userEvent.setup();
+      render(
+        <AreaMap>
+          <div data-testid="sheet-child">Sheet content</div>
+        </AreaMap>,
+      );
+
+      // Sheet should not be visible initially
+      expect(screen.queryByTestId('mock-config-sheet')).not.toBeInTheDocument();
+
+      // Click the three-dots button
+      await user.click(screen.getByTestId('config-menu-button'));
+
+      // Sheet should now be visible
+      expect(screen.getByTestId('mock-config-sheet')).toBeInTheDocument();
+    });
+
+    it('config children are visible inside the sheet when open', async () => {
+      const user = userEvent.setup();
+      render(
+        <AreaMap>
+          <div data-testid="sheet-child">Sheet content</div>
+        </AreaMap>,
+      );
+
+      await user.click(screen.getByTestId('config-menu-button'));
+
+      expect(screen.getByTestId('sheet-child')).toBeInTheDocument();
+    });
+
+    it('config children are NOT visible when sheet is closed', () => {
+      render(
+        <AreaMap>
+          <div data-testid="sheet-child">Sheet content</div>
+        </AreaMap>,
+      );
+
+      // On mobile, children are inside the sheet which starts closed
+      expect(screen.queryByTestId('sheet-child')).not.toBeInTheDocument();
+    });
   });
 });
