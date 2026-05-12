@@ -79,7 +79,7 @@ export function useArchiveStatus(): ArchiveStatus {
           s.status === 'error' ? (s.errorMessage ?? 'Unknown error') : null,
         hasCredentials: typeof s.token === 'string' && s.token.length > 0,
         isStale:
-          s.lastSyncedAt !== null
+          s.lastSyncedAt
             ? now - new Date(s.lastSyncedAt).getTime() > 24 * 60 * 60 * 1000
             : true,
       })),

@@ -23,7 +23,7 @@ export type { Alert, Attachment, Observation, Project } from '@/lib/db';
 // Projects
 // ---------------------------------------------------------------------------
 
-export async function createProject(input: { name?: string }) {
+export async function createProject(input: { name?: string; serverUrl?: string }) {
   return repoCreateProject(input);
 }
 

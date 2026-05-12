@@ -9,6 +9,7 @@ interface CreateProjectDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: (projectLocalId: string) => void;
+  serverUrl?: string;
 }
 
 type DialogState =
@@ -66,6 +67,7 @@ function CreateProjectDialog({
   isOpen,
   onClose,
   onCreated,
+  serverUrl,
 }: CreateProjectDialogProps) {
   const intl = useIntl();
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
@@ -75,7 +77,7 @@ function CreateProjectDialog({
     const name = inputRef.current?.value ?? '';
     dispatch({ type: 'submit' });
 
-    createProject({ name }).then(
+    createProject({ name, serverUrl }).then(
       (project) => {
         dispatch({ type: 'success' });
         onCreated(project.localId);

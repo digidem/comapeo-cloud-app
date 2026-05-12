@@ -20,6 +20,7 @@ import { syncRemoteArchive } from '@/lib/data-layer';
 import { exportFeatureCollection } from '@/lib/geojson-export';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useRemoteArchives } from '@/hooks/useRemoteArchives';
 
 import { AddArchiveServerDialog } from './AddArchiveServerDialog';
 import { ArchiveBrowser } from './ArchiveBrowser';
@@ -371,6 +372,11 @@ function HomeScreen() {
   const selectedProject = projects.find(
     (p) => p.localId === state.selectedProjectId,
   );
+  const { archives: allArchives, selectedArchiveId } = useRemoteArchives();
+  const archiveServerUrl = useMemo(
+    () => allArchives.find((a) => a.archiveId === selectedArchiveId)?.url ?? undefined,
+    [allArchives, selectedArchiveId],
+  );
 
   const observations = useMemo(
     () => observationsQuery.data ?? [],
@@ -617,6 +623,7 @@ function HomeScreen() {
             void queryClient.invalidateQueries({ queryKey: ['projects'] });
             dispatch({ type: 'PROJECT_CREATED', id });
           }}
+          serverUrl={archiveServerUrl}
         />
 
         <EditProjectDialog
@@ -692,6 +699,7 @@ function HomeScreen() {
             void queryClient.invalidateQueries({ queryKey: ['projects'] });
             dispatch({ type: 'PROJECT_CREATED', id });
           }}
+          serverUrl={archiveServerUrl}
         />
 
         <EditProjectDialog
@@ -774,6 +782,7 @@ function HomeScreen() {
             void queryClient.invalidateQueries({ queryKey: ['projects'] });
             dispatch({ type: 'PROJECT_CREATED', id });
           }}
+          serverUrl={archiveServerUrl}
         />
 
         <EditProjectDialog
@@ -856,6 +865,7 @@ function HomeScreen() {
             void queryClient.invalidateQueries({ queryKey: ['projects'] });
             dispatch({ type: 'PROJECT_CREATED', id });
           }}
+          serverUrl={archiveServerUrl}
         />
 
         <EditProjectDialog

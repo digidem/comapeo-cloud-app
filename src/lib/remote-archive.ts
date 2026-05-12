@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 import type { RequestConfig } from '@/lib/api-client';
 import { getDb } from '@/lib/db';
+import { getRemoteServer } from '@/lib/local-repositories';
 import type { Alert, Observation, Project } from '@/lib/db';
 
 // ---------------------------------------------------------------------------
@@ -14,6 +15,9 @@ export async function pullProjects(
   const response = await apiClient.getProjects(config);
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
+
+  // Look up the server record to get the archive's baseUrl
+  const serverRecord = await getRemoteServer(serverId);
 
   const localIds = response.data.map(
     (item) => `${sourceType}:${serverId}:${item.projectId}`,
@@ -40,6 +44,7 @@ export async function pullProjects(
       sourceId: serverId,
       remoteId: item.projectId,
       name: item.name ?? undefined,
+      serverUrl: serverRecord?.baseUrl ?? undefined,
       createdAt: existing?.createdAt ?? now,
       updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
       dirtyLocal: false,
