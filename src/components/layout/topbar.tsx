@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { LanguageSelector } from '@/components/layout/language-selector';
+
 interface TopbarProps {
   title: string;
   workspaceName?: string;
@@ -60,6 +62,7 @@ function Topbar({
         )}
       </div>
       <div className="flex items-center gap-2">
+        <LanguageSelector />
         {children && (
           <>
             <div className="h-4 w-px bg-border" />

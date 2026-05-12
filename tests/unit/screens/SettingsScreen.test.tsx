@@ -21,10 +21,12 @@ describe('SettingsScreen', () => {
     expect(screen.getByRole('heading', { level: 1 })).toBeDefined();
   });
 
-  it('renders language selector buttons', () => {
+  it('renders language info with current locale', () => {
     render(<SettingsScreen />);
-    expect(screen.getByText('English')).toBeInTheDocument();
-    expect(screen.getByText('Português')).toBeInTheDocument();
-    expect(screen.getByText('Español')).toBeInTheDocument();
+    expect(
+      screen.getByText('Change language from the top navigation bar.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Current:/)).toBeInTheDocument();
+    expect(screen.getByText(/English/)).toBeInTheDocument();
   });
 });

@@ -1,7 +1,5 @@
 import { defineMessages, useIntl } from 'react-intl';
 
-import { Button } from '@/components/ui/button';
-import { SUPPORTED_LOCALES } from '@/i18n/load-messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const _messages = defineMessages({
@@ -11,7 +9,6 @@ const _messages = defineMessages({
 export function SettingsScreen() {
   const intl = useIntl();
   const locale = useLocaleStore((s) => s.locale);
-  const setLocale = useLocaleStore((s) => s.setLocale);
 
   const LOCALE_LABELS: Record<string, string> = {
     en: 'English',
@@ -26,20 +23,12 @@ export function SettingsScreen() {
       </h1>
 
       <h2 className="text-lg font-semibold text-text">Language / Idioma</h2>
-      <div className="flex flex-wrap gap-2 mb-4">
-        {SUPPORTED_LOCALES.map((loc) => (
-          <Button
-            key={loc}
-            variant={locale === loc ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => setLocale(loc)}
-            disabled={locale === loc}
-            className={locale === loc ? 'font-bold' : 'opacity-80'}
-          >
-            {LOCALE_LABELS[loc] ?? loc}
-          </Button>
-        ))}
-      </div>
+      <p className="text-sm text-text-muted mt-2">
+        Change language from the top navigation bar.
+      </p>
+      <p className="text-xs text-text-muted mt-1">
+        Current: {LOCALE_LABELS[locale] ?? locale}
+      </p>
     </section>
   );
 }
