@@ -239,6 +239,45 @@ describe('HomeScreen', () => {
     expect(screen.getAllByText('Beta Project').length).toBeGreaterThan(0);
   });
 
+  it('does not render edit/delete/import buttons in sidebar project rows', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Sidebar Clean Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    renderWithShell(<HomeScreen />);
+    await waitFor(() => {
+      expect(
+        screen.getAllByText('Sidebar Clean Project').length,
+      ).toBeGreaterThan(0);
+    });
+
+    // Sidebar project rows should NOT contain edit or delete aria-labels
+    const secondarySection = screen.getByTestId('shell-secondary');
+    expect(
+      within(secondarySection).queryByRole('button', { name: /edit project/i }),
+    ).toBeNull();
+    expect(
+      within(secondarySection).queryByRole('button', {
+        name: /delete project/i,
+      }),
+    ).toBeNull();
+    expect(
+      within(secondarySection).queryByRole('button', {
+        name: /import data into/i,
+      }),
+    ).toBeNull();
+  });
+
   it('shows loading skeletons when projects are loading', async () => {
     mockUseProjects.mockReturnValue({
       data: undefined,

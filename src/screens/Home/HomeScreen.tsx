@@ -481,7 +481,11 @@ function HomeScreen() {
 
   // Auto-select the last updated project when projects load and none is selected
   useEffect(() => {
-    if ((!state.selectedProjectId || !projects.find(p => p.localId === state.selectedProjectId)) && projects.length > 0) {
+    if (
+      (!state.selectedProjectId ||
+        !projects.find((p) => p.localId === state.selectedProjectId)) &&
+      projects.length > 0
+    ) {
       const sorted = [...projects].sort(
         (a, b) =>
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -558,10 +562,7 @@ function HomeScreen() {
           onSelect={(id) => dispatch({ type: 'SELECT_PROJECT', id })}
           onCreateNew={handleOpenCreateDialog}
           onAddServer={() => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' })}
-          onEditProject={(id) => dispatch({ type: 'OPEN_EDIT_DIALOG', id })}
-          onDeleteProject={(id) => dispatch({ type: 'OPEN_DELETE_DIALOG', id })}
           onSelectServer={(id) => dispatch({ type: 'SELECT_SERVER', id })}
-          onImportComplete={handleIncrementRefresh}
         />
       </div>
     ),
@@ -571,7 +572,6 @@ function HomeScreen() {
       state.selectedProjectId,
       projectsQuery.isLoading,
       handleOpenCreateDialog,
-      handleIncrementRefresh,
     ],
   );
 
@@ -927,7 +927,11 @@ function HomeScreen() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             title={intl.formatMessage(messages.statMode)}
-            value={selectedProject?.serverUrl ? intl.formatMessage(messages.statConnectedToArchive) : 'Local'}
+            value={
+              selectedProject?.serverUrl
+                ? intl.formatMessage(messages.statConnectedToArchive)
+                : 'Local'
+            }
             valueColor={
               selectedProject?.serverUrl ? 'text-success' : 'text-text-muted'
             }

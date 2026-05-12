@@ -8,8 +8,6 @@ import { useRemoteArchives } from '@/hooks/useRemoteArchives';
 import type { Project } from '@/lib/db';
 import { useAuthStore } from '@/stores/auth-store';
 
-import { ImportDataButton } from './ImportDataButton';
-
 const messages = defineMessages({
   archives: {
     id: 'home.archives',
@@ -51,10 +49,7 @@ interface ArchiveBrowserProps {
   onSelect: (id: string) => void;
   onCreateNew: () => void;
   onAddServer: () => void;
-  onEditProject: (localId: string) => void;
-  onDeleteProject: (localId: string) => void;
   onSelectServer?: (serverId: string) => void;
-  onImportComplete?: (result: { imported: number; skipped: number }) => void;
 }
 
 const DOT_COLORS: Record<string, string> = {
@@ -84,10 +79,7 @@ function ArchiveBrowser({
   onSelect,
   onCreateNew,
   onAddServer,
-  onEditProject,
-  onDeleteProject,
   onSelectServer,
-  onImportComplete,
 }: ArchiveBrowserProps) {
   const intl = useIntl();
   const { archives, selectArchive } = useRemoteArchives();
@@ -205,187 +197,135 @@ function ArchiveBrowser({
                 archive.archiveId === '_local',
             )
             .map((archive) => {
-            const status = archive.url
-              ? statusMap.get(normalizeUrl(archive.url))
-              : null;
-            const archiveProjects = getProjectsForArchive(archive.archiveId);
-            const isExpanded = expandedArchives.has(archive.archiveId);
+              const status = archive.url
+                ? statusMap.get(normalizeUrl(archive.url))
+                : null;
+              const archiveProjects = getProjectsForArchive(archive.archiveId);
+              const isExpanded = expandedArchives.has(archive.archiveId);
 
-            return (
-              <div key={archive.archiveId}>
-                {/* Archive header — clickable toggle */}
-                <button
-                  type="button"
-                  onClick={() => toggleArchive(archive.archiveId)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-btn text-sm font-medium text-text hover:bg-surface transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  {/* Chevron icon — rotates when expanded */}
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className={`transition-transform shrink-0 ${
-                      isExpanded ? 'rotate-90' : ''
-                    }`}
+              return (
+                <div key={archive.archiveId}>
+                  {/* Archive header — clickable toggle */}
+                  <button
+                    type="button"
+                    onClick={() => toggleArchive(archive.archiveId)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-btn text-sm font-medium text-text hover:bg-surface transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
-                  {/* Status dot (if applicable) */}
-                  {status && (
-                    <span
-                      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT_COLORS[status] ?? DOT_COLORS['idle']}`}
-                      aria-hidden="true"
-                    />
-                  )}
-                  {/* Archive name */}
-                  <span className="flex-1 text-left truncate">
-                    {archive.name}
-                  </span>
-                  {/* Project count badge */}
-                  <span className="text-xs text-text-muted shrink-0">
-                    ({archive.projectCount})
-                  </span>
-                  {/* Server settings button — only for remote archives */}
-                  {archive.url &&
-                    onSelectServer &&
-                    (() => {
-                      const sid = serverIdByUrl.get(normalizeUrl(archive.url));
-                      return sid ? (
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectServer(sid);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
+                    {/* Chevron icon — rotates when expanded */}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className={`transition-transform shrink-0 ${
+                        isExpanded ? 'rotate-90' : ''
+                      }`}
+                    >
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                    {/* Status dot (if applicable) */}
+                    {status && (
+                      <span
+                        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT_COLORS[status] ?? DOT_COLORS['idle']}`}
+                        aria-hidden="true"
+                      />
+                    )}
+                    {/* Archive name */}
+                    <span className="flex-1 text-left truncate">
+                      {archive.name}
+                    </span>
+                    {/* Project count badge */}
+                    <span className="text-xs text-text-muted shrink-0">
+                      ({archive.projectCount})
+                    </span>
+                    {/* Server settings button — only for remote archives */}
+                    {archive.url &&
+                      onSelectServer &&
+                      (() => {
+                        const sid = serverIdByUrl.get(
+                          normalizeUrl(archive.url),
+                        );
+                        return sid ? (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => {
                               e.stopPropagation();
                               onSelectServer(sid);
-                            }
-                          }}
-                          className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.stopPropagation();
+                                onSelectServer(sid);
+                              }
+                            }}
+                            className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface
                                    inline-flex items-center justify-center shrink-0
                                    cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                          aria-label={`Manage ${archive.name}`}
-                        >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
+                            aria-label={`Manage ${archive.name}`}
                           >
-                            <circle cx="12" cy="12" r="3" />
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                          </svg>
-                        </span>
-                      ) : null;
-                    })()}
-                </button>
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <circle cx="12" cy="12" r="3" />
+                              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                            </svg>
+                          </span>
+                        ) : null;
+                      })()}
+                  </button>
 
-                {/* Collapsible project list */}
-                <div
-                  className="grid transition-[grid-template-rows] duration-300 ease-out"
-                  style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
-                >
-                  <div className="overflow-hidden">
-                    <div className="ml-4 mt-1 flex flex-col gap-0.5">
-                      {archiveProjects.map((project) => {
-                        const isActive = project.localId === selectedProjectId;
-                        return (
-                          <div
-                            key={project.localId}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-btn text-sm transition-colors ${
-                              isActive
-                                ? 'bg-primary-soft text-primary font-medium'
-                                : 'text-text hover:bg-surface'
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => onSelect(project.localId)}
-                              className="flex-1 text-left truncate cursor-pointer focus:outline-none"
+                  {/* Collapsible project list */}
+                  <div
+                    className="grid transition-[grid-template-rows] duration-300 ease-out"
+                    style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="ml-4 mt-1 flex flex-col gap-0.5">
+                        {archiveProjects.map((project) => {
+                          const isActive =
+                            project.localId === selectedProjectId;
+                          return (
+                            <div
+                              key={project.localId}
+                              className={`flex items-center px-3 py-1.5 rounded-btn text-sm transition-colors ${
+                                isActive
+                                  ? 'bg-primary-soft text-primary font-medium'
+                                  : 'text-text hover:bg-surface'
+                              }`}
                             >
-                              {project.name ?? 'Untitled'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onEditProject(project.localId);
-                              }}
-                              className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface inline-flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                              aria-label="Edit project"
-                            >
-                              <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                              <button
+                                type="button"
+                                onClick={() => onSelect(project.localId)}
+                                className="flex-1 text-left truncate cursor-pointer focus:outline-none"
                               >
-                                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDeleteProject(project.localId);
-                              }}
-                              className="h-6 w-6 rounded-full text-text-muted hover:text-error hover:bg-surface inline-flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                              aria-label="Delete project"
-                            >
-                              <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M3 6h18" />
-                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                              </svg>
-                            </button>
-                            {/* Import button — local projects only */}
-                            {!project.serverUrl && onImportComplete && (
-                              <ImportDataButton
-                                projectLocalId={project.localId}
-                                projectName={project.name}
-                                iconOnly
-                                onImportComplete={onImportComplete}
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
-                      {/* Empty state for an archive with no projects */}
-                      {archiveProjects.length === 0 && (
-                        <p className="text-xs text-text-muted px-3 py-2">
-                          {intl.formatMessage(messages.noProjects)}
-                        </p>
-                      )}
+                                {project.name ?? 'Untitled'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                        {/* Empty state for an archive with no projects */}
+                        {archiveProjects.length === 0 && (
+                          <p className="text-xs text-text-muted px-3 py-2">
+                            {intl.formatMessage(messages.noProjects)}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
       )}
     </div>
