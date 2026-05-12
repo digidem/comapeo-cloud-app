@@ -821,42 +821,40 @@ function HomeScreen() {
               layers={completedMapLayers}
               activeMethodId={state.activeMethodId}
             >
-              <div className="flex flex-col gap-4 bg-surface-card/95 backdrop-blur-md p-5 rounded-card border border-border/20 shadow-elevated">
-                {coverage.isCalculating && (
-                  <div role="status" aria-live="polite" className="sr-only">
-                    {intl.formatMessage(messages.calculating)}
-                  </div>
-                )}
+              {coverage.isCalculating && (
+                <div role="status" aria-live="polite" className="sr-only">
+                  {intl.formatMessage(messages.calculating)}
+                </div>
+              )}
 
-                <MethodSelector
-                  results={coverage.results}
-                  activeMethodId={state.activeMethodId}
-                  onActivate={(methodId) =>
-                    dispatch({ type: 'SET_ACTIVE_METHOD', methodId })
+              <MethodSelector
+                results={coverage.results}
+                activeMethodId={state.activeMethodId}
+                onActivate={(methodId) =>
+                  dispatch({ type: 'SET_ACTIVE_METHOD', methodId })
+                }
+                onExport={() => handleExport(state.activeMethodId)}
+              />
+
+              <CoverageSummary
+                activeMethodId={state.activeMethodId}
+                results={coverage.results}
+                isCalculating={coverage.isCalculating}
+                unit={state.unit}
+                onUnitChange={(unit) => dispatch({ type: 'SET_UNIT', unit })}
+              />
+
+              {hasCompletedResult && (
+                <CalculationSettings
+                  presets={BUILT_IN_PRESETS}
+                  selectedPresetId={state.selectedPresetId}
+                  params={state.params}
+                  onPresetChange={handlePresetChange}
+                  onParamsChange={(params) =>
+                    dispatch({ type: 'SET_PARAMS', params })
                   }
-                  onExport={() => handleExport(state.activeMethodId)}
                 />
-
-                <CoverageSummary
-                  activeMethodId={state.activeMethodId}
-                  results={coverage.results}
-                  isCalculating={coverage.isCalculating}
-                  unit={state.unit}
-                  onUnitChange={(unit) => dispatch({ type: 'SET_UNIT', unit })}
-                />
-
-                {hasCompletedResult && (
-                  <CalculationSettings
-                    presets={BUILT_IN_PRESETS}
-                    selectedPresetId={state.selectedPresetId}
-                    params={state.params}
-                    onPresetChange={handlePresetChange}
-                    onParamsChange={(params) =>
-                      dispatch({ type: 'SET_PARAMS', params })
-                    }
-                  />
-                )}
-              </div>
+              )}
             </AreaMap>
           </div>
         </div>
