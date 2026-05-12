@@ -10,6 +10,7 @@ export interface Project {
   sourceId: string;
   remoteId?: string;
   name?: string;
+  serverUrl?: string;
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
@@ -89,6 +90,19 @@ class AppDatabase extends Dexie {
     this.version(1).stores({
       projects:
         '&localId, [sourceType+sourceId+remoteId], [sourceType+sourceId+updatedAt], [dirtyLocal+updatedAt]',
+      observations:
+        '&localId, projectLocalId, [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
+      alerts:
+        '&localId, projectLocalId, [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
+      attachments:
+        '&localId, projectLocalId, observationLocalId, [sourceType+sourceId+remoteId]',
+      remoteServers: '&id, baseUrl, status, lastSyncedAt',
+      syncMetadata: '&id, serverId, status, updatedAt',
+    });
+
+    this.version(3).stores({
+      projects:
+        '&localId, [sourceType+sourceId+remoteId], [sourceType+sourceId+updatedAt], [dirtyLocal+updatedAt], serverUrl',
       observations:
         '&localId, projectLocalId, [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
       alerts:
