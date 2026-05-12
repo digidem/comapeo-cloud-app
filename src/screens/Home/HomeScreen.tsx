@@ -21,8 +21,8 @@ import { exportFeatureCollection } from '@/lib/geojson-export';
 import { useAuthStore } from '@/stores/auth-store';
 
 import { AddArchiveServerDialog } from './AddArchiveServerDialog';
+import { ArchiveBrowser } from './ArchiveBrowser';
 import { ArchiveServerDetail } from './ArchiveServerDetail';
-import { ArchiveStatusCard } from './ArchiveStatusCard';
 import { AreaMap } from './AreaMap';
 import { CalculationSettings } from './CalculationSettings';
 import { CoverageSummary } from './CoverageSummary';
@@ -30,7 +30,6 @@ import { CreateProjectDialog } from './CreateProjectDialog';
 import { ImportDataButton } from './ImportDataButton';
 import { MethodSelector } from './MethodSelector';
 import { ProjectBannerCard } from './ProjectBannerCard';
-import { ProjectList } from './ProjectList';
 import { RecentActivityList } from './RecentActivityList';
 import { StatCard } from './StatCard';
 
@@ -456,47 +455,11 @@ function HomeScreen() {
   const secondaryContent = useMemo(
     () => (
       <div className="flex flex-col gap-4 p-4">
-        {/* Archive Servers Section — always visible */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-text">
-              {intl.formatMessage(messages.archiveSectionTitle)}
-            </h3>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' })}
-              aria-label={intl.formatMessage(messages.archiveAddServer)}
-            >
-              + {intl.formatMessage(messages.archiveAddServer)}
-            </Button>
-          </div>
-          {archiveStatus.servers.length > 0 && (
-            <div className="flex flex-col gap-2">
-              {archiveStatus.servers.map((server) => (
-                <ArchiveStatusCard
-                  key={server.id}
-                  server={server}
-                  isSelected={state.selectedServerId === server.id}
-                  onSelect={(id) =>
-                    dispatch({
-                      type: 'SELECT_SERVER',
-                      id: state.selectedServerId === id ? null : id,
-                    })
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <ProjectList
-          projects={projects}
+        <ArchiveBrowser
           selectedProjectId={state.selectedProjectId}
           onSelect={(id) => dispatch({ type: 'SELECT_PROJECT', id })}
           onCreateNew={handleOpenCreateDialog}
-          isLoading={projectsQuery.isLoading}
-          hideEmptyState={!state.selectedProjectId}
+          onAddServer={() => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' })}
         />
 
         {state.selectedProjectId && (
@@ -511,9 +474,7 @@ function HomeScreen() {
     [
       projects,
       state.selectedProjectId,
-      state.selectedServerId,
       projectsQuery.isLoading,
-      archiveStatus.servers,
       handleOpenCreateDialog,
       handleIncrementRefresh,
     ],

@@ -4,6 +4,7 @@ import {
   screen,
   userEvent,
   waitFor,
+  within,
 } from '@tests/mocks/test-utils';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -266,8 +267,9 @@ describe('HomeScreen', () => {
 
     renderWithShell(<HomeScreen />);
 
+    // In the empty state, ArchiveBrowser shows a \"Create Project\" button
     const newProjectBtn = await screen.findByRole('button', {
-      name: 'Create new project from project list',
+      name: 'Create your first project from project list',
     });
     await user.click(newProjectBtn);
 
@@ -637,12 +639,28 @@ describe('HomeScreen', () => {
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
-  // Archive Servers sidebar section tests
+  it('shows loading skeletons when projects are loading', async () => {
+    mockUseProjects.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      error: null,
+      status: 'pending',
+    } as unknown as ReturnType<typeof useProjects>);
 
-  it('shows "Archive Servers" section header in sidebar', async () => {
     renderWithShell(<HomeScreen />);
     await waitFor(() => {
-      expect(screen.getByText('Archive Servers')).toBeInTheDocument();
+      const skeletons = screen.getAllByTestId('skeleton');
+      expect(skeletons.length).toBeGreaterThan(0);
+    });
+  });
+
+  // Archive browser sidebar tests
+
+  it('shows "Archives" section header in sidebar', async () => {
+    renderWithShell(<HomeScreen />);
+    await waitFor(() => {
+      expect(screen.getByText('Archives')).toBeInTheDocument();
     });
   });
 
@@ -650,7 +668,7 @@ describe('HomeScreen', () => {
     renderWithShell(<HomeScreen />);
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: 'Add Server' }),
+        screen.getByRole('button', { name: 'Add a new archive server' }),
       ).toBeInTheDocument();
     });
   });
@@ -659,7 +677,9 @@ describe('HomeScreen', () => {
     const user = userEvent.setup();
     renderWithShell(<HomeScreen />);
 
-    await user.click(await screen.findByRole('button', { name: 'Add Server' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Add a new archive server' }),
+    );
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(
@@ -667,7 +687,22 @@ describe('HomeScreen', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows archive status cards when servers exist', async () => {
+  it('shows archive tabs grouped by server when projects exist', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Remote Project',
+          serverUrl: 'https://archive.test',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
     mockUseArchiveStatus.mockReturnValue({
       servers: [
         {
@@ -686,12 +721,17 @@ describe('HomeScreen', () => {
 
     renderWithShell(<HomeScreen />);
     await waitFor(() => {
-      // ArchiveStatusCard renders the server label
-      expect(screen.getByText('Test Server')).toBeInTheDocument();
+      // The archive tab should show the hostname of the server
+      expect(screen.getByText('archive.test')).toBeInTheDocument();
     });
+    // The remote project should appear in the project list (secondary section)
+    const secondarySection = screen.getByTestId('shell-secondary');
+    expect(
+      within(secondarySection).getByText('Remote Project'),
+    ).toBeInTheDocument();
   });
 
-  it('does not render archive status cards when no servers', async () => {
+  it('shows empty state when no projects and no servers', async () => {
     mockUseArchiveStatus.mockReturnValue({
       servers: [],
       anyError: false,
@@ -700,11 +740,10 @@ describe('HomeScreen', () => {
 
     renderWithShell(<HomeScreen />);
 
-    // The section header should exist, but no status cards
     await waitFor(() => {
-      expect(screen.getByText('Archive Servers')).toBeInTheDocument();
+      expect(screen.getByText('Archives')).toBeInTheDocument();
     });
-    // No "Sync Now" buttons (which would indicate status cards)
-    expect(screen.queryByText('Sync Now')).not.toBeInTheDocument();
+    // Should show the empty welcome message instead of status cards
+    expect(screen.getByText('Welcome to CoMapeo Cloud')).toBeInTheDocument();
   });
 });

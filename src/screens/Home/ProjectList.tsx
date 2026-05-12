@@ -10,6 +10,7 @@ interface ProjectListProps {
   onCreateNew: () => void;
   isLoading?: boolean;
   hideEmptyState?: boolean;
+  archiveId?: string;
 }
 
 const messages = defineMessages({
@@ -46,6 +47,7 @@ function ProjectList({
   onCreateNew,
   isLoading = false,
   hideEmptyState = false,
+  archiveId: _archiveId,
 }: ProjectListProps) {
   const intl = useIntl();
 
