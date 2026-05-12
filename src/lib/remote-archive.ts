@@ -1,8 +1,8 @@
 import { apiClient } from '@/lib/api-client';
 import type { RequestConfig } from '@/lib/api-client';
 import { getDb } from '@/lib/db';
-import { getRemoteServer } from '@/lib/local-repositories';
 import type { Alert, Observation, Project } from '@/lib/db';
+import { getRemoteServer } from '@/lib/local-repositories';
 
 // ---------------------------------------------------------------------------
 // Fetch archive data and store locally

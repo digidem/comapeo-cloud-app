@@ -29,7 +29,6 @@ export function useArchiveStatus(): ArchiveStatus {
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(interval);
-     
   }, []);
 
   // Load remote servers from IndexedDB on mount
@@ -78,10 +77,9 @@ export function useArchiveStatus(): ArchiveStatus {
         error:
           s.status === 'error' ? (s.errorMessage ?? 'Unknown error') : null,
         hasCredentials: typeof s.token === 'string' && s.token.length > 0,
-        isStale:
-          s.lastSyncedAt
-            ? now - new Date(s.lastSyncedAt).getTime() > 24 * 60 * 60 * 1000
-            : true,
+        isStale: s.lastSyncedAt
+          ? now - new Date(s.lastSyncedAt).getTime() > 24 * 60 * 60 * 1000
+          : true,
       })),
     [servers, now],
   );
