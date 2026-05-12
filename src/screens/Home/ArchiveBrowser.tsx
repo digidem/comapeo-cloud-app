@@ -50,6 +50,8 @@ interface ArchiveBrowserProps {
   onSelect: (id: string) => void;
   onCreateNew: () => void;
   onAddServer: () => void;
+  onEditProject: (localId: string) => void;
+  onDeleteProject: (localId: string) => void;
 }
 
 const DOT_COLORS: Record<string, string> = {
@@ -75,6 +77,8 @@ function ArchiveBrowser({
   onSelect,
   onCreateNew,
   onAddServer,
+  onEditProject,
+  onDeleteProject,
 }: ArchiveBrowserProps) {
   const intl = useIntl();
   const { archives, selectedArchiveId, selectArchive, localProjects } =
@@ -207,6 +211,8 @@ function ArchiveBrowser({
             selectedProjectId={selectedProjectId}
             onSelect={onSelect}
             onCreateNew={onCreateNew}
+            onEdit={onEditProject}
+            onDelete={onDeleteProject}
             isLoading={isLoading}
             hideEmptyState={!selectedProjectId}
           />

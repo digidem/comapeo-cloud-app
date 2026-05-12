@@ -16,6 +16,8 @@ describe('ProjectList', () => {
         selectedProjectId={null}
         onSelect={vi.fn()}
         onCreateNew={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
       />,
     );
 
@@ -33,6 +35,8 @@ describe('ProjectList', () => {
         selectedProjectId={null}
         onSelect={onSelect}
         onCreateNew={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
       />,
     );
 
@@ -47,12 +51,18 @@ describe('ProjectList', () => {
         selectedProjectId="p1"
         onSelect={vi.fn()}
         onCreateNew={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
       />,
     );
 
+    // The wrapper div has the active styling, not the inner button
     const activeItem = screen.getByRole('button', { name: 'Alpha Project' });
-    expect(activeItem.className).toContain('bg-primary-soft');
-    expect(activeItem.className).toContain('text-primary');
+    expect(activeItem).toBeInTheDocument();
+    // The parent wrapper div has the highlight class
+    const wrapper = activeItem.closest('div');
+    expect(wrapper?.className).toContain('bg-primary-soft');
+    expect(wrapper?.className).toContain('text-primary');
   });
 
   it('shows empty state when no projects', () => {
@@ -62,6 +72,8 @@ describe('ProjectList', () => {
         selectedProjectId={null}
         onSelect={vi.fn()}
         onCreateNew={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
       />,
     );
 
@@ -75,6 +87,8 @@ describe('ProjectList', () => {
         selectedProjectId={null}
         onSelect={vi.fn()}
         onCreateNew={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
         isLoading
       />,
     );
@@ -93,6 +107,8 @@ describe('ProjectList', () => {
         selectedProjectId={null}
         onSelect={vi.fn()}
         onCreateNew={onCreateNew}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
       />,
     );
 

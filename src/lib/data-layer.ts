@@ -7,9 +7,11 @@ import {
   createAlert as repoCreateAlert,
   createObservation as repoCreateObservation,
   createProject as repoCreateProject,
+  deleteProject as repoDeleteProject,
   getAlerts as repoGetAlerts,
   getObservations as repoGetObservations,
   getProjects as repoGetProjects,
+  updateProject as repoUpdateProject,
 } from '@/lib/local-repositories';
 import { syncRemoteArchive as doSync } from '@/lib/sync';
 import { useAuthStore } from '@/stores/auth-store';
@@ -27,6 +29,17 @@ export async function createProject(input: { name?: string }) {
 
 export async function getProjects() {
   return repoGetProjects();
+}
+
+export async function updateProject(
+  localId: string,
+  updates: { name?: string },
+) {
+  return repoUpdateProject(localId, updates);
+}
+
+export async function deleteProject(localId: string) {
+  return repoDeleteProject(localId);
 }
 
 // ---------------------------------------------------------------------------

@@ -251,6 +251,36 @@
   "home.newProject.listAria": {
     "defaultMessage": "Create new project from project list"
   },
+  "home.editProject.title": {
+    "defaultMessage": "Edit Project"
+  },
+  "home.editProject.save": {
+    "defaultMessage": "Save"
+  },
+  "home.editProject.error": {
+    "defaultMessage": "Failed to update project"
+  },
+  "home.deleteProject.title": {
+    "defaultMessage": "Delete Project"
+  },
+  "home.deleteProject.confirm": {
+    "defaultMessage": "Are you sure you want to delete \"{name}\"? This will permanently remove all associated data."
+  },
+  "home.deleteProject.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "home.deleteProject.confirmBtn": {
+    "defaultMessage": "Delete"
+  },
+  "home.deleteProject.error": {
+    "defaultMessage": "Failed to delete project"
+  },
+  "home.project.editAria": {
+    "defaultMessage": "Edit project"
+  },
+  "home.project.deleteAria": {
+    "defaultMessage": "Delete project"
+  },
   "home.noProjects": {
     "defaultMessage": "No projects yet"
   },

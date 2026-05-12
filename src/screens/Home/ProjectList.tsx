@@ -8,6 +8,8 @@ interface ProjectListProps {
   selectedProjectId: string | null;
   onSelect: (id: string) => void;
   onCreateNew: () => void;
+  onEdit: (localId: string) => void;
+  onDelete: (localId: string) => void;
   isLoading?: boolean;
   hideEmptyState?: boolean;
   archiveId?: string;
@@ -38,6 +40,14 @@ const messages = defineMessages({
     id: 'home.untitledProject',
     defaultMessage: 'Untitled Project',
   },
+  editAria: {
+    id: 'home.project.editAria',
+    defaultMessage: 'Edit project',
+  },
+  deleteAria: {
+    id: 'home.project.deleteAria',
+    defaultMessage: 'Delete project',
+  },
 });
 
 function ProjectList({
@@ -45,6 +55,8 @@ function ProjectList({
   selectedProjectId,
   onSelect,
   onCreateNew,
+  onEdit,
+  onDelete,
   isLoading = false,
   hideEmptyState = false,
   archiveId: _archiveId,
@@ -92,17 +104,64 @@ function ProjectList({
             const isActive = project.localId === selectedProjectId;
             return (
               <li key={project.localId}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(project.localId)}
-                  className={`w-full text-left px-3 py-2 min-h-[44px] rounded-btn text-sm font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                <div
+                  className={`flex items-center gap-1 px-3 py-2 min-h-[44px] rounded-btn text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-primary-soft text-primary'
                       : 'text-text hover:bg-surface'
                   }`}
                 >
-                  {project.name ?? intl.formatMessage(messages.untitledProject)}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(project.localId)}
+                    className="flex-1 text-left cursor-pointer focus:outline-none"
+                  >
+                    {project.name ??
+                      intl.formatMessage(messages.untitledProject)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(project.localId)}
+                    aria-label={intl.formatMessage(messages.editAria)}
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-full text-text-muted hover:text-text hover:bg-surface cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(project.localId)}
+                    aria-label={intl.formatMessage(messages.deleteAria)}
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-full text-text-muted hover:text-error hover:bg-surface cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    </svg>
+                  </button>
+                </div>
               </li>
             );
           })}

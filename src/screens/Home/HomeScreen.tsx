@@ -28,6 +28,8 @@ import { AreaMap } from './AreaMap';
 import { CalculationSettings } from './CalculationSettings';
 import { CoverageSummary } from './CoverageSummary';
 import { CreateProjectDialog } from './CreateProjectDialog';
+import { DeleteProjectDialog } from './DeleteProjectDialog';
+import { EditProjectDialog } from './EditProjectDialog';
 import { HomeScreenSkeleton } from './HomeScreenSkeleton';
 import { ImportDataButton } from './ImportDataButton';
 import { MethodSelector } from './MethodSelector';
@@ -63,6 +65,8 @@ function formatRelativeTime(ageMs: number, intl: IntlShape): string {
 interface HomeState {
   selectedProjectId: string | null;
   isCreateDialogOpen: boolean;
+  editingProjectId: string | null;
+  deletingProjectId: string | null;
   isAddServerDialogOpen: boolean;
   selectedPresetId: string;
   params: CalculationParams;
@@ -77,6 +81,12 @@ type HomeAction =
   | { type: 'OPEN_CREATE_DIALOG' }
   | { type: 'CLOSE_CREATE_DIALOG' }
   | { type: 'PROJECT_CREATED'; id: string }
+  | { type: 'OPEN_EDIT_DIALOG'; id: string }
+  | { type: 'CLOSE_EDIT_DIALOG' }
+  | { type: 'PROJECT_EDITED' }
+  | { type: 'OPEN_DELETE_DIALOG'; id: string }
+  | { type: 'CLOSE_DELETE_DIALOG' }
+  | { type: 'PROJECT_DELETED' }
   | { type: 'SET_PRESET'; presetId: string }
   | { type: 'SET_PARAMS'; params: CalculationParams }
   | { type: 'SET_ACTIVE_METHOD'; methodId: string }
@@ -104,6 +114,25 @@ function homeReducer(state: HomeState, action: HomeAction): HomeState {
         isCreateDialogOpen: false,
         selectedProjectId: action.id,
       };
+    case 'OPEN_EDIT_DIALOG':
+      return { ...state, editingProjectId: action.id };
+    case 'CLOSE_EDIT_DIALOG':
+      return { ...state, editingProjectId: null };
+    case 'PROJECT_EDITED':
+      return { ...state, editingProjectId: null };
+    case 'OPEN_DELETE_DIALOG':
+      return { ...state, deletingProjectId: action.id };
+    case 'CLOSE_DELETE_DIALOG':
+      return { ...state, deletingProjectId: null };
+    case 'PROJECT_DELETED':
+      return {
+        ...state,
+        deletingProjectId: null,
+        selectedProjectId:
+          state.selectedProjectId === state.deletingProjectId
+            ? null
+            : state.selectedProjectId,
+      };
     case 'SET_PRESET':
       return { ...state, selectedPresetId: action.presetId };
     case 'SET_PARAMS':
@@ -128,6 +157,8 @@ function homeReducer(state: HomeState, action: HomeAction): HomeState {
 const INITIAL_STATE: HomeState = {
   selectedProjectId: null,
   isCreateDialogOpen: false,
+  editingProjectId: null,
+  deletingProjectId: null,
   isAddServerDialogOpen: false,
   selectedPresetId: BUILT_IN_PRESETS[0]?.id ?? 'balanced',
   params: { ...DEFAULTS },
@@ -255,6 +286,39 @@ const messages = defineMessages({
   activityAlertDesc: {
     id: 'home.activity.alertDesc',
     defaultMessage: 'New alert event detected in project area.',
+  },
+  editProjectTitle: {
+    id: 'home.editProject.title',
+    defaultMessage: 'Edit Project',
+  },
+  editProjectSave: {
+    id: 'home.editProject.save',
+    defaultMessage: 'Save',
+  },
+  deleteProjectTitle: {
+    id: 'home.deleteProject.title',
+    defaultMessage: 'Delete Project',
+  },
+  deleteProjectConfirm: {
+    id: 'home.deleteProject.confirm',
+    defaultMessage:
+      'Are you sure you want to delete "{name}"? This will permanently remove all associated data.',
+  },
+  deleteProjectCancel: {
+    id: 'home.deleteProject.cancel',
+    defaultMessage: 'Cancel',
+  },
+  deleteProjectConfirmBtn: {
+    id: 'home.deleteProject.confirmBtn',
+    defaultMessage: 'Delete',
+  },
+  projectEditAria: {
+    id: 'home.project.editAria',
+    defaultMessage: 'Edit project',
+  },
+  projectDeleteAria: {
+    id: 'home.project.deleteAria',
+    defaultMessage: 'Delete project',
   },
 });
 
@@ -487,6 +551,8 @@ function HomeScreen() {
           onSelect={(id) => dispatch({ type: 'SELECT_PROJECT', id })}
           onCreateNew={handleOpenCreateDialog}
           onAddServer={() => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' })}
+          onEditProject={(id) => dispatch({ type: 'OPEN_EDIT_DIALOG', id })}
+          onDeleteProject={(id) => dispatch({ type: 'OPEN_DELETE_DIALOG', id })}
         />
 
         {state.selectedProjectId && (
@@ -553,6 +619,34 @@ function HomeScreen() {
           }}
         />
 
+        <EditProjectDialog
+          isOpen={state.editingProjectId !== null}
+          projectLocalId={state.editingProjectId ?? ''}
+          currentName={
+            projects.find((p) => p.localId === state.editingProjectId)?.name ??
+            ''
+          }
+          onClose={() => dispatch({ type: 'CLOSE_EDIT_DIALOG' })}
+          onSaved={() => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_EDITED' });
+          }}
+        />
+
+        <DeleteProjectDialog
+          isOpen={state.deletingProjectId !== null}
+          projectLocalId={state.deletingProjectId ?? ''}
+          projectName={
+            projects.find((p) => p.localId === state.deletingProjectId)?.name ??
+            ''
+          }
+          onClose={() => dispatch({ type: 'CLOSE_DELETE_DIALOG' })}
+          onDeleted={() => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_DELETED' });
+          }}
+        />
+
         <AddArchiveServerDialog
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
@@ -597,6 +691,34 @@ function HomeScreen() {
           onCreated={(id) => {
             void queryClient.invalidateQueries({ queryKey: ['projects'] });
             dispatch({ type: 'PROJECT_CREATED', id });
+          }}
+        />
+
+        <EditProjectDialog
+          isOpen={state.editingProjectId !== null}
+          projectLocalId={state.editingProjectId ?? ''}
+          currentName={
+            projects.find((p) => p.localId === state.editingProjectId)?.name ??
+            ''
+          }
+          onClose={() => dispatch({ type: 'CLOSE_EDIT_DIALOG' })}
+          onSaved={() => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_EDITED' });
+          }}
+        />
+
+        <DeleteProjectDialog
+          isOpen={state.deletingProjectId !== null}
+          projectLocalId={state.deletingProjectId ?? ''}
+          projectName={
+            projects.find((p) => p.localId === state.deletingProjectId)?.name ??
+            ''
+          }
+          onClose={() => dispatch({ type: 'CLOSE_DELETE_DIALOG' })}
+          onDeleted={() => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
 
@@ -654,6 +776,34 @@ function HomeScreen() {
           }}
         />
 
+        <EditProjectDialog
+          isOpen={state.editingProjectId !== null}
+          projectLocalId={state.editingProjectId ?? ''}
+          currentName={
+            projects.find((p) => p.localId === state.editingProjectId)?.name ??
+            ''
+          }
+          onClose={() => dispatch({ type: 'CLOSE_EDIT_DIALOG' })}
+          onSaved={() => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_EDITED' });
+          }}
+        />
+
+        <DeleteProjectDialog
+          isOpen={state.deletingProjectId !== null}
+          projectLocalId={state.deletingProjectId ?? ''}
+          projectName={
+            projects.find((p) => p.localId === state.deletingProjectId)?.name ??
+            ''
+          }
+          onClose={() => dispatch({ type: 'CLOSE_DELETE_DIALOG' })}
+          onDeleted={() => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_DELETED' });
+          }}
+        />
+
         <AddArchiveServerDialog
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
@@ -705,6 +855,34 @@ function HomeScreen() {
           onCreated={(id) => {
             void queryClient.invalidateQueries({ queryKey: ['projects'] });
             dispatch({ type: 'PROJECT_CREATED', id });
+          }}
+        />
+
+        <EditProjectDialog
+          isOpen={state.editingProjectId !== null}
+          projectLocalId={state.editingProjectId ?? ''}
+          currentName={
+            projects.find((p) => p.localId === state.editingProjectId)?.name ??
+            ''
+          }
+          onClose={() => dispatch({ type: 'CLOSE_EDIT_DIALOG' })}
+          onSaved={() => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_EDITED' });
+          }}
+        />
+
+        <DeleteProjectDialog
+          isOpen={state.deletingProjectId !== null}
+          projectLocalId={state.deletingProjectId ?? ''}
+          projectName={
+            projects.find((p) => p.localId === state.deletingProjectId)?.name ??
+            ''
+          }
+          onClose={() => dispatch({ type: 'CLOSE_DELETE_DIALOG' })}
+          onDeleted={() => {
+            void queryClient.invalidateQueries({ queryKey: ['projects'] });
+            dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
 
@@ -862,6 +1040,33 @@ function HomeScreen() {
         onCreated={(id) => {
           void queryClient.invalidateQueries({ queryKey: ['projects'] });
           dispatch({ type: 'PROJECT_CREATED', id });
+        }}
+      />
+
+      <EditProjectDialog
+        isOpen={state.editingProjectId !== null}
+        projectLocalId={state.editingProjectId ?? ''}
+        currentName={
+          projects.find((p) => p.localId === state.editingProjectId)?.name ?? ''
+        }
+        onClose={() => dispatch({ type: 'CLOSE_EDIT_DIALOG' })}
+        onSaved={() => {
+          void queryClient.invalidateQueries({ queryKey: ['projects'] });
+          dispatch({ type: 'PROJECT_EDITED' });
+        }}
+      />
+
+      <DeleteProjectDialog
+        isOpen={state.deletingProjectId !== null}
+        projectLocalId={state.deletingProjectId ?? ''}
+        projectName={
+          projects.find((p) => p.localId === state.deletingProjectId)?.name ??
+          ''
+        }
+        onClose={() => dispatch({ type: 'CLOSE_DELETE_DIALOG' })}
+        onDeleted={() => {
+          void queryClient.invalidateQueries({ queryKey: ['projects'] });
+          dispatch({ type: 'PROJECT_DELETED' });
         }}
       />
 

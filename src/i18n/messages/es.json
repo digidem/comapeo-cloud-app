@@ -129,5 +129,15 @@
   "settings.invites.use.title": "Usar una Invitación",
   "settings.invites.use.code": "Código de Invitación",
   "settings.invites.use.connect": "Conectar",
-  "settings.invites.use.connected": "Conectado a {archive}"
+  "settings.invites.use.connected": "Conectado a {archive}",
+  "home.editProject.title": "Editar Proyecto",
+  "home.editProject.save": "Guardar",
+  "home.editProject.error": "Error al actualizar el proyecto",
+  "home.deleteProject.title": "Eliminar Proyecto",
+  "home.deleteProject.confirm": "¿Estás seguro de que deseas eliminar \"{name}\"? Esto eliminará permanentemente todos los datos asociados.",
+  "home.deleteProject.cancel": "Cancelar",
+  "home.deleteProject.confirmBtn": "Eliminar",
+  "home.deleteProject.error": "Error al eliminar el proyecto",
+  "home.project.editAria": "Editar proyecto",
+  "home.project.deleteAria": "Eliminar proyecto"
 }
