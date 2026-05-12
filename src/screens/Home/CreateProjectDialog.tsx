@@ -1,9 +1,14 @@
-import { useReducer, useRef } from 'react';
+import { useReducer } from 'react';
+import { useForm } from 'react-hook-form';
+import { valibotResolver } from '@hookform/resolvers/valibot';
+import * as v from 'valibot';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
+import { Select } from '@/components/ui/select';
 import { createProject } from '@/lib/data-layer';
+import { useAuthStore } from '@/stores/auth-store';
 
 interface CreateProjectDialogProps {
   isOpen: boolean;
@@ -36,6 +41,18 @@ const messages = defineMessages({
     id: 'home.newProject.dialog.namePlaceholder',
     defaultMessage: 'Enter project name',
   },
+  archiveLabel: {
+    id: 'home.newProject.dialog.archiveLabel',
+    defaultMessage: 'Remote Archive',
+  },
+  archivePlaceholder: {
+    id: 'home.newProject.dialog.archivePlaceholder',
+    defaultMessage: 'Select remote archive',
+  },
+  archiveOptionLocal: {
+    id: 'home.newProject.dialog.archiveOptionLocal',
+    defaultMessage: 'Local (offline)',
+  },
   create: {
     id: 'home.newProject.dialog.create',
     defaultMessage: 'Create',
@@ -50,7 +67,10 @@ const messages = defineMessages({
   },
 });
 
-function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
+function dialogReducer(
+  _state: DialogState,
+  action: DialogAction,
+): DialogState {
   switch (action.type) {
     case 'submit':
       return { status: 'loading' };
@@ -63,21 +83,46 @@ function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
   }
 }
 
+const formSchema = v.object({
+  name: v.optional(v.string()),
+  serverUrl: v.optional(v.string()),
+});
+
+type FormData = v.InferInput<typeof formSchema>;
+
 function CreateProjectDialog({
   isOpen,
   onClose,
   onCreated,
-  serverUrl,
+  serverUrl: _serverUrl,
 }: CreateProjectDialogProps) {
   const intl = useIntl();
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
-  const inputRef = useRef<HTMLInputElement>(null);
+  const servers = useAuthStore((s) => s.servers);
 
-  function handleCreate() {
-    const name = inputRef.current?.value ?? '';
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+  } = useForm<FormData>({
+    resolver: valibotResolver(formSchema),
+    defaultValues: {
+      name: '',
+      serverUrl: _serverUrl ?? '',
+    },
+  });
+
+  const selectedServerUrl = watch('serverUrl');
+
+  function onSubmit(data: FormData) {
     dispatch({ type: 'submit' });
 
-    createProject({ name, serverUrl }).then(
+    createProject({
+      name: data.name,
+      serverUrl: data.serverUrl || undefined,
+    }).then(
       (project) => {
         dispatch({ type: 'success' });
         onCreated(project.localId);
@@ -94,6 +139,7 @@ function CreateProjectDialog({
 
   function handleClose() {
     dispatch({ type: 'reset' });
+    reset({ name: '', serverUrl: _serverUrl ?? '' });
     onClose();
   }
 
@@ -106,10 +152,7 @@ function CreateProjectDialog({
       title={intl.formatMessage(messages.title)}
     >
       <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleCreate();
-        }}
+        onSubmit={handleSubmit(onSubmit)}
         className="flex flex-col gap-4"
       >
         <div className="flex flex-col gap-1">
@@ -121,12 +164,31 @@ function CreateProjectDialog({
           </label>
           <input
             id="project-name"
-            ref={inputRef}
             type="text"
             placeholder={intl.formatMessage(messages.namePlaceholder)}
-            defaultValue=""
             className="w-full rounded-input border border-border bg-surface-card px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary"
+            {...register('name')}
           />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-text">
+            {intl.formatMessage(messages.archiveLabel)}
+          </label>
+          <Select
+            value={selectedServerUrl}
+            onValueChange={(value) => setValue('serverUrl', value)}
+            placeholder={intl.formatMessage(messages.archivePlaceholder)}
+          >
+            <Select.Item value="">
+              {intl.formatMessage(messages.archiveOptionLocal)}
+            </Select.Item>
+            {servers.map((server) => (
+              <Select.Item key={server.id} value={server.baseUrl}>
+                {server.label}
+              </Select.Item>
+            ))}
+          </Select>
         </div>
 
         {state.status === 'error' && (

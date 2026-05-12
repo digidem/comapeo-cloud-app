@@ -145,6 +145,9 @@
   --radius-btn: var(--theme-radius-btn);
   --radius-card: var(--theme-radius-card);
   --radius-pill: var(--theme-radius-pill);
+
+  /* Animations */
+  --animate-fade-in: fadeIn 300ms ease-out forwards;
 }
 
 /* Prevent flash of unstyled background during route transitions.
@@ -205,6 +208,36 @@ html {
   }
   to {
     opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile drawer animations (MobileNavDrawer) — slide from left
+   --------------------------------------------------------------------------- */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
 

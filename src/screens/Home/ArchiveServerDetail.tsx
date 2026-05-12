@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
+import { useProjects } from '@/hooks/useProjects';
+import { updateProject } from '@/lib/data-layer';
 import type { ArchiveServerStatus } from '@/hooks/useArchiveStatus';
 import type { RemoteArchiveServer } from '@/stores/auth-store';
 import { useAuthStore } from '@/stores/auth-store';
@@ -82,6 +85,11 @@ const messages = defineMessages({
     defaultMessage:
       'Warning: Token may be stale — no successful sync in over 24 hours. Try reconnecting or updating credentials.',
   },
+  projectsReassigned: {
+    id: 'home.archive.confirmRemove.projectsReassigned',
+    defaultMessage:
+      '{count, plural, one {# project will be moved to Local.} other {# projects will be moved to Local.}}',
+  },
 });
 
 function resolveStatusLabel(server: ArchiveServerStatus): string {
@@ -97,6 +105,8 @@ function ArchiveServerDetail({
   onRemove,
 }: ArchiveServerDetailProps) {
   const intl = useIntl();
+  const queryClient = useQueryClient();
+  const { data: projects = [] } = useProjects();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isConfirmRemoveOpen, setIsConfirmRemoveOpen] = useState(false);
   const servers = useAuthStore((s) => s.servers);
@@ -118,8 +128,19 @@ function ArchiveServerDetail({
     setIsConfirmRemoveOpen(true);
   }
 
-  function handleConfirmRemove() {
+  const matchingProjects = projects.filter(
+    (p) => p.serverUrl === server.baseUrl,
+  );
+
+  async function handleConfirmRemove() {
     setIsConfirmRemoveOpen(false);
+    // Reassign all projects that belong to this server to Local (serverUrl = null)
+    await Promise.all(
+      matchingProjects.map((p) =>
+        updateProject(p.localId, { serverUrl: null }),
+      ),
+    );
+    await queryClient.invalidateQueries({ queryKey: ['projects'] });
     onRemove(server.id);
   }
 
@@ -239,9 +260,17 @@ function ArchiveServerDetail({
           if (!open) setIsConfirmRemoveOpen(false);
         }}
         title={intl.formatMessage(messages.confirmRemove)}
-        description={intl.formatMessage(messages.confirmRemoveDescription, {
-          name: server.label,
-        })}
+        description={
+          intl.formatMessage(messages.confirmRemoveDescription, {
+            name: server.label,
+          }) +
+          (matchingProjects.length > 0
+            ? ' ' +
+              intl.formatMessage(messages.projectsReassigned, {
+                count: matchingProjects.length,
+              })
+            : '')
+        }
       >
         <div className="flex justify-end gap-2 mt-4">
           <Button

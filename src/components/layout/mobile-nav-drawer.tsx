@@ -26,28 +26,13 @@ function MobileNavDrawer({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 50,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            transition: 'opacity 150ms ease-out',
-          }}
+          forceMount
+          className="fixed inset-0 z-50 bg-black/50 motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-out data-[state=closed]:opacity-0 data-[state=open]:opacity-100"
         />
         <Dialog.Content
+          forceMount
           aria-describedby={undefined}
-          style={{
-            position: 'fixed',
-            top: 0,
-            bottom: 0,
-            left: 0,
-            width: '85vw',
-            maxWidth: '24rem',
-            zIndex: 50,
-            transform: open ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform 200ms cubic-bezier(0.16, 1, 0.3, 1)',
-          }}
-          className="flex flex-col bg-surface-card shadow-elevated focus:outline-none"
+          className="fixed top-0 bottom-0 left-0 z-50 w-[85vw] max-w-96 flex flex-col bg-surface-card shadow-elevated focus:outline-none motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:-translate-x-full data-[state=open]:translate-x-0"
         >
           {/* Visually hidden title for accessibility */}
           <Dialog.Title asChild>

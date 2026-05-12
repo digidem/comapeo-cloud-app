@@ -36,9 +36,9 @@ export async function getProjects() {
 
 export async function updateProject(
   localId: string,
-  updates: { name?: string },
+  updates: { name?: string; serverUrl?: string | null },
 ) {
-  return repoUpdateProject(localId, updates);
+  return repoUpdateProject(localId, updates as any);
 }
 
 export async function deleteProject(localId: string) {

@@ -136,6 +136,9 @@ function ArchiveBrowser({
     () => new Set(archives.map((a) => a.archiveId)),
   );
 
+  // Active archive filter — null means "show all"
+  const [activeArchiveId, setActiveArchiveId] = useState<string | null>(null);
+
   function toggleArchive(id: string) {
     setExpandedArchives((prev) => {
       const next = new Set(prev);
@@ -143,6 +146,7 @@ function ArchiveBrowser({
       else next.add(id);
       return next;
     });
+    setActiveArchiveId((prev) => (prev === id ? null : id));
     selectArchive(id);
   }
 
@@ -193,7 +197,14 @@ function ArchiveBrowser({
       ) : (
         /* Accordion archive sections */
         <div className="flex flex-col gap-1">
-          {archives.map((archive) => {
+          {archives
+            .filter(
+              (archive) =>
+                activeArchiveId === null ||
+                archive.archiveId === activeArchiveId ||
+                archive.archiveId === '_local',
+            )
+            .map((archive) => {
             const status = archive.url
               ? statusMap.get(normalizeUrl(archive.url))
               : null;
@@ -281,92 +292,97 @@ function ArchiveBrowser({
                 </button>
 
                 {/* Collapsible project list */}
-                {isExpanded && (
-                  <div className="ml-4 mt-1 flex flex-col gap-0.5">
-                    {archiveProjects.map((project) => {
-                      const isActive = project.localId === selectedProjectId;
-                      return (
-                        <div
-                          key={project.localId}
-                          className={`flex items-center gap-1 px-3 py-1.5 rounded-btn text-sm transition-colors ${
-                            isActive
-                              ? 'bg-primary-soft text-primary font-medium'
-                              : 'text-text hover:bg-surface'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => onSelect(project.localId)}
-                            className="flex-1 text-left truncate cursor-pointer focus:outline-none"
+                <div
+                  className="grid transition-[grid-template-rows] duration-300 ease-out"
+                  style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+                >
+                  <div className="overflow-hidden">
+                    <div className="ml-4 mt-1 flex flex-col gap-0.5">
+                      {archiveProjects.map((project) => {
+                        const isActive = project.localId === selectedProjectId;
+                        return (
+                          <div
+                            key={project.localId}
+                            className={`flex items-center gap-1 px-3 py-1.5 rounded-btn text-sm transition-colors ${
+                              isActive
+                                ? 'bg-primary-soft text-primary font-medium'
+                                : 'text-text hover:bg-surface'
+                            }`}
                           >
-                            {project.name ?? 'Untitled'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onEditProject(project.localId);
-                            }}
-                            className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface inline-flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            aria-label="Edit project"
-                          >
-                            <svg
-                              width="12"
-                              height="12"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
+                            <button
+                              type="button"
+                              onClick={() => onSelect(project.localId)}
+                              className="flex-1 text-left truncate cursor-pointer focus:outline-none"
                             >
-                              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteProject(project.localId);
-                            }}
-                            className="h-6 w-6 rounded-full text-text-muted hover:text-error hover:bg-surface inline-flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            aria-label="Delete project"
-                          >
-                            <svg
-                              width="12"
-                              height="12"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
+                              {project.name ?? 'Untitled'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditProject(project.localId);
+                              }}
+                              className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface inline-flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                              aria-label="Edit project"
                             >
-                              <path d="M3 6h18" />
-                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                            </svg>
-                          </button>
-                          {/* Import button — local projects only */}
-                          {!project.serverUrl && onImportComplete && (
-                            <ImportDataButton
-                              projectLocalId={project.localId}
-                              projectName={project.name}
-                              iconOnly
-                              onImportComplete={onImportComplete}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                    {/* Empty state for an archive with no projects */}
-                    {archiveProjects.length === 0 && (
-                      <p className="text-xs text-text-muted px-3 py-2">
-                        {intl.formatMessage(messages.noProjects)}
-                      </p>
-                    )}
+                              <svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteProject(project.localId);
+                              }}
+                              className="h-6 w-6 rounded-full text-text-muted hover:text-error hover:bg-surface inline-flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                              aria-label="Delete project"
+                            >
+                              <svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                              </svg>
+                            </button>
+                            {/* Import button — local projects only */}
+                            {!project.serverUrl && onImportComplete && (
+                              <ImportDataButton
+                                projectLocalId={project.localId}
+                                projectName={project.name}
+                                iconOnly
+                                onImportComplete={onImportComplete}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                      {/* Empty state for an archive with no projects */}
+                      {archiveProjects.length === 0 && (
+                        <p className="text-xs text-text-muted px-3 py-2">
+                          {intl.formatMessage(messages.noProjects)}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             );
           })}
