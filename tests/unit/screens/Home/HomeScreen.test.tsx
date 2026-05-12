@@ -755,4 +755,159 @@ describe('HomeScreen', () => {
     // Should show the empty welcome message instead of status cards
     expect(screen.getByText('Welcome to CoMapeo Cloud')).toBeInTheDocument();
   });
+
+  it('auto-selects most recent project when persisted ID is stale', async () => {
+    // Simulate a stale persisted project ID that no longer exists in projects
+    useProjectStore.setState({
+      selectedProjectId: 'stale-id',
+      selectedServerId: null,
+    });
+
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Older Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+        {
+          localId: 'p2',
+          name: 'Newer Project',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    renderWithShell(<HomeScreen />);
+
+    // Should auto-select the most recently updated project (p2),
+    // not the stale persisted ID that doesn't match any project.
+    await waitFor(() => {
+      expect(screen.getByTestId('shell-workspace')).toHaveTextContent(
+        'Newer Project',
+      );
+    });
+  });
+
+  it('renders Observations stat card when project is selected with results', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Stat Observations',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    mockUseObservations.mockReturnValue({
+      data: [
+        {
+          localId: 'obs1',
+          createdAt: new Date().toISOString(),
+          tags: { species: 'tree' },
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Stat Observations' }),
+    );
+
+    // Stat card with "Observations" label should be visible
+    expect(screen.getByText('Observations')).toBeInTheDocument();
+  });
+
+  it('shows "Connected" mode stat when project has a serverUrl', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Connected Project',
+          serverUrl: 'https://archive.example.com',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Connected Project' }),
+    );
+
+    // The Mode stat card should show "Connected" with the green success color
+    const modeElements = screen.getAllByText('Connected');
+    const modeValue = modeElements.find((el) =>
+      el.className.includes('text-success'),
+    );
+    expect(modeValue).toBeInTheDocument();
+    expect(modeValue!.className).toContain('text-success');
+  });
+
+  it('shows "Local" mode stat when project has no serverUrl', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Local Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Local Project' }),
+    );
+
+    // The Mode stat card should show "Local" with the grey muted color
+    const localElements = screen.getAllByText('Local');
+    const modeValue = localElements.find((el) =>
+      el.className.includes('text-text-muted'),
+    );
+    expect(modeValue).toBeInTheDocument();
+    expect(modeValue!.className).toContain('text-text-muted');
+  });
 });

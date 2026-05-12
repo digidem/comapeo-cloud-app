@@ -66,4 +66,29 @@ describe('project-store', () => {
     expect(parsed.state.selectedProjectId).toBe('persisted-project');
     expect(parsed.state.selectedServerId).toBe('persisted-server');
   });
+
+  it('loads stale persisted ID from localStorage and allows overwriting', () => {
+    // Simulate a stale (non-existent) project ID that was persisted earlier
+    localStorage.setItem(
+      'comapeo-project',
+      JSON.stringify({
+        state: {
+          selectedProjectId: 'stale-id',
+          selectedServerId: null,
+        },
+        version: 0,
+      }),
+    );
+
+    // Rehydrate the store from the persisted localStorage
+    useProjectStore.persist.rehydrate();
+
+    // Should load the stale ID from localStorage
+    expect(useProjectStore.getState().selectedProjectId).toBe('stale-id');
+
+    // Should allow overwriting with a new valid ID
+    useProjectStore.getState().setSelectedProjectId('new-valid-id');
+    expect(useProjectStore.getState().selectedProjectId).toBe('new-valid-id');
+    expect(useProjectStore.getState().selectedServerId).toBeNull();
+  });
 });
