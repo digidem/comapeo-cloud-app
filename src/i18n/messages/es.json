@@ -114,5 +114,20 @@
   "settings.noServers": "Ningún servidor de archivo configurado. Agregue uno desde la barra lateral de la pantalla de Inicio.",
   "settings.sync": "Sincronizar ahora",
   "settings.remove": "Eliminar",
-  "settings.syncing": "Sincronizando..."
+  "settings.syncing": "Sincronizando...",
+  "settings.invites.title": "Invitaciones de Archivo Remoto",
+  "settings.invites.generate.url": "URL del Archivo Remoto",
+  "settings.invites.generate.token": "Token de Portador",
+  "settings.invites.generate.button": "Generar Invitación",
+  "settings.invites.generate.urlInvalid": "Ingrese una URL válida incluyendo http:// o https://",
+  "settings.invites.generate.tokenRequired": "El Token de Portador es obligatorio",
+  "settings.invites.results.title": "Resultados",
+  "settings.invites.results.inviteUrl": "URL de Invitación",
+  "settings.invites.results.inviteCode": "Código de Invitación",
+  "settings.invites.results.copy": "Copiar",
+  "settings.invites.results.copied": "¡Copiado!",
+  "settings.invites.use.title": "Usar una Invitación",
+  "settings.invites.use.code": "Código de Invitación",
+  "settings.invites.use.connect": "Conectar",
+  "settings.invites.use.connected": "Conectado a {archive}"
 }

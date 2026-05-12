@@ -337,5 +337,50 @@
   },
   "settings.title": {
     "defaultMessage": "Settings"
+  },
+  "settings.invites.title": {
+    "defaultMessage": "Remote Archive Invites"
+  },
+  "settings.invites.generate.url": {
+    "defaultMessage": "Remote Archive URL"
+  },
+  "settings.invites.generate.token": {
+    "defaultMessage": "Bearer Token"
+  },
+  "settings.invites.generate.button": {
+    "defaultMessage": "Generate Invite"
+  },
+  "settings.invites.generate.urlInvalid": {
+    "defaultMessage": "Enter a valid URL including http:// or https://"
+  },
+  "settings.invites.generate.tokenRequired": {
+    "defaultMessage": "Bearer Token is required"
+  },
+  "settings.invites.results.title": {
+    "defaultMessage": "Results"
+  },
+  "settings.invites.results.inviteUrl": {
+    "defaultMessage": "Invite URL"
+  },
+  "settings.invites.results.inviteCode": {
+    "defaultMessage": "Invite Code"
+  },
+  "settings.invites.results.copy": {
+    "defaultMessage": "Copy"
+  },
+  "settings.invites.results.copied": {
+    "defaultMessage": "Copied!"
+  },
+  "settings.invites.use.title": {
+    "defaultMessage": "Use an Invite"
+  },
+  "settings.invites.use.code": {
+    "defaultMessage": "Invite Code"
+  },
+  "settings.invites.use.connect": {
+    "defaultMessage": "Connect"
+  },
+  "settings.invites.use.connected": {
+    "defaultMessage": "Connected to {archive}"
   }
 }
