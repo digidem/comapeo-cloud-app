@@ -94,10 +94,14 @@ describe('SettingsScreen', () => {
     const inviteCodeLabels = screen.getAllByText('Invite Code');
     expect(inviteCodeLabels.length).toBe(2);
 
-    // Should show invite URL (now points to app with url param)
+    // Should show invite URL (now points to app with url + token params)
     expect(
-      screen.getByText(/\/invite\?hash=.*&url=https%3A%2F%2Farchive\.example\.com/),
+      screen.getByText(
+        /\/invite\?hash=.*&url=https%3A%2F%2Farchive\.example\.com/,
+      ),
     ).toBeInTheDocument();
+    // Token must be in the URL so the InviteScreen can authenticate
+    expect(screen.getByText(/&token=my-secret-token/)).toBeInTheDocument();
   });
 
   it('shows connected message after using an invite', async () => {
