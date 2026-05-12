@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
 import { useProjects } from '@/hooks/useProjects';
 import { useRemoteArchives } from '@/hooks/useRemoteArchives';
-import { useAuthStore } from '@/stores/auth-store';
 import type { Project } from '@/lib/db';
+import { useAuthStore } from '@/stores/auth-store';
+
+import { ImportDataButton } from './ImportDataButton';
 
 const messages = defineMessages({
   archives: {
@@ -52,6 +54,7 @@ interface ArchiveBrowserProps {
   onEditProject: (localId: string) => void;
   onDeleteProject: (localId: string) => void;
   onSelectServer?: (serverId: string) => void;
+  onImportComplete?: (result: { imported: number; skipped: number }) => void;
 }
 
 const DOT_COLORS: Record<string, string> = {
@@ -84,9 +87,10 @@ function ArchiveBrowser({
   onEditProject,
   onDeleteProject,
   onSelectServer,
+  onImportComplete,
 }: ArchiveBrowserProps) {
   const intl = useIntl();
-  const { archives, selectedArchiveId, selectArchive } = useRemoteArchives();
+  const { archives, selectArchive } = useRemoteArchives();
   const { data: projects = [], isLoading } = useProjects();
   const servers = useAuthStore((s) => s.servers);
   const archiveStatus = useArchiveStatus();
@@ -190,7 +194,9 @@ function ArchiveBrowser({
         /* Accordion archive sections */
         <div className="flex flex-col gap-1">
           {archives.map((archive) => {
-            const status = archive.url ? statusMap.get(normalizeUrl(archive.url)) : null;
+            const status = archive.url
+              ? statusMap.get(normalizeUrl(archive.url))
+              : null;
             const archiveProjects = getProjectsForArchive(archive.archiveId);
             const isExpanded = expandedArchives.has(archive.archiveId);
 
@@ -232,36 +238,46 @@ function ArchiveBrowser({
                     ({archive.projectCount})
                   </span>
                   {/* Server settings button — only for remote archives */}
-                  {archive.url && onSelectServer && (() => {
-                    const sid = serverIdByUrl.get(normalizeUrl(archive.url));
-                    return sid ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectServer(sid);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
+                  {archive.url &&
+                    onSelectServer &&
+                    (() => {
+                      const sid = serverIdByUrl.get(normalizeUrl(archive.url));
+                      return sid ? (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
                             e.stopPropagation();
                             onSelectServer(sid);
-                          }
-                        }}
-                        className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.stopPropagation();
+                              onSelectServer(sid);
+                            }
+                          }}
+                          className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface
                                    inline-flex items-center justify-center shrink-0
                                    cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                        aria-label={`Manage ${archive.name}`}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-                             strokeLinejoin="round" aria-hidden="true">
-                          <circle cx="12" cy="12" r="3"/>
-                          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                        </svg>
-                      </span>
-                    ) : null;
-                  })()}
+                          aria-label={`Manage ${archive.name}`}
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                          </svg>
+                        </span>
+                      ) : null;
+                    })()}
                 </button>
 
                 {/* Collapsible project list */}
@@ -331,6 +347,15 @@ function ArchiveBrowser({
                               <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
                             </svg>
                           </button>
+                          {/* Import button — local projects only */}
+                          {!project.serverUrl && onImportComplete && (
+                            <ImportDataButton
+                              projectLocalId={project.localId}
+                              projectName={project.name}
+                              iconOnly
+                              onImportComplete={onImportComplete}
+                            />
+                          )}
                         </div>
                       );
                     })}

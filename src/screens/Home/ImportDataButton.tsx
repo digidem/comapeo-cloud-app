@@ -7,6 +7,8 @@ import { importGeoJsonPoints } from '@/lib/data-layer';
 interface ImportDataButtonProps {
   projectLocalId: string;
   onImportComplete?: (result: { imported: number; skipped: number }) => void;
+  iconOnly?: boolean;
+  projectName?: string;
 }
 
 type ImportState =
@@ -72,6 +74,8 @@ function importReducer(_state: ImportState, action: ImportAction): ImportState {
 function ImportDataButton({
   projectLocalId,
   onImportComplete,
+  iconOnly = false,
+  projectName,
 }: ImportDataButtonProps) {
   const intl = useIntl();
   const [state, dispatch] = useReducer(importReducer, { status: 'idle' });
@@ -108,16 +112,63 @@ function ImportDataButton({
     event.target.value = '';
   }
 
+  // Hidden file input shared by both modes
+  const fileInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept=".geojson,.json,.zip"
+      className="sr-only"
+      onChange={handleFileChange}
+      aria-hidden="true"
+    />
+  );
+
+  // Icon-only mode: renders as a small icon button with no text/state feedback
+  if (iconOnly) {
+    return (
+      <>
+        {fileInput}
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleButtonClick();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation();
+              handleButtonClick();
+            }
+          }}
+          className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface inline-flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          aria-label={`Import data into ${projectName ?? 'project'}`}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+        </span>
+      </>
+    );
+  }
+
+  // Full mode: renders a button with state feedback
   return (
     <div className="flex flex-col gap-1">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".geojson,.json,.zip"
-        className="sr-only"
-        onChange={handleFileChange}
-        aria-hidden="true"
-      />
+      {fileInput}
 
       {state.status === 'idle' && (
         <Button variant="secondary" size="sm" onClick={handleButtonClick}>

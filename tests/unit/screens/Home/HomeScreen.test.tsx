@@ -160,17 +160,6 @@ function makeResult(methodId: string, areaM2: number) {
   };
 }
 
-function selectFile(file: File) {
-  const input = document.querySelector(
-    'input[type="file"]',
-  ) as HTMLInputElement;
-  Object.defineProperty(input, 'files', {
-    value: [file],
-    configurable: true,
-  });
-  fireEvent.change(input);
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
@@ -222,7 +211,6 @@ describe('HomeScreen', () => {
   });
 
   it('shows project list when projects exist', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -402,11 +390,27 @@ describe('HomeScreen', () => {
       await screen.findByRole('button', { name: 'Import Project' }),
     );
 
-    selectFile(
-      new File(['{"type":"FeatureCollection","features":[]}'], 'data.geojson', {
-        type: 'application/geo+json',
-      }),
-    );
+    // Click the import icon next to the project to trigger file picker
+    const importIcon = await screen.findByRole('button', {
+      name: /Import data into/,
+    });
+    await user.click(importIcon);
+
+    // Select a file via the hidden input
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    Object.defineProperty(fileInput, 'files', {
+      value: [
+        new File(
+          ['{"type":"FeatureCollection","features":[]}'],
+          'data.geojson',
+          { type: 'application/geo+json' },
+        ),
+      ],
+      configurable: true,
+    });
+    fireEvent.change(fileInput!);
 
     await waitFor(() => {
       expect(mockUseProjectCoverage).toHaveBeenLastCalledWith(
@@ -692,7 +696,6 @@ describe('HomeScreen', () => {
   });
 
   it('shows archive tabs grouped by server when projects exist', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {

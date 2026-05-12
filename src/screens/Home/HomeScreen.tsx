@@ -32,7 +32,6 @@ import { CreateProjectDialog } from './CreateProjectDialog';
 import { DeleteProjectDialog } from './DeleteProjectDialog';
 import { EditProjectDialog } from './EditProjectDialog';
 import { HomeScreenSkeleton } from './HomeScreenSkeleton';
-import { ImportDataButton } from './ImportDataButton';
 import { MethodSelector } from './MethodSelector';
 import { ProjectBannerCard } from './ProjectBannerCard';
 import { RecentActivityList } from './RecentActivityList';
@@ -562,14 +561,8 @@ function HomeScreen() {
           onEditProject={(id) => dispatch({ type: 'OPEN_EDIT_DIALOG', id })}
           onDeleteProject={(id) => dispatch({ type: 'OPEN_DELETE_DIALOG', id })}
           onSelectServer={(id) => dispatch({ type: 'SELECT_SERVER', id })}
+          onImportComplete={handleIncrementRefresh}
         />
-
-        {state.selectedProjectId && (
-          <ImportDataButton
-            projectLocalId={state.selectedProjectId}
-            onImportComplete={handleIncrementRefresh}
-          />
-        )}
       </div>
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
