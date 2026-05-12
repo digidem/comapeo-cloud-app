@@ -16,8 +16,6 @@ describe('ProjectList', () => {
         selectedProjectId={null}
         onSelect={vi.fn()}
         onCreateNew={vi.fn()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
       />,
     );
 
@@ -35,8 +33,6 @@ describe('ProjectList', () => {
         selectedProjectId={null}
         onSelect={onSelect}
         onCreateNew={vi.fn()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
       />,
     );
 
@@ -51,8 +47,6 @@ describe('ProjectList', () => {
         selectedProjectId="p1"
         onSelect={vi.fn()}
         onCreateNew={vi.fn()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
       />,
     );
 
@@ -72,8 +66,6 @@ describe('ProjectList', () => {
         selectedProjectId={null}
         onSelect={vi.fn()}
         onCreateNew={vi.fn()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
       />,
     );
 
@@ -87,8 +79,6 @@ describe('ProjectList', () => {
         selectedProjectId={null}
         onSelect={vi.fn()}
         onCreateNew={vi.fn()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
         isLoading
       />,
     );
@@ -107,8 +97,6 @@ describe('ProjectList', () => {
         selectedProjectId={null}
         onSelect={vi.fn()}
         onCreateNew={onCreateNew}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
       />,
     );
 
@@ -118,5 +106,21 @@ describe('ProjectList', () => {
       }),
     );
     expect(onCreateNew).toHaveBeenCalledOnce();
+  });
+
+  it('does not render edit or delete buttons', () => {
+    render(
+      <ProjectList
+        projects={projects}
+        selectedProjectId={null}
+        onSelect={vi.fn()}
+        onCreateNew={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /edit project/i })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /delete project/i }),
+    ).toBeNull();
   });
 });
