@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from '@tests/mocks/test-utils';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useNavigate } from '@tanstack/react-router';
+import { resetDb } from '@/lib/db';
 import { syncRemoteArchive } from '@/lib/data-layer';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -29,6 +30,12 @@ vi.mock('@/lib/data-layer', async (importOriginal) => {
 });
 
 describe('InviteScreen', () => {
+  beforeEach(async () => {
+    await resetDb();
+    useAuthStore.getState().clearAll();
+    vi.mocked(syncRemoteArchive).mockResolvedValue({ success: true });
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
     // Clear servers after each test
@@ -67,7 +74,7 @@ describe('InviteScreen', () => {
     });
 
     // syncRemoteArchive was called with correct params
-    const args = vi.mocked(syncRemoteArchive).mock.calls[0];
+    const args = vi.mocked(syncRemoteArchive).mock.calls[0]!;
     expect(args[1]).toEqual({
       baseUrl: 'https://archive.test',
       token: 'abc123',
@@ -117,5 +124,60 @@ describe('InviteScreen', () => {
     render(<InviteScreen />);
 
     expect(screen.getByText('Connecting to archive...')).toBeInTheDocument();
+  });
+
+  it('reads the dedicated token param when present', async () => {
+    setSearchParams(
+      '?hash=fingerprint&url=https%3A%2F%2Farchive.test&token=real-token',
+    );
+
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      const servers = useAuthStore.getState().servers;
+      expect(servers).toHaveLength(1);
+      expect(servers[0]!.token).toBe('real-token');
+    });
+
+    const args = vi.mocked(syncRemoteArchive).mock.calls[0]!;
+    expect(args[1]).toEqual({
+      baseUrl: 'https://archive.test',
+      token: 'real-token',
+    });
+  });
+
+  it('shows error when syncRemoteArchive returns success: false', async () => {
+    vi.mocked(syncRemoteArchive).mockResolvedValue({
+      success: false,
+      error: 'unauthorized',
+    });
+
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Failed to connect to archive.'),
+      ).toBeInTheDocument();
+    });
+
+    // Should not have navigated home
+    expect(mockNavigate).not.toHaveBeenCalledWith({ to: '/' });
+  });
+
+  it('shows error when token is missing from invite URL', async () => {
+    setSearchParams('?url=https%3A%2F%2Farchive.test');
+
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Failed to connect to archive.'),
+      ).toBeInTheDocument();
+    });
+
+    // No server was added since token is required
+    expect(useAuthStore.getState().servers).toHaveLength(0);
   });
 });

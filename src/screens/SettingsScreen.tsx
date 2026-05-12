@@ -108,7 +108,7 @@ export function SettingsScreen() {
     const shortHash = hash.slice(0, 24);
     const appOrigin = window.location.origin;
     setInviteUrl(
-      `${appOrigin}/invite?hash=${hash}&url=${encodeURIComponent(data.remoteArchiveUrl)}`,
+      `${appOrigin}/invite?hash=${shortHash}&url=${encodeURIComponent(data.remoteArchiveUrl)}&token=${encodeURIComponent(data.bearerToken)}`,
     );
     setInviteCode(shortHash);
   }, []);

@@ -32,8 +32,12 @@ export function InviteScreen() {
     const params = new URLSearchParams(window.location.search);
     const archiveUrl = params.get('url');
     const hash = params.get('hash');
+    const tokenParam = params.get('token');
+    // Fall back to hash for backward-compatibility with legacy invite URLs
+    // that didn't include a dedicated `token` parameter.
+    const token = tokenParam ?? hash ?? '';
 
-    if (!archiveUrl) {
+    if (!archiveUrl || !token) {
       setStatus('error');
       return;
     }
@@ -45,22 +49,27 @@ export function InviteScreen() {
       .addServer({
         label: new URL(archiveUrl).hostname,
         baseUrl: archiveUrl,
-        token: hash ?? '',
+        token,
       })
       .then((serverId) => {
-        if (cancelled) return;
-        // After adding the server, trigger a sync to actually connect
+        if (cancelled) return undefined;
         return syncRemoteArchive(serverId, {
           baseUrl: archiveUrl,
-          token: hash ?? '',
+          token,
         });
       })
-      .then(() => {
+      .then(async (result) => {
         if (cancelled) return;
-        // Invalidate TanStack Query caches so HomeScreen shows fresh data
-        queryClient.invalidateQueries({ queryKey: ['projects'] });
-        queryClient.invalidateQueries({ queryKey: ['observations'] });
-        queryClient.invalidateQueries({ queryKey: ['alerts'] });
+        if (!result || !result.success) {
+          setStatus('error');
+          return;
+        }
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['projects'] }),
+          queryClient.invalidateQueries({ queryKey: ['observations'] }),
+          queryClient.invalidateQueries({ queryKey: ['alerts'] }),
+        ]);
+        if (cancelled) return;
         setStatus('connected');
         setTimeout(() => {
           if (!cancelled) navigate({ to: '/' });
@@ -74,7 +83,7 @@ export function InviteScreen() {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, queryClient]);
 
   return (
     <div className="flex h-screen items-center justify-center bg-surface">
