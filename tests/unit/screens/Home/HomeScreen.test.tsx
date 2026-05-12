@@ -716,6 +716,7 @@ describe('HomeScreen', () => {
           lastSyncedAt: null,
           error: null,
           hasCredentials: true,
+          isStale: false,
         },
       ],
       anyError: false,

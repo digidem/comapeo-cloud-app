@@ -15,6 +15,7 @@ function makeServer(
     lastSyncedAt: '2025-06-01T12:00:00Z',
     error: null,
     hasCredentials: true,
+    isStale: false,
     ...overrides,
   };
 }
@@ -208,5 +209,78 @@ describe('ArchiveServerDetail', () => {
       />,
     );
     expect(screen.getByRole('button', { name: /remove/i })).toBeInTheDocument();
+  });
+
+  it('shows Retry Sync button when server has error and credentials', () => {
+    render(
+      <ArchiveServerDetail
+        server={makeServer({
+          error: 'Connection failed',
+          hasCredentials: true,
+        })}
+        onSync={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /retry sync/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('calls onSync when Retry Sync is clicked', async () => {
+    const user = userEvent.setup();
+    const onSync = vi.fn();
+
+    render(
+      <ArchiveServerDetail
+        server={makeServer({
+          error: 'Connection failed',
+          hasCredentials: true,
+        })}
+        onSync={onSync}
+        onRemove={noop}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /retry sync/i }));
+
+    expect(onSync).toHaveBeenCalledWith('srv-1');
+  });
+
+  it('shows stale token warning when isStale is true', () => {
+    render(
+      <ArchiveServerDetail
+        server={makeServer({
+          isStale: true,
+          hasCredentials: true,
+          error: null,
+          lastSyncedAt: '2024-01-01T00:00:00Z',
+        })}
+        onSync={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(screen.getByText(/token may be stale/i)).toBeInTheDocument();
+  });
+
+  it('shows Sync Now button even when server has error if no credentials', () => {
+    // When hasCredentials is false, neither Sync Now nor Retry Sync should show
+    render(
+      <ArchiveServerDetail
+        server={makeServer({
+          error: 'Error',
+          hasCredentials: false,
+          isStale: true,
+        })}
+        onSync={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: /sync now/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /retry sync/i }),
+    ).not.toBeInTheDocument();
   });
 });

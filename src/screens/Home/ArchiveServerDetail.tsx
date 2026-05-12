@@ -73,6 +73,15 @@ const messages = defineMessages({
     id: 'home.archive.detail.never',
     defaultMessage: 'Never',
   },
+  retrySync: {
+    id: 'home.archive.detail.retrySync',
+    defaultMessage: 'Retry Sync',
+  },
+  staleToken: {
+    id: 'home.archive.detail.staleToken',
+    defaultMessage:
+      'Warning: Token may be stale — no successful sync in over 24 hours. Try reconnecting or updating credentials.',
+  },
 });
 
 function resolveStatusLabel(server: ArchiveServerStatus): string {
@@ -121,13 +130,23 @@ function ArchiveServerDetail({
         <h2 className="text-xl font-bold text-text">{server.label}</h2>
 
         <div className="flex flex-wrap items-center gap-2">
-          {server.hasCredentials && !server.isSyncing && (
+          {server.hasCredentials && !server.isSyncing && !server.error && (
             <Button
               variant="secondary"
               size="sm"
               onClick={() => onSync(server.id)}
             >
               {intl.formatMessage(messages.sync)}
+            </Button>
+          )}
+
+          {server.hasCredentials && !server.isSyncing && server.error && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onSync(server.id)}
+            >
+              {intl.formatMessage(messages.retrySync)}
             </Button>
           )}
 
@@ -192,6 +211,15 @@ function ArchiveServerDetail({
             </dt>
             <dd className="text-text-muted">
               {intl.formatMessage(messages.credentialsUnavailable)}
+            </dd>
+          </div>
+        )}
+
+        {server.isStale && server.hasCredentials && !server.error && (
+          <div className="flex gap-2">
+            <dt className="font-medium text-warning min-w-24">⚠ </dt>
+            <dd className="text-warning">
+              {intl.formatMessage(messages.staleToken)}
             </dd>
           </div>
         )}

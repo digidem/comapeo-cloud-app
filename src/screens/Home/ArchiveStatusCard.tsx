@@ -14,6 +14,7 @@ interface ArchiveStatusCardProps {
   isSelected: boolean;
   onSelect: (serverId: string) => void;
   onRemove: (serverId: string) => void;
+  onSync: (serverId: string) => void;
 }
 
 const messages = defineMessages({
@@ -42,6 +43,14 @@ const messages = defineMessages({
     id: 'home.archive.confirmRemove.confirm',
     defaultMessage: 'Remove',
   },
+  retrySync: {
+    id: 'home.archive.retrySync',
+    defaultMessage: 'Retry Sync',
+  },
+  staleToken: {
+    id: 'home.archive.staleToken',
+    defaultMessage: 'Token may be stale — no sync in over 24 hours',
+  },
 });
 
 function resolveServerStatus(server: ArchiveServerStatus) {
@@ -63,6 +72,7 @@ function ArchiveStatusCard({
   isSelected,
   onSelect,
   onRemove,
+  onSync,
 }: ArchiveStatusCardProps) {
   const intl = useIntl();
   const status = resolveServerStatus(server);
@@ -128,7 +138,30 @@ function ArchiveStatusCard({
         />
         <span className="truncate flex-1">{server.label}</span>
 
+        {server.isStale && server.hasCredentials && (
+          <span
+            className="text-xs text-warning shrink-0"
+            title={intl.formatMessage(messages.staleToken)}
+          >
+            ⚠
+          </span>
+        )}
+
         <span className="flex items-center gap-1 shrink-0">
+          {status === 'error' && server.hasCredentials && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSync(server.id);
+              }}
+              className="min-h-[28px] min-w-[28px] px-1.5"
+            >
+              {intl.formatMessage(messages.retrySync)}
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"

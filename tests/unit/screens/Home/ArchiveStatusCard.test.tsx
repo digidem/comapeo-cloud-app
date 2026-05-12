@@ -15,6 +15,7 @@ function makeServer(
     lastSyncedAt: null,
     error: null,
     hasCredentials: true,
+    isStale: false,
     ...overrides,
   };
 }
@@ -29,6 +30,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={false}
         onSelect={noop}
         onRemove={noop}
+        onSync={noop}
       />,
     );
     expect(screen.getByText('My Archive Server')).toBeDefined();
@@ -41,6 +43,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={false}
         onSelect={noop}
         onRemove={noop}
+        onSync={noop}
       />,
     );
     const card = screen.getByTestId('archive-status-card');
@@ -55,6 +58,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={false}
         onSelect={noop}
         onRemove={noop}
+        onSync={noop}
       />,
     );
     const card = screen.getByTestId('archive-status-card');
@@ -69,6 +73,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={false}
         onSelect={noop}
         onRemove={noop}
+        onSync={noop}
       />,
     );
     const card = screen.getByTestId('archive-status-card');
@@ -83,6 +88,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={false}
         onSelect={noop}
         onRemove={noop}
+        onSync={noop}
       />,
     );
     const card = screen.getByTestId('archive-status-card');
@@ -100,6 +106,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={false}
         onSelect={onSelect}
         onRemove={noop}
+        onSync={noop}
       />,
     );
     await user.click(screen.getByTestId('archive-status-card'));
@@ -114,6 +121,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={true}
         onSelect={noop}
         onRemove={noop}
+        onSync={noop}
       />,
     );
     const card = screen.getByTestId('archive-status-card');
@@ -127,6 +135,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={false}
         onSelect={noop}
         onRemove={noop}
+        onSync={noop}
       />,
     );
     const card = screen.getByTestId('archive-status-card');
@@ -140,6 +149,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={false}
         onSelect={noop}
         onRemove={noop}
+        onSync={noop}
       />,
     );
     expect(screen.getByText('Edit')).toBeDefined();
@@ -154,6 +164,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={false}
         onSelect={noop}
         onRemove={noop}
+        onSync={noop}
       />,
     );
 
@@ -176,6 +187,7 @@ describe('ArchiveStatusCard', () => {
         isSelected={false}
         onSelect={noop}
         onRemove={onRemove}
+        onSync={noop}
       />,
     );
 
@@ -187,5 +199,60 @@ describe('ArchiveStatusCard', () => {
     await user.click(removeButtons[removeButtons.length - 1]!);
 
     expect(onRemove).toHaveBeenCalledWith('srv-1');
+  });
+
+  it('shows retry sync button when status is error', () => {
+    render(
+      <ArchiveStatusCard
+        server={makeServer({
+          error: 'Connection refused',
+          hasCredentials: true,
+        })}
+        isSelected={false}
+        onSelect={noop}
+        onRemove={noop}
+        onSync={noop}
+      />,
+    );
+    expect(screen.getByText('Retry Sync')).toBeDefined();
+  });
+
+  it('calls onSync when retry sync button is clicked', async () => {
+    const user = userEvent.setup();
+    const onSync = vi.fn();
+
+    render(
+      <ArchiveStatusCard
+        server={makeServer({
+          error: 'Connection refused',
+          hasCredentials: true,
+        })}
+        isSelected={false}
+        onSelect={noop}
+        onRemove={noop}
+        onSync={onSync}
+      />,
+    );
+
+    await user.click(screen.getByText('Retry Sync'));
+
+    expect(onSync).toHaveBeenCalledWith('srv-1');
+  });
+
+  it('shows stale warning dot when server is stale', () => {
+    render(
+      <ArchiveStatusCard
+        server={makeServer({
+          isStale: true,
+          hasCredentials: true,
+        })}
+        isSelected={false}
+        onSelect={noop}
+        onRemove={noop}
+        onSync={noop}
+      />,
+    );
+    const card = screen.getByTestId('archive-status-card');
+    expect(card.textContent).toContain('⚠');
   });
 });
