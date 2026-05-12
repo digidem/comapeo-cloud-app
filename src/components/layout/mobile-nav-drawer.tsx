@@ -2,15 +2,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 
 import type { ReactNode } from 'react';
-import { defineMessages, useIntl } from 'react-intl';
 
 import { Link } from '@tanstack/react-router';
-
-import { ThemeToggle } from '@/components/shared/theme-toggle';
-
-const messages = defineMessages({
-  theme: { id: 'menu.theme', defaultMessage: 'Theme' },
-});
 
 interface MobileNavDrawerProps {
   open: boolean;
@@ -29,8 +22,6 @@ function MobileNavDrawer({
   secondaryContent,
   onNavigate,
 }: MobileNavDrawerProps) {
-  const intl = useIntl();
-
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -117,15 +108,6 @@ function MobileNavDrawer({
                 <div>{secondaryContent}</div>
               </>
             )}
-
-            {/* Theme toggle section */}
-            <div className="my-2 border-t border-border" />
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm font-medium text-text-muted">
-                {intl.formatMessage(messages.theme)}
-              </span>
-              <ThemeToggle />
-            </div>
           </nav>
         </Dialog.Content>
       </Dialog.Portal>

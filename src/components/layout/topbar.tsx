@@ -1,7 +1,4 @@
-// TEMPORARY: ThemeToggle import for theme comparison
 import type { ReactNode } from 'react';
-
-import { ThemeToggle } from '@/components/shared/theme-toggle';
 
 interface TopbarProps {
   title: string;
@@ -63,10 +60,6 @@ function Topbar({
         )}
       </div>
       <div className="flex items-center gap-2">
-        {/* TEMPORARY: Theme toggle for comparison */}
-        <div className="hidden lg:flex">
-          <ThemeToggle />
-        </div>
         {children && (
           <>
             <div className="h-4 w-px bg-white/20" />

@@ -7,8 +7,6 @@ import type { ReactNode } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import Map, { Layer, type MapRef, Source } from 'react-map-gl/maplibre';
 
-import { useThemeTokens } from '@/hooks/useThemeTokens';
-
 import { MapConfigSheet } from './MapConfigSheet';
 
 const EMPTY_FEATURE_COLLECTION: FeatureCollection = {
@@ -99,7 +97,6 @@ export function AreaMap({
 }: AreaMapProps) {
   const mapRef = useRef<MapRef>(null);
   const isMapLoadedRef = useRef(false);
-  const { mapColors } = useThemeTokens();
   const intl = useIntl();
   const isDesktop = useIsDesktop();
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -110,11 +107,11 @@ export function AreaMap({
   const hasChildren = Boolean(children);
 
   const LAYER_COLORS: Record<string, string> = {
-    observed: mapColors.observed,
-    connectivity10: mapColors.connectivity,
-    connectivity30: mapColors.warning,
-    clusterHull: mapColors.cluster,
-    grid: mapColors.grid,
+    observed: '#1F6FFF',
+    connectivity10: '#0F9D58',
+    connectivity30: '#FF6B00',
+    clusterHull: '#7C3AED',
+    grid: '#04145C',
   };
 
   const mapLayers = useMemo<RenderableAreaLayer[]>(() => {
@@ -139,7 +136,7 @@ export function AreaMap({
           outlineLayerId: `area-outline-${layer.id}`,
           featureCollection: layer.featureCollection,
           isActive: Boolean(layer.isActive),
-          color: LAYER_COLORS[layer.id] ?? mapColors.observed,
+          color: LAYER_COLORS[layer.id] ?? '#1F6FFF',
           legacy: false,
         });
       }
@@ -155,12 +152,12 @@ export function AreaMap({
         outlineLayerId: 'area-outline',
         featureCollection: featureCollection ?? EMPTY_FEATURE_COLLECTION,
         isActive: true,
-        color: mapColors.observed,
+        color: '#1F6FFF',
         legacy: true,
       },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMethodId, featureCollection, layers, mapColors]);
+  }, [activeMethodId, featureCollection, layers]);
 
   const mapBounds = useMemo(() => {
     const features: FeatureCollection['features'] = [];
@@ -232,16 +229,14 @@ export function AreaMap({
                 paint={{
                   'fill-color': layer.color,
                   'fill-opacity': getFillOpacity(layer),
-                  'fill-outline-color': layer.legacy
-                    ? mapColors.grid
-                    : layer.color,
+                  'fill-outline-color': layer.legacy ? '#04145C' : layer.color,
                 }}
               />
               <Layer
                 id={layer.outlineLayerId}
                 type="line"
                 paint={{
-                  'line-color': layer.legacy ? mapColors.grid : layer.color,
+                  'line-color': layer.legacy ? '#04145C' : layer.color,
                   'line-width': getOutlineWidth(layer),
                   ...(layer.legacy
                     ? {}

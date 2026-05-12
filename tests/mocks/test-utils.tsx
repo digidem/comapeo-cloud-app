@@ -7,10 +7,6 @@ import { IntlProvider } from 'react-intl';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { getMessages } from '@/i18n/load-messages';
-import { useThemeStore } from '@/stores/theme-store';
-
-// Initialize theme store with default cloud theme for consistent test results
-useThemeStore.setState({ theme: 'cloud' });
 
 // Create a fresh QueryClient for each test to prevent shared state
 function createTestQueryClient() {

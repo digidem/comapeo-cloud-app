@@ -120,7 +120,7 @@ describe('MobileNavDrawer', () => {
     expect(screen.queryByTestId('secondary')).not.toBeInTheDocument();
   });
 
-  it('renders ThemeToggle section', () => {
+  it('does not render ThemeToggle section after theme lock', () => {
     render(
       <MobileNavDrawer
         open={true}
@@ -130,9 +130,9 @@ describe('MobileNavDrawer', () => {
         onNavigate={() => {}}
       />,
     );
-    // ThemeToggle renders buttons with labels "Cloud", "Mobile", "Sentinel"
-    expect(screen.getByText('Cloud')).toBeInTheDocument();
-    expect(screen.getByText('Mobile')).toBeInTheDocument();
-    expect(screen.getByText('Sentinel')).toBeInTheDocument();
+    // ThemeToggle was removed — no theme buttons should appear
+    expect(screen.queryByText('Cloud')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mobile')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sentinel')).not.toBeInTheDocument();
   });
 });
