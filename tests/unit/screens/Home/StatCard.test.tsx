@@ -46,4 +46,34 @@ describe('StatCard', () => {
     const errorElements = document.querySelectorAll('.text-error');
     expect(errorElements.length).toBeGreaterThan(0);
   });
+
+  it('renders subtitle when provided', () => {
+    render(
+      <StatCard
+        title="Field Data"
+        value={10}
+        subtitle={<span data-testid="subtitle-photos">3 photos</span>}
+      />,
+    );
+    expect(screen.getByTestId('subtitle-photos')).toBeInTheDocument();
+  });
+
+  it('does not render subtitle when isLoading', () => {
+    render(
+      <StatCard
+        title="Field Data"
+        value={10}
+        isLoading
+        subtitle={<span data-testid="subtitle-photos">3 photos</span>}
+      />,
+    );
+    expect(screen.queryByTestId('subtitle-photos')).not.toBeInTheDocument();
+  });
+
+  it('does not render subtitle when not provided', () => {
+    render(<StatCard title="Observations" value={42} />);
+    // No subtitle container should exist
+    const subtitleContainers = document.querySelectorAll('.mt-2.text-sm');
+    expect(subtitleContainers.length).toBe(0);
+  });
 });

@@ -873,8 +873,8 @@ describe('HomeScreen', () => {
       await screen.findByRole('button', { name: 'Stat Observations' }),
     );
 
-    // Stat card with "Observations" label should be visible
-    expect(screen.getByText('Observations')).toBeInTheDocument();
+    // Stat card with "Field Data" label should be visible
+    expect(screen.getByText('Field Data')).toBeInTheDocument();
   });
 
   it('shows "Connected" mode stat when project has a serverUrl', async () => {
@@ -1028,7 +1028,7 @@ describe('HomeScreen', () => {
 
     // Wait for the project to be auto-selected and stat cards to render
     await waitFor(() => {
-      expect(screen.getByText('Observations')).toBeInTheDocument();
+      expect(screen.getByText('Field Data')).toBeInTheDocument();
     });
 
     // Observations and Categories cards should show skeletons (from isLoading)
@@ -1096,7 +1096,7 @@ describe('HomeScreen', () => {
     renderWithShell(<HomeScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('Observations')).toBeInTheDocument();
+      expect(screen.getByText('Field Data')).toBeInTheDocument();
     });
 
     // No stat card skeletons should be visible when data is loaded

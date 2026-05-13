@@ -410,6 +410,9 @@
   "home.stat.activeAlerts": {
     "defaultMessage": "Active Alerts"
   },
+  "home.stat.audios": {
+    "defaultMessage": "{count, plural, one {# audio} other {# audios}}"
+  },
   "home.stat.categories": {
     "defaultMessage": "Categories"
   },
@@ -419,8 +422,14 @@
   "home.stat.mode": {
     "defaultMessage": "Mode"
   },
+  "home.stat.photos": {
+    "defaultMessage": "{count, plural, one {# photo} other {# photos}}"
+  },
   "home.stat.totalObservations": {
-    "defaultMessage": "Observations"
+    "defaultMessage": "Field Data"
+  },
+  "home.stat.tracks": {
+    "defaultMessage": "{count, plural, one {# track} other {# tracks}}"
   },
   "home.time.daysAgo": {
     "defaultMessage": "{count} DAY{plural, plural, one {} other {S}} AGO"

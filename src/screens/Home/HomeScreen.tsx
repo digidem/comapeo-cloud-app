@@ -249,7 +249,7 @@ const messages = defineMessages({
   },
   statTotalObservations: {
     id: 'home.stat.totalObservations',
-    defaultMessage: 'Observations',
+    defaultMessage: 'Field Data',
   },
   statCategories: {
     id: 'home.stat.categories',
@@ -258,6 +258,18 @@ const messages = defineMessages({
   statActiveAlerts: {
     id: 'home.stat.activeAlerts',
     defaultMessage: 'Active Alerts',
+  },
+  statPhotos: {
+    id: 'home.stat.photos',
+    defaultMessage: '{count, plural, one {# photo} other {# photos}}',
+  },
+  statAudios: {
+    id: 'home.stat.audios',
+    defaultMessage: '{count, plural, one {# audio} other {# audios}}',
+  },
+  statTracks: {
+    id: 'home.stat.tracks',
+    defaultMessage: '{count, plural, one {# track} other {# tracks}}',
   },
   timeJustNow: {
     id: 'home.time.justNow',
@@ -397,6 +409,24 @@ function HomeScreen() {
       }
     }
     return tagKeys.size;
+  }, [observations]);
+
+  // Compute media counts from observation tags
+  const mediaCounts = useMemo(() => {
+    let photos = 0;
+    let audios = 0;
+    let tracks = 0;
+    for (const obs of observations) {
+      if (obs.tags) {
+        photos +=
+          typeof obs.tags.photoCount === 'number' ? obs.tags.photoCount : 0;
+        audios +=
+          typeof obs.tags.audioCount === 'number' ? obs.tags.audioCount : 0;
+        tracks +=
+          typeof obs.tags.trackCount === 'number' ? obs.tags.trackCount : 0;
+      }
+    }
+    return { photos, audios, tracks };
   }, [observations]);
 
   // Build recent activity from real observations and alerts
@@ -975,6 +1005,25 @@ function HomeScreen() {
             value={observationCount.toLocaleString()}
             staggerIndex={1}
             isLoading={isObservationsLoading}
+            subtitle={
+              <>
+                <span>
+                  {intl.formatMessage(messages.statPhotos, {
+                    count: mediaCounts.photos,
+                  })}
+                </span>
+                <span>
+                  {intl.formatMessage(messages.statAudios, {
+                    count: mediaCounts.audios,
+                  })}
+                </span>
+                <span>
+                  {intl.formatMessage(messages.statTracks, {
+                    count: mediaCounts.tracks,
+                  })}
+                </span>
+              </>
+            }
           />
           <StatCard
             title={intl.formatMessage(messages.statCategories)}

@@ -11,6 +11,7 @@ interface StatCardProps {
   valueColor?: string;
   staggerIndex?: number;
   isLoading?: boolean;
+  subtitle?: ReactNode;
 }
 
 export function StatCard({
@@ -20,6 +21,7 @@ export function StatCard({
   valueColor = 'text-text',
   staggerIndex = 0,
   isLoading = false,
+  subtitle,
 }: StatCardProps) {
   const displayValue = useCountUp(value);
 
@@ -37,6 +39,11 @@ export function StatCard({
       <div className={`text-4xl font-bold tracking-tight ${valueColor}`}>
         {isLoading ? <Skeleton height={40} width="60%" /> : displayValue}
       </div>
+      {subtitle && !isLoading && (
+        <div className="mt-2 text-sm text-text-muted flex flex-wrap gap-3">
+          {subtitle}
+        </div>
+      )}
     </Card>
   );
 }
