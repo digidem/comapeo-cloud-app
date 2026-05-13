@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useCountUp } from '@/hooks/useCountUp';
 
 interface StatCardProps {
@@ -9,6 +10,7 @@ interface StatCardProps {
   icon?: ReactNode;
   valueColor?: string;
   staggerIndex?: number;
+  isLoading?: boolean;
 }
 
 export function StatCard({
@@ -17,6 +19,7 @@ export function StatCard({
   icon,
   valueColor = 'text-text',
   staggerIndex = 0,
+  isLoading = false,
 }: StatCardProps) {
   const displayValue = useCountUp(value);
 
@@ -32,7 +35,7 @@ export function StatCard({
         {icon && <div className="text-text-muted">{icon}</div>}
       </div>
       <div className={`text-4xl font-bold tracking-tight ${valueColor}`}>
-        {displayValue}
+        {isLoading ? <Skeleton height={40} width="60%" /> : displayValue}
       </div>
     </Card>
   );

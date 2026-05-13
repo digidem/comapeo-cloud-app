@@ -1,6 +1,8 @@
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useCountUp } from '@/hooks/useCountUp';
 import { ImportDataButton } from '@/screens/Home/ImportDataButton';
 
 interface ProjectBannerCardProps {
@@ -14,6 +16,7 @@ interface ProjectBannerCardProps {
   projectLocalId?: string;
   onImportComplete?: (result: { imported: number; skipped: number }) => void;
   isLocalProject?: boolean;
+  isAreaLoading?: boolean;
 }
 
 const messages = defineMessages({
@@ -59,10 +62,12 @@ export function ProjectBannerCard({
   projectLocalId,
   onImportComplete,
   isLocalProject = false,
+  isAreaLoading = false,
 }: ProjectBannerCardProps) {
   const intl = useIntl();
   const resolvedDescription =
     description ?? intl.formatMessage(messages.defaultDescription);
+  const animatedAreaSize = useCountUp(areaSize, 400);
 
   return (
     <Card className="relative overflow-hidden border-none shadow-card motion-safe:hover:scale-[1.01] motion-safe:hover:shadow-elevated transition-all duration-150">
@@ -151,11 +156,20 @@ export function ProjectBannerCard({
 
         {/* Stats Pills */}
         <div className="flex flex-wrap gap-4 mt-auto">
-          <div className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-4 py-2 sm:px-6 sm:py-2.5 shadow-pill">
+          <div
+            data-testid="territory-area-pill"
+            className="flex flex-col justify-center rounded-full bg-white/80 backdrop-blur-sm border border-border px-4 py-2 sm:px-6 sm:py-2.5 shadow-pill"
+          >
             <span className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-0.5">
               {intl.formatMessage(messages.territoryArea)}
             </span>
-            <span className="text-lg font-bold text-text">{areaSize}</span>
+            {isAreaLoading ? (
+              <Skeleton height={24} width={80} />
+            ) : (
+              <span className="text-lg font-bold text-text">
+                {animatedAreaSize}
+              </span>
+            )}
           </div>
 
           {lastSync && (

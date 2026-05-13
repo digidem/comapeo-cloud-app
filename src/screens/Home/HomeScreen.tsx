@@ -933,6 +933,10 @@ function HomeScreen() {
     );
   }
 
+  const isObservationsLoading =
+    observationsQuery.isLoading || observationsQuery.isFetching;
+  const isAlertsLoading = alertsQuery.isLoading || alertsQuery.isFetching;
+
   const observationCount = observations.length;
 
   return (
@@ -970,17 +974,20 @@ function HomeScreen() {
             title={intl.formatMessage(messages.statTotalObservations)}
             value={observationCount.toLocaleString()}
             staggerIndex={1}
+            isLoading={isObservationsLoading}
           />
           <StatCard
             title={intl.formatMessage(messages.statCategories)}
             value={categoryCount}
             staggerIndex={2}
+            isLoading={isObservationsLoading}
           />
           <StatCard
             title={intl.formatMessage(messages.statActiveAlerts)}
             value={alerts.length}
             valueColor="text-error"
             staggerIndex={3}
+            isLoading={isAlertsLoading}
           />
         </div>
 
@@ -992,6 +999,7 @@ function HomeScreen() {
               intl.formatMessage(messages.untitledProject)
             }
             areaSize={territoryArea}
+            isAreaLoading={coverage.isCalculating}
             lastSync={(() => {
               const synced = archiveStatus.servers.find((s) => s.lastSyncedAt);
               if (!synced?.lastSyncedAt) return undefined;
