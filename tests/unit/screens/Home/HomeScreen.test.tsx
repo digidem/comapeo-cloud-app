@@ -914,6 +914,41 @@ describe('HomeScreen', () => {
     expect(modeValue!.className).toContain('text-success');
   });
 
+  it('shows edit and delete buttons in banner when project is selected', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Banner Actions Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Banner Actions Project' }),
+    );
+
+    expect(
+      screen.getByRole('button', { name: /edit project/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /delete project/i }),
+    ).toBeInTheDocument();
+  });
+
   it('shows "Local" mode stat when project has no serverUrl', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({

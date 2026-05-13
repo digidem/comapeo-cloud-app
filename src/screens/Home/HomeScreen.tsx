@@ -847,6 +847,21 @@ function HomeScreen() {
               }
               areaSize="0 ha"
               teamMembersCount={0}
+              onEdit={() =>
+                dispatch({
+                  type: 'OPEN_EDIT_DIALOG',
+                  id: state.selectedProjectId!,
+                })
+              }
+              onDelete={() =>
+                dispatch({
+                  type: 'OPEN_DELETE_DIALOG',
+                  id: state.selectedProjectId!,
+                })
+              }
+              isLocalProject={!selectedProject?.serverUrl}
+              projectLocalId={selectedProject?.localId}
+              onImportComplete={handleIncrementRefresh}
             />
           )}
           <p className="text-text-muted text-sm">
@@ -986,6 +1001,21 @@ function HomeScreen() {
               );
             })()}
             teamMembersCount={archiveStatus.servers.length || 1}
+            onEdit={() =>
+              dispatch({
+                type: 'OPEN_EDIT_DIALOG',
+                id: state.selectedProjectId!,
+              })
+            }
+            onDelete={() =>
+              dispatch({
+                type: 'OPEN_DELETE_DIALOG',
+                id: state.selectedProjectId!,
+              })
+            }
+            isLocalProject={!selectedProject?.serverUrl}
+            projectLocalId={selectedProject?.localId}
+            onImportComplete={handleIncrementRefresh}
           />
         )}
 
