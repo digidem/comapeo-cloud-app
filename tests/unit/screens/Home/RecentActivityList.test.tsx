@@ -1,4 +1,4 @@
-import { render, screen } from '@tests/mocks/test-utils';
+import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import { RecentActivityList } from '@/screens/Home/RecentActivityList';
@@ -26,6 +26,16 @@ const mockActivities = [
     type: 'sync' as const,
   },
 ];
+
+function makeActivities(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `activity-${i}`,
+    title: `Activity ${i}`,
+    description: `Description ${i}`,
+    timestamp: `${i} hours ago`,
+    type: 'record' as const,
+  }));
+}
 
 describe('RecentActivityList', () => {
   it('renders empty state when activities array is empty', () => {
@@ -132,5 +142,162 @@ describe('RecentActivityList', () => {
     expect(
       screen.getByRole('heading', { name: 'Recent Activity' }),
     ).toBeVisible();
+  });
+
+  // ---- Load More tests ----
+
+  it('renders only first 3 items by default when given more than 3', () => {
+    const activities = makeActivities(5);
+    render(<RecentActivityList activities={activities} />);
+
+    expect(screen.getByText('Activity 0')).toBeVisible();
+    expect(screen.getByText('Activity 1')).toBeVisible();
+    expect(screen.getByText('Activity 2')).toBeVisible();
+    expect(screen.queryByText('Activity 3')).not.toBeInTheDocument();
+    expect(screen.queryByText('Activity 4')).not.toBeInTheDocument();
+  });
+
+  it('"Load More" button appears when there are more than 3 items', () => {
+    const activities = makeActivities(5);
+    render(<RecentActivityList activities={activities} />);
+
+    expect(screen.getByTestId('load-more-btn')).toBeVisible();
+  });
+
+  it('"Load More" button shows remaining count', () => {
+    const activities = makeActivities(5);
+    render(<RecentActivityList activities={activities} />);
+
+    expect(screen.getByText('Load More (2 more)')).toBeVisible();
+  });
+
+  it('clicking "Load More" reveals all items', async () => {
+    const user = userEvent.setup();
+    const activities = makeActivities(5);
+    render(<RecentActivityList activities={activities} />);
+
+    await user.click(screen.getByTestId('load-more-btn'));
+
+    expect(screen.getByText('Activity 3')).toBeVisible();
+    expect(screen.getByText('Activity 4')).toBeVisible();
+    expect(screen.queryByTestId('load-more-btn')).not.toBeInTheDocument();
+  });
+
+  it('no "Load More" button when there are 3 or fewer items', () => {
+    render(<RecentActivityList activities={mockActivities} />);
+    expect(screen.queryByTestId('load-more-btn')).not.toBeInTheDocument();
+  });
+
+  // ---- Observation metadata tests ----
+
+  it('renders category badge when present on record item', () => {
+    render(
+      <RecentActivityList
+        activities={[
+          {
+            id: 'obs-1',
+            title: 'Observation',
+            description: 'desc',
+            timestamp: 'now',
+            type: 'record',
+            category: 'forest',
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('forest')).toBeVisible();
+  });
+
+  it('renders photo count when present on record item', () => {
+    render(
+      <RecentActivityList
+        activities={[
+          {
+            id: 'obs-1',
+            title: 'Observation',
+            description: 'desc',
+            timestamp: 'now',
+            type: 'record',
+            photoCount: 3,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('3 photos')).toBeVisible();
+  });
+
+  it('renders audio count when present on record item', () => {
+    render(
+      <RecentActivityList
+        activities={[
+          {
+            id: 'obs-1',
+            title: 'Observation',
+            description: 'desc',
+            timestamp: 'now',
+            type: 'record',
+            audioCount: 1,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('1 audio')).toBeVisible();
+  });
+
+  it('renders details text when present on record item', () => {
+    render(
+      <RecentActivityList
+        activities={[
+          {
+            id: 'obs-1',
+            title: 'Observation',
+            description: 'desc',
+            timestamp: 'now',
+            type: 'record',
+            details: 'Some notes about the observation',
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Some notes about the observation')).toBeVisible();
+  });
+
+  it('does not render metadata row for non-record items', () => {
+    render(
+      <RecentActivityList
+        activities={[
+          {
+            id: 'sync-1',
+            title: 'Sync',
+            description: 'desc',
+            timestamp: 'now',
+            type: 'sync',
+            category: 'forest',
+            photoCount: 2,
+          },
+        ]}
+      />,
+    );
+    expect(screen.queryByText('forest')).not.toBeInTheDocument();
+    expect(screen.queryByText('2 photos')).not.toBeInTheDocument();
+  });
+
+  it('does not render metadata row when no metadata fields are set', () => {
+    render(
+      <RecentActivityList
+        activities={[
+          {
+            id: 'obs-1',
+            title: 'Observation',
+            description: 'desc',
+            timestamp: 'now',
+            type: 'record',
+          },
+        ]}
+      />,
+    );
+    // Should not have any photo/audio/category text since no metadata is set
+    expect(screen.queryByText(/photos/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/audio/)).not.toBeInTheDocument();
   });
 });

@@ -221,7 +221,7 @@ const messages = defineMessages({
   },
   activityObservationWithCoords: {
     id: 'home.activity.observationWithCoords',
-    defaultMessage: 'New geolocated observation',
+    defaultMessage: 'New CoMapeo Observation',
   },
   activityNoLocation: {
     id: 'home.activity.noLocation',
@@ -444,7 +444,7 @@ function HomeScreen() {
     // Sort by most recent first, keep top 10
     items.sort((a, b) => b._sortKey - a._sortKey);
 
-    return items.slice(0, 10).map(({ _sortKey: _, ...rest }) => rest);
+    return items.map(({ _sortKey: _, ...rest }) => rest);
   }, [observations, alerts, intl, now]);
 
   // Derive territory area from coverage results

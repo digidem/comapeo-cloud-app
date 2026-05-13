@@ -29,8 +29,17 @@
   "home.activity.alertDesc": {
     "defaultMessage": "New alert event detected in project area."
   },
+  "home.activity.audios": {
+    "defaultMessage": "{count, plural, one {# audio} other {# audios}}"
+  },
   "home.activity.empty": {
     "defaultMessage": "No recent activity"
+  },
+  "home.activity.loadMore": {
+    "defaultMessage": "Load More"
+  },
+  "home.activity.loadMoreCount": {
+    "defaultMessage": "Load More ({count} more)"
   },
   "home.activity.noLocation": {
     "defaultMessage": "No location data"
@@ -39,7 +48,10 @@
     "defaultMessage": "New observation recorded"
   },
   "home.activity.observationWithCoords": {
-    "defaultMessage": "New geolocated observation"
+    "defaultMessage": "New CoMapeo Observation"
+  },
+  "home.activity.photos": {
+    "defaultMessage": "{count, plural, one {# photo} other {# photos}}"
   },
   "home.activity.recentTitle": {
     "defaultMessage": "Recent Activity"
@@ -92,6 +104,12 @@
   "home.archive.dialog.add": {
     "defaultMessage": "Add"
   },
+  "home.archive.dialog.advanced": {
+    "defaultMessage": "Advanced"
+  },
+  "home.archive.dialog.advancedDescription": {
+    "defaultMessage": "Enter server details manually"
+  },
   "home.archive.dialog.cancel": {
     "defaultMessage": "Cancel"
   },
@@ -101,8 +119,20 @@
   "home.archive.dialog.error": {
     "defaultMessage": "Failed to add server"
   },
+  "home.archive.dialog.invalidInviteUrl": {
+    "defaultMessage": "Invalid invite URL. Make sure it's a full invite link."
+  },
   "home.archive.dialog.invalidUrl": {
     "defaultMessage": "Enter a full URL including http:// or https://"
+  },
+  "home.archive.dialog.inviteUrl": {
+    "defaultMessage": "Invite URL"
+  },
+  "home.archive.dialog.inviteUrlPlaceholder": {
+    "defaultMessage": "Paste invite URL"
+  },
+  "home.archive.dialog.inviteUrlRequired": {
+    "defaultMessage": "Invite URL is required"
   },
   "home.archive.dialog.label": {
     "defaultMessage": "Label (optional)"

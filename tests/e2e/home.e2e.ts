@@ -111,7 +111,7 @@ test('7.2 select project with data → calculations appear → preset change rec
 });
 
 // ---------------------------------------------------------------------------
-// 7.3 — add archive server from sidebar dialog → ArchiveStatusCard appears
+// 7.3 — add archive server from sidebar dialog using invite URL
 // ---------------------------------------------------------------------------
 
 test('7.3 configure archive server from sidebar → card visible on home screen', async ({
@@ -129,9 +129,10 @@ test('7.3 configure archive server from sidebar → card visible on home screen'
   // Dialog appears
   await expect(page.getByRole('dialog')).toBeVisible();
 
-  // Fill in the form
-  await page.getByLabel('Server URL').fill('http://archive.test');
-  await page.getByLabel('Bearer Token').fill('bearer-xyz');
+  // Default mode shows Invite URL - fill with a full invite URL
+  await page
+    .getByLabel('Invite URL')
+    .fill('https://app.test/invite?hash=abc&url=http%3A%2F%2Farchive.test');
 
   // Submit
   await page
@@ -141,6 +142,42 @@ test('7.3 configure archive server from sidebar → card visible on home screen'
 
   // Dialog closes and server card appears in sidebar
   await expect(page.getByText('http://archive.test')).toBeVisible({
+    timeout: 10_000,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7.3b — add archive server using advanced mode
+// ---------------------------------------------------------------------------
+
+test('7.3b add archive server using advanced mode', async ({ page }) => {
+  await setupMockServer(page);
+  await page.goto('/');
+
+  // Create a project first so sidebar is visible
+  await createProject(page, 'Advanced Archive Test');
+
+  // Click the Add Server button in sidebar
+  await page.getByRole('button', { name: /add server/i }).click();
+
+  // Dialog appears
+  await expect(page.getByRole('dialog')).toBeVisible();
+
+  // Switch to advanced mode
+  await page.getByTestId('advanced-toggle').click();
+
+  // Fill in the form
+  await page.getByLabel('Server URL').fill('http://archive-advanced.test');
+  await page.getByLabel('Bearer Token').fill('bearer-xyz');
+
+  // Submit
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^add$/i })
+    .click();
+
+  // Dialog closes and server card appears in sidebar
+  await expect(page.getByText('http://archive-advanced.test')).toBeVisible({
     timeout: 10_000,
   });
 });
@@ -211,10 +248,11 @@ test('7.6 add then remove archive server from sidebar', async ({ page }) => {
   // Create a project first so sidebar is visible
   await createProject(page, 'Remove Test');
 
-  // Add a server via sidebar dialog
+  // Add a server via sidebar dialog (use invite URL mode)
   await page.getByRole('button', { name: /add server/i }).click();
-  await page.getByLabel('Server URL').fill('http://removable.test');
-  await page.getByLabel('Bearer Token').fill('bearer-abc');
+  await page
+    .getByLabel('Invite URL')
+    .fill('https://app.test/invite?hash=abc&url=http%3A%2F%2Fremovable.test');
   await page
     .getByRole('dialog')
     .getByRole('button', { name: /^add$/i })
@@ -244,7 +282,7 @@ test('7.6 add then remove archive server from sidebar', async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 7.7 — add archive server from sidebar dialog (duplicate of 7.3 flow)
+// 7.7 — add archive server from sidebar dialog (invite URL mode)
 // ---------------------------------------------------------------------------
 
 test('7.7 add archive server from sidebar dialog', async ({ page }) => {
@@ -263,9 +301,10 @@ test('7.7 add archive server from sidebar dialog', async ({ page }) => {
   // Dialog appears
   await expect(page.getByRole('dialog')).toBeVisible();
 
-  // Fill in the form
-  await page.getByLabel('Server URL').fill('http://archive.test');
-  await page.getByLabel('Bearer Token').fill('bearer-xyz');
+  // Default mode shows Invite URL - fill with a full invite URL
+  await page
+    .getByLabel('Invite URL')
+    .fill('https://app.test/invite?hash=abc&url=http%3A%2F%2Farchive.test');
 
   // Submit
   await page

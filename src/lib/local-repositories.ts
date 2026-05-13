@@ -299,6 +299,18 @@ export async function getAttachments(
   });
 }
 
+export async function getAttachmentsForProject(
+  projectLocalId: string,
+): Promise<Attachment[]> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.attachments
+      .where('projectLocalId')
+      .equals(projectLocalId)
+      .toArray();
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Remote Servers
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getDb, resetDb } from '@/lib/db';
-import type { Alert, Observation, Project } from '@/lib/db';
+import type { Alert, Attachment, Observation, Project } from '@/lib/db';
 import { uuid } from '@/lib/uuid';
 
 function makeId(): string {
@@ -286,5 +286,92 @@ describe('source namespacing', () => {
     expect(retrieved!.sourceType).toBe('remoteArchive');
     expect(retrieved!.sourceId).toBe('server-1');
     expect(retrieved!.remoteId).toBe('remote-proj-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Attachments — getAttachmentsForProject
+// ---------------------------------------------------------------------------
+
+describe('local-repositories — attachments for project', () => {
+  it('returns all attachments for a given project', async () => {
+    const db = getDb();
+    const projectId = makeId();
+    const obsId = makeId();
+    const att1: Attachment = {
+      localId: makeId(),
+      projectLocalId: projectId,
+      observationLocalId: obsId,
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-01T00:00:00Z',
+      dirtyLocal: true,
+      deleted: false,
+    };
+    const att2: Attachment = {
+      localId: makeId(),
+      projectLocalId: projectId,
+      observationLocalId: obsId,
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2025-01-02T00:00:00Z',
+      updatedAt: '2025-01-02T00:00:00Z',
+      dirtyLocal: true,
+      deleted: false,
+    };
+    await db.attachments.bulkAdd([att1, att2]);
+    const attachments = await db.attachments
+      .where('projectLocalId')
+      .equals(projectId)
+      .toArray();
+    expect(attachments).toHaveLength(2);
+  });
+
+  it('returns empty array when no attachments exist', async () => {
+    const db = getDb();
+    const projectId = makeId();
+    const attachments = await db.attachments
+      .where('projectLocalId')
+      .equals(projectId)
+      .toArray();
+    expect(attachments).toHaveLength(0);
+  });
+
+  it('does not return attachments from other projects', async () => {
+    const db = getDb();
+    const projectA = makeId();
+    const projectB = makeId();
+    const obsA = makeId();
+    const obsB = makeId();
+    const attA: Attachment = {
+      localId: makeId(),
+      projectLocalId: projectA,
+      observationLocalId: obsA,
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-01T00:00:00Z',
+      dirtyLocal: true,
+      deleted: false,
+    };
+    const attB: Attachment = {
+      localId: makeId(),
+      projectLocalId: projectB,
+      observationLocalId: obsB,
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-01T00:00:00Z',
+      dirtyLocal: true,
+      deleted: false,
+    };
+    await db.attachments.bulkAdd([attA, attB]);
+    const attachments = await db.attachments
+      .where('projectLocalId')
+      .equals(projectA)
+      .toArray();
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0]!.projectLocalId).toBe(projectA);
   });
 });

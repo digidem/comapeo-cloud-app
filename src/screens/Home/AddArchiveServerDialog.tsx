@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
+import { parseInviteUrl } from '@/lib/invite-url';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface AddArchiveServerDialogProps {
@@ -89,6 +90,30 @@ const messages = defineMessages({
     id: 'home.archive.dialog.urlCredentials',
     defaultMessage: 'Archive server URL must not include credentials',
   },
+  inviteUrl: {
+    id: 'home.archive.dialog.inviteUrl',
+    defaultMessage: 'Invite URL',
+  },
+  inviteUrlPlaceholder: {
+    id: 'home.archive.dialog.inviteUrlPlaceholder',
+    defaultMessage: 'Paste invite URL',
+  },
+  inviteUrlRequired: {
+    id: 'home.archive.dialog.inviteUrlRequired',
+    defaultMessage: 'Invite URL is required',
+  },
+  invalidInviteUrl: {
+    id: 'home.archive.dialog.invalidInviteUrl',
+    defaultMessage: "Invalid invite URL. Make sure it's a full invite link.",
+  },
+  advanced: {
+    id: 'home.archive.dialog.advanced',
+    defaultMessage: 'Advanced',
+  },
+  advancedDescription: {
+    id: 'home.archive.dialog.advancedDescription',
+    defaultMessage: 'Enter server details manually',
+  },
 });
 
 function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
@@ -123,6 +148,13 @@ function getUrlValidationMessage(
   }
 }
 
+function checkDuplicate(normalizedUrl: string): boolean {
+  return useAuthStore.getState().servers.some((s) => {
+    const normalizedExisting = normalizeArchiveBaseUrl(s.baseUrl);
+    return normalizedExisting.ok && normalizedExisting.value === normalizedUrl;
+  });
+}
+
 function AddArchiveServerDialog({
   isOpen,
   onClose,
@@ -130,14 +162,85 @@ function AddArchiveServerDialog({
 }: AddArchiveServerDialogProps) {
   const intl = useIntl();
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Refs for advanced mode fields
   const labelRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
   const tokenRef = useRef<HTMLInputElement>(null);
 
+  // Ref for invite URL field
+  const inviteUrlRef = useRef<HTMLInputElement>(null);
+
   const [urlError, setUrlError] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
+  const [inviteUrlError, setInviteUrlError] = useState<string | null>(null);
 
-  function handleSubmit() {
+  function handleInviteSubmit() {
+    const inviteUrl = inviteUrlRef.current?.value?.trim() ?? '';
+
+    setInviteUrlError(null);
+
+    if (!inviteUrl) {
+      setInviteUrlError(intl.formatMessage(messages.inviteUrlRequired));
+      return;
+    }
+
+    const parsed = parseInviteUrl(inviteUrl);
+    if (!parsed.ok) {
+      setInviteUrlError(intl.formatMessage(messages.invalidInviteUrl));
+      return;
+    }
+
+    // Normalize the parsed base URL
+    const normalizedUrl = normalizeArchiveBaseUrl(parsed.baseUrl);
+    if (!normalizedUrl.ok) {
+      setInviteUrlError(
+        intl.formatMessage(getUrlValidationMessage(normalizedUrl.code)),
+      );
+      return;
+    }
+
+    // Check for duplicate
+    if (checkDuplicate(normalizedUrl.value)) {
+      dispatch({
+        type: 'error',
+        message: intl.formatMessage(messages.duplicateServer),
+      });
+      return;
+    }
+
+    dispatch({ type: 'submit' });
+
+    const hostname = (() => {
+      try {
+        return new URL(parsed.baseUrl).hostname;
+      } catch {
+        return normalizedUrl.value;
+      }
+    })();
+
+    const addServer = useAuthStore.getState().addServer;
+    addServer({
+      label: hostname,
+      baseUrl: normalizedUrl.value,
+      token: parsed.token,
+    }).then(
+      (serverId) => {
+        dispatch({ type: 'success' });
+        onAdded(serverId);
+      },
+      (err: unknown) => {
+        const message =
+          err instanceof Error
+            ? err.message
+            : intl.formatMessage(messages.failed);
+        dispatch({ type: 'error', message });
+      },
+    );
+  }
+
+  function handleAdvancedSubmit() {
     const url = urlRef.current?.value?.trim() ?? '';
     const token = tokenRef.current?.value?.trim() ?? '';
     const label = labelRef.current?.value?.trim() ?? '';
@@ -166,14 +269,7 @@ function AddArchiveServerDialog({
     }
 
     // Check for duplicate URL (normalized comparison)
-    const existing = useAuthStore.getState().servers.find((s) => {
-      const normalizedExisting = normalizeArchiveBaseUrl(s.baseUrl);
-      return (
-        normalizedExisting.ok &&
-        normalizedExisting.value === normalizedUrl.value
-      );
-    });
-    if (existing) {
+    if (checkDuplicate(normalizedUrl.value)) {
       dispatch({
         type: 'error',
         message: intl.formatMessage(messages.duplicateServer),
@@ -203,9 +299,19 @@ function AddArchiveServerDialog({
     );
   }
 
+  function handleSubmit() {
+    if (showAdvanced) {
+      handleAdvancedSubmit();
+    } else {
+      handleInviteSubmit();
+    }
+  }
+
   function handleClose() {
     setUrlError(null);
     setTokenError(null);
+    setInviteUrlError(null);
+    setShowAdvanced(false);
     dispatch({ type: 'reset' });
     onClose();
   }
@@ -225,33 +331,59 @@ function AddArchiveServerDialog({
         }}
         className="flex flex-col gap-4"
       >
-        <Input
-          ref={labelRef}
-          label={intl.formatMessage(messages.label)}
-          type="text"
-          placeholder={intl.formatMessage(messages.labelPlaceholder)}
-          defaultValue=""
-        />
-        <Input
-          ref={urlRef}
-          label={intl.formatMessage(messages.url)}
-          type="text"
-          placeholder={intl.formatMessage(messages.urlPlaceholder)}
-          defaultValue=""
-          error={urlError ?? undefined}
-        />
-        <Input
-          ref={tokenRef}
-          label={intl.formatMessage(messages.token)}
-          type="password"
-          placeholder={intl.formatMessage(messages.tokenPlaceholder)}
-          defaultValue=""
-          error={tokenError ?? undefined}
-        />
+        {!showAdvanced ? (
+          /* Default mode: Invite URL input */
+          <Input
+            ref={inviteUrlRef}
+            label={intl.formatMessage(messages.inviteUrl)}
+            type="text"
+            placeholder={intl.formatMessage(messages.inviteUrlPlaceholder)}
+            defaultValue=""
+            error={inviteUrlError ?? undefined}
+          />
+        ) : (
+          /* Advanced mode: Label + Server URL + Bearer Token */
+          <>
+            <Input
+              ref={labelRef}
+              label={intl.formatMessage(messages.label)}
+              type="text"
+              placeholder={intl.formatMessage(messages.labelPlaceholder)}
+              defaultValue=""
+            />
+            <Input
+              ref={urlRef}
+              label={intl.formatMessage(messages.url)}
+              type="text"
+              placeholder={intl.formatMessage(messages.urlPlaceholder)}
+              defaultValue=""
+              error={urlError ?? undefined}
+            />
+            <Input
+              ref={tokenRef}
+              label={intl.formatMessage(messages.token)}
+              type="password"
+              placeholder={intl.formatMessage(messages.tokenPlaceholder)}
+              defaultValue=""
+              error={tokenError ?? undefined}
+            />
+          </>
+        )}
 
         {state.status === 'error' && (
           <p className="text-sm text-error">{state.message}</p>
         )}
+
+        {/* Advanced toggle */}
+        <button
+          type="button"
+          data-testid="advanced-toggle"
+          className="text-sm text-primary hover:text-primary-dark text-left"
+          onClick={() => setShowAdvanced((prev) => !prev)}
+        >
+          {intl.formatMessage(messages.advanced)} —{' '}
+          {intl.formatMessage(messages.advancedDescription)}
+        </button>
 
         <div className="flex justify-end gap-2">
           <Button

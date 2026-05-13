@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Card } from '@/components/ui/card';
@@ -8,6 +9,11 @@ interface ActivityItem {
   description: string;
   timestamp: string;
   type: 'record' | 'map' | 'sync';
+  // Optional fields for observation enrichment
+  category?: string;
+  photoCount?: number;
+  audioCount?: number;
+  details?: string;
 }
 
 interface RecentActivityListProps {
@@ -23,10 +29,30 @@ const messages = defineMessages({
     id: 'home.activity.empty',
     defaultMessage: 'No recent activity',
   },
+  loadMore: {
+    id: 'home.activity.loadMore',
+    defaultMessage: 'Load More',
+  },
+  loadMoreCount: {
+    id: 'home.activity.loadMoreCount',
+    defaultMessage: 'Load More ({count} more)',
+  },
+  photos: {
+    id: 'home.activity.photos',
+    defaultMessage: '{count, plural, one {# photo} other {# photos}}',
+  },
+  audios: {
+    id: 'home.activity.audios',
+    defaultMessage: '{count, plural, one {# audio} other {# audios}}',
+  },
 });
 
 export function RecentActivityList({ activities }: RecentActivityListProps) {
   const intl = useIntl();
+  const [visibleCount, setVisibleCount] = useState(3);
+  const visibleActivities = activities.slice(0, visibleCount);
+  const hasMore = activities.length > visibleCount;
+  const remaining = activities.length - visibleCount;
 
   return (
     <Card className="flex flex-col">
@@ -41,11 +67,11 @@ export function RecentActivityList({ activities }: RecentActivityListProps) {
             {intl.formatMessage(messages.empty)}
           </div>
         ) : (
-          activities.map((activity, index) => (
+          visibleActivities.map((activity, index) => (
             <div
               key={activity.id}
               data-activity-item
-              className={`flex items-start gap-4 p-5 ${index !== activities.length - 1 ? 'border-b border-border' : ''}`}
+              className={`flex items-start gap-4 p-5 ${index !== visibleActivities.length - 1 ? 'border-b border-border' : ''}`}
             >
               <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
                 {activity.type === 'record' && (
@@ -110,11 +136,63 @@ export function RecentActivityList({ activities }: RecentActivityListProps) {
                 <p className="mt-1 text-sm text-text-muted">
                   {activity.description}
                 </p>
+                {/* Observation metadata row */}
+                {activity.type === 'record' &&
+                  (activity.category ||
+                    activity.photoCount ||
+                    activity.audioCount ||
+                    activity.details) && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                      {activity.category && (
+                        <span className="inline-flex items-center rounded-full bg-primary-soft px-2 py-0.5 text-primary">
+                          {activity.category}
+                        </span>
+                      )}
+                      {typeof activity.photoCount === 'number' &&
+                        activity.photoCount !== 0 && (
+                          <span>
+                            {intl.formatMessage(messages.photos, {
+                              count: activity.photoCount,
+                            })}
+                          </span>
+                        )}
+                      {typeof activity.audioCount === 'number' &&
+                        activity.audioCount !== 0 && (
+                          <span>
+                            {intl.formatMessage(messages.audios, {
+                              count: activity.audioCount,
+                            })}
+                          </span>
+                        )}
+                      {activity.details && (
+                        <span className="truncate max-w-[200px]">
+                          {activity.details}
+                        </span>
+                      )}
+                    </div>
+                  )}
               </div>
             </div>
           ))
         )}
       </div>
+      {/* Load More button */}
+      {hasMore && (
+        <div className="flex justify-center border-t border-border p-3">
+          <button
+            type="button"
+            data-testid="load-more-btn"
+            className="text-sm font-medium text-primary hover:text-primary-dark"
+            onClick={() => setVisibleCount(activities.length)}
+          >
+            {remaining > 0
+              ? intl.formatMessage(messages.loadMoreCount, {
+                  count: remaining,
+                })
+              : intl.formatMessage(messages.loadMore)}
+          </button>
+        </div>
+      )}
     </Card>
   );
 }
