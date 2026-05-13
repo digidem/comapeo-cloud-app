@@ -429,11 +429,11 @@ describe('HomeScreen', () => {
       await screen.findByRole('button', { name: 'Import Project' }),
     );
 
-    // Click the import icon next to the project to trigger file picker
-    const importIcon = await screen.findByRole('button', {
-      name: /Import data into/,
+    // Click the import button in the banner to trigger file picker
+    const importBtn = await screen.findByRole('button', {
+      name: /import data/i,
     });
-    await user.click(importIcon);
+    await user.click(importBtn);
 
     // Select a file via the hidden input
     const fileInput = document.querySelector(
@@ -906,7 +906,7 @@ describe('HomeScreen', () => {
     );
 
     // The Mode stat card should show "Connected" with the green success color
-    const modeElements = screen.getAllByText('Connected');
+    const modeElements = screen.getAllByText('Connected to Archive');
     const modeValue = modeElements.find((el) =>
       el.className.includes('text-success'),
     );

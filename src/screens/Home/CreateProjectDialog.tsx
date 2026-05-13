@@ -1,7 +1,8 @@
-import { useReducer } from 'react';
-import { useForm } from 'react-hook-form';
 import { valibotResolver } from '@hookform/resolvers/valibot';
 import * as v from 'valibot';
+
+import { useReducer } from 'react';
+import { useForm } from 'react-hook-form';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
@@ -67,10 +68,7 @@ const messages = defineMessages({
   },
 });
 
-function dialogReducer(
-  _state: DialogState,
-  action: DialogAction,
-): DialogState {
+function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
   switch (action.type) {
     case 'submit':
       return { status: 'loading' };
@@ -83,11 +81,16 @@ function dialogReducer(
   }
 }
 
+const LOCAL_SERVER_VALUE = '__local__';
 const formSchema = v.object({
   name: v.optional(v.string()),
-  serverUrl: v.optional(v.string()),
+  serverUrl: v.optional(
+    v.pipe(
+      v.string(),
+      v.transform((val) => (val === LOCAL_SERVER_VALUE ? '' : val)),
+    ),
+  ),
 });
-
 type FormData = v.InferInput<typeof formSchema>;
 
 function CreateProjectDialog({
@@ -100,17 +103,11 @@ function CreateProjectDialog({
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
   const servers = useAuthStore((s) => s.servers);
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    reset,
-  } = useForm<FormData>({
+  const { register, handleSubmit, setValue, watch, reset } = useForm<FormData>({
     resolver: valibotResolver(formSchema),
     defaultValues: {
       name: '',
-      serverUrl: _serverUrl ?? '',
+      serverUrl: _serverUrl ?? LOCAL_SERVER_VALUE,
     },
   });
 
@@ -139,7 +136,7 @@ function CreateProjectDialog({
 
   function handleClose() {
     dispatch({ type: 'reset' });
-    reset({ name: '', serverUrl: _serverUrl ?? '' });
+    reset({ name: '', serverUrl: _serverUrl ?? LOCAL_SERVER_VALUE });
     onClose();
   }
 
@@ -151,10 +148,7 @@ function CreateProjectDialog({
       }}
       title={intl.formatMessage(messages.title)}
     >
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="flex flex-col gap-4"
-      >
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label
             htmlFor="project-name"
@@ -180,7 +174,7 @@ function CreateProjectDialog({
             onValueChange={(value) => setValue('serverUrl', value)}
             placeholder={intl.formatMessage(messages.archivePlaceholder)}
           >
-            <Select.Item value="">
+            <Select.Item value={LOCAL_SERVER_VALUE}>
               {intl.formatMessage(messages.archiveOptionLocal)}
             </Select.Item>
             {servers.map((server) => (
