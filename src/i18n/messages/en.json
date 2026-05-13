@@ -8,6 +8,12 @@
   "dashboard.banner.defaultDescription": {
     "defaultMessage": "A controlled environment for onboarding new rangers and testing field data collection protocols."
   },
+  "dashboard.banner.deleteProject": {
+    "defaultMessage": "Delete Project"
+  },
+  "dashboard.banner.editProject": {
+    "defaultMessage": "Edit Project"
+  },
   "dashboard.banner.lastSync": {
     "defaultMessage": "Last Sync"
   },
@@ -38,6 +44,9 @@
   "home.activity.recentTitle": {
     "defaultMessage": "Recent Activity"
   },
+  "home.archive.addAria": {
+    "defaultMessage": "Add a new archive server"
+  },
   "home.archive.addServer": {
     "defaultMessage": "Add Server"
   },
@@ -49,6 +58,9 @@
   },
   "home.archive.confirmRemove.description": {
     "defaultMessage": "Are you sure you want to remove \"{name}\"? This action cannot be undone."
+  },
+  "home.archive.confirmRemove.projectsReassigned": {
+    "defaultMessage": "{count, plural, one {# project will be moved to Local.} other {# projects will be moved to Local.}}"
   },
   "home.archive.confirmRemove.title": {
     "defaultMessage": "Remove Server"
@@ -64,6 +76,12 @@
   },
   "home.archive.detail.never": {
     "defaultMessage": "Never"
+  },
+  "home.archive.detail.retrySync": {
+    "defaultMessage": "Retry Sync"
+  },
+  "home.archive.detail.staleToken": {
+    "defaultMessage": "Warning: Token may be stale — no successful sync in over 24 hours. Try reconnecting or updating credentials."
   },
   "home.archive.detail.status": {
     "defaultMessage": "Status"
@@ -134,8 +152,14 @@
   "home.archive.remove": {
     "defaultMessage": "Remove"
   },
+  "home.archive.retrySync": {
+    "defaultMessage": "Retry Sync"
+  },
   "home.archive.sectionTitle": {
     "defaultMessage": "Archive Servers"
+  },
+  "home.archive.staleToken": {
+    "defaultMessage": "Token may be stale — no sync in over 24 hours"
   },
   "home.archive.sync": {
     "defaultMessage": "Sync Now"
@@ -146,14 +170,29 @@
   "home.archive.syncing": {
     "defaultMessage": "Syncing..."
   },
+  "home.archives": {
+    "defaultMessage": "Archives"
+  },
+  "home.archives.empty.cta": {
+    "defaultMessage": "Create Project"
+  },
+  "home.archives.empty.desc": {
+    "defaultMessage": "Add a remote archive server or create your first project to get started."
+  },
+  "home.archives.empty.title": {
+    "defaultMessage": "Welcome to CoMapeo Cloud"
+  },
+  "home.archives.noProjects": {
+    "defaultMessage": "No projects in this archive"
+  },
   "home.areaUnit.ha": {
     "defaultMessage": "ha"
   },
   "home.areaUnit.km2": {
-    "defaultMessage": "km\u00b2"
+    "defaultMessage": "km²"
   },
   "home.areaUnit.m2": {
-    "defaultMessage": "m\u00b2"
+    "defaultMessage": "m²"
   },
   "home.coverage.calculating": {
     "defaultMessage": "Calculating..."
@@ -166,6 +205,30 @@
   },
   "home.coverage.retry": {
     "defaultMessage": "Retry calculation"
+  },
+  "home.deleteProject.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "home.deleteProject.confirm": {
+    "defaultMessage": "Are you sure you want to delete \"{name}\"? This will permanently remove all associated data."
+  },
+  "home.deleteProject.confirmBtn": {
+    "defaultMessage": "Delete"
+  },
+  "home.deleteProject.error": {
+    "defaultMessage": "Failed to delete project"
+  },
+  "home.deleteProject.title": {
+    "defaultMessage": "Delete Project"
+  },
+  "home.editProject.error": {
+    "defaultMessage": "Failed to update project"
+  },
+  "home.editProject.save": {
+    "defaultMessage": "Save"
+  },
+  "home.editProject.title": {
+    "defaultMessage": "Edit Project"
   },
   "home.import.another": {
     "defaultMessage": "Import another"
@@ -230,6 +293,15 @@
   "home.newProject": {
     "defaultMessage": "New Project"
   },
+  "home.newProject.dialog.archiveLabel": {
+    "defaultMessage": "Remote Archive"
+  },
+  "home.newProject.dialog.archiveOptionLocal": {
+    "defaultMessage": "Local (offline)"
+  },
+  "home.newProject.dialog.archivePlaceholder": {
+    "defaultMessage": "Select remote archive"
+  },
   "home.newProject.dialog.cancel": {
     "defaultMessage": "Cancel"
   },
@@ -250,36 +322,6 @@
   },
   "home.newProject.listAria": {
     "defaultMessage": "Create new project from project list"
-  },
-  "home.editProject.title": {
-    "defaultMessage": "Edit Project"
-  },
-  "home.editProject.save": {
-    "defaultMessage": "Save"
-  },
-  "home.editProject.error": {
-    "defaultMessage": "Failed to update project"
-  },
-  "home.deleteProject.title": {
-    "defaultMessage": "Delete Project"
-  },
-  "home.deleteProject.confirm": {
-    "defaultMessage": "Are you sure you want to delete \"{name}\"? This will permanently remove all associated data."
-  },
-  "home.deleteProject.cancel": {
-    "defaultMessage": "Cancel"
-  },
-  "home.deleteProject.confirmBtn": {
-    "defaultMessage": "Delete"
-  },
-  "home.deleteProject.error": {
-    "defaultMessage": "Failed to delete project"
-  },
-  "home.project.editAria": {
-    "defaultMessage": "Edit project"
-  },
-  "home.project.deleteAria": {
-    "defaultMessage": "Delete project"
   },
   "home.noProjects": {
     "defaultMessage": "No projects yet"
@@ -323,6 +365,12 @@
   "home.preset.grid": {
     "defaultMessage": "5 km Grid"
   },
+  "home.project.deleteAria": {
+    "defaultMessage": "Delete project"
+  },
+  "home.project.editAria": {
+    "defaultMessage": "Edit project"
+  },
   "home.settings.advanced": {
     "defaultMessage": "Advanced"
   },
@@ -362,47 +410,41 @@
   "home.untitledProject": {
     "defaultMessage": "Untitled Project"
   },
-  "menu.theme": {
-    "defaultMessage": "Theme"
+  "invite.connected": {
+    "defaultMessage": "Connected! Redirecting..."
   },
-  "settings.title": {
-    "defaultMessage": "Settings"
+  "invite.connecting": {
+    "defaultMessage": "Connecting to archive..."
   },
-  "settings.invites.title": {
-    "defaultMessage": "Remote Archive Invites"
-  },
-  "settings.invites.generate.url": {
-    "defaultMessage": "Remote Archive URL"
-  },
-  "settings.invites.generate.token": {
-    "defaultMessage": "Bearer Token"
+  "invite.error": {
+    "defaultMessage": "Failed to connect to archive."
   },
   "settings.invites.generate.button": {
     "defaultMessage": "Generate Invite"
   },
-  "settings.invites.generate.urlInvalid": {
-    "defaultMessage": "Enter a valid URL including http:// or https://"
+  "settings.invites.generate.token": {
+    "defaultMessage": "Bearer Token"
   },
-  "settings.invites.generate.tokenRequired": {
-    "defaultMessage": "Bearer Token is required"
-  },
-  "settings.invites.results.title": {
-    "defaultMessage": "Results"
-  },
-  "settings.invites.results.inviteUrl": {
-    "defaultMessage": "Invite URL"
-  },
-  "settings.invites.results.inviteCode": {
-    "defaultMessage": "Invite Code"
-  },
-  "settings.invites.results.copy": {
-    "defaultMessage": "Copy"
+  "settings.invites.generate.url": {
+    "defaultMessage": "Remote Archive URL"
   },
   "settings.invites.results.copied": {
     "defaultMessage": "Copied!"
   },
-  "settings.invites.use.title": {
-    "defaultMessage": "Use an Invite"
+  "settings.invites.results.copy": {
+    "defaultMessage": "Copy"
+  },
+  "settings.invites.results.inviteCode": {
+    "defaultMessage": "Invite Code"
+  },
+  "settings.invites.results.inviteUrl": {
+    "defaultMessage": "Invite URL"
+  },
+  "settings.invites.results.title": {
+    "defaultMessage": "Results"
+  },
+  "settings.invites.title": {
+    "defaultMessage": "Remote Archive Invites"
   },
   "settings.invites.use.code": {
     "defaultMessage": "Invite Code"
@@ -413,13 +455,10 @@
   "settings.invites.use.connected": {
     "defaultMessage": "Connected to {archive}"
   },
-  "invite.connecting": {
-    "defaultMessage": "Connecting to archive..."
+  "settings.invites.use.title": {
+    "defaultMessage": "Use an Invite"
   },
-  "invite.connected": {
-    "defaultMessage": "Connected! Redirecting..."
-  },
-  "invite.error": {
-    "defaultMessage": "Failed to connect to archive."
+  "settings.title": {
+    "defaultMessage": "Settings"
   }
 }
