@@ -984,4 +984,126 @@ describe('HomeScreen', () => {
     expect(modeValue).toBeInTheDocument();
     expect(modeValue!.className).toContain('text-text-muted');
   });
+
+  it('shows skeletons in stat cards when observations are loading', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Loading Stats Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    mockUseObservations.mockReturnValue({
+      data: [],
+      isLoading: true,
+      isFetching: true,
+      isError: false,
+      error: null,
+      status: 'pending',
+    } as unknown as ReturnType<typeof useObservations>);
+
+    mockUseAlerts.mockReturnValue({
+      data: [],
+      isLoading: true,
+      isFetching: true,
+      isError: false,
+      error: null,
+      status: 'pending',
+    } as unknown as ReturnType<typeof useAlerts>);
+
+    renderWithShell(<HomeScreen />);
+
+    // Wait for the project to be auto-selected and stat cards to render
+    await waitFor(() => {
+      expect(screen.getByText('Observations')).toBeInTheDocument();
+    });
+
+    // Observations and Categories cards should show skeletons (from isLoading)
+    // Active Alerts card should show skeleton (from isLoading)
+    const skeletons = screen.getAllByTestId('skeleton');
+    // At least 3 stat card skeletons (observations, categories, alerts)
+    expect(skeletons.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('shows real numbers in stat cards when data is loaded', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Data Loaded Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    mockUseObservations.mockReturnValue({
+      data: [
+        {
+          localId: 'obs1',
+          createdAt: new Date().toISOString(),
+          tags: { species: 'tree', location: 'forest' },
+        },
+        {
+          localId: 'obs2',
+          createdAt: new Date().toISOString(),
+          tags: { species: 'bird' },
+        },
+      ],
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+
+    mockUseAlerts.mockReturnValue({
+      data: [
+        {
+          localId: 'alert1',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useAlerts>);
+
+    renderWithShell(<HomeScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Observations')).toBeInTheDocument();
+    });
+
+    // No stat card skeletons should be visible when data is loaded
+    const allSkeletons = screen.queryAllByTestId('skeleton');
+    const statCardSkeletons = allSkeletons.filter((el) =>
+      el.closest('.text-4xl'),
+    );
+    expect(statCardSkeletons.length).toBe(0);
+  });
 });

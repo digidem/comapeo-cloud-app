@@ -1,12 +1,22 @@
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useCountUp } from '@/hooks/useCountUp';
 import { ProjectBannerCard } from '@/screens/Home/ProjectBannerCard';
+
+// Mock useCountUp to pass through values directly — animation is tested in useCountUp.test.ts
+vi.mock('@/hooks/useCountUp', () => ({
+  useCountUp: vi.fn((value: string | number) => value),
+}));
 
 describe('ProjectBannerCard', () => {
   const defaultProps = {
     projectName: 'Test Project',
   };
+
+  beforeEach(() => {
+    vi.mocked(useCountUp).mockClear();
+  });
 
   it('renders project name', () => {
     render(<ProjectBannerCard {...defaultProps} />);
@@ -86,5 +96,36 @@ describe('ProjectBannerCard', () => {
   it('does not render Import Data button when isLocalProject is not set', () => {
     render(<ProjectBannerCard {...defaultProps} />);
     expect(screen.queryByRole('button', { name: /import data/i })).toBeNull();
+  });
+
+  it('shows skeleton in Territory Area pill when isAreaLoading is true', () => {
+    render(
+      <ProjectBannerCard {...defaultProps} areaSize="5 ha" isAreaLoading />,
+    );
+    expect(screen.getByText('Territory Area')).toBeInTheDocument();
+    // Should show a skeleton for the area value
+    const skeletons = screen.getAllByTestId('skeleton');
+    const areaSkeleton = skeletons.find((el) =>
+      el.closest('[data-testid="territory-area-pill"]'),
+    );
+    expect(areaSkeleton).toBeTruthy();
+  });
+
+  it('shows area value when isAreaLoading is false', () => {
+    render(
+      <ProjectBannerCard
+        {...defaultProps}
+        areaSize="5 ha"
+        isAreaLoading={false}
+      />,
+    );
+    expect(screen.getByText('Territory Area')).toBeInTheDocument();
+    expect(screen.getByText('5 ha')).toBeInTheDocument();
+  });
+
+  it('shows area value by default without loading state', () => {
+    render(<ProjectBannerCard {...defaultProps} areaSize="10 ha" />);
+    expect(screen.getByText('10 ha')).toBeInTheDocument();
+    expect(screen.queryByTestId('skeleton')).toBeNull();
   });
 });
