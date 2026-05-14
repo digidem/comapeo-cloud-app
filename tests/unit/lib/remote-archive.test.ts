@@ -211,6 +211,125 @@ describe('remote-archive', () => {
     expect(afterSecond[0]!.updatedAt).toBe(firstUpdatedAt);
   });
 
+  it('parses attachment URLs and stores media counts in observation tags', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-media-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              lat: -8.35,
+              lon: -55.45,
+              attachments: [
+                {
+                  url: 'https://archive.example.com/projects/proj1/attachments/drive1/photo/img1',
+                },
+                {
+                  url: 'https://archive.example.com/projects/proj1/attachments/drive2/photo/img2',
+                },
+                {
+                  url: 'https://archive.example.com/projects/proj1/attachments/drive3/audio/rec1',
+                },
+              ],
+              tags: { species: 'tree' },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
+
+    expect(observations).toHaveLength(1);
+    const obs = observations[0]!;
+    // Original tags preserved
+    expect(obs.tags?.species).toBe('tree');
+    // Media counts stored as strings
+    expect(obs.tags?.photoCount).toBe('2');
+    expect(obs.tags?.audioCount).toBe('1');
+    // Photo URLs stored as comma-separated string
+    expect(obs.tags?.photoUrls).toContain('drive1/photo/img1');
+    expect(obs.tags?.photoUrls).toContain('drive2/photo/img2');
+  });
+
+  it('handles observations with no attachments', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-no-media',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [],
+              tags: { notes: 'No media' },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
+
+    expect(observations).toHaveLength(1);
+    const obs = observations[0]!;
+    expect(obs.tags?.notes).toBe('No media');
+    expect(obs.tags?.photoCount).toBeUndefined();
+    expect(obs.tags?.audioCount).toBeUndefined();
+    expect(obs.tags?.photoUrls).toBeUndefined();
+  });
+
+  it('limits stored photo URLs to 4', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-many-photos',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [
+                { url: 'https://example.com/attachments/d1/photo/a' },
+                { url: 'https://example.com/attachments/d2/photo/b' },
+                { url: 'https://example.com/attachments/d3/photo/c' },
+                { url: 'https://example.com/attachments/d4/photo/d' },
+                { url: 'https://example.com/attachments/d5/photo/e' },
+              ],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+    );
+
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
+
+    const obs = observations[0]!;
+    expect(obs.tags?.photoCount).toBe('5');
+    const urls = obs.tags?.photoUrls?.split(',').length;
+    expect(urls).toBe(4); // Only first 4 stored
+  });
+
   it('updates updatedAt when project name changes', async () => {
     const db = getDb();
 

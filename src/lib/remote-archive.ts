@@ -5,6 +5,24 @@ import type { Alert, Observation, Project } from '@/lib/db';
 import { getRemoteServer } from '@/lib/local-repositories';
 
 // ---------------------------------------------------------------------------
+// Attachment URL parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse an attachment URL to extract the media type.
+ * URL format: /projects/{projectId}/attachments/{driveId}/{type}/{name}
+ * where {type} is "photo" or "audio".
+ */
+function parseAttachmentMediaType(url: string): 'photo' | 'audio' | 'unknown' {
+  const match = url.match(/\/attachments\/[^/]+\/([^/]+)\/[^/]+$/);
+  if (!match) return 'unknown';
+  const type = match[1];
+  if (type === 'photo') return 'photo';
+  if (type === 'audio') return 'audio';
+  return 'unknown';
+}
+
+// ---------------------------------------------------------------------------
 // Fetch archive data and store locally
 // ---------------------------------------------------------------------------
 
@@ -65,20 +83,50 @@ export async function pullObservations(
   const response = await apiClient.getObservations(projectRemoteId, config);
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
-  const observations: Observation[] = response.data.map((item) => ({
-    localId: `${sourceType}:${serverId}:${item.docId}`,
-    projectLocalId,
-    sourceType,
-    sourceId: serverId,
-    remoteId: item.docId,
-    tags: (item.tags as Record<string, string>) ?? undefined,
-    lat: item.lat,
-    lon: item.lon,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-    dirtyLocal: false,
-    deleted: item.deleted,
-  }));
+  const observations: Observation[] = response.data.map((item) => {
+    // Parse attachments to extract media counts and photo URLs
+    let photoCount = 0;
+    let audioCount = 0;
+    const photoUrls: string[] = [];
+
+    for (const attachment of item.attachments) {
+      const mediaType = parseAttachmentMediaType(attachment.url);
+      if (mediaType === 'photo') {
+        photoCount++;
+        photoUrls.push(attachment.url);
+      } else if (mediaType === 'audio') {
+        audioCount++;
+      }
+    }
+
+    // Merge attachment metadata into tags
+    const enrichedTags: Record<string, string> = {
+      ...((item.tags as Record<string, string>) ?? {}),
+    };
+    if (photoCount > 0) {
+      enrichedTags.photoCount = String(photoCount);
+      // Store up to 4 photo URLs as comma-separated string
+      enrichedTags.photoUrls = photoUrls.slice(0, 4).join(',');
+    }
+    if (audioCount > 0) {
+      enrichedTags.audioCount = String(audioCount);
+    }
+
+    return {
+      localId: `${sourceType}:${serverId}:${item.docId}`,
+      projectLocalId,
+      sourceType,
+      sourceId: serverId,
+      remoteId: item.docId,
+      tags: Object.keys(enrichedTags).length > 0 ? enrichedTags : undefined,
+      lat: item.lat,
+      lon: item.lon,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      dirtyLocal: false,
+      deleted: item.deleted,
+    };
+  });
 
   await db.observations.bulkPut(observations);
   return observations;

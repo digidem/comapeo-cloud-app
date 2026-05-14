@@ -411,34 +411,36 @@ function HomeScreen() {
     return tagKeys.size;
   }, [observations]);
 
-  // Compute media counts from observation tags
+  // Compute media counts from observation tags (values stored as strings)
   const mediaCounts = useMemo(() => {
     let photos = 0;
     let audios = 0;
     let tracks = 0;
     for (const obs of observations) {
       if (obs.tags) {
-        photos +=
-          typeof obs.tags.photoCount === 'number' ? obs.tags.photoCount : 0;
-        audios +=
-          typeof obs.tags.audioCount === 'number' ? obs.tags.audioCount : 0;
-        tracks +=
-          typeof obs.tags.trackCount === 'number' ? obs.tags.trackCount : 0;
+        const pc = Number(obs.tags.photoCount);
+        if (!Number.isNaN(pc)) photos += pc;
+        const ac = Number(obs.tags.audioCount);
+        if (!Number.isNaN(ac)) audios += ac;
+        const tc = Number(obs.tags.trackCount);
+        if (!Number.isNaN(tc)) tracks += tc;
       }
     }
     return { photos, audios, tracks };
   }, [observations]);
 
   // Extract latest photo URLs from observation tags for banner collage
+  // photoUrls is stored as comma-separated string in tags
   const latestPhotoUrls = useMemo(() => {
     const urls: string[] = [];
     for (const obs of observations) {
-      if (obs.tags) {
-        const photoUrl = obs.tags.photoUrl ?? obs.tags.imageUrl;
-        if (typeof photoUrl === 'string' && photoUrl) {
-          urls.push(photoUrl);
+      if (obs.tags?.photoUrls) {
+        const parsed = String(obs.tags.photoUrls).split(',').filter(Boolean);
+        for (const url of parsed) {
+          urls.push(url);
           if (urls.length >= 4) break;
         }
+        if (urls.length >= 4) break;
       }
     }
     return urls;
@@ -474,14 +476,12 @@ function HomeScreen() {
         timestamp: formatRelativeTime(ageMs, intl),
         type: 'record',
         category: obs.tags?.category,
-        photoCount:
-          typeof obs.tags?.photoCount === 'number'
-            ? obs.tags.photoCount
-            : undefined,
-        audioCount:
-          typeof obs.tags?.audioCount === 'number'
-            ? obs.tags.audioCount
-            : undefined,
+        photoCount: obs.tags?.photoCount
+          ? Number(obs.tags.photoCount) || undefined
+          : undefined,
+        audioCount: obs.tags?.audioCount
+          ? Number(obs.tags.audioCount) || undefined
+          : undefined,
         details: obs.tags?.notes ?? obs.tags?.details,
         _sortKey: createdMs,
       });
