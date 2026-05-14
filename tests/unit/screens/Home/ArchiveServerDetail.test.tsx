@@ -283,4 +283,43 @@ describe('ArchiveServerDetail', () => {
       screen.queryByRole('button', { name: /retry sync/i }),
     ).not.toBeInTheDocument();
   });
+
+  it('shows Reconnect button when hasCredentials is false', () => {
+    render(
+      <ArchiveServerDetail
+        server={makeServer({ hasCredentials: false })}
+        onSync={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /reconnect/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows reconnect description warning when hasCredentials is false', () => {
+    render(
+      <ArchiveServerDetail
+        server={makeServer({ hasCredentials: false })}
+        onSync={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(
+      screen.getByText(/server credentials are missing/i),
+    ).toBeInTheDocument();
+  });
+
+  it('does not show Reconnect button when hasCredentials is true', () => {
+    render(
+      <ArchiveServerDetail
+        server={makeServer({ hasCredentials: true })}
+        onSync={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: /reconnect/i }),
+    ).not.toBeInTheDocument();
+  });
 });

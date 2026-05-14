@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
+
 import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
+import type { ArchiveServerStatus } from '@/hooks/useArchiveStatus';
 import { useProjects } from '@/hooks/useProjects';
 import { updateProject } from '@/lib/data-layer';
-import type { ArchiveServerStatus } from '@/hooks/useArchiveStatus';
 import type { RemoteArchiveServer } from '@/stores/auth-store';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -38,6 +39,15 @@ const messages = defineMessages({
   credentialsUnavailable: {
     id: 'home.archive.credentialsUnavailable',
     defaultMessage: 'Credentials unavailable.',
+  },
+  reconnect: {
+    id: 'home.archive.reconnect',
+    defaultMessage: 'Reconnect',
+  },
+  reconnectDescription: {
+    id: 'home.archive.reconnectDescription',
+    defaultMessage:
+      'Server credentials are missing. Re-enter your token to restore sync.',
   },
   sync: {
     id: 'home.archive.sync',
@@ -151,6 +161,16 @@ function ArchiveServerDetail({
         <h2 className="text-xl font-bold text-text">{server.label}</h2>
 
         <div className="flex flex-wrap items-center gap-2">
+          {!server.hasCredentials && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsEditDialogOpen(true)}
+            >
+              {intl.formatMessage(messages.reconnect)}
+            </Button>
+          )}
+
           {server.hasCredentials && !server.isSyncing && !server.error && (
             <Button
               variant="secondary"
@@ -215,6 +235,14 @@ function ArchiveServerDetail({
             {server.lastSyncedAt ?? intl.formatMessage(messages.never)}
           </dd>
         </div>
+
+        {!server.hasCredentials && (
+          <div className="rounded-lg border border-warning/30 bg-warning/5 p-3">
+            <p className="text-sm font-medium text-warning">
+              {intl.formatMessage(messages.reconnectDescription)}
+            </p>
+          </div>
+        )}
 
         {server.error && (
           <div className="flex gap-2">

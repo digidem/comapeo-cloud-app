@@ -179,6 +179,12 @@
   "home.archive.editDialog.title": {
     "defaultMessage": "Edit Archive Server"
   },
+  "home.archive.reconnect": {
+    "defaultMessage": "Reconnect"
+  },
+  "home.archive.reconnectDescription": {
+    "defaultMessage": "Server credentials are missing. Re-enter your token to restore sync."
+  },
   "home.archive.remove": {
     "defaultMessage": "Remove"
   },

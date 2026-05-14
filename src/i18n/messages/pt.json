@@ -49,6 +49,8 @@
   "home.archive.confirmRemove.description": "Tem certeza que deseja remover \"{name}\"? Esta ação não pode ser desfeita.",
   "home.archive.confirmRemove.title": "Remover Servidor",
   "home.archive.credentialsUnavailable": "Credenciais indisponíveis.",
+  "home.archive.reconnect": "Reconectar",
+  "home.archive.reconnectDescription": "As credenciais do servidor estão ausentes. Insira novamente seu token para restaurar a sincronização.",
   "home.archive.detail.error": "Erro",
   "home.archive.detail.lastSynced": "Última sincronização",
   "home.archive.detail.never": "Nunca",
