@@ -25,6 +25,7 @@ export type { Alert, Attachment, Observation, Project } from '@/lib/db';
 
 export async function createProject(input: {
   name?: string;
+  description?: string;
   serverUrl?: string;
 }) {
   return repoCreateProject(input);
@@ -36,9 +37,9 @@ export async function getProjects() {
 
 export async function updateProject(
   localId: string,
-  updates: { name?: string; serverUrl?: string | null },
+  updates: { name?: string; description?: string; serverUrl?: string | null },
 ) {
-  return repoUpdateProject(localId, updates as any);
+  return repoUpdateProject(localId, updates);
 }
 
 export async function deleteProject(localId: string) {

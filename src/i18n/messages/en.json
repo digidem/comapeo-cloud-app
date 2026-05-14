@@ -251,6 +251,12 @@
   "home.deleteProject.title": {
     "defaultMessage": "Delete Project"
   },
+  "home.editProject.descriptionLabel": {
+    "defaultMessage": "Description"
+  },
+  "home.editProject.descriptionPlaceholder": {
+    "defaultMessage": "Short description of the project"
+  },
   "home.editProject.error": {
     "defaultMessage": "Failed to update project"
   },
@@ -337,6 +343,12 @@
   },
   "home.newProject.dialog.create": {
     "defaultMessage": "Create"
+  },
+  "home.newProject.dialog.descriptionLabel": {
+    "defaultMessage": "Description"
+  },
+  "home.newProject.dialog.descriptionPlaceholder": {
+    "defaultMessage": "Short description of the project"
   },
   "home.newProject.dialog.error": {
     "defaultMessage": "Failed to create project"

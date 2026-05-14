@@ -63,6 +63,29 @@ test('7.1 first visit shows empty state then create project and import data', as
 });
 
 // ---------------------------------------------------------------------------
+// 7.1b — local project appears in sidebar under "Local" section
+// ---------------------------------------------------------------------------
+
+test('7.1b local project appears in sidebar under Local section', async ({
+  page,
+}) => {
+  await setupMockServer(page);
+  await page.goto('/');
+
+  // Create a local project (default is "Local (offline)")
+  await createProject(page, 'Local Test Project');
+
+  // Sidebar shows "Local" archive section
+  await expect(page.getByText('Local').first()).toBeVisible();
+
+  // Project appears under the Local section
+  await expect(page.getByText('Local Test Project')).toBeVisible();
+
+  // Import Data button is visible for the local project
+  await expect(page.getByRole('button', { name: 'Import Data' })).toBeVisible();
+});
+
+// ---------------------------------------------------------------------------
 // 7.2 — coverage recalculates when preset changes
 // ---------------------------------------------------------------------------
 

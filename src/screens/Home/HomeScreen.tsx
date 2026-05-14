@@ -659,6 +659,10 @@ function HomeScreen() {
             projects.find((p) => p.localId === state.editingProjectId)?.name ??
             ''
           }
+          currentDescription={
+            projects.find((p) => p.localId === state.editingProjectId)
+              ?.description
+          }
           onClose={() => dispatch({ type: 'CLOSE_EDIT_DIALOG' })}
           onSaved={() => {
             void queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -734,6 +738,10 @@ function HomeScreen() {
           currentName={
             projects.find((p) => p.localId === state.editingProjectId)?.name ??
             ''
+          }
+          currentDescription={
+            projects.find((p) => p.localId === state.editingProjectId)
+              ?.description
           }
           onClose={() => dispatch({ type: 'CLOSE_EDIT_DIALOG' })}
           onSaved={() => {
@@ -818,6 +826,10 @@ function HomeScreen() {
             projects.find((p) => p.localId === state.editingProjectId)?.name ??
             ''
           }
+          currentDescription={
+            projects.find((p) => p.localId === state.editingProjectId)
+              ?.description
+          }
           onClose={() => dispatch({ type: 'CLOSE_EDIT_DIALOG' })}
           onSaved={() => {
             void queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -875,6 +887,7 @@ function HomeScreen() {
                 selectedProject.name ??
                 intl.formatMessage(messages.untitledProject)
               }
+              description={selectedProject.description}
               areaSize="0 ha"
               teamMembersCount={0}
               onEdit={() =>
@@ -915,6 +928,10 @@ function HomeScreen() {
           currentName={
             projects.find((p) => p.localId === state.editingProjectId)?.name ??
             ''
+          }
+          currentDescription={
+            projects.find((p) => p.localId === state.editingProjectId)
+              ?.description
           }
           onClose={() => dispatch({ type: 'CLOSE_EDIT_DIALOG' })}
           onSaved={() => {
@@ -1047,6 +1064,7 @@ function HomeScreen() {
               selectedProject.name ??
               intl.formatMessage(messages.untitledProject)
             }
+            description={selectedProject.description}
             areaSize={territoryArea}
             isAreaLoading={coverage.isCalculating}
             lastSync={(() => {
@@ -1149,6 +1167,10 @@ function HomeScreen() {
         projectLocalId={state.editingProjectId ?? ''}
         currentName={
           projects.find((p) => p.localId === state.editingProjectId)?.name ?? ''
+        }
+        currentDescription={
+          projects.find((p) => p.localId === state.editingProjectId)
+            ?.description
         }
         onClose={() => dispatch({ type: 'CLOSE_EDIT_DIALOG' })}
         onSaved={() => {

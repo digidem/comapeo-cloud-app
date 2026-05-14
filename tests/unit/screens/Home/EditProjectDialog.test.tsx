@@ -48,8 +48,8 @@ describe('EditProjectDialog', () => {
         onSaved={vi.fn()}
       />,
     );
-    const input = screen.getByRole('textbox') as HTMLInputElement;
-    expect(input.value).toBe('Existing Project Name');
+    const inputs = screen.getAllByRole('textbox') as HTMLInputElement[];
+    expect(inputs[0]!.value).toBe('Existing Project Name');
   });
 
   it('calls updateProject and onSaved on save with new name', async () => {
@@ -69,13 +69,17 @@ describe('EditProjectDialog', () => {
       />,
     );
 
-    const input = screen.getByRole('textbox');
-    await user.clear(input);
-    await user.type(input, 'Updated Name');
+    const inputs = screen.getAllByRole('textbox');
+    const nameInput = inputs[0]!;
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Updated Name');
     await user.click(screen.getByRole('button', { name: /save/i }));
 
     await waitFor(() => {
-      expect(updateProject).toHaveBeenCalledWith('p1', { name: 'Updated Name' });
+      expect(updateProject).toHaveBeenCalledWith('p1', {
+        name: 'Updated Name',
+        description: '',
+      });
       expect(onSaved).toHaveBeenCalledOnce();
     });
   });
@@ -97,8 +101,9 @@ describe('EditProjectDialog', () => {
       />,
     );
 
-    const input = screen.getByRole('textbox');
-    await user.clear(input);
+    const inputs = screen.getAllByRole('textbox');
+    const nameInput = inputs[0]!;
+    await user.clear(nameInput);
     await user.click(screen.getByRole('button', { name: /save/i }));
 
     // Should NOT call updateProject or onSaved when name is empty/whitespace
@@ -150,9 +155,7 @@ describe('EditProjectDialog', () => {
     await user.click(screen.getByRole('button', { name: /save/i }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Failed to update project'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('Failed to update project')).toBeInTheDocument();
     });
   });
 
@@ -196,5 +199,86 @@ describe('EditProjectDialog', () => {
     // Button should show loading indicator
     const saveBtn = screen.getByRole('button', { name: /save/i });
     expect(saveBtn).toBeInTheDocument();
+  });
+
+  it('shows current description in the description input field', () => {
+    render(
+      <EditProjectDialog
+        isOpen
+        projectLocalId="p1"
+        currentName="My Project"
+        currentDescription="Existing description"
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+    const inputs = screen.getAllByRole('textbox') as HTMLInputElement[];
+    expect(inputs[1]!.value).toBe('Existing description');
+  });
+
+  it('calls updateProject with both name and description on save', async () => {
+    const { updateProject } = await import('@/lib/data-layer');
+    vi.mocked(updateProject).mockResolvedValue(undefined as never);
+
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+
+    render(
+      <EditProjectDialog
+        isOpen
+        projectLocalId="p1"
+        currentName="Old Name"
+        currentDescription="Old description"
+        onClose={vi.fn()}
+        onSaved={onSaved}
+      />,
+    );
+
+    const inputs = screen.getAllByRole('textbox');
+    const nameInput = inputs[0]!;
+    const descInput = inputs[1]!;
+    await user.clear(nameInput);
+    await user.type(nameInput, 'New Name');
+    await user.clear(descInput);
+    await user.type(descInput, 'New description');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => {
+      expect(updateProject).toHaveBeenCalledWith('p1', {
+        name: 'New Name',
+        description: 'New description',
+      });
+      expect(onSaved).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('calls updateProject with empty description when cleared', async () => {
+    const { updateProject } = await import('@/lib/data-layer');
+    vi.mocked(updateProject).mockResolvedValue(undefined as never);
+
+    const user = userEvent.setup();
+
+    render(
+      <EditProjectDialog
+        isOpen
+        projectLocalId="p1"
+        currentName="My Project"
+        currentDescription="Existing description"
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    const inputs = screen.getAllByRole('textbox');
+    const descInput = inputs[1]!;
+    await user.clear(descInput);
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => {
+      expect(updateProject).toHaveBeenCalledWith('p1', {
+        name: 'My Project',
+        description: '',
+      });
+    });
   });
 });

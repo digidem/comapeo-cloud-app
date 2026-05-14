@@ -59,12 +59,15 @@ describe('CreateProjectDialog', () => {
       <CreateProjectDialog isOpen onClose={vi.fn()} onCreated={onCreated} />,
     );
 
-    const input = screen.getByRole('textbox');
-    await user.type(input, 'Test Project');
+    const inputs = screen.getAllByRole('textbox');
+    await user.type(inputs[0]!, 'Test Project');
     await user.click(screen.getByRole('button', { name: /create/i }));
 
     await waitFor(() => {
-      expect(createProject).toHaveBeenCalledWith({ name: 'Test Project' });
+      expect(createProject).toHaveBeenCalledWith({
+        name: 'Test Project',
+        description: '',
+      });
       expect(onCreated).toHaveBeenCalledWith('new-id');
     });
   });
@@ -88,7 +91,7 @@ describe('CreateProjectDialog', () => {
     await user.click(screen.getByRole('button', { name: /create/i }));
 
     await waitFor(() => {
-      expect(createProject).toHaveBeenCalledWith({ name: '' });
+      expect(createProject).toHaveBeenCalledWith({ name: '', description: '' });
       expect(onCreated).toHaveBeenCalledWith('empty-id');
     });
   });
@@ -126,6 +129,45 @@ describe('CreateProjectDialog', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Failed to create project')).toBeInTheDocument();
+    });
+  });
+
+  it('description field is rendered', () => {
+    render(
+      <CreateProjectDialog isOpen onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    expect(
+      screen.getByPlaceholderText('Short description of the project'),
+    ).toBeInTheDocument();
+  });
+
+  it('creates project with description', async () => {
+    const { createProject } = await import('@/lib/data-layer');
+    vi.mocked(createProject).mockResolvedValue({
+      localId: 'new-id',
+      name: 'Forest Project',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as never);
+
+    const user = userEvent.setup();
+    const onCreated = vi.fn();
+
+    render(
+      <CreateProjectDialog isOpen onClose={vi.fn()} onCreated={onCreated} />,
+    );
+
+    const inputs = screen.getAllByRole('textbox');
+    await user.type(inputs[0]!, 'Forest Project');
+    await user.type(inputs[1]!, 'Monitoring forest health');
+    await user.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() => {
+      expect(createProject).toHaveBeenCalledWith({
+        name: 'Forest Project',
+        description: 'Monitoring forest health',
+      });
+      expect(onCreated).toHaveBeenCalledWith('new-id');
     });
   });
 });

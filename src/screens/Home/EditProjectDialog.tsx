@@ -9,6 +9,7 @@ interface EditProjectDialogProps {
   isOpen: boolean;
   projectLocalId: string;
   currentName: string;
+  currentDescription?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -36,6 +37,14 @@ const messages = defineMessages({
   namePlaceholder: {
     id: 'home.newProject.dialog.namePlaceholder',
     defaultMessage: 'Enter project name',
+  },
+  descriptionLabel: {
+    id: 'home.editProject.descriptionLabel',
+    defaultMessage: 'Description',
+  },
+  descriptionPlaceholder: {
+    id: 'home.editProject.descriptionPlaceholder',
+    defaultMessage: 'Short description of the project',
   },
   save: {
     id: 'home.editProject.save',
@@ -68,19 +77,22 @@ function EditProjectDialog({
   isOpen,
   projectLocalId,
   currentName,
+  currentDescription,
   onClose,
   onSaved,
 }: EditProjectDialogProps) {
   const intl = useIntl();
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
   const inputRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLInputElement>(null);
 
   function handleSave() {
     const name = inputRef.current?.value ?? '';
     if (!name.trim()) return;
     dispatch({ type: 'submit' });
 
-    updateProject(projectLocalId, { name }).then(
+    const description = descriptionRef.current?.value?.trim() ?? '';
+    updateProject(projectLocalId, { name, description }).then(
       () => {
         dispatch({ type: 'success' });
         onSaved();
@@ -128,6 +140,23 @@ function EditProjectDialog({
             type="text"
             placeholder={intl.formatMessage(messages.namePlaceholder)}
             defaultValue={currentName}
+            className="w-full rounded-input border border-border bg-surface-card px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor="edit-project-description"
+            className="text-sm font-medium text-text"
+          >
+            {intl.formatMessage(messages.descriptionLabel)}
+          </label>
+          <input
+            id="edit-project-description"
+            ref={descriptionRef}
+            type="text"
+            placeholder={intl.formatMessage(messages.descriptionPlaceholder)}
+            defaultValue={currentDescription ?? ''}
             className="w-full rounded-input border border-border bg-surface-card px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary"
           />
         </div>

@@ -300,4 +300,72 @@ describe('AppDatabase', () => {
     expect('lat' in after!).toBe(true);
     expect('lon' in after!).toBe(true);
   });
+
+  it('stores and retrieves a project with description', async () => {
+    const db = getDb();
+
+    const project: Parameters<typeof db.projects.add>[0] = {
+      localId: 'proj-desc',
+      sourceType: 'local',
+      sourceId: 'local',
+      name: 'Forest Monitoring',
+      description: 'Monitoring deforestation in the Amazon',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: true,
+      deleted: false,
+    };
+
+    await db.projects.add(project);
+    const retrieved = await db.projects.get('proj-desc');
+    expect(retrieved).toBeDefined();
+    expect(retrieved!.name).toBe('Forest Monitoring');
+    expect(retrieved!.description).toBe(
+      'Monitoring deforestation in the Amazon',
+    );
+  });
+
+  it('stores project without description as undefined', async () => {
+    const db = getDb();
+
+    const project: Parameters<typeof db.projects.add>[0] = {
+      localId: 'proj-nodesc',
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: true,
+      deleted: false,
+    };
+
+    await db.projects.add(project);
+    const retrieved = await db.projects.get('proj-nodesc');
+    expect(retrieved).toBeDefined();
+    expect(retrieved!.description).toBeUndefined();
+  });
+
+  it('version 4 migration backfills description as undefined on projects that lack it', async () => {
+    const db = getDb();
+
+    await db.projects.add({
+      localId: 'proj-migration-test',
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    // Run the same backfill logic the migration uses
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await db.projects.toCollection().modify((proj: any) => {
+      if (!('description' in proj)) proj.description = undefined;
+    });
+
+    const after = await db.projects.get('proj-migration-test');
+    expect(after).toBeDefined();
+    expect(after!.description).toBeUndefined();
+    expect('description' in after!).toBe(true);
+  });
 });

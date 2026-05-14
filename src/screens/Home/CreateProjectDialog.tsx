@@ -54,6 +54,14 @@ const messages = defineMessages({
     id: 'home.newProject.dialog.archiveOptionLocal',
     defaultMessage: 'Local (offline)',
   },
+  descriptionLabel: {
+    id: 'home.newProject.dialog.descriptionLabel',
+    defaultMessage: 'Description',
+  },
+  descriptionPlaceholder: {
+    id: 'home.newProject.dialog.descriptionPlaceholder',
+    defaultMessage: 'Short description of the project',
+  },
   create: {
     id: 'home.newProject.dialog.create',
     defaultMessage: 'Create',
@@ -84,6 +92,7 @@ function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
 const LOCAL_SERVER_VALUE = '__local__';
 const formSchema = v.object({
   name: v.optional(v.string()),
+  description: v.optional(v.string()),
   serverUrl: v.optional(
     v.pipe(
       v.string(),
@@ -107,6 +116,7 @@ function CreateProjectDialog({
     resolver: valibotResolver(formSchema),
     defaultValues: {
       name: '',
+      description: '',
       serverUrl: _serverUrl ?? LOCAL_SERVER_VALUE,
     },
   });
@@ -118,6 +128,7 @@ function CreateProjectDialog({
 
     createProject({
       name: data.name,
+      description: data.description,
       serverUrl: data.serverUrl || undefined,
     }).then(
       (project) => {
@@ -136,7 +147,11 @@ function CreateProjectDialog({
 
   function handleClose() {
     dispatch({ type: 'reset' });
-    reset({ name: '', serverUrl: _serverUrl ?? LOCAL_SERVER_VALUE });
+    reset({
+      name: '',
+      description: '',
+      serverUrl: _serverUrl ?? LOCAL_SERVER_VALUE,
+    });
     onClose();
   }
 
@@ -162,6 +177,22 @@ function CreateProjectDialog({
             placeholder={intl.formatMessage(messages.namePlaceholder)}
             className="w-full rounded-input border border-border bg-surface-card px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary"
             {...register('name')}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor="project-description"
+            className="text-sm font-medium text-text"
+          >
+            {intl.formatMessage(messages.descriptionLabel)}
+          </label>
+          <input
+            id="project-description"
+            type="text"
+            placeholder={intl.formatMessage(messages.descriptionPlaceholder)}
+            className="w-full rounded-input border border-border bg-surface-card px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary"
+            {...register('description')}
           />
         </div>
 

@@ -10,6 +10,7 @@ export interface Project {
   sourceId: string;
   remoteId?: string;
   name?: string;
+  description?: string;
   serverUrl?: string;
   createdAt: string;
   updatedAt: string;
@@ -111,6 +112,13 @@ class AppDatabase extends Dexie {
         '&localId, projectLocalId, observationLocalId, [sourceType+sourceId+remoteId]',
       remoteServers: '&id, baseUrl, status, lastSyncedAt',
       syncMetadata: '&id, serverId, status, updatedAt',
+    });
+
+    this.version(4).upgrade(async (tx) => {
+      const table = tx.table('projects');
+      await table.toCollection().modify((proj: Record<string, unknown>) => {
+        if (!('description' in proj)) proj.description = undefined;
+      });
     });
 
     this.version(2).upgrade(async (tx) => {

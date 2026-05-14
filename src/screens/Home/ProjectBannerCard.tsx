@@ -8,6 +8,7 @@ import { ImportDataButton } from '@/screens/Home/ImportDataButton';
 interface ProjectBannerCardProps {
   projectName: string;
   description?: string;
+  photoUrls?: string[];
   areaSize?: string;
   lastSync?: string | null;
   teamMembersCount?: number;
@@ -54,6 +55,7 @@ const messages = defineMessages({
 export function ProjectBannerCard({
   projectName,
   description,
+  photoUrls,
   areaSize = '0 ha',
   lastSync,
   teamMembersCount = 1,
@@ -66,23 +68,40 @@ export function ProjectBannerCard({
 }: ProjectBannerCardProps) {
   const intl = useIntl();
   const resolvedDescription =
-    description ?? intl.formatMessage(messages.defaultDescription);
+    description ??
+    (projectName
+      ? `${projectName} monitoring and data collection project.`
+      : intl.formatMessage(messages.defaultDescription));
   const animatedAreaSize = useCountUp(areaSize, 400);
 
   return (
     <Card className="relative overflow-hidden border-none shadow-card motion-safe:hover:scale-[1.01] motion-safe:hover:shadow-elevated transition-all duration-150">
       {/* Background Image */}
-      <div
-        className="absolute inset-0 z-0"
-        style={{
-          backgroundImage: "url('/amazon_banner.png')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      >
-        {/* Gradient overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-white via-white/80 to-transparent" />
-      </div>
+      {photoUrls && photoUrls.length > 0 ? (
+        <div
+          data-testid="photo-collage"
+          className="absolute inset-0 z-0 grid grid-cols-2 grid-rows-2"
+        >
+          {photoUrls.slice(0, 4).map((url, i) => (
+            <div key={i} className="overflow-hidden">
+              <img src={url} alt="" className="w-full h-full object-cover" />
+            </div>
+          ))}
+          <div className="absolute inset-0 bg-gradient-to-t from-white via-white/80 to-transparent" />
+        </div>
+      ) : (
+        <div
+          data-testid="default-banner-bg"
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: "url('/amazon_banner.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-t from-white via-white/80 to-transparent" />
+        </div>
+      )}
 
       {/* Content */}
       <div className="relative z-10 flex flex-col p-6 pt-24 md:p-8 md:pt-32">

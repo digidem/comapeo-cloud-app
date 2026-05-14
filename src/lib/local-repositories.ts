@@ -42,6 +42,7 @@ export type AlertUpdates = Omit<Partial<Alert>, ImmutableFields>;
 
 export interface CreateProjectInput {
   name?: string;
+  description?: string;
   serverUrl?: string;
 }
 

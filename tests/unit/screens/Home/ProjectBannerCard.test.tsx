@@ -128,4 +128,69 @@ describe('ProjectBannerCard', () => {
     expect(screen.getByText('10 ha')).toBeInTheDocument();
     expect(screen.queryByTestId('skeleton')).toBeNull();
   });
+
+  it('shows project description when provided', () => {
+    render(
+      <ProjectBannerCard
+        {...defaultProps}
+        description="Monitoring deforestation in the Amazon"
+      />,
+    );
+    expect(
+      screen.getByText('Monitoring deforestation in the Amazon'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows derived description from project name when description is empty', () => {
+    render(<ProjectBannerCard {...defaultProps} projectName="Forest Watch" />);
+    expect(
+      screen.getByText('Forest Watch monitoring and data collection project.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows generic fallback when neither name nor description exists', () => {
+    render(<ProjectBannerCard projectName="" />);
+    expect(
+      screen.getByText(
+        'A controlled environment for onboarding new rangers and testing field data collection protocols.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('renders photo collage when photoUrls has items', () => {
+    render(
+      <ProjectBannerCard
+        {...defaultProps}
+        photoUrls={['/photo1.jpg', '/photo2.jpg', '/photo3.jpg']}
+      />,
+    );
+    expect(screen.getByTestId('photo-collage')).toBeInTheDocument();
+    const images = screen.getAllByRole('presentation');
+    expect(images).toHaveLength(3);
+    expect(images[0]).toHaveAttribute('src', '/photo1.jpg');
+    expect(images[1]).toHaveAttribute('src', '/photo2.jpg');
+    expect(images[2]).toHaveAttribute('src', '/photo3.jpg');
+  });
+
+  it('renders default background when photoUrls is empty', () => {
+    render(<ProjectBannerCard {...defaultProps} photoUrls={[]} />);
+    expect(screen.getByTestId('default-banner-bg')).toBeInTheDocument();
+    expect(screen.queryByTestId('photo-collage')).not.toBeInTheDocument();
+  });
+
+  it('renders default background when photoUrls is undefined', () => {
+    render(<ProjectBannerCard {...defaultProps} />);
+    expect(screen.getByTestId('default-banner-bg')).toBeInTheDocument();
+  });
+
+  it('collage shows at most 4 photos', () => {
+    render(
+      <ProjectBannerCard
+        {...defaultProps}
+        photoUrls={['/1.jpg', '/2.jpg', '/3.jpg', '/4.jpg', '/5.jpg', '/6.jpg']}
+      />,
+    );
+    const images = screen.getAllByRole('presentation');
+    expect(images).toHaveLength(4);
+  });
 });
