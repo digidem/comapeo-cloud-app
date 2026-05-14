@@ -8,6 +8,7 @@ import {
   ShellSlotProvider,
   useShellOverrides,
 } from '@/components/layout/shell-slot';
+import { useAutoSync } from '@/hooks/useAutoSync';
 
 const messages = defineMessages({
   home: { id: 'home.title', defaultMessage: 'Home' },
@@ -92,7 +93,17 @@ function AuthenticatedLayoutInner() {
 export function AuthenticatedLayout() {
   return (
     <ShellSlotProvider>
-      <AuthenticatedLayoutInner />
+      <AutoSyncWrapper />
     </ShellSlotProvider>
   );
+}
+
+/**
+ * Inner wrapper that runs auto-sync once on mount.
+ * Separated so the ShellSlotProvider is already in the tree
+ * when sync-triggered invalidations cause re-renders.
+ */
+function AutoSyncWrapper() {
+  useAutoSync();
+  return <AuthenticatedLayoutInner />;
 }

@@ -25,6 +25,14 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 
+vi.mock('@/hooks/useAutoSync', () => ({
+  useAutoSync: vi.fn(),
+}));
+
+const mockUseAutoSync = vi.mocked(
+  await import('@/hooks/useAutoSync').then((m) => m.useAutoSync),
+);
+
 describe('AuthenticatedLayout', () => {
   it('renders AppShell with navigation items', () => {
     render(<AuthenticatedLayout />);
@@ -61,6 +69,11 @@ describe('AuthenticatedLayout', () => {
     // Drawer should contain nav items
     expect(screen.getAllByText('Home').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('calls useAutoSync on mount', () => {
+    render(<AuthenticatedLayout />);
+    expect(mockUseAutoSync).toHaveBeenCalledTimes(1);
   });
 
   it('drawer renders secondary content from ShellSlot overrides', async () => {
