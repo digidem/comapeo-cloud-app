@@ -62,6 +62,7 @@ export interface RemoteServer {
   id: string;
   baseUrl: string;
   label?: string;
+  token?: string;
   status: string;
   lastSyncedAt: string;
 }
@@ -118,6 +119,13 @@ class AppDatabase extends Dexie {
       const table = tx.table('projects');
       await table.toCollection().modify((proj: Record<string, unknown>) => {
         if (!('description' in proj)) proj.description = undefined;
+      });
+    });
+
+    this.version(5).upgrade(async (tx) => {
+      const table = tx.table('remoteServers');
+      await table.toCollection().modify((srv: Record<string, unknown>) => {
+        if (!('token' in srv)) srv.token = undefined;
       });
     });
 

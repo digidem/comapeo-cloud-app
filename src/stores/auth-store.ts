@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import {
   createRemoteServer,
   deleteRemoteServer,
+  getRemoteServers,
   updateRemoteServer,
 } from '@/lib/local-repositories';
 
@@ -52,6 +53,7 @@ export interface AuthState {
     id: string,
     updates: { label?: string; baseUrl?: string; token?: string },
   ) => Promise<void>;
+  hydrateServers: () => Promise<void>;
   clearAll: () => void;
 
   // Backward-compat aliases
@@ -81,6 +83,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     const server = await createRemoteServer({
       baseUrl: config.baseUrl,
       label: config.label,
+      token: config.token,
     });
     const newServer: RemoteArchiveServer = {
       id: server.id,
@@ -147,6 +150,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     await updateRemoteServer(id, {
       ...(updates.label !== undefined ? { label: updates.label } : {}),
       ...(updates.baseUrl !== undefined ? { baseUrl: updates.baseUrl } : {}),
+      ...(updates.token !== undefined ? { token: updates.token } : {}),
     });
     set((state) => ({
       servers: state.servers.map((s) =>
@@ -158,6 +162,27 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           : s,
       ),
     }));
+  },
+
+  hydrateServers: async () => {
+    try {
+      const records = await getRemoteServers();
+      const hydrated: RemoteArchiveServer[] = records.map((record) => ({
+        id: record.id,
+        label: record.label ?? record.baseUrl,
+        baseUrl: record.baseUrl,
+        token: record.token ?? '',
+        status: (['idle', 'syncing', 'connected', 'offline', 'error'].includes(
+          record.status,
+        )
+          ? record.status
+          : 'idle') as RemoteArchiveServer['status'],
+        lastSyncedAt: record.lastSyncedAt || undefined,
+      }));
+      set({ servers: hydrated });
+    } catch {
+      // IndexedDB not available — leave servers empty
+    }
   },
 
   clearAll: () =>

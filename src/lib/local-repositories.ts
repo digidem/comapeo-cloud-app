@@ -319,6 +319,7 @@ export async function getAttachmentsForProject(
 export interface CreateRemoteServerInput {
   baseUrl: string;
   label?: string;
+  token?: string;
   status?: string;
 }
 
@@ -331,6 +332,7 @@ export async function createRemoteServer(
       id: uuid(),
       baseUrl: input.baseUrl,
       label: input.label,
+      token: input.token,
       status: input.status ?? 'idle',
       lastSyncedAt: '',
     };

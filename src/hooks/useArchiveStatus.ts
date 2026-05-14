@@ -47,7 +47,8 @@ export function useArchiveStatus(): ArchiveStatus {
             isSyncing: record.status === 'syncing',
             lastSyncedAt: record.lastSyncedAt ?? null,
             error: record.status === 'error' ? 'Sync error' : null,
-            hasCredentials: false,
+            hasCredentials:
+              typeof record.token === 'string' && record.token.length > 0,
             isStale:
               record.lastSyncedAt !== null
                 ? now - new Date(record.lastSyncedAt).getTime() >

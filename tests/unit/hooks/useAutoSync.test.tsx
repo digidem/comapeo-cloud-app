@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { useAutoSync } from '@/hooks/useAutoSync';
 import { syncRemoteArchive } from '@/lib/data-layer';
+import * as localRepos from '@/lib/local-repositories';
 import { useAuthStore } from '@/stores/auth-store';
 
 vi.mock('@/lib/data-layer', () => ({
@@ -33,31 +34,38 @@ beforeEach(() => {
 });
 
 describe('useAutoSync', () => {
-  it('does not sync when no servers are configured', () => {
+  it('does not sync when no servers are in IndexedDB', async () => {
+    vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([]);
+
     renderHook(() => useAutoSync(), { wrapper });
+
+    // Wait for async getRemoteServers to resolve
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
 
     expect(mockSyncRemoteArchive).not.toHaveBeenCalled();
   });
 
-  it('syncs all configured servers with credentials on mount', async () => {
-    useAuthStore.setState({
-      servers: [
-        {
-          id: 'server-1',
-          label: 'Server 1',
-          baseUrl: 'https://archive1.example.com',
-          token: 'token-1',
-          status: 'idle',
-        },
-        {
-          id: 'server-2',
-          label: 'Server 2',
-          baseUrl: 'https://archive2.example.com',
-          token: 'token-2',
-          status: 'idle',
-        },
-      ],
-    });
+  it('syncs all servers with credentials from IndexedDB on mount', async () => {
+    vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
+      {
+        id: 'server-1',
+        baseUrl: 'https://archive1.example.com',
+        label: 'Server 1',
+        token: 'token-1',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+      {
+        id: 'server-2',
+        baseUrl: 'https://archive2.example.com',
+        label: 'Server 2',
+        token: 'token-2',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+    ]);
 
     renderHook(() => useAutoSync(), { wrapper });
 
@@ -75,25 +83,24 @@ describe('useAutoSync', () => {
     });
   });
 
-  it('skips servers without credentials', async () => {
-    useAuthStore.setState({
-      servers: [
-        {
-          id: 'server-1',
-          label: 'Server 1',
-          baseUrl: 'https://archive1.example.com',
-          token: 'token-1',
-          status: 'idle',
-        },
-        {
-          id: 'server-2',
-          label: 'Server 2',
-          baseUrl: 'https://archive2.example.com',
-          token: '',
-          status: 'idle',
-        },
-      ],
-    });
+  it('skips servers without token in IndexedDB', async () => {
+    vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
+      {
+        id: 'server-1',
+        baseUrl: 'https://archive1.example.com',
+        label: 'Server 1',
+        token: 'token-1',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+      {
+        id: 'server-2',
+        baseUrl: 'https://archive2.example.com',
+        label: 'Server 2',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+    ]);
 
     renderHook(() => useAutoSync(), { wrapper });
 
@@ -107,18 +114,41 @@ describe('useAutoSync', () => {
     });
   });
 
-  it('invalidates queries after successful sync', async () => {
-    useAuthStore.setState({
-      servers: [
-        {
-          id: 'server-1',
-          label: 'Server 1',
-          baseUrl: 'https://archive1.example.com',
-          token: 'token-1',
-          status: 'idle',
-        },
-      ],
+  it('hydrates auth store from IndexedDB on mount', async () => {
+    vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
+      {
+        id: 'server-1',
+        baseUrl: 'https://archive1.example.com',
+        label: 'Server 1',
+        token: 'token-1',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+    ]);
+
+    renderHook(() => useAutoSync(), { wrapper });
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().servers.length).toBe(1);
     });
+
+    const server = useAuthStore.getState().servers[0]!;
+    expect(server.id).toBe('server-1');
+    expect(server.token).toBe('token-1');
+    expect(server.baseUrl).toBe('https://archive1.example.com');
+  });
+
+  it('invalidates queries after successful sync', async () => {
+    vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
+      {
+        id: 'server-1',
+        baseUrl: 'https://archive1.example.com',
+        label: 'Server 1',
+        token: 'token-1',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+    ]);
 
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: 0 } },
@@ -152,17 +182,16 @@ describe('useAutoSync', () => {
   });
 
   it('only syncs once on mount (not on re-renders)', async () => {
-    useAuthStore.setState({
-      servers: [
-        {
-          id: 'server-1',
-          label: 'Server 1',
-          baseUrl: 'https://archive1.example.com',
-          token: 'token-1',
-          status: 'idle',
-        },
-      ],
-    });
+    vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
+      {
+        id: 'server-1',
+        baseUrl: 'https://archive1.example.com',
+        label: 'Server 1',
+        token: 'token-1',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+    ]);
 
     const { rerender } = renderHook(() => useAutoSync(), { wrapper });
 
@@ -179,17 +208,16 @@ describe('useAutoSync', () => {
   it('handles sync errors gracefully without throwing', async () => {
     mockSyncRemoteArchive.mockRejectedValueOnce(new Error('Network error'));
 
-    useAuthStore.setState({
-      servers: [
-        {
-          id: 'server-1',
-          label: 'Server 1',
-          baseUrl: 'https://archive1.example.com',
-          token: 'token-1',
-          status: 'idle',
-        },
-      ],
-    });
+    vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
+      {
+        id: 'server-1',
+        baseUrl: 'https://archive1.example.com',
+        label: 'Server 1',
+        token: 'token-1',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+    ]);
 
     // Should not throw
     expect(() => {
