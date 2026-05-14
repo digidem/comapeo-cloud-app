@@ -281,6 +281,7 @@ describe('HomeScreen', () => {
   it('shows loading skeletons when projects are loading', async () => {
     mockUseProjects.mockReturnValue({
       data: undefined,
+      isPending: true,
       isLoading: true,
       isError: false,
       error: null,
@@ -689,6 +690,7 @@ describe('HomeScreen', () => {
   it('shows loading skeletons when projects are loading', async () => {
     mockUseProjects.mockReturnValue({
       data: undefined,
+      isPending: true,
       isLoading: true,
       isError: false,
       error: null,
@@ -1008,6 +1010,7 @@ describe('HomeScreen', () => {
 
     mockUseObservations.mockReturnValue({
       data: [],
+      isPending: true,
       isLoading: true,
       isFetching: true,
       isError: false,
@@ -1017,6 +1020,7 @@ describe('HomeScreen', () => {
 
     mockUseAlerts.mockReturnValue({
       data: [],
+      isPending: true,
       isLoading: true,
       isFetching: true,
       isError: false,

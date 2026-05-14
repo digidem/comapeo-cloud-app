@@ -629,7 +629,7 @@ function HomeScreen() {
     [
       projects,
       state.selectedProjectId,
-      projectsQuery.isLoading,
+      projectsQuery.isPending,
       handleOpenCreateDialog,
     ],
   );
@@ -646,9 +646,11 @@ function HomeScreen() {
 
   useShellSlot(shellSlot);
 
-  // Loading state — full-page skeleton while projects query resolves
+  // Loading state — full-page skeleton only on initial load (no data yet).
+  // Background re-fetches (e.g., from auto-sync invalidation) should NOT
+  // show the skeleton — the stale data remains visible while refreshing.
   // Must be after all hooks (useShellSlot) to avoid Rules of Hooks violations
-  if (projectsQuery.isLoading || projectsQuery.isFetching) {
+  if (projectsQuery.isPending) {
     return <HomeScreenSkeleton />;
   }
 
@@ -1010,9 +1012,8 @@ function HomeScreen() {
     );
   }
 
-  const isObservationsLoading =
-    observationsQuery.isLoading || observationsQuery.isFetching;
-  const isAlertsLoading = alertsQuery.isLoading || alertsQuery.isFetching;
+  const isObservationsLoading = observationsQuery.isPending;
+  const isAlertsLoading = alertsQuery.isPending;
 
   const observationCount = observations.length;
 
