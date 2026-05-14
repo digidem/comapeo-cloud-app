@@ -429,6 +429,21 @@ function HomeScreen() {
     return { photos, audios, tracks };
   }, [observations]);
 
+  // Extract latest photo URLs from observation tags for banner collage
+  const latestPhotoUrls = useMemo(() => {
+    const urls: string[] = [];
+    for (const obs of observations) {
+      if (obs.tags) {
+        const photoUrl = obs.tags.photoUrl ?? obs.tags.imageUrl;
+        if (typeof photoUrl === 'string' && photoUrl) {
+          urls.push(photoUrl);
+          if (urls.length >= 4) break;
+        }
+      }
+    }
+    return urls;
+  }, [observations]);
+
   // Build recent activity from real observations and alerts
   const recentActivities = useMemo(() => {
     const items: Array<{
@@ -437,6 +452,10 @@ function HomeScreen() {
       description: string;
       timestamp: string;
       type: 'record' | 'map' | 'sync';
+      category?: string;
+      photoCount?: number;
+      audioCount?: number;
+      details?: string;
       _sortKey: number;
     }> = [];
 
@@ -454,6 +473,16 @@ function HomeScreen() {
           : intl.formatMessage(messages.activityNoLocation),
         timestamp: formatRelativeTime(ageMs, intl),
         type: 'record',
+        category: obs.tags?.category,
+        photoCount:
+          typeof obs.tags?.photoCount === 'number'
+            ? obs.tags.photoCount
+            : undefined,
+        audioCount:
+          typeof obs.tags?.audioCount === 'number'
+            ? obs.tags.audioCount
+            : undefined,
+        details: obs.tags?.notes ?? obs.tags?.details,
         _sortKey: createdMs,
       });
     }
@@ -471,7 +500,7 @@ function HomeScreen() {
       });
     }
 
-    // Sort by most recent first, keep top 10
+    // Sort by most recent first
     items.sort((a, b) => b._sortKey - a._sortKey);
 
     return items.map(({ _sortKey: _, ...rest }) => rest);
@@ -888,6 +917,7 @@ function HomeScreen() {
                 intl.formatMessage(messages.untitledProject)
               }
               description={selectedProject.description}
+              photoUrls={latestPhotoUrls}
               areaSize="0 ha"
               teamMembersCount={0}
               onEdit={() =>
@@ -1065,6 +1095,7 @@ function HomeScreen() {
               intl.formatMessage(messages.untitledProject)
             }
             description={selectedProject.description}
+            photoUrls={latestPhotoUrls}
             areaSize={territoryArea}
             isAreaLoading={coverage.isCalculating}
             lastSync={(() => {

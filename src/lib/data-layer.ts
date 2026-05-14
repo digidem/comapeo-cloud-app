@@ -39,7 +39,11 @@ export async function updateProject(
   localId: string,
   updates: { name?: string; description?: string; serverUrl?: string | null },
 ) {
-  return repoUpdateProject(localId, updates);
+  const { serverUrl, ...rest } = updates;
+  return repoUpdateProject(localId, {
+    ...rest,
+    ...(serverUrl !== undefined && { serverUrl: serverUrl ?? undefined }),
+  });
 }
 
 export async function deleteProject(localId: string) {
