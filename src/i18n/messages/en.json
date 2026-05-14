@@ -476,6 +476,51 @@
   "invite.error": {
     "defaultMessage": "Failed to connect to archive."
   },
+  "settings.backup.description": {
+    "defaultMessage": "Export your local settings to a JSON file, or import a previously exported backup."
+  },
+  "settings.backup.exportButton": {
+    "defaultMessage": "Export Backup"
+  },
+  "settings.backup.exportError": {
+    "defaultMessage": "Failed to export backup."
+  },
+  "settings.backup.exportSuccess": {
+    "defaultMessage": "Backup exported successfully."
+  },
+  "settings.backup.importButton": {
+    "defaultMessage": "Import Backup"
+  },
+  "settings.backup.importError": {
+    "defaultMessage": "Failed to import backup: {error}"
+  },
+  "settings.backup.importSuccess": {
+    "defaultMessage": "Backup imported. Reloading…"
+  },
+  "settings.backup.title": {
+    "defaultMessage": "Backup & Restore"
+  },
+  "settings.clear.button": {
+    "defaultMessage": "Clear All Data"
+  },
+  "settings.clear.cancelButton": {
+    "defaultMessage": "Cancel"
+  },
+  "settings.clear.confirmButton": {
+    "defaultMessage": "Yes, Clear Everything"
+  },
+  "settings.clear.confirmDescription": {
+    "defaultMessage": "This will permanently remove all local settings, preferences, and cached data. This action cannot be undone."
+  },
+  "settings.clear.confirmTitle": {
+    "defaultMessage": "Clear All Data?"
+  },
+  "settings.clear.description": {
+    "defaultMessage": "Remove all local settings, preferences, and cached data. This cannot be undone."
+  },
+  "settings.clear.title": {
+    "defaultMessage": "Clear Local Data"
+  },
   "settings.invites.generate.button": {
     "defaultMessage": "Generate Invite"
   },

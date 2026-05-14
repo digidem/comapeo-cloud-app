@@ -1,10 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { projectsFixture } from '@tests/fixtures/projects';
 
 import { setupMockServer } from './mock-server';
 import { VIEWPORTS, takeScreenshot } from './screenshot-utils';
 import type { ViewportName } from './screenshot-utils';
-
-import { projectsFixture } from '@tests/fixtures/projects';
 
 const DESKTOP_VIEWPORT = VIEWPORTS.desktop;
 
@@ -35,11 +34,7 @@ test.describe('Feature screenshots', () => {
         page.getByRole('heading', { name: 'Demo Project' }),
       ).toBeVisible({ timeout: 5_000 });
 
-      await takeScreenshot(
-        page,
-        'archive-sidebar',
-        'desktop' as ViewportName,
-      );
+      await takeScreenshot(page, 'archive-sidebar', 'desktop' as ViewportName);
     } finally {
       await context.close();
     }
@@ -58,13 +53,68 @@ test.describe('Feature screenshots', () => {
       await page.goto('/settings');
 
       // Wait for the "Remote Archive Invites" section to be visible
-      await expect(
-        page.getByText('Remote Archive Invites'),
-      ).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByText('Remote Archive Invites')).toBeVisible({
+        timeout: 5_000,
+      });
 
       await takeScreenshot(
         page,
         'settings-invite-form',
+        'desktop' as ViewportName,
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
+  // --- T3b - BACKUP & RESTORE SECTION ---
+  test('settings-backup-restore', async ({ browser }) => {
+    const context = await browser.newContext({
+      viewport: DESKTOP_VIEWPORT,
+      reducedMotion: 'reduce',
+    });
+    const page = await context.newPage();
+
+    try {
+      await setupMockServer(page);
+      await page.goto('/settings');
+
+      await expect(page.getByText('Backup & Restore')).toBeVisible({
+        timeout: 5_000,
+      });
+
+      await takeScreenshot(
+        page,
+        'settings-backup-restore',
+        'desktop' as ViewportName,
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
+  // --- T3c - CLEAR ALL DATA DIALOG ---
+  test('settings-clear-data', async ({ browser }) => {
+    const context = await browser.newContext({
+      viewport: DESKTOP_VIEWPORT,
+      reducedMotion: 'reduce',
+    });
+    const page = await context.newPage();
+
+    try {
+      await setupMockServer(page);
+      await page.goto('/settings');
+
+      // Click the Clear All Data button to open confirmation dialog
+      await page.getByRole('button', { name: 'Clear All Data' }).click();
+
+      await expect(page.getByText('Clear All Data?')).toBeVisible({
+        timeout: 5_000,
+      });
+
+      await takeScreenshot(
+        page,
+        'settings-clear-data',
         'desktop' as ViewportName,
       );
     } finally {
@@ -119,9 +169,7 @@ test.describe('Feature screenshots', () => {
       await page.getByRole('button', { name: /en|es|pt/i }).click();
 
       // Wait for dropdown to appear (custom dropdown, not a menu/listbox)
-      await expect(
-        page.getByText('English'),
-      ).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByText('English')).toBeVisible({ timeout: 5_000 });
 
       await takeScreenshot(
         page,
@@ -157,11 +205,7 @@ test.describe('Feature screenshots', () => {
       await page.goto('/');
 
       // Take screenshot immediately while data is still loading
-      await takeScreenshot(
-        page,
-        'home-skeleton',
-        'desktop' as ViewportName,
-      );
+      await takeScreenshot(page, 'home-skeleton', 'desktop' as ViewportName);
     } finally {
       await context.close();
     }

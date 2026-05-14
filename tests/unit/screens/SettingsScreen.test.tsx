@@ -1,7 +1,12 @@
-import { render, screen, userEvent } from '@tests/mocks/test-utils';
+import { fireEvent, render, screen, userEvent } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetDb } from '@/lib/db';
+import {
+  clearAllStorage,
+  exportLocalStorageData,
+  importLocalStorageData,
+} from '@/lib/local-storage-utils';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -24,6 +29,12 @@ Object.defineProperty(navigator, 'clipboard', {
   writable: true,
 });
 
+vi.mock('@/lib/local-storage-utils', () => ({
+  exportLocalStorageData: vi.fn(() => '"{\\"version\\":1,\\"data\\":{}}"'),
+  importLocalStorageData: vi.fn(() => ({ success: true })),
+  clearAllStorage: vi.fn(() => Promise.resolve()),
+}));
+
 beforeEach(async () => {
   await resetDb();
   useAuthStore.setState({
@@ -33,6 +44,10 @@ beforeEach(async () => {
     baseUrl: null,
   });
   vi.clearAllMocks();
+
+  // Mock URL functions for export tests
+  URL.createObjectURL = vi.fn(() => 'blob:http://localhost/fake-url');
+  URL.revokeObjectURL = vi.fn();
 });
 
 describe('SettingsScreen', () => {
@@ -146,5 +161,228 @@ describe('SettingsScreen', () => {
 
     // Should show "Copied!" feedback
     expect(screen.getByText('Copied!')).toBeInTheDocument();
+  });
+
+  describe('Backup & Restore', () => {
+    it('renders Backup & Restore section heading', () => {
+      render(<SettingsScreen />);
+      expect(screen.getByText('Backup & Restore')).toBeInTheDocument();
+    });
+
+    it('renders Export Backup button', () => {
+      render(<SettingsScreen />);
+      expect(
+        screen.getByRole('button', { name: 'Export Backup' }),
+      ).toBeInTheDocument();
+    });
+
+    it('renders Import Backup button', () => {
+      render(<SettingsScreen />);
+      expect(
+        screen.getByRole('button', { name: 'Import Backup' }),
+      ).toBeInTheDocument();
+    });
+
+    it('clicking Export Backup triggers file download', async () => {
+      const user = userEvent.setup();
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click');
+
+      render(<SettingsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+      expect(exportLocalStorageData).toHaveBeenCalledTimes(1);
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith(
+        'blob:http://localhost/fake-url',
+      );
+
+      clickSpy.mockRestore();
+    });
+
+    it('shows success feedback after export', async () => {
+      const user = userEvent.setup();
+      render(<SettingsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+      expect(
+        screen.getByText('Backup exported successfully.'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows error feedback when export fails', async () => {
+      vi.mocked(exportLocalStorageData).mockImplementationOnce(() => {
+        throw new Error('Storage unavailable');
+      });
+
+      const user = userEvent.setup();
+      render(<SettingsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+      expect(screen.getByText('Failed to export backup.')).toBeInTheDocument();
+    });
+
+    it('shows error feedback when import fails', async () => {
+      vi.mocked(importLocalStorageData).mockReturnValueOnce({
+        success: false,
+        error: 'Invalid backup file format',
+      });
+
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class MockFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          readAsText() {
+            this.result = 'invalid content';
+            this.onload?.({} as Event);
+          }
+        } as unknown as typeof window.FileReader;
+
+        render(<SettingsScreen />);
+
+        const fileInput = screen.getByTestId('backup-file-input');
+        fireEvent.change(fileInput, {
+          target: {
+            files: [new File(['invalid'], 'backup.json')],
+          },
+        });
+
+        expect(
+          await screen.findByText(/Failed to import backup/),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByText(/Invalid backup file format/),
+        ).toBeInTheDocument();
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
+    });
+
+    it('import button shows loading state during import', () => {
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class DelayedFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          readAsText() {
+            // Intentionally don't call onload — stays in loading state
+          }
+        } as unknown as typeof window.FileReader;
+
+        render(<SettingsScreen />);
+
+        const fileInput = screen.getByTestId('backup-file-input');
+        fireEvent.change(fileInput, {
+          target: {
+            files: [new File(['{}'], 'backup.json')],
+          },
+        });
+
+        const importButton = screen.getByRole('button', {
+          name: 'Import Backup',
+        });
+        expect(importButton).toHaveAttribute('aria-busy', 'true');
+        expect(importButton).toBeDisabled();
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
+    });
+
+    it('shows error feedback when FileReader fails', () => {
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class ErrorFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          error: DOMException | null = new DOMException('Read error');
+          readAsText() {
+            this.onerror?.({} as Event);
+          }
+        } as unknown as typeof window.FileReader;
+
+        render(<SettingsScreen />);
+
+        const fileInput = screen.getByTestId('backup-file-input');
+        fireEvent.change(fileInput, {
+          target: {
+            files: [new File(['{}'], 'backup.json')],
+          },
+        });
+
+        expect(screen.getByText(/Failed to import backup/)).toBeInTheDocument();
+        expect(screen.getByText(/Read error/)).toBeInTheDocument();
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
+    });
+  });
+
+  describe('Clear Local Data', () => {
+    it('renders Clear Local Data section heading', () => {
+      render(<SettingsScreen />);
+      expect(screen.getByText('Clear Local Data')).toBeInTheDocument();
+    });
+
+    it('renders Clear All Data button', () => {
+      render(<SettingsScreen />);
+      expect(
+        screen.getByRole('button', { name: 'Clear All Data' }),
+      ).toBeInTheDocument();
+    });
+
+    it('clicking Clear All Data opens confirmation dialog', async () => {
+      const user = userEvent.setup();
+      render(<SettingsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
+
+      expect(screen.getByText('Clear All Data?')).toBeInTheDocument();
+    });
+
+    it('confirmation dialog shows warning text', async () => {
+      const user = userEvent.setup();
+      render(<SettingsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
+
+      expect(
+        screen.getByText(/permanently remove all local settings/),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/This action cannot be undone/),
+      ).toBeInTheDocument();
+    });
+
+    it('clicking cancel closes dialog without clearing data', async () => {
+      const user = userEvent.setup();
+      render(<SettingsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
+      expect(screen.getByText('Clear All Data?')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(screen.queryByText('Clear All Data?')).not.toBeInTheDocument();
+      expect(clearAllStorage).not.toHaveBeenCalled();
+    });
+
+    it('clicking confirm calls clearAllStorage', async () => {
+      const user = userEvent.setup();
+      render(<SettingsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
+      await user.click(
+        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+      );
+
+      expect(clearAllStorage).toHaveBeenCalledTimes(1);
+    });
   });
 });
