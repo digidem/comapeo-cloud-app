@@ -90,6 +90,18 @@ vi.mock('@/hooks/useAlerts', () => ({
   useAlerts: vi.fn(),
 }));
 
+vi.mock('@/components/shared/auth-img', () => ({
+  AuthImg: ({
+    src,
+    alt,
+    className,
+  }: {
+    src: string;
+    alt: string;
+    className?: string;
+  }) => <img src={src} alt={alt} className={className} />,
+}));
+
 // Mock data-layer createProject
 vi.mock('@/lib/data-layer', () => ({
   createProject: vi.fn().mockResolvedValue({ localId: 'new-project-id' }),
@@ -1109,5 +1121,57 @@ describe('HomeScreen', () => {
       el.closest('.text-4xl'),
     );
     expect(statCardSkeletons.length).toBe(0);
+  });
+
+  it('resolves relative banner photo URLs against the selected remote project server URL', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Remote Photo Project',
+          serverUrl: 'https://archive.example.com/base',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    mockUseObservations.mockReturnValue({
+      data: [
+        {
+          localId: 'obs1',
+          createdAt: new Date().toISOString(),
+          lat: -1,
+          lon: -1,
+          tags: {
+            photoUrls: '/projects/proj1/attachments/drive1/photo/img1',
+          },
+        },
+      ],
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+
+    renderWithShell(<HomeScreen />);
+
+    const collage = await screen.findByTestId('photo-collage');
+    const image = within(collage).getByRole('presentation');
+
+    expect(image).toHaveAttribute(
+      'src',
+      'https://archive.example.com/projects/proj1/attachments/drive1/photo/img1',
+    );
   });
 });

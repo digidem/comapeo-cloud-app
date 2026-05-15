@@ -60,6 +60,16 @@ function formatRelativeTime(ageMs: number, intl: IntlShape): string {
   });
 }
 
+function resolveProjectPhotoUrl(url: string, serverUrl?: string): string {
+  if (!serverUrl || !url.startsWith('/') || url.startsWith('//')) return url;
+
+  try {
+    return new URL(url, serverUrl).toString();
+  } catch {
+    return url;
+  }
+}
+
 // ---- State management ----
 
 interface HomeState {
@@ -437,14 +447,14 @@ function HomeScreen() {
       if (obs.tags?.photoUrls) {
         const parsed = String(obs.tags.photoUrls).split(',').filter(Boolean);
         for (const url of parsed) {
-          urls.push(url);
+          urls.push(resolveProjectPhotoUrl(url, selectedProject?.serverUrl));
           if (urls.length >= 4) break;
         }
         if (urls.length >= 4) break;
       }
     }
     return urls;
-  }, [observations]);
+  }, [observations, selectedProject?.serverUrl]);
 
   // Build recent activity from real observations and alerts
   const recentActivities = useMemo(() => {

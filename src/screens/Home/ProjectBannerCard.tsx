@@ -1,5 +1,6 @@
 import { defineMessages, useIntl } from 'react-intl';
 
+import { AuthImg } from '@/components/shared/auth-img';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCountUp } from '@/hooks/useCountUp';
@@ -84,7 +85,11 @@ export function ProjectBannerCard({
         >
           {photoUrls.slice(0, 4).map((url, i) => (
             <div key={i} className="overflow-hidden">
-              <img src={url} alt="" className="w-full h-full object-cover" />
+              <AuthImg
+                src={url}
+                alt=""
+                className="w-full h-full object-cover"
+              />
             </div>
           ))}
           <div className="absolute inset-0 bg-gradient-to-t from-white via-white/80 to-transparent" />

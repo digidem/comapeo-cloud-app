@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { AuthImg } from '@/components/shared/auth-img';
 import { Button } from '@/components/ui/button';
 import { getAttachmentUrl } from '@/lib/api-client';
 
@@ -33,7 +34,7 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
             onClick={() => setPreviewIndex(index)}
             className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-card"
           >
-            <img
+            <AuthImg
               src={getAttachmentUrl(
                 projectId,
                 photo.driveId,
@@ -54,7 +55,7 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
           aria-modal="true"
           className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
         >
-          <img
+          <AuthImg
             src={getAttachmentUrl(
               projectId,
               selectedPhoto.driveId,

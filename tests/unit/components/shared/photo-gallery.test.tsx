@@ -18,6 +18,15 @@ vi.mock('@/lib/api-client', () => ({
   ),
 }));
 
+// Mock useAuthenticatedImageUrl to return instant success for synchronous testing
+vi.mock('@/hooks/useAuthenticatedImageUrl', () => ({
+  useAuthenticatedImageUrl: vi.fn(() => ({
+    blobUrl: 'blob:test',
+    isLoading: false,
+    error: null,
+  })),
+}));
+
 describe('PhotoGallery', () => {
   const photos = [
     { driveId: 'drive1', name: 'photo1.jpg', type: 'image/jpeg' },

@@ -9,6 +9,15 @@ vi.mock('@/hooks/useCountUp', () => ({
   useCountUp: vi.fn((value: string | number) => value),
 }));
 
+// Mock useAuthenticatedImageUrl to return instant success for synchronous testing
+vi.mock('@/hooks/useAuthenticatedImageUrl', () => ({
+  useAuthenticatedImageUrl: vi.fn(() => ({
+    blobUrl: 'blob:test',
+    isLoading: false,
+    error: null,
+  })),
+}));
+
 describe('ProjectBannerCard', () => {
   const defaultProps = {
     projectName: 'Test Project',
@@ -167,9 +176,10 @@ describe('ProjectBannerCard', () => {
     expect(screen.getByTestId('photo-collage')).toBeInTheDocument();
     const images = screen.getAllByRole('presentation');
     expect(images).toHaveLength(3);
-    expect(images[0]).toHaveAttribute('src', '/photo1.jpg');
-    expect(images[1]).toHaveAttribute('src', '/photo2.jpg');
-    expect(images[2]).toHaveAttribute('src', '/photo3.jpg');
+    // AuthImg renders blob URLs, not the original src
+    expect(images[0]).toHaveAttribute('src', 'blob:test');
+    expect(images[1]).toHaveAttribute('src', 'blob:test');
+    expect(images[2]).toHaveAttribute('src', 'blob:test');
   });
 
   it('renders default background when photoUrls is empty', () => {
