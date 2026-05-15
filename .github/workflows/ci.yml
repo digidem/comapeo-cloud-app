@@ -2,9 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
+  deployments: write
+  pull-requests: write
 
 jobs:
   check:
@@ -50,6 +55,17 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_PUBLIC_APP_ORIGIN: https://comapeo-cloud-app.pages.dev
+          VITE_APP_RELEASE: ${{ github.sha }}
+          VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/staging' && 'staging' || 'preview' }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
@@ -77,8 +93,229 @@ jobs:
           path: coverage/
           retention-days: 7
 
+  # -----------------------------------------------------------------------
+  # Preview deploy on pull_request
+  # -----------------------------------------------------------------------
+  preview:
+    needs: check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      preview-url: ${{ steps.deploy.outputs.pages-deployment-alias-url || steps.deploy.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Delete source maps from dist
+        run: npx tsx scripts/clean-sourcemaps.ts
+
+      - name: Assert no source maps remain
+        run: npx tsx scripts/clean-sourcemaps.ts --assert-only
+
+      - name: Deploy preview to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/ --project-name=comapeo-cloud-app --branch=${{ github.head_ref }}
+
+      - name: Comment preview URL on PR
+        uses: actions/github-script@v7
+        env:
+          PREVIEW_ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+          PREVIEW_DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+        with:
+          script: |
+            const url = process.env.PREVIEW_ALIAS_URL || process.env.PREVIEW_DEPLOYMENT_URL;
+            if (!url) {
+              console.log('No preview URL found, skipping comment.');
+              return;
+            }
+            const body = `**Preview deployment ready:** ${url}\n\nCommit: \`${context.sha.slice(0, 7)}\``;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.startsWith('**Preview deployment ready:**'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+  # -----------------------------------------------------------------------
+  # Smoke tests against preview deployment
+  # -----------------------------------------------------------------------
+  smoke-test-preview:
+    needs: preview
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Smoke test — app reachability
+        run: |
+          curl --fail --retry 5 --retry-delay 10 "${{ needs.preview.outputs.preview-url }}/"
+
+      - name: Smoke test — SPA route fallback
+        run: |
+          curl --fail --retry 5 --retry-delay 10 "${{ needs.preview.outputs.preview-url }}/settings"
+
+      - name: Smoke test — API proxy rejects missing target
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.preview.outputs.preview-url }}/api/info")
+          if [ "$STATUS" != "400" ]; then
+            echo "Expected 400 for /api/info without x-target-url, got $STATUS"
+            exit 1
+          fi
+
+      - name: Smoke test — API proxy succeeds with target
+        if: vars.SMOKE_TEST_ARCHIVE_ORIGIN != ''
+        run: |
+          curl --fail --retry 5 --retry-delay 10 \
+            -H "x-target-url: ${{ vars.SMOKE_TEST_ARCHIVE_ORIGIN }}" \
+            "${{ needs.preview.outputs.preview-url }}/api/info"
+
+      # Source-map absence is enforced pre-deploy by
+      # `npx tsx scripts/clean-sourcemaps.ts --assert-only`; a runtime URL
+      # probe cannot guess Vite's content-hashed chunk names reliably and
+      # would be a false-assurance check.
+
+  # -----------------------------------------------------------------------
+  # Production deploy on main push
+  # -----------------------------------------------------------------------
   deploy:
     needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      # Job-level so step-level `if:` can evaluate `env.SENTRY_AUTH_TOKEN`.
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+    outputs:
+      deployment-url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Upload source maps to Sentry
+        if: vars.VITE_SENTRY_DSN != '' && env.SENTRY_AUTH_TOKEN != ''
+        run: npx tsx scripts/upload-sourcemaps.ts --production
+        env:
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          VITE_APP_RELEASE: ${{ github.sha }}
+
+      - name: Delete source maps from dist
+        run: npx tsx scripts/clean-sourcemaps.ts
+
+      - name: Assert no source maps remain
+        run: npx tsx scripts/clean-sourcemaps.ts --assert-only
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/ --project-name=comapeo-cloud-app
+
+  # -----------------------------------------------------------------------
+  # Staging deploy on staging branch push
+  # -----------------------------------------------------------------------
+  staging:
+    needs: check
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      # Job-level so step-level `if:` can evaluate `env.SENTRY_AUTH_TOKEN`.
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+    outputs:
+      deployment-url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Upload source maps to Sentry (staging)
+        if: vars.VITE_SENTRY_DSN != '' && env.SENTRY_AUTH_TOKEN != ''
+        run: npx tsx scripts/upload-sourcemaps.ts
+        env:
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          VITE_APP_RELEASE: ${{ github.sha }}
+
+      - name: Delete source maps from dist
+        run: npx tsx scripts/clean-sourcemaps.ts
+
+      - name: Assert no source maps remain
+        run: npx tsx scripts/clean-sourcemaps.ts --assert-only
+
+      - name: Deploy staging to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/ --project-name=comapeo-cloud-app --branch=staging
+
+  # -----------------------------------------------------------------------
+  # Lighthouse against deployed Cloudflare URL
+  # -----------------------------------------------------------------------
+  lighthouse:
+    needs: deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
@@ -93,35 +330,43 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: pages deploy dist/ --project-name=comapeo-cloud-app
-
-  lighthouse:
-    needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Lighthouse CI
+      - name: Lighthouse CI against production
         uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: .lighthouserc.json
           uploadArtifacts: true
+
+  # -----------------------------------------------------------------------
+  # Production smoke tests
+  # -----------------------------------------------------------------------
+  smoke-test-prod:
+    needs: deploy
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Smoke test — app reachability
+        run: |
+          curl --fail --retry 5 --retry-delay 10 "https://comapeo-cloud-app.pages.dev/"
+
+      - name: Smoke test — SPA route fallback
+        run: |
+          curl --fail --retry 5 --retry-delay 10 "https://comapeo-cloud-app.pages.dev/settings"
+
+      - name: Smoke test — API proxy rejects missing target
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://comapeo-cloud-app.pages.dev/api/info")
+          if [ "$STATUS" != "400" ]; then
+            echo "Expected 400 for /api/info without x-target-url, got $STATUS"
+            exit 1
+          fi
+
+      - name: Smoke test — API proxy succeeds with target
+        if: vars.SMOKE_TEST_ARCHIVE_ORIGIN != ''
+        run: |
+          curl --fail --retry 5 --retry-delay 10 \
+            -H "x-target-url: ${{ vars.SMOKE_TEST_ARCHIVE_ORIGIN }}" \
+            "https://comapeo-cloud-app.pages.dev/api/info"
+
+      # Source-map absence is enforced pre-deploy via the assert step in the
+      # `deploy` job. Runtime URL probes cannot reliably target Vite's
+      # content-hashed chunk names.

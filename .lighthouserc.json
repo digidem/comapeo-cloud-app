@@ -2,8 +2,7 @@
   "ci": {
     "collect": {
       "numberOfRuns": 3,
-      "startServerCommand": "npx vite preview --port 4173 --host 0.0.0.0",
-      "url": ["http://localhost:4173/"]
+      "url": ["https://comapeo-cloud-app.pages.dev/"]
     },
     "assert": {
       "assertions": {
