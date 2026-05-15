@@ -15,7 +15,7 @@ env:
   # Opt into Node.js 24 for all JavaScript-based actions now, ahead of the
   # June 2 2026 forced migration.  Silences the Node.js 20 deprecation warning
   # for actions that haven't updated yet (e.g. gitleaks/gitleaks-action@v2).
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   check:
