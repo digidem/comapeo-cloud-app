@@ -8,10 +8,10 @@ import {
 import { AuthenticatedLayout } from '@/components/layout/authenticated-layout';
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
+import { InviteScreen } from '@/screens/InviteScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { ProjectsScreen } from '@/screens/ProjectsScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
-import { InviteScreen } from '@/screens/InviteScreen';
 
 // Context type for future auth integration
 interface RouterContext {

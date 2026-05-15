@@ -118,9 +118,7 @@ describe('DeleteProjectDialog', () => {
     await user.click(screen.getByRole('button', { name: /delete/i }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Delete operation failed'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('Delete operation failed')).toBeInTheDocument();
     });
   });
 
@@ -143,9 +141,7 @@ describe('DeleteProjectDialog', () => {
     await user.click(screen.getByRole('button', { name: /delete/i }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Failed to delete project'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('Failed to delete project')).toBeInTheDocument();
     });
   });
 });

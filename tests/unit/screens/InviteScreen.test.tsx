@@ -1,12 +1,10 @@
 import { render, screen, waitFor } from '@tests/mocks/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useNavigate } from '@tanstack/react-router';
-import { resetDb } from '@/lib/db';
 import { syncRemoteArchive } from '@/lib/data-layer';
-import { useAuthStore } from '@/stores/auth-store';
-
+import { resetDb } from '@/lib/db';
 import { InviteScreen } from '@/screens/InviteScreen';
+import { useAuthStore } from '@/stores/auth-store';
 
 // Mock the navigate function
 const mockNavigate = vi.fn();
@@ -21,8 +19,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 // Mock syncRemoteArchive
 vi.mock('@/lib/data-layer', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/data-layer')>();
+  const actual = await importOriginal<typeof import('@/lib/data-layer')>();
   return {
     ...actual,
     syncRemoteArchive: vi.fn().mockResolvedValue({ success: true }),

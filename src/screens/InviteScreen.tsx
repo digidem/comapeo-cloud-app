@@ -1,7 +1,9 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
+
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
+
 import { syncRemoteArchive } from '@/lib/data-layer';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -20,28 +22,32 @@ const messages = defineMessages({
   },
 });
 
+function parseInviteParams(): { archiveUrl: string; token: string } | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const archiveUrl = params.get('url');
+  const hash = params.get('hash');
+  const tokenParam = params.get('token');
+  // Fall back to hash for backward-compatibility with legacy invite URLs
+  // that didn't include a dedicated `token` parameter.
+  const token = tokenParam ?? hash ?? '';
+  if (!archiveUrl || !token) return null;
+  return { archiveUrl, token };
+}
+
 export function InviteScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const invite = useMemo(() => parseInviteParams(), []);
   const [status, setStatus] = useState<'loading' | 'connected' | 'error'>(
-    'loading',
+    invite ? 'loading' : 'error',
   );
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const archiveUrl = params.get('url');
-    const hash = params.get('hash');
-    const tokenParam = params.get('token');
-    // Fall back to hash for backward-compatibility with legacy invite URLs
-    // that didn't include a dedicated `token` parameter.
-    const token = tokenParam ?? hash ?? '';
+    if (!invite) return;
 
-    if (!archiveUrl || !token) {
-      setStatus('error');
-      return;
-    }
-
+    const { archiveUrl, token } = invite;
     let cancelled = false;
 
     useAuthStore
@@ -83,7 +89,7 @@ export function InviteScreen() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, queryClient]);
+  }, [invite, navigate, queryClient]);
 
   return (
     <div className="flex h-screen items-center justify-center bg-surface">
@@ -97,9 +103,7 @@ export function InviteScreen() {
           </p>
         )}
         {status === 'error' && (
-          <p className="text-red-600">
-            {intl.formatMessage(messages.error)}
-          </p>
+          <p className="text-red-600">{intl.formatMessage(messages.error)}</p>
         )}
       </div>
     </div>
