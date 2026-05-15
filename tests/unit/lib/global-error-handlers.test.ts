@@ -65,6 +65,41 @@ describe('installGlobalErrorHandlers', () => {
     expect(consoleErrorSpy).toHaveBeenCalled();
   });
 
+  it('handles non-Error rejection reasons', async () => {
+    const { installGlobalErrorHandlers } =
+      await import('@/lib/global-error-handlers');
+    installGlobalErrorHandlers();
+
+    const rejectionEvent = new PromiseRejectionEvent('unhandledrejection', {
+      promise: Promise.resolve(),
+      reason: 'string-rejection',
+    });
+    window.dispatchEvent(rejectionEvent);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[global-error] Unhandled promise rejection:',
+      expect.any(Error),
+    );
+  });
+
+  it('logs error events without error object (message-only)', async () => {
+    const { installGlobalErrorHandlers } =
+      await import('@/lib/global-error-handlers');
+    installGlobalErrorHandlers();
+
+    // ErrorEvent with no .error property — covers the ?? branch
+    const messageOnlyEvent = new ErrorEvent('error', {
+      message: 'script error',
+    });
+    window.dispatchEvent(messageOnlyEvent);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[global-error]',
+      'script error',
+      expect.any(ErrorEvent),
+    );
+  });
+
   it('is idempotent — calling twice does not add duplicate handlers', async () => {
     const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
 
