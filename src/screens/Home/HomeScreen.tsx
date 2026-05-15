@@ -949,7 +949,7 @@ function HomeScreen() {
           />
           <StatCard
             title={intl.formatMessage(messages.statTotalObservations)}
-            value={observationCount.toLocaleString()}
+            value={`${observationCount.toLocaleString()} ${intl.formatMessage(messages.statTotalObservations)}`}
             staggerIndex={1}
           />
           <StatCard

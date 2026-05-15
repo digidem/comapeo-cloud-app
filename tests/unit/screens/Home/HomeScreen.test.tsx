@@ -90,6 +90,10 @@ vi.mock('@/hooks/useAlerts', () => ({
   useAlerts: vi.fn(),
 }));
 
+vi.mock('@/hooks/useCountUp', () => ({
+  useCountUp: vi.fn((value: string | number) => value),
+}));
+
 // Mock data-layer createProject
 vi.mock('@/lib/data-layer', () => ({
   createProject: vi.fn().mockResolvedValue({ localId: 'new-project-id' }),
@@ -836,6 +840,52 @@ describe('HomeScreen', () => {
 
     // Stat card with "Observations" label should be visible
     expect(screen.getByText('Observations')).toBeInTheDocument();
+  });
+
+  it('shows observation count value with Observations label', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Obs Count Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    mockUseObservations.mockReturnValue({
+      data: [
+        { localId: 'obs1', createdAt: new Date().toISOString(), tags: {} },
+        { localId: 'obs2', createdAt: new Date().toISOString(), tags: {} },
+        { localId: 'obs3', createdAt: new Date().toISOString(), tags: {} },
+        { localId: 'obs4', createdAt: new Date().toISOString(), tags: {} },
+        { localId: 'obs5', createdAt: new Date().toISOString(), tags: {} },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Obs Count Project' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('5 Observations')).toBeInTheDocument();
+    });
   });
 
   it('shows "Connected" mode stat when project has a serverUrl', async () => {
