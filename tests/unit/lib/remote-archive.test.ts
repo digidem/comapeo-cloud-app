@@ -260,6 +260,40 @@ describe('remote-archive', () => {
     expect(obs.tags?.photoUrls).toContain('drive2/photo/img2');
   });
 
+  it('resolves relative photo attachment URLs against the archive base URL before storing', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-relative-media',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [
+                {
+                  url: '/projects/proj1/attachments/drive1/photo/img1',
+                },
+              ],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+    );
+
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
+
+    expect(observations[0]!.tags?.photoUrls).toBe(
+      'https://archive.example.com/projects/proj1/attachments/drive1/photo/img1',
+    );
+  });
+
   it('handles observations with no attachments', async () => {
     server.use(
       http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>

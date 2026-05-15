@@ -651,4 +651,10 @@ describe('getAttachmentUrl', () => {
       'https://other.example.com/projects/proj-1/attachments/drive-abc/photo/img.png',
     );
   });
+
+  it('builds a relative URL when no auth store baseUrl is active', () => {
+    useAuthStore.setState({ baseUrl: null });
+    const url = getAttachmentUrl('proj-1', 'drive-abc', 'photo', 'img.png');
+    expect(url).toBe('/projects/proj-1/attachments/drive-abc/photo/img.png');
+  });
 });

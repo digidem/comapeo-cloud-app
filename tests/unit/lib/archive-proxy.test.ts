@@ -109,6 +109,26 @@ describe('archive proxy helpers', () => {
       ok: true,
       value: '/projects/proj-1/remoteDetectionAlerts',
     });
+
+    // Attachment paths for authenticated image loading
+    expect(
+      validateArchiveProxyRequest(
+        'GET',
+        '/projects/proj-1/attachments/d1/photo/img.jpg',
+      ),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/attachments/d1/photo/img.jpg',
+    });
+    expect(
+      validateArchiveProxyRequest(
+        'GET',
+        '/projects/proj-1/attachments/d1/photo/img.jpg/thumbnail',
+      ),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/attachments/d1/photo/img.jpg/thumbnail',
+    });
   });
 
   it('rejects unsupported proxy methods and paths', () => {

@@ -22,6 +22,14 @@ function parseAttachmentMediaType(url: string): 'photo' | 'audio' | 'unknown' {
   return 'unknown';
 }
 
+function resolveAttachmentUrl(url: string, archiveBaseUrl: string): string {
+  try {
+    return new URL(url, archiveBaseUrl).toString();
+  } catch {
+    return url;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fetch archive data and store locally
 // ---------------------------------------------------------------------------
@@ -93,7 +101,7 @@ export async function pullObservations(
       const mediaType = parseAttachmentMediaType(attachment.url);
       if (mediaType === 'photo') {
         photoCount++;
-        photoUrls.push(attachment.url);
+        photoUrls.push(resolveAttachmentUrl(attachment.url, config.baseUrl));
       } else if (mediaType === 'audio') {
         audioCount++;
       }

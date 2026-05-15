@@ -111,7 +111,8 @@ export function validateArchiveProxyRequest(
     normalizedPath === '/healthcheck' ||
     normalizedPath === '/projects' ||
     /^\/projects\/[^/]+\/observations$/.test(normalizedPath) ||
-    /^\/projects\/[^/]+\/remoteDetectionAlerts$/.test(normalizedPath);
+    /^\/projects\/[^/]+\/remoteDetectionAlerts$/.test(normalizedPath) ||
+    /^\/projects\/[^/]+\/attachments\/.+/.test(normalizedPath);
   const isWriteEndpoint = /^\/projects\/[^/]+\/remoteDetectionAlerts$/.test(
     normalizedPath,
   );
