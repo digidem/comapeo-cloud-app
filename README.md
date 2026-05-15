@@ -18,6 +18,7 @@ A desktop-first monitoring workspace for environmental and territorial teams —
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20PT%20%7C%20ES-4B9CD3)](src/i18n/)
 [![Playwright](https://img.shields.io/badge/E2E-Playwright-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Vitest](https://img.shields.io/badge/Tests-Vitest-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
+[![CI](https://github.com/digidem/comapeo-cloud-app/actions/workflows/ci.yml/badge.svg)](https://github.com/digidem/comapeo-cloud-app/actions/workflows/ci.yml)
 
 </div>
 

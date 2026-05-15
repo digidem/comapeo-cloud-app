@@ -16,3 +16,11 @@ screenshots-manifest.json
 plans/
 design/
 debug-geojson.js
+
+# Local agent / tooling scratch
+.claude/
+.hermes/
+log/
+TASKS.md
+DESIGN.md
+_verify_translations.py
