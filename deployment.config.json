@@ -1,0 +1,6 @@
+{
+  "cloudflareProjectName": "comapeo-cloud-app",
+  "productionOrigin": "https://comapeo-cloud-app.pages.dev",
+  "finalProductionOrigin": "https://app.comapeo.cloud",
+  "stagingBranch": "staging"
+}
