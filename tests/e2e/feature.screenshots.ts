@@ -36,7 +36,7 @@ test.describe('Feature screenshots', () => {
 
       await takeScreenshot(page, 'archive-sidebar', 'desktop' as ViewportName);
     } finally {
-      await context.close();
+      await context.close().catch(() => {});
     }
   });
 
