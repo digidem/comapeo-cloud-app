@@ -71,7 +71,7 @@ jobs:
       - name: Build
         run: npm run build:ci
         env:
-          VITE_PUBLIC_APP_ORIGIN: https://comapeo-cloud-app.pages.dev
+          VITE_PUBLIC_APP_ORIGIN: https://app.comapeo.cloud
           VITE_APP_RELEASE: ${{ github.sha }}
           VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/staging' && 'staging' || 'preview' }}
 
@@ -392,15 +392,15 @@ jobs:
     steps:
       - name: Smoke test — app reachability
         run: |
-          curl --fail --retry 5 --retry-delay 10 "https://comapeo-cloud-app.pages.dev/"
+          curl --fail --retry 5 --retry-delay 10 "https://app.comapeo.cloud/"
 
       - name: Smoke test — SPA route fallback
         run: |
-          curl --fail --retry 5 --retry-delay 10 "https://comapeo-cloud-app.pages.dev/settings"
+          curl --fail --retry 5 --retry-delay 10 "https://app.comapeo.cloud/settings"
 
       - name: Smoke test — API proxy rejects missing target
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://comapeo-cloud-app.pages.dev/api/info")
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://app.comapeo.cloud/api/info")
           if [ "$STATUS" != "400" ]; then
             echo "Expected 400 for /api/info without x-target-url, got $STATUS"
             exit 1
@@ -411,7 +411,7 @@ jobs:
         run: |
           curl --fail --retry 5 --retry-delay 10 \
             -H "x-target-url: ${{ vars.SMOKE_TEST_ARCHIVE_ORIGIN }}" \
-            "https://comapeo-cloud-app.pages.dev/api/info"
+            "https://app.comapeo.cloud/api/info"
 
       # Source-map absence is enforced pre-deploy via the assert step in the
       # `deploy` job. Runtime URL probes cannot reliably target Vite's
