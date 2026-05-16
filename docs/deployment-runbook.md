@@ -8,7 +8,7 @@ The CoMapeo Cloud App is deployed to Cloudflare Pages. This runbook covers deplo
 
 | Environment | URL | Branch | Trigger |
 |---|---|---|---|
-| Production | `https://comapeo-cloud-app.pages.dev` | `main` | Push to `main` |
+| Production | `https://app.comapeo.cloud` | `main` | Push to `main` |
 | Staging | `https://staging.comapeo-cloud-app.pages.dev` | `staging` | Push to `staging` |
 | Preview | Per-PR hash URL | PR branch | PR opened/updated |
 
@@ -60,9 +60,11 @@ curl -X POST \
    - **Re-run**: Go to GitHub Actions > CI workflow > "Run workflow" on the specific commit
 3. Wait for CI to build and deploy
 
-## Custom Domain Setup (Future)
+## Custom Domain
 
-When switching from `comapeo-cloud-app.pages.dev` to `app.comapeo.cloud`:
+The custom domain `app.comapeo.cloud` is active. The original Cloudflare Pages URL `comapeo-cloud-app.pages.dev` still works but should not be used as the canonical origin.
+
+To verify or update the custom domain:
 
 1. In Cloudflare Dashboard > **Workers & Pages** > **comapeo-cloud-app** > **Custom domains**
 2. Add `app.comapeo.cloud` as a custom domain
