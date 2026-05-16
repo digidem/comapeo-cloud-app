@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel in-progress runs on the same branch/PR to avoid wasting minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   deployments: write
@@ -18,8 +23,12 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  # -----------------------------------------------------------------------
+  # Gate-keeping: lint, types, tests, build, E2E
+  # -----------------------------------------------------------------------
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         node-version: [22]
@@ -66,7 +75,7 @@ jobs:
           rm src/i18n/messages/en.json.bak
 
       - name: Build
-        run: npm run build
+        run: npm run build:ci
         env:
           VITE_PUBLIC_APP_ORIGIN: https://comapeo-cloud-app.pages.dev
           VITE_APP_RELEASE: ${{ github.sha }}
@@ -85,7 +94,39 @@ jobs:
       - name: E2E tests
         run: npx playwright test --project=chromium --project=firefox --project=webkit
 
-      - name: Generate screenshots for visual review
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # -----------------------------------------------------------------------
+  # Visual screenshots (separate job — not on the critical path)
+  # -----------------------------------------------------------------------
+  screenshots:
+    needs: check
+    if: always() && needs.check.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate screenshots
         continue-on-error: true
         run: npm run test:screenshots
 
@@ -98,15 +139,6 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 7
-          if-no-files-found: ignore
-
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request
   # -----------------------------------------------------------------------
@@ -114,6 +146,7 @@ jobs:
     needs: check
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       preview-url: ${{ steps.deploy.outputs.pages-deployment-alias-url || steps.deploy.outputs.deployment-url }}
     steps:
@@ -190,6 +223,7 @@ jobs:
     needs: preview
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
       - name: Smoke test — app reachability
         run: |
@@ -226,6 +260,7 @@ jobs:
     needs: check
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       # Job-level so step-level `if:` can evaluate `env.SENTRY_AUTH_TOKEN`.
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -279,6 +314,7 @@ jobs:
     needs: check
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       # Job-level so step-level `if:` can evaluate `env.SENTRY_AUTH_TOKEN`.
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -332,6 +368,7 @@ jobs:
     needs: deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
 
@@ -357,6 +394,7 @@ jobs:
     needs: deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
       - name: Smoke test — app reachability
         run: |

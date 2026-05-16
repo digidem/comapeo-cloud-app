@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npx tsx scripts/generate-metadata.ts && tsc --noEmit && vite build",
+    "build:ci": "npx tsx scripts/generate-metadata.ts && vite build",
     "preview": "vite preview",
     "lint": "npm-run-all --parallel lint:*",
     "lint:eslint": "eslint .",
