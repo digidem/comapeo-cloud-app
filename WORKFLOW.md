@@ -340,7 +340,7 @@ Do not add extra top-level comments outside the workpad.
 - Use exactly one persistent workpad comment per issue.
 - Do not expand scope for out-of-scope improvements.
 - Do not lower coverage thresholds.
-- Do not bypass Gitleaks or pre-commit failures without documenting a real
+- Do not bypass TruffleHog or pre-commit failures without documenting a real
   false positive.
 - Temporary local proof edits are allowed only for validation and must be
   reverted before commit.

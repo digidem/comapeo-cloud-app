@@ -142,7 +142,7 @@ Follow `design/prototype/DESIGN.md` for all visual decisions:
 | Type checking | TypeScript strict + noUncheckedIndexedAccess | `npm run lint:types` |
 | Linting | ESLint 10 flat config | `npm run lint:eslint` |
 | Formatting | Prettier + import sorting | `npm run lint:prettier` |
-| Pre-commit | Husky + lint-staged | On `git commit` |
+| Pre-commit | Husky + TruffleHog + lint-staged | On `git commit` |
 | Unit tests | Vitest + Testing Library + MSW | `npm test` |
 | Coverage | @vitest/coverage-v8 (80% threshold) | `npm run test:coverage` |
 | E2E tests | Playwright (chromium, firefox, webkit) | `npm run test:e2e` |
@@ -150,6 +150,7 @@ Follow `design/prototype/DESIGN.md` for all visual decisions:
 | i18n extraction | @formatjs/cli | `npm run extract-messages` |
 | Runtime validation | Valibot schemas on API boundaries | At runtime |
 | CI | GitHub Actions (lint, types, coverage, E2E, screenshots, i18n check, deploy) | On push/PR |
+| Secret scanning | TruffleHog (pre-commit + CI) | On `git commit` + CI |
 
 ## Visual Screenshot Testing
 
