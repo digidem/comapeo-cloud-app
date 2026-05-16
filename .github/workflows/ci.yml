@@ -108,7 +108,7 @@ jobs:
   # -----------------------------------------------------------------------
   screenshots:
     needs: check
-    if: always() && needs.check.result != 'cancelled'
+    if: needs.check.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

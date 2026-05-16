@@ -15,9 +15,10 @@ import {
   validateArchiveProxyRequest,
 } from './src/lib/archive-proxy';
 
+// Order matters: longer / more specific paths first so that substring
+// matching doesn't misassign packages (e.g. '@radix-ui/react-dialog'
+// must not match the 'react' entry).
 const vendorChunks: Record<string, string[]> = {
-  'vendor-react': ['react', 'react-dom'],
-  'vendor-tanstack': ['@tanstack/react-router', '@tanstack/react-query'],
   'vendor-ui': [
     '@radix-ui/react-dialog',
     '@radix-ui/react-dropdown-menu',
@@ -27,9 +28,61 @@ const vendorChunks: Record<string, string[]> = {
     '@radix-ui/react-tabs',
     '@radix-ui/react-toast',
     '@radix-ui/react-tooltip',
+    '@radix-ui/primitive',
+    '@radix-ui/number',
+    '@radix-ui/react-arrow',
+    '@radix-ui/react-collection',
+    '@radix-ui/react-compose-refs',
+    '@radix-ui/react-context',
+    '@radix-ui/react-direction',
+    '@radix-ui/react-dismissable-layer',
+    '@radix-ui/react-focus-guards',
+    '@radix-ui/react-focus-scope',
+    '@radix-ui/react-id',
+    '@radix-ui/react-popper',
+    '@radix-ui/react-portal',
+    '@radix-ui/react-presence',
+    '@radix-ui/react-primitive',
+    '@radix-ui/react-slot',
+    '@radix-ui/react-use-callback-ref',
+    '@radix-ui/react-use-controllable-state',
+    '@radix-ui/react-use-escape-keydown',
+    '@radix-ui/react-use-layout-effect',
+    '@radix-ui/react-use-previous',
+    '@radix-ui/react-use-size',
+    '@radix-ui/react-visually-hidden',
+    '@floating-ui/core',
+    '@floating-ui/dom',
+    '@floating-ui/react-dom',
+    '@floating-ui/utils',
   ],
-  'vendor-i18n': ['react-intl'],
+  'vendor-tanstack': [
+    '@tanstack/react-router',
+    '@tanstack/react-query',
+    '@tanstack/history',
+    '@tanstack/query-core',
+    '@tanstack/router-core',
+    '@tanstack/react-store',
+    '@tanstack/store',
+  ],
+  'vendor-i18n': [
+    'react-intl',
+    '@formatjs/intl',
+    '@formatjs/fast-memoize',
+    '@formatjs/icu-messageformat-parser',
+    '@formatjs/icu-skeleton-parser',
+    'intl-messageformat',
+  ],
   'vendor-form': ['react-hook-form', '@hookform/resolvers', 'valibot'],
+  'vendor-sentry': [
+    '@sentry/react',
+    '@sentry/core',
+    '@sentry/browser',
+    '@sentry-internal/browser-utils',
+  ],
+  'vendor-map': ['@vis.gl/react-maplibre', 'maplibre-gl'],
+  'vendor-state': ['zustand'],
+  'vendor-react': ['react-dom', 'react', 'scheduler'],
 };
 
 function writeProxyError(
@@ -185,7 +238,7 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           for (const [chunkName, modules] of Object.entries(vendorChunks)) {
-            if (modules.some((mod) => id.includes(mod))) {
+            if (modules.some((mod) => id.includes(`/node_modules/${mod}/`))) {
               return chunkName;
             }
           }
