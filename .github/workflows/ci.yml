@@ -83,7 +83,7 @@ jobs:
         run: npx playwright install --with-deps
 
       - name: E2E tests
-        run: npm run test:e2e
+        run: npx playwright test --project=chromium --project=firefox --project=webkit
 
       - name: Generate screenshots for visual review
         continue-on-error: true
