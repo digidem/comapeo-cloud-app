@@ -19,7 +19,7 @@ permissions:
 env:
   # Opt into Node.js 24 for all JavaScript-based actions now, ahead of the
   # June 2 2026 forced migration.  Silences the Node.js 20 deprecation warning
-  # for actions that haven't updated yet (e.g. gitleaks/gitleaks-action@v2).
+  # for actions that haven't updated yet.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -38,16 +38,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      # TODO: Remove continue-on-error once GITLEAKS_LICENSE secret is configured.
-      # gitleaks-action v2 requires a license key (free tier available) stored as
-      # GITLEAKS_LICENSE GitHub Secret for org/public repos. See:
-      # https://github.com/gitleaks/gitleaks-action#-announcement
-      - name: Gitleaks secret scan
-        uses: gitleaks/gitleaks-action@v2
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+      - name: TruffleHog secret scan
+        uses: trufflesecurity/trufflehog@v3.95.3
+        with:
+          extra_args: --results=verified,unknown
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v6
