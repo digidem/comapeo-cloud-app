@@ -32,7 +32,7 @@ export async function setTheme(page: Page, themeId: ThemeId): Promise<void> {
     localStorage.setItem('comapeo-theme', JSON.stringify(parsed));
   }, themeId);
   await page.reload();
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 }
 
 /**
@@ -49,7 +49,7 @@ export async function takeScreenshot(
   viewport: ViewportName,
   options?: PageScreenshotOptions,
 ): Promise<Buffer> {
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
   await page.evaluate(() => document.fonts.ready);
 
   const dir = path.join(SCREENSHOT_DIR, viewport);
