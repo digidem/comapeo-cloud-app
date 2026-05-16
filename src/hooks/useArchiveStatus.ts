@@ -65,7 +65,7 @@ export function useArchiveStatus(): ArchiveStatus {
     return () => {
       cancelled = true;
     };
-  }, [servers]);
+  }, [servers, now]);
 
   const mapped: ArchiveServerStatus[] = useMemo(
     () =>

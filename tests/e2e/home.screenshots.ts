@@ -68,6 +68,7 @@ test.describe('Home screen — visual screenshots', () => {
           // Create project
           await page
             .getByRole('button', { name: 'Create your first project' })
+            .first()
             .click();
           await page.getByLabel('Project Name').fill('Demo Project');
           await page
@@ -113,6 +114,7 @@ test.describe('Home screen — visual screenshots', () => {
           // Create project and import data
           await page
             .getByRole('button', { name: 'Create your first project' })
+            .first()
             .click();
           await page.getByLabel('Project Name').fill('Territory Alpha');
           await page

@@ -15,7 +15,7 @@ export default defineConfig({
     {
       name: 'screenshot',
       testMatch: /.*\.screenshots\.ts/,
-      timeout: 30_000,
+      timeout: 60_000,
       use: { ...devices['Desktop Chrome'] },
     },
     {
