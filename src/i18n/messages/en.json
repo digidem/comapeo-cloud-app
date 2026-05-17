@@ -1,6 +1,81 @@
 {
+  "alertDetail.back": {
+    "defaultMessage": "Back to Data"
+  },
+  "alertDetail.createdAt": {
+    "defaultMessage": "Created"
+  },
+  "alertDetail.details": {
+    "defaultMessage": "Details"
+  },
+  "alertDetail.detectionPeriod": {
+    "defaultMessage": "Detection Period"
+  },
+  "alertDetail.geometry": {
+    "defaultMessage": "Geometry"
+  },
+  "alertDetail.metadata": {
+    "defaultMessage": "Metadata"
+  },
+  "alertDetail.noGeometry": {
+    "defaultMessage": "No geometry"
+  },
+  "alertDetail.notFound": {
+    "defaultMessage": "Alert not found"
+  },
+  "alertDetail.title": {
+    "defaultMessage": "Alert"
+  },
+  "alerts.create.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "alerts.create.detectionDateEnd": {
+    "defaultMessage": "Detection Date End"
+  },
+  "alerts.create.detectionDateStart": {
+    "defaultMessage": "Detection Date Start"
+  },
+  "alerts.create.geometryLabel": {
+    "defaultMessage": "Geometry (GeoJSON)"
+  },
+  "alerts.create.geometryPlaceholder": {
+    "defaultMessage": "{\"type\":\"Point\",\"coordinates\":[0,0]}"
+  },
+  "alerts.create.invalidGeometry": {
+    "defaultMessage": "Invalid GeoJSON geometry"
+  },
+  "alerts.create.invalidJson": {
+    "defaultMessage": "Invalid JSON"
+  },
+  "alerts.create.metadataLabel": {
+    "defaultMessage": "Metadata (JSON, optional)"
+  },
+  "alerts.create.noProject": {
+    "defaultMessage": "Select a project first"
+  },
+  "alerts.create.required": {
+    "defaultMessage": "This field is required"
+  },
+  "alerts.create.submit": {
+    "defaultMessage": "Create"
+  },
+  "alerts.create.title": {
+    "defaultMessage": "Create Alert"
+  },
   "app.title": {
     "defaultMessage": "CoMapeo Cloud"
+  },
+  "audioPlayer.error": {
+    "defaultMessage": "Failed to load audio"
+  },
+  "audioPlayer.loading": {
+    "defaultMessage": "Loading audio..."
+  },
+  "audioPlayer.pause": {
+    "defaultMessage": "Pause"
+  },
+  "audioPlayer.play": {
+    "defaultMessage": "Play"
   },
   "dashboard.banner.active": {
     "defaultMessage": "Active"
@@ -22,6 +97,42 @@
   },
   "dashboard.banner.territoryArea": {
     "defaultMessage": "Territory Area"
+  },
+  "data.addAlert": {
+    "defaultMessage": "Add Alert"
+  },
+  "data.alertFallback": {
+    "defaultMessage": "Alert"
+  },
+  "data.loading": {
+    "defaultMessage": "Loading..."
+  },
+  "data.noAlerts": {
+    "defaultMessage": "No alerts yet"
+  },
+  "data.noObservations": {
+    "defaultMessage": "No observations yet"
+  },
+  "data.noProject": {
+    "defaultMessage": "Select a project from Home to view data"
+  },
+  "data.noProjectLink": {
+    "defaultMessage": "Go to Home"
+  },
+  "data.observationFallback": {
+    "defaultMessage": "Observation"
+  },
+  "data.tabs.alerts": {
+    "defaultMessage": "Alerts"
+  },
+  "data.tabs.observations": {
+    "defaultMessage": "Observations"
+  },
+  "data.title": {
+    "defaultMessage": "Data"
+  },
+  "data.untitledProject": {
+    "defaultMessage": "Untitled Project"
   },
   "home.activity.alert": {
     "defaultMessage": "Alert registered"
@@ -95,11 +206,29 @@
   "home.archive.detail.staleToken": {
     "defaultMessage": "Warning: Token may be stale — no successful sync in over 24 hours. Try reconnecting or updating credentials."
   },
+  "home.archive.detail.statsAlerts": {
+    "defaultMessage": "{count, plural, one {# alert} other {# alerts}}"
+  },
+  "home.archive.detail.statsNoData": {
+    "defaultMessage": "No data synced yet"
+  },
+  "home.archive.detail.statsObservations": {
+    "defaultMessage": "{count, plural, one {# observation} other {# observations}}"
+  },
+  "home.archive.detail.statsProjects": {
+    "defaultMessage": "{count, plural, one {# project} other {# projects}}"
+  },
+  "home.archive.detail.statsTitle": {
+    "defaultMessage": "Summary"
+  },
   "home.archive.detail.status": {
     "defaultMessage": "Status"
   },
   "home.archive.detail.url": {
     "defaultMessage": "URL"
+  },
+  "home.archive.detail.viewData": {
+    "defaultMessage": "View Data"
   },
   "home.archive.dialog.add": {
     "defaultMessage": "Add"
@@ -476,6 +605,45 @@
   "invite.error": {
     "defaultMessage": "Failed to connect to archive."
   },
+  "notFound.description": {
+    "defaultMessage": "The page you are looking for does not exist or has been moved."
+  },
+  "notFound.goHome": {
+    "defaultMessage": "Go to Home"
+  },
+  "notFound.title": {
+    "defaultMessage": "Page not found"
+  },
+  "observationDetail.back": {
+    "defaultMessage": "Back to Data"
+  },
+  "observationDetail.coordinates": {
+    "defaultMessage": "Coordinates"
+  },
+  "observationDetail.createdAt": {
+    "defaultMessage": "Created"
+  },
+  "observationDetail.details": {
+    "defaultMessage": "Details"
+  },
+  "observationDetail.fallback": {
+    "defaultMessage": "Observation"
+  },
+  "observationDetail.location": {
+    "defaultMessage": "Location"
+  },
+  "observationDetail.noLocation": {
+    "defaultMessage": "No location data"
+  },
+  "observationDetail.notFound": {
+    "defaultMessage": "Observation not found"
+  },
+  "observationDetail.tags": {
+    "defaultMessage": "Tags"
+  },
+  "observationDetail.updatedAt": {
+    "defaultMessage": "Updated"
+  },
   "settings.backup.description": {
     "defaultMessage": "Export your local settings to a JSON file, or import a previously exported backup."
   },
@@ -562,5 +730,23 @@
   },
   "settings.title": {
     "defaultMessage": "Settings"
+  },
+  "theme.ariaSetDark": {
+    "defaultMessage": "Use dark theme"
+  },
+  "theme.ariaSetLight": {
+    "defaultMessage": "Use light theme"
+  },
+  "theme.ariaSetSystem": {
+    "defaultMessage": "Use system theme"
+  },
+  "theme.dark": {
+    "defaultMessage": "Dark"
+  },
+  "theme.light": {
+    "defaultMessage": "Light"
+  },
+  "theme.system": {
+    "defaultMessage": "System"
   }
 }
