@@ -95,6 +95,56 @@
 }
 
 /* ---------------------------------------------------------------------------
+   CLOUD — Dark mode overrides
+   Inverts the surface hierarchy to deep navies and keeps brand blue legible
+   on dark backgrounds. Activated when <html data-theme="dark"> is set by the
+   theme store.
+   --------------------------------------------------------------------------- */
+[data-theme='dark'] {
+  /* Surface hierarchy — flipped, navy-tinted */
+  --theme-surface: #0b1220;
+  --theme-surface-subnav: #0f1a2e;
+  --theme-surface-card: #131e35;
+  --theme-surface-container-low: #182441;
+  --theme-surface-container-highest: #1f2f56;
+  --theme-surface-hero: #04145c;
+
+  /* Primary accent — brightened slightly for dark contrast */
+  --theme-primary: #4a8dff;
+  --theme-primary-hover: #6ba0ff;
+  --theme-primary-navy: #c2d4ff;
+  --theme-primary-soft: #1b2a4f;
+
+  /* Typography — high-contrast text on dark surfaces */
+  --theme-text: #e5e9f2;
+  --theme-text-muted: #9aa5b8;
+  --theme-text-heading: #f5f7fb;
+
+  /* Structural — subtle borders */
+  --theme-border: #2a3859;
+
+  /* Functional status — slightly muted for dark backgrounds */
+  --theme-success: #34c878;
+  --theme-success-soft: #0f3a25;
+  --theme-error: #f87171;
+  --theme-error-soft: #4b1d1d;
+  --theme-warning: #fb923c;
+  --theme-warning-soft: #4a2a13;
+  --theme-info: #4a8dff;
+  --theme-info-soft: #1b2a4f;
+
+  /* Tags */
+  --theme-tag-neutral-bg: #1f2a40;
+  --theme-tag-neutral-text: #c4cbdb;
+
+  /* Shadows — deeper for dark mode */
+  --theme-shadow-card: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --theme-shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --theme-shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --theme-shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------------------------------------------------------------------------
    @theme — Tailwind v4 theme block referencing CSS custom properties
    --------------------------------------------------------------------------- */
 @theme {
