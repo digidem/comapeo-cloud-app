@@ -1030,6 +1030,7 @@ function HomeScreen() {
   return (
     <>
       <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
+        <h1 className="sr-only">{intl.formatMessage(messages.appTitle)}</h1>
         {/* Top Stat Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard

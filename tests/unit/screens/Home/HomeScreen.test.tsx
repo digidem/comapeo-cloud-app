@@ -120,6 +120,13 @@ vi.mock('@/lib/sync', () => ({
   syncRemoteArchive: vi.fn().mockResolvedValue({ success: true }),
 }));
 
+// Mock AreaMap (lazy-loaded in HomeScreen)
+vi.mock('@/screens/Home/AreaMap', () => ({
+  AreaMap: ({ children }: { children: ReactNode }) => (
+    <div data-testid="mock-area-map">{children}</div>
+  ),
+}));
+
 const mockUseProjects = vi.mocked(useProjects);
 const mockUseProjectCoverage = vi.mocked(useProjectCoverage);
 const mockUseArchiveStatus = vi.mocked(useArchiveStatus);
