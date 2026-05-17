@@ -6,11 +6,14 @@ import {
 } from '@tanstack/react-router';
 
 import { AuthenticatedLayout } from '@/components/layout/authenticated-layout';
-import { DashboardScreen } from '@/screens/DashboardScreen';
+import { AlertDetailScreen } from '@/screens/AlertDetailScreen';
+import { CreateAlertScreen } from '@/screens/CreateAlertScreen';
+import { DataScreen } from '@/screens/DataScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { InviteScreen } from '@/screens/InviteScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
-import { ProjectsScreen } from '@/screens/ProjectsScreen';
+import { NotFoundScreen } from '@/screens/NotFoundScreen';
+import { ObservationDetailScreen } from '@/screens/ObservationDetailScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 
 // Context type for future auth integration
@@ -23,6 +26,7 @@ interface RouterContext {
 // Root route
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: () => <Outlet />,
+  notFoundComponent: NotFoundScreen,
 });
 
 // Layout route — wraps all authenticated screens with AppShell
@@ -45,16 +49,28 @@ const loginRoute = createRoute({
   component: LoginScreen,
 });
 
-const dashboardRoute = createRoute({
+const dataRoute = createRoute({
   getParentRoute: () => _authenticatedRoute,
-  path: '/dashboard',
-  component: DashboardScreen,
+  path: '/data',
+  component: DataScreen,
 });
 
-const projectsRoute = createRoute({
+const observationDetailRoute = createRoute({
   getParentRoute: () => _authenticatedRoute,
-  path: '/projects',
-  component: ProjectsScreen,
+  path: '/data/observations/$observationId',
+  component: ObservationDetailScreen,
+});
+
+const createAlertRoute = createRoute({
+  getParentRoute: () => _authenticatedRoute,
+  path: '/data/alerts/new',
+  component: CreateAlertScreen,
+});
+
+const alertDetailRoute = createRoute({
+  getParentRoute: () => _authenticatedRoute,
+  path: '/data/alerts/$alertId',
+  component: AlertDetailScreen,
 });
 
 const settingsRoute = createRoute({
@@ -75,8 +91,10 @@ const routeTree = rootRoute.addChildren([
   inviteRoute,
   _authenticatedRoute.addChildren([
     homeRoute,
-    dashboardRoute,
-    projectsRoute,
+    dataRoute,
+    observationDetailRoute,
+    createAlertRoute,
+    alertDetailRoute,
     settingsRoute,
   ]),
 ]);
@@ -95,8 +113,10 @@ export {
   homeRoute,
   loginRoute,
   inviteRoute,
-  dashboardRoute,
-  projectsRoute,
+  dataRoute,
+  observationDetailRoute,
+  createAlertRoute,
+  alertDetailRoute,
   settingsRoute,
 };
 

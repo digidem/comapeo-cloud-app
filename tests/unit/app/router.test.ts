@@ -2,11 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   _authenticatedRoute,
-  dashboardRoute,
+  dataRoute,
   homeRoute,
   inviteRoute,
   loginRoute,
-  projectsRoute,
   routeTree,
   router,
   settingsRoute,
@@ -19,8 +18,7 @@ describe('router', () => {
       expect(homeRoute.path).toBe('/');
       expect(loginRoute.path).toBe('login');
       expect(inviteRoute.path).toBe('invite');
-      expect(dashboardRoute.path).toBe('dashboard');
-      expect(projectsRoute.path).toBe('projects');
+      expect(dataRoute.path).toBe('data');
       expect(settingsRoute.path).toBe('settings');
       // Layout route uses id instead of path; TanStack Router prefixes with parent path
       expect(_authenticatedRoute.id).toBe('/_authenticated');
@@ -33,8 +31,7 @@ describe('router', () => {
         { path: '/', route: homeRoute, name: 'Home' },
         { path: '/login', route: loginRoute, name: 'Login' },
         { path: '/invite', route: inviteRoute, name: 'Invite' },
-        { path: '/dashboard', route: dashboardRoute, name: 'Dashboard' },
-        { path: '/projects', route: projectsRoute, name: 'Projects' },
+        { path: '/data', route: dataRoute, name: 'Data' },
         { path: '/settings', route: settingsRoute, name: 'Settings' },
       ];
 
@@ -81,8 +78,7 @@ describe('router', () => {
         (child: { path: string }) => child.path,
       );
       expect(authPaths).toContain('/');
-      expect(authPaths).toContain('dashboard');
-      expect(authPaths).toContain('projects');
+      expect(authPaths).toContain('data');
       expect(authPaths).toContain('settings');
 
       // Login stays at root (no shell)
@@ -98,13 +94,8 @@ describe('router', () => {
       expect(homeRoute.options.beforeLoad).toBeUndefined();
     });
 
-    it('dashboard is reachable without auth redirect', () => {
-      // No beforeLoad guard on dashboard route — local mode works immediately
-      expect(dashboardRoute.options.beforeLoad).toBeUndefined();
-    });
-
-    it('projects is reachable without auth redirect', () => {
-      expect(projectsRoute.options.beforeLoad).toBeUndefined();
+    it('data is reachable without auth redirect', () => {
+      expect(dataRoute.options.beforeLoad).toBeUndefined();
     });
 
     it('settings is reachable without auth redirect', () => {
