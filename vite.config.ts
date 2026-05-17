@@ -228,6 +228,9 @@ export default defineConfig({
       '@tests': fileURLToPath(new URL('./tests', import.meta.url)),
     },
   },
+  server: {
+    allowedHosts: ['.trycloudflare.com'],
+  },
   build: {
     target: 'es2022',
     sourcemap: 'hidden',

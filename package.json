@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:tunnel": "bash scripts/dev-tunnel.sh",
     "build": "npx tsx scripts/generate-metadata.ts && tsc --noEmit && vite build",
     "build:ci": "npx tsx scripts/generate-metadata.ts && vite build",
     "preview": "vite preview",
