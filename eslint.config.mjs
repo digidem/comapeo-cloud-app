@@ -82,6 +82,13 @@ export default pluginTs.config(
     ],
     rules: {
       'testing-library/render-result-naming-convention': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          varsIgnorePattern: '^_',
+          argsIgnorePattern: '^_',
+        },
+      ],
     },
   },
   // E2E tests use Playwright page.getBy*() — disable Testing Library rules
