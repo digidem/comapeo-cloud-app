@@ -66,7 +66,9 @@ describe('remote-archive', () => {
     expect(projects[0]!.sourceType).toBe('remoteArchive');
     expect(projects[0]!.sourceId).toBe('server-1');
     expect(projects[0]!.dirtyLocal).toBe(false);
-    expect(projects[0]!.localId).toBe('remoteArchive:server-1:proj-1');
+    expect(projects[0]!.localId).toBe(
+      'remoteArchive:https://archive.example.com:proj-1',
+    );
   });
 
   it('sends bearer auth header when pulling projects', async () => {
@@ -103,7 +105,9 @@ describe('remote-archive', () => {
     expect(observations[0]!.sourceType).toBe('remoteArchive');
     expect(observations[0]!.sourceId).toBe('server-1');
     expect(observations[0]!.projectLocalId).toBe('local-proj-1');
-    expect(observations[0]!.localId).toBe('remoteArchive:server-1:obs-1');
+    expect(observations[0]!.localId).toBe(
+      'remoteArchive:https://archive.example.com:obs-1',
+    );
   });
 
   it('pulls alerts from archive and stores them locally', async () => {
@@ -126,7 +130,9 @@ describe('remote-archive', () => {
     expect(alerts[0]!.sourceType).toBe('remoteArchive');
     expect(alerts[0]!.sourceId).toBe('server-1');
     expect(alerts[0]!.projectLocalId).toBe('local-proj-1');
-    expect(alerts[0]!.localId).toBe('remoteArchive:server-1:alert-1');
+    expect(alerts[0]!.localId).toBe(
+      'remoteArchive:https://archive.example.com:alert-1',
+    );
   });
 
   it('throws when archive returns error', async () => {
@@ -156,6 +162,29 @@ describe('remote-archive', () => {
     expect(second.map((p) => p.localId)).toEqual(first.map((p) => p.localId));
 
     // No duplicates in DB
+    const db = getDb();
+    const all = await db.projects.toArray();
+    expect(all).toHaveLength(2);
+  });
+
+  it('produces same localIds regardless of serverId — prevents duplicates from re-adding same server', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects`, () =>
+        HttpResponse.json(PROJECTS_RESPONSE),
+      ),
+    );
+
+    // Simulate first connection with server-1
+    const first = await pullProjects('server-1', archiveConfig);
+
+    // Simulate re-adding the same server (gets a new ID: server-2)
+    // but same baseUrl — should produce the same localIds
+    const second = await pullProjects('server-2', archiveConfig);
+
+    // Same localIds despite different serverIds
+    expect(second.map((p) => p.localId)).toEqual(first.map((p) => p.localId));
+
+    // No duplicates in DB — upsert replaces, not duplicates
     const db = getDb();
     const all = await db.projects.toArray();
     expect(all).toHaveLength(2);

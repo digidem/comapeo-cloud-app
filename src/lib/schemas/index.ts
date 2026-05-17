@@ -1,5 +1,5 @@
 export { serverInfoResponseSchema } from './server-info';
-export { projectsResponseSchema } from './project';
+export { projectDetailResponseSchema, projectsResponseSchema } from './project';
 export { observationSchema, observationsResponseSchema } from './observation';
 export {
   alertSchema,

@@ -284,6 +284,118 @@ describe('setToken — backward compat with active server', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Server deduplication tests
+// ---------------------------------------------------------------------------
+
+describe('addServer deduplication', () => {
+  it('returns existing server ID when adding a duplicate baseUrl', async () => {
+    const id1 = await useAuthStore.getState().addServer({
+      label: 'First',
+      baseUrl: 'https://archive.example.com',
+      token: 'token-1',
+    });
+
+    const id2 = await useAuthStore.getState().addServer({
+      label: 'Second',
+      baseUrl: 'https://archive.example.com',
+      token: 'token-2',
+    });
+
+    // Same ID returned — no duplicate created
+    expect(id2).toBe(id1);
+    expect(useAuthStore.getState().servers).toHaveLength(1);
+  });
+
+  it('updates the token on the existing server when re-adding', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://archive.example.com',
+      token: 'old-token',
+    });
+
+    await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://archive.example.com',
+      token: 'new-token',
+    });
+
+    const state = useAuthStore.getState();
+    expect(state.servers).toHaveLength(1);
+    expect(state.servers[0]!.token).toBe('new-token');
+  });
+
+  it('deduplicates URLs with trailing slashes', async () => {
+    const id1 = await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://archive.example.com/',
+      token: 'tok',
+    });
+
+    const id2 = await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://archive.example.com',
+      token: 'tok',
+    });
+
+    expect(id2).toBe(id1);
+    expect(useAuthStore.getState().servers).toHaveLength(1);
+  });
+
+  it('deduplicates URLs with different trailing slashes and case', async () => {
+    const id1 = await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://Archive.Example.COM/api/',
+      token: 'tok',
+    });
+
+    const id2 = await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://archive.example.com/api',
+      token: 'tok',
+    });
+
+    expect(id2).toBe(id1);
+    expect(useAuthStore.getState().servers).toHaveLength(1);
+  });
+
+  it('allows different baseUrls to coexist', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Server A',
+      baseUrl: 'https://server-a.example.com',
+      token: 'tok-a',
+    });
+
+    await useAuthStore.getState().addServer({
+      label: 'Server B',
+      baseUrl: 'https://server-b.example.com',
+      token: 'tok-b',
+    });
+
+    expect(useAuthStore.getState().servers).toHaveLength(2);
+  });
+
+  it('deduplicates via invite URL and manual add', async () => {
+    // Simulate adding via invite URL (InviteScreen path)
+    const id1 = await useAuthStore.getState().addServer({
+      label: 'archive.example.com',
+      baseUrl: 'https://archive.example.com',
+      token: 'invite-token',
+    });
+
+    // Simulate manual add via AddArchiveServerDialog
+    const id2 = await useAuthStore.getState().addServer({
+      label: 'Production Server',
+      baseUrl: 'https://archive.example.com',
+      token: 'manual-token',
+    });
+
+    expect(id2).toBe(id1);
+    expect(useAuthStore.getState().servers).toHaveLength(1);
+    expect(useAuthStore.getState().servers[0]!.token).toBe('manual-token');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // setBaseUrl — backward-compat with activeServerId
 // ---------------------------------------------------------------------------
 

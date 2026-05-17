@@ -360,7 +360,6 @@ describe('syncRemoteArchive', () => {
     // We'll override globalThis.fetch temporarily.
     const originalFetch = globalThis.fetch;
     let callCount = 0;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     globalThis.fetch = (..._args: Parameters<typeof fetch>) => {
       callCount++;
       // First call is projects — return valid data

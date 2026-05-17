@@ -192,6 +192,10 @@ export async function deleteObservation(localId: string): Promise<void> {
 
 export interface CreateAlertInput {
   projectLocalId: string;
+  geometry?: { type: string; coordinates: unknown };
+  metadata?: Record<string, unknown>;
+  detectionDateStart?: string;
+  detectionDateEnd?: string;
 }
 
 export async function createAlert(input: CreateAlertInput): Promise<Alert> {
@@ -208,6 +212,10 @@ export async function createAlert(input: CreateAlertInput): Promise<Alert> {
       localId: uuid(),
       projectLocalId: input.projectLocalId,
       ...localMeta(),
+      geometry: input.geometry,
+      metadata: input.metadata,
+      detectionDateStart: input.detectionDateStart,
+      detectionDateEnd: input.detectionDateEnd,
     };
     await db.alerts.add(alert);
     return alert;

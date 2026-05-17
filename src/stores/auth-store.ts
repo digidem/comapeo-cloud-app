@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import {
   createRemoteServer,
   deleteRemoteServer,
@@ -80,6 +81,33 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   setTier: (tier) => set({ tier }),
 
   addServer: async (config) => {
+    // Deduplicate: if a server with the same baseUrl already exists,
+    // update its token and return the existing ID instead of creating a duplicate.
+    // Use the same normalization as AddArchiveServerDialog for consistency.
+    const normalizedResult = normalizeArchiveBaseUrl(config.baseUrl);
+    const normalized = normalizedResult.ok
+      ? normalizedResult.value
+      : config.baseUrl.trim().replace(/\/+$/, '');
+    const existing = get().servers.find((s) => {
+      const serverNormalized = normalizeArchiveBaseUrl(s.baseUrl);
+      const serverUrl = serverNormalized.ok
+        ? serverNormalized.value
+        : s.baseUrl.trim().replace(/\/+$/, '');
+      return serverUrl === normalized;
+    });
+    if (existing) {
+      // Update token if it changed
+      if (existing.token !== config.token) {
+        await updateRemoteServer(existing.id, { token: config.token });
+        set((state) => ({
+          servers: state.servers.map((s) =>
+            s.id === existing.id ? { ...s, token: config.token } : s,
+          ),
+        }));
+      }
+      return existing.id;
+    }
+
     const server = await createRemoteServer({
       baseUrl: config.baseUrl,
       label: config.label,

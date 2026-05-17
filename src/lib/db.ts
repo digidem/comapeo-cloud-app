@@ -1,5 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 
+import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -39,6 +41,10 @@ export interface Alert {
   sourceType: string;
   sourceId: string;
   remoteId?: string;
+  geometry?: { type: string; coordinates: unknown };
+  metadata?: Record<string, unknown>;
+  detectionDateStart?: string;
+  detectionDateEnd?: string;
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
@@ -138,6 +144,71 @@ class AppDatabase extends Dexie {
         if (!('lat' in obs)) obs.lat = undefined;
         if (!('lon' in obs)) obs.lon = undefined;
       });
+    });
+
+    // Rekey remoteArchive rows from `<sourceType>:<serverId>:<remoteId>`
+    // to `<sourceType>:<normalizedBaseUrl>:<remoteId>` so re-adding the
+    // same archive (different serverId, same baseUrl) does not duplicate rows.
+    this.version(6).upgrade(async (tx) => {
+      const servers = (await tx.table('remoteServers').toArray()) as Array<{
+        id: string;
+        baseUrl: string;
+      }>;
+      const serverIdToKey = new Map<string, string>();
+      for (const s of servers) {
+        const result = normalizeArchiveBaseUrl(s.baseUrl);
+        const key = result.ok
+          ? result.value
+          : (s.baseUrl ?? '').trim().replace(/\/+$/, '');
+        if (key) serverIdToKey.set(s.id, key);
+      }
+      if (serverIdToKey.size === 0) return;
+
+      const rekey = async (
+        tableName: string,
+        projectKeyMap?: Map<string, string>,
+        observationKeyMap?: Map<string, string>,
+      ): Promise<Map<string, string>> => {
+        const tbl = tx.table(tableName);
+        const rows = (await tbl.toArray()) as Array<Record<string, unknown>>;
+        const oldKeys: string[] = [];
+        const newRows: Array<Record<string, unknown>> = [];
+        const mapping = new Map<string, string>();
+        for (const row of rows) {
+          if (row.sourceType !== 'remoteArchive') continue;
+          const newKey = serverIdToKey.get(row.sourceId as string);
+          if (!newKey || !row.remoteId) continue;
+          const oldLocalId = row.localId as string;
+          const newLocalId = `remoteArchive:${newKey}:${row.remoteId}`;
+          if (oldLocalId === newLocalId) continue;
+          mapping.set(oldLocalId, newLocalId);
+          oldKeys.push(oldLocalId);
+          const newRow: Record<string, unknown> = {
+            ...row,
+            localId: newLocalId,
+          };
+          if (projectKeyMap && typeof row.projectLocalId === 'string') {
+            newRow.projectLocalId =
+              projectKeyMap.get(row.projectLocalId) ?? row.projectLocalId;
+          }
+          if (observationKeyMap && typeof row.observationLocalId === 'string') {
+            newRow.observationLocalId =
+              observationKeyMap.get(row.observationLocalId) ??
+              row.observationLocalId;
+          }
+          newRows.push(newRow);
+        }
+        if (oldKeys.length > 0) {
+          await tbl.bulkDelete(oldKeys);
+          await tbl.bulkPut(newRows);
+        }
+        return mapping;
+      };
+
+      const projectKeyMap = await rekey('projects');
+      const observationKeyMap = await rekey('observations', projectKeyMap);
+      await rekey('alerts', projectKeyMap);
+      await rekey('attachments', projectKeyMap, observationKeyMap);
     });
   }
 }
