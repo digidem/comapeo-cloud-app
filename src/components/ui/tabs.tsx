@@ -76,5 +76,5 @@ const Tabs = Object.assign(TabsRoot, {
   Content: TabsContent,
 });
 
-export { Tabs };
+export { Tabs, TabsList, TabsTrigger, TabsContent };
 export type { TabsProps };

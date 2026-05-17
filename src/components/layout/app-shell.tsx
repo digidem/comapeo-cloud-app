@@ -7,7 +7,6 @@ import { PrimaryNav } from '@/components/layout/primary-nav';
 import { Topbar } from '@/components/layout/topbar';
 
 interface AppShellProps {
-  topbarTitle: string;
   topbarActions?: ReactNode;
   topbarWorkspaceName?: string;
   topbarModeLabel?: string;
@@ -20,7 +19,6 @@ interface AppShellProps {
 }
 
 function AppShell({
-  topbarTitle,
   topbarActions,
   topbarWorkspaceName,
   topbarModeLabel,
@@ -46,7 +44,6 @@ function AppShell({
   return (
     <div className="flex h-screen flex-col">
       <Topbar
-        title={topbarTitle}
         workspaceName={topbarWorkspaceName}
         modeLabel={topbarModeLabel}
         onMenuClick={() => setMobileMenuOpen(true)}

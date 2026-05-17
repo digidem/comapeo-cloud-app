@@ -4,11 +4,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { AudioPlayer } from '@/components/shared/audio-player';
 import { getAttachmentUrl } from '@/lib/api-client';
 
+function getAudioEl(container: HTMLElement): HTMLAudioElement {
+  const el = container.querySelector('audio');
+  if (!el) throw new Error('audio element not found');
+  return el;
+}
+
 vi.mock('@/lib/api-client', () => ({
   getAttachmentUrl: vi.fn(
     (_projectId: string, driveId: string, type: string, name: string) =>
       `https://example.com/attachments/${driveId}/${type}/${name}`,
   ),
+}));
+
+vi.mock('@/hooks/useAuthenticatedImageUrl', () => ({
+  useAuthenticatedImageUrl: (_url: string) => ({
+    blobUrl: 'blob:https://example.com/audio',
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 describe('AudioPlayer', () => {
@@ -23,13 +37,12 @@ describe('AudioPlayer', () => {
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
   });
 
-  it('shows audio element with correct src', () => {
-    render(<AudioPlayer {...defaultProps} />);
-    const audio = screen.getByRole('audio') as HTMLAudioElement;
+  it('shows audio element with blob URL src from useAuthenticatedImageUrl', () => {
+    const { container } = render(<AudioPlayer {...defaultProps} />);
+    const audio = getAudioEl(container);
     expect(audio).toBeInTheDocument();
-    expect(audio.getAttribute('src')).toBe(
-      'https://example.com/attachments/drive1/audio/mpeg/recording.mp3',
-    );
+    // The src is now a blob URL from useAuthenticatedImageUrl
+    expect(audio.getAttribute('src')).toBe('blob:https://example.com/audio');
   });
 
   it('calls getAttachmentUrl without variant', () => {
@@ -43,8 +56,8 @@ describe('AudioPlayer', () => {
   });
 
   it('play button toggles to pause when clicked', () => {
-    render(<AudioPlayer {...defaultProps} />);
-    const audio = screen.getByRole('audio') as HTMLAudioElement;
+    const { container } = render(<AudioPlayer {...defaultProps} />);
+    const audio = getAudioEl(container);
     vi.spyOn(audio, 'play').mockResolvedValue(undefined);
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
@@ -55,8 +68,8 @@ describe('AudioPlayer', () => {
   });
 
   it('pause button toggles back to play when clicked', () => {
-    render(<AudioPlayer {...defaultProps} />);
-    const audio = screen.getByRole('audio') as HTMLAudioElement;
+    const { container } = render(<AudioPlayer {...defaultProps} />);
+    const audio = getAudioEl(container);
     vi.spyOn(audio, 'play').mockResolvedValue(undefined);
     vi.spyOn(audio, 'pause').mockImplementation(() => {});
 
@@ -75,8 +88,8 @@ describe('AudioPlayer', () => {
   });
 
   it('updates progress on timeupdate', () => {
-    render(<AudioPlayer {...defaultProps} />);
-    const audio = screen.getByRole('audio') as HTMLAudioElement;
+    const { container } = render(<AudioPlayer {...defaultProps} />);
+    const audio = getAudioEl(container);
 
     Object.defineProperty(audio, 'duration', { value: 100, writable: true });
     Object.defineProperty(audio, 'currentTime', {
@@ -91,8 +104,8 @@ describe('AudioPlayer', () => {
   });
 
   it('resets to play button when play() promise rejects', () => {
-    render(<AudioPlayer {...defaultProps} />);
-    const audio = screen.getByRole('audio') as HTMLAudioElement;
+    const { container } = render(<AudioPlayer {...defaultProps} />);
+    const audio = getAudioEl(container);
     vi.spyOn(audio, 'play').mockRejectedValue(new Error('aborted'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
@@ -109,8 +122,8 @@ describe('AudioPlayer', () => {
   });
 
   it('updates duration on loadedMetadata', () => {
-    render(<AudioPlayer {...defaultProps} />);
-    const audio = screen.getByRole('audio') as HTMLAudioElement;
+    const { container } = render(<AudioPlayer {...defaultProps} />);
+    const audio = getAudioEl(container);
 
     Object.defineProperty(audio, 'duration', { value: 120, writable: true });
 

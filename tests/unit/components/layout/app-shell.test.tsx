@@ -35,26 +35,20 @@ const navItems = [
 ];
 
 describe('AppShell', () => {
-  it('renders topbar with title', () => {
+  it('renders topbar with logo', () => {
     render(
-      <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={navItems}
-        activeNavPath="/dashboard"
-      >
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );
-    expect(screen.getByText('CoMapeo Cloud')).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: 'CoMapeo Cloud' }),
+    ).toBeInTheDocument();
   });
 
   it('renders primary nav with items', () => {
     render(
-      <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={navItems}
-        activeNavPath="/dashboard"
-      >
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );
@@ -65,11 +59,7 @@ describe('AppShell', () => {
 
   it('renders main content area with children', () => {
     render(
-      <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={navItems}
-        activeNavPath="/dashboard"
-      >
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div data-testid="main-child">Hello World</div>
       </AppShell>,
     );
@@ -79,7 +69,6 @@ describe('AppShell', () => {
   it('renders contextual subnav when props provided', () => {
     render(
       <AppShell
-        topbarTitle="CoMapeo Cloud"
         navItems={navItems}
         activeNavPath="/dashboard"
         subnavTitle="Filters"
@@ -94,11 +83,7 @@ describe('AppShell', () => {
 
   it('does not render contextual subnav when props not provided', () => {
     render(
-      <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={navItems}
-        activeNavPath="/dashboard"
-      >
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );
@@ -107,11 +92,7 @@ describe('AppShell', () => {
 
   it('topbar has h-14 class', () => {
     render(
-      <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={navItems}
-        activeNavPath="/dashboard"
-      >
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );
@@ -122,7 +103,6 @@ describe('AppShell', () => {
   it('renders secondaryContent when provided', () => {
     render(
       <AppShell
-        topbarTitle="CoMapeo Cloud"
         navItems={navItems}
         activeNavPath="/dashboard"
         secondaryContent={<div data-testid="secondary-panel">Project list</div>}
@@ -135,11 +115,7 @@ describe('AppShell', () => {
 
   it('does not render secondary panel when secondaryContent not provided', () => {
     render(
-      <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={navItems}
-        activeNavPath="/dashboard"
-      >
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );
@@ -149,7 +125,6 @@ describe('AppShell', () => {
   it('renders workspace badge via topbarWorkspaceName', () => {
     render(
       <AppShell
-        topbarTitle="CoMapeo Cloud"
         navItems={navItems}
         activeNavPath="/dashboard"
         topbarWorkspaceName="Rainforest Monitoring"
@@ -162,11 +137,7 @@ describe('AppShell', () => {
 
   it('renders MobileNavDrawer in the DOM', () => {
     render(
-      <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={navItems}
-        activeNavPath="/dashboard"
-      >
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );
@@ -181,11 +152,7 @@ describe('AppShell', () => {
 
   it('drawer receives same navItems as PrimaryNav', async () => {
     render(
-      <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={navItems}
-        activeNavPath="/dashboard"
-      >
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );
@@ -196,7 +163,6 @@ describe('AppShell', () => {
     expect(
       screen.getByRole('button', { name: /close menu/i }),
     ).toBeInTheDocument();
-    // The drawer renders the "CoMapeo Cloud" header text
     // Check that nav item text content appears in the drawer
     expect(screen.getAllByText('Dashboard').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Projects').length).toBeGreaterThanOrEqual(1);
@@ -206,7 +172,6 @@ describe('AppShell', () => {
   it('drawer receives same secondaryContent as desktop sidebar', async () => {
     render(
       <AppShell
-        topbarTitle="CoMapeo Cloud"
         navItems={navItems}
         activeNavPath="/dashboard"
         secondaryContent={<div data-testid="secondary-panel">Project list</div>}
@@ -224,11 +189,7 @@ describe('AppShell', () => {
 
   it('hamburger callback triggers drawer open', async () => {
     render(
-      <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={navItems}
-        activeNavPath="/dashboard"
-      >
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );
@@ -246,11 +207,7 @@ describe('AppShell', () => {
 
   it('closes drawer when close button is clicked', async () => {
     render(
-      <AppShell
-        topbarTitle="CoMapeo Cloud"
-        navItems={navItems}
-        activeNavPath="/dashboard"
-      >
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );

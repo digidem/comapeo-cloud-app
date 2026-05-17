@@ -40,9 +40,10 @@ describe('AuthenticatedLayout', () => {
     expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
   });
 
-  it('renders app title "CoMapeo Cloud" in topbar', () => {
+  it('renders app logo in topbar', () => {
     render(<AuthenticatedLayout />);
-    expect(screen.getByText('CoMapeo Cloud')).toBeInTheDocument();
+    const logo = screen.getByRole('img', { name: 'CoMapeo Cloud' });
+    expect(logo).toBeInTheDocument();
   });
 
   it('renders Outlet for child routes', () => {

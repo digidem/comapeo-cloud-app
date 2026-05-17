@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { LanguageSelector } from '@/components/layout/language-selector';
 
 interface TopbarProps {
-  title: string;
   workspaceName?: string;
   modeLabel?: string;
   onMenuClick?: () => void;
@@ -11,7 +10,6 @@ interface TopbarProps {
 }
 
 function Topbar({
-  title,
   workspaceName,
   modeLabel,
   onMenuClick,
@@ -47,9 +45,11 @@ function Topbar({
             </svg>
           </button>
         )}
-        <h1 className="truncate max-w-[140px] text-lg font-semibold text-text sm:max-w-[200px] lg:max-w-none">
-          {title}
-        </h1>
+        <img
+          src="/comapeo_cloud_logo_min.png"
+          alt="CoMapeo Cloud"
+          className="h-12 w-auto"
+        />
         {workspaceName && (
           <span className="hidden bg-primary-soft text-primary rounded-full px-3 py-0.5 text-sm font-medium sm:inline-flex">
             {workspaceName}
