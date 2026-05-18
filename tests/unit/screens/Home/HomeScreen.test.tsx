@@ -102,6 +102,10 @@ vi.mock('@/components/shared/auth-img', () => ({
   }) => <img src={src} alt={alt} className={className} />,
 }));
 
+vi.mock('@/hooks/useCountUp', () => ({
+  useCountUp: vi.fn((value: string | number) => value),
+}));
+
 // Mock data-layer createProject
 vi.mock('@/lib/data-layer', () => ({
   createProject: vi.fn().mockResolvedValue({ localId: 'new-project-id' }),
@@ -898,6 +902,94 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Field Data')).toBeInTheDocument();
   });
 
+  it('shows observation count value with Field Data label', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Obs Count Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    mockUseObservations.mockReturnValue({
+      data: [
+        { localId: 'obs1', createdAt: new Date().toISOString(), tags: {} },
+        { localId: 'obs2', createdAt: new Date().toISOString(), tags: {} },
+        { localId: 'obs3', createdAt: new Date().toISOString(), tags: {} },
+        { localId: 'obs4', createdAt: new Date().toISOString(), tags: {} },
+        { localId: 'obs5', createdAt: new Date().toISOString(), tags: {} },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Obs Count Project' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('5 Observations')).toBeInTheDocument();
+    });
+  });
+
+  it('uses singular Observation label when count is 1', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Single Obs Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    mockUseObservations.mockReturnValue({
+      data: [
+        { localId: 'obs1', createdAt: new Date().toISOString(), tags: {} },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Single Obs Project' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('1 Observation')).toBeInTheDocument();
+    });
+  });
+
   it('shows "Connected" mode stat when project has a serverUrl', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
@@ -1393,7 +1485,9 @@ describe('HomeScreen', () => {
     });
 
     // The default active method is 'observed' so territory area = 30000 m² = 3 ha
-    expect(screen.getByText('3 ha')).toBeInTheDocument();
+    // Both CoverageSummary and ProjectBannerCard render "3 ha" when useCountUp is mocked
+    const areaElements = screen.getAllByText('3 ha');
+    expect(areaElements.length).toBeGreaterThanOrEqual(1);
   });
 
   it('AddArchiveServerDialog onAdded does not sync when server not found', async () => {
