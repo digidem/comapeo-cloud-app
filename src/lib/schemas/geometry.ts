@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 
-const position = v.array(v.number());
+const position = v.pipe(v.array(v.number()), v.minLength(2));
 
 export const geometrySchema: v.GenericSchema<{
   type: string;
