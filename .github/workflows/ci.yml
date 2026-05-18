@@ -29,9 +29,6 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      matrix:
-        node-version: [22]
 
     steps:
       - uses: actions/checkout@v6
@@ -43,7 +40,7 @@ jobs:
         with:
           extra_args: --results=verified,unknown
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
@@ -85,17 +82,6 @@ jobs:
       - name: E2E tests
         run: npx playwright test --project=chromium --project=firefox --project=webkit
 
-      - name: Generate screenshots for visual review
-        run: npm run test:screenshots
-
-      - name: Upload screenshots
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: screenshots
-          path: tests/e2e/screenshots/
-          retention-days: 14
-
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
         if: always()
@@ -116,11 +102,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -160,11 +147,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -277,7 +265,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
@@ -332,7 +320,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
@@ -382,11 +370,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       # Lighthouse CI needs @lhci/cli which is in devDependencies
       - name: Install dependencies
