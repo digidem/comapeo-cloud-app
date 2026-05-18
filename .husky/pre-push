@@ -1,0 +1,4 @@
+set -e
+
+npm run verify:handoff
+npm run check:i18n
