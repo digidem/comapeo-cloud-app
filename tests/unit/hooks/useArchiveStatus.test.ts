@@ -1,8 +1,9 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
 import { resetDb } from '@/lib/db';
+import * as localRepos from '@/lib/local-repositories';
 import { createRemoteServer } from '@/lib/local-repositories';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -114,5 +115,23 @@ describe('useArchiveStatus', () => {
       baseUrl: 'http://archive.test',
       hasCredentials: false,
     });
+  });
+
+  it('sets cachedServers to empty when getRemoteServers rejects', async () => {
+    const spy = vi
+      .spyOn(localRepos, 'getRemoteServers')
+      .mockRejectedValueOnce(new Error('fail'));
+    try {
+      const { result } = renderHook(() => useArchiveStatus());
+
+      await waitFor(
+        () => {
+          expect(result.current.servers).toEqual([]);
+        },
+        { timeout: 3000 },
+      );
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

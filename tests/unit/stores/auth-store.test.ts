@@ -396,6 +396,139 @@ describe('addServer deduplication', () => {
 });
 
 // ---------------------------------------------------------------------------
+// hydrateServers
+// ---------------------------------------------------------------------------
+
+describe('hydrateServers', () => {
+  it('loads servers from database into store', async () => {
+    // Create a server directly in the database
+    const db = (await import('@/lib/db')).getDb();
+    await db.remoteServers.add({
+      id: 'db-server-1',
+      baseUrl: 'https://hydrated.example.com',
+      label: 'Hydrated Server',
+      token: 'hydrated-token',
+      status: 'connected',
+      lastSyncedAt: '2024-01-01T00:00:00Z',
+    });
+
+    await useAuthStore.getState().hydrateServers();
+
+    const state = useAuthStore.getState();
+    expect(state.servers).toHaveLength(1);
+    expect(state.servers[0]!.id).toBe('db-server-1');
+    expect(state.servers[0]!.baseUrl).toBe('https://hydrated.example.com');
+    expect(state.servers[0]!.status).toBe('connected');
+  });
+
+  it('falls back to baseUrl when label is null', async () => {
+    const db = (await import('@/lib/db')).getDb();
+    await db.remoteServers.add({
+      id: 'no-label-server',
+      baseUrl: 'https://no-label.example.com',
+      label: null as unknown as string,
+      token: 'tok',
+      status: 'idle',
+      lastSyncedAt: '',
+    });
+
+    await useAuthStore.getState().hydrateServers();
+
+    const server = useAuthStore.getState().servers[0]!;
+    expect(server.label).toBe('https://no-label.example.com');
+  });
+
+  it('falls back to empty string when token is null', async () => {
+    const db = (await import('@/lib/db')).getDb();
+    await db.remoteServers.add({
+      id: 'no-token-server',
+      baseUrl: 'https://no-token.example.com',
+      label: 'No Token',
+      token: null as unknown as string,
+      status: 'idle',
+      lastSyncedAt: '',
+    });
+
+    await useAuthStore.getState().hydrateServers();
+
+    const server = useAuthStore.getState().servers[0]!;
+    expect(server.token).toBe('');
+  });
+
+  it('falls back to idle for unknown status values', async () => {
+    const db = (await import('@/lib/db')).getDb();
+    await db.remoteServers.add({
+      id: 'bad-status-server',
+      baseUrl: 'https://bad-status.example.com',
+      label: 'Bad Status',
+      token: 'tok',
+      status: 'invalid-status',
+      lastSyncedAt: '',
+    });
+
+    await useAuthStore.getState().hydrateServers();
+
+    const server = useAuthStore.getState().servers[0]!;
+    expect(server.status).toBe('idle');
+  });
+
+  it('handles empty database gracefully', async () => {
+    await useAuthStore.getState().hydrateServers();
+    expect(useAuthStore.getState().servers).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateServer
+// ---------------------------------------------------------------------------
+
+describe('updateServer', () => {
+  it('updates server label', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Old Label',
+      baseUrl: 'https://update.example.com',
+      token: 'tok',
+    });
+    const id = useAuthStore.getState().servers[0]!.id;
+
+    await useAuthStore.getState().updateServer(id, { label: 'New Label' });
+
+    const server = useAuthStore.getState().servers[0]!;
+    expect(server.label).toBe('New Label');
+  });
+
+  it('updates server baseUrl', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://old-url.example.com',
+      token: 'tok',
+    });
+    const id = useAuthStore.getState().servers[0]!.id;
+
+    await useAuthStore.getState().updateServer(id, {
+      baseUrl: 'https://new-url.example.com',
+    });
+
+    const server = useAuthStore.getState().servers[0]!;
+    expect(server.baseUrl).toBe('https://new-url.example.com');
+  });
+
+  it('updates server token', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'Server',
+      baseUrl: 'https://update.example.com',
+      token: 'old-token',
+    });
+    const id = useAuthStore.getState().servers[0]!.id;
+
+    await useAuthStore.getState().updateServer(id, { token: 'new-token' });
+
+    const server = useAuthStore.getState().servers[0]!;
+    expect(server.token).toBe('new-token');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // setBaseUrl — backward-compat with activeServerId
 // ---------------------------------------------------------------------------
 
