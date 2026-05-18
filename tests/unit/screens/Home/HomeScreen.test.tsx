@@ -902,7 +902,7 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Field Data')).toBeInTheDocument();
   });
 
-  it('shows observation count value with Observations label', async () => {
+  it('shows observation count value with Field Data label', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
@@ -944,7 +944,7 @@ describe('HomeScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('5 Observations')).toBeInTheDocument();
+      expect(screen.getByText('5 Field Data')).toBeInTheDocument();
     });
   });
 
