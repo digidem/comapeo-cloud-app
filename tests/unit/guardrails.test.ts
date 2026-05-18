@@ -36,6 +36,10 @@ describe('repository guardrails', () => {
     expect(preCommitHook).toContain('lint-staged');
     expect(prePushHook).toContain('npm run verify:handoff');
     expect(prePushHook).toContain('npm run check:i18n');
+    // sh defaults to continue-on-error and reports only the last command's
+    // exit code, so without `set -e` an earlier failure would silently pass.
+    expect(preCommitHook).toMatch(/^set -e$/m);
+    expect(prePushHook).toMatch(/^set -e$/m);
   });
 
   it('hardens CI with scoped permissions, deterministic setup, and blocking checks', () => {

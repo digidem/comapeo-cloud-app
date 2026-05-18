@@ -1,3 +1,5 @@
+set -e
+
 export TRUFFLEHOG_PRE_COMMIT=1
 trufflehog git file://. --since-commit HEAD --results=verified,unknown --fail --trust-local-git-config
 lint-staged
