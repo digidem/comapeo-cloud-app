@@ -80,7 +80,7 @@ const vendorChunks: Record<string, string[]> = {
     '@sentry/browser',
     '@sentry-internal/browser-utils',
   ],
-  'vendor-map': ['@vis.gl/react-maplibre', 'maplibre-gl'],
+  'vendor-map': ['maplibre-gl'],
   'vendor-state': ['zustand'],
   'vendor-react': ['react-dom', 'react', 'scheduler'],
 };
@@ -227,6 +227,9 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@tests': fileURLToPath(new URL('./tests', import.meta.url)),
     },
+  },
+  server: {
+    allowedHosts: ['.trycloudflare.com'],
   },
   build: {
     target: 'es2022',

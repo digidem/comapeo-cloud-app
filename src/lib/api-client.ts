@@ -9,6 +9,7 @@ import {
   createAlertBodySchema,
   errorResponseSchema,
   observationsResponseSchema,
+  projectDetailResponseSchema,
   projectsResponseSchema,
   serverInfoResponseSchema,
 } from '@/lib/schemas';
@@ -166,6 +167,20 @@ export const apiClient = {
         headers: { ...getAuthHeaders(config), ...request.extraHeaders },
       });
       return handleResponse(response, projectsResponseSchema, config);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
+  async getProject(projectId: string, config?: RequestConfig) {
+    try {
+      const request = resolveApiRequest(config);
+      const response = await fetch(
+        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}`,
+        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+      );
+      return handleResponse(response, projectDetailResponseSchema, config);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;

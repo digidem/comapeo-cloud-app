@@ -117,6 +117,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Download build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -372,6 +378,7 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      # Lighthouse CI needs @lhci/cli which is in devDependencies
       - name: Install dependencies
         run: npm ci
 

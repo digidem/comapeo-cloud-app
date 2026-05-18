@@ -8,3 +8,10 @@ export const projectsResponseSchema = v.object({
     }),
   ),
 });
+
+export const projectDetailResponseSchema = v.object({
+  data: v.object({
+    projectId: v.string(),
+    name: v.optional(v.string()),
+  }),
+});

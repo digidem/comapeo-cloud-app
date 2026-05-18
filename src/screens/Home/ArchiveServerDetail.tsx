@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import type { ArchiveServerStatus } from '@/hooks/useArchiveStatus';
 import { useProjects } from '@/hooks/useProjects';
-import { updateProject } from '@/lib/data-layer';
+import { getAlerts, getObservations, updateProject } from '@/lib/data-layer';
 import type { RemoteArchiveServer } from '@/stores/auth-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { EditArchiveServerDialog } from './EditArchiveServerDialog';
 
@@ -100,6 +102,31 @@ const messages = defineMessages({
     defaultMessage:
       '{count, plural, one {# project will be moved to Local.} other {# projects will be moved to Local.}}',
   },
+  statsTitle: {
+    id: 'home.archive.detail.statsTitle',
+    defaultMessage: 'Summary',
+  },
+  statsProjects: {
+    id: 'home.archive.detail.statsProjects',
+    defaultMessage: '{count, plural, one {# project} other {# projects}}',
+  },
+  statsObservations: {
+    id: 'home.archive.detail.statsObservations',
+    defaultMessage:
+      '{count, plural, one {# observation} other {# observations}}',
+  },
+  statsAlerts: {
+    id: 'home.archive.detail.statsAlerts',
+    defaultMessage: '{count, plural, one {# alert} other {# alerts}}',
+  },
+  statsNoData: {
+    id: 'home.archive.detail.statsNoData',
+    defaultMessage: 'No data synced yet',
+  },
+  viewData: {
+    id: 'home.archive.detail.viewData',
+    defaultMessage: 'View Data',
+  },
 });
 
 function resolveStatusLabel(server: ArchiveServerStatus): string {
@@ -115,6 +142,7 @@ function ArchiveServerDetail({
   onRemove,
 }: ArchiveServerDetailProps) {
   const intl = useIntl();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: projects = [] } = useProjects();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -141,6 +169,38 @@ function ArchiveServerDetail({
   const matchingProjects = projects.filter(
     (p) => p.serverUrl === server.baseUrl,
   );
+
+  // Dashboard stats: aggregate observations and alerts across all projects for this server
+  const setSelectedProjectId = useProjectStore((s) => s.setSelectedProjectId);
+  const projectQueries = useQueries({
+    queries: matchingProjects.flatMap((p) => [
+      {
+        queryKey: ['observations', p.localId],
+        queryFn: () => getObservations(p.localId),
+      },
+      {
+        queryKey: ['alerts', p.localId],
+        queryFn: () => getAlerts(p.localId),
+      },
+    ]),
+  });
+  const totalObservations = projectQueries
+    .filter((_, i) => i % 2 === 0)
+    .reduce(
+      (sum, q) => sum + ((q.data as unknown[] | undefined)?.length ?? 0),
+      0,
+    );
+  const totalAlerts = projectQueries
+    .filter((_, i) => i % 2 === 1)
+    .reduce(
+      (sum, q) => sum + ((q.data as unknown[] | undefined)?.length ?? 0),
+      0,
+    );
+
+  function handleSelectProject(projectId: string) {
+    setSelectedProjectId(projectId);
+    void navigate({ to: '/data' });
+  }
 
   async function handleConfirmRemove() {
     setIsConfirmRemoveOpen(false);
@@ -273,6 +333,65 @@ function ArchiveServerDetail({
           </div>
         )}
       </dl>
+
+      {/* Dashboard stats */}
+      {matchingProjects.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold text-text">
+            {intl.formatMessage(messages.statsTitle)}
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-card bg-surface-container-low p-3 text-center">
+              <div className="text-lg font-bold text-text">
+                {matchingProjects.length}
+              </div>
+              <div className="text-xs text-text-muted">
+                {intl.formatMessage(messages.statsProjects, {
+                  count: matchingProjects.length,
+                })}
+              </div>
+            </div>
+            <div className="rounded-card bg-surface-container-low p-3 text-center">
+              <div className="text-lg font-bold text-text">
+                {totalObservations}
+              </div>
+              <div className="text-xs text-text-muted">
+                {intl.formatMessage(messages.statsObservations, {
+                  count: totalObservations,
+                })}
+              </div>
+            </div>
+            <div className="rounded-card bg-surface-container-low p-3 text-center">
+              <div className="text-lg font-bold text-text">{totalAlerts}</div>
+              <div className="text-xs text-text-muted">
+                {intl.formatMessage(messages.statsAlerts, {
+                  count: totalAlerts,
+                })}
+              </div>
+            </div>
+          </div>
+          {/* Project list with select buttons */}
+          <div className="flex flex-col gap-1">
+            {matchingProjects.map((project) => (
+              <div
+                key={project.localId}
+                className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-surface-container-low transition-colors"
+              >
+                <span className="text-sm text-text">
+                  {project.name ?? intl.formatMessage(messages.statsNoData)}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleSelectProject(project.localId)}
+                >
+                  {intl.formatMessage(messages.viewData)}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Edit dialog */}
       <EditArchiveServerDialog

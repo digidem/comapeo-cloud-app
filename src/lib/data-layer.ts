@@ -195,7 +195,13 @@ export async function importGeoJsonPoints(
 // Alerts
 // ---------------------------------------------------------------------------
 
-export async function createAlert(input: { projectLocalId: string }) {
+export async function createAlert(input: {
+  projectLocalId: string;
+  geometry?: { type: string; coordinates: unknown };
+  metadata?: Record<string, unknown>;
+  detectionDateStart?: string;
+  detectionDateEnd?: string;
+}) {
   return repoCreateAlert(input);
 }
 

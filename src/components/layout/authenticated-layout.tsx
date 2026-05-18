@@ -12,6 +12,7 @@ import { useAutoSync } from '@/hooks/useAutoSync';
 
 const messages = defineMessages({
   home: { id: 'home.title', defaultMessage: 'Home' },
+  data: { id: 'data.title', defaultMessage: 'Data' },
   settings: { id: 'settings.title', defaultMessage: 'Settings' },
   appTitle: { id: 'app.title', defaultMessage: 'CoMapeo Cloud' },
 });
@@ -27,6 +28,21 @@ function HomeIcon(): ReactNode {
       aria-hidden="true"
     >
       <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7A1 1 0 003 11h1v6a1 1 0 001 1h4v-4h2v4h4a1 1 0 001-1v-6h1a1 1 0 00.707-1.707l-7-7z" />
+    </svg>
+  );
+}
+
+function DataIcon(): ReactNode {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={20}
+      height={20}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
     </svg>
   );
 }
@@ -69,6 +85,11 @@ function AuthenticatedLayoutInner() {
       icon: <HomeIcon />,
     },
     {
+      path: '/data',
+      label: intl.formatMessage(messages.data),
+      icon: <DataIcon />,
+    },
+    {
       path: '/settings',
       label: intl.formatMessage(messages.settings),
       icon: <SettingsIcon />,
@@ -77,7 +98,6 @@ function AuthenticatedLayoutInner() {
 
   return (
     <AppShell
-      topbarTitle={intl.formatMessage(messages.appTitle)}
       topbarWorkspaceName={topbarWorkspaceName}
       topbarModeLabel={topbarModeLabel}
       topbarActions={topbarActions}

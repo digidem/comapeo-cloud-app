@@ -345,6 +345,37 @@ describe('syncRemoteArchive', () => {
     expect(found!.label).toBe(archiveUrl);
   });
 
+  it('skips projects without remoteId', async () => {
+    await resetDb();
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Has Remote' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('handles non-Error thrown during sync', async () => {
     const serverRecord = await seedServer();
     await useAuthStore.getState().addServer({
@@ -360,7 +391,6 @@ describe('syncRemoteArchive', () => {
     // We'll override globalThis.fetch temporarily.
     const originalFetch = globalThis.fetch;
     let callCount = 0;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     globalThis.fetch = (..._args: Parameters<typeof fetch>) => {
       callCount++;
       // First call is projects — return valid data

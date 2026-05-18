@@ -146,4 +146,19 @@ describe('geometrySchema', () => {
     expect(() => v.parse(geometrySchema, null)).toThrow();
     expect(() => v.parse(geometrySchema, 42)).toThrow();
   });
+
+  it('rejects positions with fewer than 2 numbers', () => {
+    expect(() =>
+      v.parse(geometrySchema, { type: 'Point', coordinates: [] }),
+    ).toThrow();
+    expect(() =>
+      v.parse(geometrySchema, { type: 'Point', coordinates: [1] }),
+    ).toThrow();
+    expect(() =>
+      v.parse(geometrySchema, {
+        type: 'LineString',
+        coordinates: [[1], [2, 3]],
+      }),
+    ).toThrow();
+  });
 });

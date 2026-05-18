@@ -17,6 +17,8 @@ export default defineConfig({
         'src/main.tsx',
         'src/lib/db.ts',
         'src/lib/uuid.ts',
+        'src/lib/area-calculator/types.ts',
+        'src/lib/schemas/index.ts',
       ],
       thresholds: {
         lines: 80,

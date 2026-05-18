@@ -112,6 +112,16 @@ To verify or update the custom domain:
 3. Verify the `--assert-only` step passed
 4. Check `https://<deploy-url>/assets/*.map` returns 404
 
+### CSP violations
+
+The Content Security Policy is defined in `public/_headers`. If a new dependency or feature causes CSP violations:
+
+1. Open browser DevTools > Console and look for `Content Security Policy` errors
+2. Identify the blocked resource type (script, style, img, connect, worker)
+3. Update `public/_headers` minimally — only add the specific source needed
+4. Run `npx playwright test tests/e2e/csp-verification.e2e.ts` to verify
+5. The CSP E2E test covers: route navigation, API proxy, service worker, MapLibre loading
+
 ### API proxy not working
 
 1. Verify `functions/api/[[path]].ts` is included in the deployment

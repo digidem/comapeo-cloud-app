@@ -132,7 +132,7 @@ describe('useCountUp', () => {
     expect(result.current).toBe('2,500');
   });
 
-  it('handles transition from numeric to non-numeric value', () => {
+  it('handles transition from numeric to non-numeric values', () => {
     const { result, rerender } = renderHook(
       ({ value }: { value: string | number }) => useCountUp(value, 400),
       { initialProps: { value: 50 as string | number } },
@@ -147,5 +147,37 @@ describe('useCountUp', () => {
     // Switch to non-numeric
     rerender({ value: 'Local' });
     expect(result.current).toBe('Local');
+  });
+
+  it('cancels in-flight animation when switching to non-numeric', () => {
+    const { result, rerender } = renderHook(
+      ({ value }: { value: string | number }) => useCountUp(value, 400),
+      { initialProps: { value: 100 as string | number } },
+    );
+
+    // Start animation but don't complete it
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // Switch to non-numeric while animating — should cancel rAF
+    rerender({ value: 'Connected' });
+    expect(result.current).toBe('Connected');
+  });
+
+  it('cancels in-flight animation when switching to zero', () => {
+    const { result, rerender } = renderHook(
+      ({ value }: { value: string | number }) => useCountUp(value, 400),
+      { initialProps: { value: 100 as string | number } },
+    );
+
+    // Start animation but don't complete it
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // Switch to zero while animating — should cancel rAF and show immediately
+    rerender({ value: 0 });
+    expect(result.current).toBe(0);
   });
 });

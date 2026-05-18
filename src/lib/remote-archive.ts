@@ -1,8 +1,33 @@
 import { apiClient } from '@/lib/api-client';
 import type { RequestConfig } from '@/lib/api-client';
+import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { getDb } from '@/lib/db';
 import type { Alert, Observation, Project } from '@/lib/db';
 import { getRemoteServer } from '@/lib/local-repositories';
+
+// ---------------------------------------------------------------------------
+// Stable localId generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a stable localId for a remote entity using the server's baseUrl
+ * instead of its database ID. This ensures that even if duplicate server
+ * records exist for the same URL, the same remote project/observation/alert
+ * always maps to the same localId, preventing duplicates.
+ *
+ * Uses the same normalization as auth-store and AddArchiveServerDialog
+ * for consistency across the dedup chain.
+ */
+function stableSourceKey(baseUrl: string): string {
+  const result = normalizeArchiveBaseUrl(baseUrl);
+  const key = result.ok ? result.value : baseUrl.trim().replace(/\/+$/, '');
+  if (!key) {
+    throw new Error(
+      'remote-archive: cannot derive stable localId — server baseUrl is empty',
+    );
+  }
+  return key;
+}
 
 // ---------------------------------------------------------------------------
 // Attachment URL parsing
@@ -42,11 +67,15 @@ export async function pullProjects(
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
 
-  // Look up the server record to get the archive's baseUrl
+  // Look up the server record to get the archive's baseUrl.
+  // Fall back to config.baseUrl if no record exists (e.g. during sync
+  // before the server record is fully persisted).
   const serverRecord = await getRemoteServer(serverId);
+  const baseUrl = serverRecord?.baseUrl ?? config.baseUrl ?? '';
+  const stableKey = stableSourceKey(baseUrl);
 
   const localIds = response.data.map(
-    (item) => `${sourceType}:${serverId}:${item.projectId}`,
+    (item) => `${sourceType}:${stableKey}:${item.projectId}`,
   );
 
   // Fetch existing records to preserve timestamps
@@ -58,7 +87,7 @@ export async function pullProjects(
 
   const now = new Date().toISOString();
   const projects: Project[] = response.data.map((item) => {
-    const localId = `${sourceType}:${serverId}:${item.projectId}`;
+    const localId = `${sourceType}:${stableKey}:${item.projectId}`;
     const existing = existingMap.get(localId);
     const nameChanged = existing
       ? existing.name !== (item.name ?? undefined)
@@ -70,7 +99,7 @@ export async function pullProjects(
       sourceId: serverId,
       remoteId: item.projectId,
       name: item.name ?? undefined,
-      serverUrl: serverRecord?.baseUrl ?? undefined,
+      serverUrl: baseUrl || undefined,
       createdAt: existing?.createdAt ?? now,
       updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
       dirtyLocal: false,
@@ -91,6 +120,10 @@ export async function pullObservations(
   const response = await apiClient.getObservations(projectRemoteId, config);
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
+  const serverRecord = await getRemoteServer(serverId);
+  const stableKey = stableSourceKey(
+    serverRecord?.baseUrl ?? config.baseUrl ?? '',
+  );
   const observations: Observation[] = response.data.map((item) => {
     // Parse attachments to extract media counts and photo URLs
     let photoCount = 0;
@@ -121,7 +154,7 @@ export async function pullObservations(
     }
 
     return {
-      localId: `${sourceType}:${serverId}:${item.docId}`,
+      localId: `${sourceType}:${stableKey}:${item.docId}`,
       projectLocalId,
       sourceType,
       sourceId: serverId,
@@ -149,8 +182,12 @@ export async function pullAlerts(
   const response = await apiClient.getAlerts(projectRemoteId, config);
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
+  const serverRecord = await getRemoteServer(serverId);
+  const stableKey = stableSourceKey(
+    serverRecord?.baseUrl ?? config.baseUrl ?? '',
+  );
   const alerts: Alert[] = response.data.map((item) => ({
-    localId: `${sourceType}:${serverId}:${item.docId}`,
+    localId: `${sourceType}:${stableKey}:${item.docId}`,
     projectLocalId,
     sourceType,
     sourceId: serverId,

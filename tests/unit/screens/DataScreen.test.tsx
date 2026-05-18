@@ -1,0 +1,289 @@
+import { render, screen } from '@tests/mocks/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { DataScreen } from '@/screens/DataScreen';
+
+// --- Shared mock factories ---
+
+const defaultProjects = [
+  { localId: 'proj-1', name: 'Test Project' },
+  { localId: 'proj-2', name: 'Another Project' },
+];
+
+const defaultObservations = [
+  {
+    localId: 'obs-1',
+    projectLocalId: 'proj-1',
+    tags: { category: 'forest', notes: 'Deforestation detected' },
+    lat: -8.35,
+    lon: -55.45,
+    createdAt: '2024-03-15T10:30:00Z',
+    updatedAt: '2024-03-15T10:30:00Z',
+  },
+  {
+    localId: 'obs-2',
+    projectLocalId: 'proj-1',
+    tags: { notes: 'No category' },
+    createdAt: '2024-03-14T14:20:00Z',
+    updatedAt: '2024-03-14T14:20:00Z',
+  },
+];
+
+const defaultAlerts = [
+  {
+    localId: 'alert-1',
+    projectLocalId: 'proj-1',
+    geometry: { type: 'Point', coordinates: [-55.45, -8.35] },
+    metadata: { severity: 'high' },
+    detectionDateStart: '2024-03-14T00:00:00Z',
+    detectionDateEnd: '2024-03-15T00:00:00Z',
+    createdAt: '2024-03-15T08:00:00Z',
+    updatedAt: '2024-03-15T08:00:00Z',
+  },
+];
+
+let mockSelectedProjectId: string | null = null;
+let mockProjectsQuery: {
+  data?: typeof defaultProjects;
+  isPending: boolean;
+} = { data: defaultProjects, isPending: false };
+let mockObservationsQuery: {
+  data?: typeof defaultObservations;
+  isPending: boolean;
+} = { data: defaultObservations, isPending: false };
+let mockAlertsQuery: {
+  data?: typeof defaultAlerts;
+  isPending: boolean;
+} = { data: defaultAlerts, isPending: false };
+
+vi.mock('@/components/layout/shell-slot', () => ({
+  useShellSlot: vi.fn(),
+}));
+
+vi.mock('@/stores/project-store', () => ({
+  useProjectStore: vi.fn(
+    (selector: (s: { selectedProjectId: string | null }) => string | null) =>
+      selector({ selectedProjectId: mockSelectedProjectId }),
+  ),
+}));
+
+vi.mock('@/hooks/useProjects', () => ({
+  useProjects: vi.fn(() => mockProjectsQuery),
+}));
+
+vi.mock('@/hooks/useObservations', () => ({
+  useObservations: vi.fn(() => mockObservationsQuery),
+}));
+
+vi.mock('@/hooks/useAlerts', () => ({
+  useAlerts: vi.fn(() => mockAlertsQuery),
+}));
+
+vi.mock('@/components/ui/tabs', () => {
+  // Mock Tabs to always render all tab content (Radix hides inactive tabs)
+  function TabsMock({
+    children,
+  }: {
+    children: React.ReactNode;
+    defaultValue?: string;
+  }) {
+    return <div>{children}</div>;
+  }
+  TabsMock.List = ({
+    children,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => <div>{children}</div>;
+  TabsMock.Trigger = ({
+    children,
+  }: {
+    children: React.ReactNode;
+    value: string;
+    className?: string;
+  }) => <button>{children}</button>;
+  TabsMock.Content = ({
+    children,
+  }: {
+    children: React.ReactNode;
+    value: string;
+    className?: string;
+  }) => <div>{children}</div>;
+  return {
+    Tabs: TabsMock,
+    TabsList: TabsMock.List,
+    TabsTrigger: TabsMock.Trigger,
+    TabsContent: TabsMock.Content,
+  };
+});
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
+}));
+
+function resetMocks() {
+  mockSelectedProjectId = null;
+  mockProjectsQuery = { data: defaultProjects, isPending: false };
+  mockObservationsQuery = { data: defaultObservations, isPending: false };
+  mockAlertsQuery = { data: defaultAlerts, isPending: false };
+}
+
+describe('DataScreen', () => {
+  // ---- No project selected ----
+
+  describe('when no project is selected', () => {
+    it('renders loading skeleton when projectsQuery is pending and no selectedProjectId', () => {
+      resetMocks();
+      mockSelectedProjectId = null;
+      mockProjectsQuery = { data: undefined, isPending: true };
+
+      render(<DataScreen />);
+      const skeletons = document.querySelectorAll(
+        '[class*="animate-pulse"], [class*="bg-muted"]',
+      );
+      expect(skeletons.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders "Select a project" empty state with link to Home when projects loaded but no project selected', () => {
+      resetMocks();
+      mockSelectedProjectId = null;
+      mockProjectsQuery = { data: defaultProjects, isPending: false };
+
+      render(<DataScreen />);
+      expect(
+        screen.getByText('Select a project from Home to view data'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Go to Home')).toBeInTheDocument();
+    });
+  });
+
+  // ---- Project selected, observations ----
+
+  describe('when a project is selected', () => {
+    beforeEach(() => {
+      resetMocks();
+      mockSelectedProjectId = 'proj-1';
+    });
+
+    it('renders observations loading state when observationsQuery is pending', () => {
+      mockObservationsQuery = { data: undefined, isPending: true };
+
+      render(<DataScreen />);
+      expect(screen.getByText('Loading...')).toBeInTheDocument();
+    });
+
+    it('renders "No observations yet" when observations array is empty', () => {
+      mockObservationsQuery = { data: [], isPending: false };
+
+      render(<DataScreen />);
+      expect(screen.getByText('No observations yet')).toBeInTheDocument();
+    });
+
+    it('renders observation cards with category when observations have tags.category', () => {
+      mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+      render(<DataScreen />);
+      expect(screen.getByText('forest')).toBeInTheDocument();
+    });
+
+    it('renders observation cards with fallback label when tags.category is missing', () => {
+      mockObservationsQuery = {
+        data: [
+          {
+            localId: 'obs-no-cat',
+            projectLocalId: 'proj-1',
+            tags: { notes: 'Something' },
+            createdAt: '2024-03-14T14:20:00Z',
+            updatedAt: '2024-03-14T14:20:00Z',
+          },
+        ],
+        isPending: false,
+      };
+
+      render(<DataScreen />);
+      expect(screen.getByText('Observation')).toBeInTheDocument();
+    });
+
+    it('renders coordinates when obs.lat and obs.lon are present', () => {
+      mockObservationsQuery = {
+        data: [
+          {
+            localId: 'obs-coords',
+            projectLocalId: 'proj-1',
+            tags: { category: 'water', notes: 'Water quality test' },
+            lat: -8.35,
+            lon: -55.45,
+            createdAt: '2024-03-15T10:30:00Z',
+            updatedAt: '2024-03-15T10:30:00Z',
+          },
+        ],
+        isPending: false,
+      };
+
+      render(<DataScreen />);
+      expect(screen.getByText(/-8\.3500/)).toBeInTheDocument();
+      expect(screen.getByText(/-55\.4500/)).toBeInTheDocument();
+    });
+
+    it('omits coordinates when obs.lat/obs.lon are undefined', () => {
+      mockObservationsQuery = {
+        data: [
+          {
+            localId: 'obs-no-coords',
+            projectLocalId: 'proj-1',
+            tags: { category: 'wildlife', notes: 'Wildlife sighting' },
+            createdAt: '2024-03-13T09:00:00Z',
+            updatedAt: '2024-03-13T09:00:00Z',
+          } as (typeof defaultObservations)[number],
+        ],
+        isPending: false,
+      };
+
+      render(<DataScreen />);
+      expect(screen.getByText('wildlife')).toBeInTheDocument();
+      // No coordinate text should be present
+      expect(screen.queryByText(/-8\./)).not.toBeInTheDocument();
+    });
+
+    // ---- Alerts tab ----
+
+    it('renders alerts loading state when alertsQuery is pending', () => {
+      mockAlertsQuery = { data: undefined, isPending: true };
+      mockObservationsQuery = { data: [], isPending: false };
+
+      render(<DataScreen />);
+      // Both tabs render content with mocked Tabs; observations is empty, alerts is loading
+      const loadingTexts = screen.getAllByText('Loading...');
+      expect(loadingTexts.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders "No alerts yet" when alerts array is empty', () => {
+      mockAlertsQuery = { data: [], isPending: false };
+      mockObservationsQuery = { data: [], isPending: false };
+
+      render(<DataScreen />);
+      expect(screen.getByText('No alerts yet')).toBeInTheDocument();
+    });
+
+    it('renders alert cards when alerts exist', () => {
+      mockAlertsQuery = { data: defaultAlerts, isPending: false };
+      mockObservationsQuery = { data: [], isPending: false };
+
+      render(<DataScreen />);
+      // The alert card renders "Alert" as fallback text
+      expect(screen.getAllByText('Alert').length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders the Add Alert link', () => {
+      render(<DataScreen />);
+      expect(screen.getByText('Add Alert')).toBeInTheDocument();
+    });
+
+    it('renders Data title', () => {
+      render(<DataScreen />);
+      expect(screen.getByText('Data')).toBeInTheDocument();
+    });
+  });
+});

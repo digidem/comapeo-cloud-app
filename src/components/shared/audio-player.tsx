@@ -1,7 +1,28 @@
 import { useCallback, useRef, useState } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
+import { useAuthenticatedImageUrl } from '@/hooks/useAuthenticatedImageUrl';
 import { getAttachmentUrl } from '@/lib/api-client';
+
+const messages = defineMessages({
+  loading: {
+    id: 'audioPlayer.loading',
+    defaultMessage: 'Loading audio...',
+  },
+  error: {
+    id: 'audioPlayer.error',
+    defaultMessage: 'Failed to load audio',
+  },
+  play: {
+    id: 'audioPlayer.play',
+    defaultMessage: 'Play',
+  },
+  pause: {
+    id: 'audioPlayer.pause',
+    defaultMessage: 'Pause',
+  },
+});
 
 interface AudioPlayerProps {
   driveId: string;
@@ -22,17 +43,20 @@ function getAudioMimeType(name: string): string {
 }
 
 export function AudioPlayer({ driveId, name, projectId }: AudioPlayerProps) {
+  const intl = useIntl();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
-  const src = getAttachmentUrl(
+  const attachmentUrl = getAttachmentUrl(
     projectId,
     driveId,
     getAudioMimeType(name),
     name,
   );
+
+  const { blobUrl, isLoading, error } = useAuthenticatedImageUrl(attachmentUrl);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -63,6 +87,26 @@ export function AudioPlayer({ driveId, name, projectId }: AudioPlayerProps) {
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-text-muted text-sm">
+          {intl.formatMessage(messages.loading)}
+        </span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-error text-sm" role="alert">
+          {intl.formatMessage(messages.error)}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2">
       <Button
@@ -70,10 +114,17 @@ export function AudioPlayer({ driveId, name, projectId }: AudioPlayerProps) {
         variant="primary"
         size="sm"
         onClick={togglePlay}
-        aria-label={isPlaying ? 'Pause' : 'Play'}
+        aria-label={
+          isPlaying
+            ? intl.formatMessage(messages.pause)
+            : intl.formatMessage(messages.play)
+        }
         className="min-h-[44px] min-w-[44px]"
+        disabled={!blobUrl}
       >
-        {isPlaying ? 'Pause' : 'Play'}
+        {isPlaying
+          ? intl.formatMessage(messages.pause)
+          : intl.formatMessage(messages.play)}
       </Button>
       <div
         role="progressbar"
@@ -89,8 +140,7 @@ export function AudioPlayer({ driveId, name, projectId }: AudioPlayerProps) {
       </div>
       <audio
         ref={audioRef}
-        src={src}
-        role="audio"
+        src={blobUrl ?? undefined}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
       />
