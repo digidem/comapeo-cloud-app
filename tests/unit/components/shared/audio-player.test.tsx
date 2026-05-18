@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@tests/mocks/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AudioPlayer } from '@/components/shared/audio-player';
 import { getAttachmentUrl } from '@/lib/api-client';
@@ -17,12 +17,14 @@ vi.mock('@/lib/api-client', () => ({
   ),
 }));
 
+let mockImageResult = {
+  blobUrl: 'blob:https://example.com/audio' as string | null,
+  isLoading: false,
+  error: null as Error | null,
+};
+
 vi.mock('@/hooks/useAuthenticatedImageUrl', () => ({
-  useAuthenticatedImageUrl: (_url: string) => ({
-    blobUrl: 'blob:https://example.com/audio',
-    isLoading: false,
-    error: null,
-  }),
+  useAuthenticatedImageUrl: (_url: string) => mockImageResult,
 }));
 
 describe('AudioPlayer', () => {
@@ -31,6 +33,14 @@ describe('AudioPlayer', () => {
     name: 'recording.mp3',
     projectId: 'proj1',
   };
+
+  beforeEach(() => {
+    mockImageResult = {
+      blobUrl: 'blob:https://example.com/audio',
+      isLoading: false,
+      error: null,
+    };
+  });
 
   it('renders play button', () => {
     render(<AudioPlayer {...defaultProps} />);
@@ -200,5 +210,21 @@ describe('AudioPlayer', () => {
       'audio/mpeg',
       'recording',
     );
+  });
+
+  it('renders loading state when useAuthenticatedImageUrl returns isLoading true', () => {
+    mockImageResult = { blobUrl: null, isLoading: true, error: null };
+    render(<AudioPlayer {...defaultProps} />);
+    expect(screen.getByText('Loading audio...')).toBeInTheDocument();
+  });
+
+  it('renders error state when useAuthenticatedImageUrl returns an error', () => {
+    mockImageResult = {
+      blobUrl: null,
+      isLoading: false,
+      error: new Error('fetch failed'),
+    };
+    render(<AudioPlayer {...defaultProps} />);
+    expect(screen.getByText('Failed to load audio')).toBeInTheDocument();
   });
 });
