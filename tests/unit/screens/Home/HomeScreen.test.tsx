@@ -1443,7 +1443,9 @@ describe('HomeScreen', () => {
     });
 
     // The default active method is 'observed' so territory area = 30000 m² = 3 ha
-    expect(screen.getByText('3 ha')).toBeInTheDocument();
+    // Both CoverageSummary and ProjectBannerCard render "3 ha" when useCountUp is mocked
+    const areaElements = screen.getAllByText('3 ha');
+    expect(areaElements.length).toBeGreaterThanOrEqual(1);
   });
 
   it('AddArchiveServerDialog onAdded does not sync when server not found', async () => {
