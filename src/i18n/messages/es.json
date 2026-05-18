@@ -190,6 +190,7 @@
   "home.stat.connectedToArchive": "Conectado al Archivo",
   "home.stat.mode": "Modo",
   "home.stat.photos": "{count, plural, one {# foto} other {# fotos}}",
+  "home.stat.observationsCount": "{count, plural, one {# Observación} other {# Observaciones}}",
   "home.stat.totalObservations": "Datos de Campo",
   "home.stat.tracks": "{count, plural, one {# pista} other {# pistas}}",
   "home.time.daysAgo": "{count} DÍA{plural, plural, one {} other {S}} ATRÁS",

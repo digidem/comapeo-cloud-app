@@ -261,6 +261,11 @@ const messages = defineMessages({
     id: 'home.stat.totalObservations',
     defaultMessage: 'Field Data',
   },
+  statObservationsCount: {
+    id: 'home.stat.observationsCount',
+    defaultMessage:
+      '{count, plural, one {# Observation} other {# Observations}}',
+  },
   statCategories: {
     id: 'home.stat.categories',
     defaultMessage: 'Categories',
@@ -1061,7 +1066,9 @@ function HomeScreen() {
           />
           <StatCard
             title={intl.formatMessage(messages.statTotalObservations)}
-            value={`${observationCount.toLocaleString()} ${intl.formatMessage(messages.statTotalObservations)}`}
+            value={intl.formatMessage(messages.statObservationsCount, {
+              count: observationCount,
+            })}
             staggerIndex={1}
             isLoading={isObservationsLoading}
             subtitle={

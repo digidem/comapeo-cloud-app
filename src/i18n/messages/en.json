@@ -569,6 +569,9 @@
   "home.stat.mode": {
     "defaultMessage": "Mode"
   },
+  "home.stat.observationsCount": {
+    "defaultMessage": "{count, plural, one {# Observation} other {# Observations}}"
+  },
   "home.stat.photos": {
     "defaultMessage": "{count, plural, one {# photo} other {# photos}}"
   },

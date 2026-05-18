@@ -944,7 +944,49 @@ describe('HomeScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('5 Field Data')).toBeInTheDocument();
+      expect(screen.getByText('5 Observations')).toBeInTheDocument();
+    });
+  });
+
+  it('uses singular Observation label when count is 1', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Single Obs Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    mockUseObservations.mockReturnValue({
+      data: [
+        { localId: 'obs1', createdAt: new Date().toISOString(), tags: {} },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+
+    renderWithShell(<HomeScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Single Obs Project' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('1 Observation')).toBeInTheDocument();
     });
   });
 
