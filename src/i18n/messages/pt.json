@@ -16,9 +16,7 @@
   "alerts.create.invalidGeometry": "Geometria GeoJSON inválida",
   "alerts.create.invalidJson": "JSON inválido",
   "alerts.create.metadataLabel": "Metadados (JSON, opcional)",
-  "alerts.create.noProject": {
-    "defaultMessage": "Select a project first"
-  },
+  "alerts.create.noProject": "Selecione um projeto primeiro",
   "alerts.create.required": "Este campo é obrigatório",
   "alerts.create.submit": "Criar",
   "alerts.create.title": "Criar Alerta",
@@ -184,7 +182,7 @@
   "home.preset.grid": "Grade 5 km",
   "home.project.deleteAria": "Excluir projeto",
   "home.project.editAria": "Editar projeto",
-  "home.settings.advanced": "Avançado",
+  "home.settings.advanced": "Avanzado",
   "home.settings.preset": "Predefinição de cálculo",
   "home.stat.activeAlerts": "Alertas ativos",
   "home.stat.audios": "{count, plural, one {# áudio} other {# áudios}}",
@@ -245,15 +243,9 @@
   "settings.invites.use.connected": "Conectado a {archive}",
   "settings.invites.use.title": "Usar um Convite",
   "settings.title": "Configurações",
-  "theme.ariaSetDark": {
-    "defaultMessage": "Use dark theme"
-  },
-  "theme.ariaSetLight": {
-    "defaultMessage": "Use light theme"
-  },
-  "theme.ariaSetSystem": {
-    "defaultMessage": "Use system theme"
-  },
+  "theme.ariaSetDark": "Usar tema escuro",
+  "theme.ariaSetLight": "Usar tema claro",
+  "theme.ariaSetSystem": "Usar tema do sistema",
   "theme.dark": "Escuro",
   "theme.light": "Claro",
   "theme.system": "Sistema"

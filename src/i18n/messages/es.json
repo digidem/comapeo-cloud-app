@@ -16,9 +16,7 @@
   "alerts.create.invalidGeometry": "Geometría GeoJSON inválida",
   "alerts.create.invalidJson": "JSON inválido",
   "alerts.create.metadataLabel": "Metadatos (JSON, opcional)",
-  "alerts.create.noProject": {
-    "defaultMessage": "Select a project first"
-  },
+  "alerts.create.noProject": "Seleccione un proyecto primero",
   "alerts.create.required": "Este campo es obligatorio",
   "alerts.create.submit": "Crear",
   "alerts.create.title": "Crear Alerta",
@@ -245,15 +243,9 @@
   "settings.invites.use.connected": "Conectado a {archive}",
   "settings.invites.use.title": "Usar una Invitación",
   "settings.title": "Configuración",
-  "theme.ariaSetDark": {
-    "defaultMessage": "Use dark theme"
-  },
-  "theme.ariaSetLight": {
-    "defaultMessage": "Use light theme"
-  },
-  "theme.ariaSetSystem": {
-    "defaultMessage": "Use system theme"
-  },
+  "theme.ariaSetDark": "Usar tema oscuro",
+  "theme.ariaSetLight": "Usar tema claro",
+  "theme.ariaSetSystem": "Usar tema del sistema",
   "theme.dark": "Oscuro",
   "theme.light": "Claro",
   "theme.system": "Sistema"
