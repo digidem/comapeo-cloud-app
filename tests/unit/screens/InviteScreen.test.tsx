@@ -109,14 +109,16 @@ describe('InviteScreen', () => {
     );
   });
 
-  it('shows error when archive URL is missing', async () => {
+  it('shows invalid-invite message when archive URL is missing from a legacy URL', async () => {
     setSearchParams('?hash=abc123');
 
     render(<InviteScreen />);
 
     await waitFor(() => {
       expect(
-        screen.getByText('Failed to connect to archive.'),
+        screen.getByText(
+          "Couldn't accept this invite. The link may be invalid.",
+        ),
       ).toBeInTheDocument();
     });
 
@@ -175,14 +177,16 @@ describe('InviteScreen', () => {
     expect(mockNavigate).not.toHaveBeenCalledWith({ to: '/' });
   });
 
-  it('shows error when token is missing from invite URL', async () => {
+  it('shows invalid-invite message when token is missing from invite URL', async () => {
     setSearchParams('?url=https%3A%2F%2Farchive.test');
 
     render(<InviteScreen />);
 
     await waitFor(() => {
       expect(
-        screen.getByText('Failed to connect to archive.'),
+        screen.getByText(
+          "Couldn't accept this invite. The link may be invalid.",
+        ),
       ).toBeInTheDocument();
     });
 

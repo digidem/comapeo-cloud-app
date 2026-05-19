@@ -52,7 +52,10 @@ export function InviteScreen() {
   const invite = useMemo(() => parseInviteFromLocation(), []);
   const [status, setStatus] = useState<
     'loading' | 'connected' | 'error' | 'expired' | 'invalid'
-  >(invite && invite.ok ? 'loading' : 'error');
+  >(() => {
+    if (!invite) return 'error';
+    return invite.ok ? 'loading' : 'invalid';
+  });
 
   useEffect(() => {
     if (!invite || !invite.ok) return;

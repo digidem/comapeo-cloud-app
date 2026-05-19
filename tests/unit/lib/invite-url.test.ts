@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parseInviteUrl } from '@/lib/invite-url';
 
@@ -118,5 +118,45 @@ describe('parseInviteUrl', () => {
       kind: 'encrypted',
       code: 'abc+def==',
     });
+  });
+});
+
+// `warnLegacyInviteUrlOnce` has a module-level guard so it fires at most
+// once per session. Each test re-imports the module via `vi.resetModules`
+// + dynamic import so the guard starts fresh.
+describe('warnLegacyInviteUrlOnce (isolated)', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.resetModules();
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('emits a deprecation warning the first time it is called', async () => {
+    const { warnLegacyInviteUrlOnce } = await import('@/lib/invite-url');
+    warnLegacyInviteUrlOnce();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const message = String(warnSpy.mock.calls[0]?.[0] ?? '');
+    expect(message).toMatch(/deprecated/i);
+  });
+
+  it('does not log a token, code, or URL in the warning text', async () => {
+    const { warnLegacyInviteUrlOnce } = await import('@/lib/invite-url');
+    warnLegacyInviteUrlOnce();
+    const message = String(warnSpy.mock.calls[0]?.[0] ?? '');
+    expect(message).not.toMatch(/https?:\/\//);
+    expect(message).not.toMatch(/token=/);
+  });
+
+  it('only emits the warning once across multiple calls in the same module instance', async () => {
+    const { warnLegacyInviteUrlOnce } = await import('@/lib/invite-url');
+    warnLegacyInviteUrlOnce();
+    warnLegacyInviteUrlOnce();
+    warnLegacyInviteUrlOnce();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 });

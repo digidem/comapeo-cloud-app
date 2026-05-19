@@ -205,4 +205,4 @@ The `/api/invites/{encrypt,decrypt}` Pages Functions require a 32-byte AES-GCM k
 - Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
 - Set in Pages: `npx wrangler pages secret put INVITE_KEY --project-name comapeo-cloud-app`
 - Local dev: add `INVITE_KEY=<base64>` to `.dev.vars` (gitignored).
-- Rotation: bump the version prefix in `src/lib/invite-crypto.ts` (currently `v1.`) so previously issued codes are rejected after rollover.
+- Rotation: bump the version prefix in `src/lib/invite-crypto.ts` (currently `v1.`) AND add a parallel decrypt path that still accepts the old prefix. Keep the old prefix alive for at least one TTL window (24h) before removing it, so in-flight invites aren't invalidated mid-use.

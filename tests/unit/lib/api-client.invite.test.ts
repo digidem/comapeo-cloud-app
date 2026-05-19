@@ -26,9 +26,11 @@ describe('createEncryptedInvite', () => {
 
   it('forwards ttlHours in the request body', async () => {
     let capturedBody: Record<string, unknown> | null = null;
+    let capturedAuth: string | null = null;
     server.use(
       http.post('*/api/invites/encrypt', async ({ request }) => {
         capturedBody = (await request.json()) as Record<string, unknown>;
+        capturedAuth = request.headers.get('Authorization');
         return HttpResponse.json({ code: 'mock-encrypted-code-xyz' });
       }),
     );
@@ -39,6 +41,18 @@ describe('createEncryptedInvite', () => {
     expect(capturedBody!.ttlHours).toBe(1);
     expect(capturedBody!.url).toBe('https://archive.example');
     expect(capturedBody!.token).toBe('tok-abc');
+    // Issue #8 regression guard: invite endpoints are first-party; the
+    // archive bearer token must never appear on the wire to /api/invites/*.
+    expect(capturedAuth).toBeNull();
+  });
+
+  it('throws InviteApiError with INVITE_BAD_INPUT when token is empty', async () => {
+    await expect(
+      createEncryptedInvite('https://archive.example', ''),
+    ).rejects.toMatchObject({
+      name: 'InviteApiError',
+      code: 'INVITE_BAD_INPUT',
+    });
   });
 });
 
@@ -75,5 +89,24 @@ describe('redeemEncryptedInvite', () => {
       return;
     }
     throw new Error('expected redeemEncryptedInvite to throw');
+  });
+
+  it('does not send Authorization header to the redeem endpoint', async () => {
+    let capturedAuth: string | null = null;
+    server.use(
+      http.post('*/api/invites/decrypt', ({ request }) => {
+        capturedAuth = request.headers.get('Authorization');
+        return HttpResponse.json({
+          url: 'https://archive.example',
+          token: 'tok',
+        });
+      }),
+    );
+
+    await redeemEncryptedInvite('mock-encrypted-code-anything');
+
+    // Issue #8 regression guard: redeem is anonymous; sending the archive
+    // bearer here would leak it to anyone who can serve /api/invites/decrypt.
+    expect(capturedAuth).toBeNull();
   });
 });

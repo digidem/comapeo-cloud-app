@@ -96,6 +96,28 @@ describe('invite-crypto', () => {
     }
   });
 
+  it('returns INVITE_EXPIRED at the exact second the payload expires', async () => {
+    const exp = 1_000_000;
+    const payload = makePayload({ exp });
+    const code = await encryptInvite(payload, key);
+    const result = await decryptInvite(code, key, exp);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('INVITE_EXPIRED');
+    }
+  });
+
+  it('returns INVITE_DECRYPT_FAILED when the decrypting key differs from the encrypting key', async () => {
+    const code = await encryptInvite(makePayload(), key);
+    const wrongKey = new Uint8Array(32);
+    globalThis.crypto.getRandomValues(wrongKey);
+    const result = await decryptInvite(code, wrongKey);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('INVITE_DECRYPT_FAILED');
+    }
+  });
+
   it('throws when encryptInvite is called with a 31-byte key', async () => {
     const shortKey = new Uint8Array(31);
     await expect(encryptInvite(makePayload(), shortKey)).rejects.toThrow(

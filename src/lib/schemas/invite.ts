@@ -7,7 +7,9 @@ export const encryptInviteRequestSchema = v.object({
 });
 
 export const decryptInviteRequestSchema = v.object({
-  code: v.pipe(v.string(), v.nonEmpty()),
+  // Real ciphertexts are ~160 base64url chars; cap defensively so the server
+  // rejects oversized payloads before allocating buffers for AES-GCM decrypt.
+  code: v.pipe(v.string(), v.nonEmpty(), v.maxLength(2048)),
 });
 
 export type EncryptInviteRequest = v.InferOutput<
