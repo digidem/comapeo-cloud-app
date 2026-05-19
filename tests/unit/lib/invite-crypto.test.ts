@@ -49,11 +49,14 @@ describe('invite-crypto', () => {
     const code = await encryptInvite(payload, key);
     const prefix = 'v1.';
     const body = code.slice(prefix.length);
-    // Flip the last char to something different but still in the base64url
-    // alphabet so we exercise the AES-GCM auth-tag failure path.
-    const lastChar = body.charAt(body.length - 1);
-    const replacement = lastChar === 'A' ? 'B' : 'A';
-    const mutated = `${prefix}${body.slice(0, -1)}${replacement}`;
+    // Mutate the FIRST char of the body (which falls inside the IV bytes).
+    // The first char's 6 bits map cleanly to the top 6 bits of byte 0 — no
+    // truncation possible — so A↔B is guaranteed to change a real byte. The
+    // last char is unsafe: when total bytes % 3 != 0, the low 2-4 bits of
+    // the trailing char are unused, so toggling them can be a silent no-op.
+    const firstChar = body.charAt(0);
+    const replacement = firstChar === 'A' ? 'B' : 'A';
+    const mutated = `${prefix}${replacement}${body.slice(1)}`;
     const result = await decryptInvite(mutated, key);
     expect(result.ok).toBe(false);
     if (!result.ok) {

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decryptInviteRequestSchema,
   encryptInviteRequestSchema,
+  encryptedPayloadSchema,
 } from '@/lib/schemas/invite';
 
 describe('encryptInviteRequestSchema', () => {
@@ -92,5 +93,66 @@ describe('decryptInviteRequestSchema', () => {
 
   it('rejects a missing code', () => {
     expect(() => v.parse(decryptInviteRequestSchema, {})).toThrow();
+  });
+
+  it('accepts a code at the 2048-char boundary', () => {
+    const code = 'a'.repeat(2048);
+    expect(v.parse(decryptInviteRequestSchema, { code }).code).toHaveLength(
+      2048,
+    );
+  });
+
+  it('rejects a code longer than 2048 chars', () => {
+    const code = 'a'.repeat(2049);
+    expect(() => v.parse(decryptInviteRequestSchema, { code })).toThrow();
+  });
+});
+
+describe('encryptedPayloadSchema', () => {
+  it('parses a valid decrypted payload', () => {
+    const result = v.parse(encryptedPayloadSchema, {
+      url: 'https://archive.example.com',
+      token: 'bearer-abc',
+      exp: 1_700_000_000,
+    });
+    expect(result).toEqual({
+      url: 'https://archive.example.com',
+      token: 'bearer-abc',
+      exp: 1_700_000_000,
+    });
+  });
+
+  it('rejects a payload missing url', () => {
+    expect(() =>
+      v.parse(encryptedPayloadSchema, { token: 'x', exp: 1 }),
+    ).toThrow();
+  });
+
+  it('rejects a payload missing token', () => {
+    expect(() =>
+      v.parse(encryptedPayloadSchema, { url: 'https://a', exp: 1 }),
+    ).toThrow();
+  });
+
+  it('rejects a payload missing exp', () => {
+    expect(() =>
+      v.parse(encryptedPayloadSchema, { url: 'https://a', token: 'x' }),
+    ).toThrow();
+  });
+
+  it('rejects a payload where exp is not a number', () => {
+    expect(() =>
+      v.parse(encryptedPayloadSchema, {
+        url: 'https://a',
+        token: 'x',
+        exp: '1',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a payload where url is not a string', () => {
+    expect(() =>
+      v.parse(encryptedPayloadSchema, { url: 42, token: 'x', exp: 1 }),
+    ).toThrow();
   });
 });
