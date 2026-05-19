@@ -1,3 +1,7 @@
+import * as v from 'valibot';
+
+import { encryptedPayloadSchema } from '@/lib/schemas/invite';
+
 export type EncryptedInvitePayload = {
   url: string;
   token: string;
@@ -39,9 +43,7 @@ function getSubtle(): SubtleCrypto {
 function toBase64Url(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i += 1) {
-    const byte = bytes[i];
-    if (byte === undefined) continue;
-    binary += String.fromCharCode(byte);
+    binary += String.fromCharCode(bytes[i]!);
   }
   const base64 = btoa(binary);
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -176,13 +178,8 @@ export async function decryptInvite(
     };
   }
 
-  if (
-    !parsed ||
-    typeof parsed !== 'object' ||
-    typeof (parsed as Record<string, unknown>).url !== 'string' ||
-    typeof (parsed as Record<string, unknown>).token !== 'string' ||
-    typeof (parsed as Record<string, unknown>).exp !== 'number'
-  ) {
+  const parsedResult = v.safeParse(encryptedPayloadSchema, parsed);
+  if (!parsedResult.success) {
     return {
       ok: false,
       code: 'INVITE_DECRYPT_FAILED',
@@ -190,11 +187,7 @@ export async function decryptInvite(
     };
   }
 
-  const value: EncryptedInvitePayload = {
-    url: (parsed as Record<string, unknown>).url as string,
-    token: (parsed as Record<string, unknown>).token as string,
-    exp: (parsed as Record<string, unknown>).exp as number,
-  };
+  const value: EncryptedInvitePayload = parsedResult.output;
 
   const currentTime = now ?? Math.floor(Date.now() / 1000);
   if (currentTime >= value.exp) {

@@ -15,6 +15,11 @@ export function warnLegacyInviteUrlOnce(): void {
   );
 }
 
+/** Reset the legacy-warning guard. Exported for test use only. */
+export function resetLegacyWarningForTests(): void {
+  legacyWarningEmitted = false;
+}
+
 export function parseInviteUrl(input: string): ParseInviteResult {
   let url: URL;
   try {

@@ -12,6 +12,13 @@ export const decryptInviteRequestSchema = v.object({
   code: v.pipe(v.string(), v.nonEmpty(), v.maxLength(2048)),
 });
 
+/** Schema for the JSON payload inside the AES-GCM ciphertext. */
+export const encryptedPayloadSchema = v.object({
+  url: v.string(),
+  token: v.string(),
+  exp: v.number(),
+});
+
 export type EncryptInviteRequest = v.InferOutput<
   typeof encryptInviteRequestSchema
 >;

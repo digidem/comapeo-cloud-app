@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parseInviteUrl } from '@/lib/invite-url';
+import { parseInviteUrl, resetLegacyWarningForTests } from '@/lib/invite-url';
 
 describe('parseInviteUrl', () => {
   it('parses a valid invite URL with hash param', () => {
@@ -122,13 +122,13 @@ describe('parseInviteUrl', () => {
 });
 
 // `warnLegacyInviteUrlOnce` has a module-level guard so it fires at most
-// once per session. Each test re-imports the module via `vi.resetModules`
-// + dynamic import so the guard starts fresh.
+// once per session. Tests use `_resetLegacyWarning` to reset the guard
+// between runs without needing `vi.resetModules()` + dynamic imports.
 describe('warnLegacyInviteUrlOnce (isolated)', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    vi.resetModules();
+    resetLegacyWarningForTests();
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
