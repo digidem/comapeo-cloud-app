@@ -9,6 +9,7 @@ describe('parseInviteUrl', () => {
     );
     expect(result).toEqual({
       ok: true,
+      kind: 'legacy',
       baseUrl: 'https://archive.test',
       token: 'abc',
     });
@@ -20,6 +21,7 @@ describe('parseInviteUrl', () => {
     );
     expect(result).toEqual({
       ok: true,
+      kind: 'legacy',
       baseUrl: 'https://archive.test',
       token: 'real-token',
     });
@@ -67,8 +69,54 @@ describe('parseInviteUrl', () => {
     );
     expect(result).toEqual({
       ok: true,
+      kind: 'legacy',
       baseUrl: 'https://archive.example.com:8080/path',
       token: 'abc123',
+    });
+  });
+
+  it('parses encrypted invite URL with code param', () => {
+    const result = parseInviteUrl(
+      'https://app.com/invite?code=Y29kZQ&url=https%3A%2F%2Farchive.test',
+    );
+    expect(result).toEqual({
+      ok: true,
+      kind: 'encrypted',
+      code: 'Y29kZQ',
+    });
+  });
+
+  it('prefers code param over legacy params when both present', () => {
+    const result = parseInviteUrl(
+      'https://app.com/invite?code=Y29kZQ&token=raw-token&url=https%3A%2F%2Farchive.test',
+    );
+    expect(result).toEqual({
+      ok: true,
+      kind: 'encrypted',
+      code: 'Y29kZQ',
+    });
+  });
+
+  it('falls back to legacy when code param is empty', () => {
+    const result = parseInviteUrl(
+      'https://app.com/invite?code=&hash=abc&url=https%3A%2F%2Farchive.test',
+    );
+    expect(result).toEqual({
+      ok: true,
+      kind: 'legacy',
+      baseUrl: 'https://archive.test',
+      token: 'abc',
+    });
+  });
+
+  it('preserves URL-encoded characters in code param', () => {
+    const result = parseInviteUrl(
+      'https://app.com/invite?code=abc%2Bdef%3D%3D',
+    );
+    expect(result).toEqual({
+      ok: true,
+      kind: 'encrypted',
+      code: 'abc+def==',
     });
   });
 });

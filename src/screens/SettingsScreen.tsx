@@ -8,6 +8,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { InviteApiError, createEncryptedInvite } from '@/lib/api-client';
 import {
   clearAllStorage,
   exportLocalStorageData,
@@ -53,21 +54,18 @@ const _messages = defineMessages({
     id: 'settings.invites.results.copied',
     defaultMessage: 'Copied!',
   },
-  useInviteTitle: {
-    id: 'settings.invites.use.title',
-    defaultMessage: 'Use an Invite',
+  expiryNote: {
+    id: 'settings.invites.results.expiryNote',
+    defaultMessage: 'Expires in 24 hours.',
   },
-  useInviteCode: {
-    id: 'settings.invites.use.code',
-    defaultMessage: 'Invite Code',
+  generateGenericError: {
+    id: 'settings.invites.generate.errorGeneric',
+    defaultMessage: "Couldn't generate invite. Try again.",
   },
-  useInviteConnect: {
-    id: 'settings.invites.use.connect',
-    defaultMessage: 'Connect',
-  },
-  connectedMessage: {
-    id: 'settings.invites.use.connected',
-    defaultMessage: 'Connected to {archive}',
+  generateMissingKeyError: {
+    id: 'settings.invites.generate.errorMissingKey',
+    defaultMessage:
+      'Server is not configured to issue encrypted invites — contact your administrator.',
   },
 
   // Backup/Restore section
@@ -149,14 +147,6 @@ const generateInviteSchema = v.object({
 
 type GenerateInviteForm = v.InferInput<typeof generateInviteSchema>;
 
-async function sha256(input: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 const LOCALE_LABELS: Record<string, string> = {
   en: 'English',
   pt: 'Portugu\u00eas',
@@ -171,8 +161,7 @@ export function SettingsScreen() {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
-  const [useCode, setUseCode] = useState('');
-  const [connected, setConnected] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const [exportStatus, setExportStatus] = useState<
     'idle' | 'success' | 'error'
@@ -192,15 +181,34 @@ export function SettingsScreen() {
     resolver: valibotResolver(generateInviteSchema),
   });
 
-  const onGenerate = useCallback(async (data: GenerateInviteForm) => {
-    const hash = await sha256(data.remoteArchiveUrl + data.bearerToken);
-    const shortHash = hash.slice(0, 24);
-    const appOrigin = window.location.origin;
-    setInviteUrl(
-      `${appOrigin}/invite?hash=${shortHash}&url=${encodeURIComponent(data.remoteArchiveUrl)}&token=${encodeURIComponent(data.bearerToken)}`,
-    );
-    setInviteCode(shortHash);
-  }, []);
+  const onGenerate = useCallback(
+    async (data: GenerateInviteForm) => {
+      setGenerateError(null);
+      try {
+        const { code } = await createEncryptedInvite(
+          data.remoteArchiveUrl,
+          data.bearerToken,
+        );
+        const appOrigin = window.location.origin;
+        setInviteUrl(`${appOrigin}/invite?code=${encodeURIComponent(code)}`);
+        setInviteCode(code);
+      } catch (err) {
+        setInviteUrl(null);
+        setInviteCode(null);
+        if (
+          err instanceof InviteApiError &&
+          err.code === 'INVITE_KEY_MISSING'
+        ) {
+          setGenerateError(
+            intl.formatMessage(_messages.generateMissingKeyError),
+          );
+        } else {
+          setGenerateError(intl.formatMessage(_messages.generateGenericError));
+        }
+      }
+    },
+    [intl],
+  );
 
   const copyToClipboard = useCallback(
     async (text: string, setCopied: (v: boolean) => void) => {
@@ -214,14 +222,6 @@ export function SettingsScreen() {
     },
     [],
   );
-
-  const handleConnect = useCallback(async () => {
-    if (useCode.trim()) {
-      // In a real flow, the invite code is the hash — we'd resolve the URL
-      // from the code. For now, we just show the connected state.
-      setConnected(useCode.trim());
-    }
-  }, [useCode]);
 
   const handleExport = useCallback(() => {
     try {
@@ -313,6 +313,7 @@ export function SettingsScreen() {
         <Button type="submit">
           {intl.formatMessage(_messages.generateButton)}
         </Button>
+        {generateError && <p className="text-sm text-error">{generateError}</p>}
       </form>
 
       {/* Results */}
@@ -360,36 +361,12 @@ export function SettingsScreen() {
                 </Button>
               </div>
             </div>
+            <p className="text-xs text-text-muted">
+              {intl.formatMessage(_messages.expiryNote)}
+            </p>
           </div>
         </div>
       )}
-
-      {/* Use an Invite */}
-      <div className="mt-6 max-w-md">
-        <h3 className="text-md font-semibold text-text mb-3">
-          {intl.formatMessage(_messages.useInviteTitle)}
-        </h3>
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <Input
-              label={intl.formatMessage(_messages.useInviteCode)}
-              placeholder={intl.formatMessage(_messages.useInviteCode)}
-              value={useCode}
-              onChange={(e) => setUseCode(e.target.value)}
-            />
-          </div>
-          <Button onClick={handleConnect}>
-            {intl.formatMessage(_messages.useInviteConnect)}
-          </Button>
-        </div>
-        {connected && (
-          <p className="mt-2 text-sm text-green-600">
-            {intl.formatMessage(_messages.connectedMessage, {
-              archive: connected,
-            })}
-          </p>
-        )}
-      </div>
 
       {/* Backup & Restore */}
       <h2 className="text-lg font-semibold text-text mt-6">

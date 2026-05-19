@@ -141,6 +141,111 @@ export const handlers = [
     },
   ),
 
+  http.post('*/api/invites/encrypt', async ({ request }) => {
+    let body: Record<string, unknown>;
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return HttpResponse.json(
+        { error: { code: 'INVITE_BAD_JSON', message: 'Body must be JSON' } },
+        { status: 400 },
+      );
+    }
+    if (
+      typeof body.url !== 'string' ||
+      body.url.length === 0 ||
+      typeof body.token !== 'string' ||
+      body.token.length === 0
+    ) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'INVITE_BAD_INPUT',
+            message: 'url and token are required',
+          },
+        },
+        { status: 400 },
+      );
+    }
+    const json = JSON.stringify(body);
+    const base64 = btoa(json)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    return HttpResponse.json({ code: `mock-encrypted-code-${base64}` });
+  }),
+
+  http.post('*/api/invites/decrypt', async ({ request }) => {
+    let body: Record<string, unknown>;
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return HttpResponse.json(
+        { error: { code: 'INVITE_BAD_JSON', message: 'Body must be JSON' } },
+        { status: 400 },
+      );
+    }
+    const code = body.code;
+    if (typeof code !== 'string' || code.length === 0) {
+      return HttpResponse.json(
+        {
+          error: { code: 'INVITE_BAD_INPUT', message: 'code is required' },
+        },
+        { status: 400 },
+      );
+    }
+    if (code === 'expired') {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'INVITE_EXPIRED',
+            message: 'This invite has expired',
+          },
+        },
+        { status: 410 },
+      );
+    }
+    if (code === 'invalid') {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'INVITE_DECRYPT_FAILED',
+            message: 'Invite code is invalid',
+          },
+        },
+        { status: 400 },
+      );
+    }
+    const prefix = 'mock-encrypted-code-';
+    if (code.startsWith(prefix)) {
+      const encoded = code.slice(prefix.length);
+      try {
+        const padLength = (4 - (encoded.length % 4)) % 4;
+        const padded =
+          encoded.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padLength);
+        const json = atob(padded);
+        const parsed = JSON.parse(json) as Record<string, unknown>;
+        if (
+          typeof parsed.url === 'string' &&
+          typeof parsed.token === 'string'
+        ) {
+          return HttpResponse.json({ url: parsed.url, token: parsed.token });
+        }
+      } catch {
+        // fall through
+      }
+    }
+    return HttpResponse.json(
+      {
+        error: {
+          code: 'INVITE_DECRYPT_FAILED',
+          message: 'Invite code is invalid',
+        },
+      },
+      { status: 400 },
+    );
+  }),
+
   http.post('*/projects/*/remoteDetectionAlerts', async ({ request }) => {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {

@@ -288,4 +288,50 @@ test.describe('Critical User Flows', () => {
       page.getByRole('button', { name: /import backup/i }),
     ).toBeVisible();
   });
+
+  // -------------------------------------------------------------------------
+  // Flow 6: Generate encrypted invite from Settings (issue #8 regression)
+  // -------------------------------------------------------------------------
+  // Guards against regressing issue #8: invite URLs must not embed the
+  // bearer token in cleartext. The server-side encrypt endpoint returns an
+  // opaque code; the rendered URL must use ?code=... (no token=, no
+  // raw token value).
+  test('generating an invite from settings produces an opaque encrypted URL (issue #8)', async ({
+    page,
+  }) => {
+    const ARCHIVE_URL = 'https://archive.example.com';
+    const BEARER_TOKEN = 'super-secret-bearer-xyz-123';
+
+    await page.goto('/settings');
+    await page.waitForLoadState('domcontentloaded');
+
+    await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Fill the Generate Invite form
+    await page.getByLabel('Remote Archive URL').fill(ARCHIVE_URL);
+    await page.getByLabel('Bearer Token').fill(BEARER_TOKEN);
+    await page.getByRole('button', { name: /generate invite/i }).click();
+
+    // Results header appears once encrypt resolves
+    await expect(page.getByRole('heading', { name: /^results$/i })).toBeVisible(
+      { timeout: 5_000 },
+    );
+
+    // Capture the rendered invite URL from the DOM
+    const inviteUrlEl = page.getByText(/\/invite\?code=/).first();
+    await expect(inviteUrlEl).toBeVisible();
+    const renderedUrl = (await inviteUrlEl.textContent())?.trim() ?? '';
+
+    // Shape assertion: scheme://host/invite?code=<opaque>
+    expect(renderedUrl).toMatch(/^https?:\/\/[^/]+\/invite\?code=[^&]+$/);
+
+    // Regression guards for issue #8
+    expect(renderedUrl).not.toContain('token=');
+    expect(renderedUrl).not.toContain(BEARER_TOKEN);
+
+    // Expiry caption is rendered
+    await expect(page.getByText('Expires in 24 hours.')).toBeVisible();
+  });
 });

@@ -1,8 +1,21 @@
-type ParseResult =
-  | { ok: true; baseUrl: string; token: string }
+export type ParseInviteResult =
+  | { ok: true; kind: 'encrypted'; code: string }
+  | { ok: true; kind: 'legacy'; baseUrl: string; token: string }
   | { ok: false; code: string; message: string };
 
-export function parseInviteUrl(input: string): ParseResult {
+// Module-level guard so the legacy-deprecation warning fires at most once per session.
+// TODO(issue-#8): remove this helper and every `kind: 'legacy'` consumer in the next release.
+let legacyWarningEmitted = false;
+
+export function warnLegacyInviteUrlOnce(): void {
+  if (legacyWarningEmitted) return;
+  legacyWarningEmitted = true;
+  console.warn(
+    'Invite URL with raw token is deprecated; please request a new invite.',
+  );
+}
+
+export function parseInviteUrl(input: string): ParseInviteResult {
   let url: URL;
   try {
     url = new URL(input.trim());
@@ -18,6 +31,11 @@ export function parseInviteUrl(input: string): ParseResult {
     };
   }
 
+  const codeParam = url.searchParams.get('code');
+  if (codeParam) {
+    return { ok: true, kind: 'encrypted', code: codeParam };
+  }
+
   const baseUrl = url.searchParams.get('url');
   if (!baseUrl) {
     return {
@@ -27,6 +45,10 @@ export function parseInviteUrl(input: string): ParseResult {
     };
   }
 
+  // TODO(issue-#8): remove the `token`/`hash` legacy fallback in the next release.
+  // It exists for one-release backward compatibility with invite URLs issued
+  // before AES-GCM encryption shipped. See the discriminated `kind: 'legacy'`
+  // consumers in InviteScreen.tsx and AddArchiveServerDialog.tsx.
   const tokenParam = url.searchParams.get('token');
   const hashParam = url.searchParams.get('hash');
   const token = tokenParam ?? hashParam;
@@ -39,5 +61,5 @@ export function parseInviteUrl(input: string): ParseResult {
     };
   }
 
-  return { ok: true, baseUrl, token };
+  return { ok: true, kind: 'legacy', baseUrl, token };
 }

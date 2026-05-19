@@ -120,6 +120,8 @@ Managed by Prettier via `@trivago/prettier-plugin-sort-imports`:
 | GET | `/projects/:id/observations` | Bearer | `{ data: [{ docId, createdAt, updatedAt, deleted, lat?, lon?, attachments, tags }] }` |
 | GET | `/projects/:id/remoteDetectionAlerts` | Bearer | `{ data: [{ docId, createdAt, updatedAt, deleted, detectionDateStart, detectionDateEnd, sourceId, metadata, geometry }] }` |
 | POST | `/projects/:id/remoteDetectionAlerts` | Bearer | Body: `{ geometry, metadata?, detectionDateStart?, detectionDateEnd? }` -> 201 empty |
+| POST | `/api/invites/encrypt` | None (first-party) | Body: `{ url, token, ttlHours? }` -> `{ code }`; uses Cloudflare Pages Function with `INVITE_KEY` |
+| POST | `/api/invites/decrypt` | None (first-party) | Body: `{ code }` -> `{ url, token }`; 410 if expired |
 
 ## Design System
 
@@ -195,3 +197,12 @@ Types: `feat`, `fix`, `test`, `refactor`, `chore`, `docs`, `style`, `ci`
 - Deploy: `npm run deploy`
 - Preview: `npm run deploy:preview`
 - Wrangler requires Node >=22
+
+### Required secret: `INVITE_KEY`
+
+The `/api/invites/{encrypt,decrypt}` Pages Functions require a 32-byte AES-GCM key (base64 encoded) bound as `INVITE_KEY`.
+
+- Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
+- Set in Pages: `npx wrangler pages secret put INVITE_KEY --project-name comapeo-cloud-app`
+- Local dev: add `INVITE_KEY=<base64>` to `.dev.vars` (gitignored).
+- Rotation: bump the version prefix in `src/lib/invite-crypto.ts` (currently `v1.`) so previously issued codes are rejected after rollover.

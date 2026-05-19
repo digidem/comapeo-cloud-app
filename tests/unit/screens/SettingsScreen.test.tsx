@@ -1,4 +1,6 @@
+import { server } from '@tests/mocks/node';
 import { fireEvent, render, screen, userEvent } from '@tests/mocks/test-utils';
+import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetDb } from '@/lib/db';
@@ -9,17 +11,6 @@ import {
 } from '@/lib/local-storage-utils';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { useAuthStore } from '@/stores/auth-store';
-
-// Mock crypto.subtle.digest
-const mockDigest = vi.fn();
-Object.defineProperty(globalThis, 'crypto', {
-  value: {
-    subtle: {
-      digest: mockDigest,
-    },
-  },
-  writable: true,
-});
 
 // Mock clipboard API
 Object.defineProperty(navigator, 'clipboard', {
@@ -79,66 +70,95 @@ describe('SettingsScreen', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders the Use an Invite section', () => {
+  it('does not render the dead "Use an Invite" section', () => {
     render(<SettingsScreen />);
-    expect(screen.getByText('Use an Invite')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    expect(screen.queryByText('Use an Invite')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Connect' }),
+    ).not.toBeInTheDocument();
   });
 
-  it('shows results after generating invite', async () => {
-    // Mock SHA-256 to return predictable hash
-    mockDigest.mockResolvedValue(new Uint8Array(32).fill(0xab));
+  it('shows an encrypted invite URL after generating (no raw token leaks)', async () => {
+    const user = userEvent.setup();
+    render(<SettingsScreen />);
+
+    await user.type(
+      screen.getByLabelText('Remote Archive URL'),
+      'https://archive.example.com',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
+    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+
+    // Results header should appear
+    expect(await screen.findByText('Results')).toBeInTheDocument();
+    expect(screen.getByText('Invite URL')).toBeInTheDocument();
+    expect(screen.getByText('Invite Code')).toBeInTheDocument();
+
+    // Find the displayed invite URL
+    const inviteUrlEl = await screen.findByText(
+      /\/invite\?code=mock-encrypted-code-/,
+    );
+    const renderedUrl = inviteUrlEl.textContent ?? '';
+    expect(renderedUrl).toMatch(
+      /^https?:\/\/[^/]+\/invite\?code=mock-encrypted-code-/,
+    );
+
+    // Regression guard for issue #8: the URL must NOT contain a token=
+    // parameter or the raw bearer token value.
+    expect(renderedUrl).not.toContain('token=');
+    expect(renderedUrl).not.toContain('my-secret-token');
+  });
+
+  it('shows the "Expires in 24 hours" caption after generating', async () => {
+    const user = userEvent.setup();
+    render(<SettingsScreen />);
+
+    await user.type(
+      screen.getByLabelText('Remote Archive URL'),
+      'https://archive.example.com',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
+    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+
+    expect(await screen.findByText('Expires in 24 hours.')).toBeInTheDocument();
+  });
+
+  it('shows the missing-key error message when the server is not configured', async () => {
+    server.use(
+      http.post('*/api/invites/encrypt', () => {
+        return HttpResponse.json(
+          {
+            error: {
+              code: 'INVITE_KEY_MISSING',
+              message: 'Server key is not configured',
+            },
+          },
+          { status: 500 },
+        );
+      }),
+    );
 
     const user = userEvent.setup();
     render(<SettingsScreen />);
 
-    const urlInput = screen.getByLabelText('Remote Archive URL');
-    const tokenInput = screen.getByLabelText('Bearer Token');
-    const generateBtn = screen.getByRole('button', {
-      name: 'Generate Invite',
-    });
+    await user.type(
+      screen.getByLabelText('Remote Archive URL'),
+      'https://archive.example.com',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
+    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
 
-    await user.type(urlInput, 'https://archive.example.com');
-    await user.type(tokenInput, 'my-secret-token');
-    await user.click(generateBtn);
-
-    // Should show results
-    expect(screen.getByText('Results')).toBeInTheDocument();
-    expect(screen.getByText('Invite URL')).toBeInTheDocument();
-    // There are two "Invite Code" labels (results + use section)
-    const inviteCodeLabels = screen.getAllByText('Invite Code');
-    expect(inviteCodeLabels.length).toBe(2);
-
-    // Should show invite URL (now points to app with url + token params)
     expect(
-      screen.getByText(
-        /\/invite\?hash=.*&url=https%3A%2F%2Farchive\.example\.com/,
+      await screen.findByText(
+        /Server is not configured to issue encrypted invites/,
       ),
     ).toBeInTheDocument();
-    // Token must be in the URL so the InviteScreen can authenticate
-    expect(screen.getByText(/&token=my-secret-token/)).toBeInTheDocument();
-  });
-
-  it('shows connected message after using an invite', async () => {
-    const user = userEvent.setup();
-    render(<SettingsScreen />);
-
-    const codeInput = screen.getByLabelText('Invite Code');
-    const connectBtn = screen.getByRole('button', { name: 'Connect' });
-
-    await user.type(codeInput, 'test-invite-code-123');
-    await user.click(connectBtn);
-
-    expect(
-      screen.getByText('Connected to test-invite-code-123'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText('Results')).not.toBeInTheDocument();
   });
 
   it('copies invite URL to clipboard', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     navigator.clipboard.writeText = writeText;
-
-    mockDigest.mockResolvedValue(new Uint8Array(32).fill(0xab));
 
     const user = userEvent.setup();
     render(<SettingsScreen />);
@@ -151,12 +171,15 @@ describe('SettingsScreen', () => {
     await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
     await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
 
-    // Click copy button (there are two - URL and code)
+    // Wait for results to render
+    await screen.findByText('Results');
+
+    // Click copy button (there are two — URL and code)
     const copyButtons = screen.getAllByRole('button', { name: 'Copy' });
     await user.click(copyButtons[0]!);
 
     expect(writeText).toHaveBeenCalledWith(
-      expect.stringContaining('/invite?hash='),
+      expect.stringContaining('/invite?code='),
     );
 
     // Should show "Copied!" feedback

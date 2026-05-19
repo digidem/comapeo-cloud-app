@@ -85,6 +85,7 @@ npm run deploy:preview   # build + deploy to preview channel
 ```
 
 > Requires Wrangler authenticated with your Cloudflare account and Node ≥ 22.
+> The `/api/invites/*` Pages Functions require an `INVITE_KEY` secret (32-byte AES-GCM key, base64 encoded). See [AGENTS.md → Cloudflare Deployment](AGENTS.md#cloudflare-deployment) for setup, rotation, and local-dev (`.dev.vars`) details.
 
 ## Scripts
 
@@ -140,6 +141,8 @@ Key endpoints from [comapeo-cloud](https://github.com/digidem/comapeo-cloud):
 | `GET` | `/projects/:id/observations` | Bearer |
 | `GET` | `/projects/:id/remoteDetectionAlerts` | Bearer |
 | `POST` | `/projects/:id/remoteDetectionAlerts` | Bearer |
+| `POST` | `/api/invites/encrypt` | — (first-party Pages Function, uses `INVITE_KEY`) |
+| `POST` | `/api/invites/decrypt` | — (first-party Pages Function, uses `INVITE_KEY`) |
 
 ## Contributing
 

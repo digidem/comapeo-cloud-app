@@ -267,6 +267,118 @@ export const apiClient = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Invite endpoints (first-party Pages Functions)
+// ---------------------------------------------------------------------------
+
+export class InviteApiError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'InviteApiError';
+    this.code = code;
+  }
+}
+
+async function parseInviteError(response: Response): Promise<InviteApiError> {
+  try {
+    const body = await response.json();
+    const parsed = v.safeParse(errorResponseSchema, body);
+    if (parsed.success) {
+      return new InviteApiError(
+        parsed.output.error.code,
+        parsed.output.error.message,
+      );
+    }
+  } catch {
+    // fall through to generic error below
+  }
+  return new InviteApiError(
+    'INVITE_REQUEST_FAILED',
+    `Invite request failed with status ${response.status}`,
+  );
+}
+
+export async function createEncryptedInvite(
+  baseUrl: string,
+  token: string,
+  ttlHours?: number,
+): Promise<{ code: string }> {
+  const body: Record<string, unknown> = { url: baseUrl, token };
+  if (ttlHours !== undefined) body.ttlHours = ttlHours;
+
+  let response: Response;
+  try {
+    response = await fetch('/api/invites/encrypt', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    if (isNetworkError(error)) throwNetworkError();
+    throw error;
+  }
+
+  if (!response.ok) {
+    throw await parseInviteError(response);
+  }
+
+  const json: unknown = await response.json();
+  if (
+    !json ||
+    typeof json !== 'object' ||
+    typeof (json as { code?: unknown }).code !== 'string'
+  ) {
+    throw new InviteApiError(
+      'INVITE_REQUEST_FAILED',
+      'Invite encrypt response was malformed',
+    );
+  }
+  return { code: (json as { code: string }).code };
+}
+
+export async function redeemEncryptedInvite(
+  code: string,
+): Promise<{ baseUrl: string; token: string }> {
+  let response: Response;
+  try {
+    response = await fetch('/api/invites/decrypt', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ code }),
+    });
+  } catch (error) {
+    if (isNetworkError(error)) throwNetworkError();
+    throw error;
+  }
+
+  if (!response.ok) {
+    throw await parseInviteError(response);
+  }
+
+  const json: unknown = await response.json();
+  if (
+    !json ||
+    typeof json !== 'object' ||
+    typeof (json as { url?: unknown }).url !== 'string' ||
+    typeof (json as { token?: unknown }).token !== 'string'
+  ) {
+    throw new InviteApiError(
+      'INVITE_REQUEST_FAILED',
+      'Invite decrypt response was malformed',
+    );
+  }
+  const { url, token } = json as { url: string; token: string };
+  return { baseUrl: url, token };
+}
+
+// ---------------------------------------------------------------------------
 // getAttachmentUrl (URL builder, no fetch)
 // ---------------------------------------------------------------------------
 
