@@ -1,4 +1,6 @@
+import { server } from '@tests/mocks/node';
 import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
+import { HttpResponse, http } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetDb } from '@/lib/db';
@@ -642,6 +644,108 @@ describe('AddArchiveServerDialog', () => {
           label: 'https://archive.test',
         }),
       );
+    });
+  });
+
+  // ---- Encrypted invite URL tests ----
+
+  describe('encrypted invite URLs', () => {
+    function makeEncryptedCode(url: string, token: string): string {
+      const payload = JSON.stringify({ url, token });
+      const base64 = btoa(payload)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      return `mock-encrypted-code-${base64}`;
+    }
+
+    it('redeems an encrypted invite URL and addServer is called with the decrypted token', async () => {
+      const code = makeEncryptedCode('https://archive.test', 'decrypted-token');
+      const inviteUrl = `https://app.com/invite?code=${encodeURIComponent(code)}`;
+
+      const user = userEvent.setup();
+      const onAdded = vi.fn();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={onAdded}
+        />,
+      );
+
+      await user.type(screen.getByLabelText('Invite URL'), inviteUrl);
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      await waitFor(() => {
+        expect(onAdded).toHaveBeenCalledWith('test-server-id');
+      });
+      expect(mockCreateRemoteServer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: 'https://archive.test',
+          token: 'decrypted-token',
+          label: 'archive.test',
+        }),
+      );
+    });
+
+    it('shows the expired error when the encrypted code is expired', async () => {
+      const inviteUrl = 'https://app.com/invite?code=expired';
+
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.type(screen.getByLabelText('Invite URL'), inviteUrl);
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      expect(
+        await screen.findByText(
+          'This invite link has expired. Ask the sender for a new one.',
+        ),
+      ).toBeInTheDocument();
+      expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+    });
+
+    it('shows a generic invalid-invite error when the encrypt API fails for other reasons', async () => {
+      server.use(
+        http.post('*/api/invites/decrypt', () => {
+          return HttpResponse.json(
+            {
+              error: {
+                code: 'INVITE_DECRYPT_FAILED',
+                message: 'Bad invite',
+              },
+            },
+            { status: 400 },
+          );
+        }),
+      );
+
+      const inviteUrl = 'https://app.com/invite?code=anything';
+
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.type(screen.getByLabelText('Invite URL'), inviteUrl);
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      expect(
+        await screen.findByText(
+          "Invalid invite URL. Make sure it's a full invite link.",
+        ),
+      ).toBeInTheDocument();
+      expect(mockCreateRemoteServer).not.toHaveBeenCalled();
     });
   });
 });

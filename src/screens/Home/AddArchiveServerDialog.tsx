@@ -4,8 +4,9 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
-import { parseInviteUrl } from '@/lib/invite-url';
+import { parseInviteUrl, warnLegacyInviteUrlOnce } from '@/lib/invite-url';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface AddArchiveServerDialogProps {
@@ -106,6 +107,11 @@ const messages = defineMessages({
     id: 'home.archive.dialog.invalidInviteUrl',
     defaultMessage: "Invalid invite URL. Make sure it's a full invite link.",
   },
+  inviteExpired: {
+    id: 'home.archive.dialog.inviteExpired',
+    defaultMessage:
+      'This invite link has expired. Ask the sender for a new one.',
+  },
   advanced: {
     id: 'home.archive.dialog.advanced',
     defaultMessage: 'Advanced',
@@ -176,6 +182,54 @@ function AddArchiveServerDialog({
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [inviteUrlError, setInviteUrlError] = useState<string | null>(null);
 
+  function finalizeAddServer(baseUrl: string, token: string) {
+    const normalizedUrl = normalizeArchiveBaseUrl(baseUrl);
+    if (!normalizedUrl.ok) {
+      const urlMessage = getUrlValidationMessage(normalizedUrl.code);
+      dispatch({
+        type: 'error',
+        message: intl.formatMessage(urlMessage),
+      });
+      return;
+    }
+
+    // Check for duplicate
+    if (checkDuplicate(normalizedUrl.value)) {
+      dispatch({
+        type: 'error',
+        message: intl.formatMessage(messages.duplicateServer),
+      });
+      return;
+    }
+
+    const hostname = (() => {
+      try {
+        return new URL(baseUrl).hostname;
+      } catch {
+        return normalizedUrl.value;
+      }
+    })();
+
+    const addServer = useAuthStore.getState().addServer;
+    addServer({
+      label: hostname,
+      baseUrl: normalizedUrl.value,
+      token,
+    }).then(
+      (serverId) => {
+        dispatch({ type: 'success' });
+        onAdded(serverId);
+      },
+      (err: unknown) => {
+        const message =
+          err instanceof Error
+            ? err.message
+            : intl.formatMessage(messages.failed);
+        dispatch({ type: 'error', message });
+      },
+    );
+  }
+
   function handleInviteSubmit() {
     const inviteUrl = inviteUrlRef.current?.value?.trim() ?? '';
 
@@ -192,49 +246,55 @@ function AddArchiveServerDialog({
       return;
     }
 
-    // Normalize the parsed base URL
-    const normalizedUrl = normalizeArchiveBaseUrl(parsed.baseUrl);
-    if (!normalizedUrl.ok) {
-      setInviteUrlError(
-        intl.formatMessage(getUrlValidationMessage(normalizedUrl.code)),
-      );
-      return;
-    }
-
-    // Check for duplicate
-    if (checkDuplicate(normalizedUrl.value)) {
-      dispatch({
-        type: 'error',
-        message: intl.formatMessage(messages.duplicateServer),
-      });
-      return;
-    }
-
-    dispatch({ type: 'submit' });
-
-    const hostname = (() => {
-      try {
-        return new URL(parsed.baseUrl).hostname;
-      } catch {
-        return normalizedUrl.value;
+    if (parsed.kind === 'legacy') {
+      // TODO(issue-#8): remove this legacy branch in the next release.
+      warnLegacyInviteUrlOnce();
+      // For early validation, normalize first so we can show the field error
+      // (rather than a generic dialog error) for malformed legacy URLs.
+      const normalizedUrl = normalizeArchiveBaseUrl(parsed.baseUrl);
+      if (!normalizedUrl.ok) {
+        setInviteUrlError(
+          intl.formatMessage(getUrlValidationMessage(normalizedUrl.code)),
+        );
+        return;
       }
-    })();
 
-    const addServer = useAuthStore.getState().addServer;
-    addServer({
-      label: hostname,
-      baseUrl: normalizedUrl.value,
-      token: parsed.token,
-    }).then(
-      (serverId) => {
-        dispatch({ type: 'success' });
-        onAdded(serverId);
+      // Check for duplicate
+      if (checkDuplicate(normalizedUrl.value)) {
+        dispatch({
+          type: 'error',
+          message: intl.formatMessage(messages.duplicateServer),
+        });
+        return;
+      }
+
+      dispatch({ type: 'submit' });
+      finalizeAddServer(parsed.baseUrl, parsed.token);
+      return;
+    }
+
+    // Encrypted: redeem the code first, then proceed with the same flow.
+    dispatch({ type: 'submit' });
+    redeemEncryptedInvite(parsed.code).then(
+      (redeemed) => {
+        finalizeAddServer(redeemed.baseUrl, redeemed.token);
       },
       (err: unknown) => {
-        const message =
-          err instanceof Error
-            ? err.message
-            : intl.formatMessage(messages.failed);
+        if (err instanceof InviteApiError && err.code === 'INVITE_EXPIRED') {
+          dispatch({
+            type: 'error',
+            message: intl.formatMessage(messages.inviteExpired),
+          });
+          return;
+        }
+        let message: string;
+        if (err instanceof InviteApiError) {
+          message = intl.formatMessage(messages.invalidInviteUrl);
+        } else if (err instanceof Error) {
+          message = err.message;
+        } else {
+          message = intl.formatMessage(messages.failed);
+        }
         dispatch({ type: 'error', message });
       },
     );

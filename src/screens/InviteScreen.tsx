@@ -4,7 +4,13 @@ import { defineMessages, useIntl } from 'react-intl';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 
+import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
 import { syncRemoteArchive } from '@/lib/data-layer';
+import {
+  type ParseInviteResult,
+  parseInviteUrl,
+  warnLegacyInviteUrlOnce,
+} from '@/lib/invite-url';
 import { useAuthStore } from '@/stores/auth-store';
 
 const messages = defineMessages({
@@ -20,56 +26,77 @@ const messages = defineMessages({
     id: 'invite.error',
     defaultMessage: 'Failed to connect to archive.',
   },
+  expired: {
+    id: 'invite.expired',
+    defaultMessage:
+      'This invite link has expired. Ask the sender for a new one.',
+  },
+  invalidInvite: {
+    id: 'invite.invalid',
+    defaultMessage: "Couldn't accept this invite. The link may be invalid.",
+  },
 });
 
-function parseInviteParams(): { archiveUrl: string; token: string } | null {
+function parseInviteFromLocation(): ParseInviteResult | null {
   if (typeof window === 'undefined') return null;
-  const params = new URLSearchParams(window.location.search);
-  const archiveUrl = params.get('url');
-  const hash = params.get('hash');
-  const tokenParam = params.get('token');
-  // Fall back to hash for backward-compatibility with legacy invite URLs
-  // that didn't include a dedicated `token` parameter.
-  const token = tokenParam ?? hash ?? '';
-  if (!archiveUrl || !token) return null;
-  return { archiveUrl, token };
+  const origin = window.location.origin;
+  const search = window.location.search;
+  const candidate = `${origin}/invite${search}`;
+  return parseInviteUrl(candidate);
 }
 
 export function InviteScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const invite = useMemo(() => parseInviteParams(), []);
-  const [status, setStatus] = useState<'loading' | 'connected' | 'error'>(
-    invite ? 'loading' : 'error',
-  );
+  const invite = useMemo(() => parseInviteFromLocation(), []);
+  const [status, setStatus] = useState<
+    'loading' | 'connected' | 'error' | 'expired' | 'invalid'
+  >(() => {
+    if (!invite) return 'error';
+    return invite.ok ? 'loading' : 'invalid';
+  });
 
   useEffect(() => {
-    if (!invite) return;
+    if (!invite || !invite.ok) return;
 
-    const { archiveUrl, token } = invite;
     let cancelled = false;
+    const parsed = invite;
 
-    useAuthStore
-      .getState()
-      .addServer({
-        label: new URL(archiveUrl).hostname,
-        baseUrl: archiveUrl,
-        token,
-      })
-      .then((serverId) => {
-        if (cancelled) return undefined;
-        return syncRemoteArchive(serverId, {
-          baseUrl: archiveUrl,
+    async function run(): Promise<void> {
+      try {
+        let baseUrl: string;
+        let token: string;
+
+        if (parsed.kind === 'encrypted') {
+          const redeemed = await redeemEncryptedInvite(parsed.code);
+          if (cancelled) return;
+          baseUrl = redeemed.baseUrl;
+          token = redeemed.token;
+        } else {
+          // TODO(issue-#8): remove this legacy branch in the next release.
+          warnLegacyInviteUrlOnce();
+          baseUrl = parsed.baseUrl;
+          token = parsed.token;
+        }
+
+        const serverId = await useAuthStore.getState().addServer({
+          label: new URL(baseUrl).hostname,
+          baseUrl,
           token,
         });
-      })
-      .then(async (result) => {
         if (cancelled) return;
-        if (!result || !result.success) {
+
+        const syncResult = await syncRemoteArchive(serverId, {
+          baseUrl,
+          token,
+        });
+        if (cancelled) return;
+        if (!syncResult || !syncResult.success) {
           setStatus('error');
           return;
         }
+
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['projects'] }),
           queryClient.invalidateQueries({ queryKey: ['observations'] }),
@@ -80,11 +107,21 @@ export function InviteScreen() {
         setTimeout(() => {
           if (!cancelled) navigate({ to: '/' });
         }, 1500);
-      })
-      .catch(() => {
+      } catch (err) {
         if (cancelled) return;
+        if (err instanceof InviteApiError) {
+          if (err.code === 'INVITE_EXPIRED') {
+            setStatus('expired');
+          } else {
+            setStatus('invalid');
+          }
+          return;
+        }
         setStatus('error');
-      });
+      }
+    }
+
+    void run();
 
     return () => {
       cancelled = true;
@@ -100,6 +137,14 @@ export function InviteScreen() {
         {status === 'connected' && (
           <p className="text-green-600">
             {intl.formatMessage(messages.connected)}
+          </p>
+        )}
+        {status === 'expired' && (
+          <p className="text-red-600">{intl.formatMessage(messages.expired)}</p>
+        )}
+        {status === 'invalid' && (
+          <p className="text-red-600">
+            {intl.formatMessage(messages.invalidInvite)}
           </p>
         )}
         {status === 'error' && (

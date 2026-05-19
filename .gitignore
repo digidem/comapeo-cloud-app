@@ -8,6 +8,7 @@ coverage
 .env
 .env.local
 *.local
+.dev.vars
 .DS_Store
 test-results
 playwright-report

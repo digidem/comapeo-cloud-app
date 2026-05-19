@@ -5,26 +5,10 @@ import {
   stripApiPrefix,
   validateArchiveProxyRequest,
 } from '../../src/lib/archive-proxy';
+import { jsonError, withNoStore } from '../../src/lib/pages-fn-utils';
 
 interface PagesContext {
   request: Request;
-}
-
-function jsonError(status: number, code: string, message: string): Response {
-  return Response.json(
-    { error: { code, message } },
-    { status, headers: { 'Cache-Control': 'no-store' } },
-  );
-}
-
-function withNoStore(response: Response): Response {
-  const headers = new Headers(response.headers);
-  headers.set('Cache-Control', 'no-store');
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
 }
 
 export async function onRequest({ request }: PagesContext): Promise<Response> {
