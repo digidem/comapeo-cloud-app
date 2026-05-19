@@ -43,7 +43,7 @@ async function seedProjectWithObservations(
   name: string,
 ): Promise<string> {
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 
   // Create project
   await createProject(page, name);
@@ -247,7 +247,7 @@ test.describe('Critical User Flows', () => {
   // -------------------------------------------------------------------------
   test('non-existent route shows 404 page', async ({ page }) => {
     await page.goto('/nonexistent-page');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Should show 404 heading
     await expect(page.getByRole('heading', { name: '404' })).toBeVisible({
@@ -270,10 +270,10 @@ test.describe('Critical User Flows', () => {
   // -------------------------------------------------------------------------
   test('settings screen renders correctly', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Settings heading should be visible
     await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible({

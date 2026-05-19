@@ -53,14 +53,14 @@ test.describe('CSP Runtime Verification', () => {
     await installCspListener(page);
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // App should render
     await expect(page.locator('body')).toBeVisible();
 
     // Navigate to /data (replaces deleted /dashboard)
     await page.goto('/data');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('body')).toBeVisible();
 
     // Check for CSP violations
@@ -74,7 +74,7 @@ test.describe('CSP Runtime Verification', () => {
 
     for (const route of routes) {
       await page.goto(route);
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       await expect(page.locator('body')).toBeVisible();
     }
 
@@ -102,7 +102,7 @@ test.describe('CSP Runtime Verification', () => {
   }) => {
     // Navigate first so page.route interceptors are active
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Override setupMockServer's **/info with a specific /api/info intercept.
     // page.route uses last-wins semantics — this route takes priority.
@@ -132,7 +132,7 @@ test.describe('CSP Runtime Verification', () => {
     await installCspListener(page);
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Filter for service-worker-related violations
     const violations = await readCspViolations(page);
@@ -158,7 +158,7 @@ test.describe('CSP Runtime Verification', () => {
 
     for (const route of routes) {
       await page.goto(route);
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
     }
 
     // Filter out known non-critical errors (e.g., network errors from mocked routes)
