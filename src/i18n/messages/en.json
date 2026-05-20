@@ -617,6 +617,15 @@
   "invite.invalid": {
     "defaultMessage": "Couldn't accept this invite. The link may be invalid."
   },
+  "mediaPreview.audioAlt": {
+    "defaultMessage": "Audio attachment"
+  },
+  "mediaPreview.moreCount": {
+    "defaultMessage": "+{count} more"
+  },
+  "mediaPreview.photoAlt": {
+    "defaultMessage": "Photo {number}"
+  },
   "notFound.description": {
     "defaultMessage": "The page you are looking for does not exist or has been moved."
   },
@@ -643,6 +652,9 @@
   },
   "observationDetail.location": {
     "defaultMessage": "Location"
+  },
+  "observationDetail.mediaGallery": {
+    "defaultMessage": "Media"
   },
   "observationDetail.noLocation": {
     "defaultMessage": "No location data"

@@ -44,6 +44,23 @@ export async function setupMockServer(page: Page): Promise<void> {
   );
 
   // ---------------------------------------------------------------------------
+  // Attachment mock — returns 1x1 transparent PNG for any attachment URL.
+  // The observation fixtures contain full absolute URLs like
+  // https://example.com/projects/proj1/attachments/drive1/photo/img1
+  // ---------------------------------------------------------------------------
+  const TRANSPARENT_1X1_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  await page.route('**/attachments/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: TRANSPARENT_1X1_PNG,
+    }),
+  );
+
+  // ---------------------------------------------------------------------------
   // Invite endpoints (first-party Pages Functions)
   // ---------------------------------------------------------------------------
   // These mirror the MSW handlers in tests/mocks/handlers.ts so E2E tests

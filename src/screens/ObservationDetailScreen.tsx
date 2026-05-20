@@ -4,6 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Link, useParams } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { AuthImg } from '@/components/shared/auth-img';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useObservations } from '@/hooks/useObservations';
@@ -59,7 +60,19 @@ const messages = defineMessages({
     id: 'data.untitledProject',
     defaultMessage: 'Untitled Project',
   },
+  mediaGallery: {
+    id: 'observationDetail.mediaGallery',
+    defaultMessage: 'Media',
+  },
 });
+
+/** Internal metadata tags that should be filtered from the tags display */
+const INTERNAL_TAGS = new Set([
+  'photoUrls',
+  'photoCount',
+  'audioCount',
+  'trackCount',
+]);
 
 export function ObservationDetailScreen() {
   const intl = useIntl();
@@ -134,6 +147,29 @@ export function ObservationDetailScreen() {
         </p>
       </div>
 
+      {/* Inline media gallery */}
+      {tags.photoUrls && (
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold text-text mb-2">
+            {intl.formatMessage(messages.mediaGallery)}
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {tags.photoUrls.split(',').map((url, index) => (
+              <div
+                key={url}
+                className="h-20 w-20 overflow-hidden rounded-md bg-surface-container-low"
+              >
+                <AuthImg
+                  src={url}
+                  alt={`Photo ${index + 1}`}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-4">
           <h3 className="text-sm font-semibold text-text mb-2">
@@ -170,20 +206,23 @@ export function ObservationDetailScreen() {
         </Card>
       </div>
 
-      {Object.keys(tags).length > 0 && (
+      {Object.entries(tags).filter(([key]) => !INTERNAL_TAGS.has(key)).length >
+        0 && (
         <Card className="p-4">
           <h3 className="text-sm font-semibold text-text mb-2">
             {intl.formatMessage(messages.tags)}
           </h3>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(tags).map(([key, value]) => (
-              <span
-                key={key}
-                className="rounded-pill bg-surface-container-low px-3 py-1 text-xs text-text"
-              >
-                {key}: {String(value)}
-              </span>
-            ))}
+            {Object.entries(tags)
+              .filter(([key]) => !INTERNAL_TAGS.has(key))
+              .map(([key, value]) => (
+                <span
+                  key={key}
+                  className="rounded-pill bg-surface-container-low px-3 py-1 text-xs text-text"
+                >
+                  {key}: {String(value)}
+                </span>
+              ))}
           </div>
         </Card>
       )}

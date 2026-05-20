@@ -4,6 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Link } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { MediaPreview } from '@/components/shared/MediaPreview';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -187,6 +188,10 @@ export function DataScreen() {
                         <span className="text-xs text-text-muted">
                           {new Date(obs.createdAt).toLocaleDateString()}
                         </span>
+                        <MediaPreview
+                          observationLocalId={obs.localId}
+                          tags={obs.tags}
+                        />
                       </div>
                     </Card>
                   </Link>
