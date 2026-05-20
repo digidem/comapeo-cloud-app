@@ -83,4 +83,52 @@ describe('ArchiveBrowser', () => {
     expect(onSelectServer).toHaveBeenCalledOnce();
     expect(onSelectServer).toHaveBeenCalledWith('server-1');
   });
+
+  it('does not bubble archive toggle clicks to parent navigation handlers', async () => {
+    const user = userEvent.setup();
+    const onParentClick = vi.fn();
+
+    render(
+      <div onClick={onParentClick}>
+        <ArchiveBrowser
+          selectedProjectId={null}
+          onSelect={vi.fn()}
+          onCreateNew={vi.fn()}
+          onAddServer={vi.fn()}
+          onSelectServer={vi.fn()}
+        />
+      </div>,
+    );
+
+    const archiveToggle = screen.getByText('North Archive').closest('button');
+    if (archiveToggle === null) {
+      throw new Error('Archive toggle button not found');
+    }
+    await user.click(archiveToggle);
+
+    expect(onParentClick).not.toHaveBeenCalled();
+  });
+
+  it('bubbles archive settings clicks to parent navigation handlers', async () => {
+    const user = userEvent.setup();
+    const onParentClick = vi.fn();
+
+    render(
+      <div onClick={onParentClick}>
+        <ArchiveBrowser
+          selectedProjectId={null}
+          onSelect={vi.fn()}
+          onCreateNew={vi.fn()}
+          onAddServer={vi.fn()}
+          onSelectServer={vi.fn()}
+        />
+      </div>,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Manage North Archive' }),
+    );
+
+    expect(onParentClick).toHaveBeenCalledOnce();
+  });
 });

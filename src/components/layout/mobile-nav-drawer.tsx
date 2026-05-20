@@ -103,7 +103,7 @@ function MobileNavDrawer({
             {secondaryContent !== undefined && (
               <>
                 <div className="my-2 border-t border-border" />
-                <div>{secondaryContent}</div>
+                <div onClick={() => onNavigate()}>{secondaryContent}</div>
               </>
             )}
           </nav>

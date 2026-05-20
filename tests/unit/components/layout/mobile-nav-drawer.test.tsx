@@ -122,6 +122,24 @@ describe('MobileNavDrawer', () => {
     expect(screen.getByTestId('secondary')).toBeInTheDocument();
   });
 
+  it('calls onNavigate when secondaryContent is clicked', async () => {
+    const onNavigate = vi.fn();
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={onNavigate}
+        secondaryContent={<button type="button">Project item</button>}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Project item' }));
+
+    expect(onNavigate).toHaveBeenCalledOnce();
+  });
+
   it('does not render secondary section when secondaryContent not provided', () => {
     render(
       <MobileNavDrawer

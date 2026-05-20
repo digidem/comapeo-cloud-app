@@ -210,7 +210,10 @@ function ArchiveBrowser({
                     {/* Clickable archive toggle */}
                     <button
                       type="button"
-                      onClick={() => toggleArchive(archive.archiveId)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleArchive(archive.archiveId);
+                      }}
                       className="min-w-0 flex flex-1 items-center gap-2 rounded-btn cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       {/* Chevron icon — rotates when expanded */}
@@ -253,8 +256,7 @@ function ArchiveBrowser({
                         return sid ? (
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={() => {
                               onSelectServer(sid);
                             }}
                             className="h-10 w-10 sm:h-8 sm:w-8 rounded-full text-text-muted hover:text-text hover:bg-surface
