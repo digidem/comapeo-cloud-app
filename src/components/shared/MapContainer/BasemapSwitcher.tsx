@@ -78,7 +78,6 @@ function BasemapSwitcher({
             className="z-50 w-56 rounded-card border border-border/20 bg-surface-card/95 p-1 shadow-elevated backdrop-blur-md"
             sideOffset={8}
             align="end"
-            role="menu"
             aria-label={intl.formatMessage(messages.basemapLabel)}
           >
             <div className="px-2 py-1.5 text-xs font-medium text-text-muted">
@@ -87,8 +86,6 @@ function BasemapSwitcher({
             {basemaps.map((basemap) => (
               <button
                 key={basemap.id}
-                role="menuitemradio"
-                aria-checked={basemap.id === value}
                 className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none hover:bg-primary/10 hover:text-primary ${
                   basemap.id === value
                     ? 'bg-primary/10 text-primary font-medium'

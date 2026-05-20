@@ -37,7 +37,7 @@ describe('BasemapSwitcher', () => {
     for (const basemap of BASEMAP_CATALOG) {
       expect(screen.getByText(basemap.name)).toBeInTheDocument();
     }
-    expect(screen.getByRole('menu', { name: /basemap/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
   it('calls onChange with the selected basemap id', async () => {
@@ -93,10 +93,10 @@ describe('BasemapSwitcher', () => {
 
     await user.click(screen.getByRole('button', { name: /basemap/i }));
 
-    const selectedItem = screen
-      .getByText('OpenStreetMap')
-      .closest('[role="menuitemradio"]');
-    expect(selectedItem).toHaveAttribute('aria-checked', 'true');
+    const selectedItem = screen.getByRole('button', { name: 'OpenStreetMap' });
+    expect(selectedItem).not.toHaveAttribute('role', 'menuitemradio');
+    expect(selectedItem).not.toHaveAttribute('aria-checked');
+    expect(selectedItem).toHaveClass('bg-primary/10');
   });
 
   it('closes the popover after selecting a basemap', async () => {

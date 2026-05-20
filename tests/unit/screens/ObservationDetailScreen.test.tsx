@@ -29,6 +29,18 @@ vi.mock('@/hooks/useObservations', () => ({
   })),
 }));
 
+vi.mock('@/components/shared/auth-img', () => ({
+  AuthImg: ({
+    src,
+    alt,
+    className,
+  }: {
+    src: string;
+    alt: string;
+    className?: string;
+  }) => <img src={src} alt={alt} className={className} />,
+}));
+
 vi.mock('@/hooks/useProjects', () => ({
   useProjects: vi.fn(() => ({
     data: [{ localId: 'proj-1', name: 'Test Project' }],
@@ -157,5 +169,31 @@ describe('ObservationDetailScreen', () => {
     expect(screen.getByText('Observation')).toBeInTheDocument();
     // Tags card still renders
     expect(screen.getByText(/notes.*Some notes/)).toBeInTheDocument();
+  });
+
+  it('trims photo URLs and skips blank entries in the media gallery', () => {
+    resetMocks();
+    mockObservationsData = [
+      {
+        localId: 'obs-1',
+        projectLocalId: 'proj-1',
+        tags: {
+          category: 'Wildlife',
+          photoUrls:
+            ' https://example.com/photo-1.jpg, ,https://example.com/photo-2.jpg,',
+        },
+        lat: 10.5,
+        lon: -85.2,
+        createdAt: '2026-01-15T00:00:00Z',
+        updatedAt: '2026-01-15T12:00:00Z',
+      },
+    ];
+
+    render(<ObservationDetailScreen />);
+
+    const photos = screen.getAllByRole('img', { name: /photo/i });
+    expect(photos).toHaveLength(2);
+    expect(photos[0]).toHaveAttribute('src', 'https://example.com/photo-1.jpg');
+    expect(photos[1]).toHaveAttribute('src', 'https://example.com/photo-2.jpg');
   });
 });

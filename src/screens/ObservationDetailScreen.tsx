@@ -154,18 +154,22 @@ export function ObservationDetailScreen() {
             {intl.formatMessage(messages.mediaGallery)}
           </h3>
           <div className="flex flex-wrap gap-2">
-            {tags.photoUrls.split(',').map((url, index) => (
-              <div
-                key={url}
-                className="h-20 w-20 overflow-hidden rounded-md bg-surface-container-low"
-              >
-                <AuthImg
-                  src={url}
-                  alt={`Photo ${index + 1}`}
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            ))}
+            {tags.photoUrls
+              .split(',')
+              .map((url) => url.trim())
+              .filter(Boolean)
+              .map((url, index) => (
+                <div
+                  key={`${url}-${index}`}
+                  className="h-20 w-20 overflow-hidden rounded-md bg-surface-container-low"
+                >
+                  <AuthImg
+                    src={url}
+                    alt={`Photo ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ))}
           </div>
         </Card>
       )}
