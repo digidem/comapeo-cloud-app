@@ -7,6 +7,10 @@ const messages = defineMessages({
     id: 'mediaPreview.moreCount',
     defaultMessage: '+{count} more',
   },
+  moreCountAriaLabel: {
+    id: 'mediaPreview.moreCountAriaLabel',
+    defaultMessage: '{count} more media files',
+  },
   photoAlt: {
     id: 'mediaPreview.photoAlt',
     defaultMessage: 'Photo {number}',
@@ -41,9 +45,18 @@ export function MediaPreview({
 
   if (!tags) return null;
 
-  const photoUrls = tags.photoUrls ? tags.photoUrls.split(',') : [];
-  const audioCount = tags.audioCount ? Number(tags.audioCount) : 0;
-  const totalMedia = photoUrls.length + audioCount;
+  // Filter out empty strings from split (handles trailing commas, consecutive commas, empty string)
+  const photoUrls = tags.photoUrls
+    ? tags.photoUrls
+        .split(',')
+        .map((url) => url.trim())
+        .filter(Boolean)
+    : [];
+  const rawAudioCount = tags.audioCount ? Number(tags.audioCount) : 0;
+  const safeAudioCount = Number.isFinite(rawAudioCount)
+    ? Math.max(0, Math.floor(rawAudioCount))
+    : 0;
+  const totalMedia = photoUrls.length + safeAudioCount;
 
   if (totalMedia === 0) return null;
 
@@ -51,7 +64,7 @@ export function MediaPreview({
   const visiblePhotos = photoUrls.slice(0, 2);
 
   // Calculate remaining: total - what we actually show (photos + audio icon if visible)
-  const shownItems = visiblePhotos.length + (audioCount > 0 ? 1 : 0);
+  const shownItems = visiblePhotos.length + (safeAudioCount > 0 ? 1 : 0);
   const actualRemaining = totalMedia - Math.min(shownItems, 2);
 
   return (
@@ -69,9 +82,10 @@ export function MediaPreview({
         </div>
       ))}
 
-      {audioCount > 0 && visiblePhotos.length < 2 && (
+      {safeAudioCount > 0 && visiblePhotos.length < 2 && (
         <div
           data-testid="audio-icon"
+          role="img"
           className="flex h-10 w-10 items-center justify-center rounded-md bg-surface-container-low"
           aria-label={intl.formatMessage(messages.audioAlt)}
         >
@@ -93,7 +107,12 @@ export function MediaPreview({
       )}
 
       {actualRemaining > 0 && (
-        <span className="text-primary text-xs font-medium whitespace-nowrap">
+        <span
+          className="text-primary text-xs font-medium whitespace-nowrap"
+          aria-label={intl.formatMessage(messages.moreCountAriaLabel, {
+            count: actualRemaining,
+          })}
+        >
           {intl.formatMessage(messages.moreCount, {
             count: actualRemaining,
           })}

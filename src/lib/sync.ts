@@ -30,18 +30,15 @@ const activeSyncs = new Map<string, Promise<SyncResult>>();
 async function ensureServerInStore(
   options: SyncOptions,
 ): Promise<string | null> {
-  const { servers } = useAuthStore.getState();
-  let server = servers.find((s) => s.baseUrl === options.baseUrl);
-  if (!server) {
-    await useAuthStore.getState().addServer({
-      label: options.serverLabel ?? options.baseUrl,
-      baseUrl: options.baseUrl,
-      token: options.token,
-    });
-    const updated = useAuthStore.getState().servers;
-    server = updated.find((s) => s.baseUrl === options.baseUrl);
-  }
-  return server?.id ?? null;
+  // Always call addServer — it handles deduplication by baseUrl and
+  // updates the token when it has changed, keeping the auth store in
+  // sync with the credentials used for the current sync operation.
+  const id = await useAuthStore.getState().addServer({
+    label: options.serverLabel ?? options.baseUrl,
+    baseUrl: options.baseUrl,
+    token: options.token,
+  });
+  return id;
 }
 
 async function doSync(

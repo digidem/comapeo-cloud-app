@@ -111,4 +111,124 @@ describe('MediaPreview', () => {
     expect(screen.getAllByTestId('auth-img')).toHaveLength(1);
     expect(screen.getByTestId('audio-icon')).toBeInTheDocument();
   });
+
+  // --- Edge case tests (from external review findings) ---
+
+  describe('edge cases', () => {
+    it('filters out empty strings from photoUrls with trailing comma', () => {
+      render(
+        <MediaPreview
+          observationLocalId="obs-1"
+          tags={{ photoUrls: 'https://example.com/photo1.jpg,' }}
+        />,
+      );
+      const imgs = screen.getAllByTestId('auth-img');
+      expect(imgs).toHaveLength(1);
+      expect(imgs[0]).toHaveAttribute('src', 'https://example.com/photo1.jpg');
+    });
+
+    it('filters out empty strings from photoUrls with consecutive commas', () => {
+      render(
+        <MediaPreview
+          observationLocalId="obs-1"
+          tags={{
+            photoUrls:
+              'https://example.com/photo1.jpg,,https://example.com/photo2.jpg',
+          }}
+        />,
+      );
+      const imgs = screen.getAllByTestId('auth-img');
+      expect(imgs).toHaveLength(2);
+    });
+
+    it('trims photo URLs and ignores whitespace-only entries', () => {
+      render(
+        <MediaPreview
+          observationLocalId="obs-1"
+          tags={{
+            photoUrls:
+              ' https://example.com/photo1.jpg ,   , https://example.com/photo2.jpg ',
+          }}
+        />,
+      );
+      const imgs = screen.getAllByTestId('auth-img');
+      expect(imgs).toHaveLength(2);
+      expect(imgs[0]).toHaveAttribute('src', 'https://example.com/photo1.jpg');
+      expect(imgs[1]).toHaveAttribute('src', 'https://example.com/photo2.jpg');
+    });
+
+    it('renders nothing when photoUrls is an empty string', () => {
+      const { container } = render(
+        <MediaPreview observationLocalId="obs-1" tags={{ photoUrls: '' }} />,
+      );
+      expect(container.innerHTML).toBe('');
+    });
+
+    it('handles non-numeric audioCount gracefully', () => {
+      const { container } = render(
+        <MediaPreview
+          observationLocalId="obs-1"
+          tags={{ audioCount: 'abc' }}
+        />,
+      );
+      // Number('abc') is NaN — component should handle gracefully
+      // Should not crash; renders nothing or renders safely
+      expect(container.innerHTML).toBeDefined();
+    });
+
+    it('ignores negative audioCount values', () => {
+      render(
+        <MediaPreview
+          observationLocalId="obs-1"
+          tags={{
+            photoUrls: 'https://example.com/photo1.jpg',
+            audioCount: '-1',
+          }}
+        />,
+      );
+      expect(screen.getAllByTestId('auth-img')).toHaveLength(1);
+      expect(screen.queryByTestId('audio-icon')).not.toBeInTheDocument();
+    });
+
+    it('rounds fractional audioCount values down', () => {
+      render(
+        <MediaPreview
+          observationLocalId="obs-1"
+          tags={{
+            photoUrls:
+              'https://example.com/photo1.jpg,https://example.com/photo2.jpg',
+            audioCount: '1.9',
+          }}
+        />,
+      );
+      expect(screen.getByText('+1 more')).toBeInTheDocument();
+    });
+  });
+
+  // --- Accessibility tests ---
+
+  describe('accessibility', () => {
+    it('audio icon has role="img" for screen readers', () => {
+      render(
+        <MediaPreview observationLocalId="obs-1" tags={{ audioCount: '1' }} />,
+      );
+      const audioIcon = screen.getByTestId('audio-icon');
+      expect(audioIcon).toHaveAttribute('role', 'img');
+    });
+
+    it('"+N more" span has aria-label with context', () => {
+      render(
+        <MediaPreview
+          observationLocalId="obs-1"
+          tags={{
+            photoUrls:
+              'https://example.com/photo1.jpg,https://example.com/photo2.jpg,https://example.com/photo3.jpg',
+          }}
+        />,
+      );
+      const moreText = screen.getByText('+1 more');
+      expect(moreText).toHaveAttribute('aria-label');
+      expect(moreText.getAttribute('aria-label')).toContain('1');
+    });
+  });
 });

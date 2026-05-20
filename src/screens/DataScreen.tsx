@@ -62,6 +62,14 @@ const messages = defineMessages({
     id: 'data.addAlert',
     defaultMessage: 'Add Alert',
   },
+  observationsError: {
+    id: 'data.observationsError',
+    defaultMessage: 'Failed to load observations. Please try again.',
+  },
+  alertsError: {
+    id: 'data.alertsError',
+    defaultMessage: 'Failed to load alerts. Please try again.',
+  },
 });
 
 export function DataScreen() {
@@ -146,6 +154,15 @@ export function DataScreen() {
 
         <TabsContent value="observations">
           {(() => {
+            if (observationsQuery.isError) {
+              return (
+                <div className="flex items-center justify-center p-8">
+                  <span className="text-error text-sm">
+                    {intl.formatMessage(messages.observationsError)}
+                  </span>
+                </div>
+              );
+            }
             if (observationsQuery.isPending) {
               return (
                 <div className="flex items-center justify-center p-8">
@@ -203,6 +220,15 @@ export function DataScreen() {
 
         <TabsContent value="alerts">
           {(() => {
+            if (alertsQuery.isError) {
+              return (
+                <div className="flex items-center justify-center p-8">
+                  <span className="text-error text-sm">
+                    {intl.formatMessage(messages.alertsError)}
+                  </span>
+                </div>
+              );
+            }
             if (alertsQuery.isPending) {
               return (
                 <div className="flex items-center justify-center p-8">
