@@ -27,12 +27,12 @@ function MobileNavDrawer({
       <Dialog.Portal>
         <Dialog.Overlay
           forceMount
-          className="fixed inset-0 z-50 bg-black/50 motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-out data-[state=closed]:opacity-0 data-[state=open]:opacity-100"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm motion-safe:transition-opacity motion-safe:duration-200 motion-safe:ease-out data-[state=closed]:opacity-0 data-[state=open]:opacity-100"
         />
         <Dialog.Content
           forceMount
           aria-describedby={undefined}
-          className="fixed top-0 bottom-0 left-0 z-50 w-[85vw] max-w-96 flex flex-col bg-surface-card shadow-elevated focus:outline-none motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:-translate-x-full data-[state=open]:translate-x-0"
+          className="fixed top-0 bottom-0 left-0 z-50 w-[85vw] max-w-96 flex flex-col bg-surface-card shadow-elevated focus:outline-none motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:-translate-x-full data-[state=open]:translate-x-0"
         >
           {/* Visually hidden title for accessibility */}
           <Dialog.Title asChild>
@@ -76,16 +76,17 @@ function MobileNavDrawer({
 
           {/* Nav section */}
           <nav className="flex-1 overflow-y-auto px-2 py-2">
-            {navItems.map((item) => {
+            {navItems.map((item, index) => {
               const isActive = activePath === item.path;
               return (
                 <Link
                   key={item.path}
                   to={item.path}
                   onClick={() => onNavigate()}
-                  className={`flex w-full items-center gap-3 rounded-btn px-3 py-3 text-sm font-medium ${
+                  style={{ animationDelay: `${index * 30}ms` }}
+                  className={`flex w-full items-center gap-3 rounded-btn px-3 py-3 text-sm font-medium motion-safe:animate-[slideInItem_0.3s_ease-out_both] ${
                     isActive
-                      ? 'bg-primary-soft text-primary'
+                      ? 'bg-primary-soft text-primary border-l-4 border-primary'
                       : 'text-text hover:bg-surface'
                   }`}
                 >

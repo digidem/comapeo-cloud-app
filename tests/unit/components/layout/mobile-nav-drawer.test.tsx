@@ -151,4 +151,100 @@ describe('MobileNavDrawer', () => {
     expect(screen.queryByText('Mobile')).not.toBeInTheDocument();
     expect(screen.queryByText('Sentinel')).not.toBeInTheDocument();
   });
+
+  describe('animation enhancements', () => {
+    it('overlay has backdrop-blur-sm class', () => {
+      render(
+        <MobileNavDrawer
+          open={true}
+          onOpenChange={() => {}}
+          navItems={navItems}
+          activePath="/"
+          onNavigate={() => {}}
+        />,
+      );
+      // Radix Dialog.Overlay renders as a div with data-state attribute
+      const overlays = document.querySelectorAll('div[data-state]');
+      const overlay = Array.from(overlays).find((el) =>
+        el.className.includes('backdrop-blur'),
+      );
+      expect(overlay).toBeTruthy();
+      expect(overlay?.className).toContain('backdrop-blur-sm');
+    });
+
+    it('drawer content has duration-300 class', () => {
+      render(
+        <MobileNavDrawer
+          open={true}
+          onOpenChange={() => {}}
+          navItems={navItems}
+          activePath="/"
+          onNavigate={() => {}}
+        />,
+      );
+      const content = document.querySelector('[role="dialog"]');
+      expect(content?.className).toContain('duration-300');
+    });
+
+    it('nav items have staggered animationDelay inline styles', () => {
+      render(
+        <MobileNavDrawer
+          open={true}
+          onOpenChange={() => {}}
+          navItems={navItems}
+          activePath="/"
+          onNavigate={() => {}}
+        />,
+      );
+      const links = screen.getAllByRole('link');
+      expect(links[0]).toHaveStyle({ animationDelay: '0ms' });
+      expect(links[1]).toHaveStyle({ animationDelay: '30ms' });
+    });
+
+    it('active nav item has border-l-4 border-primary accent', () => {
+      render(
+        <MobileNavDrawer
+          open={true}
+          onOpenChange={() => {}}
+          navItems={navItems}
+          activePath="/"
+          onNavigate={() => {}}
+        />,
+      );
+      // Find the active link by text content (icon text makes role-based query unreliable)
+      const homeLink = screen.getByText('Home').closest('a');
+      expect(homeLink).toBeTruthy();
+      expect(homeLink!.className).toContain('border-l-4');
+      expect(homeLink!.className).toContain('border-primary');
+    });
+
+    it('drawer header still contains close button', () => {
+      render(
+        <MobileNavDrawer
+          open={true}
+          onOpenChange={() => {}}
+          navItems={navItems}
+          activePath="/"
+          onNavigate={() => {}}
+        />,
+      );
+      expect(
+        screen.getByRole('button', { name: /close menu/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('nav items have motion-safe animate class', () => {
+      render(
+        <MobileNavDrawer
+          open={true}
+          onOpenChange={() => {}}
+          navItems={navItems}
+          activePath="/"
+          onNavigate={() => {}}
+        />,
+      );
+      const links = screen.getAllByRole('link');
+      expect(links[0]!.className).toContain('motion-safe:animate-');
+    });
+  });
 });

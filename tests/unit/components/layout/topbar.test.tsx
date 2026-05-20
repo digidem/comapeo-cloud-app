@@ -112,4 +112,73 @@ describe('Topbar', () => {
     expect(label.className).toContain('hidden');
     expect(label.className).toContain('md:inline-flex');
   });
+
+  describe('animated hamburger button', () => {
+    it('renders 3 span bars when isMenuOpen is false', () => {
+      render(<Topbar onMenuClick={() => {}} isMenuOpen={false} />);
+      const btn = screen.getByRole('button', { name: /open menu/i });
+      // The 3 bars are inside the aria-hidden wrapper
+      const wrapper = btn.querySelector('[aria-hidden="true"]');
+      const bars = wrapper!.querySelectorAll('span');
+      expect(bars).toHaveLength(3);
+    });
+
+    it('transforms bars when isMenuOpen is true', () => {
+      render(<Topbar onMenuClick={() => {}} isMenuOpen={true} />);
+      const btn = screen.getByRole('button', { name: /close menu/i });
+      const wrapper = btn.querySelector('[aria-hidden="true"]');
+      const bars = wrapper!.querySelectorAll('span');
+      // Top bar rotates 45deg
+      expect(bars[0]!.className).toContain('rotate-45');
+      // Middle bar hides
+      expect(bars[1]!.className).toContain('opacity-0');
+      // Bottom bar rotates -45deg
+      expect(bars[2]!.className).toContain('-rotate-45');
+    });
+
+    it('has aria-label "Open menu" when closed', () => {
+      render(<Topbar onMenuClick={() => {}} isMenuOpen={false} />);
+      expect(
+        screen.getByRole('button', { name: 'Open menu' }),
+      ).toBeInTheDocument();
+    });
+
+    it('has aria-label "Close menu" when open', () => {
+      render(<Topbar onMenuClick={() => {}} isMenuOpen={true} />);
+      expect(
+        screen.getByRole('button', { name: 'Close menu' }),
+      ).toBeInTheDocument();
+    });
+
+    it('has aria-expanded false when closed', () => {
+      render(<Topbar onMenuClick={() => {}} isMenuOpen={false} />);
+      const btn = screen.getByRole('button', { name: /menu/i });
+      expect(btn).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('has aria-expanded true when open', () => {
+      render(<Topbar onMenuClick={() => {}} isMenuOpen={true} />);
+      const btn = screen.getByRole('button', { name: /menu/i });
+      expect(btn).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('button has active:scale-90 class', () => {
+      render(<Topbar onMenuClick={() => {}} isMenuOpen={false} />);
+      const btn = screen.getByRole('button', { name: /open menu/i });
+      expect(btn.className).toContain('active:scale-90');
+    });
+
+    it('button has motion-safe:transition-transform class', () => {
+      render(<Topbar onMenuClick={() => {}} isMenuOpen={false} />);
+      const btn = screen.getByRole('button', { name: /open menu/i });
+      expect(btn.className).toContain('motion-safe:transition-transform');
+    });
+
+    it('clicking the button calls onMenuClick', async () => {
+      const onMenuClick = vi.fn();
+      render(<Topbar onMenuClick={onMenuClick} isMenuOpen={false} />);
+      await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
+      expect(onMenuClick).toHaveBeenCalledOnce();
+    });
+  });
 });

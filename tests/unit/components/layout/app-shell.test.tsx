@@ -221,4 +221,22 @@ describe('AppShell', () => {
       screen.queryByRole('button', { name: /close menu/i }),
     ).not.toBeInTheDocument();
   });
+
+  it('updates hamburger aria-label when drawer opens', async () => {
+    render(
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
+        <div>Main content</div>
+      </AppShell>,
+    );
+    // Initially closed — hamburger shows "Open menu"
+    expect(
+      screen.getByRole('button', { name: /open menu/i }),
+    ).toBeInTheDocument();
+    // Open the drawer
+    await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    // Drawer close button should be visible (confirming drawer opened)
+    expect(
+      screen.getByRole('button', { name: /close menu/i }),
+    ).toBeInTheDocument();
+  });
 });

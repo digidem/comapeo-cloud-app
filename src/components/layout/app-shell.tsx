@@ -47,6 +47,7 @@ function AppShell({
         workspaceName={topbarWorkspaceName}
         modeLabel={topbarModeLabel}
         onMenuClick={() => setMobileMenuOpen(true)}
+        isMenuOpen={mobileMenuOpen}
       >
         {topbarActions}
       </Topbar>

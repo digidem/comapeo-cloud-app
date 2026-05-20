@@ -6,6 +6,7 @@ interface TopbarProps {
   workspaceName?: string;
   modeLabel?: string;
   onMenuClick?: () => void;
+  isMenuOpen?: boolean;
   children?: ReactNode;
 }
 
@@ -13,6 +14,7 @@ function Topbar({
   workspaceName,
   modeLabel,
   onMenuClick,
+  isMenuOpen,
   children,
 }: TopbarProps) {
   return (
@@ -25,24 +27,27 @@ function Topbar({
           <button
             type="button"
             onClick={onMenuClick}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-text-muted hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-white lg:hidden"
-            aria-label="Open menu"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-text-muted hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-white active:scale-90 motion-safe:transition-transform motion-safe:duration-150 lg:hidden"
+            aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={isMenuOpen ? 'true' : 'false'}
           >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
+            <span className="sr-only">
+              {isMenuOpen ? 'Close menu' : 'Open menu'}
+            </span>
+            <span
               aria-hidden="true"
+              className="flex h-5 w-6 flex-col items-center justify-center gap-[5px]"
             >
-              <path
-                d="M3 6h18M3 12h18M3 18h18"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
+              <span
+                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-transform motion-safe:duration-150 ${isMenuOpen ? 'translate-y-[7px] rotate-45' : ''}`}
               />
-            </svg>
+              <span
+                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-opacity motion-safe:duration-150 ${isMenuOpen ? 'opacity-0' : ''}`}
+              />
+              <span
+                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-transform motion-safe:duration-150 ${isMenuOpen ? '-translate-y-[7px] -rotate-45' : ''}`}
+              />
+            </span>
           </button>
         )}
         <span className="font-semibold" aria-label="CoMapeo Cloud">
