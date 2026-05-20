@@ -4,11 +4,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { Topbar } from '@/components/layout/topbar';
 
 describe('Topbar', () => {
-  it('renders with logo image', () => {
+  it('renders CoMapeo Cloud text with styled segments', () => {
     render(<Topbar />);
-    const logo = screen.getByRole('img', { name: 'CoMapeo Cloud' });
-    expect(logo).toBeInTheDocument();
-    expect(logo).toHaveAttribute('src', '/comapeo_cloud_logo_min.png');
+    const label = screen.getByLabelText('CoMapeo Cloud');
+    expect(label).toBeInTheDocument();
+    expect(label).toHaveClass('font-semibold');
+    const co = label.querySelector('.text-warning');
+    expect(co).toHaveTextContent('Co');
+    const rest = label.querySelector('.text-text');
+    expect(rest).toHaveTextContent('Mapeo Cloud');
   });
 
   it('renders children (action buttons)', () => {
@@ -26,10 +30,10 @@ describe('Topbar', () => {
     expect(topbar.className).toContain('h-14');
   });
 
-  it('has white background', () => {
+  it('has surface-card background', () => {
     render(<Topbar />);
     const topbar = screen.getByRole('banner');
-    expect(topbar.className).toContain('bg-white');
+    expect(topbar.className).toContain('bg-surface-card');
   });
 
   it('renders workspace badge when workspaceName provided', () => {
@@ -78,10 +82,21 @@ describe('Topbar', () => {
     expect(btn.className).toContain('lg:hidden');
   });
 
-  it('logo has correct height class', () => {
+  it('does not render logo image', () => {
     render(<Topbar />);
-    const logo = screen.getByRole('img', { name: 'CoMapeo Cloud' });
-    expect(logo.className).toContain('h-12');
+    const images = screen.queryAllByRole('img');
+    expect(images).toHaveLength(0);
+  });
+
+  it('renders CoMapeo Cloud branding text', () => {
+    render(<Topbar />);
+    const label = screen.getByLabelText('CoMapeo Cloud');
+    expect(label).toBeInTheDocument();
+    expect(label).toHaveClass('font-semibold');
+    const co = label.querySelector('.text-warning');
+    expect(co).toHaveTextContent('Co');
+    const rest = label.querySelector('.text-text');
+    expect(rest).toHaveTextContent('Mapeo Cloud');
   });
 
   it('workspace badge has hidden sm:inline-flex class', () => {

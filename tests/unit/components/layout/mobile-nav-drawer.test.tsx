@@ -33,6 +33,22 @@ const navItems = [
 ];
 
 describe('MobileNavDrawer', () => {
+  it('renders logo and branding when open', () => {
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+      />,
+    );
+    const logo = document.querySelector('img');
+    expect(logo).toBeInTheDocument();
+    expect(logo).toHaveAttribute('src', '/comapeo_cloud_app.svg');
+    expect(screen.getByLabelText('CoMapeo Cloud')).toBeInTheDocument();
+  });
+
   it('renders nav items with correct labels when open', () => {
     render(
       <MobileNavDrawer

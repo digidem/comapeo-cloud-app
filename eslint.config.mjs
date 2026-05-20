@@ -1,3 +1,6 @@
+// For more info, see https://github.com/storybookjs/eslint-plugin-storybook#configuration-flat-config-format
+import storybook from "eslint-plugin-storybook";
+
 // @ts-check
 import { includeIgnoreFile } from '@eslint/compat';
 import pluginJs from '@eslint/js';
@@ -100,4 +103,11 @@ export default pluginTs.config(
       'testing-library/prefer-screen-queries': 'off',
     },
   },
+  // Storybook config files
+  {
+    name: 'storybook',
+    files: ['.storybook/**/*.{js,jsx,ts,tsx}'],
+    extends: [pluginTs.configs.recommended],
+  },
+  storybook.configs["flat/recommended"]
 );

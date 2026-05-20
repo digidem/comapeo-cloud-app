@@ -25,3 +25,6 @@ log/
 TASKS.md
 DESIGN.md
 _verify_translations.py
+
+*storybook.log
+storybook-static

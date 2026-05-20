@@ -99,7 +99,7 @@ export function ProjectBannerCard({
           data-testid="default-banner-bg"
           className="absolute inset-0 z-0"
           style={{
-            backgroundImage: "url('/amazon_banner.png')",
+            backgroundImage: "url('/amazon_banner.webp')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}

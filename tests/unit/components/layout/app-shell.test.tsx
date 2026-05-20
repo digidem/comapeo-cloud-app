@@ -35,15 +35,13 @@ const navItems = [
 ];
 
 describe('AppShell', () => {
-  it('renders topbar with logo', () => {
+  it('renders topbar with branding text', () => {
     render(
       <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );
-    expect(
-      screen.getByRole('img', { name: 'CoMapeo Cloud' }),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText('CoMapeo Cloud')).toBeInTheDocument();
   });
 
   it('renders primary nav with items', () => {

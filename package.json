@@ -18,12 +18,12 @@
     "lint:prettier": "prettier --check .",
     "lint:types": "tsc --noEmit",
     "format": "prettier --write .",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
+    "test": "vitest run --project=unit",
+    "test:watch": "vitest --project=unit",
+    "test:coverage": "vitest run --project=unit --coverage",
+    "test:e2e": "playwright test --reporter=list",
     "test:e2e:ui": "playwright test --ui",
-    "test:screenshots": "playwright test --project=screenshot",
+    "test:screenshots": "playwright test --project=screenshot --reporter=list",
     "review:visual": "npx tsx tests/e2e/review-screenshots.ts",
     "deploy": "npm run build && npx tsx scripts/clean-sourcemaps.ts && npx wrangler pages deploy dist/ --project-name=comapeo-cloud-app",
     "deploy:preview": "npm run build && npx tsx scripts/clean-sourcemaps.ts && npx wrangler pages deploy dist/ --project-name=comapeo-cloud-app --branch preview",
@@ -35,7 +35,9 @@
     "clean-sourcemaps": "npx tsx scripts/clean-sourcemaps.ts",
     "upload-sourcemaps": "npx tsx scripts/upload-sourcemaps.ts",
     "translate:locale": "npx tsx scripts/translate-locale.ts",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run --project=unit",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -101,6 +103,16 @@
     "vite": "^8.0.10",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.5",
-    "wrangler": "^4.88.0"
+    "wrangler": "^4.88.0",
+    "storybook": "^10.4.0",
+    "@storybook/tanstack-react": "^10.4.0",
+    "@chromatic-com/storybook": "^5.2.1",
+    "@storybook/addon-vitest": "^10.4.0",
+    "@storybook/addon-a11y": "^10.4.0",
+    "@storybook/addon-docs": "^10.4.0",
+    "@storybook/addon-mcp": "^0.6.0",
+    "eslint-plugin-storybook": "^10.4.0",
+    "playwright": "^1.60.0",
+    "@vitest/browser-playwright": "^4.1.5"
   }
 }

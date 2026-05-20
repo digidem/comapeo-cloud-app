@@ -35,8 +35,8 @@ Every feature MUST follow this cycle:
 npm test              # Run all unit tests once
 npm run test:watch    # Run tests in watch mode during development
 npm run test:coverage # Run tests with coverage report (enforces 80% threshold)
-npm run test:e2e      # Run Playwright E2E tests (chromium, firefox, webkit)
-npm run test:screenshots  # Generate desktop + mobile screenshots (chromium only)
+npm run test:e2e      # Run Playwright E2E tests (chromium, firefox, webkit) — uses --reporter=list to avoid HTML report server blocking
+npm run test:screenshots  # Generate desktop + mobile screenshots (chromium only) — uses --reporter=list
 npm run review:visual # Output JSON manifest of all generated screenshots
 npm run extract-messages  # Extract i18n messages from source to en.json
 npm run format        # Format all files with Prettier
@@ -188,6 +188,51 @@ chore(deps): update TanStack Query
 ```
 
 Types: `feat`, `fix`, `test`, `refactor`, `chore`, `docs`, `style`, `ci`
+
+## Storybook
+
+Visual component explorer using `@storybook/tanstack-react`. Stories live alongside their components (`*.stories.tsx`).
+
+### Commands
+
+```bash
+npm run build-storybook  # Static build to storybook-static/ (exits cleanly — use this for agents/CI)
+npm run storybook        # Dev server on :6006 (interactive only — long-running, does NOT exit)
+```
+
+### For agents (non-interactive)
+
+`storybook dev` is a long-running dev server that blocks until Ctrl+C. **Never run it directly.** Instead:
+
+```bash
+# 1. Build static Storybook (exits cleanly)
+npm run build-storybook
+
+# 2. Serve the static build in background
+npx serve storybook-static -l 6006 -s &
+
+# 3. Take screenshots / interact with http://localhost:6006
+
+# 4. Kill the server when done
+kill %1
+```
+
+### Mock architecture
+
+Stories use Vite aliases (`.storybook/main.ts`) to redirect module imports to mocks in `src/screens/stories/__mocks__/`:
+
+- `stores.ts` — Zustand stores with controllable state
+- `hooks.ts` — TanStack Query hooks returning fixture data (projects, observations, alerts)
+- `api-client.ts`, `data-layer.ts`, `invite-url.ts`, `geojson-export.ts` — API/utility stubs
+
+The `@tanstack/react-router` is NOT mocked — the `@storybook/tanstack-react` framework provides its own router decorator that wraps all stories in a memory router context.
+
+### Adding stories
+
+1. Create `src/screens/ScreenName.stories.tsx` alongside the component
+2. Import from `@storybook/tanstack-react` (not `@storybook/react`)
+3. Use `useProjectStore.setState()` in decorators to control store state
+4. Set `parameters: { layout: 'fullscreen' }` for screen-level stories
 
 ## Cloudflare Deployment
 

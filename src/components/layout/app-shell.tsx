@@ -53,7 +53,7 @@ function AppShell({
       <div className="flex flex-1 pt-14">
         <PrimaryNav items={navItems} activePath={activeNavPath} />
         {secondaryContent !== undefined && (
-          <aside className="hidden w-[268px] flex-col border-r border-border bg-white lg:flex">
+          <aside className="hidden w-[268px] flex-col border-r border-border bg-surface-card lg:flex">
             {secondaryContent}
           </aside>
         )}

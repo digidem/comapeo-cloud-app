@@ -288,7 +288,7 @@ export function CreateAlertScreen() {
             </p>
           )}
 
-          <div className="flex gap-3">
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
             <Button
               type="submit"
               variant="primary"

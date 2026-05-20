@@ -124,7 +124,7 @@ export function DataScreen() {
 
       {/* Tabbed content */}
       <Tabs defaultValue="observations">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <TabsList>
             <TabsTrigger value="observations">
               {intl.formatMessage(messages.observationsTab)} (
@@ -137,7 +137,7 @@ export function DataScreen() {
 
           <Link
             to="/data/alerts/new"
-            className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white no-underline hover:bg-primary-dark transition-colors"
+            className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white no-underline hover:bg-primary-dark transition-colors text-center"
           >
             {intl.formatMessage(messages.addAlert)}
           </Link>

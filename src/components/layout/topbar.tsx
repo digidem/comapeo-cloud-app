@@ -18,7 +18,7 @@ function Topbar({
   return (
     <header
       role="banner"
-      className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between border-b border-border bg-white px-4"
+      className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between border-b border-border bg-surface-card px-4"
     >
       <div className="flex items-center gap-3">
         {onMenuClick && (
@@ -45,11 +45,10 @@ function Topbar({
             </svg>
           </button>
         )}
-        <img
-          src="/comapeo_cloud_logo_min.png"
-          alt="CoMapeo Cloud"
-          className="h-12 w-auto"
-        />
+        <span className="font-semibold" aria-label="CoMapeo Cloud">
+          <span className="text-warning">Co</span>
+          <span className="text-text">Mapeo Cloud</span>
+        </span>
         {workspaceName && (
           <span className="hidden bg-primary-soft text-primary rounded-full px-3 py-0.5 text-sm font-medium sm:inline-flex">
             {workspaceName}

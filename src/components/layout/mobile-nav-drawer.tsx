@@ -40,11 +40,18 @@ function MobileNavDrawer({
           </Dialog.Title>
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <img
-              src="/comapeo_cloud_logo_min.png"
-              alt="CoMapeo Cloud"
-              className="h-10 w-auto"
-            />
+            <div className="flex items-center gap-2">
+              <img
+                src="/comapeo_cloud_app.svg"
+                alt=""
+                className="h-10 w-auto"
+                aria-hidden="true"
+              />
+              <span className="font-semibold" aria-label="CoMapeo Cloud">
+                <span className="text-warning">Co</span>
+                <span className="text-text">Mapeo Cloud</span>
+              </span>
+            </div>
             <Dialog.Close
               className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-text-muted hover:text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               aria-label="Close menu"
