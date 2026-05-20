@@ -14,7 +14,7 @@ vi.mock('@/lib/api-client', () => ({
       name: string,
       variant?: string,
     ) =>
-      `https://example.com/attachments/${driveId}/${type}/${name}${variant ? `/${variant}` : ''}`,
+      `https://example.com/attachments/${driveId}/${type}/${name}${variant ? `?variant=${variant}` : ''}`,
   ),
 }));
 

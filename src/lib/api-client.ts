@@ -392,5 +392,5 @@ export function getAttachmentUrl(
   const { baseUrl } = useAuthStore.getState();
   const base = baseUrl?.replace(/\/+$/, '') ?? '';
   const path = `${base}/projects/${encodeURIComponent(projectId)}/attachments/${encodeURIComponent(driveId)}/${encodeURIComponent(type)}/${encodeURIComponent(name)}`;
-  return variant ? `${path}/${variant}` : path;
+  return variant ? `${path}?variant=${encodeURIComponent(variant)}` : path;
 }

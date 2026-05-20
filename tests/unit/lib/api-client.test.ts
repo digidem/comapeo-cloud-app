@@ -640,7 +640,7 @@ describe('getAttachmentUrl', () => {
       'thumbnail',
     );
     expect(url).toBe(
-      `${BASE_URL}/projects/proj-1/attachments/drive-abc/photo/image.jpg/thumbnail`,
+      `${BASE_URL}/projects/proj-1/attachments/drive-abc/photo/image.jpg?variant=thumbnail`,
     );
   });
 
