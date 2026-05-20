@@ -272,6 +272,11 @@ export function SettingsScreen() {
     [],
   );
 
+  const handleClearAll = useCallback(async () => {
+    await clearAllStorage();
+    window.location.reload();
+  }, []);
+
   return (
     <section className="p-3 sm:p-4 lg:p-6">
       <h1 className="text-2xl font-bold text-text-heading">
@@ -460,9 +465,7 @@ export function SettingsScreen() {
             type="button"
             variant="danger"
             size="sm"
-            onClick={() => {
-              void clearAllStorage();
-            }}
+            onClick={handleClearAll}
           >
             {intl.formatMessage(_messages.clearConfirmButton)}
           </Button>

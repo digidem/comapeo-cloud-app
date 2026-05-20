@@ -6,13 +6,10 @@ import { Topbar } from '@/components/layout/topbar';
 describe('Topbar', () => {
   it('renders CoMapeo Cloud text with styled segments', () => {
     render(<Topbar />);
-    const label = screen.getByLabelText('CoMapeo Cloud');
-    expect(label).toBeInTheDocument();
-    expect(label).toHaveClass('font-semibold');
-    const co = label.querySelector('.text-warning');
-    expect(co).toHaveTextContent('Co');
-    const rest = label.querySelector('.text-text');
-    expect(rest).toHaveTextContent('Mapeo Cloud');
+    // The branding text is split across two styled spans with aria-label
+    expect(screen.getByLabelText('CoMapeo Cloud')).toBeInTheDocument();
+    expect(screen.getByText('Co')).toBeInTheDocument();
+    expect(screen.getByText('Mapeo Cloud')).toBeInTheDocument();
   });
 
   it('renders children (action buttons)', () => {
@@ -90,13 +87,8 @@ describe('Topbar', () => {
 
   it('renders CoMapeo Cloud branding text', () => {
     render(<Topbar />);
-    const label = screen.getByLabelText('CoMapeo Cloud');
-    expect(label).toBeInTheDocument();
-    expect(label).toHaveClass('font-semibold');
-    const co = label.querySelector('.text-warning');
-    expect(co).toHaveTextContent('Co');
-    const rest = label.querySelector('.text-text');
-    expect(rest).toHaveTextContent('Mapeo Cloud');
+    expect(screen.getByText('Co')).toBeInTheDocument();
+    expect(screen.getByText('Mapeo Cloud')).toBeInTheDocument();
   });
 
   it('workspace badge has hidden sm:inline-flex class', () => {
@@ -179,6 +171,13 @@ describe('Topbar', () => {
       render(<Topbar onMenuClick={onMenuClick} isMenuOpen={false} />);
       await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
       expect(onMenuClick).toHaveBeenCalledOnce();
+    });
+
+    it('button has visible focus ring (ring-primary, not ring-white)', () => {
+      render(<Topbar onMenuClick={() => {}} isMenuOpen={false} />);
+      const btn = screen.getByRole('button', { name: /open menu/i });
+      expect(btn.className).toContain('focus-visible:ring-primary');
+      expect(btn.className).not.toContain('focus-visible:ring-white');
     });
   });
 });

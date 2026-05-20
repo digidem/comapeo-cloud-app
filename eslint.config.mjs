@@ -1,10 +1,9 @@
 // For more info, see https://github.com/storybookjs/eslint-plugin-storybook#configuration-flat-config-format
-import storybook from "eslint-plugin-storybook";
-
 // @ts-check
 import { includeIgnoreFile } from '@eslint/compat';
 import pluginJs from '@eslint/js';
 import pluginReactHooks from 'eslint-plugin-react-hooks';
+import storybook from 'eslint-plugin-storybook';
 import pluginTestingLibrary from 'eslint-plugin-testing-library';
 import globals from 'globals';
 import path from 'node:path';
@@ -109,5 +108,5 @@ export default pluginTs.config(
     files: ['.storybook/**/*.{js,jsx,ts,tsx}'],
     extends: [pluginTs.configs.recommended],
   },
-  storybook.configs["flat/recommended"]
+  storybook.configs['flat/recommended'],
 );

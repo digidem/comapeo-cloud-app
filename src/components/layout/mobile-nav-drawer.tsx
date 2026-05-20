@@ -75,7 +75,10 @@ function MobileNavDrawer({
           </div>
 
           {/* Nav section */}
-          <nav className="flex-1 overflow-y-auto px-2 py-2">
+          <nav
+            aria-label="Main navigation"
+            className="flex-1 overflow-y-auto px-2 py-2"
+          >
             {navItems.map((item, index) => {
               const isActive = activePath === item.path;
               return (

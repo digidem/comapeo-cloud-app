@@ -26,6 +26,8 @@ export default defineConfig({
         'src/**/*.d.ts',
         'src/**/*.test.{ts,tsx}',
         'src/main.tsx',
+        'src/**/*.stories.{ts,tsx}',
+        'src/screens/stories/**',
         'src/lib/db.ts',
         'src/lib/uuid.ts',
         'src/lib/area-calculator/types.ts',

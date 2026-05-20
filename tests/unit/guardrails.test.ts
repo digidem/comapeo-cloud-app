@@ -73,6 +73,9 @@ describe('repository guardrails', () => {
     expect(vitestConfig).toContain("include: ['src/**/*.{ts,tsx}']");
     // Hard-to-test files are explicitly excluded (not silently dropped)
     expect(vitestConfig).toContain("'src/main.tsx'");
+    // Storybook files are visual fixtures, not runtime coverage targets
+    expect(vitestConfig).toContain("'src/**/*.stories.{ts,tsx}'");
+    expect(vitestConfig).toContain("'src/screens/stories/**'");
     // main.tsx avoids non-null assertions and JSX syntax
     expect(mainSource).not.toContain("document.getElementById('root')!");
     expect(mainSource).not.toContain('<StrictMode>');
