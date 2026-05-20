@@ -129,5 +129,10 @@
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.5",
     "wrangler": "^4.88.0"
+  },
+  "overrides": {
+    "@storybook/test": {
+      "storybook": "$storybook"
+    }
   }
 }
