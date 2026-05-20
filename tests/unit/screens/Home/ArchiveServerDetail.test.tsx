@@ -1,8 +1,24 @@
-import { render, screen, userEvent } from '@tests/mocks/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ArchiveServerStatus } from '@/hooks/useArchiveStatus';
 import { ArchiveServerDetail } from '@/screens/Home/ArchiveServerDetail';
+import { useProjectStore } from '@/stores/project-store';
+
+const mockNavigate = vi.fn();
+
+function setupUser() {
+  return userEvent.setup();
+}
+
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@tanstack/react-router')>();
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
 
 vi.mock('@/hooks/useProjects', () => ({
   useProjects: () => ({
@@ -22,20 +38,26 @@ vi.mock('@/hooks/useProjects', () => ({
 }));
 
 vi.mock('@/lib/data-layer', () => ({
-  getObservations: vi.fn(() => Promise.resolve([{ localId: 'obs-1' }])),
-  getAlerts: vi.fn(() => Promise.resolve([{ localId: 'alert-1' }])),
+  getObservations: vi.fn((projectId: string) =>
+    Promise.resolve(projectId === 'proj-1' ? [{ localId: 'obs-1' }] : []),
+  ),
+  getAlerts: vi.fn((projectId: string) =>
+    Promise.resolve(projectId === 'proj-1' ? [{ localId: 'alert-1' }] : []),
+  ),
   updateProject: vi.fn(() => Promise.resolve()),
 }));
 
 function makeServer(
   overrides: Partial<ArchiveServerStatus> = {},
 ): ArchiveServerStatus {
+  const recentSync = new Date(Date.now() - 4 * 60 * 1000).toISOString();
+
   return {
     id: 'srv-1',
     label: 'Demo Server',
     baseUrl: 'https://archive.example.com',
     isSyncing: false,
-    lastSyncedAt: '2025-06-01T12:00:00Z',
+    lastSyncedAt: recentSync,
     error: null,
     hasCredentials: true,
     isStale: false,
@@ -43,415 +65,290 @@ function makeServer(
   };
 }
 
-const noop = vi.fn();
+function renderDetail({
+  server = makeServer(),
+  onSync = vi.fn(),
+  onRemove = vi.fn(),
+  onBack = vi.fn(),
+}: {
+  server?: ArchiveServerStatus;
+  onSync?: (serverId: string) => void;
+  onRemove?: (serverId: string) => void;
+  onBack?: () => void;
+} = {}) {
+  render(
+    <ArchiveServerDetail
+      server={server}
+      onSync={onSync}
+      onRemove={onRemove}
+      onBack={onBack}
+    />,
+  );
+
+  return { onSync, onRemove, onBack };
+}
 
 describe('ArchiveServerDetail', () => {
-  it('renders server label as heading', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockNavigate.mockReset();
+    useProjectStore.setState({
+      selectedProjectId: null,
+      selectedServerId: null,
+    });
+  });
+
+  it('renders the archive card with a human-readable sync summary', () => {
+    renderDetail();
+
     expect(
       screen.getByRole('heading', { name: 'Demo Server' }),
     ).toBeInTheDocument();
+    expect(screen.getAllByText('https://archive.example.com')).not.toHaveLength(
+      0,
+    );
+    expect(screen.getByText('Synced')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Last sync: (Today|Yesterday), \d{2}:\d{2}/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Synced 4 minutes ago')).toBeInTheDocument();
   });
 
-  it('shows server URL', () => {
-    render(
+  it('renders Never when the archive has never synced', () => {
+    renderDetail({ server: makeServer({ lastSyncedAt: null }) });
+
+    expect(screen.getAllByText('Never')).not.toHaveLength(0);
+  });
+
+  it('calls onBack from the top back button', async () => {
+    const user = setupUser();
+    const { onBack } = renderDetail();
+
+    await user.click(screen.getByRole('button', { name: /back to archives/i }));
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('copies the archive URL from the inline copy button', async () => {
+    const user = setupUser();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    navigator.clipboard.writeText = writeText;
+    renderDetail();
+
+    await user.click(screen.getByRole('button', { name: /copy url/i }));
+
+    expect(writeText).toHaveBeenCalledWith('https://archive.example.com');
+  });
+
+  it('opens overflow actions, closes them on outside click, and copies from the menu', async () => {
+    const user = setupUser();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    navigator.clipboard.writeText = writeText;
+    renderDetail();
+
+    await user.click(screen.getByRole('button', { name: /archive actions/i }));
+    expect(
+      screen.getByRole('menuitem', { name: /edit archive/i }),
+    ).toBeInTheDocument();
+
+    await user.click(document.body);
+    expect(
+      screen.queryByRole('menuitem', { name: /edit archive/i }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /archive actions/i }));
+    await user.click(screen.getByRole('menuitem', { name: /copy url/i }));
+
+    expect(writeText).toHaveBeenCalledWith('https://archive.example.com');
+    expect(
+      screen.queryByRole('menuitem', { name: /copy url/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('opens the edit dialog from the overflow menu', async () => {
+    const user = setupUser();
+    renderDetail();
+
+    await user.click(screen.getByRole('button', { name: /archive actions/i }));
+    await user.click(screen.getByRole('menuitem', { name: /edit archive/i }));
+
+    expect(
+      screen.getByRole('heading', { name: /edit archive server/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the correct primary sync action for each server state', () => {
+    const { rerender } = render(
       <ArchiveServerDetail
         server={makeServer()}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(screen.getByText('https://archive.example.com')).toBeInTheDocument();
-  });
-
-  it('shows last synced date when available', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(screen.getByText('2025-06-01T12:00:00Z')).toBeInTheDocument();
-  });
-
-  it('shows Never when lastSyncedAt is null', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer({ lastSyncedAt: null })}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(screen.getByText('Never')).toBeInTheDocument();
-  });
-
-  it('shows error message when server has error', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer({ error: 'Connection refused' })}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(screen.getByText('Connection refused')).toBeInTheDocument();
-  });
-
-  it('shows credentials unavailable when hasCredentials is false', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer({ hasCredentials: false })}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(screen.getByText(/credentials unavailable/i)).toBeInTheDocument();
-  });
-
-  it('shows Sync Now button when not syncing and has credentials', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={noop}
+        onSync={vi.fn()}
+        onRemove={vi.fn()}
+        onBack={vi.fn()}
       />,
     );
     expect(
       screen.getByRole('button', { name: /sync now/i }),
     ).toBeInTheDocument();
-  });
 
-  it('shows Syncing button when syncing', () => {
-    render(
+    rerender(
       <ArchiveServerDetail
-        server={makeServer({ isSyncing: true })}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(screen.getByText('Syncing...')).toBeInTheDocument();
-  });
-
-  it('shows Remove button', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(screen.getByRole('button', { name: /remove/i })).toBeInTheDocument();
-  });
-
-  it('calls onSync with server id when Sync clicked', async () => {
-    const user = userEvent.setup();
-    const onSync = vi.fn();
-
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={onSync}
-        onRemove={noop}
-      />,
-    );
-    await user.click(screen.getByRole('button', { name: /sync now/i }));
-
-    expect(onSync).toHaveBeenCalledWith('srv-1');
-  });
-
-  it('opens confirmation dialog when Remove clicked', async () => {
-    const user = userEvent.setup();
-    const onRemove = vi.fn();
-
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={onRemove}
-      />,
-    );
-    // There are multiple "Remove" buttons — the detail one and the confirm one.
-    // Click the first Remove button (in the detail header)
-    const removeButtons = screen.getAllByRole('button', { name: /remove/i });
-    await user.click(removeButtons[0]!);
-
-    // Confirmation dialog should appear
-    expect(screen.getByText(/are you sure/i)).toBeInTheDocument();
-    // onRemove should NOT have been called yet
-    expect(onRemove).not.toHaveBeenCalled();
-  });
-
-  it('calls onRemove after confirming removal', async () => {
-    const user = userEvent.setup();
-    const onRemove = vi.fn();
-
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={onRemove}
-      />,
-    );
-    // Click the first Remove button to open confirmation
-    const removeButtons = screen.getAllByRole('button', { name: /remove/i });
-    await user.click(removeButtons[0]!);
-
-    // Click confirm in the dialog
-    const confirmButtons = screen.getAllByRole('button', { name: /remove/i });
-    await user.click(confirmButtons[confirmButtons.length - 1]!);
-
-    expect(onRemove).toHaveBeenCalledWith('srv-1');
-  });
-
-  it('shows Edit button', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
-  });
-
-  it('shows Remove button even when errored with no credentials', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer({
-          error: 'Sync error',
-          hasCredentials: false,
-        })}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(screen.getByRole('button', { name: /remove/i })).toBeInTheDocument();
-  });
-
-  it('shows Retry Sync button when server has error and credentials', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer({
-          error: 'Connection failed',
-          hasCredentials: true,
-        })}
-        onSync={noop}
-        onRemove={noop}
+        server={makeServer({ error: 'Connection failed' })}
+        onSync={vi.fn()}
+        onRemove={vi.fn()}
+        onBack={vi.fn()}
       />,
     );
     expect(
       screen.getByRole('button', { name: /retry sync/i }),
     ).toBeInTheDocument();
-  });
 
-  it('calls onSync when Retry Sync is clicked', async () => {
-    const user = userEvent.setup();
-    const onSync = vi.fn();
-
-    render(
-      <ArchiveServerDetail
-        server={makeServer({
-          error: 'Connection failed',
-          hasCredentials: true,
-        })}
-        onSync={onSync}
-        onRemove={noop}
-      />,
-    );
-
-    await user.click(screen.getByRole('button', { name: /retry sync/i }));
-
-    expect(onSync).toHaveBeenCalledWith('srv-1');
-  });
-
-  it('shows stale token warning when isStale is true', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer({
-          isStale: true,
-          hasCredentials: true,
-          error: null,
-          lastSyncedAt: '2024-01-01T00:00:00Z',
-        })}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(screen.getByText(/token may be stale/i)).toBeInTheDocument();
-  });
-
-  it('shows Sync Now button even when server has error if no credentials', () => {
-    // When hasCredentials is false, neither Sync Now nor Retry Sync should show
-    render(
-      <ArchiveServerDetail
-        server={makeServer({
-          error: 'Error',
-          hasCredentials: false,
-          isStale: true,
-        })}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(
-      screen.queryByRole('button', { name: /sync now/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /retry sync/i }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('shows Reconnect button when hasCredentials is false', () => {
-    render(
+    rerender(
       <ArchiveServerDetail
         server={makeServer({ hasCredentials: false })}
-        onSync={noop}
-        onRemove={noop}
+        onSync={vi.fn()}
+        onRemove={vi.fn()}
+        onBack={vi.fn()}
       />,
     );
     expect(
       screen.getByRole('button', { name: /reconnect/i }),
     ).toBeInTheDocument();
-  });
 
-  it('shows reconnect description warning when hasCredentials is false', () => {
-    render(
+    rerender(
       <ArchiveServerDetail
-        server={makeServer({ hasCredentials: false })}
-        onSync={noop}
-        onRemove={noop}
+        server={makeServer({ isSyncing: true })}
+        onSync={vi.fn()}
+        onRemove={vi.fn()}
+        onBack={vi.fn()}
       />,
     );
+    expect(screen.getByRole('button', { name: /syncing/i })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+  });
+
+  it('calls onSync with the server id from the primary action', async () => {
+    const user = setupUser();
+    const onSync = vi.fn();
+    renderDetail({ onSync });
+
+    await user.click(screen.getByRole('button', { name: /sync now/i }));
+
+    expect(onSync).toHaveBeenCalledWith('srv-1');
+  });
+
+  it('renders compact aggregate stats and per-project row stats', async () => {
+    renderDetail();
+
+    expect(screen.getAllByText('Projects')).not.toHaveLength(0);
+    expect(screen.getByText('Observations')).toBeInTheDocument();
+    expect(screen.getByText('Alerts')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('1')).toHaveLength(3));
     expect(
-      screen.getByText(/server credentials are missing/i),
+      await screen.findByText('1 observation · 1 alert'),
     ).toBeInTheDocument();
   });
 
-  it('does not show Reconnect button when hasCredentials is true', () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer({ hasCredentials: true })}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-    expect(
-      screen.queryByRole('button', { name: /reconnect/i }),
-    ).not.toBeInTheDocument();
-  });
+  it('renders only matching projects as tappable rows and navigates to data', async () => {
+    const user = setupUser();
+    renderDetail();
 
-  // Phase 5 tests — stats section and remove confirmation
-
-  it('renders aggregated stats when server has matching projects', async () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-
-    // Wait for stats section to appear
-    expect(await screen.findByText('Summary')).toBeInTheDocument();
-    // 1 matching project (proj-1 has serverUrl matching our server)
-    expect(screen.getByText('1 project')).toBeInTheDocument();
-    // Mocked getObservations/getAlerts each resolve to one item per project
-    expect(await screen.findByText('1 observation')).toBeInTheDocument();
-    expect(await screen.findByText('1 alert')).toBeInTheDocument();
-  });
-
-  it('renders View Data button for each matching project', async () => {
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-
-    expect(
-      await screen.findByRole('button', { name: /view data/i }),
-    ).toBeInTheDocument();
-    // Only one matching project (proj-1), not proj-2 (different serverUrl)
-    expect(screen.getByText('Forest Monitor')).toBeInTheDocument();
+    const row = await screen.findByRole('button', { name: /forest monitor/i });
     expect(screen.queryByText('Ocean Watch')).not.toBeInTheDocument();
+
+    await user.click(row);
+
+    expect(useProjectStore.getState().selectedProjectId).toBe('proj-1');
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/data' });
   });
 
-  it('remove confirmation shows project reassignment warning when matching projects exist', async () => {
-    const user = userEvent.setup();
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
+  it('keeps remove de-emphasized in overflow and the advanced danger zone', async () => {
+    const user = setupUser();
+    renderDetail();
 
-    const removeButtons = screen.getAllByRole('button', { name: /remove/i });
-    await user.click(removeButtons[0]!);
+    expect(
+      screen.queryByRole('button', { name: /^remove$/i }),
+    ).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: /archive actions/i }));
+    expect(
+      screen.getByRole('menuitem', { name: /remove archive/i }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByText('Advanced Settings'));
+    expect(screen.getByText('Danger Zone')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /remove archive/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows technical metadata, stale warning, and error details in advanced settings', async () => {
+    const user = setupUser();
+    const lastSyncedAt = new Date(
+      Date.now() - 25 * 60 * 60 * 1000,
+    ).toISOString();
+    renderDetail({
+      server: makeServer({
+        error: 'Connection refused',
+        isStale: true,
+        lastSyncedAt,
+      }),
+    });
+
+    await user.click(screen.getByText('Advanced Settings'));
+
+    expect(screen.getByText('Full URL')).toBeInTheDocument();
+    expect(screen.getByText('Last synced (UTC)')).toBeInTheDocument();
+    expect(screen.getByText(lastSyncedAt)).toBeInTheDocument();
+    expect(screen.getByText(/token may be stale/i)).toBeInTheDocument();
+    expect(screen.getByText('Connection refused')).toBeInTheDocument();
+  });
+
+  it('opens confirmation from overflow and warns that projects will move to local', async () => {
+    const user = setupUser();
+    const onRemove = vi.fn();
+    renderDetail({ onRemove });
+
+    await user.click(screen.getByRole('button', { name: /archive actions/i }));
+    await user.click(screen.getByRole('menuitem', { name: /remove archive/i }));
+
+    expect(screen.getByText(/are you sure/i)).toBeInTheDocument();
     expect(
       screen.getByText(/project will be moved to local/i),
     ).toBeInTheDocument();
+    expect(onRemove).not.toHaveBeenCalled();
   });
 
-  it('remove confirmation shows no project warning when no matching projects', async () => {
-    const user = userEvent.setup();
-    render(
-      <ArchiveServerDetail
-        server={makeServer({ baseUrl: 'https://no-matching.example.com' })}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
+  it('opens confirmation from the danger zone and removes after reassigning projects', async () => {
+    const user = setupUser();
+    const onRemove = vi.fn();
+    renderDetail({ onRemove });
 
-    const removeButtons = screen.getAllByRole('button', { name: /remove/i });
-    await user.click(removeButtons[0]!);
+    await user.click(screen.getByText('Advanced Settings'));
+    await user.click(screen.getByRole('button', { name: /remove archive/i }));
+    await user.click(screen.getByRole('button', { name: /^remove$/i }));
+
+    const { updateProject } = await import('@/lib/data-layer');
+    await waitFor(() => {
+      expect(updateProject).toHaveBeenCalledWith('proj-1', {
+        serverUrl: null,
+      });
+      expect(onRemove).toHaveBeenCalledWith('srv-1');
+    });
+  });
+
+  it('omits the reassignment warning when no projects match the archive', async () => {
+    const user = setupUser();
+    renderDetail({
+      server: makeServer({ baseUrl: 'https://no-match.example.com' }),
+    });
+
+    await user.click(screen.getByRole('button', { name: /archive actions/i }));
+    await user.click(screen.getByRole('menuitem', { name: /remove archive/i }));
 
     expect(
       screen.queryByText(/project will be moved to local/i),
     ).not.toBeInTheDocument();
-  });
-
-  it('confirming removal calls onRemove after reassigning projects', async () => {
-    const user = userEvent.setup();
-    const onRemove = vi.fn();
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={onRemove}
-      />,
-    );
-
-    const removeButtons = screen.getAllByRole('button', { name: /remove/i });
-    await user.click(removeButtons[0]!);
-
-    const confirmButtons = screen.getAllByRole('button', { name: /remove/i });
-    await user.click(confirmButtons[confirmButtons.length - 1]!);
-
-    // Should have called updateProject to reassign matching projects
-    const { updateProject } = await import('@/lib/data-layer');
-    expect(updateProject).toHaveBeenCalledWith('proj-1', { serverUrl: null });
-    expect(onRemove).toHaveBeenCalledWith('srv-1');
-  });
-
-  it('renders project name fallback when project has no name', async () => {
-    // Verify the stats section renders correctly with our mock data
-    render(
-      <ArchiveServerDetail
-        server={makeServer()}
-        onSync={noop}
-        onRemove={noop}
-      />,
-    );
-
-    expect(await screen.findByText('Summary')).toBeInTheDocument();
   });
 });

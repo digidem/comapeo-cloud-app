@@ -681,6 +681,7 @@ function HomeScreen() {
       <>
         <ArchiveServerDetail
           server={selectedArchiveServer}
+          onBack={() => dispatch({ type: 'SELECT_SERVER', id: null })}
           onSync={handleSync}
           onRemove={(id) => {
             void removeServer(id);
