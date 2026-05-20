@@ -38,4 +38,12 @@ describe('schemas index', () => {
   it('exports geometrySchema', () => {
     expect(schemas.geometrySchema).toBeDefined();
   });
+
+  it('exports imageryBasemapSchema', () => {
+    expect(schemas.imageryBasemapSchema).toBeDefined();
+  });
+
+  it('exports basemapCategorySchema', () => {
+    expect(schemas.basemapCategorySchema).toBeDefined();
+  });
 });

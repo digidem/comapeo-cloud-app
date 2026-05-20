@@ -104,6 +104,9 @@
   "data.alertFallback": {
     "defaultMessage": "Alert"
   },
+  "data.alertsError": {
+    "defaultMessage": "Failed to load alerts. Please try again."
+  },
   "data.loading": {
     "defaultMessage": "Loading..."
   },
@@ -121,6 +124,9 @@
   },
   "data.observationFallback": {
     "defaultMessage": "Observation"
+  },
+  "data.observationsError": {
+    "defaultMessage": "Failed to load observations. Please try again."
   },
   "data.tabs.alerts": {
     "defaultMessage": "Alerts"
@@ -617,11 +623,17 @@
   "invite.invalid": {
     "defaultMessage": "Couldn't accept this invite. The link may be invalid."
   },
+  "map.basemap.label": {
+    "defaultMessage": "Basemap"
+  },
   "mediaPreview.audioAlt": {
     "defaultMessage": "Audio attachment"
   },
   "mediaPreview.moreCount": {
     "defaultMessage": "+{count} more"
+  },
+  "mediaPreview.moreCountAriaLabel": {
+    "defaultMessage": "{count} more media files"
   },
   "mediaPreview.photoAlt": {
     "defaultMessage": "Photo {number}"

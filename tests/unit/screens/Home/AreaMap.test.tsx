@@ -310,8 +310,10 @@ describe('AreaMap', () => {
 
   it('map wrapper has flex-1 on desktop', () => {
     render(<AreaMap />);
-    const mapWrapper = screen.getByTestId('mock-map')
-      .parentElement as HTMLElement;
+    // The AreaMap wrapper div is the parent of the MapContainer's div
+    // mock-map -> map-container -> AreaMap wrapper div
+    const mapContainer = screen.getByTestId('map-container');
+    const mapWrapper = mapContainer.parentElement as HTMLElement;
     expect(mapWrapper).toBeTruthy();
     expect(mapWrapper.className).toContain('h-full');
     expect(mapWrapper.className).toContain('flex-1');
