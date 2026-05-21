@@ -154,14 +154,10 @@ describe('ArchiveBrowser', () => {
       </div>,
     );
 
-    await user.click(
-      screen.getByRole('button', { name: 'Archive actions' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Archive actions' }));
 
     // Clicking "View Details" inside the sheet bubbles up
-    await user.click(
-      screen.getByRole('button', { name: 'View Details' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'View Details' }));
 
     expect(onParentClick).toHaveBeenCalled();
   });

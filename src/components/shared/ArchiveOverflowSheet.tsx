@@ -90,7 +90,10 @@ function ArchiveOverflowSheet({
 
           {/* Drag handle */}
           <div className="flex justify-center pt-3 pb-1">
-            <div aria-hidden="true" className="h-1 w-10 rounded-full bg-border" />
+            <div
+              aria-hidden="true"
+              className="h-1 w-10 rounded-full bg-border"
+            />
           </div>
 
           {/* Header */}
