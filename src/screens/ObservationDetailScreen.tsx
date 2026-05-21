@@ -115,7 +115,8 @@ export function ObservationDetailScreen() {
           {intl.formatMessage(messages.errorLoading)}
         </p>
         <p className="text-sm text-text-muted">
-          {observationsQuery.error?.message ?? intl.formatMessage(messages.tryAgain)}
+          {observationsQuery.error?.message ??
+            intl.formatMessage(messages.tryAgain)}
         </p>
       </div>
     );

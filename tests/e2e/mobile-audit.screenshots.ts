@@ -74,7 +74,9 @@ test.describe('Mobile audit screenshots', () => {
     try {
       await setupMockServer(page);
       await page.goto('/');
-      await expect(page.getByText('Welcome to CoMapeo Cloud').first()).toBeVisible({
+      await expect(
+        page.getByText('Welcome to CoMapeo Cloud').first(),
+      ).toBeVisible({
         timeout: 5_000,
       });
       await takeScreenshot(page, 'mobile-home-empty', 'mobile');
@@ -301,7 +303,9 @@ test.describe('Mobile audit screenshots', () => {
       await setupMockServer(page);
       await page.goto('/');
       await setDarkMode(page);
-      await expect(page.getByText('Welcome to CoMapeo Cloud').first()).toBeVisible({
+      await expect(
+        page.getByText('Welcome to CoMapeo Cloud').first(),
+      ).toBeVisible({
         timeout: 5_000,
       });
       await takeScreenshot(page, 'mobile-home-empty-dark', 'mobile');

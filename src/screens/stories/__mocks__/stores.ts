@@ -50,4 +50,3 @@ export const useAuthStore = create<AuthStoreState>()((set) => ({
     return id;
   },
 }));
-
