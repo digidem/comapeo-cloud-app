@@ -64,9 +64,12 @@ function fromBase64Url(input: string): Uint8Array {
   return bytes;
 }
 
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const copy = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(copy).set(bytes);
+function toCryptoBufferSource(bytes: Uint8Array): BufferSource {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(bytes);
+  }
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
   return copy;
 }
 
@@ -74,7 +77,7 @@ async function importAesKey(rawKey: Uint8Array): Promise<CryptoKey> {
   const subtle = getSubtle();
   return subtle.importKey(
     'raw',
-    toArrayBuffer(rawKey),
+    toCryptoBufferSource(rawKey),
     { name: 'AES-GCM' },
     false,
     ['encrypt', 'decrypt'],
@@ -92,9 +95,9 @@ export async function encryptInvite(
   globalThis.crypto.getRandomValues(iv);
   const plaintext = new TextEncoder().encode(JSON.stringify(payload));
   const cipherBuffer = await subtle.encrypt(
-    { name: 'AES-GCM', iv: toArrayBuffer(iv) },
+    { name: 'AES-GCM', iv: toCryptoBufferSource(iv) },
     key,
-    toArrayBuffer(plaintext),
+    toCryptoBufferSource(plaintext),
   );
   const cipherBytes = new Uint8Array(cipherBuffer);
   const combined = new Uint8Array(iv.byteLength + cipherBytes.byteLength);
@@ -154,9 +157,9 @@ export async function decryptInvite(
     const subtle = getSubtle();
     const key = await importAesKey(rawKey);
     plaintextBuffer = await subtle.decrypt(
-      { name: 'AES-GCM', iv: toArrayBuffer(iv) },
+      { name: 'AES-GCM', iv: toCryptoBufferSource(iv) },
       key,
-      toArrayBuffer(ciphertext),
+      toCryptoBufferSource(ciphertext),
     );
   } catch {
     return {

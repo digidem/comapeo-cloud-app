@@ -154,7 +154,7 @@ describe('invite-crypto', () => {
     const subtle = globalThis.crypto.subtle;
     const cryptoKey = await subtle.importKey(
       'raw',
-      key.buffer.slice(0) as ArrayBuffer,
+      Buffer.from(key),
       { name: 'AES-GCM' },
       false,
       ['encrypt', 'decrypt'],
@@ -163,9 +163,9 @@ describe('invite-crypto', () => {
     globalThis.crypto.getRandomValues(iv);
     const plaintext = new TextEncoder().encode('this-is-not-json');
     const cipherBuffer = await subtle.encrypt(
-      { name: 'AES-GCM', iv: iv.buffer.slice(0) as ArrayBuffer },
+      { name: 'AES-GCM', iv: Buffer.from(iv) },
       cryptoKey,
-      plaintext.buffer.slice(0) as ArrayBuffer,
+      Buffer.from(plaintext),
     );
     const cipherBytes = new Uint8Array(cipherBuffer);
     const combined = new Uint8Array(iv.byteLength + cipherBytes.byteLength);
@@ -195,7 +195,7 @@ describe('invite-crypto', () => {
     const subtle = globalThis.crypto.subtle;
     const cryptoKey = await subtle.importKey(
       'raw',
-      key.buffer.slice(0) as ArrayBuffer,
+      Buffer.from(key),
       { name: 'AES-GCM' },
       false,
       ['encrypt', 'decrypt'],
@@ -206,9 +206,9 @@ describe('invite-crypto', () => {
       JSON.stringify({ foo: 'bar', exp: 'not-a-number' }),
     );
     const cipherBuffer = await subtle.encrypt(
-      { name: 'AES-GCM', iv: iv.buffer.slice(0) as ArrayBuffer },
+      { name: 'AES-GCM', iv: Buffer.from(iv) },
       cryptoKey,
-      plaintext.buffer.slice(0) as ArrayBuffer,
+      Buffer.from(plaintext),
     );
     const cipherBytes = new Uint8Array(cipherBuffer);
     const combined = new Uint8Array(iv.byteLength + cipherBytes.byteLength);
