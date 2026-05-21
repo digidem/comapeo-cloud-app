@@ -143,7 +143,7 @@ test.describe('Critical User Flows', () => {
 
     // At least one observation card link visible
     await expect(
-      page.locator('a[href^="/data/observations/"]').first(),
+      page.locator('a[href^="/data/observations/"]').last(),
     ).toBeVisible();
   });
 
