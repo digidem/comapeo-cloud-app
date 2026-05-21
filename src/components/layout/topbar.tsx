@@ -27,7 +27,7 @@ function Topbar({
           <button
             type="button"
             onClick={onMenuClick}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-text-muted hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-90 motion-safe:transition-transform motion-safe:duration-150 lg:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-text-muted motion-safe:transition-transform motion-safe:duration-300 hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-75 lg:hidden"
             aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={isMenuOpen ? 'true' : 'false'}
           >
@@ -39,13 +39,13 @@ function Topbar({
               className="flex h-5 w-6 flex-col items-center justify-center gap-[5px]"
             >
               <span
-                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-transform motion-safe:duration-150 ${isMenuOpen ? 'translate-y-[7px] rotate-45' : ''}`}
+                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isMenuOpen ? 'translate-y-[7px] rotate-45' : ''}`}
               />
               <span
-                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-opacity motion-safe:duration-150 ${isMenuOpen ? 'opacity-0' : ''}`}
+                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-opacity motion-safe:duration-[250ms] ${isMenuOpen ? 'opacity-0' : ''}`}
               />
               <span
-                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-transform motion-safe:duration-150 ${isMenuOpen ? '-translate-y-[7px] -rotate-45' : ''}`}
+                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isMenuOpen ? '-translate-y-[7px] -rotate-45' : ''}`}
               />
             </span>
           </button>

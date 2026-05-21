@@ -28,7 +28,7 @@ function PrimaryNav({ items, activePath }: PrimaryNavProps) {
             to={item.path}
             aria-label={item.label}
             aria-current={isActive ? 'page' : undefined}
-            className={`flex w-[54px] h-[54px] items-center justify-center rounded-xl focus-visible:ring-2 focus-visible:ring-white/40 ${
+            className={`flex w-[54px] h-[54px] items-center justify-center rounded-xl transition-all duration-200 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-110 active:scale-90 focus-visible:ring-2 focus-visible:ring-white/40 ${
               isActive
                 ? 'bg-white/15 text-white'
                 : 'text-white/60 hover:text-white hover:bg-white/8'
