@@ -93,9 +93,14 @@ describe('BasemapSwitcher', () => {
 
     await user.click(screen.getByRole('button', { name: /basemap/i }));
 
-    const selectedItem = screen.getByRole('button', { name: 'OpenStreetMap' });
-    expect(selectedItem).not.toHaveAttribute('role', 'menuitemradio');
-    expect(selectedItem).not.toHaveAttribute('aria-checked');
+    const selectedItem = screen.getByRole('menuitemradio', {
+      name: 'OpenStreetMap',
+    });
+    expect(selectedItem).toHaveAttribute('aria-checked', 'true');
+    const unselectedItem = screen.getByRole('menuitemradio', {
+      name: 'CartoDB Positron',
+    });
+    expect(unselectedItem).toHaveAttribute('aria-checked', 'false');
     expect(selectedItem).toHaveClass('bg-primary/10');
   });
 
