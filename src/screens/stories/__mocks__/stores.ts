@@ -51,5 +51,3 @@ export const useAuthStore = create<AuthStoreState>()((set) => ({
   },
 }));
 
-// State accessor used by InviteScreen
-useAuthStore.getState = () => useAuthStore.getState();

@@ -811,23 +811,6 @@ describe('HomeScreen', () => {
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
-  it('shows loading skeletons when projects are loading', async () => {
-    mockUseProjects.mockReturnValue({
-      data: undefined,
-      isPending: true,
-      isLoading: true,
-      isError: false,
-      error: null,
-      status: 'pending',
-    } as unknown as ReturnType<typeof useProjects>);
-
-    renderWithShell(<HomeScreen />);
-    await waitFor(() => {
-      const skeletons = screen.getAllByTestId('skeleton');
-      expect(skeletons.length).toBeGreaterThan(0);
-    });
-  });
-
   it('auto-selects most recent project when persisted ID is stale', async () => {
     // Simulate a stale persisted project ID that no longer exists in projects
     useProjectStore.setState({
