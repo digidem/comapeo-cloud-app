@@ -14,7 +14,12 @@ const { mockNavigate, mockRouterState } = vi.hoisted(() => ({
 vi.mock('@tanstack/react-router', () => ({
   Outlet: () => <div data-testid="outlet-content">Child Route</div>,
   useNavigate: () => mockNavigate,
-  useRouterState: () => ({ location: { pathname: mockRouterState.pathname } }),
+  useRouterState: (opts?: {
+    select?: (state: { location: { pathname: string } }) => unknown;
+  }) => {
+    const state = { location: { pathname: mockRouterState.pathname } };
+    return opts?.select ? opts.select(state) : state;
+  },
   Link: ({
     to,
     children,
@@ -134,7 +139,7 @@ describe('AuthenticatedLayout', () => {
     await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
     // Close button visible means drawer is open
     expect(
-      screen.getByRole('button', { name: /close menu/i }),
+      await screen.findByRole('button', { name: /close menu/i }),
     ).toBeInTheDocument();
   });
 
