@@ -6,6 +6,8 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 
+import { useArchiveStore, useAuthStore } from './stores';
+
 // ---------------------------------------------------------------------------
 // Types matching our actual data shapes
 // ---------------------------------------------------------------------------
@@ -144,19 +146,34 @@ export function useCreateAlert() {
 }
 
 // ---------------------------------------------------------------------------
-// Additional hooks used by HomeScreen
+// Additional hooks used by HomeScreen / ArchiveBrowser
 // ---------------------------------------------------------------------------
 
-export function useArchiveStatus(_serverId: string) {
-  return useQuery({
-    queryKey: ['archive-status', _serverId],
-    queryFn: async () => ({
-      serverId: _serverId,
-      lastSync: new Date().toISOString(),
-      status: 'connected' as const,
-      observationCount: 42,
-    }),
-  });
+/**
+ * Mock useArchiveStatus — matches the real hook's return shape:
+ * { servers: ArchiveServerStatus[], anyError, anySyncing }
+ *
+ * Derives servers from the mock auth store so the data is consistent.
+ */
+export function useArchiveStatus() {
+  const servers = useAuthStore.getState().servers;
+
+  return {
+    servers: servers.map((s) => ({
+      id: s.id,
+      label: s.label,
+      baseUrl: s.baseUrl,
+      isSyncing: s.status === 'syncing',
+      lastSyncedAt: s.lastSyncedAt ?? null,
+      error: s.status === 'error' ? (s.errorMessage ?? 'Sync error') : null,
+      hasCredentials: typeof s.token === 'string' && s.token.length > 0,
+      isStale: s.lastSyncedAt
+        ? Date.now() - new Date(s.lastSyncedAt).getTime() > 24 * 60 * 60 * 1000
+        : true,
+    })),
+    anyError: servers.some((s) => s.status === 'error'),
+    anySyncing: servers.some((s) => s.status === 'syncing'),
+  };
 }
 
 export function useProjectCoverage(
@@ -174,9 +191,38 @@ export function useProjectCoverage(
   });
 }
 
+/**
+ * Mock useRemoteArchives — matches the real hook's return shape:
+ * { archives: RemoteArchive[], selectedArchiveId, selectArchive, localProjects }
+ *
+ * Returns fixture data aligned with mock projects and auth store.
+ */
 export function useRemoteArchives() {
-  return useQuery({
-    queryKey: ['remote-archives'],
-    queryFn: async () => [],
-  });
+  const { selectedArchiveId, selectArchive } = useArchiveStore.getState();
+
+  return {
+    archives: [
+      {
+        archiveId: '_local',
+        name: 'Local',
+        url: null,
+        projectCount: 2,
+      },
+      {
+        archiveId: 'https://archive.amazon.example.com',
+        name: 'Amazon Archive',
+        url: 'https://archive.amazon.example.com',
+        projectCount: 1,
+      },
+      {
+        archiveId: 'https://archive.cerrado.example.com',
+        name: 'Cerrado Archive',
+        url: 'https://archive.cerrado.example.com',
+        projectCount: 1,
+      },
+    ],
+    selectedArchiveId,
+    selectArchive,
+    localProjects: MOCK_PROJECTS,
+  };
 }
