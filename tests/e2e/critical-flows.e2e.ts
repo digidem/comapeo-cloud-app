@@ -210,7 +210,7 @@ test.describe('Critical User Flows', () => {
 
     // "Back to Data" link visible — arrow icon with "Data" label
     await expect(
-      page.getByRole('link', { name: 'Data', exact: true }).first(),
+      page.getByRole('link', { name: 'Data', exact: true }).last(),
     ).toBeVisible();
   });
 
