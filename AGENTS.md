@@ -266,3 +266,32 @@ The `/api/invites/{encrypt,decrypt}` Pages Functions require a 32-byte AES-GCM k
 - Set in Pages: `npx wrangler pages secret put INVITE_KEY --project-name comapeo-cloud-app`
 - Local dev: add `INVITE_KEY=<base64>` to `.dev.vars` (gitignored).
 - Rotation: bump the version prefix in `src/lib/invite-crypto.ts` (currently `v1.`) AND add a parallel decrypt path that still accepts the old prefix. Keep the old prefix alive for at least one TTL window (24h) before removing it, so in-flight invites aren't invalidated mid-use.
+
+## Dev Server + Cloudflare Tunnel (MANDATORY)
+
+Every time you start development work in any worktree, ALWAYS:
+
+1. **Kill any stale dev servers** - `pkill -f "vite"` or kill old PID
+2. **Start the Vite dev server** - `npm run dev` (runs on port 5173)
+3. **Expose via Cloudflare Tunnel** - `cloudflared tunnel --url http://localhost:5173`
+4. **Capture the tunnel URL** - look for `https://*.trycloudflare.com` in the output
+5. **Share the URL with the user** so they have immediate access to the latest UI even before CI/PR previews finish
+
+This ensures the user can always preview the current state of the codebase in real time without waiting for builds or deployments.
+
+### Commands
+
+```bash
+# Start dev server (background)
+cd /home/coder/comapeo-cloud-app && npm run dev
+
+# Create quick tunnel (background)
+cloudflared tunnel --url http://localhost:5173
+```
+
+### Notes
+
+- Quick tunnels are ephemeral - they get a new URL each time they're started
+- The URL changes on restart, so always share the latest one
+- Vite dev server must be running before the tunnel connects
+- The tunnel URL is typically reachable within 5-10 seconds of starting cloudflared
