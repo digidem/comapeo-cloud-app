@@ -102,7 +102,8 @@ export const useAuthStore = create<AuthStoreState>()((set) => ({
   },
   setActiveServer: (id) => {
     set((state) => {
-      if (id === null) return { activeServerId: null, token: null, baseUrl: null };
+      if (id === null)
+        return { activeServerId: null, token: null, baseUrl: null };
       const server = state.servers.find((s) => s.id === id);
       return {
         activeServerId: id,

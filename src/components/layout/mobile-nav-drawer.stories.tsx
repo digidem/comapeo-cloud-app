@@ -48,9 +48,7 @@ const mockProjects = {
     { localId: 'proj-a1', name: 'River Monitoring' },
     { localId: 'proj-a2', name: 'Forest Patrol' },
   ],
-  'server-2': [
-    { localId: 'proj-b1', name: 'Cerrado North' },
-  ],
+  'server-2': [{ localId: 'proj-b1', name: 'Cerrado North' }],
 };
 
 const navItems = [

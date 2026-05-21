@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
 
-import { useProjectStore } from '@/stores/project-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { HomeScreen } from './HomeScreen';
 
