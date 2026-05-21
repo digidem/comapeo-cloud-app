@@ -89,8 +89,12 @@ async function doSync(
 
     // Collect any per-project errors without aborting the overall sync.
     const projectErrors = projectResults
-      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-      .map((r, i) => {
+      .map((r, i) => ({ r, i }))
+      .filter(
+        (x): x is { r: PromiseRejectedResult; i: number } =>
+          x.r.status === 'rejected',
+      )
+      .map(({ r, i }) => {
         const reason =
           r.reason instanceof Error ? r.reason.message : String(r.reason);
         const name =
