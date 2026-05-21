@@ -94,8 +94,10 @@ test('7.1 first visit shows empty state then create project and import data', as
   await setupMockServer(page);
   await page.goto('/');
 
-  // Empty state
-  await expect(page.getByText('No projects yet').first()).toBeVisible();
+  // Empty state — IntroPage shown when no projects/servers exist
+  await expect(
+    page.getByText('Welcome to CoMapeo Cloud').first(),
+  ).toBeVisible();
 
   // Create project
   await createProject(page, 'My Territory');

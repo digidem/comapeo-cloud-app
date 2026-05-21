@@ -1,11 +1,12 @@
 import bbox from '@turf/bbox';
 import type { FeatureCollection } from 'geojson';
-import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
-import Map, { Layer, type MapRef, Source } from 'react-map-gl/maplibre';
+import { Layer, type MapRef, Source } from 'react-map-gl/maplibre';
+
+import { MapContainer } from '@/components/shared/MapContainer';
 
 import { MapConfigSheet } from './MapConfigSheet';
 
@@ -202,15 +203,13 @@ export function AreaMap({
       className="relative -mx-3 w-[calc(100%+1.5rem)] h-[min(60vh,500px)] overflow-hidden sm:-mx-4 sm:w-[calc(100%+2rem)] sm:h-[400px] lg:mx-0 lg:w-full lg:h-[600px] lg:flex lg:flex-row lg:overflow-visible lg:rounded-card lg:border lg:border-border/15 lg:shadow-card"
     >
       <div className="relative h-full min-h-0 flex-1 lg:min-w-0">
-        <Map
-          ref={mapRef}
+        <MapContainer
+          mapRef={mapRef}
           initialViewState={{
             longitude: -60, // Fallback roughly Amazon
             latitude: -3,
             zoom: 4,
           }}
-          mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-          interactive={true}
           onLoad={() => {
             isMapLoadedRef.current = true;
             fitMapToBounds(mapBounds);
@@ -245,13 +244,13 @@ export function AreaMap({
               />
             </Source>
           ))}
-        </Map>
+        </MapContainer>
 
         {/* Three-dots config button — mobile only, inside map wrapper */}
         {hasChildren && !isDesktop && (
           <button
             type="button"
-            className="absolute top-3 right-3 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-card/90 text-text-muted backdrop-blur-sm shadow-card hover:bg-surface-card hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
+            className="absolute top-16 right-3 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-card/90 text-text-muted backdrop-blur-sm shadow-card hover:bg-surface-card hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
             aria-label={intl.formatMessage(messages.configMenu)}
             onClick={() => setIsConfigOpen(true)}
             data-testid="config-menu-button"

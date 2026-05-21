@@ -29,6 +29,18 @@ vi.mock('@/hooks/useObservations', () => ({
   })),
 }));
 
+vi.mock('@/components/shared/auth-img', () => ({
+  AuthImg: ({
+    src,
+    alt,
+    className,
+  }: {
+    src: string;
+    alt: string;
+    className?: string;
+  }) => <img src={src} alt={alt} className={className} />,
+}));
+
 vi.mock('@/hooks/useProjects', () => ({
   useProjects: vi.fn(() => ({
     data: [{ localId: 'proj-1', name: 'Test Project' }],
@@ -44,8 +56,18 @@ vi.mock('@/stores/project-store', () => ({
 }));
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
-    <a href={to}>{children}</a>
+  Link: ({
+    children,
+    className,
+    to,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+    to: string;
+  }) => (
+    <a href={to} className={className}>
+      {children}
+    </a>
   ),
   useParams: () => ({ observationId: mockObservationId }),
 }));
@@ -86,10 +108,13 @@ describe('ObservationDetailScreen', () => {
     expect(screen.getByText(/notes.*Eagle sighting/)).toBeInTheDocument();
   });
 
-  it('renders back link', () => {
+  it('renders arrow back link to data', () => {
     resetMocks();
     render(<ObservationDetailScreen />);
-    expect(screen.getByText('Back to Data')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Data' });
+    expect(link).toHaveAttribute('href', '/data');
+    expect(link).toHaveClass('min-h-[44px]');
+    expect(screen.queryByText('Back to Data')).not.toBeInTheDocument();
   });
 
   it('renders created date', () => {
@@ -157,5 +182,31 @@ describe('ObservationDetailScreen', () => {
     expect(screen.getByText('Observation')).toBeInTheDocument();
     // Tags card still renders
     expect(screen.getByText(/notes.*Some notes/)).toBeInTheDocument();
+  });
+
+  it('trims photo URLs and skips blank entries in the media gallery', () => {
+    resetMocks();
+    mockObservationsData = [
+      {
+        localId: 'obs-1',
+        projectLocalId: 'proj-1',
+        tags: {
+          category: 'Wildlife',
+          photoUrls:
+            ' https://example.com/photo-1.jpg, ,https://example.com/photo-2.jpg,',
+        },
+        lat: 10.5,
+        lon: -85.2,
+        createdAt: '2026-01-15T00:00:00Z',
+        updatedAt: '2026-01-15T12:00:00Z',
+      },
+    ];
+
+    render(<ObservationDetailScreen />);
+
+    const photos = screen.getAllByRole('img', { name: /photo/i });
+    expect(photos).toHaveLength(2);
+    expect(photos[0]).toHaveAttribute('src', 'https://example.com/photo-1.jpg');
+    expect(photos[1]).toHaveAttribute('src', 'https://example.com/photo-2.jpg');
   });
 });

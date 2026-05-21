@@ -179,6 +179,7 @@
   --color-warning-soft: var(--theme-warning-soft);
   --color-info: var(--theme-info);
   --color-info-soft: var(--theme-info-soft);
+  --color-danger: var(--theme-error);
 
   /* Tags */
   --color-tag-neutral-bg: var(--theme-tag-neutral-bg);
@@ -269,6 +270,18 @@ html {
   }
 }
 
+/* Mobile drawer nav item staggered entrance */
+@keyframes slideInItem {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 @keyframes slideOutLeft {
   from {
     transform: translateX(0);
@@ -284,5 +297,47 @@ html {
   }
   to {
     opacity: 0;
+  }
+}
+
+/* Staggered entrance for drawer nav items when user allows motion */
+@media (prefers-reduced-motion: no-preference) {
+  .drawer-content[data-state='open'] .drawer-nav-item {
+    animation: slideInItem 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .drawer-content[data-state='open'] .drawer-nav-item:nth-child(1) {
+    animation-delay: 80ms;
+  }
+  .drawer-content[data-state='open'] .drawer-nav-item:nth-child(2) {
+    animation-delay: 180ms;
+  }
+  .drawer-content[data-state='open'] .drawer-nav-item:nth-child(3) {
+    animation-delay: 280ms;
+  }
+  .drawer-content[data-state='open'] .drawer-nav-item:nth-child(4) {
+    animation-delay: 380ms;
+  }
+  .drawer-content[data-state='open'] .drawer-nav-item:nth-child(5) {
+    animation-delay: 480ms;
+  }
+
+  /* Staggered entrance for archive groups */
+  .drawer-content[data-state='open'] .drawer-archive-group {
+    animation: slideInItem 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .drawer-content[data-state='open'] .drawer-archive-group:nth-child(1) {
+    animation-delay: 130ms;
+  }
+  .drawer-content[data-state='open'] .drawer-archive-group:nth-child(2) {
+    animation-delay: 230ms;
+  }
+  .drawer-content[data-state='open'] .drawer-archive-group:nth-child(3) {
+    animation-delay: 330ms;
+  }
+  .drawer-content[data-state='open'] .drawer-archive-group:nth-child(4) {
+    animation-delay: 430ms;
+  }
+  .drawer-content[data-state='open'] .drawer-archive-group:nth-child(5) {
+    animation-delay: 530ms;
   }
 }

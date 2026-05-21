@@ -121,13 +121,14 @@ describe('archive proxy helpers', () => {
       value: '/projects/proj-1/attachments/d1/photo/img.jpg',
     });
     expect(
-      validateArchiveProxyRequest(
-        'GET',
-        '/projects/proj-1/attachments/d1/photo/img.jpg/thumbnail',
+      buildArchiveTargetUrl(
+        'https://app.example.com/api/projects/proj-1/attachments/d1/photo/img.jpg?variant=thumbnail',
+        'https://archive.example.com/base/',
       ),
     ).toEqual({
       ok: true,
-      value: '/projects/proj-1/attachments/d1/photo/img.jpg/thumbnail',
+      value:
+        'https://archive.example.com/base/projects/proj-1/attachments/d1/photo/img.jpg?variant=thumbnail',
     });
   });
 

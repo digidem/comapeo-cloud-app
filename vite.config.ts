@@ -1,10 +1,12 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import httpProxy from 'http-proxy-3';
+import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import {
@@ -103,6 +105,48 @@ function isApiProxyUrl(url: string): boolean {
   return pathname === '/api' || pathname.startsWith('/api/');
 }
 
+function unquoteEnvValue(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function readInviteKeyFromDevVars(envDir: string): string | undefined {
+  const devVarsPath = resolve(envDir, '.dev.vars');
+  if (!existsSync(devVarsPath)) return undefined;
+
+  const lines = readFileSync(devVarsPath, 'utf-8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const match = /^INVITE_KEY\s*=\s*(.*)$/.exec(trimmed);
+    if (match?.[1]) return unquoteEnvValue(match[1]);
+  }
+
+  return undefined;
+}
+
+function ensureInviteKeyLoaded(mode: string, envDir: string) {
+  if (process.env.INVITE_KEY) return;
+
+  const env = loadEnv(mode, envDir, '');
+  const inviteKey = env.INVITE_KEY ?? readInviteKeyFromDevVars(envDir);
+  if (inviteKey) {
+    process.env.INVITE_KEY = inviteKey;
+  }
+}
+
+function getRequestProtocol(req: IncomingMessage): string {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  if (Array.isArray(forwardedProto)) return forwardedProto[0] ?? 'http';
+  return forwardedProto ?? 'http';
+}
+
 function archiveApiProxy(): Plugin {
   const createProxyServer =
     httpProxy.createProxyServer ??
@@ -142,6 +186,96 @@ function archiveApiProxy(): Plugin {
   return {
     name: 'archive-api-proxy',
     configureServer(server) {
+      // Invite handler middleware.
+      // Runs before the archive proxy so /api/invites/* is handled first.
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url) {
+          next();
+          return;
+        }
+        const { pathname } = new URL(req.url, 'http://localhost');
+
+        if (
+          (pathname === '/api/invites/encrypt' ||
+            pathname === '/api/invites/decrypt') &&
+          req.method === 'POST'
+        ) {
+          try {
+            const envDir = server.config.envDir ?? process.cwd();
+            ensureInviteKeyLoaded(server.config.mode, envDir);
+
+            // Load through SSR transform so @/ aliases work.
+            const mod = (await server.ssrLoadModule(
+              '/scripts/dev-invite-handler.ts',
+            )) as {
+              handleDevEncrypt: (r: Request) => Promise<Response>;
+              handleDevDecrypt: (r: Request) => Promise<Response>;
+            };
+
+            // Read the request body.
+            const chunks: Buffer[] = [];
+            for await (const chunk of req) {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            }
+            const body = Buffer.concat(chunks).toString('utf-8');
+
+            // Build a Web API Request from the Node.js request.
+            const headers = new Headers();
+            for (const [key, value] of Object.entries(req.headers)) {
+              if (value) {
+                if (Array.isArray(value)) {
+                  for (const v of value) headers.append(key, v);
+                } else {
+                  headers.set(key, value);
+                }
+              }
+            }
+            const protocol = getRequestProtocol(req);
+            const webReq = new Request(
+              `${protocol}://${req.headers.host ?? 'localhost'}${req.url}`,
+              {
+                method: req.method,
+                headers,
+                body:
+                  req.method === 'POST' || req.method === 'PUT'
+                    ? body
+                    : undefined,
+              },
+            );
+
+            const handler =
+              pathname === '/api/invites/encrypt'
+                ? mod.handleDevEncrypt
+                : mod.handleDevDecrypt;
+            const webRes = await handler(webReq);
+
+            // Write the Web API Response back to Node.js response.
+            res.statusCode = webRes.status;
+            webRes.headers.forEach((value, key) => {
+              res.setHeader(key, value);
+            });
+            const resBody = await webRes.text();
+            res.end(resBody);
+          } catch (err) {
+            console.error('[invite handler] error:', (err as Error).message);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(
+              JSON.stringify({
+                error: {
+                  code: 'INVITE_DEV_HANDLER_FAILED',
+                  message: 'Invite handler error',
+                },
+              }),
+            );
+          }
+          return;
+        }
+
+        next();
+      });
+
+      // Archive proxy middleware.
       server.middlewares.use((req, res, next) => {
         if (!req.url || !isApiProxyUrl(req.url)) {
           next();
@@ -152,7 +286,15 @@ function archiveApiProxy(): Plugin {
         const targetValue = Array.isArray(targetHeader)
           ? targetHeader[0]
           : targetHeader;
-        const normalized = normalizeArchiveBaseUrl(targetValue ?? '');
+
+        // If no x-target-url header, this is not an archive proxy request
+        // (e.g. /api/invites/* handled by Pages Functions). Pass through.
+        if (!targetValue) {
+          next();
+          return;
+        }
+
+        const normalized = normalizeArchiveBaseUrl(targetValue);
 
         if (!normalized.ok) {
           writeProxyError(

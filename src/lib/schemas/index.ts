@@ -8,3 +8,9 @@ export {
 } from './alert';
 export { errorResponseSchema } from './error';
 export { geometrySchema } from './geometry';
+export { imageryBasemapSchema, basemapCategorySchema } from './imagery-source';
+export type {
+  ImageryBasemap,
+  BasemapId,
+  BasemapCategory,
+} from './imagery-source';

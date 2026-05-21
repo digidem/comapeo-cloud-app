@@ -23,7 +23,6 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
 import { AddArchiveServerDialog } from './AddArchiveServerDialog';
-import { ArchiveBrowser } from './ArchiveBrowser';
 import { ArchiveServerDetail } from './ArchiveServerDetail';
 import { AreaMap } from './AreaMap';
 import { CalculationSettings } from './CalculationSettings';
@@ -32,6 +31,7 @@ import { CreateProjectDialog } from './CreateProjectDialog';
 import { DeleteProjectDialog } from './DeleteProjectDialog';
 import { EditProjectDialog } from './EditProjectDialog';
 import { HomeScreenSkeleton } from './HomeScreenSkeleton';
+import { IntroPage } from './IntroPage';
 import { MethodSelector } from './MethodSelector';
 import { ProjectBannerCard } from './ProjectBannerCard';
 import { RecentActivityList } from './RecentActivityList';
@@ -351,6 +351,14 @@ const messages = defineMessages({
 
 // ---- Component ----
 
+/** Internal metadata tags that should be filtered from the tags display */
+const INTERNAL_TAGS = new Set([
+  'photoUrls',
+  'photoCount',
+  'audioCount',
+  'trackCount',
+]);
+
 function HomeScreen() {
   const [state, dispatch] = useReducer(homeReducer, INITIAL_STATE);
   const persistedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -419,7 +427,9 @@ function HomeScreen() {
     for (const obs of observations) {
       if (obs.tags) {
         for (const key of Object.keys(obs.tags)) {
-          tagKeys.add(key);
+          if (!INTERNAL_TAGS.has(key)) {
+            tagKeys.add(key);
+          }
         }
       }
     }
@@ -582,6 +592,11 @@ function HomeScreen() {
     [],
   );
 
+  const handleOpenAddServer = useCallback(
+    () => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' }),
+    [],
+  );
+
   const handleIncrementRefresh = useCallback(
     () => dispatch({ type: 'INCREMENT_COVERAGE_REFRESH' }),
     [],
@@ -620,7 +635,7 @@ function HomeScreen() {
     }
   }
 
-  // ---- Shell slot: inject topbar + secondary sidebar into layout's AppShell ----
+  // ---- Shell slot: inject topbar into layout's AppShell ----
 
   const topbarWorkspaceName =
     selectedProject?.name ??
@@ -628,35 +643,13 @@ function HomeScreen() {
       ? intl.formatMessage(messages.untitledProject)
       : intl.formatMessage(messages.localMode));
 
-  const secondaryContent = useMemo(
-    () => (
-      <div className="flex flex-col gap-4 p-4">
-        <ArchiveBrowser
-          selectedProjectId={state.selectedProjectId}
-          onSelect={(id) => dispatch({ type: 'SELECT_PROJECT', id })}
-          onCreateNew={handleOpenCreateDialog}
-          onAddServer={() => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' })}
-          onSelectServer={(id) => dispatch({ type: 'SELECT_SERVER', id })}
-        />
-      </div>
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      projects,
-      state.selectedProjectId,
-      projectsQuery.isPending,
-      handleOpenCreateDialog,
-    ],
-  );
-
   const shellSlot = useMemo(
     () => ({
       topbarWorkspaceName,
       topbarModeLabel: intl.formatMessage(messages.homeTitle),
-      secondaryContent,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [topbarWorkspaceName, secondaryContent],
+    [topbarWorkspaceName],
   );
 
   useShellSlot(shellSlot);
@@ -681,6 +674,7 @@ function HomeScreen() {
       <>
         <ArchiveServerDetail
           server={selectedArchiveServer}
+          onBack={() => dispatch({ type: 'SELECT_SERVER', id: null })}
           onSync={handleSync}
           onRemove={(id) => {
             void removeServer(id);
@@ -729,6 +723,19 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
+      </>
+    );
+  }
+
+  if (!state.selectedProjectId && servers.length === 0) {
+    return (
+      <>
+        <div className="flex h-full flex-col">
+          <IntroPage
+            onAddServer={handleOpenAddServer}
+            onCreateProject={handleOpenCreateDialog}
+          />
+        </div>
 
         <AddArchiveServerDialog
           isOpen={state.isAddServerDialogOpen}
@@ -743,7 +750,9 @@ function HomeScreen() {
                 baseUrl: server.baseUrl,
                 token: server.token,
               }).then(() => {
-                void queryClient.invalidateQueries({ queryKey: ['projects'] });
+                void queryClient.invalidateQueries({
+                  queryKey: ['projects'],
+                });
                 void queryClient.invalidateQueries({
                   queryKey: ['observations'],
                 });
@@ -752,21 +761,6 @@ function HomeScreen() {
             }
           }}
         />
-      </>
-    );
-  }
-
-  if (!state.selectedProjectId && servers.length === 0) {
-    return (
-      <>
-        <div className="flex h-full flex-col items-center justify-center gap-3 py-12 sm:py-16 lg:py-20 text-center">
-          <p className="text-text-muted text-sm">
-            {intl.formatMessage(messages.noProjects)}
-          </p>
-          <Button variant="primary" size="sm" onClick={handleOpenCreateDialog}>
-            {intl.formatMessage(messages.firstProject)}
-          </Button>
-        </div>
 
         <CreateProjectDialog
           isOpen={state.isCreateDialogOpen}
@@ -807,29 +801,6 @@ function HomeScreen() {
           onDeleted={() => {
             void queryClient.invalidateQueries({ queryKey: ['projects'] });
             dispatch({ type: 'PROJECT_DELETED' });
-          }}
-        />
-
-        <AddArchiveServerDialog
-          isOpen={state.isAddServerDialogOpen}
-          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(serverId) => {
-            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-            const server = useAuthStore
-              .getState()
-              .servers.find((s) => s.id === serverId);
-            if (server) {
-              void syncRemoteArchive(serverId, {
-                baseUrl: server.baseUrl,
-                token: server.token,
-              }).then(() => {
-                void queryClient.invalidateQueries({ queryKey: ['projects'] });
-                void queryClient.invalidateQueries({
-                  queryKey: ['observations'],
-                });
-                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
-              });
-            }
           }}
         />
       </>

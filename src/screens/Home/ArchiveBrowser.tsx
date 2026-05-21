@@ -205,41 +205,47 @@ function ArchiveBrowser({
 
               return (
                 <div key={archive.archiveId}>
-                  {/* Archive header — clickable toggle */}
-                  <button
-                    type="button"
-                    onClick={() => toggleArchive(archive.archiveId)}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-btn text-sm font-medium text-text hover:bg-surface transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    {/* Chevron icon — rotates when expanded */}
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className={`transition-transform shrink-0 ${
-                        isExpanded ? 'rotate-90' : ''
-                      }`}
+                  {/* Archive header */}
+                  <div className="w-full flex items-center gap-2 px-3 py-2 rounded-btn text-sm font-medium text-text hover:bg-surface transition-colors">
+                    {/* Clickable archive toggle */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleArchive(archive.archiveId);
+                      }}
+                      className="min-w-0 flex flex-1 items-center gap-2 rounded-btn cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
-                    {/* Status dot (if applicable) */}
-                    {status && (
-                      <span
-                        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT_COLORS[status] ?? DOT_COLORS['idle']}`}
-                        aria-hidden="true"
-                      />
-                    )}
-                    {/* Archive name */}
-                    <span className="flex-1 text-left truncate">
-                      {archive.name}
-                    </span>
-                    {/* Project count badge */}
-                    <span className="text-xs text-text-muted shrink-0">
-                      ({archive.projectCount})
-                    </span>
+                      {/* Chevron icon — rotates when expanded */}
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        className={`transition-transform shrink-0 ${
+                          isExpanded ? 'rotate-90' : ''
+                        }`}
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                      {/* Status dot (if applicable) */}
+                      {status && (
+                        <span
+                          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT_COLORS[status] ?? DOT_COLORS['idle']}`}
+                          aria-hidden="true"
+                        />
+                      )}
+                      {/* Archive name */}
+                      <span className="flex-1 text-left truncate">
+                        {archive.name}
+                      </span>
+                      {/* Project count badge */}
+                      <span className="text-xs text-text-muted shrink-0">
+                        ({archive.projectCount})
+                      </span>
+                    </button>
                     {/* Server settings button — only for remote archives */}
                     {archive.url &&
                       onSelectServer &&
@@ -248,22 +254,14 @@ function ArchiveBrowser({
                           normalizeUrl(archive.url),
                         );
                         return sid ? (
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => {
-                              e.stopPropagation();
+                          <button
+                            type="button"
+                            onClick={() => {
                               onSelectServer(sid);
                             }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.stopPropagation();
-                                onSelectServer(sid);
-                              }
-                            }}
-                            className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface
+                            className="h-10 w-10 sm:h-8 sm:w-8 rounded-full text-text-muted hover:text-text hover:bg-surface
                                    inline-flex items-center justify-center shrink-0
-                                   cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                   focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                             aria-label={`Manage ${archive.name}`}
                           >
                             <svg
@@ -280,10 +278,10 @@ function ArchiveBrowser({
                               <circle cx="12" cy="12" r="3" />
                               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                             </svg>
-                          </span>
+                          </button>
                         ) : null;
                       })()}
-                  </button>
+                  </div>
 
                   {/* Collapsible project list */}
                   <div

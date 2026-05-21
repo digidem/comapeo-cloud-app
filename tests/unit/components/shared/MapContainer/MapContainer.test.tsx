@@ -1,0 +1,221 @@
+import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { MapContainer } from '@/components/shared/MapContainer/MapContainer';
+import { useMapStore } from '@/stores/map-store';
+
+// Mock maplibre-gl CSS import
+vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}));
+
+// Track props passed to Map for passthrough assertions
+const mapProps: Array<Record<string, unknown>> = [];
+
+// Mock react-map-gl/maplibre
+vi.mock('react-map-gl/maplibre', () => {
+  return {
+    default: (props: Record<string, unknown>) => {
+      mapProps.push(props);
+      return (
+        <div
+          data-testid="mock-map"
+          data-map-style={
+            typeof props.mapStyle === 'string'
+              ? props.mapStyle
+              : 'StyleSpecification'
+          }
+          data-cursor={props.cursor as string}
+        >
+          {props.children as React.ReactNode}
+        </div>
+      );
+    },
+    Source: (props: Record<string, unknown>) => (
+      <div
+        data-testid={`mock-source-${props.id}`}
+        data-source-id={props.id as string}
+      >
+        {props.children as React.ReactNode}
+      </div>
+    ),
+    Layer: (props: Record<string, unknown>) => (
+      <div
+        data-testid={`mock-layer-${props.id}`}
+        data-layer-id={props.id as string}
+      />
+    ),
+  };
+});
+
+beforeEach(() => {
+  mapProps.length = 0;
+  localStorage.clear();
+  useMapStore.setState({ basemapId: 'carto-positron' });
+});
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
+
+describe('MapContainer', () => {
+  it('renders the map with default basemap style', () => {
+    render(<MapContainer />);
+    expect(screen.getByTestId('mock-map')).toBeInTheDocument();
+  });
+
+  it('passes the correct mapStyle for the store basemap', () => {
+    useMapStore.setState({ basemapId: 'carto-positron' });
+    render(<MapContainer />);
+    const mapEl = screen.getByTestId('mock-map');
+    expect(mapEl.dataset.mapStyle).toContain('cartocdn.com');
+  });
+
+  it('passes a StyleSpecification for raster basemaps', () => {
+    useMapStore.setState({ basemapId: 'osm-standard' });
+    render(<MapContainer />);
+    const mapEl = screen.getByTestId('mock-map');
+    expect(mapEl.dataset.mapStyle).toBe('StyleSpecification');
+  });
+
+  it('shows the basemap switcher by default', () => {
+    render(<MapContainer />);
+    expect(screen.getByTestId('basemap-switcher')).toBeInTheDocument();
+  });
+
+  it('hides the basemap switcher when showBasemapSwitcher is false', () => {
+    render(<MapContainer showBasemapSwitcher={false} />);
+    expect(screen.queryByTestId('basemap-switcher')).not.toBeInTheDocument();
+  });
+
+  it('renders children inside the map', () => {
+    render(
+      <MapContainer>
+        <div data-testid="child-content">Map child</div>
+      </MapContainer>,
+    );
+    expect(screen.getByTestId('child-content')).toBeInTheDocument();
+  });
+
+  it('uses controlled basemapId when provided', () => {
+    render(<MapContainer basemapId="esri-world-imagery" />);
+    const mapEl = screen.getByTestId('mock-map');
+    expect(mapEl.dataset.mapStyle).toBe('StyleSpecification');
+  });
+
+  it('seeds store with defaultBasemapId on mount', async () => {
+    render(<MapContainer defaultBasemapId="osm-standard" />);
+    // After mount effect runs, the store should be seeded
+    await waitFor(() => {
+      expect(useMapStore.getState().basemapId).toBe('osm-standard');
+    });
+    const mapEl = screen.getByTestId('mock-map');
+    expect(mapEl.dataset.mapStyle).toBe('StyleSpecification');
+  });
+
+  it('defaultBasemapId does not override controlled basemapId', () => {
+    render(
+      <MapContainer
+        basemapId="carto-positron"
+        defaultBasemapId="osm-standard"
+      />,
+    );
+    const mapEl = screen.getByTestId('mock-map');
+    expect(mapEl.dataset.mapStyle).toContain('cartocdn.com');
+    // Store should NOT be seeded when controlled
+    expect(useMapStore.getState().basemapId).toBe('carto-positron');
+  });
+
+  it('switcher changes persist after defaultBasemapId seeding', async () => {
+    const user = userEvent.setup();
+    render(<MapContainer defaultBasemapId="osm-standard" />);
+
+    // Wait for seeding
+    await waitFor(() => {
+      expect(useMapStore.getState().basemapId).toBe('osm-standard');
+    });
+
+    // Switch basemap via the switcher
+    await user.click(screen.getByRole('button', { name: /basemap/i }));
+    await user.click(screen.getByText('CartoDB Positron'));
+
+    // Store should now be updated and sticky
+    expect(useMapStore.getState().basemapId).toBe('carto-positron');
+  });
+
+  it('calls onBasemapChange when switcher changes', async () => {
+    const handleChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <MapContainer
+        basemapId="carto-positron"
+        onBasemapChange={handleChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /basemap/i }));
+    await user.click(screen.getByText('OpenStreetMap'));
+
+    expect(handleChange).toHaveBeenCalledWith('osm-standard');
+  });
+
+  it('uses custom basemaps catalog when provided', () => {
+    const customCatalog = [
+      {
+        id: 'custom',
+        name: 'Custom Map',
+        category: 'street' as const,
+        type: 'style' as const,
+        url: 'https://example.com/style.json',
+      },
+    ];
+    render(<MapContainer basemapId="custom" basemaps={customCatalog} />);
+    const mapEl = screen.getByTestId('mock-map');
+    expect(mapEl.dataset.mapStyle).toBe('https://example.com/style.json');
+  });
+
+  it('custom catalog without default basemap falls back to first entry', () => {
+    const customCatalog = [
+      {
+        id: 'custom-a',
+        name: 'Custom A',
+        category: 'satellite' as const,
+        type: 'style' as const,
+        url: 'https://example.com/a/style.json',
+      },
+    ];
+    render(<MapContainer basemaps={customCatalog} />);
+    const mapEl = screen.getByTestId('mock-map');
+    expect(mapEl.dataset.mapStyle).toBe('https://example.com/a/style.json');
+  });
+
+  it('applies custom className to container', () => {
+    render(<MapContainer className="custom-container" />);
+    const container = screen.getByTestId('map-container');
+    expect(container.classList.contains('custom-container')).toBe(true);
+  });
+
+  it('does not have trailing space in className when no custom class', () => {
+    render(<MapContainer />);
+    const container = screen.getByTestId('map-container');
+    expect(container.className).not.toMatch(/\s$/);
+  });
+
+  it('applies custom height style', () => {
+    render(<MapContainer height={400} />);
+    const container = screen.getByTestId('map-container');
+    expect(container.style.height).toBe('400px');
+  });
+
+  it('uses default height of 100% when not specified', () => {
+    render(<MapContainer />);
+    const container = screen.getByTestId('map-container');
+    expect(container.style.height).toBe('100%');
+  });
+
+  it('forwards passthrough props to the underlying Map', () => {
+    render(<MapContainer cursor="crosshair" />);
+    // The last Map render should have received the cursor prop
+    const lastProps = mapProps[mapProps.length - 1];
+    expect(lastProps).toBeTruthy();
+    expect(lastProps!.cursor).toBe('crosshair');
+  });
+});

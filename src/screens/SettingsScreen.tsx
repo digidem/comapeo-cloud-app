@@ -272,6 +272,11 @@ export function SettingsScreen() {
     [],
   );
 
+  const handleClearAll = useCallback(async () => {
+    await clearAllStorage();
+    window.location.reload();
+  }, []);
+
   return (
     <section className="p-3 sm:p-4 lg:p-6">
       <h1 className="text-2xl font-bold text-text-heading">
@@ -310,7 +315,7 @@ export function SettingsScreen() {
           error={errors.bearerToken?.message}
           {...register('bearerToken')}
         />
-        <Button type="submit">
+        <Button type="submit" className="w-full sm:w-auto">
           {intl.formatMessage(_messages.generateButton)}
         </Button>
         {generateError && <p className="text-sm text-error">{generateError}</p>}
@@ -327,14 +332,15 @@ export function SettingsScreen() {
               <p className="text-sm text-text-muted mb-1">
                 {intl.formatMessage(_messages.inviteUrlLabel)}
               </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 bg-surface-card border border-border rounded-input px-3 py-2 text-sm text-text truncate">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <code className="flex-1 bg-surface-card border border-border rounded-input px-3 py-2 text-sm text-text truncate min-w-0">
                   {inviteUrl}
                 </code>
                 <Button
                   size="sm"
                   variant="secondary"
                   onClick={() => copyToClipboard(inviteUrl, setCopiedUrl)}
+                  className="shrink-0"
                 >
                   {copiedUrl
                     ? intl.formatMessage(_messages.copiedButton)
@@ -346,14 +352,15 @@ export function SettingsScreen() {
               <p className="text-sm text-text-muted mb-1">
                 {intl.formatMessage(_messages.inviteCodeLabel)}
               </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 bg-surface-card border border-border rounded-input px-3 py-2 text-sm text-text">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <code className="flex-1 bg-surface-card border border-border rounded-input px-3 py-2 text-sm text-text min-w-0">
                   {inviteCode}
                 </code>
                 <Button
                   size="sm"
                   variant="secondary"
                   onClick={() => copyToClipboard(inviteCode, setCopiedCode)}
+                  className="shrink-0"
                 >
                   {copiedCode
                     ? intl.formatMessage(_messages.copiedButton)
@@ -375,7 +382,7 @@ export function SettingsScreen() {
       <p className="text-sm text-text-muted mt-2">
         {intl.formatMessage(_messages.backupDescription)}
       </p>
-      <div className="mt-4 flex flex-wrap gap-3 max-w-md">
+      <div className="mt-4 flex flex-col sm:flex-row flex-wrap gap-3 max-w-md">
         <input
           type="file"
           accept=".json"
@@ -384,7 +391,7 @@ export function SettingsScreen() {
           className="hidden"
           data-testid="backup-file-input"
         />
-        <Button variant="secondary" onClick={handleExport}>
+        <Button variant="secondary" onClick={handleExport} className="min-w-0">
           {intl.formatMessage(_messages.backupExportButton)}
         </Button>
         <Button
@@ -392,6 +399,7 @@ export function SettingsScreen() {
           onClick={() => fileInputRef.current?.click()}
           loading={importStatus === 'loading'}
           disabled={importStatus === 'loading'}
+          className="min-w-0"
         >
           {intl.formatMessage(_messages.backupImportButton)}
         </Button>
@@ -427,7 +435,11 @@ export function SettingsScreen() {
         {intl.formatMessage(_messages.clearDescription)}
       </p>
       <div className="mt-4 max-w-md">
-        <Button variant="danger" onClick={() => setIsClearConfirmOpen(true)}>
+        <Button
+          variant="danger"
+          onClick={() => setIsClearConfirmOpen(true)}
+          className="w-full sm:w-auto"
+        >
           {intl.formatMessage(_messages.clearButton)}
         </Button>
       </div>
@@ -440,7 +452,7 @@ export function SettingsScreen() {
         title={intl.formatMessage(_messages.clearConfirmTitle)}
         description={intl.formatMessage(_messages.clearConfirmDescription)}
       >
-        <div className="flex justify-end gap-2 mt-4">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-4">
           <Button
             type="button"
             variant="secondary"
@@ -453,9 +465,7 @@ export function SettingsScreen() {
             type="button"
             variant="danger"
             size="sm"
-            onClick={() => {
-              void clearAllStorage();
-            }}
+            onClick={handleClearAll}
           >
             {intl.formatMessage(_messages.clearConfirmButton)}
           </Button>

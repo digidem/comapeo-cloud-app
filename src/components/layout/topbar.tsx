@@ -6,6 +6,7 @@ interface TopbarProps {
   workspaceName?: string;
   modeLabel?: string;
   onMenuClick?: () => void;
+  isMenuOpen?: boolean;
   children?: ReactNode;
 }
 
@@ -13,43 +14,43 @@ function Topbar({
   workspaceName,
   modeLabel,
   onMenuClick,
+  isMenuOpen,
   children,
 }: TopbarProps) {
   return (
     <header
       role="banner"
-      className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between border-b border-border bg-white px-4"
+      className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between border-b border-border bg-surface-card px-4"
     >
       <div className="flex items-center gap-3">
         {onMenuClick && (
           <button
             type="button"
             onClick={onMenuClick}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-text-muted hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-white lg:hidden"
-            aria-label="Open menu"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-text-muted motion-safe:transition-transform motion-safe:duration-300 hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-safe:active:scale-75 lg:hidden"
+            aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={isMenuOpen ? 'true' : 'false'}
           >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
+            <span
               aria-hidden="true"
+              className="flex h-5 w-6 flex-col items-center justify-center gap-[5px]"
             >
-              <path
-                d="M3 6h18M3 12h18M3 18h18"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
+              <span
+                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isMenuOpen ? 'translate-y-[7px] rotate-45' : ''}`}
               />
-            </svg>
+              <span
+                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-opacity motion-safe:duration-[250ms] ${isMenuOpen ? 'opacity-0' : ''}`}
+              />
+              <span
+                className={`block h-[2px] w-full rounded-full bg-current motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isMenuOpen ? '-translate-y-[7px] -rotate-45' : ''}`}
+              />
+            </span>
           </button>
         )}
-        <img
-          src="/comapeo_cloud_logo_min.png"
-          alt="CoMapeo Cloud"
-          className="h-12 w-auto"
-        />
+        <span className="font-semibold" aria-label="CoMapeo Cloud">
+          <span className="text-warning">Co</span>
+          <span className="text-text">Mapeo Cloud</span>
+        </span>
         {workspaceName && (
           <span className="hidden bg-primary-soft text-primary rounded-full px-3 py-0.5 text-sm font-medium sm:inline-flex">
             {workspaceName}

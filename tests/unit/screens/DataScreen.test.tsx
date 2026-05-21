@@ -5,12 +5,22 @@ import { DataScreen } from '@/screens/DataScreen';
 
 // --- Shared mock factories ---
 
+type ObservationMock = {
+  localId: string;
+  projectLocalId: string;
+  tags?: Record<string, string>;
+  lat?: number;
+  lon?: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const defaultProjects = [
   { localId: 'proj-1', name: 'Test Project' },
   { localId: 'proj-2', name: 'Another Project' },
 ];
 
-const defaultObservations = [
+const defaultObservations: ObservationMock[] = [
   {
     localId: 'obs-1',
     projectLocalId: 'proj-1',
@@ -46,14 +56,17 @@ let mockSelectedProjectId: string | null = null;
 let mockProjectsQuery: {
   data?: typeof defaultProjects;
   isPending: boolean;
+  isError?: boolean;
 } = { data: defaultProjects, isPending: false };
 let mockObservationsQuery: {
-  data?: typeof defaultObservations;
+  data?: ObservationMock[];
   isPending: boolean;
+  isError?: boolean;
 } = { data: defaultObservations, isPending: false };
 let mockAlertsQuery: {
   data?: typeof defaultAlerts;
   isPending: boolean;
+  isError?: boolean;
 } = { data: defaultAlerts, isPending: false };
 
 vi.mock('@/components/layout/shell-slot', () => ({
@@ -77,6 +90,13 @@ vi.mock('@/hooks/useObservations', () => ({
 
 vi.mock('@/hooks/useAlerts', () => ({
   useAlerts: vi.fn(() => mockAlertsQuery),
+}));
+
+// Mock AuthImg to avoid needing useAuthenticatedImageUrl in DataScreen tests
+vi.mock('@/components/shared/auth-img', () => ({
+  AuthImg: ({ src, alt }: { src: string; alt: string }) => (
+    <img data-testid="auth-img" src={src} alt={alt} />
+  ),
 }));
 
 vi.mock('@/components/ui/tabs', () => {
@@ -174,6 +194,16 @@ describe('DataScreen', () => {
       expect(screen.getByText('Loading...')).toBeInTheDocument();
     });
 
+    it('renders observations error state before empty state', () => {
+      mockObservationsQuery = { data: [], isPending: false, isError: true };
+
+      render(<DataScreen />);
+      expect(
+        screen.getByText('Failed to load observations. Please try again.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('No observations yet')).not.toBeInTheDocument();
+    });
+
     it('renders "No observations yet" when observations array is empty', () => {
       mockObservationsQuery = { data: [], isPending: false };
 
@@ -236,7 +266,7 @@ describe('DataScreen', () => {
             tags: { category: 'wildlife', notes: 'Wildlife sighting' },
             createdAt: '2024-03-13T09:00:00Z',
             updatedAt: '2024-03-13T09:00:00Z',
-          } as (typeof defaultObservations)[number],
+          },
         ],
         isPending: false,
       };
@@ -245,6 +275,101 @@ describe('DataScreen', () => {
       expect(screen.getByText('wildlife')).toBeInTheDocument();
       // No coordinate text should be present
       expect(screen.queryByText(/-8\./)).not.toBeInTheDocument();
+    });
+
+    // ---- MediaPreview integration ----
+
+    describe('media preview in observation cards', () => {
+      it('renders photo thumbnails when observation has photoUrls in tags', () => {
+        mockObservationsQuery = {
+          data: [
+            {
+              localId: 'obs-photos',
+              projectLocalId: 'proj-1',
+              tags: {
+                category: 'forest',
+                photoUrls:
+                  'https://example.com/photo1.jpg,https://example.com/photo2.jpg',
+              },
+              createdAt: '2024-03-15T10:30:00Z',
+              updatedAt: '2024-03-15T10:30:00Z',
+            },
+          ],
+          isPending: false,
+        };
+
+        render(<DataScreen />);
+        const authImgs = screen.getAllByTestId('auth-img');
+        expect(authImgs).toHaveLength(2);
+        expect(authImgs[0]).toHaveAttribute(
+          'src',
+          'https://example.com/photo1.jpg',
+        );
+        expect(authImgs[1]).toHaveAttribute(
+          'src',
+          'https://example.com/photo2.jpg',
+        );
+      });
+
+      it('renders audio icon when observation has audioCount in tags', () => {
+        mockObservationsQuery = {
+          data: [
+            {
+              localId: 'obs-audio',
+              projectLocalId: 'proj-1',
+              tags: { category: 'forest', audioCount: '2' },
+              createdAt: '2024-03-15T10:30:00Z',
+              updatedAt: '2024-03-15T10:30:00Z',
+            },
+          ],
+          isPending: false,
+        };
+
+        render(<DataScreen />);
+        expect(screen.getByTestId('audio-icon')).toBeInTheDocument();
+      });
+
+      it('renders "+N more" text when total media exceeds visible slots', () => {
+        mockObservationsQuery = {
+          data: [
+            {
+              localId: 'obs-many',
+              projectLocalId: 'proj-1',
+              tags: {
+                category: 'forest',
+                photoUrls:
+                  'https://example.com/photo1.jpg,https://example.com/photo2.jpg,https://example.com/photo3.jpg',
+              },
+              createdAt: '2024-03-15T10:30:00Z',
+              updatedAt: '2024-03-15T10:30:00Z',
+            },
+          ],
+          isPending: false,
+        };
+
+        render(<DataScreen />);
+        expect(screen.getByText('+1 more')).toBeInTheDocument();
+      });
+
+      it('does not render media preview when observation has no media tags', () => {
+        mockObservationsQuery = {
+          data: [
+            {
+              localId: 'obs-no-media',
+              projectLocalId: 'proj-1',
+              tags: { category: 'forest', notes: 'No media' },
+              createdAt: '2024-03-15T10:30:00Z',
+              updatedAt: '2024-03-15T10:30:00Z',
+            },
+          ],
+          isPending: false,
+        };
+
+        render(<DataScreen />);
+        expect(screen.queryByTestId('auth-img')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('audio-icon')).not.toBeInTheDocument();
+        expect(screen.queryByText(/more/)).not.toBeInTheDocument();
+      });
     });
 
     // ---- Alerts tab ----
@@ -257,6 +382,17 @@ describe('DataScreen', () => {
       // Both tabs render content with mocked Tabs; observations is empty, alerts is loading
       const loadingTexts = screen.getAllByText('Loading...');
       expect(loadingTexts.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders alerts error state before empty state', () => {
+      mockAlertsQuery = { data: [], isPending: false, isError: true };
+      mockObservationsQuery = { data: [], isPending: false };
+
+      render(<DataScreen />);
+      expect(
+        screen.getByText('Failed to load alerts. Please try again.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('No alerts yet')).not.toBeInTheDocument();
     });
 
     it('renders "No alerts yet" when alerts array is empty', () => {

@@ -30,18 +30,15 @@ const activeSyncs = new Map<string, Promise<SyncResult>>();
 async function ensureServerInStore(
   options: SyncOptions,
 ): Promise<string | null> {
-  const { servers } = useAuthStore.getState();
-  let server = servers.find((s) => s.baseUrl === options.baseUrl);
-  if (!server) {
-    await useAuthStore.getState().addServer({
-      label: options.serverLabel ?? options.baseUrl,
-      baseUrl: options.baseUrl,
-      token: options.token,
-    });
-    const updated = useAuthStore.getState().servers;
-    server = updated.find((s) => s.baseUrl === options.baseUrl);
-  }
-  return server?.id ?? null;
+  // Always call addServer — it handles deduplication by baseUrl and
+  // updates the token when it has changed, keeping the auth store in
+  // sync with the credentials used for the current sync operation.
+  const id = await useAuthStore.getState().addServer({
+    label: options.serverLabel ?? options.baseUrl,
+    baseUrl: options.baseUrl,
+    token: options.token,
+  });
+  return id;
 }
 
 async function doSync(
@@ -68,17 +65,55 @@ async function doSync(
     // Pull projects
     const projects = await pullProjects(serverDbId, config);
 
-    // Pull observations and alerts for each project
-    for (const project of projects) {
-      if (project.remoteId) {
-        await pullObservations(
+    // Pull observations and alerts for each project in parallel.
+    // Each project is handled independently so a single failure does not
+    // abort the rest — partial results are still persisted.
+    const projectResults = await Promise.allSettled(
+      projects.map(async (project) => {
+        if (project.remoteId) {
+          await pullObservations(
+            serverDbId,
+            project.remoteId,
+            project.localId,
+            config,
+          );
+          await pullAlerts(
+            serverDbId,
+            project.remoteId,
+            project.localId,
+            config,
+          );
+        }
+      }),
+    );
+
+    // Collect any per-project errors without aborting the overall sync.
+    const projectErrors = projectResults
+      .map((r, i) => ({ r, i }))
+      .filter(
+        (x): x is { r: PromiseRejectedResult; i: number } =>
+          x.r.status === 'rejected',
+      )
+      .map(({ r, i }) => {
+        const reason =
+          r.reason instanceof Error ? r.reason.message : String(r.reason);
+        const name =
+          projects[i]?.name ?? projects[i]?.remoteId ?? `project ${i}`;
+        return `${name}: ${reason}`;
+      });
+
+    if (projectErrors.length > 0) {
+      await useAuthStore
+        .getState()
+        .updateServerStatus(
           serverDbId,
-          project.remoteId,
-          project.localId,
-          config,
+          'error',
+          `Partial sync failure — ${projectErrors.join('; ')}`,
         );
-        await pullAlerts(serverDbId, project.remoteId, project.localId, config);
-      }
+      return {
+        success: false,
+        error: `Partial sync failure — ${projectErrors.join('; ')}`,
+      };
     }
 
     // Mark server as connected
@@ -88,15 +123,10 @@ async function doSync(
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown sync error';
-    // Update server status to error
-    const existing = useAuthStore
+    // Update server status to error — use serverDbId directly
+    await useAuthStore
       .getState()
-      .servers.find((s) => s.baseUrl === options.baseUrl);
-    if (existing) {
-      await useAuthStore
-        .getState()
-        .updateServerStatus(existing.id, 'error', errorMessage);
-    }
+      .updateServerStatus(serverDbId, 'error', errorMessage);
     return { success: false, error: errorMessage };
   }
 }

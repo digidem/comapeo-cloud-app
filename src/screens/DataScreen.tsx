@@ -4,6 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Link } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { MediaPreview } from '@/components/shared/MediaPreview';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -60,6 +61,14 @@ const messages = defineMessages({
   addAlert: {
     id: 'data.addAlert',
     defaultMessage: 'Add Alert',
+  },
+  observationsError: {
+    id: 'data.observationsError',
+    defaultMessage: 'Failed to load observations. Please try again.',
+  },
+  alertsError: {
+    id: 'data.alertsError',
+    defaultMessage: 'Failed to load alerts. Please try again.',
   },
 });
 
@@ -124,7 +133,7 @@ export function DataScreen() {
 
       {/* Tabbed content */}
       <Tabs defaultValue="observations">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <TabsList>
             <TabsTrigger value="observations">
               {intl.formatMessage(messages.observationsTab)} (
@@ -137,7 +146,7 @@ export function DataScreen() {
 
           <Link
             to="/data/alerts/new"
-            className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white no-underline hover:bg-primary-dark transition-colors"
+            className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white no-underline hover:bg-primary-dark transition-colors text-center"
           >
             {intl.formatMessage(messages.addAlert)}
           </Link>
@@ -145,6 +154,15 @@ export function DataScreen() {
 
         <TabsContent value="observations">
           {(() => {
+            if (observationsQuery.isError) {
+              return (
+                <div className="flex items-center justify-center p-8">
+                  <span className="text-error text-sm">
+                    {intl.formatMessage(messages.observationsError)}
+                  </span>
+                </div>
+              );
+            }
             if (observationsQuery.isPending) {
               return (
                 <div className="flex items-center justify-center p-8">
@@ -187,6 +205,10 @@ export function DataScreen() {
                         <span className="text-xs text-text-muted">
                           {new Date(obs.createdAt).toLocaleDateString()}
                         </span>
+                        <MediaPreview
+                          observationLocalId={obs.localId}
+                          tags={obs.tags}
+                        />
                       </div>
                     </Card>
                   </Link>
@@ -198,6 +220,15 @@ export function DataScreen() {
 
         <TabsContent value="alerts">
           {(() => {
+            if (alertsQuery.isError) {
+              return (
+                <div className="flex items-center justify-center p-8">
+                  <span className="text-error text-sm">
+                    {intl.formatMessage(messages.alertsError)}
+                  </span>
+                </div>
+              );
+            }
             if (alertsQuery.isPending) {
               return (
                 <div className="flex items-center justify-center p-8">

@@ -35,15 +35,13 @@ const navItems = [
 ];
 
 describe('AppShell', () => {
-  it('renders topbar with logo', () => {
+  it('renders topbar with branding text', () => {
     render(
       <AppShell navItems={navItems} activeNavPath="/dashboard">
         <div>Main content</div>
       </AppShell>,
     );
-    expect(
-      screen.getByRole('img', { name: 'CoMapeo Cloud' }),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText('CoMapeo Cloud')).toBeInTheDocument();
   });
 
   it('renders primary nav with items', () => {
@@ -169,7 +167,7 @@ describe('AppShell', () => {
     expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('drawer receives same secondaryContent as desktop sidebar', async () => {
+  it('drawer shows structured sections instead of secondaryContent in mobile', async () => {
     render(
       <AppShell
         navItems={navItems}
@@ -182,9 +180,11 @@ describe('AppShell', () => {
     // Open the drawer
     const hamburger = screen.getByRole('button', { name: /open menu/i });
     await userEvent.click(hamburger);
-    // secondaryContent should appear in both desktop sidebar and drawer
+    // Drawer close button should be visible (confirming drawer opened)
+    await screen.findByRole('button', { name: /close menu/i });
+    // secondaryContent appears in the desktop sidebar (hidden on mobile)
     const secondaryPanels = screen.getAllByTestId('secondary-panel');
-    expect(secondaryPanels.length).toBe(2);
+    expect(secondaryPanels.length).toBe(1);
   });
 
   it('hamburger callback triggers drawer open', async () => {
@@ -222,5 +222,23 @@ describe('AppShell', () => {
     expect(
       screen.queryByRole('button', { name: /close menu/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it('updates hamburger aria-label when drawer opens', async () => {
+    render(
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
+        <div>Main content</div>
+      </AppShell>,
+    );
+    // Initially closed — hamburger shows "Open menu"
+    expect(
+      screen.getByRole('button', { name: /open menu/i }),
+    ).toBeInTheDocument();
+    // Open the drawer
+    await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    // Drawer close button should be visible (confirming drawer opened)
+    expect(
+      screen.getByRole('button', { name: /close menu/i }),
+    ).toBeInTheDocument();
   });
 });

@@ -15,6 +15,29 @@ interface AppShellProps {
   subnavTitle?: string;
   subnavContent?: ReactNode;
   secondaryContent?: ReactNode;
+  /** Archive servers for mobile drawer */
+  drawerArchives?: Array<{ id: string; label: string; baseUrl?: string }>;
+  /** Projects grouped by archive server ID */
+  drawerArchiveProjects?: Record<
+    string,
+    Array<{ localId: string; name: string }>
+  >;
+  /** Local projects (not tied to any archive) */
+  drawerLocalProjects?: Array<{ localId: string; name: string }>;
+  /** Active archive server ID */
+  activeArchiveId?: string;
+  /** Active project ID */
+  activeProjectId?: string;
+  /** Opens AddArchiveServerDialog (available from any route) */
+  onDrawerAddServer?: () => void;
+  /** Opens CreateProjectDialog (available from any route) */
+  onDrawerCreateProject?: () => void;
+  /** Select an archive server (navigates to home) */
+  onDrawerSelectServer?: (id: string) => void;
+  /** Select a project (navigates to home) */
+  onDrawerSelectProject?: (id: string) => void;
+  /** Open archive settings dialog */
+  onDrawerArchiveSettings?: (id: string) => void;
   children: ReactNode;
 }
 
@@ -27,13 +50,22 @@ function AppShell({
   subnavTitle,
   subnavContent,
   secondaryContent,
+  drawerArchives,
+  drawerArchiveProjects,
+  drawerLocalProjects,
+  activeArchiveId,
+  activeProjectId,
+  onDrawerAddServer,
+  onDrawerCreateProject,
+  onDrawerSelectServer,
+  onDrawerSelectProject,
+  onDrawerArchiveSettings,
   children,
 }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const prevNavPathRef = useRef(activeNavPath);
 
   // Close drawer on route change (handles browser back/forward)
-  // Read the previous value before updating the ref, all within one effect
   useEffect(() => {
     if (prevNavPathRef.current !== activeNavPath) {
       setMobileMenuOpen(false);
@@ -46,14 +78,15 @@ function AppShell({
       <Topbar
         workspaceName={topbarWorkspaceName}
         modeLabel={topbarModeLabel}
-        onMenuClick={() => setMobileMenuOpen(true)}
+        onMenuClick={() => setMobileMenuOpen((prev) => !prev)}
+        isMenuOpen={mobileMenuOpen}
       >
         {topbarActions}
       </Topbar>
       <div className="flex flex-1 pt-14">
         <PrimaryNav items={navItems} activePath={activeNavPath} />
         {secondaryContent !== undefined && (
-          <aside className="hidden w-[268px] flex-col border-r border-border bg-white lg:flex">
+          <aside className="hidden w-[268px] flex-col border-r border-border bg-surface-card lg:flex">
             {secondaryContent}
           </aside>
         )}
@@ -71,7 +104,16 @@ function AppShell({
         onOpenChange={setMobileMenuOpen}
         navItems={navItems}
         activePath={activeNavPath}
-        secondaryContent={secondaryContent}
+        archives={drawerArchives}
+        archiveProjects={drawerArchiveProjects}
+        localProjects={drawerLocalProjects}
+        activeArchiveId={activeArchiveId}
+        activeProjectId={activeProjectId}
+        onAddServer={onDrawerAddServer}
+        onCreateProject={onDrawerCreateProject}
+        onSelectServer={onDrawerSelectServer}
+        onSelectProject={onDrawerSelectProject}
+        onArchiveSettings={onDrawerArchiveSettings}
         onNavigate={() => setMobileMenuOpen(false)}
       />
     </div>

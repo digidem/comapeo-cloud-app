@@ -91,8 +91,10 @@ function getAuthHeaders(config?: RequestConfig): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
 
+const NETWORK_ERROR_RE = /failed to fetch|networkerror|load failed/i;
+
 function isNetworkError(error: unknown): boolean {
-  return error instanceof TypeError && error.message === 'Failed to fetch';
+  return error instanceof TypeError && NETWORK_ERROR_RE.test(error.message);
 }
 
 function throwNetworkError(): never {
@@ -388,9 +390,12 @@ export function getAttachmentUrl(
   type: string,
   name: string,
   variant?: string,
+  options?: { baseUrl?: string },
 ): string {
-  const { baseUrl } = useAuthStore.getState();
+  const baseUrl = options?.baseUrl ?? useAuthStore.getState().baseUrl;
+  // Keep archive URLs intact here. AuthImg/useAuthenticatedImageUrl converts
+  // matching archive URLs to /api proxy requests with the required headers.
   const base = baseUrl?.replace(/\/+$/, '') ?? '';
   const path = `${base}/projects/${encodeURIComponent(projectId)}/attachments/${encodeURIComponent(driveId)}/${encodeURIComponent(type)}/${encodeURIComponent(name)}`;
-  return variant ? `${path}/${variant}` : path;
+  return variant ? `${path}?variant=${encodeURIComponent(variant)}` : path;
 }

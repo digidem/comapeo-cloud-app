@@ -1,7 +1,4 @@
 {
-  "alertDetail.back": {
-    "defaultMessage": "Back to Data"
-  },
   "alertDetail.createdAt": {
     "defaultMessage": "Created"
   },
@@ -104,6 +101,9 @@
   "data.alertFallback": {
     "defaultMessage": "Alert"
   },
+  "data.alertsError": {
+    "defaultMessage": "Failed to load alerts. Please try again."
+  },
   "data.loading": {
     "defaultMessage": "Loading..."
   },
@@ -121,6 +121,9 @@
   },
   "data.observationFallback": {
     "defaultMessage": "Observation"
+  },
+  "data.observationsError": {
+    "defaultMessage": "Failed to load observations. Please try again."
   },
   "data.tabs.alerts": {
     "defaultMessage": "Alerts"
@@ -191,14 +194,65 @@
   "home.archive.credentialsUnavailable": {
     "defaultMessage": "Credentials unavailable."
   },
+  "home.archive.detail.advancedSettings": {
+    "defaultMessage": "Advanced Settings"
+  },
+  "home.archive.detail.alerts": {
+    "defaultMessage": "Alerts"
+  },
+  "home.archive.detail.backToArchives": {
+    "defaultMessage": "Back to archives"
+  },
+  "home.archive.detail.copyUrl": {
+    "defaultMessage": "Copy URL"
+  },
+  "home.archive.detail.dangerZone": {
+    "defaultMessage": "Danger Zone"
+  },
+  "home.archive.detail.editAction": {
+    "defaultMessage": "Edit archive"
+  },
   "home.archive.detail.error": {
     "defaultMessage": "Error"
   },
-  "home.archive.detail.lastSynced": {
-    "defaultMessage": "Last synced"
+  "home.archive.detail.fullUrl": {
+    "defaultMessage": "Full URL"
+  },
+  "home.archive.detail.lastSync": {
+    "defaultMessage": "Last sync: {time}"
+  },
+  "home.archive.detail.lastSyncIso": {
+    "defaultMessage": "Last synced (UTC)"
+  },
+  "home.archive.detail.needsAttention": {
+    "defaultMessage": "Needs attention"
   },
   "home.archive.detail.never": {
     "defaultMessage": "Never"
+  },
+  "home.archive.detail.noProjects": {
+    "defaultMessage": "No projects in this archive"
+  },
+  "home.archive.detail.observations": {
+    "defaultMessage": "Observations"
+  },
+  "home.archive.detail.offline": {
+    "defaultMessage": "Offline"
+  },
+  "home.archive.detail.overflowActions": {
+    "defaultMessage": "Archive actions"
+  },
+  "home.archive.detail.projectAlerts": {
+    "defaultMessage": "{count, plural, one {# alert} other {# alerts}}"
+  },
+  "home.archive.detail.projectObservations": {
+    "defaultMessage": "{count, plural, one {# observation} other {# observations}}"
+  },
+  "home.archive.detail.projects": {
+    "defaultMessage": "Projects"
+  },
+  "home.archive.detail.removeAction": {
+    "defaultMessage": "Remove archive"
   },
   "home.archive.detail.retrySync": {
     "defaultMessage": "Retry Sync"
@@ -206,29 +260,29 @@
   "home.archive.detail.staleToken": {
     "defaultMessage": "Warning: Token may be stale — no successful sync in over 24 hours. Try reconnecting or updating credentials."
   },
-  "home.archive.detail.statsAlerts": {
-    "defaultMessage": "{count, plural, one {# alert} other {# alerts}}"
+  "home.archive.detail.synced": {
+    "defaultMessage": "Synced"
   },
-  "home.archive.detail.statsNoData": {
-    "defaultMessage": "No data synced yet"
+  "home.archive.detail.syncedAgo": {
+    "defaultMessage": "Synced {minutes} minutes ago"
   },
-  "home.archive.detail.statsObservations": {
-    "defaultMessage": "{count, plural, one {# observation} other {# observations}}"
+  "home.archive.detail.syncedHourAgo": {
+    "defaultMessage": "Synced {hours} hours ago"
   },
-  "home.archive.detail.statsProjects": {
-    "defaultMessage": "{count, plural, one {# project} other {# projects}}"
+  "home.archive.detail.syncing": {
+    "defaultMessage": "Syncing…"
   },
-  "home.archive.detail.statsTitle": {
-    "defaultMessage": "Summary"
+  "home.archive.detail.today": {
+    "defaultMessage": "Today"
   },
-  "home.archive.detail.status": {
-    "defaultMessage": "Status"
+  "home.archive.detail.untitledProject": {
+    "defaultMessage": "Untitled"
   },
-  "home.archive.detail.url": {
-    "defaultMessage": "URL"
+  "home.archive.detail.viewProjectData": {
+    "defaultMessage": "View observations, alerts, and project data"
   },
-  "home.archive.detail.viewData": {
-    "defaultMessage": "View Data"
+  "home.archive.detail.yesterday": {
+    "defaultMessage": "Yesterday"
   },
   "home.archive.dialog.add": {
     "defaultMessage": "Add"
@@ -335,9 +389,6 @@
   "home.archive.syncFailed": {
     "defaultMessage": "Sync failed"
   },
-  "home.archive.syncing": {
-    "defaultMessage": "Syncing..."
-  },
   "home.archives": {
     "defaultMessage": "Archives"
   },
@@ -424,6 +475,42 @@
   },
   "home.import.tryAgain": {
     "defaultMessage": "Try again"
+  },
+  "home.intro.addServerCta": {
+    "defaultMessage": "Add server"
+  },
+  "home.intro.addServerDesc": {
+    "defaultMessage": "Connect to an existing CoMapeo Cloud server and sync projects, observations, and alerts."
+  },
+  "home.intro.addServerLabel": {
+    "defaultMessage": "Add remote archive server"
+  },
+  "home.intro.createProjectCta": {
+    "defaultMessage": "Create project"
+  },
+  "home.intro.createProjectDesc": {
+    "defaultMessage": "Start a new project on this device. You can connect it to a remote archive later."
+  },
+  "home.intro.createProjectLabel": {
+    "defaultMessage": "Start a project"
+  },
+  "home.intro.description": {
+    "defaultMessage": "Connect your team’s CoMapeo data in one place. Add a remote archive server to sync field projects, or create a local project to get started."
+  },
+  "home.intro.howItWorks": {
+    "defaultMessage": "How it works"
+  },
+  "home.intro.step1": {
+    "defaultMessage": "Add a server or start locally."
+  },
+  "home.intro.step2": {
+    "defaultMessage": "Select or create a project."
+  },
+  "home.intro.step3": {
+    "defaultMessage": "Review observations, alerts, and territory data."
+  },
+  "home.intro.title": {
+    "defaultMessage": "Welcome to CoMapeo Cloud"
   },
   "home.localMode": {
     "defaultMessage": "Local Mode"
@@ -617,6 +704,75 @@
   "invite.invalid": {
     "defaultMessage": "Couldn't accept this invite. The link may be invalid."
   },
+  "map.basemap.label": {
+    "defaultMessage": "Basemap"
+  },
+  "mediaLightbox.closePreview": {
+    "defaultMessage": "Close preview"
+  },
+  "mediaLightbox.imageCount": {
+    "defaultMessage": "Image {current} of {total}"
+  },
+  "mediaLightbox.nextImage": {
+    "defaultMessage": "Next image"
+  },
+  "mediaLightbox.photoLabel": {
+    "defaultMessage": "Photo {number}"
+  },
+  "mediaLightbox.previousImage": {
+    "defaultMessage": "Previous image"
+  },
+  "mediaPreview.audioAlt": {
+    "defaultMessage": "Audio attachment"
+  },
+  "mediaPreview.moreCount": {
+    "defaultMessage": "+{count} more"
+  },
+  "mediaPreview.moreCountAriaLabel": {
+    "defaultMessage": "{count} more media files"
+  },
+  "mediaPreview.photoAlt": {
+    "defaultMessage": "Photo {number}"
+  },
+  "mobileNav.addServer": {
+    "defaultMessage": "Add Server"
+  },
+  "mobileNav.archiveSettings": {
+    "defaultMessage": "Archive settings"
+  },
+  "mobileNav.archivesTitle": {
+    "defaultMessage": "Archives"
+  },
+  "mobileNav.closeMenu": {
+    "defaultMessage": "Close menu"
+  },
+  "mobileNav.collapseAria": {
+    "defaultMessage": "Toggle archive section"
+  },
+  "mobileNav.createProject": {
+    "defaultMessage": "Create Project"
+  },
+  "mobileNav.dialogTitle": {
+    "defaultMessage": "Menu"
+  },
+  "mobileNav.language": {
+    "defaultMessage": "Language"
+  },
+  "mobileNav.localProjects": {
+    "defaultMessage": "Local"
+  },
+  "mobileNav.navTitle": {
+    "defaultMessage": "Navigation"
+  },
+  "mobileNav.noProjectsInArchive": {
+    "defaultMessage": "No projects in this archive yet."
+  },
+  "mobileNav.noServersDesc": {
+    "defaultMessage": "Add a server to sync projects, observations, and alerts."
+  },
+  "mobileNav.noServersTitle": {
+    "defaultMessage": "No remote archive servers yet."
+  },
   "notFound.description": {
     "defaultMessage": "The page you are looking for does not exist or has been moved."
   },
@@ -625,9 +781,6 @@
   },
   "notFound.title": {
     "defaultMessage": "Page not found"
-  },
-  "observationDetail.back": {
-    "defaultMessage": "Back to Data"
   },
   "observationDetail.coordinates": {
     "defaultMessage": "Coordinates"
@@ -643,6 +796,9 @@
   },
   "observationDetail.location": {
     "defaultMessage": "Location"
+  },
+  "observationDetail.mediaGallery": {
+    "defaultMessage": "Media"
   },
   "observationDetail.noLocation": {
     "defaultMessage": "No location data"

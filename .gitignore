@@ -14,6 +14,8 @@ test-results
 playwright-report
 blob-report
 screenshots-manifest.json
+tests/e2e/screenshots/*-review-report.json
+PROGRESS.md
 plans/
 design/
 debug-geojson.js
@@ -25,3 +27,16 @@ log/
 TASKS.md
 DESIGN.md
 _verify_translations.py
+
+# Agent / orchestrator scratch files
+.contrabass/
+.opencode/
+.sortie.db
+.sortie.db-shm
+.sortie.db-wal
+.sortie.env
+WORKFLOW.sortie.md
+contrabass-*.log
+
+*storybook.log
+storybook-static

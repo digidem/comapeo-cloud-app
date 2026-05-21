@@ -35,8 +35,8 @@ Every feature MUST follow this cycle:
 npm test              # Run all unit tests once
 npm run test:watch    # Run tests in watch mode during development
 npm run test:coverage # Run tests with coverage report (enforces 80% threshold)
-npm run test:e2e      # Run Playwright E2E tests (chromium, firefox, webkit)
-npm run test:screenshots  # Generate desktop + mobile screenshots (chromium only)
+npm run test:e2e      # Run Playwright E2E tests (chromium, firefox, webkit) — uses --reporter=list to avoid HTML report server blocking
+npm run test:screenshots  # Generate desktop + mobile screenshots (chromium only) — uses --reporter=list
 npm run review:visual # Output JSON manifest of all generated screenshots
 npm run extract-messages  # Extract i18n messages from source to en.json
 npm run format        # Format all files with Prettier
@@ -153,6 +153,21 @@ Follow `design/prototype/DESIGN.md` for all visual decisions:
 | Runtime validation | Valibot schemas on API boundaries | At runtime |
 | CI | GitHub Actions (lint, types, coverage, E2E, screenshots, i18n check, deploy) | On push/PR |
 | Secret scanning | TruffleHog (pre-commit + CI) | On `git commit` + CI |
+| Screen back buttons | Arrow icon + page name | Every detail screen |
+| Skeleton loading | Skeleton component while data loads | Every screen with async data |
+
+## Screen Conventions
+
+### Back navigation
+
+All detail screens (ObservationDetail, AlertDetail) MUST use an arrow-back icon (← SVG chevron) with the page name ("Data") instead of text like "Back to Data". The link must have `min-h-[44px]` for mobile touch target.
+
+### Skeleton loading
+
+Every screen that loads async data MUST show a Skeleton placeholder while data is pending. Use the `<Skeleton>` component from `@/components/ui/skeleton`. At minimum show:
+
+- A title skeleton (h24, w200)
+- 1-2 card skeletons (h100-200)
 
 ## Visual Screenshot Testing
 
@@ -189,6 +204,51 @@ chore(deps): update TanStack Query
 
 Types: `feat`, `fix`, `test`, `refactor`, `chore`, `docs`, `style`, `ci`
 
+## Storybook
+
+Visual component explorer using `@storybook/tanstack-react`. Stories live alongside their components (`*.stories.tsx`).
+
+### Commands
+
+```bash
+npm run build-storybook  # Static build to storybook-static/ (exits cleanly — use this for agents/CI)
+npm run storybook        # Dev server on :6006 (interactive only — long-running, does NOT exit)
+```
+
+### For agents (non-interactive)
+
+`storybook dev` is a long-running dev server that blocks until Ctrl+C. **Never run it directly.** Instead:
+
+```bash
+# 1. Build static Storybook (exits cleanly)
+npm run build-storybook
+
+# 2. Serve the static build in background
+npx serve storybook-static -l 6006 -s &
+
+# 3. Take screenshots / interact with http://localhost:6006
+
+# 4. Kill the server when done
+kill %1
+```
+
+### Mock architecture
+
+Stories use Vite aliases (`.storybook/main.ts`) to redirect module imports to mocks in `src/screens/stories/__mocks__/`:
+
+- `stores.ts` — Zustand stores with controllable state
+- `hooks.ts` — TanStack Query hooks returning fixture data (projects, observations, alerts)
+- `api-client.ts`, `data-layer.ts`, `invite-url.ts`, `geojson-export.ts` — API/utility stubs
+
+The `@tanstack/react-router` is NOT mocked — the `@storybook/tanstack-react` framework provides its own router decorator that wraps all stories in a memory router context.
+
+### Adding stories
+
+1. Create `src/screens/ScreenName.stories.tsx` alongside the component
+2. Import from `@storybook/tanstack-react` (not `@storybook/react`)
+3. Use `useProjectStore.setState()` in decorators to control store state
+4. Set `parameters: { layout: 'fullscreen' }` for screen-level stories
+
 ## Cloudflare Deployment
 
 - Target: Cloudflare Pages (static SPA)
@@ -206,3 +266,32 @@ The `/api/invites/{encrypt,decrypt}` Pages Functions require a 32-byte AES-GCM k
 - Set in Pages: `npx wrangler pages secret put INVITE_KEY --project-name comapeo-cloud-app`
 - Local dev: add `INVITE_KEY=<base64>` to `.dev.vars` (gitignored).
 - Rotation: bump the version prefix in `src/lib/invite-crypto.ts` (currently `v1.`) AND add a parallel decrypt path that still accepts the old prefix. Keep the old prefix alive for at least one TTL window (24h) before removing it, so in-flight invites aren't invalidated mid-use.
+
+## Dev Server + Cloudflare Tunnel (MANDATORY)
+
+Every time you start development work in any worktree, ALWAYS:
+
+1. **Kill any stale dev servers** - `pkill -f "vite"` or kill old PID
+2. **Start the Vite dev server** - `npm run dev` (runs on port 5173)
+3. **Expose via Cloudflare Tunnel** - `cloudflared tunnel --url http://localhost:5173`
+4. **Capture the tunnel URL** - look for `https://*.trycloudflare.com` in the output
+5. **Share the URL with the user** so they have immediate access to the latest UI even before CI/PR previews finish
+
+This ensures the user can always preview the current state of the codebase in real time without waiting for builds or deployments.
+
+### Commands
+
+```bash
+# Start dev server (background)
+cd /home/coder/comapeo-cloud-app && npm run dev
+
+# Create quick tunnel (background)
+cloudflared tunnel --url http://localhost:5173
+```
+
+### Notes
+
+- Quick tunnels are ephemeral - they get a new URL each time they're started
+- The URL changes on restart, so always share the latest one
+- Vite dev server must be running before the tunnel connects
+- The tunnel URL is typically reachable within 5-10 seconds of starting cloudflared

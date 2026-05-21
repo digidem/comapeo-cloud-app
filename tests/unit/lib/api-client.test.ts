@@ -640,7 +640,7 @@ describe('getAttachmentUrl', () => {
       'thumbnail',
     );
     expect(url).toBe(
-      `${BASE_URL}/projects/proj-1/attachments/drive-abc/photo/image.jpg/thumbnail`,
+      `${BASE_URL}/projects/proj-1/attachments/drive-abc/photo/image.jpg?variant=thumbnail`,
     );
   });
 
@@ -649,6 +649,22 @@ describe('getAttachmentUrl', () => {
     const url = getAttachmentUrl('proj-1', 'drive-abc', 'photo', 'img.png');
     expect(url).toBe(
       'https://other.example.com/projects/proj-1/attachments/drive-abc/photo/img.png',
+    );
+  });
+
+  it('allows an explicit archive base URL override', () => {
+    useAuthStore.setState({ baseUrl: 'https://active.example.com' });
+    const url = getAttachmentUrl(
+      'proj-1',
+      'drive-abc',
+      'photo',
+      'img.png',
+      undefined,
+      { baseUrl: 'https://archive.example.com/base/' },
+    );
+
+    expect(url).toBe(
+      'https://archive.example.com/base/projects/proj-1/attachments/drive-abc/photo/img.png',
     );
   });
 

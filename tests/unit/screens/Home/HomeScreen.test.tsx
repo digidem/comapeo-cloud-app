@@ -183,6 +183,12 @@ function makeResult(methodId: string, areaM2: number) {
   };
 }
 
+async function waitForWorkspace(name: string) {
+  await waitFor(() => {
+    expect(screen.getByTestId('shell-workspace')).toHaveTextContent(name);
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
@@ -220,7 +226,7 @@ describe('HomeScreen', () => {
     expect(document.body).toBeDefined();
   });
 
-  it('shows "No projects yet" message when there are no projects', () => {
+  it('shows intro page when there are no servers and no projects', () => {
     mockUseProjects.mockReturnValue({
       data: [],
       isLoading: false,
@@ -230,7 +236,156 @@ describe('HomeScreen', () => {
     } as unknown as ReturnType<typeof useProjects>);
 
     render(<HomeScreen />);
-    expect(screen.getAllByText('No projects yet').length).toBeGreaterThan(0);
+    expect(screen.getByText('Welcome to CoMapeo Cloud')).toBeInTheDocument();
+    expect(screen.getByText('Add remote archive server')).toBeInTheDocument();
+    expect(screen.getByText('Create project')).toBeInTheDocument();
+  });
+
+  it('shows both action cards with CTA buttons on intro page', () => {
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(<HomeScreen />);
+    expect(
+      screen.getByRole('button', { name: 'Add server' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Create project' }),
+    ).toBeInTheDocument();
+  });
+
+  it('opens dialog when CTA buttons are clicked on intro page', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(<HomeScreen />);
+
+    // Click "Add server" on the intro page
+    await user.click(screen.getByRole('button', { name: 'Add server' }));
+    // The AddArchiveServerDialog uses Radix Dialog.Portal to render.
+    // Even if the portal content isn't in JSDOM's tree, verify the
+    // dialog's title text eventually appears in the document.
+    // The Radix Dialog renders the title inside Dialog.Title.
+    await vi.waitFor(
+      () => {
+        const dialogs = document.querySelectorAll('[role="dialog"]');
+        expect(dialogs).toHaveLength(1);
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it('opens CreateProjectDialog when "Create project" is clicked on intro page', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(<HomeScreen />);
+    await user.click(screen.getByRole('button', { name: 'Create project' }));
+    // Check that the Create Project dialog appears
+    expect(
+      await screen.findByRole('dialog', {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows "How it works" section on intro page', () => {
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(<HomeScreen />);
+    expect(screen.getByText('How it works')).toBeInTheDocument();
+  });
+
+  it('does not show intro page when servers exist', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    // Set up auth store with servers so HomeScreen skips intro
+    const { useAuthStore } = await import('@/stores/auth-store');
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'srv-1',
+          label: 'Test Archive',
+          baseUrl: 'https://example.com',
+          token: 'test',
+          status: 'idle',
+        },
+      ],
+    });
+
+    // Archive status must also report servers for ArchiveBrowser
+    mockUseArchiveStatus.mockReturnValue({
+      servers: [
+        {
+          id: 'srv-1',
+          label: 'Test Archive',
+          baseUrl: 'https://example.com',
+          isSyncing: false,
+          error: null,
+          lastSyncedAt: null,
+          hasCredentials: true,
+          isStale: true,
+        },
+      ],
+      anyError: false,
+      anySyncing: false,
+    });
+
+    render(<HomeScreen />);
+    expect(
+      screen.queryByText('Welcome to CoMapeo Cloud'),
+    ).not.toBeInTheDocument();
+
+    // Clean up
+    useAuthStore.setState({ servers: [] });
+  });
+
+  it('does not show intro page when projects exist', () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Alpha Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(<HomeScreen />);
+    expect(
+      screen.queryByText('Welcome to CoMapeo Cloud'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows project list when projects exist', async () => {
@@ -254,15 +409,14 @@ describe('HomeScreen', () => {
     } as unknown as ReturnType<typeof useProjects>);
 
     renderWithShell(<HomeScreen />);
-    // Archives are expanded by default — project list is visible
-    // Project list is in secondary sidebar — wait for shell slot effect to flush
+    // The selected project should be reflected in the screen content.
     await waitFor(() => {
       expect(screen.getAllByText('Alpha Project').length).toBeGreaterThan(0);
     });
-    expect(screen.getAllByText('Beta Project').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Beta Project')).not.toBeInTheDocument();
   });
 
-  it('does not render edit/delete/import buttons in sidebar project rows', async () => {
+  it('does not register secondary sidebar content in the shell slot', async () => {
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -278,27 +432,12 @@ describe('HomeScreen', () => {
     } as unknown as ReturnType<typeof useProjects>);
 
     renderWithShell(<HomeScreen />);
+
     await waitFor(() => {
-      expect(
-        screen.getAllByText('Sidebar Clean Project').length,
-      ).toBeGreaterThan(0);
+      expect(screen.getByTestId('shell-mode')).toHaveTextContent('Home');
     });
 
-    // Sidebar project rows should NOT contain edit or delete aria-labels
-    const secondarySection = screen.getByTestId('shell-secondary');
-    expect(
-      within(secondarySection).queryByRole('button', { name: /edit project/i }),
-    ).toBeNull();
-    expect(
-      within(secondarySection).queryByRole('button', {
-        name: /delete project/i,
-      }),
-    ).toBeNull();
-    expect(
-      within(secondarySection).queryByRole('button', {
-        name: /import data into/i,
-      }),
-    ).toBeNull();
+    expect(screen.queryByTestId('shell-secondary')).not.toBeInTheDocument();
   });
 
   it('shows loading skeletons when projects are loading', async () => {
@@ -316,22 +455,6 @@ describe('HomeScreen', () => {
       const skeletons = screen.getAllByTestId('skeleton');
       expect(skeletons.length).toBeGreaterThan(0);
     });
-  });
-
-  it('opens create dialog when the secondary new project button is clicked', async () => {
-    const user = userEvent.setup();
-
-    renderWithShell(<HomeScreen />);
-
-    // In the empty state, ArchiveBrowser shows a \"Create Project\" button
-    const newProjectBtn = await screen.findByRole('button', {
-      name: 'Create your first project from project list',
-    });
-    await user.click(newProjectBtn);
-
-    expect(
-      screen.getByRole('heading', { name: 'New Project' }),
-    ).toBeInTheDocument();
   });
 
   it('auto-selects the last updated project when projects exist', async () => {
@@ -397,14 +520,13 @@ describe('HomeScreen', () => {
 
     render(<HomeScreen />);
 
-    await user.click(
-      screen.getByRole('button', { name: 'Create your first project' }),
-    );
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create project' }));
+    expect(
+      await screen.findByRole('dialog', {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
   });
 
   it('shows "No mappable coordinates found" when project is selected but no results', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -427,7 +549,7 @@ describe('HomeScreen', () => {
 
     renderWithShell(<HomeScreen />);
 
-    await user.click(await screen.findByRole('button', { name: 'My Project' }));
+    await waitForWorkspace('My Project');
 
     expect(screen.getByText('No mappable coordinates found')).toBeDefined();
   });
@@ -449,9 +571,7 @@ describe('HomeScreen', () => {
     } as unknown as ReturnType<typeof useProjects>);
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Import Project' }),
-    );
+    await waitForWorkspace('Import Project');
 
     // Click the import button in the banner to trigger file picker
     const importBtn = await screen.findByRole('button', {
@@ -506,9 +626,7 @@ describe('HomeScreen', () => {
     });
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Unit Project' }),
-    );
+    await waitForWorkspace('Unit Project');
     await user.click(screen.getByRole('button', { name: 'm²' }));
 
     const values = screen.getAllByText(/50[.,\s]?000/);
@@ -516,7 +634,6 @@ describe('HomeScreen', () => {
   });
 
   it('shows settings when any method has a result', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -537,15 +654,12 @@ describe('HomeScreen', () => {
     });
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Settings Project' }),
-    );
+    await waitForWorkspace('Settings Project');
 
     expect(screen.getByText('Calculation Preset')).toBeInTheDocument();
   });
 
   it('keeps calculator method controls in the main settings panel only', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -566,9 +680,7 @@ describe('HomeScreen', () => {
     });
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Controls Project' }),
-    );
+    await waitForWorkspace('Controls Project');
 
     expect(
       screen.queryByRole('button', { name: 'Algorithm Options' }),
@@ -580,7 +692,6 @@ describe('HomeScreen', () => {
   });
 
   it('uses monitored area language for the section title', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -601,9 +712,7 @@ describe('HomeScreen', () => {
     });
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Monitored Project' }),
-    );
+    await waitForWorkspace('Monitored Project');
 
     expect(
       screen.getByRole('heading', { name: 'Monitored Area' }),
@@ -635,9 +744,7 @@ describe('HomeScreen', () => {
     });
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Preset Project' }),
-    );
+    await waitForWorkspace('Preset Project');
 
     const [mapLayerSelect, presetSelect] = screen.getAllByRole('combobox');
     expect(mapLayerSelect).toHaveTextContent('Observed Footprint');
@@ -649,7 +756,6 @@ describe('HomeScreen', () => {
   });
 
   it('announces calculation progress in an aria-live region', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -671,15 +777,12 @@ describe('HomeScreen', () => {
     });
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Calc Project' }),
-    );
+    await waitForWorkspace('Calc Project');
 
     expect(screen.getByRole('status')).toHaveTextContent('Calculating');
   });
 
   it('shows coverage summary when project is selected and calculating', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -701,123 +804,11 @@ describe('HomeScreen', () => {
     });
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Calc Project' }),
-    );
+    await waitForWorkspace('Calc Project');
 
     // CoverageSummary renders when isCalculating=true (shows skeleton for area)
     const skeletons = screen.getAllByTestId('skeleton');
     expect(skeletons.length).toBeGreaterThan(0);
-  });
-
-  it('shows loading skeletons when projects are loading', async () => {
-    mockUseProjects.mockReturnValue({
-      data: undefined,
-      isPending: true,
-      isLoading: true,
-      isError: false,
-      error: null,
-      status: 'pending',
-    } as unknown as ReturnType<typeof useProjects>);
-
-    renderWithShell(<HomeScreen />);
-    await waitFor(() => {
-      const skeletons = screen.getAllByTestId('skeleton');
-      expect(skeletons.length).toBeGreaterThan(0);
-    });
-  });
-
-  // Archive browser sidebar tests
-
-  it('shows "Archives" section header in sidebar', async () => {
-    renderWithShell(<HomeScreen />);
-    await waitFor(() => {
-      expect(screen.getByText('Archives')).toBeInTheDocument();
-    });
-  });
-
-  it('shows "Add Server" button in sidebar', async () => {
-    renderWithShell(<HomeScreen />);
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Add a new archive server' }),
-      ).toBeInTheDocument();
-    });
-  });
-
-  it('clicking "Add Server" opens the dialog', async () => {
-    const user = userEvent.setup();
-    renderWithShell(<HomeScreen />);
-
-    await user.click(
-      await screen.findByRole('button', { name: 'Add a new archive server' }),
-    );
-
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Add Archive Server' }),
-    ).toBeInTheDocument();
-  });
-
-  it('shows archive tabs grouped by server when projects exist', async () => {
-    mockUseProjects.mockReturnValue({
-      data: [
-        {
-          localId: 'p1',
-          name: 'Remote Project',
-          serverUrl: 'https://archive.test',
-          updatedAt: '2025-01-01T00:00:00.000Z',
-        },
-      ],
-      isLoading: false,
-      isError: false,
-      error: null,
-      status: 'success',
-    } as unknown as ReturnType<typeof useProjects>);
-
-    mockUseArchiveStatus.mockReturnValue({
-      servers: [
-        {
-          id: 's1',
-          label: 'Test Server',
-          baseUrl: 'https://archive.test',
-          isSyncing: false,
-          lastSyncedAt: null,
-          error: null,
-          hasCredentials: true,
-          isStale: false,
-        },
-      ],
-      anyError: false,
-      anySyncing: false,
-    });
-
-    renderWithShell(<HomeScreen />);
-    await waitFor(() => {
-      // The archive accordion header should show the hostname of the server
-      expect(screen.getByText('archive.test')).toBeInTheDocument();
-    });
-    // The remote project should appear in the project list (secondary section)
-    const secondarySection = screen.getByTestId('shell-secondary');
-    expect(
-      within(secondarySection).getByText('Remote Project'),
-    ).toBeInTheDocument();
-  });
-
-  it('shows empty state when no projects and no servers', async () => {
-    mockUseArchiveStatus.mockReturnValue({
-      servers: [],
-      anyError: false,
-      anySyncing: false,
-    });
-
-    renderWithShell(<HomeScreen />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Archives')).toBeInTheDocument();
-    });
-    // Should show the empty welcome message instead of status cards
-    expect(screen.getByText('Welcome to CoMapeo Cloud')).toBeInTheDocument();
   });
 
   it('auto-selects most recent project when persisted ID is stale', async () => {
@@ -858,7 +849,6 @@ describe('HomeScreen', () => {
   });
 
   it('renders Observations stat card when project is selected with results', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -894,16 +884,13 @@ describe('HomeScreen', () => {
     } as unknown as ReturnType<typeof useObservations>);
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Stat Observations' }),
-    );
+    await waitForWorkspace('Stat Observations');
 
     // Stat card with "Field Data" label should be visible
     expect(screen.getByText('Field Data')).toBeInTheDocument();
   });
 
   it('shows observation count value with Field Data label', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -939,9 +926,7 @@ describe('HomeScreen', () => {
     } as unknown as ReturnType<typeof useObservations>);
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Obs Count Project' }),
-    );
+    await waitForWorkspace('Obs Count Project');
 
     await waitFor(() => {
       expect(screen.getByText('5 Observations')).toBeInTheDocument();
@@ -949,7 +934,6 @@ describe('HomeScreen', () => {
   });
 
   it('uses singular Observation label when count is 1', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -981,9 +965,7 @@ describe('HomeScreen', () => {
     } as unknown as ReturnType<typeof useObservations>);
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Single Obs Project' }),
-    );
+    await waitForWorkspace('Single Obs Project');
 
     await waitFor(() => {
       expect(screen.getByText('1 Observation')).toBeInTheDocument();
@@ -991,7 +973,6 @@ describe('HomeScreen', () => {
   });
 
   it('shows "Connected" mode stat when project has a serverUrl', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -1014,9 +995,7 @@ describe('HomeScreen', () => {
     });
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Connected Project' }),
-    );
+    await waitForWorkspace('Connected Project');
 
     // The Mode stat card should show "Connected" with the green success color
     const modeElements = screen.getAllByText('Connected to Archive');
@@ -1028,7 +1007,6 @@ describe('HomeScreen', () => {
   });
 
   it('shows edit and delete buttons in banner when project is selected', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -1050,9 +1028,7 @@ describe('HomeScreen', () => {
     });
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Banner Actions Project' }),
-    );
+    await waitForWorkspace('Banner Actions Project');
 
     expect(
       screen.getByRole('button', { name: /edit project/i }),
@@ -1063,7 +1039,6 @@ describe('HomeScreen', () => {
   });
 
   it('shows "Local" mode stat when project has no serverUrl', async () => {
-    const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -1085,9 +1060,7 @@ describe('HomeScreen', () => {
     });
 
     renderWithShell(<HomeScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Local Project' }),
-    );
+    await waitForWorkspace('Local Project');
 
     // The Mode stat card should show "Local" with the grey muted color
     const localElements = screen.getAllByText('Local');
@@ -1305,7 +1278,7 @@ describe('HomeScreen', () => {
     expect(
       await screen.findByRole('heading', { name: 'Test Archive' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('https://archive.example.com')).toBeInTheDocument();
+    expect(screen.getAllByText('https://archive.example.com').length).toBe(2);
   });
 
   it('calls handleSync when sync button clicked on archive server detail', async () => {
@@ -1441,8 +1414,8 @@ describe('HomeScreen', () => {
 
     renderWithShell(<HomeScreen />);
 
-    // Should show Syncing... button (disabled) instead of Sync Now
-    expect(await screen.findByText('Syncing...')).toBeInTheDocument();
+    // Should show Syncing button (disabled) instead of Sync Now
+    expect(await screen.findAllByText(/Syncing/)).toHaveLength(2);
 
     // syncRemoteArchive should NOT be called
     expect(syncFn).not.toHaveBeenCalled();

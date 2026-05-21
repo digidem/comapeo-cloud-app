@@ -414,6 +414,6 @@ describe('syncRemoteArchive', () => {
     globalThis.fetch = originalFetch;
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe('Unknown sync error');
+    expect(result.error).toContain('Partial sync failure');
   });
 });

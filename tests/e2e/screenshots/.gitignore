@@ -1,2 +1,3 @@
 # Generated screenshots — artifacts, not source
 *.png
+*-review-report.json

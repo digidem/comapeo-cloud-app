@@ -1,7 +1,9 @@
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { Outlet, useRouterState } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 
 import { AppShell } from '@/components/layout/app-shell';
 import {
@@ -9,6 +11,13 @@ import {
   useShellOverrides,
 } from '@/components/layout/shell-slot';
 import { useAutoSync } from '@/hooks/useAutoSync';
+import { useProjects } from '@/hooks/useProjects';
+import { syncRemoteArchive } from '@/lib/data-layer';
+import { AddArchiveServerDialog } from '@/screens/Home/AddArchiveServerDialog';
+import { ArchiveBrowser } from '@/screens/Home/ArchiveBrowser';
+import { CreateProjectDialog } from '@/screens/Home/CreateProjectDialog';
+import { useAuthStore } from '@/stores/auth-store';
+import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
   home: { id: 'home.title', defaultMessage: 'Home' },
@@ -66,17 +75,86 @@ function SettingsIcon(): ReactNode {
   );
 }
 
+/** Normalize a URL for comparison by stripping trailing slashes. */
+function normalizeUrl(url: string): string {
+  return url.trim().replace(/\/+$/, '');
+}
+
+/** Group projects by archive server, returning a map keyed by server ID. */
+function groupProjectsByServer(
+  servers: Array<{ id: string; baseUrl: string }>,
+  projects: Array<{ localId: string; name?: string; serverUrl?: string }>,
+): {
+  archiveProjects: Record<string, Array<{ localId: string; name: string }>>;
+  localProjects: Array<{ localId: string; name: string }>;
+} {
+  const serverUrlToId: Record<string, string> = {};
+  for (const s of servers) {
+    serverUrlToId[normalizeUrl(s.baseUrl)] = s.id;
+  }
+
+  const archiveProjects: Record<
+    string,
+    Array<{ localId: string; name: string }>
+  > = {};
+  const localProjects: Array<{ localId: string; name: string }> = [];
+
+  for (const p of projects) {
+    const entry = { localId: p.localId, name: p.name ?? 'Untitled' };
+    if (p.serverUrl) {
+      const serverId = serverUrlToId[normalizeUrl(p.serverUrl)];
+      if (serverId) {
+        if (!archiveProjects[serverId]) {
+          archiveProjects[serverId] = [];
+        }
+        archiveProjects[serverId].push(entry);
+      } else {
+        // Server URL does not match any known server, so treat it as local.
+        localProjects.push(entry);
+      }
+    } else {
+      localProjects.push(entry);
+    }
+  }
+
+  return { archiveProjects, localProjects };
+}
+
 function AuthenticatedLayoutInner() {
   const intl = useIntl();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const pathname = useRouterState({
     select: (s) => s.location.pathname,
   });
-  const {
-    topbarWorkspaceName,
-    topbarModeLabel,
-    topbarActions,
-    secondaryContent,
-  } = useShellOverrides();
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const selectedServerId = useProjectStore((s) => s.selectedServerId);
+  const { topbarWorkspaceName, topbarModeLabel, topbarActions } =
+    useShellOverrides();
+
+  // Shared dialog state for mobile drawer and sidebar actions.
+  const [isAddServerOpen, setAddServerOpen] = useState(false);
+  const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
+
+  // Data for drawer archive/project sections.
+  const servers = useAuthStore((s) => s.servers);
+  const { data: projects = [] } = useProjects();
+
+  const drawerArchives = useMemo(
+    () =>
+      servers.map((s) => ({
+        id: s.id,
+        label: s.label ?? s.baseUrl,
+        baseUrl: s.baseUrl,
+      })),
+    [servers],
+  );
+
+  // Group projects by archive server.
+  const { archiveProjects, localProjects } = useMemo(
+    () => groupProjectsByServer(servers, projects),
+    [servers, projects],
+  );
 
   const NAV_ITEMS = [
     {
@@ -97,16 +175,93 @@ function AuthenticatedLayoutInner() {
   ];
 
   return (
-    <AppShell
-      topbarWorkspaceName={topbarWorkspaceName}
-      topbarModeLabel={topbarModeLabel}
-      topbarActions={topbarActions}
-      navItems={NAV_ITEMS}
-      activeNavPath={pathname}
-      secondaryContent={secondaryContent}
-    >
-      <Outlet />
-    </AppShell>
+    <>
+      <AppShell
+        topbarWorkspaceName={topbarWorkspaceName}
+        topbarModeLabel={topbarModeLabel}
+        topbarActions={topbarActions}
+        navItems={NAV_ITEMS}
+        activeNavPath={pathname}
+        secondaryContent={
+          <div className="flex flex-col gap-4 p-4">
+            <ArchiveBrowser
+              selectedProjectId={selectedProjectId}
+              onSelect={(id) => {
+                useProjectStore.getState().setSelectedProjectId(id);
+                navigate({ to: '/' });
+              }}
+              onCreateNew={() => setCreateProjectOpen(true)}
+              onAddServer={() => setAddServerOpen(true)}
+              onSelectServer={(id) => {
+                useProjectStore.getState().setSelectedServerId(id);
+                navigate({ to: '/' });
+              }}
+            />
+          </div>
+        }
+        drawerArchives={drawerArchives}
+        drawerArchiveProjects={archiveProjects}
+        drawerLocalProjects={localProjects}
+        activeArchiveId={selectedServerId ?? undefined}
+        activeProjectId={selectedProjectId ?? undefined}
+        onDrawerAddServer={() => setAddServerOpen(true)}
+        onDrawerCreateProject={() => setCreateProjectOpen(true)}
+        onDrawerSelectServer={(id) => {
+          useProjectStore.getState().setSelectedServerId(id);
+          navigate({ to: '/' });
+        }}
+        onDrawerSelectProject={(id) => {
+          useProjectStore.getState().setSelectedProjectId(id);
+          navigate({ to: '/' });
+        }}
+        onDrawerArchiveSettings={(id) => {
+          // Archive settings navigates to Home, where ArchiveBrowser owns the dialog.
+          useProjectStore.getState().setSelectedServerId(id);
+          navigate({ to: '/' });
+        }}
+      >
+        <Outlet />
+      </AppShell>
+
+      <AddArchiveServerDialog
+        isOpen={isAddServerOpen}
+        onClose={() => setAddServerOpen(false)}
+        onAdded={(serverId) => {
+          setAddServerOpen(false);
+          const server = useAuthStore
+            .getState()
+            .servers.find((s) => s.id === serverId);
+          if (server) {
+            void syncRemoteArchive(serverId, {
+              baseUrl: server.baseUrl,
+              token: server.token,
+            })
+              .then(() => {
+                void queryClient.invalidateQueries({ queryKey: ['projects'] });
+                void queryClient.invalidateQueries({
+                  queryKey: ['observations'],
+                });
+                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+              })
+              .catch(() => {
+                // Sync failure is handled by the sync layer — don't block UI
+              });
+          }
+        }}
+      />
+
+      <CreateProjectDialog
+        isOpen={isCreateProjectOpen}
+        onClose={() => setCreateProjectOpen(false)}
+        onCreated={(id) => {
+          setCreateProjectOpen(false);
+          useProjectStore.getState().setSelectedProjectId(id);
+          void queryClient.invalidateQueries({ queryKey: ['projects'] });
+          navigate({ to: '/' });
+        }}
+        serverUrl={undefined}
+      />
+    </>
   );
 }
 
