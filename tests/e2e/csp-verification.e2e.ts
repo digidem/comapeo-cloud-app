@@ -84,17 +84,15 @@ test.describe('CSP Runtime Verification', () => {
     expect(await readCspViolations(page)).toHaveLength(0);
   });
 
-  test('API proxy rejects requests without x-target-url header', async ({
+  test('API proxy passes through requests without x-target-url header', async ({
     page,
   }) => {
     // Use page.request (bypasses page.route interceptors) so the request
-    // reaches the Vite dev proxy, which returns 400 for missing header.
+    // reaches the Vite dev proxy. Requests without x-target-url header
+    // pass through to the Vite dev server (handled by next() in the proxy
+    // middleware — /api/invites/* are handled by Cloudflare Pages Functions).
     const response = await page.request.get('/api/info');
-    expect(response.status()).toBe(400);
-
-    const body = await response.json();
-    expect(body.error).toBeDefined();
-    expect(body.error.code).toBe('ARCHIVE_PROXY_BAD_TARGET');
+    expect(response.status()).toBe(200);
   });
 
   test('API proxy succeeds with valid x-target-url header', async ({
