@@ -91,8 +91,10 @@ function getAuthHeaders(config?: RequestConfig): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
 
+const NETWORK_ERROR_RE = /failed to fetch|networkerror|load failed/i;
+
 function isNetworkError(error: unknown): boolean {
-  return error instanceof TypeError && error.message === 'Failed to fetch';
+  return error instanceof TypeError && NETWORK_ERROR_RE.test(error.message);
 }
 
 function throwNetworkError(): never {
