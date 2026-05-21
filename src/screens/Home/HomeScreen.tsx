@@ -31,6 +31,7 @@ import { CreateProjectDialog } from './CreateProjectDialog';
 import { DeleteProjectDialog } from './DeleteProjectDialog';
 import { EditProjectDialog } from './EditProjectDialog';
 import { HomeScreenSkeleton } from './HomeScreenSkeleton';
+import { IntroPage } from './IntroPage';
 import { MethodSelector } from './MethodSelector';
 import { ProjectBannerCard } from './ProjectBannerCard';
 import { RecentActivityList } from './RecentActivityList';
@@ -581,6 +582,11 @@ function HomeScreen() {
     [],
   );
 
+  const handleOpenAddServer = useCallback(
+    () => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' }),
+    [],
+  );
+
   const handleIncrementRefresh = useCallback(
     () => dispatch({ type: 'INCREMENT_COVERAGE_REFRESH' }),
     [],
@@ -707,6 +713,19 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
+      </>
+    );
+  }
+
+  if (!state.selectedProjectId && servers.length === 0) {
+    return (
+      <>
+        <div className="flex h-full flex-col">
+          <IntroPage
+            onAddServer={handleOpenAddServer}
+            onCreateProject={handleOpenCreateDialog}
+          />
+        </div>
 
         <AddArchiveServerDialog
           isOpen={state.isAddServerDialogOpen}
@@ -721,7 +740,9 @@ function HomeScreen() {
                 baseUrl: server.baseUrl,
                 token: server.token,
               }).then(() => {
-                void queryClient.invalidateQueries({ queryKey: ['projects'] });
+                void queryClient.invalidateQueries({
+                  queryKey: ['projects'],
+                });
                 void queryClient.invalidateQueries({
                   queryKey: ['observations'],
                 });
@@ -730,21 +751,6 @@ function HomeScreen() {
             }
           }}
         />
-      </>
-    );
-  }
-
-  if (!state.selectedProjectId && servers.length === 0) {
-    return (
-      <>
-        <div className="flex h-full flex-col items-center justify-center gap-3 py-12 sm:py-16 lg:py-20 text-center">
-          <p className="text-text-muted text-sm">
-            {intl.formatMessage(messages.noProjects)}
-          </p>
-          <Button variant="primary" size="sm" onClick={handleOpenCreateDialog}>
-            {intl.formatMessage(messages.firstProject)}
-          </Button>
-        </div>
 
         <CreateProjectDialog
           isOpen={state.isCreateDialogOpen}
