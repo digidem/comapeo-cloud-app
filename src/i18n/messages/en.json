@@ -8,6 +8,9 @@
   "alertDetail.detectionPeriod": {
     "defaultMessage": "Detection Period"
   },
+  "alertDetail.errorLoading": {
+    "defaultMessage": "Failed to load alert"
+  },
   "alertDetail.geometry": {
     "defaultMessage": "Geometry"
   },
@@ -22,6 +25,9 @@
   },
   "alertDetail.title": {
     "defaultMessage": "Alert"
+  },
+  "alertDetail.tryAgain": {
+    "defaultMessage": "Please try again later."
   },
   "alerts.create.cancel": {
     "defaultMessage": "Cancel"
@@ -791,6 +797,9 @@
   "observationDetail.details": {
     "defaultMessage": "Details"
   },
+  "observationDetail.errorLoading": {
+    "defaultMessage": "Failed to load observation"
+  },
   "observationDetail.fallback": {
     "defaultMessage": "Observation"
   },
@@ -808,6 +817,9 @@
   },
   "observationDetail.tags": {
     "defaultMessage": "Tags"
+  },
+  "observationDetail.tryAgain": {
+    "defaultMessage": "Please try again later."
   },
   "observationDetail.updatedAt": {
     "defaultMessage": "Updated"
