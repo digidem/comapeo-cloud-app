@@ -6,8 +6,32 @@ import {
   useEffect,
   useRef,
 } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 
 import { AuthImg } from '@/components/shared/auth-img';
+
+const messages = defineMessages({
+  closePreview: {
+    id: 'mediaLightbox.closePreview',
+    defaultMessage: 'Close preview',
+  },
+  previousImage: {
+    id: 'mediaLightbox.previousImage',
+    defaultMessage: 'Previous image',
+  },
+  nextImage: {
+    id: 'mediaLightbox.nextImage',
+    defaultMessage: 'Next image',
+  },
+  imageCount: {
+    id: 'mediaLightbox.imageCount',
+    defaultMessage: 'Image {current} of {total}',
+  },
+  photoLabel: {
+    id: 'mediaLightbox.photoLabel',
+    defaultMessage: 'Photo {number}',
+  },
+});
 
 interface MediaLightboxProps {
   /** Array of image URLs to display */
@@ -37,6 +61,7 @@ function MediaLightbox({
   onClose,
   onNavigate,
 }: MediaLightboxProps) {
+  const intl = useIntl();
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const touchStartXRef = useRef<number | null>(null);
@@ -48,6 +73,14 @@ function MediaLightbox({
 
   useEffect(() => {
     closeButtonRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const original = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = original;
+    };
   }, []);
 
   const handleKeyDown = useCallback(
@@ -120,7 +153,10 @@ function MediaLightbox({
       ref={overlayRef}
       role="dialog"
       aria-modal="true"
-      aria-label={`Image ${currentIndex + 1} of ${images.length}`}
+      aria-label={intl.formatMessage(messages.imageCount, {
+        current: currentIndex + 1,
+        total: images.length,
+      })}
       tabIndex={-1}
       onKeyDown={handleKeyDown}
       onClick={handleBackdropClick}
@@ -131,7 +167,9 @@ function MediaLightbox({
       <div className="pointer-events-none flex h-full w-full items-center justify-center px-4 py-16">
         <AuthImg
           src={currentImage}
-          alt={`Photo ${safeIndex + 1}`}
+          alt={intl.formatMessage(messages.photoLabel, {
+            number: safeIndex + 1,
+          })}
           className="pointer-events-auto max-h-full max-w-full rounded-card object-contain motion-safe:animate-[fadeIn_300ms_ease-out]"
         />
       </div>
@@ -147,7 +185,7 @@ function MediaLightbox({
         type="button"
         onClick={onClose}
         className="absolute top-4 right-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-colors"
-        aria-label="Close preview"
+        aria-label={intl.formatMessage(messages.closePreview)}
       >
         <svg
           width="20"
@@ -170,7 +208,7 @@ function MediaLightbox({
           type="button"
           onClick={() => onNavigate(safeIndex - 1)}
           className="absolute left-2 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-colors"
-          aria-label="Previous image"
+          aria-label={intl.formatMessage(messages.previousImage)}
         >
           <svg
             width="20"
@@ -193,7 +231,7 @@ function MediaLightbox({
           type="button"
           onClick={() => onNavigate(safeIndex + 1)}
           className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-colors"
-          aria-label="Next image"
+          aria-label={intl.formatMessage(messages.nextImage)}
         >
           <svg
             width="20"

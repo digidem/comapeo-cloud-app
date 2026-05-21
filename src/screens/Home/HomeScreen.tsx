@@ -793,29 +793,6 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
-
-        <AddArchiveServerDialog
-          isOpen={state.isAddServerDialogOpen}
-          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(serverId) => {
-            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-            const server = useAuthStore
-              .getState()
-              .servers.find((s) => s.id === serverId);
-            if (server) {
-              void syncRemoteArchive(serverId, {
-                baseUrl: server.baseUrl,
-                token: server.token,
-              }).then(() => {
-                void queryClient.invalidateQueries({ queryKey: ['projects'] });
-                void queryClient.invalidateQueries({
-                  queryKey: ['observations'],
-                });
-                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
-              });
-            }
-          }}
-        />
       </>
     );
   }

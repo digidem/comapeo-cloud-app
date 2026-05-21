@@ -707,6 +707,21 @@
   "map.basemap.label": {
     "defaultMessage": "Basemap"
   },
+  "mediaLightbox.closePreview": {
+    "defaultMessage": "Close preview"
+  },
+  "mediaLightbox.imageCount": {
+    "defaultMessage": "Image {current} of {total}"
+  },
+  "mediaLightbox.nextImage": {
+    "defaultMessage": "Next image"
+  },
+  "mediaLightbox.photoLabel": {
+    "defaultMessage": "Photo {number}"
+  },
+  "mediaLightbox.previousImage": {
+    "defaultMessage": "Previous image"
+  },
   "mediaPreview.audioAlt": {
     "defaultMessage": "Audio attachment"
   },

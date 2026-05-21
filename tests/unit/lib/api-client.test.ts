@@ -652,6 +652,22 @@ describe('getAttachmentUrl', () => {
     );
   });
 
+  it('allows an explicit archive base URL override', () => {
+    useAuthStore.setState({ baseUrl: 'https://active.example.com' });
+    const url = getAttachmentUrl(
+      'proj-1',
+      'drive-abc',
+      'photo',
+      'img.png',
+      undefined,
+      { baseUrl: 'https://archive.example.com/base/' },
+    );
+
+    expect(url).toBe(
+      'https://archive.example.com/base/projects/proj-1/attachments/drive-abc/photo/img.png',
+    );
+  });
+
   it('builds a relative URL when no auth store baseUrl is active', () => {
     useAuthStore.setState({ baseUrl: null });
     const url = getAttachmentUrl('proj-1', 'drive-abc', 'photo', 'img.png');

@@ -1,6 +1,6 @@
 import { render, screen } from '@tests/mocks/test-utils';
 import { userEvent } from '@tests/mocks/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MediaLightbox } from '@/components/shared/media-lightbox';
 
@@ -18,6 +18,10 @@ const images = [
 ];
 
 describe('MediaLightbox', () => {
+  afterEach(() => {
+    document.body.style.overflow = '';
+  });
+
   it('renders the current image', () => {
     render(
       <MediaLightbox
@@ -140,5 +144,24 @@ describe('MediaLightbox', () => {
     );
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('locks body scrolling while open and restores it on unmount', () => {
+    document.body.style.overflow = 'auto';
+
+    const { unmount } = render(
+      <MediaLightbox
+        images={images}
+        currentIndex={0}
+        onClose={() => {}}
+        onNavigate={() => {}}
+      />,
+    );
+
+    expect(document.body.style.overflow).toBe('hidden');
+
+    unmount();
+
+    expect(document.body.style.overflow).toBe('auto');
   });
 });

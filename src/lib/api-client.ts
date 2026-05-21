@@ -388,8 +388,11 @@ export function getAttachmentUrl(
   type: string,
   name: string,
   variant?: string,
+  options?: { baseUrl?: string },
 ): string {
-  const { baseUrl } = useAuthStore.getState();
+  const baseUrl = options?.baseUrl ?? useAuthStore.getState().baseUrl;
+  // Keep archive URLs intact here. AuthImg/useAuthenticatedImageUrl converts
+  // matching archive URLs to /api proxy requests with the required headers.
   const base = baseUrl?.replace(/\/+$/, '') ?? '';
   const path = `${base}/projects/${encodeURIComponent(projectId)}/attachments/${encodeURIComponent(driveId)}/${encodeURIComponent(type)}/${encodeURIComponent(name)}`;
   return variant ? `${path}?variant=${encodeURIComponent(variant)}` : path;

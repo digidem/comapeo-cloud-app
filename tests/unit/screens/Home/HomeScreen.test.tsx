@@ -279,13 +279,11 @@ describe('HomeScreen', () => {
     // The Radix Dialog renders the title inside Dialog.Title.
     await vi.waitFor(
       () => {
-        const titles = document.querySelectorAll('[role="dialog"]');
-        return titles.length > 0;
+        const dialogs = document.querySelectorAll('[role="dialog"]');
+        expect(dialogs).toHaveLength(1);
       },
       { timeout: 3000 },
     );
-    // Fallback: verify at least one dialog role element exists
-    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
   });
 
   it('opens CreateProjectDialog when "Create project" is clicked on intro page', async () => {
