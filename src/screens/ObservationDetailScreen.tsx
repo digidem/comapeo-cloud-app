@@ -15,6 +15,14 @@ import { useProjects } from '@/hooks/useProjects';
 import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
+  errorLoading: {
+    id: 'observationDetail.errorLoading',
+    defaultMessage: 'Failed to load observation',
+  },
+  tryAgain: {
+    id: 'observationDetail.tryAgain',
+    defaultMessage: 'Please try again later.',
+  },
   notFound: {
     id: 'observationDetail.notFound',
     defaultMessage: 'Observation not found',
@@ -99,6 +107,19 @@ export function ObservationDetailScreen() {
     [selectedProjectId, topbarWorkspaceName],
   );
   useShellSlot(shellSlot);
+
+  if (observationsQuery.isError) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+        <p className="text-error font-semibold">
+          {intl.formatMessage(messages.errorLoading)}
+        </p>
+        <p className="text-sm text-text-muted">
+          {observationsQuery.error?.message ?? intl.formatMessage(messages.tryAgain)}
+        </p>
+      </div>
+    );
+  }
 
   if (observationsQuery.isPending) {
     return (

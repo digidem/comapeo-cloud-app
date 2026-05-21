@@ -73,7 +73,6 @@ function IntroPage({ onAddServer, onCreateProject }: IntroPageProps) {
           src="/comapeo_cloud_app.svg"
           alt="CoMapeo Cloud"
           className="h-10 w-auto"
-          aria-hidden="true"
         />
 
         <h2 className="text-lg font-semibold text-text">

@@ -351,6 +351,14 @@ const messages = defineMessages({
 
 // ---- Component ----
 
+/** Internal metadata tags that should be filtered from the tags display */
+const INTERNAL_TAGS = new Set([
+  'photoUrls',
+  'photoCount',
+  'audioCount',
+  'trackCount',
+]);
+
 function HomeScreen() {
   const [state, dispatch] = useReducer(homeReducer, INITIAL_STATE);
   const persistedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -419,7 +427,9 @@ function HomeScreen() {
     for (const obs of observations) {
       if (obs.tags) {
         for (const key of Object.keys(obs.tags)) {
-          tagKeys.add(key);
+          if (!INTERNAL_TAGS.has(key)) {
+            tagKeys.add(key);
+          }
         }
       }
     }

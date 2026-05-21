@@ -11,6 +11,14 @@ import { useProjects } from '@/hooks/useProjects';
 import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
+  errorLoading: {
+    id: 'alertDetail.errorLoading',
+    defaultMessage: 'Failed to load alert',
+  },
+  tryAgain: {
+    id: 'alertDetail.tryAgain',
+    defaultMessage: 'Please try again later.',
+  },
   notFound: {
     id: 'alertDetail.notFound',
     defaultMessage: 'Alert not found',
@@ -76,6 +84,19 @@ export function AlertDetailScreen() {
     [selectedProjectId, topbarWorkspaceName],
   );
   useShellSlot(shellSlot);
+
+  if (alertsQuery.isError) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+        <p className="text-error font-semibold">
+          {intl.formatMessage(messages.errorLoading)}
+        </p>
+        <p className="text-sm text-text-muted">
+          {alertsQuery.error?.message ?? intl.formatMessage(messages.tryAgain)}
+        </p>
+      </div>
+    );
+  }
 
   if (alertsQuery.isPending) {
     return (
