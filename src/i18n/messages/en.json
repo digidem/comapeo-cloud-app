@@ -68,6 +68,27 @@
   "app.title": {
     "defaultMessage": "CoMapeo Cloud"
   },
+  "archiveOverflow.closeSheet": {
+    "defaultMessage": "Close"
+  },
+  "archiveOverflow.copyUrl": {
+    "defaultMessage": "Copy URL"
+  },
+  "archiveOverflow.editArchive": {
+    "defaultMessage": "Edit Archive"
+  },
+  "archiveOverflow.removeArchive": {
+    "defaultMessage": "Remove Archive"
+  },
+  "archiveOverflow.sheetTitle": {
+    "defaultMessage": "Actions for {name}"
+  },
+  "archiveOverflow.syncNow": {
+    "defaultMessage": "Sync Now"
+  },
+  "archiveOverflow.viewDetails": {
+    "defaultMessage": "View Details"
+  },
   "audioPlayer.error": {
     "defaultMessage": "Failed to load audio"
   },
@@ -742,6 +763,9 @@
   },
   "mobileNav.addServer": {
     "defaultMessage": "Add Server"
+  },
+  "mobileNav.archiveActions": {
+    "defaultMessage": "Archive actions"
   },
   "mobileNav.archiveSettings": {
     "defaultMessage": "Archive settings"

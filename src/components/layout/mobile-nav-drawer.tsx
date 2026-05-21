@@ -7,6 +7,7 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import { Link } from '@tanstack/react-router';
 
+import { ArchiveOverflowSheet } from '@/components/shared/ArchiveOverflowSheet';
 import { Button } from '@/components/ui/button';
 import { SUPPORTED_LOCALES } from '@/i18n/load-messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -60,6 +61,10 @@ const messages = defineMessages({
   archiveSettings: {
     id: 'mobileNav.archiveSettings',
     defaultMessage: 'Archive settings',
+  },
+  archiveActions: {
+    id: 'mobileNav.archiveActions',
+    defaultMessage: 'Archive actions',
   },
   collapseAria: {
     id: 'mobileNav.collapseAria',
@@ -147,6 +152,11 @@ function MobileNavDrawer({
   const [expandedArchives, setExpandedArchives] = useState<
     Record<string, boolean>
   >({});
+  const [overflowArchive, setOverflowArchive] = useState<{
+    id: string;
+    label: string;
+    baseUrl?: string;
+  } | null>(null);
 
   const toggleArchive = (id: string) => {
     setExpandedArchives((prev) => ({ ...prev, [id]: !(prev[id] ?? true) }));
@@ -363,33 +373,33 @@ function MobileNavDrawer({
                             <span className="truncate">{server.label}</span>
                           </button>
 
-                          {/* Settings gear */}
+                          {/* Overflow actions button */}
                           {onArchiveSettings && (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onNavigate();
-                                onArchiveSettings(server.id);
+                                setOverflowArchive({
+                                  id: server.id,
+                                  label: server.label,
+                                  baseUrl: server.baseUrl,
+                                });
                               }}
                               className="ml-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-btn text-text-muted transition-colors hover:bg-surface hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                               aria-label={intl.formatMessage(
-                                messages.archiveSettings,
+                                messages.archiveActions,
                               )}
                             >
                               <svg
                                 width="18"
                                 height="18"
                                 viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                                fill="currentColor"
                                 aria-hidden="true"
                               >
-                                <circle cx="12" cy="12" r="3" />
-                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                                <circle cx="12" cy="5" r="1.5" />
+                                <circle cx="12" cy="12" r="1.5" />
+                                <circle cx="12" cy="19" r="1.5" />
                               </svg>
                             </button>
                           )}
@@ -589,6 +599,45 @@ function MobileNavDrawer({
           </div>
         </Dialog.Content>
       </Dialog.Portal>
+
+      {/* Nested overflow sheet for archive actions */}
+      <ArchiveOverflowSheet
+        open={overflowArchive !== null}
+        onOpenChange={(open) => {
+          if (!open) setOverflowArchive(null);
+        }}
+        archiveName={overflowArchive?.label ?? ''}
+        onViewDetails={() => {
+          if (overflowArchive) {
+            onNavigate();
+            onArchiveSettings?.(overflowArchive.id);
+          }
+        }}
+        onEdit={() => {
+          if (overflowArchive) {
+            onNavigate();
+            onArchiveSettings?.(overflowArchive.id);
+          }
+        }}
+        onSync={() => {
+          // no-op for now
+        }}
+        onCopyUrl={() => {
+          if (overflowArchive?.baseUrl) {
+            try {
+              void navigator.clipboard.writeText(overflowArchive.baseUrl);
+            } catch {
+              // Clipboard API not available
+            }
+          }
+        }}
+        onRemove={() => {
+          if (overflowArchive) {
+            onNavigate();
+            onArchiveSettings?.(overflowArchive.id);
+          }
+        }}
+      />
     </Dialog.Root>
   );
 }

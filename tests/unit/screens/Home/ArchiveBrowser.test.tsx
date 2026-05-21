@@ -56,7 +56,7 @@ describe('ArchiveBrowser', () => {
     });
   });
 
-  it('renders remote archive settings as a mobile-sized native button', async () => {
+  it('renders remote archive overflow button with correct aria-label', async () => {
     const user = userEvent.setup();
     const onSelectServer = vi.fn();
 
@@ -70,18 +70,17 @@ describe('ArchiveBrowser', () => {
       />,
     );
 
-    const settingsButton = screen.getByRole('button', {
-      name: 'Manage North Archive',
+    const overflowButton = screen.getByRole('button', {
+      name: 'Archive actions',
     });
 
-    expect(settingsButton.tagName).toBe('BUTTON');
-    expect(settingsButton).toHaveAttribute('type', 'button');
-    expect(settingsButton).toHaveClass('h-10', 'w-10', 'sm:h-8', 'sm:w-8');
+    expect(overflowButton.tagName).toBe('BUTTON');
+    expect(overflowButton).toHaveAttribute('type', 'button');
+    expect(overflowButton).toHaveClass('h-10', 'w-10', 'sm:h-8', 'sm:w-8');
 
-    await user.click(settingsButton);
-
-    expect(onSelectServer).toHaveBeenCalledOnce();
-    expect(onSelectServer).toHaveBeenCalledWith('server-1');
+    // Clicking the overflow button opens the sheet, not directly calling onSelectServer
+    await user.click(overflowButton);
+    expect(onSelectServer).not.toHaveBeenCalled();
   });
 
   it('does not bubble archive toggle clicks to parent navigation handlers', async () => {
@@ -109,7 +108,37 @@ describe('ArchiveBrowser', () => {
     expect(onParentClick).not.toHaveBeenCalled();
   });
 
-  it('bubbles archive settings clicks to parent navigation handlers', async () => {
+  it('opens overflow sheet and clicking View Details calls onSelectServer', async () => {
+    const user = userEvent.setup();
+    const onSelectServer = vi.fn();
+
+    render(
+      <ArchiveBrowser
+        selectedProjectId={null}
+        onSelect={vi.fn()}
+        onCreateNew={vi.fn()}
+        onAddServer={vi.fn()}
+        onSelectServer={onSelectServer}
+      />,
+    );
+
+    // Click the overflow button to open the sheet
+    const overflowButton = screen.getByRole('button', {
+      name: 'Archive actions',
+    });
+    await user.click(overflowButton);
+
+    // The sheet should be open — find and click "View Details"
+    const viewDetailsButton = screen.getByRole('button', {
+      name: 'View Details',
+    });
+    await user.click(viewDetailsButton);
+
+    expect(onSelectServer).toHaveBeenCalledOnce();
+    expect(onSelectServer).toHaveBeenCalledWith('server-1');
+  });
+
+  it('bubbles archive settings clicks to parent via overflow sheet', async () => {
     const user = userEvent.setup();
     const onParentClick = vi.fn();
 
@@ -126,9 +155,14 @@ describe('ArchiveBrowser', () => {
     );
 
     await user.click(
-      screen.getByRole('button', { name: 'Manage North Archive' }),
+      screen.getByRole('button', { name: 'Archive actions' }),
     );
 
-    expect(onParentClick).toHaveBeenCalledOnce();
+    // Clicking "View Details" inside the sheet bubbles up
+    await user.click(
+      screen.getByRole('button', { name: 'View Details' }),
+    );
+
+    expect(onParentClick).toHaveBeenCalled();
   });
 });

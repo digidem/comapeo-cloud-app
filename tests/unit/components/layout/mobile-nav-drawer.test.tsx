@@ -300,7 +300,7 @@ describe('MobileNavDrawer', () => {
     expect(onSelectProject).toHaveBeenCalledWith('loc-1');
   });
 
-  it('calls onArchiveSettings when gear icon is clicked', async () => {
+  it('calls onArchiveSettings when overflow View Details is clicked', async () => {
     const onArchiveSettings = vi.fn();
     const archives = [
       { id: 'srv-1', label: 'Archive', baseUrl: 'https://x.com' },
@@ -317,8 +317,13 @@ describe('MobileNavDrawer', () => {
         onArchiveSettings={onArchiveSettings}
       />,
     );
+    // Click the overflow button (now "Archive actions" instead of "Archive settings")
     await userEvent.click(
-      screen.getByRole('button', { name: /Archive settings/i }),
+      screen.getByRole('button', { name: /Archive actions/i }),
+    );
+    // Now click "View Details" in the overflow sheet
+    await userEvent.click(
+      screen.getByRole('button', { name: /View Details/i }),
     );
     expect(onArchiveSettings).toHaveBeenCalledWith('srv-1');
   });
