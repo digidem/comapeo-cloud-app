@@ -252,6 +252,7 @@ function AuthenticatedLayoutInner() {
         onCreated={(id) => {
           setCreateProjectOpen(false);
           useProjectStore.getState().setSelectedProjectId(id);
+          void queryClient.invalidateQueries({ queryKey: ['projects'] });
           navigate({ to: '/' });
         }}
         serverUrl={undefined}
