@@ -208,9 +208,9 @@ test.describe('Critical User Flows', () => {
     // Observation detail renders with h1 heading
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
-    // "Back to Data" link visible
+    // "Back to Data" link visible — arrow icon with "Data" label
     await expect(
-      page.getByRole('link', { name: /back to data/i }),
+      page.getByRole('link', { name: 'Data', exact: true }).first(),
     ).toBeVisible();
   });
 
