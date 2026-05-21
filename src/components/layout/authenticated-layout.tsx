@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { Outlet, useRouterState } from '@tanstack/react-router';
+import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 
 import { AppShell } from '@/components/layout/app-shell';
 import {
@@ -9,6 +9,8 @@ import {
   useShellOverrides,
 } from '@/components/layout/shell-slot';
 import { useAutoSync } from '@/hooks/useAutoSync';
+import { ArchiveBrowser } from '@/screens/Home/ArchiveBrowser';
+import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
   home: { id: 'home.title', defaultMessage: 'Home' },
@@ -68,15 +70,13 @@ function SettingsIcon(): ReactNode {
 
 function AuthenticatedLayoutInner() {
   const intl = useIntl();
+  const navigate = useNavigate();
   const pathname = useRouterState({
     select: (s) => s.location.pathname,
   });
-  const {
-    topbarWorkspaceName,
-    topbarModeLabel,
-    topbarActions,
-    secondaryContent,
-  } = useShellOverrides();
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const { topbarWorkspaceName, topbarModeLabel, topbarActions } =
+    useShellOverrides();
 
   const NAV_ITEMS = [
     {
@@ -103,7 +103,23 @@ function AuthenticatedLayoutInner() {
       topbarActions={topbarActions}
       navItems={NAV_ITEMS}
       activeNavPath={pathname}
-      secondaryContent={secondaryContent}
+      secondaryContent={
+        <div className="flex flex-col gap-4 p-4">
+          <ArchiveBrowser
+            selectedProjectId={selectedProjectId}
+            onSelect={(id) => {
+              useProjectStore.getState().setSelectedProjectId(id);
+              navigate({ to: '/' });
+            }}
+            onCreateNew={() => navigate({ to: '/' })}
+            onAddServer={() => navigate({ to: '/' })}
+            onSelectServer={(id) => {
+              useProjectStore.getState().setSelectedServerId(id);
+              navigate({ to: '/' });
+            }}
+          />
+        </div>
+      }
     >
       <Outlet />
     </AppShell>

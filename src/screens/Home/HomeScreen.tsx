@@ -23,7 +23,6 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
 import { AddArchiveServerDialog } from './AddArchiveServerDialog';
-import { ArchiveBrowser } from './ArchiveBrowser';
 import { ArchiveServerDetail } from './ArchiveServerDetail';
 import { AreaMap } from './AreaMap';
 import { CalculationSettings } from './CalculationSettings';
@@ -620,7 +619,7 @@ function HomeScreen() {
     }
   }
 
-  // ---- Shell slot: inject topbar + secondary sidebar into layout's AppShell ----
+  // ---- Shell slot: inject topbar into layout's AppShell ----
 
   const topbarWorkspaceName =
     selectedProject?.name ??
@@ -628,35 +627,13 @@ function HomeScreen() {
       ? intl.formatMessage(messages.untitledProject)
       : intl.formatMessage(messages.localMode));
 
-  const secondaryContent = useMemo(
-    () => (
-      <div className="flex flex-col gap-4 p-4">
-        <ArchiveBrowser
-          selectedProjectId={state.selectedProjectId}
-          onSelect={(id) => dispatch({ type: 'SELECT_PROJECT', id })}
-          onCreateNew={handleOpenCreateDialog}
-          onAddServer={() => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' })}
-          onSelectServer={(id) => dispatch({ type: 'SELECT_SERVER', id })}
-        />
-      </div>
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      projects,
-      state.selectedProjectId,
-      projectsQuery.isPending,
-      handleOpenCreateDialog,
-    ],
-  );
-
   const shellSlot = useMemo(
     () => ({
       topbarWorkspaceName,
       topbarModeLabel: intl.formatMessage(messages.homeTitle),
-      secondaryContent,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [topbarWorkspaceName, secondaryContent],
+    [topbarWorkspaceName],
   );
 
   useShellSlot(shellSlot);

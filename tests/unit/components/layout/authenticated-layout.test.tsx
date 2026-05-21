@@ -1,13 +1,20 @@
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
 
 import { AuthenticatedLayout } from '@/components/layout/authenticated-layout';
+import { useProjectStore } from '@/stores/project-store';
+
+const { mockNavigate, mockRouterState } = vi.hoisted(() => ({
+  mockNavigate: vi.fn(),
+  mockRouterState: { pathname: '/' },
+}));
 
 vi.mock('@tanstack/react-router', () => ({
   Outlet: () => <div data-testid="outlet-content">Child Route</div>,
-  useRouterState: () => ({ location: { pathname: '/' } }),
+  useNavigate: () => mockNavigate,
+  useRouterState: () => ({ location: { pathname: mockRouterState.pathname } }),
   Link: ({
     to,
     children,
@@ -29,11 +36,54 @@ vi.mock('@/hooks/useAutoSync', () => ({
   useAutoSync: vi.fn(),
 }));
 
+vi.mock('@/screens/Home/ArchiveBrowser', () => ({
+  ArchiveBrowser: ({
+    selectedProjectId,
+    onSelect,
+    onCreateNew,
+    onAddServer,
+    onSelectServer,
+  }: {
+    selectedProjectId: string | null;
+    onSelect: (id: string) => void;
+    onCreateNew: () => void;
+    onAddServer: () => void;
+    onSelectServer: (id: string) => void;
+  }) => (
+    <div
+      data-testid="archive-browser"
+      data-selected-project-id={selectedProjectId ?? ''}
+    >
+      <button type="button" onClick={() => onSelect('project-2')}>
+        Select Project
+      </button>
+      <button type="button" onClick={onCreateNew}>
+        Create Project
+      </button>
+      <button type="button" onClick={onAddServer}>
+        Add Server
+      </button>
+      <button type="button" onClick={() => onSelectServer('server-1')}>
+        Select Server
+      </button>
+    </div>
+  ),
+}));
+
 const mockUseAutoSync = vi.mocked(
   await import('@/hooks/useAutoSync').then((m) => m.useAutoSync),
 );
 
 describe('AuthenticatedLayout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRouterState.pathname = '/';
+    useProjectStore.setState({
+      selectedProjectId: null,
+      selectedServerId: null,
+    });
+  });
+
   it('renders AppShell with navigation items', () => {
     render(<AuthenticatedLayout />);
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
@@ -86,5 +136,23 @@ describe('AuthenticatedLayout', () => {
     expect(
       screen.getByRole('button', { name: /close menu/i }),
     ).toBeInTheDocument();
+  });
+
+  it('renders the archive browser as persistent secondary content on authenticated pages', async () => {
+    const user = userEvent.setup();
+    mockRouterState.pathname = '/data';
+    useProjectStore.setState({ selectedProjectId: 'project-1' });
+
+    render(<AuthenticatedLayout />);
+
+    expect(screen.getByTestId('archive-browser')).toHaveAttribute(
+      'data-selected-project-id',
+      'project-1',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Select Project' }));
+
+    expect(useProjectStore.getState().selectedProjectId).toBe('project-2');
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/' });
   });
 });

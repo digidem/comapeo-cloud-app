@@ -450,9 +450,10 @@ function ArchiveServerDetail({
 
   function formatSyncedDescription() {
     if (server.lastSyncedAt === null) return intl.formatMessage(messages.never);
+
     const ageMs = Math.max(
       0,
-      Date.now() - new Date(server.lastSyncedAt).getTime(),
+      new Date().getTime() - new Date(server.lastSyncedAt).getTime(),
     );
     const minutes = Math.max(0, Math.floor(ageMs / 60_000));
 
@@ -502,6 +503,42 @@ function ArchiveServerDetail({
     );
     await queryClient.invalidateQueries({ queryKey: ['projects'] });
     onRemove(server.id);
+  }
+
+  function renderSyncButton() {
+    if (!server.hasCredentials) {
+      return (
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => setIsEditDialogOpen(true)}
+        >
+          {intl.formatMessage(messages.reconnect)}
+        </Button>
+      );
+    }
+
+    if (server.isSyncing) {
+      return (
+        <Button variant="secondary" size="sm" loading disabled>
+          {intl.formatMessage(messages.syncing)}
+        </Button>
+      );
+    }
+
+    if (server.error) {
+      return (
+        <Button variant="secondary" size="sm" onClick={() => onSync(server.id)}>
+          {intl.formatMessage(messages.retrySync)}
+        </Button>
+      );
+    }
+
+    return (
+      <Button variant="secondary" size="sm" onClick={() => onSync(server.id)}>
+        {intl.formatMessage(messages.sync)}
+      </Button>
+    );
   }
 
   return (
@@ -600,37 +637,7 @@ function ArchiveServerDetail({
           </p>
         )}
 
-        <div className="mt-3">
-          {!server.hasCredentials ? (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsEditDialogOpen(true)}
-            >
-              {intl.formatMessage(messages.reconnect)}
-            </Button>
-          ) : server.isSyncing ? (
-            <Button variant="secondary" size="sm" loading disabled>
-              {intl.formatMessage(messages.syncing)}
-            </Button>
-          ) : server.error ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onSync(server.id)}
-            >
-              {intl.formatMessage(messages.retrySync)}
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onSync(server.id)}
-            >
-              {intl.formatMessage(messages.sync)}
-            </Button>
-          )}
-        </div>
+        <div className="mt-3">{renderSyncButton()}</div>
       </div>
 
       <div className="rounded-xl border border-border bg-surface-card p-4">
