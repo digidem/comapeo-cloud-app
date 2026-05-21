@@ -86,6 +86,8 @@ function BasemapSwitcher({
             {basemaps.map((basemap) => (
               <button
                 key={basemap.id}
+                role="menuitemradio"
+                aria-checked={basemap.id === value}
                 className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none hover:bg-primary/10 hover:text-primary ${
                   basemap.id === value
                     ? 'bg-primary/10 text-primary font-medium'

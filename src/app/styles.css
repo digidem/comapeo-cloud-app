@@ -179,6 +179,7 @@
   --color-warning-soft: var(--theme-warning-soft);
   --color-info: var(--theme-info);
   --color-info-soft: var(--theme-info-soft);
+  --color-danger: var(--theme-error);
 
   /* Tags */
   --color-tag-neutral-bg: var(--theme-tag-neutral-bg);

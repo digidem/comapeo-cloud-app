@@ -27,13 +27,10 @@ function Topbar({
           <button
             type="button"
             onClick={onMenuClick}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-text-muted motion-safe:transition-transform motion-safe:duration-300 hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-75 lg:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-btn text-text-muted motion-safe:transition-transform motion-safe:duration-300 hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-safe:active:scale-75 lg:hidden"
             aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={isMenuOpen ? 'true' : 'false'}
           >
-            <span className="sr-only">
-              {isMenuOpen ? 'Close menu' : 'Open menu'}
-            </span>
             <span
               aria-hidden="true"
               className="flex h-5 w-6 flex-col items-center justify-center gap-[5px]"

@@ -235,13 +235,17 @@ function AuthenticatedLayoutInner() {
             void syncRemoteArchive(serverId, {
               baseUrl: server.baseUrl,
               token: server.token,
-            }).then(() => {
-              void queryClient.invalidateQueries({ queryKey: ['projects'] });
-              void queryClient.invalidateQueries({
-                queryKey: ['observations'],
+            })
+              .then(() => {
+                void queryClient.invalidateQueries({ queryKey: ['projects'] });
+                void queryClient.invalidateQueries({
+                  queryKey: ['observations'],
+                });
+                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+              })
+              .catch(() => {
+                // Sync failure is handled by the sync layer — don't block UI
               });
-              void queryClient.invalidateQueries({ queryKey: ['alerts'] });
-            });
           }
         }}
       />
