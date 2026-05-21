@@ -45,8 +45,18 @@ vi.mock('@/stores/project-store', () => ({
 }));
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
-    <a href={to}>{children}</a>
+  Link: ({
+    children,
+    className,
+    to,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+    to: string;
+  }) => (
+    <a href={to} className={className}>
+      {children}
+    </a>
   ),
   useParams: () => ({ alertId: mockAlertId }),
 }));
@@ -87,10 +97,13 @@ describe('AlertDetailScreen', () => {
     expect(screen.getByText('Metadata')).toBeInTheDocument();
   });
 
-  it('renders back link', () => {
+  it('renders arrow back link to data', () => {
     resetMocks();
     render(<AlertDetailScreen />);
-    expect(screen.getByText('Back to Data')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Data' });
+    expect(link).toHaveAttribute('href', '/data');
+    expect(link).toHaveClass('min-h-[44px]');
+    expect(screen.queryByText('Back to Data')).not.toBeInTheDocument();
   });
 
   it('renders detection period', () => {

@@ -153,6 +153,21 @@ Follow `design/prototype/DESIGN.md` for all visual decisions:
 | Runtime validation | Valibot schemas on API boundaries | At runtime |
 | CI | GitHub Actions (lint, types, coverage, E2E, screenshots, i18n check, deploy) | On push/PR |
 | Secret scanning | TruffleHog (pre-commit + CI) | On `git commit` + CI |
+| Screen back buttons | Arrow icon + page name | Every detail screen |
+| Skeleton loading | Skeleton component while data loads | Every screen with async data |
+
+## Screen Conventions
+
+### Back navigation
+
+All detail screens (ObservationDetail, AlertDetail) MUST use an arrow-back icon (← SVG chevron) with the page name ("Data") instead of text like "Back to Data". The link must have `min-h-[44px]` for mobile touch target.
+
+### Skeleton loading
+
+Every screen that loads async data MUST show a Skeleton placeholder while data is pending. Use the `<Skeleton>` component from `@/components/ui/skeleton`. At minimum show:
+
+- A title skeleton (h24, w200)
+- 1-2 card skeletons (h100-200)
 
 ## Visual Screenshot Testing
 

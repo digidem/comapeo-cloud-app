@@ -8,6 +8,7 @@ const mockNavigate = vi.fn();
 
 let mockSelectedProjectId: string | null = 'proj-1';
 let mockIsPending = false;
+let mockProjectsIsPending = false;
 
 vi.mock('@/components/layout/shell-slot', () => ({
   useShellSlot: vi.fn(),
@@ -30,7 +31,7 @@ vi.mock('@/stores/project-store', () => ({
 vi.mock('@/hooks/useProjects', () => ({
   useProjects: vi.fn(() => ({
     data: [{ localId: 'proj-1', name: 'Test Project' }],
-    isPending: false,
+    isPending: mockProjectsIsPending,
   })),
 }));
 
@@ -50,6 +51,7 @@ describe('CreateAlertScreen', () => {
   beforeEach(() => {
     mockSelectedProjectId = 'proj-1';
     mockIsPending = false;
+    mockProjectsIsPending = false;
     mockMutate.mockClear();
     mockNavigate.mockClear();
   });
@@ -78,6 +80,17 @@ describe('CreateAlertScreen', () => {
     render(<CreateAlertScreen />);
     expect(screen.getByText('Detection Date Start')).toBeInTheDocument();
     expect(screen.getByText('Detection Date End')).toBeInTheDocument();
+  });
+
+  it('renders skeleton loading while projects are pending', () => {
+    mockProjectsIsPending = true;
+    render(<CreateAlertScreen />);
+
+    expect(screen.getAllByTestId('skeleton')).toHaveLength(3);
+    expect(screen.queryByText('Create Alert')).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('Geometry (GeoJSON)'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows validation error when geometry is not valid JSON', async () => {

@@ -12,10 +12,6 @@ import { useProjects } from '@/hooks/useProjects';
 import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
-  backToData: {
-    id: 'observationDetail.back',
-    defaultMessage: 'Back to Data',
-  },
   notFound: {
     id: 'observationDetail.notFound',
     defaultMessage: 'Observation not found',
@@ -129,9 +125,22 @@ export function ObservationDetailScreen() {
       <div className="flex items-center gap-3">
         <Link
           to="/data"
-          className="text-sm text-text-muted hover:text-text transition-colors"
+          className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-text transition-colors min-h-[44px]"
         >
-          {intl.formatMessage(messages.backToData)}
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+          {intl.formatMessage(messages.dataLabel)}
         </Link>
       </div>
 

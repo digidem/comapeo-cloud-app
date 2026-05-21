@@ -10,6 +10,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useCreateAlert } from '@/hooks/useCreateAlert';
 import { useProjects } from '@/hooks/useProjects';
 import { geometrySchema } from '@/lib/schemas/geometry';
@@ -152,6 +153,16 @@ export function CreateAlertScreen() {
       detectionDateEnd: '',
     },
   });
+
+  if (projectsQuery.isPending) {
+    return (
+      <div className="flex flex-col gap-4 p-6">
+        <Skeleton height={24} width={200} />
+        <Skeleton height={100} className="rounded-card" />
+        <Skeleton height={100} className="rounded-card" />
+      </div>
+    );
+  }
 
   function onSubmit(data: FormData) {
     if (!selectedProjectId) return;
