@@ -154,10 +154,10 @@ describe('Topbar', () => {
       expect(btn).toHaveAttribute('aria-expanded', 'true');
     });
 
-    it('button has active:scale-90 class', () => {
+    it('button has active:scale-75 class', () => {
       render(<Topbar onMenuClick={() => {}} isMenuOpen={false} />);
       const btn = screen.getByRole('button', { name: /open menu/i });
-      expect(btn.className).toContain('active:scale-90');
+      expect(btn.className).toContain('active:scale-75');
     });
 
     it('button has motion-safe:transition-transform class', () => {

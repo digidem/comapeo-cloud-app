@@ -16,10 +16,7 @@ async function createProjectViaUI(
 ): Promise<void> {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page
-    .getByRole('button', { name: 'Create your first project' })
-    .first()
-    .click();
+  await page.getByRole('button', { name: 'Create project' }).first().click();
   await page.getByLabel('Project Name').fill('Test Project 1');
   await page
     .getByRole('dialog')

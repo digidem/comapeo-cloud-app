@@ -226,7 +226,7 @@ describe('HomeScreen', () => {
     expect(document.body).toBeDefined();
   });
 
-  it('shows "No projects yet" message when there are no projects', () => {
+  it('shows intro page when there are no servers and no projects', () => {
     mockUseProjects.mockReturnValue({
       data: [],
       isLoading: false,
@@ -236,7 +236,158 @@ describe('HomeScreen', () => {
     } as unknown as ReturnType<typeof useProjects>);
 
     render(<HomeScreen />);
-    expect(screen.getAllByText('No projects yet').length).toBeGreaterThan(0);
+    expect(screen.getByText('Welcome to CoMapeo Cloud')).toBeInTheDocument();
+    expect(screen.getByText('Add remote archive server')).toBeInTheDocument();
+    expect(screen.getByText('Create project')).toBeInTheDocument();
+  });
+
+  it('shows both action cards with CTA buttons on intro page', () => {
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(<HomeScreen />);
+    expect(
+      screen.getByRole('button', { name: 'Add server' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Create project' }),
+    ).toBeInTheDocument();
+  });
+
+  it('opens dialog when CTA buttons are clicked on intro page', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(<HomeScreen />);
+
+    // Click "Add server" on the intro page
+    await user.click(screen.getByRole('button', { name: 'Add server' }));
+    // The AddArchiveServerDialog uses Radix Dialog.Portal to render.
+    // Even if the portal content isn't in JSDOM's tree, verify the
+    // dialog's title text eventually appears in the document.
+    // The Radix Dialog renders the title inside Dialog.Title.
+    await vi.waitFor(
+      () => {
+        const titles = document.querySelectorAll('[role="dialog"]');
+        return titles.length > 0;
+      },
+      { timeout: 3000 },
+    );
+    // Fallback: verify at least one dialog role element exists
+    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+  });
+
+  it('opens CreateProjectDialog when "Create project" is clicked on intro page', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(<HomeScreen />);
+    await user.click(screen.getByRole('button', { name: 'Create project' }));
+    // Check that the Create Project dialog appears
+    expect(
+      await screen.findByRole('dialog', {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows "How it works" section on intro page', () => {
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(<HomeScreen />);
+    expect(screen.getByText('How it works')).toBeInTheDocument();
+  });
+
+  it('does not show intro page when servers exist', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    // Set up auth store with servers so HomeScreen skips intro
+    const { useAuthStore } = await import('@/stores/auth-store');
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'srv-1',
+          label: 'Test Archive',
+          baseUrl: 'https://example.com',
+          token: 'test',
+          status: 'idle',
+        },
+      ],
+    });
+
+    // Archive status must also report servers for ArchiveBrowser
+    mockUseArchiveStatus.mockReturnValue({
+      servers: [
+        {
+          id: 'srv-1',
+          label: 'Test Archive',
+          baseUrl: 'https://example.com',
+          isSyncing: false,
+          error: null,
+          lastSyncedAt: null,
+          hasCredentials: true,
+          isStale: true,
+        },
+      ],
+      anyError: false,
+      anySyncing: false,
+    });
+
+    render(<HomeScreen />);
+    expect(
+      screen.queryByText('Welcome to CoMapeo Cloud'),
+    ).not.toBeInTheDocument();
+
+    // Clean up
+    useAuthStore.setState({ servers: [] });
+  });
+
+  it('does not show intro page when projects exist', () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Alpha Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(<HomeScreen />);
+    expect(
+      screen.queryByText('Welcome to CoMapeo Cloud'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows project list when projects exist', async () => {
@@ -371,10 +522,10 @@ describe('HomeScreen', () => {
 
     render(<HomeScreen />);
 
-    await user.click(
-      screen.getByRole('button', { name: 'Create your first project' }),
-    );
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create project' }));
+    expect(
+      await screen.findByRole('dialog', {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
   });
 
   it('shows "No mappable coordinates found" when project is selected but no results', async () => {

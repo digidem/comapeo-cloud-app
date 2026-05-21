@@ -108,7 +108,16 @@ describe('MobileNavDrawer', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('renders secondaryContent when provided', () => {
+  it('renders archives with nested projects when provided', () => {
+    const archives = [
+      { id: 'srv-1', label: 'My Archive', baseUrl: 'https://example.com' },
+    ];
+    const archiveProjects = {
+      'srv-1': [
+        { localId: 'p1', name: 'Alpha Project' },
+        { localId: 'p2', name: 'Beta Project' },
+      ],
+    };
     render(
       <MobileNavDrawer
         open={true}
@@ -116,31 +125,227 @@ describe('MobileNavDrawer', () => {
         navItems={navItems}
         activePath="/"
         onNavigate={() => {}}
-        secondaryContent={<div data-testid="secondary">Project list</div>}
+        archives={archives}
+        archiveProjects={archiveProjects}
+        onAddServer={() => {}}
       />,
     );
-    expect(screen.getByTestId('secondary')).toBeInTheDocument();
+    expect(screen.getByText('My Archive')).toBeInTheDocument();
+    expect(screen.getByText('Alpha Project')).toBeInTheDocument();
+    expect(screen.getByText('Beta Project')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Add Server/i }),
+    ).toBeInTheDocument();
   });
 
-  it('calls onNavigate when secondaryContent is clicked', async () => {
-    const onNavigate = vi.fn();
+  it('renders local projects section when provided', () => {
+    const localProjects = [{ localId: 'p1', name: 'Local Proj' }];
     render(
       <MobileNavDrawer
         open={true}
         onOpenChange={() => {}}
         navItems={navItems}
         activePath="/"
-        onNavigate={onNavigate}
-        secondaryContent={<button type="button">Project item</button>}
+        onNavigate={() => {}}
+        archives={[{ id: 'srv-1', label: 'Remote', baseUrl: 'https://x.com' }]}
+        archiveProjects={{ 'srv-1': [] }}
+        localProjects={localProjects}
+        onCreateProject={() => {}}
       />,
     );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Project item' }));
-
-    expect(onNavigate).toHaveBeenCalledOnce();
+    expect(screen.getByText('Local Proj')).toBeInTheDocument();
   });
 
-  it('does not render secondary section when secondaryContent not provided', () => {
+  it('shows empty state when no archive servers exist', () => {
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={[]}
+        onAddServer={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText('No remote archive servers yet.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Add a server to sync projects, observations, and alerts.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows empty state inside archive when no projects exist', () => {
+    const archives = [
+      { id: 'srv-1', label: 'Empty Archive', baseUrl: 'https://example.com' },
+    ];
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={archives}
+        archiveProjects={{ 'srv-1': [] }}
+      />,
+    );
+    expect(
+      screen.getByText('No projects in this archive yet.'),
+    ).toBeInTheDocument();
+  });
+
+  it('calls onAddServer when Add Server is clicked', async () => {
+    const onAddServer = vi.fn();
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        onAddServer={onAddServer}
+        archives={[]}
+      />,
+    );
+    // Click the primary CTA button (not the header link)
+    const addButtons = screen.getAllByRole('button', { name: /Add Server/i });
+    await userEvent.click(addButtons[addButtons.length - 1]!);
+    expect(onAddServer).toHaveBeenCalledOnce();
+  });
+
+  it('calls onCreateProject when Create Project is clicked', async () => {
+    const onCreateProject = vi.fn();
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={[{ id: 'srv-1', label: 'Remote', baseUrl: 'https://x.com' }]}
+        archiveProjects={{ 'srv-1': [] }}
+        onCreateProject={onCreateProject}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: /Create Project/i }),
+    );
+    expect(onCreateProject).toHaveBeenCalledOnce();
+  });
+
+  it('calls onSelectServer when archive label is clicked', async () => {
+    const onSelectServer = vi.fn();
+    const archives = [
+      { id: 'srv-1', label: 'My Archive', baseUrl: 'https://example.com' },
+    ];
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={archives}
+        onSelectServer={onSelectServer}
+      />,
+    );
+    await userEvent.click(screen.getByText('My Archive'));
+    expect(onSelectServer).toHaveBeenCalledWith('srv-1');
+  });
+
+  it('calls onSelectProject when a nested project is clicked', async () => {
+    const onSelectProject = vi.fn();
+    const archives = [
+      { id: 'srv-1', label: 'Archive', baseUrl: 'https://x.com' },
+    ];
+    const archiveProjects = {
+      'srv-1': [{ localId: 'p1', name: 'Alpha Project' }],
+    };
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={archives}
+        archiveProjects={archiveProjects}
+        onSelectProject={onSelectProject}
+      />,
+    );
+    await userEvent.click(screen.getByText('Alpha Project'));
+    expect(onSelectProject).toHaveBeenCalledWith('p1');
+  });
+
+  it('calls onSelectProject when a local project is clicked', async () => {
+    const onSelectProject = vi.fn();
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={[{ id: 'srv-1', label: 'Remote', baseUrl: 'https://x.com' }]}
+        archiveProjects={{ 'srv-1': [] }}
+        localProjects={[{ localId: 'loc-1', name: 'Local Project' }]}
+        onSelectProject={onSelectProject}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Local Proj/i }));
+    expect(onSelectProject).toHaveBeenCalledWith('loc-1');
+  });
+
+  it('calls onArchiveSettings when gear icon is clicked', async () => {
+    const onArchiveSettings = vi.fn();
+    const archives = [
+      { id: 'srv-1', label: 'Archive', baseUrl: 'https://x.com' },
+    ];
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={archives}
+        archiveProjects={{ 'srv-1': [] }}
+        onArchiveSettings={onArchiveSettings}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: /Archive settings/i }),
+    );
+    expect(onArchiveSettings).toHaveBeenCalledWith('srv-1');
+  });
+
+  it('highlights active archive server', () => {
+    const archives = [
+      { id: 'srv-1', label: 'Active Archive', baseUrl: 'https://x.com' },
+      { id: 'srv-2', label: 'Inactive Archive', baseUrl: 'https://y.com' },
+    ];
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={archives}
+        activeArchiveId="srv-1"
+      />,
+    );
+    const activeArchive = screen.getByText('Active Archive').closest('button');
+    expect(activeArchive).toBeTruthy();
+    // Active archive label button should have primary color text
+    expect(activeArchive!.className).toContain('text-primary');
+  });
+
+  it('renders language selector in footer', () => {
     render(
       <MobileNavDrawer
         open={true}
@@ -150,11 +355,40 @@ describe('MobileNavDrawer', () => {
         onNavigate={() => {}}
       />,
     );
-    // There should be no element with data-testid="secondary"
+    expect(screen.getByText('Language')).toBeInTheDocument();
+    expect(screen.getByText('EN')).toBeInTheDocument();
+    expect(screen.getByText('PT')).toBeInTheDocument();
+    expect(screen.getByText('ES')).toBeInTheDocument();
+  });
+
+  it('shows section titles for navigation and archives', () => {
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+      />,
+    );
+    expect(screen.getByText('Navigation')).toBeInTheDocument();
+    expect(screen.getByText('Archives')).toBeInTheDocument();
+  });
+
+  it('does not render secondaryContent section (replaced by structured sections)', () => {
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+      />,
+    );
     expect(screen.queryByTestId('secondary')).not.toBeInTheDocument();
   });
 
-  it('does not render ThemeToggle section after theme lock', () => {
+  it('active nav item has highlighted styling', () => {
     render(
       <MobileNavDrawer
         open={true}
@@ -164,105 +398,84 @@ describe('MobileNavDrawer', () => {
         onNavigate={() => {}}
       />,
     );
-    // ThemeToggle was removed — no theme buttons should appear
-    expect(screen.queryByText('Cloud')).not.toBeInTheDocument();
-    expect(screen.queryByText('Mobile')).not.toBeInTheDocument();
-    expect(screen.queryByText('Sentinel')).not.toBeInTheDocument();
+    const homeLink = screen.getByText('Home').closest('a');
+    expect(homeLink).toBeTruthy();
+    expect(homeLink!.className).toContain('bg-primary-soft');
+    expect(homeLink!.className).toContain('text-primary');
   });
 
-  describe('animation enhancements', () => {
-    it('overlay has backdrop-blur-sm class', () => {
-      render(
-        <MobileNavDrawer
-          open={true}
-          onOpenChange={() => {}}
-          navItems={navItems}
-          activePath="/"
-          onNavigate={() => {}}
-        />,
-      );
-      // Radix Dialog.Overlay renders as a div with data-state attribute
-      const overlays = document.querySelectorAll('div[data-state]');
-      const overlay = Array.from(overlays).find((el) =>
-        el.className.includes('backdrop-blur'),
-      );
-      expect(overlay).toBeTruthy();
-      expect(overlay?.className).toContain('backdrop-blur-sm');
-    });
+  it('drawer header still contains close button', () => {
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /close menu/i }),
+    ).toBeInTheDocument();
+  });
 
-    it('drawer content has duration-300 class', () => {
-      render(
-        <MobileNavDrawer
-          open={true}
-          onOpenChange={() => {}}
-          navItems={navItems}
-          activePath="/"
-          onNavigate={() => {}}
-        />,
-      );
-      const content = document.querySelector('[role="dialog"]');
-      expect(content?.className).toContain('duration-300');
+  it('project count in archives determines toggle visibility', () => {
+    const archives = [
+      { id: 'srv-1', label: 'With Projects', baseUrl: 'https://x.com' },
+      { id: 'srv-2', label: 'Empty Archive', baseUrl: 'https://y.com' },
+    ];
+    const archiveProjects = {
+      'srv-1': [{ localId: 'p1', name: 'A Project' }],
+      'srv-2': [],
+    };
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={archives}
+        archiveProjects={archiveProjects}
+      />,
+    );
+    // The archive with projects has a toggle button (chevron)
+    const toggleButtons = screen.getAllByRole('button', {
+      name: /Toggle archive section/i,
     });
+    expect(toggleButtons).toHaveLength(1);
+  });
 
-    it('nav items have staggered animationDelay inline styles', () => {
-      render(
-        <MobileNavDrawer
-          open={true}
-          onOpenChange={() => {}}
-          navItems={navItems}
-          activePath="/"
-          onNavigate={() => {}}
-        />,
-      );
-      const links = screen.getAllByRole('link');
-      expect(links[0]).toHaveStyle({ animationDelay: '0ms' });
-      expect(links[1]).toHaveStyle({ animationDelay: '30ms' });
-    });
+  it('expands and collapses archive on toggle click', async () => {
+    const archives = [
+      { id: 'srv-1', label: 'Collapsible', baseUrl: 'https://x.com' },
+    ];
+    const archiveProjects = {
+      'srv-1': [{ localId: 'p1', name: 'Nested Project' }],
+    };
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={archives}
+        archiveProjects={archiveProjects}
+      />,
+    );
+    // Project is visible initially
+    expect(screen.getByText('Nested Project')).toBeInTheDocument();
 
-    it('active nav item has border-l-4 border-primary accent', () => {
-      render(
-        <MobileNavDrawer
-          open={true}
-          onOpenChange={() => {}}
-          navItems={navItems}
-          activePath="/"
-          onNavigate={() => {}}
-        />,
-      );
-      // Find the active link by text content (icon text makes role-based query unreliable)
-      const homeLink = screen.getByText('Home').closest('a');
-      expect(homeLink).toBeTruthy();
-      expect(homeLink!.className).toContain('border-l-4');
-      expect(homeLink!.className).toContain('border-primary');
+    // Collapse
+    const toggle = screen.getByRole('button', {
+      name: /Toggle archive section/i,
     });
+    await userEvent.click(toggle);
+    expect(screen.queryByText('Nested Project')).not.toBeInTheDocument();
 
-    it('drawer header still contains close button', () => {
-      render(
-        <MobileNavDrawer
-          open={true}
-          onOpenChange={() => {}}
-          navItems={navItems}
-          activePath="/"
-          onNavigate={() => {}}
-        />,
-      );
-      expect(
-        screen.getByRole('button', { name: /close menu/i }),
-      ).toBeInTheDocument();
-    });
-
-    it('nav items have motion-safe animate class', () => {
-      render(
-        <MobileNavDrawer
-          open={true}
-          onOpenChange={() => {}}
-          navItems={navItems}
-          activePath="/"
-          onNavigate={() => {}}
-        />,
-      );
-      const links = screen.getAllByRole('link');
-      expect(links[0]!.className).toContain('motion-safe:animate-');
-    });
+    // Expand again
+    await userEvent.click(toggle);
+    expect(screen.getByText('Nested Project')).toBeInTheDocument();
   });
 });
