@@ -131,4 +131,31 @@ describe('ArchiveOverflowSheet', () => {
     expect(onRemove).toHaveBeenCalledOnce();
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it('calls onOpenChange when close button (X) is clicked', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <ArchiveOverflowSheet {...defaultProps} onOpenChange={onOpenChange} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('calls onOpenChange when the backdrop is clicked', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <ArchiveOverflowSheet {...defaultProps} onOpenChange={onOpenChange} />,
+    );
+
+    // Radix Dialog renders the overlay as a sibling before the dialog content
+    const dialog = screen.getByRole('dialog');
+    const overlay = dialog.previousElementSibling;
+    expect(overlay).toBeTruthy();
+
+    await user.click(overlay!);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });
