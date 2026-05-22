@@ -51,12 +51,15 @@ describe('Topbar', () => {
     expect(screen.getByText('Beta')).toBeInTheDocument();
   });
 
-  it('renders brand fallback when workspaceName not provided', () => {
+  it('renders brand fallback as h1 heading when workspaceName not provided', () => {
     render(<Topbar />);
-    // Brand fallback should be visible
-    expect(screen.getByLabelText('CoMapeo Cloud')).toBeInTheDocument();
-    // No h1 heading should exist
-    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+    // Brand fallback should be visible and serve as the page's h1 for a11y
+    const heading = screen.getByRole('heading', {
+      level: 1,
+      name: 'CoMapeo Cloud',
+    });
+    expect(heading).toBeInTheDocument();
+    expect(heading.tagName).toBe('H1');
   });
 
   it('renders topbarActions via children prop', () => {

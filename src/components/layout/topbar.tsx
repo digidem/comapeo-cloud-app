@@ -55,10 +55,10 @@ function Topbar({
             {workspaceName}
           </h1>
         ) : (
-          <span className="font-semibold" aria-label="CoMapeo Cloud">
+          <h1 className="font-semibold" aria-label="CoMapeo Cloud">
             <span className="text-warning">Co</span>
             <span className="text-text">Mapeo Cloud</span>
-          </span>
+          </h1>
         )}
         {modeLabel && (
           <span className="hidden bg-surface-container-low text-text-muted rounded-full px-3 py-0.5 text-xs font-medium md:inline-flex">

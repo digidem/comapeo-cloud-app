@@ -557,21 +557,6 @@ function HomeScreen() {
     return mapLayers;
   }, [coverage.results, state.activeMethodId]);
 
-  // Auto-select the last updated project when projects load and none is selected
-  useEffect(() => {
-    if (
-      state.selectedProjectId &&
-      projects.find((p) => p.localId === state.selectedProjectId)
-    )
-      return;
-    if (projects.length === 0) return;
-    const sorted = [...projects].sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
-    dispatch({ type: 'SELECT_PROJECT', id: sorted[0]!.localId });
-  }, [state.selectedProjectId, projects]);
-
   // Refs to prevent infinite loops in the bidirectional store↔reducer sync.
   // Two separate refs are needed because Effect 1 (reducer→store) and
   // Effect 2 (store→reducer) run in the same commit phase. Effect 2 sees a
@@ -580,6 +565,9 @@ function HomeScreen() {
   // misinterpret Effect 1's write as an external change.
   const reducerToStoreProjectRef = useRef<string | null>(null);
   const reducerToStoreServerRef = useRef<string | null>(null);
+  // Tracks whether the store→reducer sync just cleared the project (user action).
+  // When set, the auto-select effect skips re-selection to preserve the user's intent.
+  const userClearedProjectRef = useRef(false);
 
   // Effect 1: sync reducer state → Zustand store
   useEffect(() => {
@@ -610,6 +598,9 @@ function HomeScreen() {
       dispatch({ type: 'SELECT_PROJECT', id: liveProjectId });
     } else {
       dispatch({ type: 'CLEAR_PROJECT' });
+      // Prevent the auto-select effect from immediately re-selecting a project
+      // after the user explicitly cleared their selection.
+      userClearedProjectRef.current = true;
     }
   }, [persistedProjectId, state.selectedProjectId]);
 
@@ -623,6 +614,27 @@ function HomeScreen() {
     reducerToStoreServerRef.current = liveServerId;
     dispatch({ type: 'SELECT_SERVER', id: liveServerId });
   }, [persistedServerId, state.selectedServerId]);
+
+  // Auto-select the last updated project when projects load and none is selected.
+  // Skips auto-select when the user explicitly cleared the project (tracked via ref).
+  useEffect(() => {
+    if (userClearedProjectRef.current) {
+      userClearedProjectRef.current = false;
+      return;
+    }
+    if (
+      state.selectedProjectId &&
+      projects.find((p) => p.localId === state.selectedProjectId)
+    ) {
+      return;
+    }
+    if (projects.length === 0) return;
+    const sorted = [...projects].sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+    dispatch({ type: 'SELECT_PROJECT', id: sorted[0]!.localId });
+  }, [state.selectedProjectId, projects]);
 
   const handleOpenCreateDialog = useCallback(
     () => dispatch({ type: 'OPEN_CREATE_DIALOG' }),
