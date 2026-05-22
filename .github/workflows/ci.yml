@@ -38,6 +38,10 @@ jobs:
       - name: TruffleHog secret scan
         uses: trufflesecurity/trufflehog@v3.95.3
         with:
+          # On push events, compare against the previous commit.
+          # On PR events, compare against the base branch.
+          base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          head: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event.after }}
           extra_args: --results=verified,unknown
 
       - name: Setup Node.js
