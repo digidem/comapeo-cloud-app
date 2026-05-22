@@ -78,12 +78,8 @@ describe('ErrorBoundary', () => {
   });
 
   it('does not render error message paragraph when error is null', () => {
-    render(
-      <DefaultFallback error={null} onRetry={vi.fn()} />,
-    );
+    render(<DefaultFallback error={null} onRetry={vi.fn()} />);
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    expect(
-      screen.queryByText('Test error message'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Test error message')).not.toBeInTheDocument();
   });
 });

@@ -1,22 +1,23 @@
-import React from 'react';
 import { act, fireEvent } from '@testing-library/react';
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
+import React from 'react';
+
 import { ToastProvider, useToast } from '@/components/ui/toast';
 
 vi.mock('@radix-ui/react-toast', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@radix-ui/react-toast')>();
+  const actual = await importOriginal<typeof import('@radix-ui/react-toast')>();
   const ActualRoot = actual.Root;
 
-  const MockedRoot = React.forwardRef<any, any>((props, ref) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const MockedRoot = React.forwardRef<any, any>((props, _ref) => {
     // Call onOpenChange(true) on mount to cover the !open === false branch
     // (Radix Toast never calls onOpenChange(true) in uncontrolled mode)
     React.useEffect(() => {
-      props.onOpenChange?.(true);
+      (props.onOpenChange as ((open: boolean) => void) | undefined)?.(true);
     }, []);
-    return React.createElement(ActualRoot, { ...props, ref });
+    return React.createElement(ActualRoot, props);
   });
   MockedRoot.displayName = 'Root';
 

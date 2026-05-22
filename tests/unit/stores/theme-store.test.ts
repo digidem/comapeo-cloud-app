@@ -61,7 +61,9 @@ async function importStore(opts?: {
       ) as unknown as MediaQueryList['addEventListener'],
       removeEventListener:
         vi.fn() as unknown as MediaQueryList['removeEventListener'],
-      dispatchEvent: vi.fn(() => false) as unknown as MediaQueryList['dispatchEvent'],
+      dispatchEvent: vi.fn(
+        () => false,
+      ) as unknown as MediaQueryList['dispatchEvent'],
     } as MediaQueryList;
     return mql;
   });
@@ -195,7 +197,9 @@ describe('getPersistedMode — import-time initialization', () => {
   });
 
   it('returns "system" when localStorage has "system" (covers line 40)', async () => {
-    const { useThemeStore: store } = await importStore({ storedValue: 'system' });
+    const { useThemeStore: store } = await importStore({
+      storedValue: 'system',
+    });
     expect(store.getState().mode).toBe('system');
   });
 
@@ -205,7 +209,9 @@ describe('getPersistedMode — import-time initialization', () => {
   });
 
   it('returns "light" when localStorage has "light"', async () => {
-    const { useThemeStore: store } = await importStore({ storedValue: 'light' });
+    const { useThemeStore: store } = await importStore({
+      storedValue: 'light',
+    });
     expect(store.getState().mode).toBe('light');
   });
 
@@ -280,6 +286,10 @@ describe('MQL guard flag — prevents duplicate listener attachment', () => {
     // The guard flag should still be true (second import did not try to attach again)
     expect(g[key]).toBe(true);
 
+    // getSystemTheme calls matchMedia (for resolveTheme during init), but the
+    // guard flag proves addEventListener was not re-attached on the second import.
+    expect(matchMediaSpy).toHaveBeenCalledTimes(1);
+
     // matchMedia may be called in getSystemTheme, but the guard prevents
     // the addEventListener path on the second import.
     // The fact that the flag is still set proves the guard worked.
@@ -322,7 +332,7 @@ describe('MQL change listener — system theme follows OS changes', () => {
     }));
 
     // Trigger the change listener
-    changeListener!({ matches: true });
+    changeListener!({ matches: true } as unknown as MediaQueryListEvent);
 
     expect(store.getState().resolved).toBe('dark');
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
@@ -352,7 +362,7 @@ describe('MQL change listener — system theme follows OS changes', () => {
     }));
 
     // Trigger the change listener — should NOT update because mode is 'dark', not 'system'
-    changeListener!({ matches: false });
+    changeListener!({ matches: false } as unknown as MediaQueryListEvent);
 
     // Resolved should still be dark
     expect(store.getState().resolved).toBe('dark');
@@ -382,7 +392,7 @@ describe('MQL change listener — system theme follows OS changes', () => {
     }));
 
     // Trigger the change listener
-    changeListener!({ matches: false });
+    changeListener!({ matches: false } as unknown as MediaQueryListEvent);
 
     expect(store.getState().resolved).toBe('light');
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');

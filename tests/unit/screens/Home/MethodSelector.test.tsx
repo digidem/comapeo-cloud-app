@@ -2,6 +2,7 @@ import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CoverageMethodResult } from '@/hooks/useProjectCoverage';
+import { MethodSelector } from '@/screens/Home/MethodSelector';
 
 // Mock scrollIntoView which is not available in jsdom
 Element.prototype.scrollIntoView = vi.fn();
@@ -26,12 +27,7 @@ vi.mock('@/screens/Home/method-ids', () => ({
   ],
 }));
 
-import { MethodSelector } from '@/screens/Home/MethodSelector';
-
-function makeResult(
-  methodId: string,
-  areaM2: number,
-): CoverageMethodResult {
+function makeResult(methodId: string, areaM2: number): CoverageMethodResult {
   return {
     methodId,
     result: {
