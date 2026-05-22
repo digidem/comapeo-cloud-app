@@ -1,6 +1,13 @@
 import type { FeatureCollection } from 'geojson';
 
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import { type IntlShape, defineMessages, useIntl } from 'react-intl';
 
 import { useQueryClient } from '@tanstack/react-query';
@@ -104,7 +111,8 @@ type HomeAction =
   | { type: 'INCREMENT_COVERAGE_REFRESH' }
   | { type: 'OPEN_ADD_SERVER_DIALOG' }
   | { type: 'CLOSE_ADD_SERVER_DIALOG' }
-  | { type: 'SELECT_SERVER'; id: string | null };
+  | { type: 'SELECT_SERVER'; id: string | null }
+  | { type: 'CLEAR_PROJECT' };
 
 function homeReducer(state: HomeState, action: HomeAction): HomeState {
   switch (action.type) {
@@ -159,6 +167,8 @@ function homeReducer(state: HomeState, action: HomeAction): HomeState {
       return { ...state, isAddServerDialogOpen: false };
     case 'SELECT_SERVER':
       return { ...state, selectedServerId: action.id };
+    case 'CLEAR_PROJECT':
+      return { ...state, selectedProjectId: null };
     default:
       return state;
   }
@@ -192,10 +202,6 @@ const messages = defineMessages({
   homeTitle: {
     id: 'home.title',
     defaultMessage: 'Home',
-  },
-  localMode: {
-    id: 'home.localMode',
-    defaultMessage: 'Local Mode',
   },
   noProjects: {
     id: 'home.noProjects',
@@ -372,18 +378,6 @@ function HomeScreen() {
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(interval);
-  }, []);
-
-  // Restore persisted project/server selection on mount — intentional [] deps
-  // (only run once on mount; adding persistedProjectId would re-restore on every change)
-  useEffect(() => {
-    if (persistedProjectId) {
-      dispatch({ type: 'SELECT_PROJECT', id: persistedProjectId });
-    }
-    if (persistedServerId) {
-      dispatch({ type: 'SELECT_SERVER', id: persistedServerId });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const queryClient = useQueryClient();
@@ -566,26 +560,69 @@ function HomeScreen() {
   // Auto-select the last updated project when projects load and none is selected
   useEffect(() => {
     if (
-      (!state.selectedProjectId ||
-        !projects.find((p) => p.localId === state.selectedProjectId)) &&
-      projects.length > 0
-    ) {
-      const sorted = [...projects].sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-      );
-      dispatch({ type: 'SELECT_PROJECT', id: sorted[0]!.localId });
-    }
+      state.selectedProjectId &&
+      projects.find((p) => p.localId === state.selectedProjectId)
+    )
+      return;
+    if (projects.length === 0) return;
+    const sorted = [...projects].sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+    dispatch({ type: 'SELECT_PROJECT', id: sorted[0]!.localId });
   }, [state.selectedProjectId, projects]);
 
-  // Sync selected project/server to persisted store whenever they change
+  // Refs to prevent infinite loops in the bidirectional store↔reducer sync.
+  // Two separate refs are needed because Effect 1 (reducer→store) and
+  // Effect 2 (store→reducer) run in the same commit phase. Effect 2 sees a
+  // stale persistedProjectId from the render snapshot while Effect 1 has
+  // already updated the store. Using a single ref would cause Effect 2 to
+  // misinterpret Effect 1's write as an external change.
+  const reducerToStoreProjectRef = useRef<string | null>(null);
+  const reducerToStoreServerRef = useRef<string | null>(null);
+
+  // Effect 1: sync reducer state → Zustand store
   useEffect(() => {
+    if (reducerToStoreProjectRef.current === state.selectedProjectId) return;
+    reducerToStoreProjectRef.current = state.selectedProjectId;
     setSelectedProjectId(state.selectedProjectId);
   }, [state.selectedProjectId, setSelectedProjectId]);
 
   useEffect(() => {
+    if (reducerToStoreServerRef.current === state.selectedServerId) return;
+    reducerToStoreServerRef.current = state.selectedServerId;
     setSelectedServerId(state.selectedServerId);
   }, [state.selectedServerId, setSelectedServerId]);
+
+  // Effect 2: sync Zustand store → reducer (for external changes from
+  // drawer/sidebar). Uses getState() to read the LIVE store value instead of
+  // the render snapshot so changes from Effect 1 (same flush) are correctly
+  // attributed.
+  useEffect(() => {
+    const liveProjectId = useProjectStore.getState().selectedProjectId;
+    // If Effect 1 just wrote this value, it's not an external change
+    if (liveProjectId === reducerToStoreProjectRef.current) return;
+    // Already in sync
+    if (liveProjectId === state.selectedProjectId) return;
+
+    reducerToStoreProjectRef.current = liveProjectId;
+    if (liveProjectId) {
+      dispatch({ type: 'SELECT_PROJECT', id: liveProjectId });
+    } else {
+      dispatch({ type: 'CLEAR_PROJECT' });
+    }
+  }, [persistedProjectId, state.selectedProjectId]);
+
+  useEffect(() => {
+    const liveServerId = useProjectStore.getState().selectedServerId;
+    // If Effect 1 just wrote this value, it's not an external change
+    if (liveServerId === reducerToStoreServerRef.current) return;
+    // Already in sync
+    if (liveServerId === state.selectedServerId) return;
+
+    reducerToStoreServerRef.current = liveServerId;
+    dispatch({ type: 'SELECT_SERVER', id: liveServerId });
+  }, [persistedServerId, state.selectedServerId]);
 
   const handleOpenCreateDialog = useCallback(
     () => dispatch({ type: 'OPEN_CREATE_DIALOG' }),
@@ -637,11 +674,9 @@ function HomeScreen() {
 
   // ---- Shell slot: inject topbar into layout's AppShell ----
 
-  const topbarWorkspaceName =
-    selectedProject?.name ??
-    (selectedProject
-      ? intl.formatMessage(messages.untitledProject)
-      : intl.formatMessage(messages.localMode));
+  const topbarWorkspaceName = selectedProject
+    ? (selectedProject.name ?? intl.formatMessage(messages.untitledProject))
+    : undefined;
 
   const shellSlot = useMemo(
     () => ({

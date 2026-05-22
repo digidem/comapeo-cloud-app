@@ -47,13 +47,17 @@ function Topbar({
             </span>
           </button>
         )}
-        <span className="font-semibold" aria-label="CoMapeo Cloud">
-          <span className="text-warning">Co</span>
-          <span className="text-text">Mapeo Cloud</span>
-        </span>
-        {workspaceName && (
-          <span className="hidden bg-primary-soft text-primary rounded-full px-3 py-0.5 text-sm font-medium sm:inline-flex">
+        {workspaceName ? (
+          <h1
+            className="truncate font-semibold text-text max-w-[40vw] sm:max-w-[280px] lg:max-w-[420px]"
+            title={workspaceName}
+          >
             {workspaceName}
+          </h1>
+        ) : (
+          <span className="font-semibold" aria-label="CoMapeo Cloud">
+            <span className="text-warning">Co</span>
+            <span className="text-text">Mapeo Cloud</span>
           </span>
         )}
         {modeLabel && (
