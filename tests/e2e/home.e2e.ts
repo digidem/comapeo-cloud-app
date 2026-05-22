@@ -28,7 +28,7 @@ async function createProject(
     .getByRole('dialog')
     .getByRole('button', { name: 'Create', exact: true })
     .click();
-  await expect(page.getByRole('heading', { name })).toBeVisible({
+  await expect(page.locator('h2', { hasText: name })).toBeVisible({
     timeout: 5_000,
   });
 }
