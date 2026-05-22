@@ -33,11 +33,17 @@ describe('Topbar', () => {
     expect(topbar.className).toContain('bg-surface-card');
   });
 
-  it('renders workspace badge when workspaceName provided', () => {
+  it('renders workspace name as h1 heading with semantic classes', () => {
     render(<Topbar workspaceName="My Workspace" />);
-    expect(screen.getByText('My Workspace')).toBeInTheDocument();
-    const badge = screen.getByText('My Workspace');
-    expect(badge.className).toContain('rounded-full');
+    const heading = screen.getByRole('heading', {
+      level: 1,
+      name: 'My Workspace',
+    });
+    expect(heading).toBeInTheDocument();
+    expect(heading.tagName).toBe('H1');
+    expect(heading.className).toContain('truncate');
+    expect(heading.className).toContain('font-semibold');
+    expect(heading).toHaveAttribute('title', 'My Workspace');
   });
 
   it('renders mode label pill when modeLabel provided', () => {
@@ -45,9 +51,12 @@ describe('Topbar', () => {
     expect(screen.getByText('Beta')).toBeInTheDocument();
   });
 
-  it('does not render workspace badge when workspaceName not provided', () => {
+  it('renders brand fallback when workspaceName not provided', () => {
     render(<Topbar />);
-    expect(screen.queryByText(/workspace/i)).not.toBeInTheDocument();
+    // Brand fallback should be visible
+    expect(screen.getByLabelText('CoMapeo Cloud')).toBeInTheDocument();
+    // No h1 heading should exist
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });
 
   it('renders topbarActions via children prop', () => {
@@ -91,11 +100,12 @@ describe('Topbar', () => {
     expect(screen.getByText('Mapeo Cloud')).toBeInTheDocument();
   });
 
-  it('workspace badge has hidden sm:inline-flex class', () => {
+  it('workspace heading has responsive max-width classes', () => {
     render(<Topbar workspaceName="My Workspace" />);
-    const badge = screen.getByText('My Workspace');
-    expect(badge.className).toContain('hidden');
-    expect(badge.className).toContain('sm:inline-flex');
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading.className).toContain('max-w-[40vw]');
+    expect(heading.className).toContain('sm:max-w-[280px]');
+    expect(heading.className).toContain('lg:max-w-[420px]');
   });
 
   it('mode label has hidden md:inline-flex class', () => {
