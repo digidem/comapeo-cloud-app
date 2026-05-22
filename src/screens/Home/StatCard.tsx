@@ -27,7 +27,7 @@ export function StatCard({
 
   return (
     <Card
-      className="flex flex-col p-5 h-full justify-between motion-safe:animate-fade-in"
+      className="flex flex-col p-4 sm:p-5 h-full justify-between motion-safe:animate-fade-in"
       style={{ animationDelay: `${staggerIndex * 50}ms` }}
     >
       <div className="flex items-center justify-between mb-4">
@@ -36,7 +36,9 @@ export function StatCard({
         </h3>
         {icon && <div className="text-text-muted">{icon}</div>}
       </div>
-      <div className={`text-4xl font-bold tracking-tight ${valueColor}`}>
+      <div
+        className={`text-lg sm:text-2xl lg:text-4xl font-bold tracking-tight ${valueColor}`}
+      >
         {isLoading ? <Skeleton height={40} width="60%" /> : displayValue}
       </div>
       {subtitle && !isLoading && (
