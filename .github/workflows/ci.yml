@@ -173,6 +173,12 @@ jobs:
       - name: Assert no source maps remain
         run: npx tsx scripts/clean-sourcemaps.ts --assert-only
 
+      - name: Copy Cloudflare Pages Functions into dist
+        run: |
+          if [ -d functions ]; then
+            cp -r functions/ dist/functions/
+          fi
+
       - name: Deploy preview to Cloudflare Pages
         id: deploy
         uses: cloudflare/wrangler-action@v4
@@ -300,6 +306,12 @@ jobs:
       - name: Assert no source maps remain
         run: npx tsx scripts/clean-sourcemaps.ts --assert-only
 
+      - name: Copy Cloudflare Pages Functions into dist
+        run: |
+          if [ -d functions ]; then
+            cp -r functions/ dist/functions/
+          fi
+
       - name: Deploy to Cloudflare Pages
         id: deploy
         uses: cloudflare/wrangler-action@v4
@@ -354,6 +366,12 @@ jobs:
 
       - name: Assert no source maps remain
         run: npx tsx scripts/clean-sourcemaps.ts --assert-only
+
+      - name: Copy Cloudflare Pages Functions into dist
+        run: |
+          if [ -d functions ]; then
+            cp -r functions/ dist/functions/
+          fi
 
       - name: Deploy staging to Cloudflare Pages
         id: deploy
