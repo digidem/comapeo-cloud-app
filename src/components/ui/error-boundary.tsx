@@ -68,5 +68,5 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
-export { ErrorBoundary };
+export { DefaultFallback, ErrorBoundary };
 export type { ErrorBoundaryProps };

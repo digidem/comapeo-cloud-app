@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import type { CoverageMethodResult } from '@/hooks/useProjectCoverage';
 
+import { METHOD_IDS } from './method-ids';
+
 interface MethodSelectorProps {
   results: CoverageMethodResult[];
   activeMethodId: string;
@@ -53,14 +55,6 @@ const METHOD_META: Record<string, { label: keyof typeof messages }> = {
   clusterHull: { label: 'clusterHullLabel' },
   grid: { label: 'gridLabel' },
 };
-
-const METHOD_IDS = [
-  'observed',
-  'connectivity10',
-  'connectivity30',
-  'clusterHull',
-  'grid',
-] as const;
 
 export function MethodSelector({
   results,

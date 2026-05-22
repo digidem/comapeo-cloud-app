@@ -227,4 +227,38 @@ describe('AudioPlayer', () => {
     render(<AudioPlayer {...defaultProps} />);
     expect(screen.getByText('Failed to load audio')).toBeInTheDocument();
   });
+
+  it('disables play button when blobUrl is null (not loading, not error)', () => {
+    mockImageResult = { blobUrl: null, isLoading: false, error: null };
+    render(<AudioPlayer {...defaultProps} />);
+    const button = screen.getByRole('button', { name: 'Play' });
+    expect(button).toBeDisabled();
+  });
+
+  it('renders audio element with undefined src when blobUrl is null', () => {
+    mockImageResult = { blobUrl: null, isLoading: false, error: null };
+    const { container } = render(<AudioPlayer {...defaultProps} />);
+    const audio = getAudioEl(container);
+    // blobUrl ?? undefined → src attribute should be absent or null
+    expect(audio.getAttribute('src')).toBeNull();
+    expect(audio).toBeInTheDocument();
+  });
+
+  it('enables play button when blobUrl is present', () => {
+    // default mock has blobUrl set — button should NOT be disabled
+    render(<AudioPlayer {...defaultProps} />);
+    const button = screen.getByRole('button', { name: 'Play' });
+    expect(button).not.toBeDisabled();
+  });
+
+  it('renders error state with role="alert" for accessibility', () => {
+    mockImageResult = {
+      blobUrl: null,
+      isLoading: false,
+      error: new Error('fetch failed'),
+    };
+    render(<AudioPlayer {...defaultProps} />);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Failed to load audio');
+  });
 });

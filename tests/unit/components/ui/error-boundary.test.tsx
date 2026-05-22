@@ -1,7 +1,7 @@
 import { render, screen } from '@tests/mocks/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { DefaultFallback, ErrorBoundary } from '@/components/ui/error-boundary';
 
 function ThrowError({ shouldThrow }: { shouldThrow: boolean }) {
   if (shouldThrow) {
@@ -75,5 +75,15 @@ describe('ErrorBoundary', () => {
     // The retry button should be present in the default fallback
     const retryButton = screen.getByRole('button', { name: /try again/i });
     expect(retryButton).toBeInTheDocument();
+  });
+
+  it('does not render error message paragraph when error is null', () => {
+    render(
+      <DefaultFallback error={null} onRetry={vi.fn()} />,
+    );
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Test error message'),
+    ).not.toBeInTheDocument();
   });
 });

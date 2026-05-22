@@ -241,4 +241,30 @@ describe('AppShell', () => {
       screen.getByRole('button', { name: /close menu/i }),
     ).toBeInTheDocument();
   });
+
+  it('closes mobile drawer when route changes', async () => {
+    const { rerender } = render(
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    // Open the drawer first
+    await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    expect(
+      screen.getByRole('button', { name: /close menu/i }),
+    ).toBeInTheDocument();
+
+    // Re-render with a different activeNavPath (simulates route change)
+    rerender(
+      <AppShell navItems={navItems} activeNavPath="/settings">
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    // Drawer should close on route change
+    expect(
+      screen.queryByRole('button', { name: /close menu/i }),
+    ).not.toBeInTheDocument();
+  });
 });

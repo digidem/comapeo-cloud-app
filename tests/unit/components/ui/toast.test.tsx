@@ -1,8 +1,30 @@
+import React from 'react';
 import { act, fireEvent } from '@testing-library/react';
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ToastProvider, useToast } from '@/components/ui/toast';
+
+vi.mock('@radix-ui/react-toast', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@radix-ui/react-toast')>();
+  const ActualRoot = actual.Root;
+
+  const MockedRoot = React.forwardRef<any, any>((props, ref) => {
+    // Call onOpenChange(true) on mount to cover the !open === false branch
+    // (Radix Toast never calls onOpenChange(true) in uncontrolled mode)
+    React.useEffect(() => {
+      props.onOpenChange?.(true);
+    }, []);
+    return React.createElement(ActualRoot, { ...props, ref });
+  });
+  MockedRoot.displayName = 'Root';
+
+  return {
+    ...actual,
+    Root: MockedRoot,
+  };
+});
 
 function ToastTestConsumer({
   variant = 'info',
@@ -107,5 +129,44 @@ describe('Toast', () => {
     });
     expect(screen.queryByText('Auto dismiss')).not.toBeInTheDocument();
     vi.useRealTimers();
+  });
+
+  it('useToast throws without provider', () => {
+    function BadConsumer() {
+      useToast();
+      return null;
+    }
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    expect(() => render(<BadConsumer />)).toThrow(
+      'useToast must be used within a ToastProvider',
+    );
+    consoleError.mockRestore();
+  });
+
+  it('renders optional description when provided', async () => {
+    const user = userEvent.setup();
+    renderWithToastProvider(
+      <ToastTestConsumer title="Title" description="Optional description" />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Show Toast' }));
+    expect(screen.getByText('Optional description')).toBeInTheDocument();
+  });
+
+  it('renders toast without description (no conditional description block)', async () => {
+    const user = userEvent.setup();
+    renderWithToastProvider(<ToastTestConsumer title="No desc" />);
+    await user.click(screen.getByRole('button', { name: 'Show Toast' }));
+    expect(screen.getByText('No desc')).toBeInTheDocument();
+  });
+
+  it('does not remove toast when onOpenChange fires with true (noop branch)', async () => {
+    const user = userEvent.setup();
+    renderWithToastProvider(<ToastTestConsumer title="Noop branch" />);
+    await user.click(screen.getByRole('button', { name: 'Show Toast' }));
+    // The mocked Root calls onOpenChange(true) on mount, which hits the
+    // !open === false branch (noop) — the toast must remain visible.
+    expect(screen.getByText('Noop branch')).toBeInTheDocument();
   });
 });

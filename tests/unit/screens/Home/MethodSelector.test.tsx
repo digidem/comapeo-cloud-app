@@ -1,52 +1,93 @@
-import { render, screen } from '@tests/mocks/test-utils';
-import { userEvent } from '@tests/mocks/test-utils';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { render, screen, userEvent } from '@tests/mocks/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CoverageMethodResult } from '@/hooks/useProjectCoverage';
+
+// Mock scrollIntoView which is not available in jsdom
+Element.prototype.scrollIntoView = vi.fn();
+
+/**
+ * Patch METHOD_IDS to include an entry not in METHOD_META so the
+ * `if (!meta) return null` guard is exercised in the real MethodSelector
+ * component with proper source coverage tracking.
+ *
+ * We mock the method-ids module (not the component itself) so the real
+ * MethodSelector receives the patched METHOD_IDS through its import
+ * binding. This gives us true branch coverage on line 80.
+ */
+vi.mock('@/screens/Home/method-ids', () => ({
+  METHOD_IDS: [
+    'invalid-method',
+    'observed',
+    'connectivity10',
+    'connectivity30',
+    'clusterHull',
+    'grid',
+  ],
+}));
+
 import { MethodSelector } from '@/screens/Home/MethodSelector';
 
-// Radix Select uses scrollIntoView internally which jsdom doesn't support
-beforeAll(() => {
-  Element.prototype.scrollIntoView = vi.fn();
-});
-
-const mockResults: CoverageMethodResult[] = [
-  {
-    methodId: 'observed',
+function makeResult(
+  methodId: string,
+  areaM2: number,
+): CoverageMethodResult {
+  return {
+    methodId,
     result: {
-      id: 'observed',
-      label: 'Observed Footprint',
+      id: methodId,
+      label: methodId,
       description: 'test',
       featureCollection: { type: 'FeatureCollection', features: [] },
       previewFeatureCollection: { type: 'FeatureCollection', features: [] },
-      areaM2: 50000,
+      areaM2,
       metadata: {},
     },
-  },
-  { methodId: 'connectivity10' },
-  { methodId: 'connectivity30' },
-  { methodId: 'clusterHull' },
-  { methodId: 'grid' },
-];
+  };
+}
 
 describe('MethodSelector', () => {
-  it('renders Map Layer label and select with all 5 method options', async () => {
-    const user = userEvent.setup();
+  const results: CoverageMethodResult[] = [
+    makeResult('observed', 50000),
+    makeResult('grid', 120000),
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders the Map Layer label and export button', () => {
     render(
       <MethodSelector
-        results={mockResults}
+        results={results}
         activeMethodId="observed"
-        onActivate={() => {}}
-        onExport={() => {}}
+        onActivate={vi.fn()}
+        onExport={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('Map Layer')).toBeVisible();
+    expect(screen.getByText('Map Layer')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Export map layer' }),
+    ).toBeInTheDocument();
+  });
 
-    // Open the select dropdown
-    await user.click(screen.getByRole('combobox'));
+  it('renders all 5 valid method options in the select dropdown', async () => {
+    const user = userEvent.setup();
 
-    // Verify all 5 method options are present
+    render(
+      <MethodSelector
+        results={results}
+        activeMethodId="observed"
+        onActivate={vi.fn()}
+        onExport={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByRole('combobox');
+    await user.click(trigger);
+
+    // Radix Select renders items in a portal; query the full document
     expect(
       screen.getByRole('option', { name: 'Observed Footprint' }),
     ).toBeInTheDocument();
@@ -64,60 +105,100 @@ describe('MethodSelector', () => {
     ).toBeInTheDocument();
   });
 
-  it('calls onActivate when a method is selected', async () => {
-    const handleActivate = vi.fn();
+  it('does NOT render options for method IDs missing from METHOD_META', async () => {
     const user = userEvent.setup();
+
     render(
       <MethodSelector
-        results={mockResults}
+        results={results}
         activeMethodId="observed"
-        onActivate={handleActivate}
-        onExport={() => {}}
+        onActivate={vi.fn()}
+        onExport={vi.fn()}
       />,
     );
 
-    await user.click(screen.getByRole('combobox'));
-    await user.click(screen.getByRole('option', { name: '10km Connectivity' }));
+    const trigger = screen.getByRole('combobox');
+    await user.click(trigger);
 
-    expect(handleActivate).toHaveBeenCalledWith('connectivity10');
+    // 'invalid-method' is in the patched METHOD_IDS but not METHOD_META,
+    // so the !meta null-return branch was hit and no option rendered
+    expect(
+      screen.queryByRole('option', { name: /invalid/i }),
+    ).not.toBeInTheDocument();
   });
 
-  it('calls onExport when export button clicked', async () => {
-    const handleExport = vi.fn();
-    const user = userEvent.setup();
+  it('disables the export button when active method has no result', () => {
     render(
       <MethodSelector
-        results={mockResults}
+        results={[]}
         activeMethodId="observed"
-        onActivate={() => {}}
-        onExport={handleExport}
+        onActivate={vi.fn()}
+        onExport={vi.fn()}
       />,
     );
 
-    // "observed" has a result, so export button should be enabled
-    const exportButton = screen.getByRole('button', {
-      name: 'Export map layer',
-    });
-    expect(exportButton).toBeEnabled();
-
-    await user.click(exportButton);
-    expect(handleExport).toHaveBeenCalledOnce();
-  });
-
-  it('export button is disabled when no result exists for active method', () => {
-    render(
-      <MethodSelector
-        results={mockResults}
-        activeMethodId="connectivity10"
-        onActivate={() => {}}
-        onExport={() => {}}
-      />,
-    );
-
-    // "connectivity10" has no result in mockResults (only methodId, no result property)
     const exportButton = screen.getByRole('button', {
       name: 'Export map layer',
     });
     expect(exportButton).toBeDisabled();
+  });
+
+  it('enables the export button when active method has a result', () => {
+    render(
+      <MethodSelector
+        results={results}
+        activeMethodId="observed"
+        onActivate={vi.fn()}
+        onExport={vi.fn()}
+      />,
+    );
+
+    const exportButton = screen.getByRole('button', {
+      name: 'Export map layer',
+    });
+    expect(exportButton).not.toBeDisabled();
+  });
+
+  it('calls onActivate when a different method is selected', async () => {
+    const user = userEvent.setup();
+    const onActivate = vi.fn();
+
+    render(
+      <MethodSelector
+        results={results}
+        activeMethodId="observed"
+        onActivate={onActivate}
+        onExport={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByRole('combobox');
+    await user.click(trigger);
+
+    const gridOption = screen.getByRole('option', { name: 'Occupied Grid' });
+    await user.click(gridOption);
+
+    expect(onActivate).toHaveBeenCalledWith('grid');
+  });
+
+  it('calls onExport when the export button is clicked', async () => {
+    const user = userEvent.setup();
+    const onExport = vi.fn();
+
+    render(
+      <MethodSelector
+        results={results}
+        activeMethodId="observed"
+        onActivate={vi.fn()}
+        onExport={onExport}
+      />,
+    );
+
+    const exportButton = screen.getByRole('button', {
+      name: 'Export map layer',
+    });
+    await user.click(exportButton);
+
+    expect(onExport).toHaveBeenCalledOnce();
   });
 });
