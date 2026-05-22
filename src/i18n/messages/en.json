@@ -539,9 +539,6 @@
   "home.intro.title": {
     "defaultMessage": "Welcome to CoMapeo Cloud"
   },
-  "home.localMode": {
-    "defaultMessage": "Local Mode"
-  },
   "home.method.clusterHull.label": {
     "defaultMessage": "Cluster Hull"
   },

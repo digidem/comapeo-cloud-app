@@ -1486,4 +1486,357 @@ describe('HomeScreen', () => {
     // When server is not found after adding, sync should NOT be called
     expect(syncFn).not.toHaveBeenCalled();
   });
+
+  // Phase 9: store↔reducer bidirectional sync effects (lines 560-637)
+
+  it('syncs store→reducer when project changes externally (Effect 2 SELECT_PROJECT)', async () => {
+    // Let the auto-select effect pick the most recent project (p2) on mount.
+    // Then externally change the store to p1 and verify Effect 2 syncs it.
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Project Alpha',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+        {
+          localId: 'p2',
+          name: 'Project Beta',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    renderWithShell(<HomeScreen />);
+
+    // Auto-select picks the most recently updated project (p2)
+    await waitFor(() => {
+      expect(screen.getByTestId('shell-workspace')).toHaveTextContent(
+        'Project Beta',
+      );
+    });
+
+    // Simulate external change: drawer/sidebar selects a different project
+    useProjectStore.setState({ selectedProjectId: 'p1' });
+
+    // Effect 2 detects the external change and syncs to reducer
+    await waitFor(() => {
+      expect(screen.getByTestId('shell-workspace')).toHaveTextContent(
+        'Project Alpha',
+      );
+    });
+  });
+
+  it('syncs store→reducer CLEAR_PROJECT when store becomes null externally', async () => {
+    // Let the auto-select effect pick the most recent project (p2) on mount.
+    // Then externally clear the store and verify the reducer clears the selection
+    // and the auto-select is suppressed via userClearedProjectRef.
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Sync Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+        {
+          localId: 'p2',
+          name: 'Fallback Project',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    renderWithShell(<HomeScreen />);
+
+    // Auto-select picks the most recently updated project (p2)
+    await waitFor(() => {
+      expect(screen.getByTestId('shell-workspace')).toHaveTextContent(
+        'Fallback Project',
+      );
+    });
+
+    // Simulate external clear: user clears project from drawer
+    useProjectStore.setState({ selectedProjectId: null });
+
+    // Effect 2 dispatches CLEAR_PROJECT and sets userClearedProjectRef
+    // The shell workspace should no longer show a project name (cleared)
+    await waitFor(() => {
+      expect(screen.queryByTestId('shell-workspace')).not.toBeInTheDocument();
+    });
+
+    // userClearedProjectRef prevents auto-select: Fallback Project should
+    // NOT be auto-selected after the explicit clear
+    expect(screen.queryByText('Fallback Project')).not.toBeInTheDocument();
+  });
+
+  it('respects userClearedProjectRef — skips auto-select after explicit clear', async () => {
+    // Set up auth store with servers so intro page is NOT shown
+    // (otherwise the intro page would hide the project list behavior)
+    const { useAuthStore } = await import('@/stores/auth-store');
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'srv-1',
+          label: 'Archive',
+          baseUrl: 'https://example.com',
+          token: 't',
+          status: 'idle',
+        },
+      ],
+    });
+
+    mockUseArchiveStatus.mockReturnValue({
+      servers: [
+        {
+          id: 'srv-1',
+          label: 'Archive',
+          baseUrl: 'https://example.com',
+          isSyncing: false,
+          error: null,
+          lastSyncedAt: null,
+          hasCredentials: true,
+          isStale: false,
+        },
+      ],
+      anyError: false,
+      anySyncing: false,
+    });
+
+    // Let the auto-select effect pick the most recent project (p2) on mount.
+    // Then externally clear the store and verify the auto-select is suppressed.
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Current Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+        {
+          localId: 'p2',
+          name: 'Newer Project',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    renderWithShell(<HomeScreen />);
+
+    // Auto-select picks the most recently updated project (p2)
+    await waitFor(() => {
+      expect(screen.getByTestId('shell-workspace')).toHaveTextContent(
+        'Newer Project',
+      );
+    });
+
+    // Externally clear the project (simulating user clearing from drawer)
+    useProjectStore.setState({ selectedProjectId: null });
+
+    // Wait for the reducer to reflect the cleared state (workspace gone)
+    await waitFor(() => {
+      expect(screen.queryByTestId('shell-workspace')).not.toBeInTheDocument();
+    });
+
+    // Verify that auto-select did NOT kick in and select 'Newer Project'
+    // The userClearedProjectRef flag consumed by the auto-select effect
+    // should prevent the auto-selection
+    expect(screen.queryByText('Newer Project')).not.toBeInTheDocument();
+
+    // Clean up
+    useAuthStore.setState({ servers: [] });
+  });
+
+  it('syncs store→reducer when server changes externally (Effect 2 SELECT_SERVER)', async () => {
+    const { useAuthStore } = await import('@/stores/auth-store');
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'srv-1',
+          label: 'Archive One',
+          baseUrl: 'https://a1.example.com',
+          token: 't1',
+          status: 'idle',
+        },
+        {
+          id: 'srv-2',
+          label: 'Archive Two',
+          baseUrl: 'https://a2.example.com',
+          token: 't2',
+          status: 'idle',
+        },
+      ],
+    });
+
+    mockUseArchiveStatus.mockReturnValue({
+      servers: [
+        {
+          id: 'srv-1',
+          label: 'Archive One',
+          baseUrl: 'https://a1.example.com',
+          isSyncing: false,
+          error: null,
+          lastSyncedAt: null,
+          hasCredentials: true,
+          isStale: false,
+        },
+        {
+          id: 'srv-2',
+          label: 'Archive Two',
+          baseUrl: 'https://a2.example.com',
+          isSyncing: false,
+          error: null,
+          lastSyncedAt: null,
+          hasCredentials: true,
+          isStale: false,
+        },
+      ],
+      anyError: false,
+      anySyncing: false,
+    });
+
+    // Start with srv-1 selected in store
+    useProjectStore.setState({
+      selectedProjectId: null,
+      selectedServerId: 'srv-1',
+    });
+
+    renderWithShell(<HomeScreen />);
+
+    // Effect 2 syncs store→reducer: reducer shows Archive One
+    await screen.findByRole('heading', { name: 'Archive One' });
+
+    // Simulate external change: drawer/sidebar selects a different server
+    useProjectStore.setState({ selectedServerId: 'srv-2' });
+
+    // Effect 2 detects the change and syncs to reducer
+    await screen.findByRole('heading', { name: 'Archive Two' });
+
+    // Clean up
+    useAuthStore.setState({ servers: [] });
+  });
+
+  it('skips Effect 2 store→reducer sync when project already matches reducer state', async () => {
+    // Both store and reducer start null (default beforeEach state)
+    // When Effect 2 fires: liveProjectId (null) === state.selectedProjectId (null)
+    // so it should skip without dispatching
+
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Only Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    renderWithShell(<HomeScreen />);
+
+    // Auto-select should kick in and select 'Only Project' since
+    // Effect 2 skipped (both were null/empty) and auto-select runs normally
+    await waitFor(() => {
+      expect(screen.getByTestId('shell-workspace')).toHaveTextContent(
+        'Only Project',
+      );
+    });
+
+    // Now both store and reducer have 'p1'. Set store to 'p1' again
+    // Effect 2 should skip because liveProjectId === state.selectedProjectId
+    useProjectStore.setState({ selectedProjectId: 'p1' });
+
+    // The workspace should remain unchanged (no double-dispatch)
+    await waitFor(() => {
+      expect(screen.getByTestId('shell-workspace')).toHaveTextContent(
+        'Only Project',
+      );
+    });
+  });
+
+  it('skips Effect 2 store→reducer sync when server already matches reducer state', async () => {
+    const { useAuthStore } = await import('@/stores/auth-store');
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'srv-1',
+          label: 'Stable Archive',
+          baseUrl: 'https://stable.example.com',
+          token: 't',
+          status: 'idle',
+        },
+      ],
+    });
+
+    mockUseArchiveStatus.mockReturnValue({
+      servers: [
+        {
+          id: 'srv-1',
+          label: 'Stable Archive',
+          baseUrl: 'https://stable.example.com',
+          isSyncing: false,
+          error: null,
+          lastSyncedAt: null,
+          hasCredentials: true,
+          isStale: false,
+        },
+      ],
+      anyError: false,
+      anySyncing: false,
+    });
+
+    // Store has srv-1, reducer will sync to srv-1 on mount
+    useProjectStore.setState({
+      selectedProjectId: null,
+      selectedServerId: 'srv-1',
+    });
+
+    renderWithShell(<HomeScreen />);
+
+    // Wait for server detail to appear (reducer synced from store)
+    await screen.findByRole('heading', { name: 'Stable Archive' });
+
+    // Set store to the same server again — Effect 2 should skip
+    // because liveServerId ('srv-1') === state.selectedServerId ('srv-1')
+    useProjectStore.setState({ selectedServerId: 'srv-1' });
+
+    // Server detail should still be visible (no disruption from unnecessary dispatch)
+    expect(
+      screen.getByRole('heading', { name: 'Stable Archive' }),
+    ).toBeInTheDocument();
+
+    // Clean up
+    useAuthStore.setState({ servers: [] });
+  });
 });

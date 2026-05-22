@@ -28,7 +28,7 @@ async function createProject(
     .getByRole('dialog')
     .getByRole('button', { name: 'Create', exact: true })
     .click();
-  await expect(page.getByRole('heading', { name })).toBeVisible({
+  await expect(page.locator('h2', { hasText: name })).toBeVisible({
     timeout: 5_000,
   });
 }
@@ -206,7 +206,9 @@ test.describe('Critical User Flows', () => {
     );
 
     // Observation detail renders with h1 heading
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Observation' }),
+    ).toBeVisible();
 
     // "Back to Data" link visible — arrow icon with "Data" label
     await expect(

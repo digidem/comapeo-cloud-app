@@ -141,7 +141,6 @@
   "home.import.processing": "Procesando...",
   "home.import.successWithSkipped": "{imported} importadas, {skipped} omitidas",
   "home.import.tryAgain": "Intentar de nuevo",
-  "home.localMode": "Modo local",
   "home.method.clusterHull.label": "Envolvente de clúster",
   "home.method.connectivity10.label": "Conectividad 10km",
   "home.method.connectivity30.label": "Conectividad 30km",
