@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@tests/mocks/test-utils';
+import { render, waitFor } from '@tests/mocks/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useProjects } from '@/hooks/useProjects';
