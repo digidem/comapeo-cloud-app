@@ -14,6 +14,7 @@ import { useAlerts } from '@/hooks/useAlerts';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjects } from '@/hooks/useProjects';
 import { useProjectStore } from '@/stores/project-store';
+import { useViewModeStore } from '@/stores/view-mode-store';
 
 const messages = defineMessages({
   title: {
@@ -93,7 +94,8 @@ export function DataScreen() {
   const projectsQuery = useProjects();
   const observationsQuery = useObservations(selectedProjectId);
   const alertsQuery = useAlerts(selectedProjectId);
-  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
+  const viewMode = useViewModeStore((s) => s.viewMode);
+  const setViewMode = useViewModeStore((s) => s.setViewMode);
   const [activeTab, setActiveTab] = useState('observations');
 
   const projects = projectsQuery.data ?? [];

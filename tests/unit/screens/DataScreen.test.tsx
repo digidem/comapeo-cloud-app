@@ -2,6 +2,7 @@ import { render, screen } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DataScreen } from '@/screens/DataScreen';
+import { useViewModeStore } from '@/stores/view-mode-store';
 
 // --- Shared mock factories ---
 
@@ -153,6 +154,7 @@ function resetMocks() {
   mockProjectsQuery = { data: defaultProjects, isPending: false };
   mockObservationsQuery = { data: defaultObservations, isPending: false };
   mockAlertsQuery = { data: defaultAlerts, isPending: false };
+  useViewModeStore.setState({ viewMode: 'grid' });
 }
 
 describe('DataScreen', () => {
