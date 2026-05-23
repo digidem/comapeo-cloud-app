@@ -92,15 +92,13 @@ describe('AlertCard', () => {
     expect(screen.queryByText('Alert')).not.toBeInTheDocument();
   });
 
-  it('applies info severity variant when severity is unrecognized', () => {
+  it('does not render severity badge when severity is unrecognized', () => {
     const alert = makeAlert({
       metadata: { severity: 'critical' },
     });
     render(<AlertCard alert={alert} />);
-    // Should render "Unknown" for unrecognized severity
-    expect(screen.getByText('Unknown')).toBeInTheDocument();
-    const badge = screen.getByText('Unknown').closest('[data-variant]');
-    expect(badge).toHaveAttribute('data-variant', 'info');
+    // Unrecognized severity should not render any badge at all
+    expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
   });
 
   it('renders coordinates when geometry is a Point', () => {

@@ -8,6 +8,7 @@ import { useShellSlot } from '@/components/layout/shell-slot';
 import { MapContainer } from '@/components/shared/MapContainer';
 import {
   Badge,
+  isKnownSeverity,
   severityToLabel,
   severityToVariant,
 } from '@/components/ui/badge';
@@ -227,7 +228,9 @@ export function AlertDetailScreen() {
 
       {/* Alert header: badges */}
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={variant}>{severityLabel}</Badge>
+        {isKnownSeverity(severity) && (
+          <Badge variant={variant}>{severityLabel}</Badge>
+        )}
         {alertType && (
           <span className="rounded-pill bg-surface-container-low px-3 py-1 text-sm font-semibold text-text">
             {alertType}

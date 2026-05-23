@@ -3,6 +3,7 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import {
   Badge,
+  isKnownSeverity,
   severityToLabel,
   severityToVariant,
 } from '@/components/ui/badge';
@@ -93,7 +94,9 @@ export function AlertCard({ alert }: AlertCardProps) {
     <div data-testid="alert-card" className="flex flex-col gap-2">
       {/* Top row: severity badge + type badge + location */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <Badge variant={variant}>{severityLabel}</Badge>
+        {isKnownSeverity(severity) && (
+          <Badge variant={variant}>{severityLabel}</Badge>
+        )}
         {alertType && (
           <span className="rounded-pill bg-surface-container-low px-2.5 py-0.5 text-xs font-medium text-text">
             {alertType}

@@ -60,6 +60,13 @@ export function severityToLabel(
   }
 }
 
+/** Returns true only for known severity values (high/medium/low). */
+export function isKnownSeverity(
+  severity: string | undefined,
+): severity is string {
+  return ['high', 'medium', 'low'].includes(severity?.toLowerCase() ?? '');
+}
+
 export interface BadgeProps {
   variant: BadgeVariant;
   children: ReactNode;
