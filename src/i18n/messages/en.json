@@ -185,6 +185,12 @@
   "data.observationsError": {
     "defaultMessage": "Failed to load observations. Please try again."
   },
+  "data.switchToGridView": {
+    "defaultMessage": "Switch to grid view"
+  },
+  "data.switchToMapView": {
+    "defaultMessage": "Switch to map view"
+  },
   "data.tabs.alerts": {
     "defaultMessage": "Alerts"
   },
@@ -193,12 +199,6 @@
   },
   "data.title": {
     "defaultMessage": "Data"
-  },
-  "data.switchToMapView": {
-    "defaultMessage": "Switch to map view"
-  },
-  "data.switchToGridView": {
-    "defaultMessage": "Switch to grid view"
   },
   "data.untitledProject": {
     "defaultMessage": "Untitled Project"
