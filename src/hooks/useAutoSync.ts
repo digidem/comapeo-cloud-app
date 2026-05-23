@@ -62,8 +62,7 @@ export function useAutoSync(options?: { pollIntervalMs?: number }): void {
       // Surface any errors for observability (non-critical — don't throw)
       for (const r of results) {
         if (r.status === 'rejected') {
-          // Sync errors are surfaced via auth store status updates.
-          // Log to console for debugging but don't propagate.
+          console.warn('[useAutoSync] sync error:', r.reason);
         }
       }
     } catch {

@@ -4,10 +4,6 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Button } from '@/components/ui/button';
 
 const messages = defineMessages({
-  refresh: {
-    id: 'common.refresh',
-    defaultMessage: 'Refresh',
-  },
   refreshAria: {
     id: 'common.refreshAria',
     defaultMessage: 'Refresh data',

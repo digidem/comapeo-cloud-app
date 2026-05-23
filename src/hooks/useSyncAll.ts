@@ -51,14 +51,10 @@ export function useSyncAll(): {
       void queryClient.invalidateQueries({ queryKey: ['alerts'] });
 
       // Surface any errors (but don't throw)
-      const errors = results
-        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-        .map((r) =>
-          r.reason instanceof Error ? r.reason.message : String(r.reason),
-        );
-
-      if (errors.length > 0) {
-        // Errors are surfaced via auth store status updates — swallow here
+      for (const r of results) {
+        if (r.status === 'rejected') {
+          console.warn('[useSyncAll] sync error:', r.reason);
+        }
       }
     } catch {
       // Unexpected error — swallow to avoid unhandled rejections
