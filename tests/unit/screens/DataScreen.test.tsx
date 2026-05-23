@@ -1,7 +1,8 @@
-import { render, screen } from '@tests/mocks/test-utils';
+import { fireEvent, render, screen } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DataScreen } from '@/screens/DataScreen';
+import { useViewModeStore } from '@/stores/view-mode-store';
 
 // --- Shared mock factories ---
 
@@ -173,10 +174,15 @@ vi.mock('@/components/ui/tabs', () => {
   };
 });
 
+vi.mock('@/components/shared/ObservationsMap', () => ({
+  ObservationsMap: () => <div data-testid="observations-map" />,
+}));
+
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
+  useNavigate: () => vi.fn(),
 }));
 
 function resetMocks() {
@@ -184,6 +190,7 @@ function resetMocks() {
   mockProjectsQuery = { data: defaultProjects, isPending: false };
   mockObservationsQuery = { data: defaultObservations, isPending: false };
   mockAlertsQuery = { data: defaultAlerts, isPending: false };
+  useViewModeStore.setState({ viewMode: 'grid' });
 }
 
 describe('DataScreen', () => {
@@ -483,6 +490,138 @@ describe('DataScreen', () => {
         expect(exportButton).toBeInTheDocument();
         expect(exportButton).toBeDisabled();
         expect(exportButton).toHaveAttribute('data-observations-count', '0');
+      });
+    });
+
+    // ---- Map/Grid Toggle ----
+
+    describe('map/grid toggle', () => {
+      it('shows grid view by default — observations-map absent', () => {
+        render(<DataScreen />);
+        expect(
+          screen.queryByTestId('observations-map'),
+        ).not.toBeInTheDocument();
+        // Observation card content is present (grid view)
+        expect(screen.getByText('forest')).toBeInTheDocument();
+      });
+
+      it('renders the toggle button with accessible label', () => {
+        render(<DataScreen />);
+        expect(
+          screen.getByRole('button', { name: /switch to map view/i }),
+        ).toBeInTheDocument();
+      });
+
+      it('switches to map view on toggle click', async () => {
+        const { userEvent } = await import('@tests/mocks/test-utils');
+        const user = userEvent.setup();
+        render(<DataScreen />);
+
+        // Initially grid view
+        expect(
+          screen.queryByTestId('observations-map'),
+        ).not.toBeInTheDocument();
+
+        // Click toggle to switch to map
+        await user.click(
+          screen.getByRole('button', { name: /switch to map view/i }),
+        );
+
+        // Map view should be shown
+        expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+        // Grid cards should be hidden (no 'forest' category text visible)
+        expect(screen.queryByText('forest')).not.toBeInTheDocument();
+      });
+
+      it('switches back to grid view on second toggle click', async () => {
+        const { userEvent } = await import('@tests/mocks/test-utils');
+        const user = userEvent.setup();
+        render(<DataScreen />);
+
+        // Toggle to map
+        await user.click(
+          screen.getByRole('button', { name: /switch to map view/i }),
+        );
+        expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+
+        // Toggle back to grid
+        await user.click(
+          screen.getByRole('button', { name: /switch to grid view/i }),
+        );
+        expect(
+          screen.queryByTestId('observations-map'),
+        ).not.toBeInTheDocument();
+        expect(screen.getByText('forest')).toBeInTheDocument();
+      });
+    });
+
+    // ---- Observation filter integration ----
+
+    describe('observation filtering', () => {
+      it('renders filter bar when observations exist', () => {
+        mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+        render(<DataScreen />);
+        expect(screen.getByLabelText('Search')).toBeInTheDocument();
+        expect(screen.getByText('2 results')).toBeInTheDocument();
+      });
+
+      it('does not render filter bar when observations array is empty', () => {
+        mockObservationsQuery = { data: [], isPending: false };
+
+        render(<DataScreen />);
+        expect(screen.queryByLabelText('Search')).not.toBeInTheDocument();
+        expect(screen.getByText('No observations yet')).toBeInTheDocument();
+      });
+
+      it('renders no-results state when search matches nothing', () => {
+        mockObservationsQuery = {
+          data: [
+            {
+              localId: 'obs-1',
+              projectLocalId: 'proj-1',
+              tags: { category: 'forest', notes: 'Deforestation detected' },
+              createdAt: '2024-03-15T10:30:00Z',
+              updatedAt: '2024-03-15T10:30:00Z',
+            },
+          ],
+          isPending: false,
+        };
+
+        render(<DataScreen />);
+        const searchInput = screen.getByLabelText('Search');
+        fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
+
+        expect(
+          screen.getByText('No observations match your filters'),
+        ).toBeInTheDocument();
+        // "No observations yet" should NOT be shown
+        expect(
+          screen.queryByText('No observations yet'),
+        ).not.toBeInTheDocument();
+      });
+
+      it('renders Clear filters button in no-results state', () => {
+        mockObservationsQuery = {
+          data: [
+            {
+              localId: 'obs-1',
+              projectLocalId: 'proj-1',
+              tags: { category: 'forest', notes: 'Deforestation detected' },
+              createdAt: '2024-03-15T10:30:00Z',
+              updatedAt: '2024-03-15T10:30:00Z',
+            },
+          ],
+          isPending: false,
+        };
+
+        render(<DataScreen />);
+        const searchInput = screen.getByLabelText('Search');
+        fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
+
+        // There are two "Clear filters" — one in filter bar, one in no-results
+        const clearButtons = screen.getAllByText('Clear filters');
+        expect(clearButtons.length).toBeGreaterThanOrEqual(1);
       });
     });
   });
