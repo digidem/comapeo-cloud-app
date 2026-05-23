@@ -170,7 +170,6 @@ export function DataScreen() {
                     onClick={() => setViewMode('map')}
                     className="inline-flex h-11 w-11 items-center justify-center rounded-button bg-surface-card text-text-muted hover:bg-surface-container-low hover:text-text transition-colors min-h-[44px]"
                     aria-label={intl.formatMessage(messages.switchToMapView)}
-                    aria-pressed={false}
                     title={intl.formatMessage(messages.viewMap)}
                   >
                     <svg
@@ -195,7 +194,6 @@ export function DataScreen() {
                     onClick={() => setViewMode('grid')}
                     className="inline-flex h-11 w-11 items-center justify-center rounded-button bg-surface-card text-text-muted hover:bg-surface-container-low hover:text-text transition-colors min-h-[44px]"
                     aria-label={intl.formatMessage(messages.switchToGridView)}
-                    aria-pressed={true}
                     title={intl.formatMessage(messages.viewGrid)}
                   >
                     <svg
