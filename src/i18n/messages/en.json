@@ -20,9 +20,6 @@
   "alertCard.sourceLabel": {
     "defaultMessage": "Source"
   },
-  "alertCard.typeLabel": {
-    "defaultMessage": "Type"
-  },
   "alertDetail.createdAt": {
     "defaultMessage": "Created"
   },

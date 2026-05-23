@@ -8,10 +8,6 @@ import {
 import type { Alert } from '@/lib/db';
 
 const messages = defineMessages({
-  typeLabel: {
-    id: 'alertCard.typeLabel',
-    defaultMessage: 'Type',
-  },
   sourceLabel: {
     id: 'alertCard.sourceLabel',
     defaultMessage: 'Source',
@@ -33,6 +29,7 @@ const messages = defineMessages({
 function formatDate(dateStr: string): string {
   // Use UTC to avoid timezone shifts — API dates are ISO strings
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(d.getUTCDate()).padStart(2, '0');
   const yyyy = d.getUTCFullYear();

@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
-import { defineMessages, useIntl } from 'react-intl';
+import { defineMessages } from 'react-intl';
+import type { IntlShape } from 'react-intl';
 
 const messages = defineMessages({
   severityHigh: {
@@ -45,7 +46,7 @@ export function severityToVariant(severity: string | undefined): BadgeVariant {
 
 export function severityToLabel(
   severity: string | undefined,
-  intl: ReturnType<typeof useIntl>,
+  intl: IntlShape,
 ): string {
   switch (severity?.toLowerCase()) {
     case 'high':
