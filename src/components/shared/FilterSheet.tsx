@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 
-import { useRef } from 'react';
+import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
@@ -30,7 +30,9 @@ interface FilterSheetProps extends ObservationFilterBarProps {
 
 function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
   const intl = useIntl();
-  const portalRef = useRef<HTMLDivElement>(null);
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(
+    null,
+  );
 
   function handleApply() {
     onOpenChange(false);
@@ -97,11 +99,11 @@ function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
 
           {/* Portal container for Select dropdowns — renders inside Dialog.Content
               so clicks on options aren't intercepted by the Dialog's DismissableLayer */}
-          <div ref={portalRef} />
+          <div ref={setPortalContainer} />
 
           {/* Filter controls */}
           <div className="overflow-y-auto p-4">
-            <SelectPortalProvider container={portalRef.current}>
+            <SelectPortalProvider container={portalContainer}>
               <ObservationFilterBar {...filterProps} />
             </SelectPortalProvider>
           </div>
