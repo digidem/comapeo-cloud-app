@@ -1,4 +1,4 @@
-import { render, screen } from '@tests/mocks/test-utils';
+import { fireEvent, render, screen } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DataScreen } from '@/screens/DataScreen';
@@ -420,6 +420,76 @@ describe('DataScreen', () => {
     it('renders Data title', () => {
       render(<DataScreen />);
       expect(screen.getByText('Data')).toBeInTheDocument();
+    });
+
+    // ---- Observation filter integration ----
+
+    describe('observation filtering', () => {
+      it('renders filter bar when observations exist', () => {
+        mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+        render(<DataScreen />);
+        expect(screen.getByLabelText('Search')).toBeInTheDocument();
+        expect(screen.getByText('2 results')).toBeInTheDocument();
+      });
+
+      it('does not render filter bar when observations array is empty', () => {
+        mockObservationsQuery = { data: [], isPending: false };
+
+        render(<DataScreen />);
+        expect(screen.queryByLabelText('Search')).not.toBeInTheDocument();
+        expect(screen.getByText('No observations yet')).toBeInTheDocument();
+      });
+
+      it('renders no-results state when search matches nothing', () => {
+        mockObservationsQuery = {
+          data: [
+            {
+              localId: 'obs-1',
+              projectLocalId: 'proj-1',
+              tags: { category: 'forest', notes: 'Deforestation detected' },
+              createdAt: '2024-03-15T10:30:00Z',
+              updatedAt: '2024-03-15T10:30:00Z',
+            },
+          ],
+          isPending: false,
+        };
+
+        render(<DataScreen />);
+        const searchInput = screen.getByLabelText('Search');
+        fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
+
+        expect(
+          screen.getByText('No observations match your filters'),
+        ).toBeInTheDocument();
+        // "No observations yet" should NOT be shown
+        expect(
+          screen.queryByText('No observations yet'),
+        ).not.toBeInTheDocument();
+      });
+
+      it('renders Clear filters button in no-results state', () => {
+        mockObservationsQuery = {
+          data: [
+            {
+              localId: 'obs-1',
+              projectLocalId: 'proj-1',
+              tags: { category: 'forest', notes: 'Deforestation detected' },
+              createdAt: '2024-03-15T10:30:00Z',
+              updatedAt: '2024-03-15T10:30:00Z',
+            },
+          ],
+          isPending: false,
+        };
+
+        render(<DataScreen />);
+        const searchInput = screen.getByLabelText('Search');
+        fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
+
+        // There are two "Clear filters" — one in filter bar, one in no-results
+        const clearButtons = screen.getAllByText('Clear filters');
+        expect(clearButtons.length).toBeGreaterThanOrEqual(1);
+      });
     });
   });
 });
