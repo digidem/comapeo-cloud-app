@@ -134,6 +134,79 @@ export function DataScreen() {
   );
   useShellSlot(shellSlot);
 
+  const filteredObs = obsFilters.filteredObservations;
+
+  const observationsContent = useMemo(() => {
+    if (filteredObs.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
+          <span className="text-text-muted text-sm">
+            {intl.formatMessage(messages.noResults)}
+          </span>
+          <button
+            type="button"
+            className="text-primary text-sm font-medium hover:underline cursor-pointer"
+            onClick={obsFilters.reset}
+          >
+            {intl.formatMessage({
+              id: 'data.filters.clear',
+              defaultMessage: 'Clear filters',
+            })}
+          </button>
+        </div>
+      );
+    }
+    if (viewMode === 'map') {
+      return (
+        <div className="mt-4">
+          <ObservationsMap
+            observations={filteredObs}
+            onMarkerClick={(observationId) =>
+              navigate({
+                to: '/data/observations/$observationId',
+                params: { observationId },
+              })
+            }
+          />
+        </div>
+      );
+    }
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        {filteredObs.map((obs) => (
+          <Link
+            key={obs.localId}
+            to="/data/observations/$observationId"
+            params={{ observationId: obs.localId }}
+            className="no-underline"
+          >
+            <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-text">
+                  {obs.tags?.category
+                    ? String(obs.tags.category)
+                    : intl.formatMessage(messages.observationFallback)}
+                </span>
+                {obs.lat !== undefined && obs.lon !== undefined && (
+                  <span className="text-xs text-text-muted">
+                    {obs.lat.toFixed(4)}, {obs.lon.toFixed(4)}
+                  </span>
+                )}
+                <span className="text-xs text-text-muted">
+                  {new Date(obs.createdAt).toLocaleDateString()}
+                </span>
+                <MediaPreview
+                  observationLocalId={obs.localId}
+                  tags={obs.tags}
+                />
+              </div>
+            </Card>
+          </Link>
+        ))}
+      </div>
+    );
+  }, [filteredObs, viewMode, navigate, intl, obsFilters]);
+
   // No project selected
   if (!selectedProjectId || !selectedProject) {
     if (projectsQuery.isPending) {
@@ -278,8 +351,6 @@ export function DataScreen() {
               );
             }
 
-            const filteredObs = obsFilters.filteredObservations;
-
             return (
               <>
                 {/* Mobile: filter button that opens bottom sheet */}
@@ -343,70 +414,7 @@ export function DataScreen() {
                     onClear={obsFilters.reset}
                   />
                 </div>
-                {filteredObs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
-                    <span className="text-text-muted text-sm">
-                      {intl.formatMessage(messages.noResults)}
-                    </span>
-                    <button
-                      type="button"
-                      className="text-primary text-sm font-medium hover:underline cursor-pointer"
-                      onClick={obsFilters.reset}
-                    >
-                      {intl.formatMessage({
-                        id: 'data.filters.clear',
-                        defaultMessage: 'Clear filters',
-                      })}
-                    </button>
-                  </div>
-                ) : viewMode === 'map' ? (
-                  <div className="mt-4">
-                    <ObservationsMap
-                      observations={filteredObs}
-                      onMarkerClick={(observationId) =>
-                        navigate({
-                          to: '/data/observations/$observationId',
-                          params: { observationId },
-                        })
-                      }
-                    />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-                    {filteredObs.map((obs) => (
-                      <Link
-                        key={obs.localId}
-                        to="/data/observations/$observationId"
-                        params={{ observationId: obs.localId }}
-                        className="no-underline"
-                      >
-                        <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-sm font-medium text-text">
-                              {obs.tags?.category
-                                ? String(obs.tags.category)
-                                : intl.formatMessage(
-                                    messages.observationFallback,
-                                  )}
-                            </span>
-                            {obs.lat !== undefined && obs.lon !== undefined && (
-                              <span className="text-xs text-text-muted">
-                                {obs.lat.toFixed(4)}, {obs.lon.toFixed(4)}
-                              </span>
-                            )}
-                            <span className="text-xs text-text-muted">
-                              {new Date(obs.createdAt).toLocaleDateString()}
-                            </span>
-                            <MediaPreview
-                              observationLocalId={obs.localId}
-                              tags={obs.tags}
-                            />
-                          </div>
-                        </Card>
-                      </Link>
-                    ))}
-                  </div>
-                )}
+                {observationsContent}
               </>
             );
           })()}
