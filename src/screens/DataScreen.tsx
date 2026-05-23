@@ -1,15 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Link } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { AlertCard } from '@/components/shared/AlertCard';
+import { FilterSheet } from '@/components/shared/FilterSheet';
 import { MediaPreview } from '@/components/shared/MediaPreview';
+import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAlerts } from '@/hooks/useAlerts';
+import { useObservationFilters } from '@/hooks/useObservationFilters';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjects } from '@/hooks/useProjects';
 import { useProjectStore } from '@/stores/project-store';
@@ -67,6 +71,14 @@ const messages = defineMessages({
     id: 'data.alertsError',
     defaultMessage: 'Failed to load alerts. Please try again.',
   },
+  noResults: {
+    id: 'data.filters.noResults',
+    defaultMessage: 'No observations match your filters',
+  },
+  filterButton: {
+    id: 'data.filterButton',
+    defaultMessage: 'Filters',
+  },
 });
 
 export function DataScreen() {
@@ -75,6 +87,14 @@ export function DataScreen() {
   const projectsQuery = useProjects();
   const observationsQuery = useObservations(selectedProjectId);
   const alertsQuery = useAlerts(selectedProjectId);
+
+  // Call unconditionally (hooks must not be conditional)
+  const obsFilters = useObservationFilters(
+    observationsQuery.data ?? [],
+    selectedProjectId ?? undefined,
+  );
+
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
@@ -178,39 +198,125 @@ export function DataScreen() {
                 </div>
               );
             }
+
+            const filteredObs = obsFilters.filteredObservations;
+
             return (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-                {observations.map((obs) => (
-                  <Link
-                    key={obs.localId}
-                    to="/data/observations/$observationId"
-                    params={{ observationId: obs.localId }}
-                    className="no-underline"
+              <>
+                {/* Mobile: filter button that opens bottom sheet */}
+                <div className="block md:hidden">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setFilterDrawerOpen(true)}
+                    className="relative"
                   >
-                    <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm font-medium text-text">
-                          {obs.tags?.category
-                            ? String(obs.tags.category)
-                            : intl.formatMessage(messages.observationFallback)}
-                        </span>
-                        {obs.lat !== undefined && obs.lon !== undefined && (
-                          <span className="text-xs text-text-muted">
-                            {obs.lat.toFixed(4)}, {obs.lon.toFixed(4)}
-                          </span>
-                        )}
-                        <span className="text-xs text-text-muted">
-                          {new Date(obs.createdAt).toLocaleDateString()}
-                        </span>
-                        <MediaPreview
-                          observationLocalId={obs.localId}
-                          tags={obs.tags}
-                        />
-                      </div>
-                    </Card>
-                  </Link>
-                ))}
-              </div>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                      className="mr-1.5"
+                    >
+                      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                    </svg>
+                    {intl.formatMessage(messages.filterButton)}
+                    {obsFilters.isFiltering && (
+                      <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                        {filteredObs.length}
+                      </span>
+                    )}
+                  </Button>
+
+                  <FilterSheet
+                    open={filterDrawerOpen}
+                    onOpenChange={setFilterDrawerOpen}
+                    filters={obsFilters.filters}
+                    availableCategories={obsFilters.availableCategories}
+                    resultCount={filteredObs.length}
+                    isFiltering={obsFilters.isFiltering}
+                    onSearchChange={obsFilters.setSearch}
+                    onStartDateChange={obsFilters.setStartDate}
+                    onEndDateChange={obsFilters.setEndDate}
+                    onCategoryChange={obsFilters.setCategory}
+                    onSortChange={obsFilters.setSort}
+                    onClear={obsFilters.reset}
+                  />
+                </div>
+
+                {/* Desktop: full filter bar */}
+                <div className="hidden md:block">
+                  <ObservationFilterBar
+                    filters={obsFilters.filters}
+                    availableCategories={obsFilters.availableCategories}
+                    resultCount={filteredObs.length}
+                    isFiltering={obsFilters.isFiltering}
+                    onSearchChange={obsFilters.setSearch}
+                    onStartDateChange={obsFilters.setStartDate}
+                    onEndDateChange={obsFilters.setEndDate}
+                    onCategoryChange={obsFilters.setCategory}
+                    onSortChange={obsFilters.setSort}
+                    onClear={obsFilters.reset}
+                  />
+                </div>
+                {filteredObs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
+                    <span className="text-text-muted text-sm">
+                      {intl.formatMessage(messages.noResults)}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-primary text-sm font-medium hover:underline cursor-pointer"
+                      onClick={obsFilters.reset}
+                    >
+                      {intl.formatMessage({
+                        id: 'data.filters.clear',
+                        defaultMessage: 'Clear filters',
+                      })}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                    {filteredObs.map((obs) => (
+                      <Link
+                        key={obs.localId}
+                        to="/data/observations/$observationId"
+                        params={{ observationId: obs.localId }}
+                        className="no-underline"
+                      >
+                        <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-medium text-text">
+                              {obs.tags?.category
+                                ? String(obs.tags.category)
+                                : intl.formatMessage(
+                                    messages.observationFallback,
+                                  )}
+                            </span>
+                            {obs.lat !== undefined && obs.lon !== undefined && (
+                              <span className="text-xs text-text-muted">
+                                {obs.lat.toFixed(4)}, {obs.lon.toFixed(4)}
+                              </span>
+                            )}
+                            <span className="text-xs text-text-muted">
+                              {new Date(obs.createdAt).toLocaleDateString()}
+                            </span>
+                            <MediaPreview
+                              observationLocalId={obs.localId}
+                              tags={obs.tags}
+                            />
+                          </div>
+                        </Card>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </>
             );
           })()}
         </TabsContent>

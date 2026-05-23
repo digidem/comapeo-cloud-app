@@ -164,6 +164,57 @@
   "data.alertsError": {
     "defaultMessage": "Failed to load alerts. Please try again."
   },
+  "data.filterButton": {
+    "defaultMessage": "Filters"
+  },
+  "data.filterSheetApply": {
+    "defaultMessage": "Show results"
+  },
+  "data.filterSheetClose": {
+    "defaultMessage": "Close filters"
+  },
+  "data.filterSheetTitle": {
+    "defaultMessage": "Filters"
+  },
+  "data.filters.categoryAll": {
+    "defaultMessage": "All categories"
+  },
+  "data.filters.categoryLabel": {
+    "defaultMessage": "Category"
+  },
+  "data.filters.clear": {
+    "defaultMessage": "Clear filters"
+  },
+  "data.filters.endDateLabel": {
+    "defaultMessage": "To"
+  },
+  "data.filters.noResults": {
+    "defaultMessage": "No observations match your filters"
+  },
+  "data.filters.resultCount": {
+    "defaultMessage": "{count, plural, one {# result} other {# results}}"
+  },
+  "data.filters.searchLabel": {
+    "defaultMessage": "Search"
+  },
+  "data.filters.searchPlaceholder": {
+    "defaultMessage": "Search by category or notes"
+  },
+  "data.filters.sortCategory": {
+    "defaultMessage": "Category (A–Z)"
+  },
+  "data.filters.sortLabel": {
+    "defaultMessage": "Sort"
+  },
+  "data.filters.sortNewest": {
+    "defaultMessage": "Newest first"
+  },
+  "data.filters.sortOldest": {
+    "defaultMessage": "Oldest first"
+  },
+  "data.filters.startDateLabel": {
+    "defaultMessage": "From"
+  },
   "data.loading": {
     "defaultMessage": "Loading..."
   },
