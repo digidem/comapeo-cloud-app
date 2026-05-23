@@ -164,6 +164,18 @@
   "data.alertsError": {
     "defaultMessage": "Failed to load alerts. Please try again."
   },
+  "data.filterButton": {
+    "defaultMessage": "Filters"
+  },
+  "data.filterSheetApply": {
+    "defaultMessage": "Show results"
+  },
+  "data.filterSheetClose": {
+    "defaultMessage": "Close filters"
+  },
+  "data.filterSheetTitle": {
+    "defaultMessage": "Filters"
+  },
   "data.filters.categoryAll": {
     "defaultMessage": "All categories"
   },
