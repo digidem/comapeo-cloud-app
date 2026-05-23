@@ -72,6 +72,10 @@ const messages = defineMessages({
     id: 'alertDetail.metadataSection',
     defaultMessage: 'Additional Info',
   },
+  sourceLabel: {
+    id: 'alertDetail.sourceLabel',
+    defaultMessage: 'Source',
+  },
 });
 
 // Known metadata fields that are shown as badges/cards elsewhere
@@ -315,7 +319,9 @@ export function AlertDetailScreen() {
             )}
             {alert.remoteSourceId && (
               <div>
-                <span className="text-xs text-text-muted">Source</span>
+                <span className="text-xs text-text-muted">
+                  {intl.formatMessage(messages.sourceLabel)}
+                </span>
                 <span className="block text-sm text-text">
                   {alert.remoteSourceId}
                 </span>
