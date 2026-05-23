@@ -442,7 +442,7 @@ describe('DataScreen', () => {
       it('renders the toggle button with accessible label', () => {
         render(<DataScreen />);
         expect(
-          screen.getByRole('button', { name: /toggle map and grid view/i }),
+          screen.getByRole('button', { name: /switch to map view/i }),
         ).toBeInTheDocument();
       });
 
@@ -458,7 +458,7 @@ describe('DataScreen', () => {
 
         // Click toggle to switch to map
         await user.click(
-          screen.getByRole('button', { name: /toggle map and grid view/i }),
+          screen.getByRole('button', { name: /switch to map view/i }),
         );
 
         // Map view should be shown
@@ -474,13 +474,13 @@ describe('DataScreen', () => {
 
         // Toggle to map
         await user.click(
-          screen.getByRole('button', { name: /toggle map and grid view/i }),
+          screen.getByRole('button', { name: /switch to map view/i }),
         );
         expect(screen.getByTestId('observations-map')).toBeInTheDocument();
 
         // Toggle back to grid
         await user.click(
-          screen.getByRole('button', { name: /toggle map and grid view/i }),
+          screen.getByRole('button', { name: /switch to grid view/i }),
         );
         expect(
           screen.queryByTestId('observations-map'),

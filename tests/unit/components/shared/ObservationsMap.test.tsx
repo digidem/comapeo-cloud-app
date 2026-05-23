@@ -210,8 +210,11 @@ describe('ObservationsMap', () => {
     expect(mockFitBounds).toHaveBeenCalled();
     const callArgs = mockFitBounds.mock.calls[0]![0];
     // Bounds should be [[minLng, minLat], [maxLng, maxLat]]
-    expect(callArgs[0][0]).toBeLessThanOrEqual(callArgs[1][0]); // minLng <= maxLng
-    expect(callArgs[0][1]).toBeLessThanOrEqual(callArgs[1][1]); // minLat <= maxLat
+    // obs-1: lat=-8.35, lon=-55.45; obs-2: lat=-9.0, lon=-56.0
+    expect(callArgs[0][0]).toBe(-56.0); // minLng
+    expect(callArgs[0][1]).toBe(-9.0); // minLat
+    expect(callArgs[1][0]).toBe(-55.45); // maxLng
+    expect(callArgs[1][1]).toBe(-8.35); // maxLat
   });
 
   it('does not crash with a single geo observation', () => {

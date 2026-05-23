@@ -194,8 +194,11 @@
   "data.title": {
     "defaultMessage": "Data"
   },
-  "data.toggleView": {
-    "defaultMessage": "Toggle map and grid view"
+  "data.switchToMapView": {
+    "defaultMessage": "Switch to map view"
+  },
+  "data.switchToGridView": {
+    "defaultMessage": "Switch to grid view"
   },
   "data.untitledProject": {
     "defaultMessage": "Untitled Project"
