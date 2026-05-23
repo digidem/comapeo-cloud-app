@@ -13,6 +13,8 @@
     "build": "npx tsx scripts/generate-metadata.ts && tsc --noEmit && vite build",
     "build:ci": "npx tsx scripts/generate-metadata.ts && vite build",
     "preview": "vite preview",
+    "validate": "bash scripts/validate.sh",
+    "validate:fast": "bash scripts/validate-fast.sh",
     "lint": "npm-run-all --parallel lint:*",
     "lint:eslint": "eslint .",
     "lint:prettier": "prettier --check .",
