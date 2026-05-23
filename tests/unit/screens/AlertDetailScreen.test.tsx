@@ -9,7 +9,7 @@ let mockAlertsData: unknown[] = [
     localId: 'alert-1',
     projectLocalId: 'proj-1',
     geometry: { type: 'Point', coordinates: [102.0, 0.5] },
-    metadata: { severity: 'high' },
+    metadata: { severity: 'high', alert_type: 'deforestation' },
     detectionDateStart: '2026-01-01T00:00:00Z',
     detectionDateEnd: '2026-01-31T00:00:00Z',
     createdAt: '2026-01-15T00:00:00Z',
@@ -17,6 +17,18 @@ let mockAlertsData: unknown[] = [
   },
 ];
 let mockAlertsIsPending = false;
+
+vi.mock('@/components/shared/MapContainer', () => ({
+  MapContainer: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="mock-map">{children}</div>
+  ),
+}));
+
+vi.mock('react-map-gl/maplibre', () => ({
+  Marker: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="mock-marker">{children}</div>
+  ),
+}));
 
 vi.mock('@/components/layout/shell-slot', () => ({
   useShellSlot: vi.fn(),
@@ -68,7 +80,7 @@ function resetMocks() {
       localId: 'alert-1',
       projectLocalId: 'proj-1',
       geometry: { type: 'Point', coordinates: [102.0, 0.5] },
-      metadata: { severity: 'high' },
+      metadata: { severity: 'high', alert_type: 'deforestation' },
       detectionDateStart: '2026-01-01T00:00:00Z',
       detectionDateEnd: '2026-01-31T00:00:00Z',
       createdAt: '2026-01-15T00:00:00Z',
@@ -79,22 +91,39 @@ function resetMocks() {
 }
 
 describe('AlertDetailScreen', () => {
-  it('renders alert title', () => {
+  it('renders alert title when alert_type is present', () => {
     resetMocks();
     render(<AlertDetailScreen />);
-    expect(screen.getByText('Alert')).toBeInTheDocument();
+    // alert_type: 'deforestation' appears as the h1 title
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'deforestation' }),
+    ).toBeInTheDocument();
   });
 
-  it('renders geometry section', () => {
+  it('renders severity badge', () => {
     resetMocks();
     render(<AlertDetailScreen />);
-    expect(screen.getByText('Geometry')).toBeInTheDocument();
+    expect(screen.getByText('High')).toBeInTheDocument();
   });
 
-  it('renders metadata section', () => {
+  it('renders location section with map', () => {
     resetMocks();
     render(<AlertDetailScreen />);
-    expect(screen.getByText('Metadata')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-map')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-marker')).toBeInTheDocument();
+  });
+
+  it('renders details section', () => {
+    resetMocks();
+    render(<AlertDetailScreen />);
+    expect(screen.getByText('Details')).toBeInTheDocument();
+  });
+
+  it('renders coordinates when geometry is a Point', () => {
+    resetMocks();
+    render(<AlertDetailScreen />);
+    expect(screen.getByText(/0\.500000/)).toBeInTheDocument();
+    expect(screen.getByText(/102\.000000/)).toBeInTheDocument();
   });
 
   it('renders arrow back link to data', () => {
@@ -131,23 +160,23 @@ describe('AlertDetailScreen', () => {
     expect(skeletons.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders "No geometry" when alert has no geometry', () => {
+  it('renders "No location data" when alert has no geometry', () => {
     resetMocks();
     mockAlertsData = [
       {
         localId: 'alert-1',
         projectLocalId: 'proj-1',
         geometry: undefined,
-        metadata: { severity: 'high' },
+        metadata: { severity: 'high', alert_type: 'deforestation' },
         createdAt: '2026-01-15T00:00:00Z',
         updatedAt: '2026-01-15T00:00:00Z',
       },
     ];
     render(<AlertDetailScreen />);
-    expect(screen.getByText('No geometry')).toBeInTheDocument();
+    expect(screen.getByText('No location data')).toBeInTheDocument();
   });
 
-  it('renders alert without metadata section when metadata is null', () => {
+  it('renders alert without additional info section when metadata is null', () => {
     resetMocks();
     mockAlertsData = [
       {
@@ -160,8 +189,8 @@ describe('AlertDetailScreen', () => {
       },
     ];
     render(<AlertDetailScreen />);
-    // Metadata card should NOT be rendered
-    expect(screen.queryByText('Metadata')).not.toBeInTheDocument();
+    // Additional Info card should NOT be rendered
+    expect(screen.queryByText('Additional Info')).not.toBeInTheDocument();
   });
 
   it('renders alert without detection dates when optional fields are missing', () => {
@@ -171,7 +200,7 @@ describe('AlertDetailScreen', () => {
         localId: 'alert-1',
         projectLocalId: 'proj-1',
         geometry: { type: 'Point', coordinates: [0, 0] },
-        metadata: { severity: 'high' },
+        metadata: { severity: 'high', alert_type: 'deforestation' },
         detectionDateStart: undefined,
         detectionDateEnd: undefined,
         createdAt: '2026-01-15T00:00:00Z',
@@ -181,5 +210,12 @@ describe('AlertDetailScreen', () => {
     render(<AlertDetailScreen />);
     // Detection Period should NOT be rendered
     expect(screen.queryByText('Detection Period')).not.toBeInTheDocument();
+  });
+
+  it('renders severity badge for alert', () => {
+    resetMocks();
+    render(<AlertDetailScreen />);
+    const badges = screen.getAllByText('High');
+    expect(badges.length).toBeGreaterThanOrEqual(1);
   });
 });

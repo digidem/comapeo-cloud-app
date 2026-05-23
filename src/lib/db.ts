@@ -41,6 +41,7 @@ export interface Alert {
   sourceType: string;
   sourceId: string;
   remoteId?: string;
+  remoteSourceId?: string;
   geometry?: { type: string; coordinates: unknown };
   metadata?: Record<string, unknown>;
   detectionDateStart?: string;

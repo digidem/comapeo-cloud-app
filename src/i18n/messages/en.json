@@ -1,4 +1,31 @@
 {
+  "alertCard.detectedBetween": {
+    "defaultMessage": "Detected {start} – {end}"
+  },
+  "alertCard.detectedOn": {
+    "defaultMessage": "Detected {date}"
+  },
+  "alertCard.noLocation": {
+    "defaultMessage": "No location"
+  },
+  "alertCard.severityHigh": {
+    "defaultMessage": "High"
+  },
+  "alertCard.severityLow": {
+    "defaultMessage": "Low"
+  },
+  "alertCard.severityMedium": {
+    "defaultMessage": "Medium"
+  },
+  "alertCard.severityUnknown": {
+    "defaultMessage": "Unknown"
+  },
+  "alertCard.sourceLabel": {
+    "defaultMessage": "Source"
+  },
+  "alertDetail.coordinates": {
+    "defaultMessage": "Coordinates"
+  },
   "alertDetail.createdAt": {
     "defaultMessage": "Created"
   },
@@ -11,17 +38,20 @@
   "alertDetail.errorLoading": {
     "defaultMessage": "Failed to load alert"
   },
-  "alertDetail.geometry": {
-    "defaultMessage": "Geometry"
+  "alertDetail.location": {
+    "defaultMessage": "Location"
   },
-  "alertDetail.metadata": {
-    "defaultMessage": "Metadata"
+  "alertDetail.metadataSection": {
+    "defaultMessage": "Additional Info"
   },
-  "alertDetail.noGeometry": {
-    "defaultMessage": "No geometry"
+  "alertDetail.noLocation": {
+    "defaultMessage": "No location data"
   },
   "alertDetail.notFound": {
     "defaultMessage": "Alert not found"
+  },
+  "alertDetail.sourceLabel": {
+    "defaultMessage": "Source"
   },
   "alertDetail.title": {
     "defaultMessage": "Alert"
@@ -124,9 +154,6 @@
   },
   "data.addAlert": {
     "defaultMessage": "Add Alert"
-  },
-  "data.alertFallback": {
-    "defaultMessage": "Alert"
   },
   "data.alertsError": {
     "defaultMessage": "Failed to load alerts. Please try again."
