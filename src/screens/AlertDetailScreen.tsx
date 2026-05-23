@@ -74,7 +74,6 @@ const messages = defineMessages({
 });
 
 // Known metadata fields that are shown as badges/cards elsewhere
-const KNOWN_META_KEYS = new Set(['severity', 'type']);
 
 /** Extract [lon, lat] from a GeoJSON Point geometry, or null if not a Point. */
 function getPointCoords(geometry: Alert['geometry']): [number, number] | null {
@@ -236,7 +235,7 @@ export function AlertDetailScreen() {
         )}
       </div>
 
-      <h1 className="text-2xl font-bold text-text">{alertType ?? 'Alert'}</h1>
+      <h1 className="text-2xl font-bold text-text">{alertType ?? intl.formatMessage(messages.alertTitle)}</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Location — minimap with marker */}
