@@ -1,4 +1,28 @@
 {
+  "alertCard.detectedBetween": {
+    "defaultMessage": "Detected {start} – {end}"
+  },
+  "alertCard.detectedOn": {
+    "defaultMessage": "Detected {date}"
+  },
+  "alertCard.severityHigh": {
+    "defaultMessage": "High"
+  },
+  "alertCard.severityLow": {
+    "defaultMessage": "Low"
+  },
+  "alertCard.severityMedium": {
+    "defaultMessage": "Medium"
+  },
+  "alertCard.severityUnknown": {
+    "defaultMessage": "Unknown"
+  },
+  "alertCard.sourceLabel": {
+    "defaultMessage": "Source"
+  },
+  "alertCard.typeLabel": {
+    "defaultMessage": "Type"
+  },
   "alertDetail.createdAt": {
     "defaultMessage": "Created"
   },

@@ -133,6 +133,105 @@ describe('remote-archive', () => {
     expect(alerts[0]!.localId).toBe(
       'remoteArchive:https://archive.example.com:alert-1',
     );
+    // Geometry is now properly preserved
+    expect(alerts[0]!.geometry).toEqual({ type: 'Point', coordinates: [0, 0] });
+  });
+
+  it('pullAlerts persists metadata, geometry, detection dates, and remote sourceId', async () => {
+    const fullAlertResponse = {
+      data: [
+        {
+          docId: 'alert-full',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          deleted: false,
+          geometry: { type: 'Point', coordinates: [102.0, 0.5] },
+          metadata: { severity: 'high', type: 'deforestation' },
+          detectionDateStart: '2024-03-14T00:00:00Z',
+          detectionDateEnd: '2024-03-15T00:00:00Z',
+          sourceId: 'source-1',
+        },
+      ],
+    };
+
+    server.use(
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-1/remoteDetectionAlerts`,
+        () => HttpResponse.json(fullAlertResponse),
+      ),
+    );
+
+    const alerts = await pullAlerts(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
+
+    expect(alerts).toHaveLength(1);
+    const alert = alerts[0]!;
+
+    // Persisted to DB via bulkPut
+    const db = getDb();
+    const stored = await db.alerts.get(alert.localId);
+    expect(stored).toBeTruthy();
+
+    expect(stored!.geometry).toEqual({
+      type: 'Point',
+      coordinates: [102.0, 0.5],
+    });
+    expect(stored!.metadata).toEqual({
+      severity: 'high',
+      type: 'deforestation',
+    });
+    expect(stored!.detectionDateStart).toBe('2024-03-14T00:00:00Z');
+    expect(stored!.detectionDateEnd).toBe('2024-03-15T00:00:00Z');
+    expect((stored! as unknown as Record<string, unknown>).remoteSourceId).toBe(
+      'source-1',
+    );
+    // sourceId should still be serverId (not overwritten by API's sourceId)
+    expect(stored!.sourceId).toBe('server-1');
+  });
+
+  it('pullAlerts tolerates alerts without optional fields', async () => {
+    const minimalAlertResponse = {
+      data: [
+        {
+          docId: 'alert-minimal',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          deleted: false,
+          geometry: { type: 'Point', coordinates: [0, 0] },
+        },
+      ],
+    };
+
+    server.use(
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-1/remoteDetectionAlerts`,
+        () => HttpResponse.json(minimalAlertResponse),
+      ),
+    );
+
+    const alerts = await pullAlerts(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
+
+    expect(alerts).toHaveLength(1);
+    const alert = alerts[0]!;
+
+    // Must not throw when optional fields are absent
+    expect(alert.metadata).toBeUndefined();
+    expect(alert.detectionDateStart).toBeUndefined();
+    expect(alert.detectionDateEnd).toBeUndefined();
+    expect(
+      (alert as unknown as Record<string, unknown>).remoteSourceId,
+    ).toBeUndefined();
+    // Geometry is required by schema, so it must be present
+    expect(alert.geometry).toEqual({ type: 'Point', coordinates: [0, 0] });
   });
 
   it('throws when archive returns error', async () => {
