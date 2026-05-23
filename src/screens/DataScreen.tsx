@@ -4,6 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Link } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { AlertCard } from '@/components/shared/AlertCard';
 import { MediaPreview } from '@/components/shared/MediaPreview';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -257,14 +258,7 @@ export function DataScreen() {
                     className="no-underline"
                   >
                     <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm font-medium text-text">
-                          {intl.formatMessage(messages.alertFallback)}
-                        </span>
-                        <span className="text-xs text-text-muted">
-                          {new Date(alert.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
+                      <AlertCard alert={alert} />
                     </Card>
                   </Link>
                 ))}

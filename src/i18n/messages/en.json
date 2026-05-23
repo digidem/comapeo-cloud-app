@@ -5,6 +5,12 @@
   "alertCard.detectedOn": {
     "defaultMessage": "Detected {date}"
   },
+  "alertCard.hasLocation": {
+    "defaultMessage": "Has location"
+  },
+  "alertCard.noLocation": {
+    "defaultMessage": "No location"
+  },
   "alertCard.severityHigh": {
     "defaultMessage": "High"
   },
@@ -20,6 +26,9 @@
   "alertCard.sourceLabel": {
     "defaultMessage": "Source"
   },
+  "alertDetail.coordinates": {
+    "defaultMessage": "Coordinates"
+  },
   "alertDetail.createdAt": {
     "defaultMessage": "Created"
   },
@@ -32,14 +41,14 @@
   "alertDetail.errorLoading": {
     "defaultMessage": "Failed to load alert"
   },
-  "alertDetail.geometry": {
-    "defaultMessage": "Geometry"
+  "alertDetail.location": {
+    "defaultMessage": "Location"
   },
-  "alertDetail.metadata": {
-    "defaultMessage": "Metadata"
+  "alertDetail.metadataSection": {
+    "defaultMessage": "Additional Info"
   },
-  "alertDetail.noGeometry": {
-    "defaultMessage": "No geometry"
+  "alertDetail.noLocation": {
+    "defaultMessage": "No location data"
   },
   "alertDetail.notFound": {
     "defaultMessage": "Alert not found"

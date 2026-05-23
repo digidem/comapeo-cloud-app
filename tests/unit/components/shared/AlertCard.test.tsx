@@ -100,4 +100,38 @@ describe('AlertCard', () => {
     const badge = screen.getByText('Unknown').closest('[data-variant]');
     expect(badge).toHaveAttribute('data-variant', 'info');
   });
+
+  it('renders coordinates when geometry is a Point', () => {
+    const alert = makeAlert({
+      geometry: { type: 'Point', coordinates: [-74.006, 40.7128] },
+    });
+    render(<AlertCard alert={alert} />);
+    // Should show lat/lon rounded to 4 decimal places
+    expect(screen.getByText(/40\.7128/)).toBeInTheDocument();
+    expect(screen.getByText(/-74\.006/)).toBeInTheDocument();
+  });
+
+  it('shows "No location" when geometry is absent', () => {
+    const alert = makeAlert({ geometry: undefined });
+    render(<AlertCard alert={alert} />);
+    expect(screen.getByText('No location')).toBeInTheDocument();
+  });
+
+  it('shows "No location" when geometry is not a Point', () => {
+    const alert = makeAlert({
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 0],
+          ],
+        ],
+      },
+    });
+    render(<AlertCard alert={alert} />);
+    expect(screen.getByText('No location')).toBeInTheDocument();
+  });
 });

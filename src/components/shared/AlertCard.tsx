@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import {
@@ -24,6 +25,14 @@ const messages = defineMessages({
     id: 'data.alertFallback',
     defaultMessage: 'Alert',
   },
+  hasLocation: {
+    id: 'alertCard.hasLocation',
+    defaultMessage: 'Has location',
+  },
+  noLocation: {
+    id: 'alertCard.noLocation',
+    defaultMessage: 'No location',
+  },
 });
 
 function formatDate(dateStr: string): string {
@@ -36,6 +45,41 @@ function formatDate(dateStr: string): string {
   return `${mm}/${dd}/${yyyy}`;
 }
 
+/** Extract [lon, lat] from a GeoJSON Point geometry, or null if not a Point. */
+function getPointCoords(geometry: Alert['geometry']): [number, number] | null {
+  if (!geometry || geometry.type !== 'Point') return null;
+  const coords = geometry.coordinates;
+  if (
+    Array.isArray(coords) &&
+    coords.length >= 2 &&
+    typeof coords[0] === 'number' &&
+    typeof coords[1] === 'number'
+  ) {
+    return [coords[0] as number, coords[1] as number];
+  }
+  return null;
+}
+
+function LocationPin(): ReactNode {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0 text-text-muted"
+    >
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  );
+}
+
 export interface AlertCardProps {
   alert: Alert;
 }
@@ -46,6 +90,7 @@ export function AlertCard({ alert }: AlertCardProps) {
   const type = alert.metadata?.type as string | undefined;
   const variant = severityToVariant(severity);
   const severityLabel = severityToLabel(severity, intl);
+  const pointCoords = getPointCoords(alert.geometry);
 
   const title = type ?? intl.formatMessage(messages.alertFallback);
 
@@ -55,12 +100,23 @@ export function AlertCard({ alert }: AlertCardProps) {
 
   return (
     <div data-testid="alert-card" className="flex flex-col gap-2">
-      {/* Top row: severity badge + type pill */}
+      {/* Top row: severity badge + type pill + location */}
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant={variant}>{severityLabel}</Badge>
         {type && <Badge variant="neutral">{type}</Badge>}
         {!type && (
           <span className="text-sm font-medium text-text">{title}</span>
+        )}
+        {pointCoords && (
+          <span className="ml-auto inline-flex items-center gap-1 text-xs text-text-muted">
+            <LocationPin />
+            {pointCoords[1].toFixed(4)}, {pointCoords[0].toFixed(4)}
+          </span>
+        )}
+        {!pointCoords && (
+          <span className="ml-auto text-xs text-text-muted">
+            {intl.formatMessage(messages.noLocation)}
+          </span>
         )}
       </div>
 
