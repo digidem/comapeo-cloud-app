@@ -8,7 +8,7 @@ export const alertsFixture = {
       detectionDateStart: '2024-03-14T00:00:00Z',
       detectionDateEnd: '2024-03-15T00:00:00Z',
       sourceId: 'source-1',
-      metadata: { severity: 'high', type: 'deforestation' },
+      metadata: { severity: 'high', alert_type: 'deforestation' },
       geometry: {
         type: 'Point',
         coordinates: [-55.45, -8.35],

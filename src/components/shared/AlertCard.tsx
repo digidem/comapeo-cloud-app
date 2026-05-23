@@ -21,14 +21,6 @@ const messages = defineMessages({
     id: 'alertCard.detectedBetween',
     defaultMessage: 'Detected {start} – {end}',
   },
-  alertFallback: {
-    id: 'data.alertFallback',
-    defaultMessage: 'Alert',
-  },
-  hasLocation: {
-    id: 'alertCard.hasLocation',
-    defaultMessage: 'Has location',
-  },
   noLocation: {
     id: 'alertCard.noLocation',
     defaultMessage: 'No location',
@@ -86,13 +78,12 @@ export interface AlertCardProps {
 
 export function AlertCard({ alert }: AlertCardProps) {
   const intl = useIntl();
-  const severity = alert.metadata?.severity as string | undefined;
-  const type = alert.metadata?.type as string | undefined;
+  const metadata = alert.metadata ?? {};
+  const severity = metadata.severity as string | undefined;
+  const alertType = metadata.alert_type as string | undefined;
   const variant = severityToVariant(severity);
   const severityLabel = severityToLabel(severity, intl);
   const pointCoords = getPointCoords(alert.geometry);
-
-  const title = type ?? intl.formatMessage(messages.alertFallback);
 
   // Date range
   const hasStart = !!alert.detectionDateStart;
@@ -100,20 +91,20 @@ export function AlertCard({ alert }: AlertCardProps) {
 
   return (
     <div data-testid="alert-card" className="flex flex-col gap-2">
-      {/* Top row: severity badge + type pill + location */}
+      {/* Top row: severity badge + type badge + location */}
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant={variant}>{severityLabel}</Badge>
-        {type && <Badge variant="neutral">{type}</Badge>}
-        {!type && (
-          <span className="text-sm font-medium text-text">{title}</span>
+        {alertType && (
+          <span className="rounded-pill bg-surface-container-low px-2.5 py-0.5 text-xs font-medium text-text">
+            {alertType}
+          </span>
         )}
-        {pointCoords && (
+        {pointCoords ? (
           <span className="ml-auto inline-flex items-center gap-1 text-xs text-text-muted">
             <LocationPin />
             {pointCoords[1].toFixed(4)}, {pointCoords[0].toFixed(4)}
           </span>
-        )}
-        {!pointCoords && (
+        ) : (
           <span className="ml-auto text-xs text-text-muted">
             {intl.formatMessage(messages.noLocation)}
           </span>

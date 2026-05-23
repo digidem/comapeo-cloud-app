@@ -44,7 +44,7 @@ const defaultAlerts = [
     localId: 'alert-1',
     projectLocalId: 'proj-1',
     geometry: { type: 'Point', coordinates: [12.34, 56.78] },
-    metadata: { severity: 'high' },
+    metadata: { severity: 'high', alert_type: 'deforestation' },
     detectionDateStart: '2024-03-14T00:00:00Z',
     detectionDateEnd: '2024-03-15T00:00:00Z',
     createdAt: '2024-03-15T08:00:00Z',
@@ -408,8 +408,8 @@ describe('DataScreen', () => {
       mockObservationsQuery = { data: [], isPending: false };
 
       render(<DataScreen />);
-      // The alert card renders "Alert" as fallback text
-      expect(screen.getAllByText('Alert').length).toBeGreaterThanOrEqual(1);
+      // The alert card renders the alert_type badge
+      expect(screen.getByText('deforestation')).toBeInTheDocument();
     });
 
     it('renders the Add Alert link', () => {

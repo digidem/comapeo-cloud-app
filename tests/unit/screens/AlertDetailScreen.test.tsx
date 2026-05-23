@@ -9,7 +9,7 @@ let mockAlertsData: unknown[] = [
     localId: 'alert-1',
     projectLocalId: 'proj-1',
     geometry: { type: 'Point', coordinates: [102.0, 0.5] },
-    metadata: { severity: 'high' },
+    metadata: { severity: 'high', alert_type: 'deforestation' },
     detectionDateStart: '2026-01-01T00:00:00Z',
     detectionDateEnd: '2026-01-31T00:00:00Z',
     createdAt: '2026-01-15T00:00:00Z',
@@ -80,7 +80,7 @@ function resetMocks() {
       localId: 'alert-1',
       projectLocalId: 'proj-1',
       geometry: { type: 'Point', coordinates: [102.0, 0.5] },
-      metadata: { severity: 'high' },
+      metadata: { severity: 'high', alert_type: 'deforestation' },
       detectionDateStart: '2026-01-01T00:00:00Z',
       detectionDateEnd: '2026-01-31T00:00:00Z',
       createdAt: '2026-01-15T00:00:00Z',
@@ -91,10 +91,11 @@ function resetMocks() {
 }
 
 describe('AlertDetailScreen', () => {
-  it('renders alert title', () => {
+  it('renders alert title when alert_type is present', () => {
     resetMocks();
     render(<AlertDetailScreen />);
-    expect(screen.getByText('Alert')).toBeInTheDocument();
+    // alert_type: 'deforestation' appears as the h1 title
+    expect(screen.getByRole('heading', { level: 1, name: 'deforestation' })).toBeInTheDocument();
   });
 
   it('renders severity badge', () => {
@@ -164,7 +165,7 @@ describe('AlertDetailScreen', () => {
         localId: 'alert-1',
         projectLocalId: 'proj-1',
         geometry: undefined,
-        metadata: { severity: 'high' },
+        metadata: { severity: 'high', alert_type: 'deforestation' },
         createdAt: '2026-01-15T00:00:00Z',
         updatedAt: '2026-01-15T00:00:00Z',
       },
@@ -197,7 +198,7 @@ describe('AlertDetailScreen', () => {
         localId: 'alert-1',
         projectLocalId: 'proj-1',
         geometry: { type: 'Point', coordinates: [0, 0] },
-        metadata: { severity: 'high' },
+        metadata: { severity: 'high', alert_type: 'deforestation' },
         detectionDateStart: undefined,
         detectionDateEnd: undefined,
         createdAt: '2026-01-15T00:00:00Z',

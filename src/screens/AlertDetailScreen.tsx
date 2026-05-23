@@ -187,18 +187,18 @@ export function AlertDetailScreen() {
   }
 
   const severity = alert.metadata?.severity as string | undefined;
-  const type = alert.metadata?.type as string | undefined;
+  const alertType = alert.metadata?.alert_type as string | undefined;
   const variant = severityToVariant(severity);
   const severityLabel = severityToLabel(severity, intl);
   const pointCoords = getPointCoords(alert.geometry);
 
-  // Filter residual metadata fields (excluding severity/type shown as badges)
+  // Filter residual metadata fields (excluding alert_type/severity shown as badges)
+  const KNOWN_META_KEYS = new Set(['severity', 'alert_type']);
   const residualMeta = alert.metadata
     ? Object.entries(alert.metadata).filter(
         ([key]) => !KNOWN_META_KEYS.has(key),
       )
     : [];
-
   const hasDetectionEnd = !!alert.detectionDateEnd;
 
   return (
@@ -229,12 +229,14 @@ export function AlertDetailScreen() {
       {/* Alert header: badges */}
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={variant}>{severityLabel}</Badge>
-        {type && <Badge variant="neutral">{type}</Badge>}
+        {alertType && (
+          <span className="rounded-pill bg-surface-container-low px-3 py-1 text-sm font-semibold text-text">
+            {alertType}
+          </span>
+        )}
       </div>
 
-      <h1 className="text-2xl font-bold text-text">
-        {type ?? intl.formatMessage(messages.alertTitle)}
-      </h1>
+      <h1 className="text-2xl font-bold text-text">{alertType ?? 'Alert'}</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Location — minimap with marker */}
@@ -331,17 +333,33 @@ export function AlertDetailScreen() {
             {intl.formatMessage(messages.metadataSection)}
           </h3>
           <div className="flex flex-wrap gap-2">
-            {residualMeta.map(([key, value]) => (
-              <span
-                key={key}
-                className="rounded-pill bg-surface-container-low px-3 py-1.5 text-xs text-text"
-              >
-                <span className="font-medium">{key}:</span>{' '}
-                {typeof value === 'object' && value !== null
-                  ? JSON.stringify(value)
-                  : String(value ?? '')}
-              </span>
-            ))}
+            {residualMeta.flatMap(([key, value]) => {
+              // Flatten nested objects into individual key-value pills
+              if (
+                typeof value === 'object' &&
+                value !== null &&
+                !Array.isArray(value)
+              ) {
+                return Object.entries(value).map(([subKey, subValue]) => (
+                  <span
+                    key={`${key}.${subKey}`}
+                    className="rounded-pill bg-surface-container-low px-3 py-1.5 text-xs text-text"
+                  >
+                    <span className="font-medium">{subKey}:</span>{' '}
+                    {String(subValue ?? '')}
+                  </span>
+                ));
+              }
+              return (
+                <span
+                  key={key}
+                  className="rounded-pill bg-surface-container-low px-3 py-1.5 text-xs text-text"
+                >
+                  <span className="font-medium">{key}:</span>{' '}
+                  {String(value ?? '')}
+                </span>
+              );
+            })}
           </div>
         </Card>
       )}

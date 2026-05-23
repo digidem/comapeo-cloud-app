@@ -32,9 +32,9 @@ describe('AlertCard', () => {
     expect(badge).toHaveAttribute('data-variant', 'high');
   });
 
-  it('renders type badge when metadata.type is present', () => {
+  it('renders alert_type badge when metadata.alert_type is present', () => {
     const alert = makeAlert({
-      metadata: { severity: 'high', type: 'deforestation' },
+      metadata: { severity: 'high', alert_type: 'deforestation' },
     });
     render(<AlertCard alert={alert} />);
     expect(screen.getByText('deforestation')).toBeInTheDocument();
@@ -82,12 +82,14 @@ describe('AlertCard', () => {
     expect(screen.queryByTestId('alert-source-id')).not.toBeInTheDocument();
   });
 
-  it('falls back to "Alert" label when metadata.type is absent', () => {
+  it('shows no alert_type badge when metadata.alert_type is absent', () => {
     const alert = makeAlert({
       metadata: { severity: 'medium' },
     });
     render(<AlertCard alert={alert} />);
-    expect(screen.getByText('Alert')).toBeInTheDocument();
+    // Only severity badge rendered — no type badge shown
+    expect(screen.getByText('Medium')).toBeInTheDocument();
+    expect(screen.queryByText('Alert')).not.toBeInTheDocument();
   });
 
   it('applies info severity variant when severity is unrecognized', () => {

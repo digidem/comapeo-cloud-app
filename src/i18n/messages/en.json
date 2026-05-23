@@ -5,9 +5,6 @@
   "alertCard.detectedOn": {
     "defaultMessage": "Detected {date}"
   },
-  "alertCard.hasLocation": {
-    "defaultMessage": "Has location"
-  },
   "alertCard.noLocation": {
     "defaultMessage": "No location"
   },
@@ -154,9 +151,6 @@
   },
   "data.addAlert": {
     "defaultMessage": "Add Alert"
-  },
-  "data.alertFallback": {
-    "defaultMessage": "Alert"
   },
   "data.alertsError": {
     "defaultMessage": "Failed to load alerts. Please try again."

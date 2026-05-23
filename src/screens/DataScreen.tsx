@@ -55,10 +55,6 @@ const messages = defineMessages({
     id: 'data.observationFallback',
     defaultMessage: 'Observation',
   },
-  alertFallback: {
-    id: 'data.alertFallback',
-    defaultMessage: 'Alert',
-  },
   addAlert: {
     id: 'data.addAlert',
     defaultMessage: 'Add Alert',
