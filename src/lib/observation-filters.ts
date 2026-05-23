@@ -35,7 +35,7 @@ export function extractCategories(observations: Observation[]): string[] {
   for (const obs of observations) {
     const cat = obs.tags?.category;
     if (cat && cat.trim() !== '') {
-      seen.add(cat);
+      seen.add(cat.trim());
     }
   }
   return Array.from(seen).sort((a, b) =>

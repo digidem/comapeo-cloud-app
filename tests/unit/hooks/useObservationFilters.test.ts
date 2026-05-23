@@ -126,6 +126,16 @@ describe('useObservationFilters', () => {
     expect(result.current.isFiltering).toBe(true);
   });
 
+  it('isFiltering is unaffected by sort changes', () => {
+    const { result } = renderHook(() => useObservationFilters(observations));
+    expect(result.current.isFiltering).toBe(false);
+    act(() => {
+      result.current.setSort('oldest');
+    });
+    // Sort is not a filter — isFiltering should stay false
+    expect(result.current.isFiltering).toBe(false);
+  });
+
   it('reset restores defaults', () => {
     const { result } = renderHook(() => useObservationFilters(observations));
     act(() => {

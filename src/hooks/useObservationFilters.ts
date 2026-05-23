@@ -73,14 +73,15 @@ export function useObservationFilters(
     [observations, filters],
   );
 
-  // isFiltering: any filter deviates from DEFAULT_FILTERS
+  // isFiltering: any actual filter deviates from DEFAULT_FILTERS (sort is excluded
+  // because changing sort order is not "filtering" — it doesn't affect which
+  // observations appear, only their order)
   const isFiltering = useMemo(() => {
     return (
       filters.search !== DEFAULT_FILTERS.search ||
       filters.startDate !== DEFAULT_FILTERS.startDate ||
       filters.endDate !== DEFAULT_FILTERS.endDate ||
-      filters.category !== DEFAULT_FILTERS.category ||
-      filters.sort !== DEFAULT_FILTERS.sort
+      filters.category !== DEFAULT_FILTERS.category
     );
   }, [filters]);
 

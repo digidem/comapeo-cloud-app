@@ -1,9 +1,14 @@
-import { fireEvent, render, screen } from '@tests/mocks/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, userEvent } from '@tests/mocks/test-utils';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { ObservationFilterBarProps } from '@/components/shared/ObservationFilterBar';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
 import { DEFAULT_FILTERS } from '@/lib/observation-filters';
+
+// Radix Select uses scrollIntoView internally which jsdom doesn't support
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 function renderBar(
   overrides: Partial<ObservationFilterBarProps> = {},
@@ -96,6 +101,23 @@ describe('ObservationFilterBar', () => {
     expect(clearButton).toBeInTheDocument();
     fireEvent.click(clearButton);
     expect(props.onClear).toHaveBeenCalledOnce();
+  });
+
+  it('selecting "All categories" passes null to onCategoryChange', async () => {
+    const user = userEvent.setup();
+    // Start with a non-null category so that selecting "All categories" triggers a change
+    const props = renderBar({
+      filters: { ...DEFAULT_FILTERS, category: 'forest' },
+    });
+    // Open the category select dropdown
+    await user.click(screen.getByRole('combobox', { name: 'Category' }));
+    // Find and click the "All categories" option
+    const allCategoriesOption = await screen.findByRole('option', {
+      name: 'All categories',
+    });
+    await user.click(allCategoriesOption);
+    // Should map the sentinel value to null
+    expect(props.onCategoryChange).toHaveBeenCalledWith(null);
   });
 
   it('renders search placeholder text', () => {
