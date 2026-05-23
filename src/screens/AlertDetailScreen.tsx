@@ -231,11 +231,6 @@ export function AlertDetailScreen() {
         {isKnownSeverity(severity) && (
           <Badge variant={variant}>{severityLabel}</Badge>
         )}
-        {alertType && (
-          <span className="rounded-pill bg-surface-container-low px-3 py-1 text-sm font-semibold text-text">
-            {alertType}
-          </span>
-        )}
       </div>
 
       <h1 className="text-2xl font-bold text-text">
