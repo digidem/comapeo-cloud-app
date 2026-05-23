@@ -1,4 +1,13 @@
-set -e
+set -eu
 
-npm run verify:handoff
-npm run check:i18n
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+npm run validate
+
+case "$BRANCH" in
+  auto/*)
+    echo "=== Auto branch: running coverage diff ==="
+    npm run test:coverage
+    node scripts/coverage-diff.mjs
+    ;;
+esac
