@@ -5,6 +5,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { AlertCard } from '@/components/shared/AlertCard';
+import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { FilterSheet } from '@/components/shared/FilterSheet';
 import { MediaPreview } from '@/components/shared/MediaPreview';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
@@ -259,6 +260,11 @@ export function DataScreen() {
           <div className="flex items-center gap-2">
             {activeTab === 'observations' && (
               <>
+                <ExportObservationsButton
+                  observations={observations}
+                  projectName={selectedProject?.name}
+                  disabled={observations.length === 0}
+                />
                 {viewMode === 'grid' ? (
                   <button
                     type="button"

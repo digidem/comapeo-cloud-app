@@ -164,6 +164,18 @@
   "data.alertsError": {
     "defaultMessage": "Failed to load alerts. Please try again."
   },
+  "data.export.button": {
+    "defaultMessage": "Export"
+  },
+  "data.export.csv": {
+    "defaultMessage": "CSV"
+  },
+  "data.export.error": {
+    "defaultMessage": "Export failed. Please try again."
+  },
+  "data.export.geojson": {
+    "defaultMessage": "GeoJSON"
+  },
   "data.filterButton": {
     "defaultMessage": "Filters"
   },

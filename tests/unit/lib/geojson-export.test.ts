@@ -21,6 +21,7 @@ describe('exportFeatureCollection', () => {
   let anchorElement: HTMLAnchorElement;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     originalCreateObjectURL = URL.createObjectURL;
     originalRevokeObjectURL = URL.revokeObjectURL;
 
@@ -52,6 +53,7 @@ describe('exportFeatureCollection', () => {
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('creates a Blob with the correct JSON content and MIME type', () => {
@@ -77,6 +79,9 @@ describe('exportFeatureCollection', () => {
     exportFeatureCollection(mockFeatureCollection, 'test.geojson');
 
     const revokeMock = URL.revokeObjectURL as ReturnType<typeof vi.fn>;
+    // Revoke happens after 100ms timeout
+    expect(revokeMock).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(100);
     expect(revokeMock).toHaveBeenCalledWith('blob:http://localhost/abc123');
   });
 

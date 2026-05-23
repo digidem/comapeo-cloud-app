@@ -100,15 +100,44 @@ vi.mock('@/components/shared/auth-img', () => ({
   ),
 }));
 
+// Mock ExportObservationsButton to avoid real downloads
+vi.mock('@/components/shared/ExportObservationsButton', () => ({
+  ExportObservationsButton: ({
+    disabled,
+    observations,
+    projectName,
+  }: {
+    disabled?: boolean;
+    observations: unknown[];
+    projectName?: string;
+  }) => (
+    <button
+      data-testid="export-observations-button"
+      disabled={disabled}
+      data-observations-count={observations.length}
+      data-project-name={projectName}
+    >
+      Export
+    </button>
+  ),
+}));
+
 vi.mock('@/components/ui/tabs', () => {
   // Mock Tabs to always render all tab content (Radix hides inactive tabs)
   function TabsMock({
     children,
+    value,
   }: {
     children: React.ReactNode;
     defaultValue?: string;
+    value?: string;
+    onValueChange?: (value: string) => void;
   }) {
-    return <div>{children}</div>;
+    return (
+      <div data-testid="tabs" data-value={value}>
+        {children}
+      </div>
+    );
   }
   TabsMock.List = ({
     children,
@@ -118,11 +147,18 @@ vi.mock('@/components/ui/tabs', () => {
   }) => <div>{children}</div>;
   TabsMock.Trigger = ({
     children,
+    value,
+    onClick,
   }: {
     children: React.ReactNode;
     value: string;
     className?: string;
-  }) => <button>{children}</button>;
+    onClick?: () => void;
+  }) => (
+    <button data-testid={`tab-trigger-${value}`} onClick={onClick}>
+      {children}
+    </button>
+  );
   TabsMock.Content = ({
     children,
   }: {
@@ -427,6 +463,34 @@ describe('DataScreen', () => {
     it('renders Data title', () => {
       render(<DataScreen />);
       expect(screen.getByText('Data')).toBeInTheDocument();
+    });
+
+    // ---- Export button ----
+
+    describe('Export button', () => {
+      it('renders Export button on observations tab when observations exist', () => {
+        mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+        render(<DataScreen />);
+        const exportButton = screen.getByTestId('export-observations-button');
+        expect(exportButton).toBeInTheDocument();
+        expect(exportButton).not.toBeDisabled();
+        expect(exportButton).toHaveAttribute('data-observations-count', '2');
+        expect(exportButton).toHaveAttribute(
+          'data-project-name',
+          'Test Project',
+        );
+      });
+
+      it('disables Export button when no observations', () => {
+        mockObservationsQuery = { data: [], isPending: false };
+
+        render(<DataScreen />);
+        const exportButton = screen.getByTestId('export-observations-button');
+        expect(exportButton).toBeInTheDocument();
+        expect(exportButton).toBeDisabled();
+        expect(exportButton).toHaveAttribute('data-observations-count', '0');
+      });
     });
 
     // ---- Map/Grid Toggle ----
