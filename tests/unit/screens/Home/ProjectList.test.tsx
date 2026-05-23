@@ -123,4 +123,17 @@ describe('ProjectList', () => {
       screen.queryByRole('button', { name: /delete project/i }),
     ).toBeNull();
   });
+
+  it('renders fallback name when project has no name', () => {
+    render(
+      <ProjectList
+        projects={[{ localId: 'p1' }]}
+        selectedProjectId={null}
+        onSelect={vi.fn()}
+        onCreateNew={vi.fn()}
+      />,
+    );
+    // Should show "Untitled Project" as the fallback name
+    expect(screen.getByText('Untitled Project')).toBeDefined();
+  });
 });
