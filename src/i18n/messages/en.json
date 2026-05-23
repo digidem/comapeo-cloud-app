@@ -101,6 +101,12 @@
   "audioPlayer.play": {
     "defaultMessage": "Play"
   },
+  "common.refreshAria": {
+    "defaultMessage": "Refresh data"
+  },
+  "common.refreshing": {
+    "defaultMessage": "Refreshing…"
+  },
   "dashboard.banner.active": {
     "defaultMessage": "Active"
   },
