@@ -248,6 +248,20 @@ describe('filterObservations — category', () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.localId).toBe('2');
   });
+
+  it('matches even when observation category has whitespace padding', () => {
+    const obs = [
+      makeObs({ localId: '1', tags: { category: '  forest  ' } }),
+      makeObs({ localId: '2', tags: { category: 'forest' } }),
+    ];
+    // Both should match the trimmed category value 'forest'
+    const result = filterObservations(obs, {
+      ...DEFAULT_FILTERS,
+      category: 'forest',
+    });
+    expect(result).toHaveLength(2);
+    expect(result.map((o) => o.localId).sort()).toEqual(['1', '2']);
+  });
 });
 
 // --- filterObservations: sort ---

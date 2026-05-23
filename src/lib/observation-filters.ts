@@ -83,7 +83,7 @@ function matchesDateRange(
 
 function matchesCategory(obs: Observation, category: string | null): boolean {
   if (category === null) return true;
-  return (obs.tags?.category ?? null) === category;
+  return (obs.tags?.category?.trim() ?? null) === category;
 }
 
 function sortObservations(
