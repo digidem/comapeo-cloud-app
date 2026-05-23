@@ -95,7 +95,9 @@ describe('AlertDetailScreen', () => {
     resetMocks();
     render(<AlertDetailScreen />);
     // alert_type: 'deforestation' appears as the h1 title
-    expect(screen.getByRole('heading', { level: 1, name: 'deforestation' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'deforestation' }),
+    ).toBeInTheDocument();
   });
 
   it('renders severity badge', () => {
