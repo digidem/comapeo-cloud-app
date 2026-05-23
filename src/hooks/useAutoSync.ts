@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -29,7 +29,7 @@ export function useAutoSync(options?: { pollIntervalMs?: number }): void {
    * Run a full sync cycle for all servers with credentials.
    * Guards against concurrent calls via isSyncingRef.
    */
-  async function runSync(): Promise<void> {
+  const runSync = useCallback(async (): Promise<void> => {
     if (isSyncingRef.current) return;
     isSyncingRef.current = true;
 
@@ -70,7 +70,7 @@ export function useAutoSync(options?: { pollIntervalMs?: number }): void {
     } finally {
       isSyncingRef.current = false;
     }
-  }
+  }, [queryClient]);
 
   // Initial sync on mount
   useEffect(() => {
@@ -78,8 +78,7 @@ export function useAutoSync(options?: { pollIntervalMs?: number }): void {
     hasSynced.current = true;
 
     void runSync();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryClient]);
+  }, [runSync]);
 
   // Polling effect
   useEffect(() => {
@@ -118,5 +117,5 @@ export function useAutoSync(options?: { pollIntervalMs?: number }): void {
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [pollIntervalMs]);
+  }, [pollIntervalMs, runSync]);
 }

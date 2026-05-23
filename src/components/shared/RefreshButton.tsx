@@ -58,7 +58,7 @@ export function RefreshButton({
       }
       onClick={onClick}
     >
-      <RefreshIcon />
+      {isSyncing ? null : <RefreshIcon />}
     </Button>
   );
 }
