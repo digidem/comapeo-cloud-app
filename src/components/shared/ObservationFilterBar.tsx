@@ -94,6 +94,12 @@ export function ObservationFilterBar({
     onCategoryChange(value === ALL_CATEGORIES_SENTINEL ? null : value);
   }
 
+  function handleSortChange(v: string) {
+    if (v === 'newest' || v === 'oldest' || v === 'category') {
+      onSortChange(v);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
       <div className="flex-1 min-w-[180px]">
@@ -148,7 +154,7 @@ export function ObservationFilterBar({
       <div className="min-w-[160px]">
         <Select
           value={filters.sort}
-          onValueChange={(v) => onSortChange(v as ObservationSort)}
+          onValueChange={handleSortChange}
           placeholder={intl.formatMessage(messages.sortLabel)}
           ariaLabel={intl.formatMessage(messages.sortLabel)}
         >
