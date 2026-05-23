@@ -42,6 +42,7 @@
   "dashboard.banner.territoryArea": "Área do território",
   "data.export.button": "Exportar",
   "data.export.csv": "CSV",
+  "data.export.error": "Falha ao exportar. Tente novamente.",
   "data.export.geojson": "GeoJSON",
   "data.addAlert": "Adicionar Alerta",
   "data.alertFallback": "Alerta",
