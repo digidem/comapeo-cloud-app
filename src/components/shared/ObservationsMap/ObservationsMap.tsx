@@ -106,7 +106,8 @@ export function ObservationsMap({
     fitMapToBounds(mapBounds);
   }, [fitMapToBounds, mapBounds]);
 
-  // Determine if height is a Tailwind class or a numeric/CSS value
+  // Arbitrary-value Tailwind classes contain '[' (e.g. 'h-[300px]')
+  // Plain utilities like 'h-64' are passed as inline styles instead.
   const isTailwindClass = typeof height === 'string' && height.includes('[');
 
   return (
