@@ -26,6 +26,10 @@ describe('repository guardrails', () => {
     expect(packageJson.scripts?.['verify:handoff']).toBe(
       'npm run lint && npm run test:coverage && npm run build',
     );
+    expect(packageJson.scripts?.['validate']).toBe('bash scripts/validate.sh');
+    expect(packageJson.scripts?.['validate:fast']).toBe(
+      'bash scripts/validate-fast.sh',
+    );
   });
 
   it('keeps local git hooks aligned with required guardrails', () => {
@@ -34,12 +38,12 @@ describe('repository guardrails', () => {
 
     expect(preCommitHook).toContain('trufflehog');
     expect(preCommitHook).toContain('lint-staged');
-    expect(prePushHook).toContain('npm run verify:handoff');
-    expect(prePushHook).toContain('npm run check:i18n');
+    expect(prePushHook).toContain('npm run validate');
+    expect(prePushHook).toContain('case "$BRANCH" in');
     // sh defaults to continue-on-error and reports only the last command's
     // exit code, so without `set -e` an earlier failure would silently pass.
     expect(preCommitHook).toMatch(/^set -e$/m);
-    expect(prePushHook).toMatch(/^set -e$/m);
+    expect(prePushHook).toMatch(/^set -e[ua]*$/m);
   });
 
   it('hardens CI with scoped permissions, deterministic setup, and blocking checks', () => {
