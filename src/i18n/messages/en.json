@@ -170,6 +170,9 @@
   "data.export.csv": {
     "defaultMessage": "CSV"
   },
+  "data.export.error": {
+    "defaultMessage": "Export failed. Please try again."
+  },
   "data.export.geojson": {
     "defaultMessage": "GeoJSON"
   },
