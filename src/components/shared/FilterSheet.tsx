@@ -1,0 +1,124 @@
+import * as Dialog from '@radix-ui/react-dialog';
+
+import { useState } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
+
+import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
+import type { ObservationFilterBarProps } from '@/components/shared/ObservationFilterBar';
+import { Button } from '@/components/ui/button';
+import { SelectPortalProvider } from '@/components/ui/select';
+
+const messages = defineMessages({
+  sheetTitle: {
+    id: 'data.filterSheetTitle',
+    defaultMessage: 'Filters',
+  },
+  apply: {
+    id: 'data.filterSheetApply',
+    defaultMessage: 'Show results',
+  },
+  closeSheet: {
+    id: 'data.filterSheetClose',
+    defaultMessage: 'Close filters',
+  },
+});
+
+interface FilterSheetProps extends ObservationFilterBarProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
+  const intl = useIntl();
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(
+    null,
+  );
+
+  function handleApply() {
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            animation: 'fadeIn 150ms ease-out',
+          }}
+        />
+        <Dialog.Content
+          aria-describedby={undefined}
+          className="fixed bottom-0 left-0 right-0 z-[51] flex max-h-[85vh] flex-col rounded-t-card bg-surface-card shadow-elevated focus:outline-none"
+          style={{
+            animation: 'slideUp 200ms ease-out',
+          }}
+        >
+          <Dialog.Title className="sr-only">
+            {intl.formatMessage(messages.sheetTitle)}
+          </Dialog.Title>
+
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1">
+            <div
+              aria-hidden="true"
+              className="h-1 w-10 rounded-full bg-border"
+            />
+          </div>
+
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-border/20 px-5 py-3">
+            <span className="text-sm font-semibold text-text">
+              {intl.formatMessage(messages.sheetTitle)}
+            </span>
+            <Dialog.Close
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label={intl.formatMessage(messages.closeSheet)}
+              style={{ touchAction: 'manipulation' }}
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 15 15"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.193 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.193 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z"
+                  fill="currentColor"
+                  fillRule="evenodd"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </Dialog.Close>
+          </div>
+
+          {/* Portal container for Select dropdowns — renders inside Dialog.Content
+              so clicks on options aren't intercepted by the Dialog's DismissableLayer */}
+          <div ref={setPortalContainer} />
+
+          {/* Filter controls */}
+          <div className="overflow-y-auto p-4">
+            <SelectPortalProvider container={portalContainer}>
+              <ObservationFilterBar {...filterProps} />
+            </SelectPortalProvider>
+          </div>
+
+          {/* Apply button */}
+          <div className="border-t border-border p-4">
+            <Button className="w-full" onClick={handleApply}>
+              {intl.formatMessage(messages.apply)}
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+export { FilterSheet };
+export type { FilterSheetProps };
