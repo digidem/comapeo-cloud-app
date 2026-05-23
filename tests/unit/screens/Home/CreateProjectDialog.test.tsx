@@ -141,6 +141,30 @@ describe('CreateProjectDialog', () => {
     ).toBeInTheDocument();
   });
 
+  it('uses provided serverUrl as default value', async () => {
+    const { useAuthStore } = await import('@/stores/auth-store');
+    await useAuthStore.getState().addServer({
+      label: 'Custom Server',
+      baseUrl: 'https://custom-server.test',
+      token: 'test-token',
+    });
+
+    render(
+      <CreateProjectDialog
+        isOpen
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        serverUrl="https://custom-server.test"
+      />,
+    );
+
+    // The form should initialize with the provided serverUrl (not LOCAL_SERVER_VALUE)
+    // We verify the branch where _serverUrl is defined (line 120: _serverUrl ?? LOCAL_SERVER_VALUE)
+    expect(screen.getByRole('dialog')).toBeDefined();
+    // The Radix Select trigger should display the matching server's URL value
+    expect(screen.getAllByText('Custom Server').length).toBeGreaterThan(0);
+  });
+
   it('creates project with description', async () => {
     const { createProject } = await import('@/lib/data-layer');
     vi.mocked(createProject).mockResolvedValue({
