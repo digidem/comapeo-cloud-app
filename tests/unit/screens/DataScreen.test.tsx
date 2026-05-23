@@ -137,10 +137,15 @@ vi.mock('@/components/ui/tabs', () => {
   };
 });
 
+vi.mock('@/components/shared/ObservationsMap', () => ({
+  ObservationsMap: () => <div data-testid="observations-map" />,
+}));
+
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
+  useNavigate: () => vi.fn(),
 }));
 
 function resetMocks() {
@@ -420,6 +425,68 @@ describe('DataScreen', () => {
     it('renders Data title', () => {
       render(<DataScreen />);
       expect(screen.getByText('Data')).toBeInTheDocument();
+    });
+
+    // ---- Map/Grid Toggle ----
+
+    describe('map/grid toggle', () => {
+      it('shows grid view by default — observations-map absent', () => {
+        render(<DataScreen />);
+        expect(
+          screen.queryByTestId('observations-map'),
+        ).not.toBeInTheDocument();
+        // Observation card content is present (grid view)
+        expect(screen.getByText('forest')).toBeInTheDocument();
+      });
+
+      it('renders the toggle button with accessible label', () => {
+        render(<DataScreen />);
+        expect(
+          screen.getByRole('button', { name: /toggle map and grid view/i }),
+        ).toBeInTheDocument();
+      });
+
+      it('switches to map view on toggle click', async () => {
+        const { userEvent } = await import('@tests/mocks/test-utils');
+        const user = userEvent.setup();
+        render(<DataScreen />);
+
+        // Initially grid view
+        expect(
+          screen.queryByTestId('observations-map'),
+        ).not.toBeInTheDocument();
+
+        // Click toggle to switch to map
+        await user.click(
+          screen.getByRole('button', { name: /toggle map and grid view/i }),
+        );
+
+        // Map view should be shown
+        expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+        // Grid cards should be hidden (no 'forest' category text visible)
+        expect(screen.queryByText('forest')).not.toBeInTheDocument();
+      });
+
+      it('switches back to grid view on second toggle click', async () => {
+        const { userEvent } = await import('@tests/mocks/test-utils');
+        const user = userEvent.setup();
+        render(<DataScreen />);
+
+        // Toggle to map
+        await user.click(
+          screen.getByRole('button', { name: /toggle map and grid view/i }),
+        );
+        expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+
+        // Toggle back to grid
+        await user.click(
+          screen.getByRole('button', { name: /toggle map and grid view/i }),
+        );
+        expect(
+          screen.queryByTestId('observations-map'),
+        ).not.toBeInTheDocument();
+        expect(screen.getByText('forest')).toBeInTheDocument();
+      });
     });
   });
 });

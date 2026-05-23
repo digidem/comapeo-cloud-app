@@ -1,11 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { AlertCard } from '@/components/shared/AlertCard';
 import { MediaPreview } from '@/components/shared/MediaPreview';
+import { ObservationsMap } from '@/components/shared/ObservationsMap';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -67,14 +68,28 @@ const messages = defineMessages({
     id: 'data.alertsError',
     defaultMessage: 'Failed to load alerts. Please try again.',
   },
+  viewGrid: {
+    id: 'data.viewGrid',
+    defaultMessage: 'Grid view',
+  },
+  viewMap: {
+    id: 'data.viewMap',
+    defaultMessage: 'Map view',
+  },
+  toggleView: {
+    id: 'data.toggleView',
+    defaultMessage: 'Toggle map and grid view',
+  },
 });
 
 export function DataScreen() {
   const intl = useIntl();
+  const navigate = useNavigate();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projectsQuery = useProjects();
   const observationsQuery = useObservations(selectedProjectId);
   const alertsQuery = useAlerts(selectedProjectId);
+  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
@@ -141,12 +156,67 @@ export function DataScreen() {
             </TabsTrigger>
           </TabsList>
 
-          <Link
-            to="/data/alerts/new"
-            className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white no-underline hover:bg-primary-dark transition-colors text-center"
-          >
-            {intl.formatMessage(messages.addAlert)}
-          </Link>
+          <div className="flex items-center gap-2">
+            {viewMode === 'grid' ? (
+              <button
+                type="button"
+                onClick={() => setViewMode('map')}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-button bg-surface-card text-text-muted hover:bg-surface-container-low hover:text-text transition-colors min-h-[44px]"
+                aria-label={intl.formatMessage(messages.toggleView)}
+                aria-pressed={false}
+                title={intl.formatMessage(messages.viewMap)}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+                  <line x1="8" y1="2" x2="8" y2="18" />
+                  <line x1="16" y1="6" x2="16" y2="22" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-button bg-surface-card text-text-muted hover:bg-surface-container-low hover:text-text transition-colors min-h-[44px]"
+                aria-label={intl.formatMessage(messages.toggleView)}
+                aria-pressed={true}
+                title={intl.formatMessage(messages.viewGrid)}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                </svg>
+              </button>
+            )}
+
+            <Link
+              to="/data/alerts/new"
+              className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white no-underline hover:bg-primary-dark transition-colors text-center"
+            >
+              {intl.formatMessage(messages.addAlert)}
+            </Link>
+          </div>
         </div>
 
         <TabsContent value="observations">
@@ -175,6 +245,21 @@ export function DataScreen() {
                   <span className="text-text-muted text-sm">
                     {intl.formatMessage(messages.noObservations)}
                   </span>
+                </div>
+              );
+            }
+            if (viewMode === 'map') {
+              return (
+                <div className="mt-4">
+                  <ObservationsMap
+                    observations={observations}
+                    onMarkerClick={(observationId) =>
+                      navigate({
+                        to: '/data/observations/$observationId',
+                        params: { observationId },
+                      })
+                    }
+                  />
                 </div>
               );
             }

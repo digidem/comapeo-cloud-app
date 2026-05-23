@@ -194,8 +194,17 @@
   "data.title": {
     "defaultMessage": "Data"
   },
+  "data.toggleView": {
+    "defaultMessage": "Toggle map and grid view"
+  },
   "data.untitledProject": {
     "defaultMessage": "Untitled Project"
+  },
+  "data.viewGrid": {
+    "defaultMessage": "Grid view"
+  },
+  "data.viewMap": {
+    "defaultMessage": "Map view"
   },
   "home.activity.alert": {
     "defaultMessage": "Alert registered"
@@ -877,6 +886,12 @@
   },
   "observationDetail.updatedAt": {
     "defaultMessage": "Updated"
+  },
+  "observationsMap.empty": {
+    "defaultMessage": "No observations with location to show on the map"
+  },
+  "observationsMap.markerLabel": {
+    "defaultMessage": "View observation"
   },
   "settings.backup.description": {
     "defaultMessage": "Export your local settings to a JSON file, or import a previously exported backup."
