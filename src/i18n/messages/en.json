@@ -50,6 +50,9 @@
   "alertDetail.notFound": {
     "defaultMessage": "Alert not found"
   },
+  "alertDetail.sourceLabel": {
+    "defaultMessage": "Source"
+  },
   "alertDetail.title": {
     "defaultMessage": "Alert"
   },
