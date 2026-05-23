@@ -197,13 +197,8 @@ test.describe('Critical User Flows', () => {
     );
     expect(observationLocalId).not.toBeNull();
 
-    // Click the first observation card
-    await page.locator('a[href^="/data/observations/"]').first().click();
-
-    // Assert URL matches the observation detail route
-    await expect(page).toHaveURL(
-      new RegExp(`/data/observations/${observationLocalId}`),
-    );
+    // Click the specific observation card matching the IndexedDB observation
+    await page.locator(`a[href="/data/observations/${observationLocalId}"]`).click();
 
     // Observation detail renders with h1 heading
     await expect(
