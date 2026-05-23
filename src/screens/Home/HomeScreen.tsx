@@ -596,6 +596,8 @@ function HomeScreen() {
     reducerToStoreProjectRef.current = liveProjectId;
     if (liveProjectId) {
       dispatch({ type: 'SELECT_PROJECT', id: liveProjectId });
+      // User explicitly selected a project — re-enable auto-select
+      userClearedProjectRef.current = false;
     } else {
       dispatch({ type: 'CLEAR_PROJECT' });
       // Prevent the auto-select effect from immediately re-selecting a project
@@ -619,7 +621,6 @@ function HomeScreen() {
   // Skips auto-select when the user explicitly cleared the project (tracked via ref).
   useEffect(() => {
     if (userClearedProjectRef.current) {
-      userClearedProjectRef.current = false;
       return;
     }
     if (
