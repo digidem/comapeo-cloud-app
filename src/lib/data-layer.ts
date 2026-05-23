@@ -2,6 +2,7 @@ import type { FeatureCollection, Geometry, Point } from 'geojson';
 import JSZip from 'jszip';
 
 import { extractPoints } from '@/lib/area-calculator/calculator';
+import { isValidCoord } from '@/lib/coords';
 import {
   createAttachment,
   createAlert as repoCreateAlert,
@@ -65,17 +66,6 @@ export async function createObservation(input: {
 
 export async function getObservations(projectLocalId: string) {
   return repoGetObservations(projectLocalId);
-}
-
-function isValidCoord(lat: number, lon: number): boolean {
-  return (
-    Number.isFinite(lat) &&
-    Number.isFinite(lon) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lon >= -180 &&
-    lon <= 180
-  );
 }
 
 export async function getProjectPoints(

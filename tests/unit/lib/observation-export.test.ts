@@ -279,6 +279,26 @@ describe('observationsToCsv', () => {
     expect(csv).toMatch(/\\"/);
   });
 
+  it('quotes fields containing newlines', () => {
+    const obs = makeObservation({
+      tags: { notes: 'line1\nline2' },
+    });
+    const csv = observationsToCsv([obs]);
+
+    // Field containing newline should be quoted
+    expect(csv).toContain('"{"');
+  });
+
+  it('quotes fields containing carriage returns', () => {
+    const obs = makeObservation({
+      tags: { notes: 'col1\rcol2' },
+    });
+    const csv = observationsToCsv([obs]);
+
+    // Field containing carriage return should be quoted
+    expect(csv).toContain('"{"');
+  });
+
   it('handles photoUrls field from tags', () => {
     const obs = makeObservation({
       tags: {

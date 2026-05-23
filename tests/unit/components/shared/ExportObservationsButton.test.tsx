@@ -112,11 +112,39 @@ vi.mock('@radix-ui/react-dropdown-menu', () => {
     );
   }
 
+  function MockPortal({
+    children,
+    _isOpen,
+    _setIsOpen,
+  }: {
+    children: ReactNode;
+    _isOpen?: boolean;
+    _setIsOpen?: Dispatch<SetStateAction<boolean>>;
+  }) {
+    return (
+      <>
+        {Children.map(children, (child: ReactNode) => {
+          if (isValidElement(child)) {
+            return cloneElement(
+              child as React.ReactElement<Record<string, unknown>>,
+              {
+                _isOpen,
+                _setIsOpen,
+              },
+            );
+          }
+          return child;
+        })}
+      </>
+    );
+  }
+
   return {
     Root: MockRoot,
     Trigger: MockTrigger,
     Content: MockContent,
     Item: MockItem,
+    Portal: MockPortal,
   };
 });
 

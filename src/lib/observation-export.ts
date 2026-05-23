@@ -1,23 +1,9 @@
 import type { Feature, FeatureCollection, Point } from 'geojson';
 
+import { isValidCoord } from '@/lib/coords';
 import type { Observation } from '@/lib/data-layer';
 
 export type ExportFormat = 'geojson' | 'csv';
-
-// ---------------------------------------------------------------------------
-// Coord validation (mirrors data-layer.ts)
-// ---------------------------------------------------------------------------
-
-function isValidCoord(lat: number, lon: number): boolean {
-  return (
-    Number.isFinite(lat) &&
-    Number.isFinite(lon) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lon >= -180 &&
-    lon <= 180
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Slugify
@@ -100,7 +86,12 @@ function csvEscape(value: string): string {
   if (/^[=+\-@]/.test(value)) {
     value = "'" + value;
   }
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+  if (
+    value.includes(',') ||
+    value.includes('"') ||
+    value.includes('\n') ||
+    value.includes('\r')
+  ) {
     return `"${value.replace(/"/g, '""')}"`;
   }
   return value;

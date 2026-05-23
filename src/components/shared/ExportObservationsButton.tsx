@@ -68,14 +68,16 @@ export function ExportObservationsButton({
         </Button>
       </DropdownMenu.Trigger>
 
-      <DropdownMenu.Content align="end">
-        <DropdownMenu.Item onSelect={handleExportGeoJson}>
-          {intl.formatMessage(messages.geojson)}
-        </DropdownMenu.Item>
-        <DropdownMenu.Item onSelect={handleExportCsv}>
-          {intl.formatMessage(messages.csv)}
-        </DropdownMenu.Item>
-      </DropdownMenu.Content>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end">
+          <DropdownMenu.Item onSelect={handleExportGeoJson}>
+            {intl.formatMessage(messages.geojson)}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item onSelect={handleExportCsv}>
+            {intl.formatMessage(messages.csv)}
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
     </DropdownMenu.Root>
   );
 }
