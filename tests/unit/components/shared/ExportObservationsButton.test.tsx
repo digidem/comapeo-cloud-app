@@ -294,11 +294,12 @@ describe('ExportObservationsButton', () => {
     );
   });
 
-  it('catches errors in GeoJSON export and logs to console', async () => {
+  it('catches errors in GeoJSON export, logs to console, and alerts the user', async () => {
     const user = userEvent.setup();
     const consoleErrorSpy = vi
       .spyOn(console, 'error')
       .mockImplementation(() => {});
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     mockObservationsToGeoJson.mockImplementation(() => {
       throw new Error('GeoJSON conversion failed');
     });
@@ -321,16 +322,19 @@ describe('ExportObservationsButton', () => {
       'Export failed:',
       expect.any(Error),
     );
+    expect(alertSpy).toHaveBeenCalledWith('Export failed. Please try again.');
     expect(mockDownloadText).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
+    alertSpy.mockRestore();
   });
 
-  it('catches errors in CSV export and logs to console', async () => {
+  it('catches errors in CSV export, logs to console, and alerts the user', async () => {
     const user = userEvent.setup();
     const consoleErrorSpy = vi
       .spyOn(console, 'error')
       .mockImplementation(() => {});
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     mockObservationsToCsv.mockImplementation(() => {
       throw new Error('CSV conversion failed');
     });
@@ -353,8 +357,10 @@ describe('ExportObservationsButton', () => {
       'Export failed:',
       expect.any(Error),
     );
+    expect(alertSpy).toHaveBeenCalledWith('Export failed. Please try again.');
     expect(mockDownloadText).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
+    alertSpy.mockRestore();
   });
 });

@@ -83,7 +83,8 @@ const CSV_COLUMNS = [
 
 function csvEscape(value: string): string {
   // Prevent CSV formula injection: prefix cells starting with =, +, -, @
-  if (/^[=+\-@]/.test(value)) {
+  // (including when preceded by whitespace, which Excel and Sheets also interpret)
+  if (/^\s*[=+\-@]/.test(value)) {
     value = "'" + value;
   }
   if (
