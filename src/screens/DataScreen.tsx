@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Link } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { AlertCard } from '@/components/shared/AlertCard';
+import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { MediaPreview } from '@/components/shared/MediaPreview';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -76,6 +77,8 @@ export function DataScreen() {
   const observationsQuery = useObservations(selectedProjectId);
   const alertsQuery = useAlerts(selectedProjectId);
 
+  const [activeTab, setActiveTab] = useState('observations');
+
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
 
@@ -129,7 +132,7 @@ export function DataScreen() {
       </h1>
 
       {/* Tabbed content */}
-      <Tabs defaultValue="observations">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <TabsList>
             <TabsTrigger value="observations">
@@ -141,12 +144,22 @@ export function DataScreen() {
             </TabsTrigger>
           </TabsList>
 
-          <Link
-            to="/data/alerts/new"
-            className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white no-underline hover:bg-primary-dark transition-colors text-center"
-          >
-            {intl.formatMessage(messages.addAlert)}
-          </Link>
+          <div className="flex items-center gap-2">
+            {activeTab === 'observations' && (
+              <ExportObservationsButton
+                observations={observations}
+                projectName={selectedProject?.name}
+                disabled={observations.length === 0}
+              />
+            )}
+
+            <Link
+              to="/data/alerts/new"
+              className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white no-underline hover:bg-primary-dark transition-colors text-center"
+            >
+              {intl.formatMessage(messages.addAlert)}
+            </Link>
+          </div>
         </div>
 
         <TabsContent value="observations">
