@@ -106,9 +106,9 @@ export function ObservationsMap({
     fitMapToBounds(mapBounds);
   }, [fitMapToBounds, mapBounds]);
 
-  // Arbitrary-value Tailwind classes contain '[' (e.g. 'h-[300px]')
-  // Plain utilities like 'h-64' are passed as inline styles instead.
-  const isTailwindClass = typeof height === 'string' && height.includes('[');
+  // Detect Tailwind height classes via h- prefix (e.g. 'h-[300px]', 'h-64', 'h-screen')
+  // Plain values like '300px' or 500 are passed as inline styles instead.
+  const isTailwindClass = typeof height === 'string' && /^h-/.test(height);
 
   return (
     <div
@@ -156,11 +156,13 @@ export function ObservationsMap({
           >
             <button
               type="button"
-              className="flex flex-col items-center cursor-pointer"
+              className="flex items-center justify-center min-h-[44px] min-w-[44px] cursor-pointer"
               aria-label={intl.formatMessage(messages.markerLabel)}
             >
-              <div className="h-3 w-3 rounded-full bg-danger border-2 border-white shadow-md" />
-              <div className="h-2.5 w-0.5 rounded-full bg-danger/60" />
+              <div className="flex flex-col items-center">
+                <div className="h-3 w-3 rounded-full bg-danger border-2 border-white shadow-md" />
+                <div className="h-2.5 w-0.5 rounded-full bg-danger/60" />
+              </div>
             </button>
           </Marker>
         ))}
