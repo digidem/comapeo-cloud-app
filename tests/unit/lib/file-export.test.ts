@@ -9,6 +9,7 @@ describe('triggerDownload', () => {
   let anchorElement: HTMLAnchorElement;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     originalCreateObjectURL = URL.createObjectURL;
     originalRevokeObjectURL = URL.revokeObjectURL;
 
@@ -40,6 +41,7 @@ describe('triggerDownload', () => {
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('creates an object URL from the blob', () => {
@@ -70,6 +72,9 @@ describe('triggerDownload', () => {
     const blob = new Blob(['hello'], { type: 'text/plain' });
     triggerDownload(blob, 'test.txt');
 
+    // Revoke happens after 100ms timeout
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(100);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith(
       'blob:http://localhost/test123',
     );

@@ -54,7 +54,7 @@ export function buildExportFilename(
 export function observationsToGeoJson(
   observations: Observation[],
 ): FeatureCollection {
-  const features = observations.map((obs) => {
+  const features: FeatureCollection['features'] = observations.map((obs) => {
     const hasValidCoords =
       obs.lat !== undefined &&
       obs.lon !== undefined &&
@@ -76,7 +76,7 @@ export function observationsToGeoJson(
 
   return {
     type: 'FeatureCollection',
-    features: features as FeatureCollection['features'],
+    features,
   };
 }
 
@@ -96,6 +96,10 @@ const CSV_COLUMNS = [
 ] as const;
 
 function csvEscape(value: string): string {
+  // Prevent CSV formula injection: prefix cells starting with =, +, -, @
+  if (/^[=+\-@]/.test(value)) {
+    value = "'" + value;
+  }
   if (value.includes(',') || value.includes('"') || value.includes('\n')) {
     return `"${value.replace(/"/g, '""')}"`;
   }
@@ -111,11 +115,16 @@ export function observationsToCsv(observations: Observation[]): string {
     const photoUrls = tags.photoUrls ?? '';
     const category = tags.category ?? '';
 
+    const hasValidCoords =
+      obs.lat !== undefined &&
+      obs.lon !== undefined &&
+      isValidCoord(obs.lat, obs.lon);
+
     const values: string[] = [
       csvEscape(obs.localId),
       csvEscape(category),
-      obs.lat !== undefined ? String(obs.lat) : '',
-      obs.lon !== undefined ? String(obs.lon) : '',
+      hasValidCoords ? String(obs.lat) : '',
+      hasValidCoords ? String(obs.lon) : '',
       csvEscape(obs.createdAt),
       csvEscape(obs.updatedAt),
       csvEscape(JSON.stringify(tags)),

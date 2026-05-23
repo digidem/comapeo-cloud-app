@@ -331,4 +331,23 @@ describe('observationsToCsv', () => {
 
     expect(lines).toHaveLength(3); // header + 2 data rows
   });
+
+  it('leaves lat/lon empty for NaN coords', () => {
+    const obs = makeObservation({ lat: NaN, lon: NaN });
+    const csv = observationsToCsv([obs]);
+    const lines = csv.split('\n');
+    const fields = lines[1]!.split(',');
+
+    expect(fields[2]).toBe('');
+    expect(fields[3]).toBe('');
+  });
+
+  it('prefixes formula-injection characters with apostrophe', () => {
+    const obs = makeObservation({
+      tags: { category: '=SUM(A1:A10)' },
+    });
+    const csv = observationsToCsv([obs]);
+    // Category field starting with '=' should be prefixed with apostrophe
+    expect(csv).toContain("'=SUM");
+  });
 });

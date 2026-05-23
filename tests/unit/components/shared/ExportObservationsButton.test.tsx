@@ -43,9 +43,10 @@ vi.mock('@radix-ui/react-dropdown-menu', () => {
             return cloneElement(
               child as React.ReactElement<Record<string, unknown>>,
               {
-              _isOpen: isOpen,
-              _setIsOpen: setIsOpen,
-            });
+                _isOpen: isOpen,
+                _setIsOpen: setIsOpen,
+              },
+            );
           }
           return child;
         })}

@@ -55,7 +55,7 @@ export function ExportObservationsButton({
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild disabled={disabled}>
-        <Button variant="secondary" size="sm" disabled={disabled}>
+        <Button variant="secondary" size="sm">
           {intl.formatMessage(messages.button)}
         </Button>
       </DropdownMenu.Trigger>
