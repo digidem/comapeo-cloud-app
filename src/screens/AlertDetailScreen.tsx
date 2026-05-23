@@ -235,7 +235,9 @@ export function AlertDetailScreen() {
         )}
       </div>
 
-      <h1 className="text-2xl font-bold text-text">{alertType ?? intl.formatMessage(messages.alertTitle)}</h1>
+      <h1 className="text-2xl font-bold text-text">
+        {alertType ?? intl.formatMessage(messages.alertTitle)}
+      </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Location — minimap with marker */}
