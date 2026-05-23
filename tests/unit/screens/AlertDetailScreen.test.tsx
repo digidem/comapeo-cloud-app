@@ -18,6 +18,18 @@ let mockAlertsData: unknown[] = [
 ];
 let mockAlertsIsPending = false;
 
+vi.mock('@/components/shared/MapContainer', () => ({
+  MapContainer: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="mock-map">{children}</div>
+  ),
+}));
+
+vi.mock('react-map-gl/maplibre', () => ({
+  Marker: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="mock-marker">{children}</div>
+  ),
+}));
+
 vi.mock('@/components/layout/shell-slot', () => ({
   useShellSlot: vi.fn(),
 }));
@@ -85,16 +97,30 @@ describe('AlertDetailScreen', () => {
     expect(screen.getByText('Alert')).toBeInTheDocument();
   });
 
-  it('renders geometry section', () => {
+  it('renders severity badge', () => {
     resetMocks();
     render(<AlertDetailScreen />);
-    expect(screen.getByText('Geometry')).toBeInTheDocument();
+    expect(screen.getByText('High')).toBeInTheDocument();
   });
 
-  it('renders metadata section', () => {
+  it('renders location section with map', () => {
     resetMocks();
     render(<AlertDetailScreen />);
-    expect(screen.getByText('Metadata')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-map')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-marker')).toBeInTheDocument();
+  });
+
+  it('renders details section', () => {
+    resetMocks();
+    render(<AlertDetailScreen />);
+    expect(screen.getByText('Details')).toBeInTheDocument();
+  });
+
+  it('renders coordinates when geometry is a Point', () => {
+    resetMocks();
+    render(<AlertDetailScreen />);
+    expect(screen.getByText(/0\.500000/)).toBeInTheDocument();
+    expect(screen.getByText(/102\.000000/)).toBeInTheDocument();
   });
 
   it('renders arrow back link to data', () => {
@@ -131,7 +157,7 @@ describe('AlertDetailScreen', () => {
     expect(skeletons.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders "No geometry" when alert has no geometry', () => {
+  it('renders "No location data" when alert has no geometry', () => {
     resetMocks();
     mockAlertsData = [
       {
@@ -144,10 +170,10 @@ describe('AlertDetailScreen', () => {
       },
     ];
     render(<AlertDetailScreen />);
-    expect(screen.getByText('No geometry')).toBeInTheDocument();
+    expect(screen.getByText('No location data')).toBeInTheDocument();
   });
 
-  it('renders alert without metadata section when metadata is null', () => {
+  it('renders alert without additional info section when metadata is null', () => {
     resetMocks();
     mockAlertsData = [
       {
@@ -160,8 +186,8 @@ describe('AlertDetailScreen', () => {
       },
     ];
     render(<AlertDetailScreen />);
-    // Metadata card should NOT be rendered
-    expect(screen.queryByText('Metadata')).not.toBeInTheDocument();
+    // Additional Info card should NOT be rendered
+    expect(screen.queryByText('Additional Info')).not.toBeInTheDocument();
   });
 
   it('renders alert without detection dates when optional fields are missing', () => {
@@ -181,5 +207,12 @@ describe('AlertDetailScreen', () => {
     render(<AlertDetailScreen />);
     // Detection Period should NOT be rendered
     expect(screen.queryByText('Detection Period')).not.toBeInTheDocument();
+  });
+
+  it('renders severity badge for alert', () => {
+    resetMocks();
+    render(<AlertDetailScreen />);
+    const badges = screen.getAllByText('High');
+    expect(badges.length).toBeGreaterThanOrEqual(1);
   });
 });

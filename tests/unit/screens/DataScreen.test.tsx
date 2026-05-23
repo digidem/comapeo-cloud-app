@@ -43,7 +43,7 @@ const defaultAlerts = [
   {
     localId: 'alert-1',
     projectLocalId: 'proj-1',
-    geometry: { type: 'Point', coordinates: [-55.45, -8.35] },
+    geometry: { type: 'Point', coordinates: [12.34, 56.78] },
     metadata: { severity: 'high' },
     detectionDateStart: '2024-03-14T00:00:00Z',
     detectionDateEnd: '2024-03-15T00:00:00Z',
