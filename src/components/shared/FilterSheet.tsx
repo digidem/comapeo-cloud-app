@@ -1,10 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
 
+import { useRef } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
 import type { ObservationFilterBarProps } from '@/components/shared/ObservationFilterBar';
 import { Button } from '@/components/ui/button';
+import { SelectPortalProvider } from '@/components/ui/select';
 
 const messages = defineMessages({
   sheetTitle: {
@@ -28,6 +30,7 @@ interface FilterSheetProps extends ObservationFilterBarProps {
 
 function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
   const intl = useIntl();
+  const portalRef = useRef<HTMLDivElement>(null);
 
   function handleApply() {
     onOpenChange(false);
@@ -92,9 +95,15 @@ function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
             </Dialog.Close>
           </div>
 
+          {/* Portal container for Select dropdowns — renders inside Dialog.Content
+              so clicks on options aren't intercepted by the Dialog's DismissableLayer */}
+          <div ref={portalRef} />
+
           {/* Filter controls */}
           <div className="overflow-y-auto p-4">
-            <ObservationFilterBar {...filterProps} />
+            <SelectPortalProvider container={portalRef.current}>
+              <ObservationFilterBar {...filterProps} />
+            </SelectPortalProvider>
           </div>
 
           {/* Apply button */}
