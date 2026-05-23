@@ -1,4 +1,4 @@
-import type { FeatureCollection } from 'geojson';
+import type { Feature, FeatureCollection, Point } from 'geojson';
 
 import type { Observation } from '@/lib/data-layer';
 
@@ -54,7 +54,7 @@ export function buildExportFilename(
 export function observationsToGeoJson(
   observations: Observation[],
 ): FeatureCollection {
-  const features: FeatureCollection['features'] = observations.map((obs) => {
+  const features: Array<Feature<Point | null>> = observations.map((obs) => {
     const hasValidCoords =
       obs.lat !== undefined &&
       obs.lon !== undefined &&
@@ -76,7 +76,7 @@ export function observationsToGeoJson(
 
   return {
     type: 'FeatureCollection',
-    features,
+    features: features as FeatureCollection['features'],
   };
 }
 
