@@ -40,16 +40,24 @@ export function ExportObservationsButton({
   const intl = useIntl();
 
   function handleExportGeoJson() {
-    const fc = observationsToGeoJson(observations);
-    const json = JSON.stringify(fc, null, 2);
-    const filename = buildExportFilename(projectName, 'geojson');
-    downloadText(json, filename, 'application/geo+json');
+    try {
+      const fc = observationsToGeoJson(observations);
+      const json = JSON.stringify(fc, null, 2);
+      const filename = buildExportFilename(projectName, 'geojson');
+      downloadText(json, filename, 'application/geo+json');
+    } catch (e) {
+      console.error('Export failed:', e);
+    }
   }
 
   function handleExportCsv() {
-    const csv = observationsToCsv(observations);
-    const filename = buildExportFilename(projectName, 'csv');
-    downloadText(csv, filename, 'text/csv');
+    try {
+      const csv = observationsToCsv(observations);
+      const filename = buildExportFilename(projectName, 'csv');
+      downloadText(csv, filename, 'text/csv');
+    } catch (e) {
+      console.error('Export failed:', e);
+    }
   }
 
   return (

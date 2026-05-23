@@ -265,4 +265,68 @@ describe('ExportObservationsButton', () => {
       'text/csv',
     );
   });
+
+  it('catches errors in GeoJSON export and logs to console', async () => {
+    const user = userEvent.setup();
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    mockObservationsToGeoJson.mockImplementation(() => {
+      throw new Error('GeoJSON conversion failed');
+    });
+
+    render(
+      <ExportObservationsButton
+        observations={[makeObservation()]}
+        projectName="Test Project"
+      />,
+    );
+
+    // Open dropdown
+    await user.click(screen.getByTestId('dropdown-trigger'));
+
+    // Click GeoJSON item — should not throw
+    const items = screen.getAllByTestId('dropdown-item');
+    await user.click(items[0]!);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Export failed:',
+      expect.any(Error),
+    );
+    expect(mockDownloadText).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('catches errors in CSV export and logs to console', async () => {
+    const user = userEvent.setup();
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    mockObservationsToCsv.mockImplementation(() => {
+      throw new Error('CSV conversion failed');
+    });
+
+    render(
+      <ExportObservationsButton
+        observations={[makeObservation()]}
+        projectName="Test Project"
+      />,
+    );
+
+    // Open dropdown
+    await user.click(screen.getByTestId('dropdown-trigger'));
+
+    // Click CSV item — should not throw
+    const items = screen.getAllByTestId('dropdown-item');
+    await user.click(items[1]!);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Export failed:',
+      expect.any(Error),
+    );
+    expect(mockDownloadText).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
 });
