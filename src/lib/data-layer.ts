@@ -15,7 +15,10 @@ import {
   getProjects as repoGetProjects,
   updateProject as repoUpdateProject,
 } from '@/lib/local-repositories';
-import { getLegacyDisplayName, matchObservationToPreset } from '@/lib/preset-utils';
+import {
+  getLegacyDisplayName,
+  matchObservationToPreset,
+} from '@/lib/preset-utils';
 import { syncRemoteArchive as doSync } from '@/lib/sync';
 import { useAuthStore } from '@/stores/auth-store';
 

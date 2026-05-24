@@ -106,7 +106,9 @@ export function getObservationDisplayNameSync(
   const preset = matchObservationToPreset(observation, presets);
   if (preset) return preset.name;
 
-  const legacyName = getLegacyDisplayName(observation.tags as Record<string, unknown> | undefined);
+  const legacyName = getLegacyDisplayName(
+    observation.tags as Record<string, unknown> | undefined,
+  );
   if (legacyName) return legacyName;
 
   return FALLBACK_NAME;
