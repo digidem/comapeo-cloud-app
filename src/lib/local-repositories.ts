@@ -444,9 +444,9 @@ export async function getPresetByRemoteId(
   return wrapDb(async () => {
     const db = getDb();
     return db.presets
-      .where('projectLocalId')
-      .equals(projectLocalId)
-      .filter((p) => p.remoteId === remoteId && !p.deleted)
+      .where('[projectLocalId+remoteId]')
+      .equals([projectLocalId, remoteId])
+      .filter((p) => !p.deleted)
       .first();
   });
 }

@@ -232,7 +232,7 @@ class AppDatabase extends Dexie {
 
     this.version(7).stores({
       presets:
-        '&localId, projectLocalId, [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
+        '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
     });
   }
 }

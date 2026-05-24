@@ -224,25 +224,28 @@ export async function pullPresets(
     serverRecord?.baseUrl ?? config.baseUrl ?? '',
   );
 
-  const presets: Preset[] = response.data
-    .filter((item) => !item.deleted)
-    .map((item) => ({
-      localId: `${sourceType}:${stableKey}:${item.docId}`,
-      projectLocalId,
-      sourceType,
-      sourceId: serverId,
-      remoteId: item.docId,
-      name: item.name,
-      color: item.color,
-      iconDocId: item.iconRef?.docId,
-      terms: item.terms ?? [],
-      fieldRefs: item.fieldRefs ?? [],
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      dirtyLocal: false,
-      deleted: false,
-    }));
+  // Map ALL items (including deleted) and write them all to DB as tombstones
+  // matching the pattern from pullObservations / pullAlerts
+  const allPresets: Preset[] = response.data.map((item) => ({
+    localId: `${sourceType}:${stableKey}:${item.docId}`,
+    projectLocalId,
+    sourceType,
+    sourceId: serverId,
+    remoteId: item.docId,
+    name: item.name,
+    color: item.color,
+    iconDocId: item.iconRef?.docId,
+    terms: item.terms ?? [],
+    fieldRefs: item.fieldRefs ?? [],
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    dirtyLocal: false,
+    deleted: item.deleted,
+  }));
 
-  await db.presets.bulkPut(presets);
-  return presets;
+  await db.presets.bulkPut(allPresets);
+
+  // Return only the non-deleted subset to callers; deleted items remain
+  // locally as tombstones so they are not re-surfaced after server-side deletion
+  return allPresets.filter((p) => !p.deleted);
 }
