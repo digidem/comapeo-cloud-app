@@ -15,7 +15,7 @@ import {
   getProjects as repoGetProjects,
   updateProject as repoUpdateProject,
 } from '@/lib/local-repositories';
-import { matchObservationToPreset } from '@/lib/preset-utils';
+import { getLegacyDisplayName, matchObservationToPreset } from '@/lib/preset-utils';
 import { syncRemoteArchive as doSync } from '@/lib/sync';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -279,5 +279,5 @@ export async function getObservationDisplayName(
   const presets = await repoGetPresets(projectLocalId);
   const preset = matchObservationToPreset(observation, presets);
   if (preset) return preset.name;
-  return 'Observation';
+  return getLegacyDisplayName(observation.tags) ?? 'Observation';
 }
