@@ -181,25 +181,20 @@ export function DataScreen() {
     }
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-        {filteredObs.map((obs) => {
-          const rawCategory = obs.tags?.category;
-          const categoryLabel =
-            rawCategory !== undefined && rawCategory !== null
-              ? String(rawCategory)
-              : null;
-          return (
-            <Link
-              key={obs.localId}
-              to="/data/observations/$observationId"
-              params={{ observationId: obs.localId }}
-              className="no-underline"
-            >
-              <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-text">
-                    {displayNames.get(obs.localId) ??
-                      categoryLabel ??
-                      intl.formatMessage(messages.observationFallback)}
+        {filteredObs.map((obs) => (
+          <Link
+            key={obs.localId}
+            to="/data/observations/$observationId"
+            params={{ observationId: obs.localId }}
+            className="no-underline"
+          >
+            <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-text">
+                  {displayNames.get(obs.localId) ??
+                    (obs.tags?.category !== null
+                      ? String(obs.tags.category)
+                      : intl.formatMessage(messages.observationFallback))}
                 </span>
                 {obs.lat !== undefined && obs.lon !== undefined && (
                   <span className="text-xs text-text-muted">
