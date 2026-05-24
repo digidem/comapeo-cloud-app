@@ -2,7 +2,11 @@
   "ci": {
     "collect": {
       "numberOfRuns": 3,
-      "url": ["https://app.comapeo.cloud/"]
+      "url": [
+        "https://app.comapeo.cloud/",
+        "https://app.comapeo.cloud/settings",
+        "https://app.comapeo.cloud/data"
+      ]
     },
     "assert": {
       "assertions": {
