@@ -19,7 +19,11 @@ describe('presetSchema', () => {
     addTags: {},
     removeTags: {},
     fieldRefs: [
-      { docId: 'field-001', versionId: 'field-001/0', url: '/projects/proj1/field/field-001' },
+      {
+        docId: 'field-001',
+        versionId: 'field-001/0',
+        url: '/projects/proj1/field/field-001',
+      },
     ],
     iconRef: { docId: 'icon-001', versionId: 'icon-001/0', url: '/icon' },
     color: '#FF5733',
