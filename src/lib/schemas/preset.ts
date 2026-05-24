@@ -1,14 +1,10 @@
 import * as v from 'valibot';
 
+import { presetRefSchema } from '@/lib/schemas/observation';
+
 const geometryTypesSchema = v.array(
   v.picklist(['point', 'vertex', 'line', 'area', 'relation']),
 );
-
-const urlRefSchema = v.object({
-  docId: v.string(),
-  versionId: v.string(),
-  url: v.string(),
-});
 
 const tagsSchema = v.record(
   v.string(),
@@ -35,8 +31,8 @@ export const presetSchema = v.object({
   tags: tagsSchema,
   addTags: tagsSchema,
   removeTags: tagsSchema,
-  fieldRefs: v.array(urlRefSchema),
-  iconRef: v.optional(urlRefSchema),
+  fieldRefs: v.array(presetRefSchema),
+  iconRef: v.optional(presetRefSchema),
   color: v.optional(v.pipe(v.string(), v.regex(/^#[0-9A-Fa-f]{6}$/))),
   terms: v.array(v.string()),
 });
