@@ -189,7 +189,7 @@ export function ObservationDetailScreen() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold text-text">
           {displayNames.get(observation.localId) ??
-            (tags.category != null
+            (tags.category !== null
               ? String(tags.category)
               : intl.formatMessage(messages.observationFallback))}
         </h1>
