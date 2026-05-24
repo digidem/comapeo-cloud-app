@@ -591,10 +591,11 @@ jobs:
       - name: Lighthouse CI against staging
         uses: treosh/lighthouse-ci-action@v12
         with:
-          configPath: .lighthouserc.json
+          urls: |
+            ${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/
+            ${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/settings
+            ${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/data
           uploadArtifacts: true
-        env:
-          LHCI_URL: ${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}
 
   # -----------------------------------------------------------------------
   # Production smoke tests
