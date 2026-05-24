@@ -192,8 +192,9 @@ export function DataScreen() {
               <div className="flex flex-col gap-1">
                 <span className="text-sm font-medium text-text">
                   {displayNames.get(obs.localId) ??
-                    obs.tags?.category ??
-                    intl.formatMessage(messages.observationFallback)}
+                    (obs.tags?.category != null
+                      ? String(obs.tags.category)
+                      : intl.formatMessage(messages.observationFallback))}
                 </span>
                 {obs.lat !== undefined && obs.lon !== undefined && (
                   <span className="text-xs text-text-muted">
