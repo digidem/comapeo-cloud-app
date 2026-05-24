@@ -1,6 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { createQueryWrapper } from '@tests/mocks/test-utils';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { usePresets } from '@/hooks/usePresets';
 import { getDb, resetDb } from '@/lib/db';
