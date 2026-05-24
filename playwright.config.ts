@@ -7,11 +7,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI
-    ? [
-        ['html', { open: 'never' }],
-        ['list'],
-        ['@argos-ci/playwright/reporter'],
-      ]
+    ? [['html', { open: 'never' }], ['list'], ['@argos-ci/playwright/reporter']]
     : 'html',
   use: {
     baseURL: 'http://localhost:5173',
