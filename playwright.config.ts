@@ -6,9 +6,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  reporter: process.env.CI
+    ? [['html', { open: 'never' }], ['list'], ['@argos-ci/playwright/reporter']]
+    : 'html',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: process.env.BASE_URL || 'http://localhost:5173',
     trace: 'on-first-retry',
   },
   projects: [
@@ -37,9 +39,13 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] },
     },
   ],
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: process.env.BASE_URL
+    ? undefined
+    : {
+        command: process.env.VITE_PREVIEW
+          ? 'npx vite preview --port 5173'
+          : 'npm run dev',
+        url: 'http://localhost:5173',
+        reuseExistingServer: !process.env.CI,
+      },
 });

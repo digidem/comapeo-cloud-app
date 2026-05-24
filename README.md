@@ -100,7 +100,7 @@ npm run deploy:preview   # build + deploy to preview channel
 | `npm run test:coverage` | Unit tests with coverage report (80% threshold) |
 | `npm run test:e2e` | Playwright E2E across Chromium, Firefox, WebKit |
 | `npm run test:screenshots` | Generate desktop (1440×900) + mobile (375×812) screenshots |
-| `npm run review:visual` | Output JSON manifest of screenshots for vision LLM review |
+| `npm run review:mobile` | Run LLM visual review of mobile screenshots |
 | `npm run extract-messages` | Extract i18n keys from source to `src/i18n/messages/en.json` |
 
 ## Project Structure

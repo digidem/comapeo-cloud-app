@@ -146,7 +146,6 @@ npm run test:coverage
 npm run test:e2e
 npm run test:e2e:ui
 npm run test:screenshots
-npm run review:visual
 npm run extract-messages
 ```
 
@@ -162,7 +161,7 @@ Also run:
 
 - `npm run test:e2e` when routing, auth, app shell behavior, browser APIs, or
   cross-screen flows change.
-- `npm run test:screenshots` and `npm run review:visual` when visual layout
+- `npm run test:screenshots` and `npm run review:mobile` when visual layout
   changes.
 - `npm run extract-messages` when user-visible strings change, then verify
   `src/i18n/messages/en.json` is intentionally updated.

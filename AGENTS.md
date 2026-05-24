@@ -37,7 +37,7 @@ npm run test:watch    # Run tests in watch mode during development
 npm run test:coverage # Run tests with coverage report (enforces 80% threshold)
 npm run test:e2e      # Run Playwright E2E tests (chromium, firefox, webkit) — uses --reporter=list to avoid HTML report server blocking
 npm run test:screenshots  # Generate desktop + mobile screenshots (chromium only) — uses --reporter=list
-npm run review:visual # Output JSON manifest of all generated screenshots
+npm run review:mobile # Run LLM visual review of mobile screenshots
 npm run extract-messages  # Extract i18n messages from source to en.json
 npm run format        # Format all files with Prettier
 ```
@@ -68,7 +68,6 @@ tests/
     screenshots/  # Generated PNG artifacts (gitignored)
     screenshot-utils.ts  # Viewport constants and takeScreenshot helper
     mock-server.ts       # Playwright route intercepts using test fixtures
-    review-screenshots.ts # Manifest generator for vision LLM review
   fixtures/     # Test data matching real API shapes
   mocks/        # MSW handlers and test utilities
 ```
@@ -183,7 +182,7 @@ Pattern for adding new screen screenshots:
 3. Import `setupMockServer` from `./mock-server` for API mocking
 4. Use `browser.newContext()` + `try/finally` pattern (see `app.screenshots.ts`)
 5. Run `npm run test:screenshots` to generate PNGs
-6. Run `npm run review:visual` to get a JSON manifest for LLM consumption
+6. Run `npm run review:mobile` (or `npm run pipeline:mobile-review`) for LLM-based visual review
 
 Screenshots are gitignored (generated artifacts). Each Playwright project
 that runs E2E tests uses all 3 browsers; the `screenshot` project uses
