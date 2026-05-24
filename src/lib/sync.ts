@@ -66,30 +66,56 @@ async function doSync(
     // Pull projects
     const projects = await pullProjects(serverDbId, config);
 
-    // Pull observations and alerts for each project in parallel.
-    // Each project is handled independently so a single failure does not
-    // abort the rest — partial results are still persisted.
+    // Pull observations, alerts, and presets for each project.
+    // Each data type is handled independently so a single failure does not
+    // abort the others — partial results are still persisted.
     const projectResults = await Promise.allSettled(
       projects.map(async (project) => {
         if (project.remoteId) {
-          await pullObservations(
-            serverDbId,
-            project.remoteId,
-            project.localId,
-            config,
-          );
-          await pullAlerts(
-            serverDbId,
-            project.remoteId,
-            project.localId,
-            config,
-          );
-          await pullPresets(
-            serverDbId,
-            project.remoteId,
-            project.localId,
-            config,
-          );
+          const projectErrors: string[] = [];
+
+          try {
+            await pullObservations(
+              serverDbId,
+              project.remoteId,
+              project.localId,
+              config,
+            );
+          } catch (e) {
+            projectErrors.push(
+              `Observations: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+
+          try {
+            await pullAlerts(
+              serverDbId,
+              project.remoteId,
+              project.localId,
+              config,
+            );
+          } catch (e) {
+            projectErrors.push(
+              `Alerts: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+
+          try {
+            await pullPresets(
+              serverDbId,
+              project.remoteId,
+              project.localId,
+              config,
+            );
+          } catch (e) {
+            projectErrors.push(
+              `Presets: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+
+          if (projectErrors.length > 0) {
+            throw new Error(projectErrors.join('; '));
+          }
         }
       }),
     );
