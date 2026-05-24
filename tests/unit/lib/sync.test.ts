@@ -416,4 +416,63 @@ describe('syncRemoteArchive', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('Partial sync failure');
   });
+
+  it('pulls presets for each project during sync', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'preset-1',
+              versionId: 'preset-1/0',
+              originalVersionId: 'preset-1/0',
+              schemaName: 'preset',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              name: 'Deforestation',
+              geometry: ['point'],
+              tags: {},
+              addTags: {},
+              removeTags: {},
+              fieldRefs: [],
+              terms: [],
+            },
+          ],
+        }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    expect(result.success).toBe(true);
+
+    const db = getDb();
+    const presets = await db.presets.toArray();
+    expect(presets.length).toBeGreaterThan(0);
+    expect(presets[0]!.name).toBe('Deforestation');
+  });
 });

@@ -2,6 +2,7 @@ import { getRemoteServer } from '@/lib/local-repositories';
 import {
   pullAlerts,
   pullObservations,
+  pullPresets,
   pullProjects,
 } from '@/lib/remote-archive';
 import { useAuthStore } from '@/stores/auth-store';
@@ -78,6 +79,12 @@ async function doSync(
             config,
           );
           await pullAlerts(
+            serverDbId,
+            project.remoteId,
+            project.localId,
+            config,
+          );
+          await pullPresets(
             serverDbId,
             project.remoteId,
             project.localId,

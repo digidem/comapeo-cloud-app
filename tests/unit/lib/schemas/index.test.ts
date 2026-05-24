@@ -46,4 +46,25 @@ describe('schemas index', () => {
   it('exports basemapCategorySchema', () => {
     expect(schemas.basemapCategorySchema).toBeDefined();
   });
+
+  it('exports presetSchema', () => {
+    expect(schemas.presetSchema).toBeDefined();
+    expect(typeof schemas.presetSchema).toBe('object');
+  });
+
+  it('exports presetsResponseSchema', () => {
+    expect(schemas.presetsResponseSchema).toBeDefined();
+  });
+
+  it('exports fieldSchema', () => {
+    expect(schemas.fieldSchema).toBeDefined();
+  });
+
+  it('exports fieldsResponseSchema', () => {
+    expect(schemas.fieldsResponseSchema).toBeDefined();
+  });
+
+  it('exports presetRefSchema', () => {
+    expect(schemas.presetRefSchema).toBeDefined();
+  });
 });

@@ -1,5 +1,11 @@
 import * as v from 'valibot';
 
+export const presetRefSchema = v.object({
+  docId: v.string(),
+  versionId: v.string(),
+  url: v.string(),
+});
+
 export const observationSchema = v.object({
   docId: v.string(),
   createdAt: v.string(),
@@ -13,6 +19,7 @@ export const observationSchema = v.object({
     }),
   ),
   tags: v.record(v.string(), v.unknown()),
+  presetRef: v.optional(presetRefSchema),
 });
 
 export const observationsResponseSchema = v.object({

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getDb, resetDb } from '@/lib/db';
-import type { Alert, Attachment, Observation, Project } from '@/lib/db';
+import type { Alert, Attachment, Observation, Preset, Project } from '@/lib/db';
 import { uuid } from '@/lib/uuid';
 
 function makeId(): string {
@@ -373,5 +373,106 @@ describe('local-repositories — attachments for project', () => {
       .toArray();
     expect(attachments).toHaveLength(1);
     expect(attachments[0]!.projectLocalId).toBe(projectA);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Presets
+// ---------------------------------------------------------------------------
+
+describe('local-repositories — presets', () => {
+  it('returns presets for a project', async () => {
+    const db = getDb();
+    const projectId = makeId();
+    const preset: Preset = {
+      localId: makeId(),
+      projectLocalId: projectId,
+      sourceType: 'remoteArchive',
+      sourceId: 's1',
+      remoteId: 'preset-1',
+      name: 'Deforestation',
+      color: '#FF5733',
+      terms: ['logging'],
+      fieldRefs: [],
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    };
+    await db.presets.put(preset);
+    const stored = await db.presets
+      .where('projectLocalId')
+      .equals(projectId)
+      .toArray();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.name).toBe('Deforestation');
+  });
+
+  it('filters out deleted presets', async () => {
+    const db = getDb();
+    const projectId = makeId();
+    const active: Preset = {
+      localId: makeId(),
+      projectLocalId: projectId,
+      sourceType: 'remoteArchive',
+      sourceId: 's1',
+      remoteId: 'preset-active',
+      name: 'Active',
+      terms: [],
+      fieldRefs: [],
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    };
+    const deleted: Preset = {
+      localId: makeId(),
+      projectLocalId: projectId,
+      sourceType: 'remoteArchive',
+      sourceId: 's1',
+      remoteId: 'preset-del',
+      name: 'Deleted',
+      terms: [],
+      fieldRefs: [],
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: true,
+    };
+    await db.presets.bulkPut([active, deleted]);
+    const presets = await db.presets
+      .where('projectLocalId')
+      .equals(projectId)
+      .filter((p) => !p.deleted)
+      .toArray();
+    expect(presets).toHaveLength(1);
+    expect(presets[0]!.name).toBe('Active');
+  });
+
+  it('queries preset by remoteId', async () => {
+    const db = getDb();
+    const projectId = makeId();
+    const preset: Preset = {
+      localId: makeId(),
+      projectLocalId: projectId,
+      sourceType: 'remoteArchive',
+      sourceId: 's1',
+      remoteId: 'preset-water',
+      name: 'Water',
+      terms: [],
+      fieldRefs: [],
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    };
+    await db.presets.put(preset);
+    const found = await db.presets
+      .where('projectLocalId')
+      .equals(projectId)
+      .filter((p) => p.remoteId === 'preset-water' && !p.deleted)
+      .first();
+    expect(found).toBeDefined();
+    expect(found!.name).toBe('Water');
   });
 });

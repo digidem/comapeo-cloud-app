@@ -11,14 +11,16 @@ import {
   deleteProject as repoDeleteProject,
   getAlerts as repoGetAlerts,
   getObservations as repoGetObservations,
+  getPresets as repoGetPresets,
   getProjects as repoGetProjects,
   updateProject as repoUpdateProject,
 } from '@/lib/local-repositories';
+import { matchObservationToPreset } from '@/lib/preset-utils';
 import { syncRemoteArchive as doSync } from '@/lib/sync';
 import { useAuthStore } from '@/stores/auth-store';
 
 // Re-export types from db
-export type { Alert, Attachment, Observation, Project } from '@/lib/db';
+export type { Alert, Attachment, Observation, Preset, Project } from '@/lib/db';
 
 // ---------------------------------------------------------------------------
 // Projects
@@ -242,4 +244,40 @@ export async function syncRemoteArchive(
   options: { baseUrl: string; token: string; serverLabel?: string },
 ): Promise<{ success: boolean; error?: string }> {
   return doSync(serverId, options);
+}
+
+// ---------------------------------------------------------------------------
+// Presets
+// ---------------------------------------------------------------------------
+
+export async function getPresets(projectLocalId: string) {
+  return repoGetPresets(projectLocalId);
+}
+
+/**
+ * Build a lookup map from preset remoteId to Preset for efficient matching.
+ */
+export async function getPresetLookupMap(
+  projectLocalId: string,
+): Promise<Map<string, import('@/lib/db').Preset>> {
+  const presets = await repoGetPresets(projectLocalId);
+  const map = new Map<string, import('@/lib/db').Preset>();
+  for (const p of presets) {
+    if (p.remoteId) map.set(p.remoteId, p);
+  }
+  return map;
+}
+
+/**
+ * Resolve the display name for an observation using its matched preset.
+ * Falls back to tags.category then 'Observation'.
+ */
+export async function getObservationDisplayName(
+  observation: import('@/lib/db').Observation,
+  projectLocalId: string,
+): Promise<string> {
+  const lookup = await getPresetLookupMap(projectLocalId);
+  const preset = matchObservationToPreset(observation, lookup);
+  if (preset) return preset.name;
+  return (observation.tags?.category as string) ?? 'Observation';
 }

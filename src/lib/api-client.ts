@@ -8,7 +8,9 @@ import {
   alertsResponseSchema,
   createAlertBodySchema,
   errorResponseSchema,
+  fieldsResponseSchema,
   observationsResponseSchema,
+  presetsResponseSchema,
   projectDetailResponseSchema,
   projectsResponseSchema,
   serverInfoResponseSchema,
@@ -261,6 +263,73 @@ export const apiClient = {
       }
 
       throw new ApiError(response.status, code, message);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
+  async getPresets(projectId: string, config?: RequestConfig) {
+    try {
+      const request = resolveApiRequest(config);
+      const response = await fetch(
+        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/preset`,
+        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+      );
+      return handleResponse(response, presetsResponseSchema, config);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
+  async getFields(projectId: string, config?: RequestConfig) {
+    try {
+      const request = resolveApiRequest(config);
+      const response = await fetch(
+        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/field`,
+        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+      );
+      return handleResponse(response, fieldsResponseSchema, config);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
+  async getIcon(
+    projectId: string,
+    docId: string,
+    config?: RequestConfig,
+  ): Promise<Blob> {
+    try {
+      const request = resolveApiRequest(config);
+      const response = await fetch(
+        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/icon/${encodeURIComponent(docId)}`,
+        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+      );
+
+      if (response.status === 401 && !config) {
+        useAuthStore.getState().clearAuth();
+      }
+
+      if (!response.ok) {
+        let code = 'UNKNOWN';
+        let message = `Request failed with status ${response.status}`;
+        try {
+          const body = await response.json();
+          const parsed = v.safeParse(errorResponseSchema, body);
+          if (parsed.success) {
+            code = parsed.output.error.code;
+            message = parsed.output.error.message;
+          }
+        } catch {
+          /* keep defaults */
+        }
+        throw new ApiError(response.status, code, message);
+      }
+
+      return response.blob();
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;

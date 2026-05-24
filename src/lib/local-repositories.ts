@@ -3,6 +3,7 @@ import type {
   Alert,
   Attachment,
   Observation,
+  Preset,
   Project,
   RemoteServer,
   SyncMetadata,
@@ -93,11 +94,12 @@ export async function deleteProject(localId: string): Promise<void> {
     const db = getDb();
     await db.transaction(
       'rw',
-      [db.projects, db.observations, db.alerts, db.attachments],
+      [db.projects, db.observations, db.alerts, db.attachments, db.presets],
       async () => {
         await db.observations.where('projectLocalId').equals(localId).delete();
         await db.alerts.where('projectLocalId').equals(localId).delete();
         await db.attachments.where('projectLocalId').equals(localId).delete();
+        await db.presets.where('projectLocalId').equals(localId).delete();
         await db.projects.delete(localId);
       },
     );
@@ -410,5 +412,41 @@ export async function upsertSyncMetadata(
     const db = getDb();
     await db.syncMetadata.put(meta);
     return meta;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Presets
+// ---------------------------------------------------------------------------
+
+export async function getPresets(projectLocalId: string): Promise<Preset[]> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.presets
+      .where('projectLocalId')
+      .equals(projectLocalId)
+      .filter((p) => !p.deleted)
+      .toArray();
+  });
+}
+
+export async function getPreset(localId: string): Promise<Preset | undefined> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.presets.get(localId);
+  });
+}
+
+export async function getPresetByRemoteId(
+  projectLocalId: string,
+  remoteId: string,
+): Promise<Preset | undefined> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.presets
+      .where('projectLocalId')
+      .equals(projectLocalId)
+      .filter((p) => p.remoteId === remoteId && !p.deleted)
+      .first();
   });
 }

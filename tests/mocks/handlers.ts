@@ -1,5 +1,10 @@
 import { alertsFixture } from '@tests/fixtures/alerts';
 import { observationsFixture } from '@tests/fixtures/observations';
+import {
+  fieldsFixture,
+  iconFixture,
+  presetsFixture,
+} from '@tests/fixtures/presets';
 import { projectsFixture } from '@tests/fixtures/projects';
 import { serverInfoFixture } from '@tests/fixtures/server-info';
 import { HttpResponse, http } from 'msw';
@@ -268,5 +273,56 @@ export const handlers = [
       );
     }
     return new HttpResponse(null, { status: 201 });
+  }),
+
+  http.get('*/projects/*/preset', ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid bearer token',
+          },
+        },
+        { status: 401 },
+      );
+    }
+    return HttpResponse.json(presetsFixture);
+  }),
+
+  http.get('*/projects/*/field', ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid bearer token',
+          },
+        },
+        { status: 401 },
+      );
+    }
+    return HttpResponse.json(fieldsFixture);
+  }),
+
+  http.get('*/projects/*/icon/*', ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid bearer token',
+          },
+        },
+        { status: 401 },
+      );
+    }
+    return new HttpResponse(iconFixture, {
+      status: 200,
+      headers: { 'Content-Type': 'image/svg+xml' },
+    });
   }),
 ];

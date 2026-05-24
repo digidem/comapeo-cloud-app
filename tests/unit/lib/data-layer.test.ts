@@ -6,13 +6,16 @@ import {
   createObservation,
   createProject,
   getAlerts,
+  getObservationDisplayName,
   getObservations,
+  getPresetLookupMap,
+  getPresets,
   getProjectPoints,
   getProjects,
   getSyncStatus,
   importGeoJsonPoints,
 } from '@/lib/data-layer';
-import { resetDb } from '@/lib/db';
+import { getDb, resetDb } from '@/lib/db';
 import { useAuthStore } from '@/stores/auth-store';
 
 beforeEach(async () => {
@@ -343,6 +346,124 @@ describe('data-layer', () => {
       const result = await importGeoJsonPoints(project.localId, file);
       expect(result.imported).toBe(2);
       expect(result.skipped).toBe(0);
+    });
+
+    describe('getPresets', () => {
+      it('returns presets for a project', async () => {
+        const project = await createProject({ name: 'P' });
+        const db = getDb();
+        await db.presets.put({
+          localId: 'preset-1',
+          projectLocalId: project.localId,
+          sourceType: 'remoteArchive',
+          sourceId: 's1',
+          remoteId: 'forest',
+          name: 'Forest',
+          terms: [],
+          fieldRefs: [],
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          dirtyLocal: false,
+          deleted: false,
+        });
+
+        const presets = await getPresets(project.localId);
+        expect(presets).toBeInstanceOf(Array);
+        expect(presets).toHaveLength(1);
+        expect(presets[0]!.name).toBe('Forest');
+      });
+    });
+
+    describe('getPresetLookupMap', () => {
+      it('returns a Map of remoteId -> Preset', async () => {
+        const project = await createProject({ name: 'P' });
+        const db = getDb();
+        await db.presets.bulkPut([
+          {
+            localId: 'p1',
+            projectLocalId: project.localId,
+            sourceType: 'remoteArchive',
+            sourceId: 's1',
+            remoteId: 'forest',
+            name: 'Forest',
+            terms: [],
+            fieldRefs: [],
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            dirtyLocal: false,
+            deleted: false,
+          },
+          {
+            localId: 'p2',
+            projectLocalId: project.localId,
+            sourceType: 'remoteArchive',
+            sourceId: 's1',
+            remoteId: 'water',
+            name: 'Water',
+            terms: [],
+            fieldRefs: [],
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            dirtyLocal: false,
+            deleted: false,
+          },
+        ]);
+
+        const map = await getPresetLookupMap(project.localId);
+        expect(map).toBeInstanceOf(Map);
+        expect(map.get('forest')?.name).toBe('Forest');
+        expect(map.get('water')?.name).toBe('Water');
+      });
+    });
+
+    describe('getObservationDisplayName', () => {
+      it('returns preset name when observation has a matching preset', async () => {
+        const project = await createProject({ name: 'P' });
+        const obs = await createObservation({
+          projectLocalId: project.localId,
+          tags: { presetRefDocId: 'forest' },
+        });
+
+        const db = getDb();
+        await db.presets.put({
+          localId: 'preset-forest',
+          projectLocalId: project.localId,
+          sourceType: 'remoteArchive',
+          sourceId: 's1',
+          remoteId: 'forest',
+          name: 'Forest Monitoring',
+          terms: [],
+          fieldRefs: [],
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          dirtyLocal: false,
+          deleted: false,
+        });
+
+        const name = await getObservationDisplayName(obs, project.localId);
+        expect(name).toBe('Forest Monitoring');
+      });
+
+      it('falls back to tags.category when no preset match', async () => {
+        const project = await createProject({ name: 'P' });
+        const obs = await createObservation({
+          projectLocalId: project.localId,
+          tags: { category: 'deforestation' },
+        });
+
+        const name = await getObservationDisplayName(obs, project.localId);
+        expect(name).toBe('deforestation');
+      });
+
+      it('falls back to "Observation" when no category or preset', async () => {
+        const project = await createProject({ name: 'P' });
+        const obs = await createObservation({
+          projectLocalId: project.localId,
+        });
+
+        const name = await getObservationDisplayName(obs, project.localId);
+        expect(name).toBe('Observation');
+      });
     });
   });
 });

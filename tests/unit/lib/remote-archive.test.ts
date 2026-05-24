@@ -6,6 +6,7 @@ import { getDb, resetDb } from '@/lib/db';
 import {
   pullAlerts,
   pullObservations,
+  pullPresets,
   pullProjects,
 } from '@/lib/remote-archive';
 
@@ -524,5 +525,178 @@ describe('remote-archive', () => {
     // updatedAt should change when name changed
     expect(afterSecond[0]!.updatedAt).not.toBe(firstUpdatedAt);
     expect(afterSecond[0]!.name).toBe('Updated Forest Name');
+  });
+});
+
+describe('pullPresets', () => {
+  const PRESETS_RESPONSE = {
+    data: [
+      {
+        docId: 'preset-001',
+        versionId: 'preset-001/0',
+        originalVersionId: 'preset-001/0',
+        schemaName: 'preset' as const,
+        createdAt: '2024-03-15T10:00:00Z',
+        updatedAt: '2024-03-15T10:00:00Z',
+        links: [],
+        deleted: false,
+        name: 'Deforestation',
+        geometry: ['point', 'area'] as const,
+        tags: { category: 'forest-risk' },
+        addTags: {},
+        removeTags: {},
+        fieldRefs: ['field-001'],
+        iconRef: {
+          docId: 'icon-001',
+          versionId: 'icon-001/0',
+          url: '/presets/icon-001',
+        },
+        color: '#FF5733',
+        terms: ['logging', 'clear-cut'],
+      },
+      {
+        docId: 'preset-002',
+        versionId: 'preset-002/0',
+        originalVersionId: 'preset-002/0',
+        schemaName: 'preset' as const,
+        createdAt: '2024-03-14T14:00:00Z',
+        updatedAt: '2024-03-14T14:00:00Z',
+        links: [],
+        deleted: false,
+        name: 'Water Contamination',
+        geometry: ['point'] as const,
+        tags: { category: 'water-risk' },
+        addTags: {},
+        removeTags: {},
+        fieldRefs: [],
+        color: '#3357FF',
+        terms: ['river', 'pollution'],
+      },
+    ],
+  };
+
+  it('fetches presets from API and stores in DB', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/preset`, () =>
+        HttpResponse.json(PRESETS_RESPONSE),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    const presets = await pullPresets(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      config,
+    );
+    expect(presets).toHaveLength(2);
+    expect(presets[0]!.name).toBe('Deforestation');
+    expect(presets[0]!.projectLocalId).toBe('proj-local-1');
+
+    const db = getDb();
+    const stored = await db.presets
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(stored).toHaveLength(2);
+  });
+
+  it('overwrites existing presets for the same localId on re-sync', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/preset`, () =>
+        HttpResponse.json(PRESETS_RESPONSE),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    await pullPresets('server-1', 'proj-remote-1', 'proj-local-1', config);
+    await pullPresets('server-1', 'proj-remote-1', 'proj-local-1', config);
+    const db = getDb();
+    const stored = await db.presets
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(stored).toHaveLength(2); // not duplicated
+  });
+
+  it('skips deleted presets', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/preset`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'preset-del',
+              versionId: 'preset-del/0',
+              originalVersionId: 'preset-del/0',
+              schemaName: 'preset' as const,
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: true,
+              name: 'Deleted',
+              geometry: ['point'],
+              tags: {},
+              addTags: {},
+              removeTags: {},
+              fieldRefs: [],
+              terms: [],
+            },
+          ],
+        }),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    const presets = await pullPresets(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      config,
+    );
+    expect(presets).toHaveLength(0);
+  });
+});
+
+describe('pullObservations with presetRef', () => {
+  it('preserves presetRef on stored observations', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-preset-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [],
+              tags: { category: 'forest' },
+              presetRef: {
+                docId: 'preset-forest',
+                versionId: 'v1',
+                url: '/projects/proj-1/preset/preset-forest',
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    expect(observations).toHaveLength(1);
+    const obs = observations[0]!;
+    expect(obs.tags?.category).toBe('forest');
+    expect(obs.tags?.presetRefDocId).toBe('preset-forest');
   });
 });
