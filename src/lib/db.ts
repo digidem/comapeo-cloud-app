@@ -90,6 +90,7 @@ export interface Preset {
   name: string;
   color?: string;
   iconDocId?: string;
+  tags?: Record<string, unknown>;
   terms: string[];
   fieldRefs: string[];
   createdAt: string;

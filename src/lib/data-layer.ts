@@ -270,14 +270,14 @@ export async function getPresetLookupMap(
 
 /**
  * Resolve the display name for an observation using its matched preset.
- * Falls back to tags.category then 'Observation'.
+ * Falls back to 'Observation'.
  */
 export async function getObservationDisplayName(
   observation: import('@/lib/db').Observation,
   projectLocalId: string,
 ): Promise<string> {
-  const lookup = await getPresetLookupMap(projectLocalId);
-  const preset = matchObservationToPreset(observation, lookup);
+  const presets = await repoGetPresets(projectLocalId);
+  const preset = matchObservationToPreset(observation, presets);
   if (preset) return preset.name;
-  return (observation.tags?.category as string) ?? 'Observation';
+  return 'Observation';
 }

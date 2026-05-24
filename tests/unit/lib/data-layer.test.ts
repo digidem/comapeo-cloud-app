@@ -444,7 +444,7 @@ describe('data-layer', () => {
         expect(name).toBe('Forest Monitoring');
       });
 
-      it('falls back to tags.category when no preset match', async () => {
+      it('returns "Observation" when no preset matches observation tags', async () => {
         const project = await createProject({ name: 'P' });
         const obs = await createObservation({
           projectLocalId: project.localId,
@@ -452,7 +452,7 @@ describe('data-layer', () => {
         });
 
         const name = await getObservationDisplayName(obs, project.localId);
-        expect(name).toBe('deforestation');
+        expect(name).toBe('Observation');
       });
 
       it('falls back to "Observation" when no category or preset', async () => {
