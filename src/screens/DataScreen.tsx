@@ -216,8 +216,8 @@ export function DataScreen() {
               </div>
             </Card>
           </Link>
-          );
-        })}
+        );
+      })}
       </div>
     );
   }, [filteredObs, viewMode, navigate, intl, obsFilters]);
