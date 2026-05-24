@@ -674,6 +674,19 @@ describe('getPresets', () => {
     );
     await expect(apiClient.getPresets('proj1')).rejects.toThrow(ApiError);
   });
+
+  it('returns empty data array on 404 (legacy server)', async () => {
+    server.use(
+      http.get(`${BASE_URL}/projects/proj1/preset`, () =>
+        HttpResponse.json(
+          { error: { code: 'NOT_FOUND', message: 'Not found' } },
+          { status: 404 },
+        ),
+      ),
+    );
+    const result = await apiClient.getPresets('proj1');
+    expect(result).toEqual({ data: [] });
+  });
 });
 
 // ---------------------------------------------------------------------------
