@@ -16,6 +16,7 @@ import { useShellSlot } from '@/components/layout/shell-slot';
 import { Button } from '@/components/ui/button';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
+import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
@@ -413,6 +414,12 @@ function HomeScreen() {
     [observationsQuery.data],
   );
 
+  // Pre-compute observation display names using preset matching + legacy fallback
+  const observationDisplayNames = useObservationDisplayNames(
+    observations,
+    state.selectedProjectId,
+  );
+
   const alerts = useMemo(() => alertsQuery.data ?? [], [alertsQuery.data]);
 
   // Derive unique tag categories from observations
@@ -486,9 +493,9 @@ function HomeScreen() {
       const hasCoords = obs.lat !== undefined && obs.lon !== undefined;
       items.push({
         id: obs.localId,
-        title: hasCoords
-          ? intl.formatMessage(messages.activityObservationWithCoords)
-          : intl.formatMessage(messages.activityObservation),
+        title:
+          observationDisplayNames.get(obs.localId) ??
+          intl.formatMessage(messages.activityObservationWithCoords),
         description: hasCoords
           ? `${obs.lat!.toFixed(4)}, ${obs.lon!.toFixed(4)}`
           : intl.formatMessage(messages.activityNoLocation),
