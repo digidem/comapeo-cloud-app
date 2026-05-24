@@ -154,6 +154,10 @@ export function ObservationDetailScreen() {
   }
 
   const tags = observation.tags ?? {};
+  const categoryLabel =
+    tags.category !== undefined && tags.category !== null
+      ? String(tags.category)
+      : null;
   const photoList =
     tags.photoUrls === undefined
       ? []
@@ -189,9 +193,8 @@ export function ObservationDetailScreen() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold text-text">
           {displayNames.get(observation.localId) ??
-            (tags.category !== null
-              ? String(tags.category)
-              : intl.formatMessage(messages.observationFallback))}
+            categoryLabel ??
+            intl.formatMessage(messages.observationFallback)}
         </h1>
         <p className="text-text-muted text-sm">
           {intl.formatMessage(messages.createdAt)}:{' '}

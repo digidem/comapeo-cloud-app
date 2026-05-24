@@ -101,6 +101,14 @@ const messages = defineMessages({
   },
 });
 
+/** Safely extract category label from observation tags */
+function getCategoryLabel(obs: {
+  tags?: Record<string, unknown>;
+}): string | null {
+  const raw = obs.tags?.category;
+  return raw !== undefined && raw !== null ? String(raw) : null;
+}
+
 export function DataScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
@@ -192,9 +200,8 @@ export function DataScreen() {
               <div className="flex flex-col gap-1">
                 <span className="text-sm font-medium text-text">
                   {displayNames.get(obs.localId) ??
-                    (obs.tags?.category !== null
-                      ? String(obs.tags.category)
-                      : intl.formatMessage(messages.observationFallback))}
+                    getCategoryLabel(obs) ??
+                    intl.formatMessage(messages.observationFallback)}
                 </span>
                 {obs.lat !== undefined && obs.lon !== undefined && (
                   <span className="text-xs text-text-muted">
