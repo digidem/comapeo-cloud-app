@@ -11,7 +11,7 @@ export const presetsFixture = {
       deleted: false,
       name: 'Deforestation',
       geometry: ['point', 'area'] as const,
-      tags: { category: 'forest-risk' },
+      tags: { category: 'forest' },
       addTags: {},
       removeTags: {},
       fieldRefs: [
