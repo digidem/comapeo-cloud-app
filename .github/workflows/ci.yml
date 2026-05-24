@@ -69,7 +69,7 @@ jobs:
       - name: Build
         run: npm run build:ci
         env:
-          VITE_PUBLIC_APP_ORIGIN: https://app.comapeo.cloud
+          VITE_PUBLIC_APP_ORIGIN: ${{ github.ref == 'refs/heads/main' && 'https://app.comapeo.cloud' || github.ref == 'refs/heads/staging' && 'https://staging.comapeo.cloud' || format('https://{0}', vars.PAGES_DOMAIN || 'pages.dev') }}
           VITE_APP_RELEASE: ${{ github.sha }}
           VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/staging' && 'staging' || 'preview' }}
 
@@ -185,6 +185,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           command: pages deploy dist/ --project-name=comapeo-cloud-app --branch=${{ github.head_ref }}
 
       - name: Comment preview URL on PR
@@ -318,6 +319,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           command: pages deploy dist/ --project-name=comapeo-cloud-app
 
   # -----------------------------------------------------------------------
@@ -379,7 +381,40 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           command: pages deploy dist/ --project-name=comapeo-cloud-app --branch=staging
+
+  # -----------------------------------------------------------------------
+  # Smoke tests against staging deployment
+  # -----------------------------------------------------------------------
+  smoke-test-staging:
+    needs: staging
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Smoke test — app reachability
+        run: |
+          curl --fail --retry 10 --retry-delay 15 "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/"
+
+      - name: Smoke test — SPA route fallback
+        run: |
+          curl --fail --retry 10 --retry-delay 15 "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/settings"
+
+      - name: Smoke test — API proxy rejects missing target
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/api/info")
+          if [ "$STATUS" != "400" ]; then
+            echo "Expected 400 for /api/info without x-target-url, got $STATUS"
+            exit 1
+          fi
+
+      - name: Smoke test — API proxy succeeds with target
+        if: vars.SMOKE_TEST_ARCHIVE_ORIGIN != ''
+        run: |
+          curl --fail --retry 10 --retry-delay 15 \
+            -H "x-target-url: ${{ vars.SMOKE_TEST_ARCHIVE_ORIGIN }}" \
+            "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/api/info"
 
   # -----------------------------------------------------------------------
   # Lighthouse against deployed Cloudflare URL
