@@ -24,12 +24,11 @@ env:
 
 jobs:
   # -----------------------------------------------------------------------
-  # Gate-keeping: lint, types, tests, build, E2E
+  # TruffleHog secret scan (independent, needs full history)
   # -----------------------------------------------------------------------
-  check:
+  trufflehog:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
         with:
@@ -38,11 +37,18 @@ jobs:
       - name: TruffleHog secret scan
         uses: trufflesecurity/trufflehog@v3.95.3
         with:
-          # On push events, compare against the previous commit.
-          # On PR events, compare against the base branch.
           base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           head: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event.after }}
           extra_args: --results=verified,unknown
+
+  # -----------------------------------------------------------------------
+  # Lint (parallel)
+  # -----------------------------------------------------------------------
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -57,14 +63,81 @@ jobs:
       - name: Lint
         run: npm run lint
 
+  # -----------------------------------------------------------------------
+  # Type check (parallel)
+  # -----------------------------------------------------------------------
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Type check
         run: npm run lint:types
+
+  # -----------------------------------------------------------------------
+  # Unit tests with coverage + i18n check (parallel)
+  # -----------------------------------------------------------------------
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Unit tests with coverage
         run: npm run test:coverage
 
       - name: i18n message extraction check
         run: npm run check:i18n
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # -----------------------------------------------------------------------
+  # Build + E2E (gated on all parallel checks)
+  # -----------------------------------------------------------------------
+  build-e2e:
+    needs: [trufflehog, lint, typecheck, unit-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build
         run: npm run build:ci
@@ -78,29 +151,25 @@ jobs:
         with:
           name: dist
           path: dist/
-          retention-days: 1
+          retention-days: 3
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: E2E tests
-        run: npx playwright test --project=chromium --project=firefox --project=webkit
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 7
-          if-no-files-found: ignore
+      - name: E2E tests (chromium-only on PRs, all browsers on main)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright test --project=chromium --reporter=list
+          else
+            npx playwright test --project=chromium --project=firefox --project=webkit
+          fi
 
   # -----------------------------------------------------------------------
   # Visual regression with Argos CI
   # -----------------------------------------------------------------------
   visual-regression:
-    needs: check
-    if: needs.check.result == 'success'
+    needs: build-e2e
+    if: needs.build-e2e.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -150,7 +219,7 @@ jobs:
   # Preview deploy on pull_request
   # -----------------------------------------------------------------------
   preview:
-    needs: check
+    needs: build-e2e
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -301,7 +370,7 @@ jobs:
   # Production deploy on main push
   # -----------------------------------------------------------------------
   deploy:
-    needs: check
+    needs: build-e2e
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -363,7 +432,7 @@ jobs:
   # Staging deploy on staging branch push
   # -----------------------------------------------------------------------
   staging:
-    needs: check
+    needs: build-e2e
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
