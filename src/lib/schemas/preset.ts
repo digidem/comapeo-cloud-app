@@ -35,7 +35,7 @@ export const presetSchema = v.object({
   tags: tagsSchema,
   addTags: tagsSchema,
   removeTags: tagsSchema,
-  fieldRefs: v.array(v.string()),
+  fieldRefs: v.array(urlRefSchema),
   iconRef: v.optional(urlRefSchema),
   color: v.optional(v.pipe(v.string(), v.regex(/^#[0-9A-Fa-f]{6}$/))),
   terms: v.array(v.string()),

@@ -236,7 +236,7 @@ export async function pullPresets(
     color: item.color,
     iconDocId: item.iconRef?.docId,
     terms: item.terms ?? [],
-    fieldRefs: item.fieldRefs ?? [],
+    fieldRefs: item.fieldRefs.map((f) => f.docId),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     dirtyLocal: false,
