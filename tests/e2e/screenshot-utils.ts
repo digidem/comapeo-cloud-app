@@ -1,12 +1,5 @@
 import { argosScreenshot } from '@argos-ci/playwright';
 import type { Page } from '@playwright/test';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/** Absolute path to the screenshot output directory. */
-export const SCREENSHOT_DIR = path.resolve(__dirname, 'screenshots');
 
 /** Standard viewport sizes for visual review. */
 export const VIEWPORTS = {

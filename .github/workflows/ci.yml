@@ -123,7 +123,7 @@ jobs:
   # Build + E2E (gated on all parallel checks)
   # -----------------------------------------------------------------------
   build-e2e:
-    needs: [trufflehog, lint, typecheck, unit-tests]
+    needs: [trufflehog, lint, typecheck, unit-tests, audit]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
