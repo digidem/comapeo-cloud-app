@@ -109,6 +109,12 @@ export function ObservationDetailScreen() {
   );
   useShellSlot(shellSlot);
 
+  // Compute display names (MUST be before any early return — React hooks rule)
+  const displayNames = useObservationDisplayNames(
+    observationsQuery.data ?? [],
+    selectedProjectId,
+  );
+
   if (observationsQuery.isError) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
@@ -135,12 +141,6 @@ export function ObservationDetailScreen() {
 
   const observation = observationsQuery.data?.find(
     (o) => o.localId === observationId,
-  );
-
-  // Compute display name using preset matching
-  const displayNames = useObservationDisplayNames(
-    observation ? [observation] : [],
-    selectedProjectId,
   );
 
   if (!observation) {
