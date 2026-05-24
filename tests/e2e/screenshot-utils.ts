@@ -1,3 +1,4 @@
+import { argosScreenshot } from '@argos-ci/playwright';
 import type { Page, PageScreenshotOptions } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,32 +37,20 @@ export async function setTheme(page: Page, themeId: ThemeId): Promise<void> {
 }
 
 /**
- * Captures a full-page screenshot after waiting for fonts and network idle.
+ * Captures a full-page screenshot and uploads to Argos CI for visual diffing.
  *
  * @param page - Playwright Page instance
- * @param name - File name without extension (e.g. "home")
- * @param viewport - Which viewport subdirectory to save into
- * @param options - Additional Playwright screenshot options
+ * @param name - Screenshot name for Argos (e.g. "home-cloud-desktop")
  */
 export async function takeScreenshot(
   page: Page,
   name: string,
-  viewport: ViewportName,
-  options?: PageScreenshotOptions,
-): Promise<Buffer> {
+  _viewport?: ViewportName,
+): Promise<void> {
   await page.waitForLoadState('domcontentloaded');
   await page.evaluate(() => document.fonts.ready);
 
-  const dir = path.join(SCREENSHOT_DIR, viewport);
-
-  const { mkdir } = await import('node:fs/promises');
-  await mkdir(dir, { recursive: true });
-
-  const filePath = path.join(dir, `${name}.png`);
-
-  return page.screenshot({
-    path: filePath,
+  await argosScreenshot(page, name, {
     fullPage: true,
-    ...options,
   });
 }

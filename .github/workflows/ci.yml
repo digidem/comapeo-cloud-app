@@ -96,9 +96,9 @@ jobs:
           if-no-files-found: ignore
 
   # -----------------------------------------------------------------------
-  # Visual screenshots (separate job — not on the critical path)
+  # Visual regression with Argos CI
   # -----------------------------------------------------------------------
-  screenshots:
+  visual-regression:
     needs: check
     if: needs.check.result == 'success'
     runs-on: ubuntu-latest
@@ -116,27 +116,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Download build artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: dist
-          path: dist/
-
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Generate screenshots
-        continue-on-error: true
+      - name: Run visual regression screenshots
         run: npm run test:screenshots
+        env:
+          ARGOS_TOKEN: ${{ secrets.ARGOS_TOKEN }}
 
-      - name: Upload screenshots
-        uses: actions/upload-artifact@v7
-        if: always()
+  # -----------------------------------------------------------------------
+  # Dependency vulnerability audit
+  # -----------------------------------------------------------------------
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          name: screenshots
-          path: tests/e2e/screenshots/
-          retention-days: 14
-          if-no-files-found: ignore
+          node-version-file: .node-version
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit
+        run: npm audit --audit-level=high
 
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request
@@ -259,6 +267,35 @@ jobs:
       # `npx tsx scripts/clean-sourcemaps.ts --assert-only`; a runtime URL
       # probe cannot guess Vite's content-hashed chunk names reliably and
       # would be a false-assurance check.
+
+  # -----------------------------------------------------------------------
+  # Lightweight E2E against deployed preview (chromium-only, smoke-level)
+  # -----------------------------------------------------------------------
+  e2e-preview:
+    needs: preview
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke-level E2E against preview
+        run: npx playwright test --project=chromium --reporter=list
+        env:
+          BASE_URL: ${{ needs.preview.outputs.preview-url }}
 
   # -----------------------------------------------------------------------
   # Production deploy on main push
