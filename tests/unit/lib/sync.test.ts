@@ -414,7 +414,7 @@ describe('syncRemoteArchive', () => {
     globalThis.fetch = originalFetch;
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('Partial sync failure');
+    expect(result.error).toContain('unexpected string error');
   });
 
   it('pulls presets for each project during sync', async () => {
@@ -474,5 +474,134 @@ describe('syncRemoteArchive', () => {
     const presets = await db.presets.toArray();
     expect(presets.length).toBeGreaterThan(0);
     expect(presets[0]!.name).toBe('Deforestation');
+  });
+
+  it('succeeds when presets fail (non-critical data type)', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({}, { status: 500 }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    // Preset failures should not block sync success
+    expect(result.success).toBe(true);
+
+    // Observations and alerts should still be persisted
+    const db = getDb();
+    const observations = await db.observations.toArray();
+    expect(observations.length).toBeGreaterThan(0);
+  });
+
+  it('succeeds when alerts fail (non-critical data type)', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({}, { status: 500 }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    // Alert failures should not block sync success
+    expect(result.success).toBe(true);
+
+    const db = getDb();
+    const observations = await db.observations.toArray();
+    expect(observations.length).toBeGreaterThan(0);
+  });
+
+  it('fails when observations fail for all projects (critical data type)', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({}, { status: 500 }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    expect(result.success).toBe(false);
   });
 });

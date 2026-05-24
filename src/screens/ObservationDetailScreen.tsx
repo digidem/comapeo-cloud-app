@@ -10,6 +10,7 @@ import { AuthImg } from '@/components/shared/auth-img';
 import { MediaLightbox } from '@/components/shared/media-lightbox';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjects } from '@/hooks/useProjects';
 import { useProjectStore } from '@/stores/project-store';
@@ -136,6 +137,12 @@ export function ObservationDetailScreen() {
     (o) => o.localId === observationId,
   );
 
+  // Compute display name using preset matching
+  const displayNames = useObservationDisplayNames(
+    observation ? [observation] : [],
+    selectedProjectId,
+  );
+
   if (!observation) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
@@ -181,9 +188,9 @@ export function ObservationDetailScreen() {
 
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold text-text">
-          {tags.category
-            ? String(tags.category)
-            : intl.formatMessage(messages.observationFallback)}
+          {displayNames.get(observation.localId) ??
+            tags.category ??
+            intl.formatMessage(messages.observationFallback)}
         </h1>
         <p className="text-text-muted text-sm">
           {intl.formatMessage(messages.createdAt)}:{' '}

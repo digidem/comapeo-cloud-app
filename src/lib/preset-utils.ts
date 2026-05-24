@@ -2,6 +2,8 @@ import type { Observation, Preset } from '@/lib/db';
 
 const PRESET_REF_DOC_ID_KEY = 'presetRefDocId';
 
+const FALLBACK_NAME = 'Observation';
+
 /**
  * Finds the best matching preset based on an observation's tags.
  *
@@ -58,4 +60,22 @@ export function matchObservationToPreset(
   }
 
   return bestMatch;
+}
+
+/**
+ * Synchronous version of `getObservationDisplayName` that takes presets
+ * as a parameter instead of loading them from the database. Useful in UI
+ * components that already have presets loaded via a hook.
+ *
+ * @param observation - The observation whose display name to resolve
+ * @param presets - All presets (already loaded) to match against
+ * @returns The matched preset name, or the fallback 'Observation'
+ */
+export function getObservationDisplayNameSync(
+  observation: Pick<Observation, 'tags'>,
+  presets: Preset[],
+): string {
+  const preset = matchObservationToPreset(observation, presets);
+  if (preset) return preset.name;
+  return FALLBACK_NAME;
 }

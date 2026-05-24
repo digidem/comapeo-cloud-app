@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Observation, Preset } from '@/lib/db';
-import { matchObservationToPreset } from '@/lib/preset-utils';
+import {
+  getObservationDisplayNameSync,
+  matchObservationToPreset,
+} from '@/lib/preset-utils';
 
 const forestPreset: Preset = {
   localId: 'p:rf',
@@ -156,5 +159,28 @@ describe('matchObservationToPreset', () => {
     // Fast path fails, should fall back to tag scoring
     const result = matchObservationToPreset(obs, presets);
     expect(result).toEqual(forestPreset);
+  });
+});
+
+describe('getObservationDisplayNameSync', () => {
+  it('returns preset name when matched', () => {
+    const obs = makeObs({
+      tags: { category: 'forest-risk' },
+    });
+    expect(getObservationDisplayNameSync(obs, presets)).toBe('Forest');
+  });
+
+  it('returns Observation when no preset matches', () => {
+    const obs = makeObs({
+      tags: { color: 'red' },
+    });
+    expect(getObservationDisplayNameSync(obs, presets)).toBe('Observation');
+  });
+
+  it('returns Observation when presets array is empty', () => {
+    const obs = makeObs({
+      tags: { category: 'forest-risk' },
+    });
+    expect(getObservationDisplayNameSync(obs, [])).toBe('Observation');
   });
 });
