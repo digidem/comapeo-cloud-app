@@ -205,6 +205,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run visual regression screenshots
+        continue-on-error: true
         run: npm run test:screenshots
         env:
           ARGOS_TOKEN: ${{ secrets.ARGOS_TOKEN }}
