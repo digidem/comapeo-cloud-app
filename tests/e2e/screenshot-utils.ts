@@ -1,5 +1,5 @@
 import { argosScreenshot } from '@argos-ci/playwright';
-import type { Page, PageScreenshotOptions } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
