@@ -5,6 +5,34 @@ const PRESET_REF_DOC_ID_KEY = 'presetRefDocId';
 const FALLBACK_NAME = 'Observation';
 
 /**
+ * Attempts to derive a display name from legacy observation tags.
+ *
+ * In legacy servers (v0.4.x), observations used tag keys with values
+ * of "yes" or "true" to indicate the observation category (e.g.
+ * `{ "tree-sighting": "yes" }`). This function finds the first such
+ * tag key and formats it as a human-readable name.
+ *
+ * @param tags - The observation's tags object
+ * @returns A formatted display name, or undefined if no legacy tag found
+ */
+export function getLegacyDisplayName(
+  tags: Record<string, unknown> | undefined,
+): string | undefined {
+  if (!tags) return undefined;
+
+  for (const [key, value] of Object.entries(tags)) {
+    if (value === 'yes' || value === 'true') {
+      return key
+        .split(/[-_]/)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Finds the best matching preset based on an observation's tags.
  *
  * Primary match: uses the server-provided presetRef.docId stored in tags
@@ -77,5 +105,9 @@ export function getObservationDisplayNameSync(
 ): string {
   const preset = matchObservationToPreset(observation, presets);
   if (preset) return preset.name;
+
+  const legacyName = getLegacyDisplayName(observation.tags as Record<string, unknown> | undefined);
+  if (legacyName) return legacyName;
+
   return FALLBACK_NAME;
 }

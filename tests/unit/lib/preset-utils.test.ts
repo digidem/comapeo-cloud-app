@@ -183,4 +183,79 @@ describe('getObservationDisplayNameSync', () => {
     });
     expect(getObservationDisplayNameSync(obs, [])).toBe('Observation');
   });
+
+  it('returns preset name via fast path (presetRefDocId matches remoteId)', () => {
+    const obs = makeObs({
+      tags: { presetRefDocId: 'preset-forest', category: 'forest-risk' },
+    });
+    expect(getObservationDisplayNameSync(obs, presets)).toBe('Forest');
+  });
+
+  it('returns preset name via tag scoring fallback (category tag matches)', () => {
+    const obs = makeObs({
+      tags: { category: 'infrastructure', surface: 'paved' },
+    });
+    expect(getObservationDisplayNameSync(obs, presets)).toBe('Road');
+  });
+
+  it('returns legacy display name when no presets match and tag has "yes" value', () => {
+    const obs = makeObs({
+      tags: { 'tree-sighting': 'yes' },
+    });
+    expect(getObservationDisplayNameSync(obs, [])).toBe('Tree Sighting');
+  });
+
+  it('returns legacy display name when no presets match and tag has "true" value', () => {
+    const obs = makeObs({
+      tags: { caminho: 'true' },
+    });
+    expect(getObservationDisplayNameSync(obs, [])).toBe('Caminho');
+  });
+
+  it('returns legacy display name with underscore formatting', () => {
+    const obs = makeObs({
+      tags: { water_contamination: 'yes' },
+    });
+    expect(getObservationDisplayNameSync(obs, [])).toBe('Water Contamination');
+  });
+
+  it('returns legacy display name with mixed hyphens and underscores', () => {
+    const obs = makeObs({
+      tags: { 'forest_risk-area': 'yes' },
+    });
+    expect(getObservationDisplayNameSync(obs, [])).toBe('Forest Risk Area');
+  });
+
+  it('returns Observation when no match and no legacy tag key', () => {
+    const obs = makeObs({
+      tags: { color: 'red' },
+    });
+    expect(getObservationDisplayNameSync(obs, [])).toBe('Observation');
+  });
+
+  it('returns legacy name only when preset match fails (preset takes priority)', () => {
+    // obs has a legacy tag AND a matching preset — preset should win
+    const obs = makeObs({
+      tags: { 'tree-sighting': 'yes', category: 'forest-risk' },
+    });
+    expect(getObservationDisplayNameSync(obs, presets)).toBe('Forest');
+  });
+
+  it('handles undefined tags gracefully', () => {
+    const obs = makeObs({ tags: undefined });
+    expect(getObservationDisplayNameSync(obs, [])).toBe('Observation');
+  });
+
+  it('handles empty tags gracefully', () => {
+    const obs = makeObs({ tags: {} });
+    expect(getObservationDisplayNameSync(obs, [])).toBe('Observation');
+  });
+
+  it('picks the first tag key with "yes" value', () => {
+    const obs = makeObs({
+      tags: { alpha: 'yes', beta: 'yes' },
+    });
+    // Object key order is insertion order in modern JS engines
+    expect(getObservationDisplayNameSync(obs, [])).toBe('Alpha');
+  });
 });
