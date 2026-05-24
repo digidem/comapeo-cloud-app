@@ -169,7 +169,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             npx playwright test --project=chromium --reporter=list
           else
-            npx playwright test --project=chromium --project=firefox --project=webkit
+            npx playwright test --project=chromium --project=firefox --project=webkit --reporter=list
           fi
 
   # -----------------------------------------------------------------------
@@ -212,7 +212,7 @@ jobs:
 
       - name: Run visual regression screenshots
         continue-on-error: true
-        run: npm run test:screenshots
+        run: npm run test:screenshots:ci
         env:
           ARGOS_TOKEN: ${{ secrets.ARGOS_TOKEN }}
           VITE_PREVIEW: '1'
