@@ -621,6 +621,107 @@ describe('explicit RequestConfig', () => {
 });
 
 // ---------------------------------------------------------------------------
+// getPresets
+// ---------------------------------------------------------------------------
+describe('getPresets', () => {
+  it('returns validated presets list', async () => {
+    const result = await apiClient.getPresets('proj1');
+    expect(result.data).toBeInstanceOf(Array);
+    expect(result.data[0]).toHaveProperty('name');
+    expect(result.data[0]).toHaveProperty('docId');
+  });
+
+  it('sends Authorization header', async () => {
+    let capturedAuth: string | null = null;
+    server.use(
+      http.get(`${BASE_URL}/projects/proj1/preset`, ({ request }) => {
+        capturedAuth = request.headers.get('Authorization');
+        return HttpResponse.json({
+          data: [
+            {
+              docId: 'preset-001',
+              versionId: 'preset-001/0',
+              originalVersionId: 'preset-001/0',
+              schemaName: 'preset',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              name: 'Test',
+              geometry: ['point'],
+              tags: {},
+              addTags: {},
+              removeTags: {},
+              fieldRefs: [],
+              terms: [],
+            },
+          ],
+        });
+      }),
+    );
+    await apiClient.getPresets('proj1');
+    expect(capturedAuth).toBe('Bearer test-token');
+  });
+
+  it('throws ApiError on error response', async () => {
+    server.use(
+      http.get(`${BASE_URL}/projects/proj1/preset`, () =>
+        HttpResponse.json(
+          { error: { code: 'INTERNAL_ERROR', message: 'Boom' } },
+          { status: 500 },
+        ),
+      ),
+    );
+    await expect(apiClient.getPresets('proj1')).rejects.toThrow(ApiError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getFields
+// ---------------------------------------------------------------------------
+describe('getFields', () => {
+  it('returns validated fields list', async () => {
+    const result = await apiClient.getFields('proj1');
+    expect(result.data).toBeInstanceOf(Array);
+    expect(result.data[0]).toHaveProperty('key');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getIcon
+// ---------------------------------------------------------------------------
+describe('getIcon', () => {
+  it('returns the icon binary as a Blob', async () => {
+    const svgBytes = new TextEncoder().encode('<svg></svg>');
+    server.use(
+      http.get(
+        `${BASE_URL}/projects/proj1/icon/icon-001`,
+        () =>
+          new HttpResponse(svgBytes, {
+            status: 200,
+            headers: { 'Content-Type': 'image/svg+xml' },
+          }),
+      ),
+    );
+    const result = await apiClient.getIcon('proj1', 'icon-001');
+    expect(result.size).toBeGreaterThan(0);
+    expect(result.type).toBe('image/svg+xml');
+  });
+
+  it('throws on non-200 status', async () => {
+    server.use(
+      http.get(
+        `${BASE_URL}/projects/proj1/icon/icon-001`,
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+    await expect(apiClient.getIcon('proj1', 'icon-001')).rejects.toThrow(
+      ApiError,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // getAttachmentUrl
 // ---------------------------------------------------------------------------
 describe('getAttachmentUrl', () => {

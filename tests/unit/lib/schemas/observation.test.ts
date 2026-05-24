@@ -130,6 +130,58 @@ describe('observationSchema', () => {
       }),
     ).toThrow();
   });
+
+  it('validates an observation with optional presetRef', () => {
+    const data = {
+      docId: 'abc123',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      deleted: false,
+      lat: -8.35,
+      lon: -55.45,
+      attachments: [{ url: 'https://example.com/a.jpg' }],
+      tags: { category: 'forest' },
+      presetRef: {
+        docId: 'preset-001',
+        versionId: 'v1',
+        url: '/projects/abc/preset/preset-001',
+      },
+    };
+    const result = v.safeParse(observationSchema, data);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.output.presetRef).toEqual({
+        docId: 'preset-001',
+        versionId: 'v1',
+        url: '/projects/abc/preset/preset-001',
+      });
+    }
+  });
+
+  it('validates an observation without presetRef (backward compat)', () => {
+    const data = {
+      docId: 'abc123',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      deleted: false,
+      attachments: [],
+      tags: { category: 'forest' },
+    };
+    expect(v.safeParse(observationSchema, data).success).toBe(true);
+  });
+
+  it('rejects presetRef with missing required docId', () => {
+    const data = {
+      docId: 'abc123',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      deleted: false,
+      attachments: [],
+      tags: {},
+      presetRef: { versionId: 'v1', url: '/foo' },
+    };
+    expect(v.safeParse(observationSchema, data).success).toBe(false);
+  });
 });
 
 describe('observationsResponseSchema', () => {
@@ -186,5 +238,24 @@ describe('observationsResponseSchema', () => {
         data: [{ invalidField: 'nope' }],
       }),
     ).toThrow();
+  });
+
+  it('validates a response with presetRef on observations', () => {
+    const response = {
+      data: [
+        {
+          docId: 'obs-1',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          deleted: false,
+          attachments: [],
+          tags: {},
+          presetRef: { docId: 'p1', versionId: 'v1', url: '/p' },
+        },
+      ],
+    };
+    expect(v.safeParse(observationsResponseSchema, response).success).toBe(
+      true,
+    );
   });
 });

@@ -81,6 +81,24 @@ export interface SyncMetadata {
   updatedAt: string;
 }
 
+export interface Preset {
+  localId: string;
+  projectLocalId: string;
+  sourceType: string;
+  sourceId: string;
+  remoteId?: string;
+  name: string;
+  color?: string;
+  iconDocId?: string;
+  tags?: Record<string, unknown>;
+  terms: string[];
+  fieldRefs: string[];
+  createdAt: string;
+  updatedAt: string;
+  dirtyLocal: boolean;
+  deleted: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Database class
 // ---------------------------------------------------------------------------
@@ -92,6 +110,7 @@ class AppDatabase extends Dexie {
   attachments!: EntityTable<Attachment, 'localId'>;
   remoteServers!: EntityTable<RemoteServer, 'id'>;
   syncMetadata!: EntityTable<SyncMetadata, 'id'>;
+  presets!: EntityTable<Preset, 'localId'>;
 
   constructor() {
     super('comapeo-cloud-app');
@@ -210,6 +229,11 @@ class AppDatabase extends Dexie {
       const observationKeyMap = await rekey('observations', projectKeyMap);
       await rekey('alerts', projectKeyMap);
       await rekey('attachments', projectKeyMap, observationKeyMap);
+    });
+
+    this.version(7).stores({
+      presets:
+        '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
     });
   }
 }

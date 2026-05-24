@@ -2,7 +2,7 @@ import { apiClient } from '@/lib/api-client';
 import type { RequestConfig } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { getDb } from '@/lib/db';
-import type { Alert, Observation, Project } from '@/lib/db';
+import type { Alert, Observation, Preset, Project } from '@/lib/db';
 import { getRemoteServer } from '@/lib/local-repositories';
 
 // ---------------------------------------------------------------------------
@@ -144,6 +144,9 @@ export async function pullObservations(
     const enrichedTags: Record<string, string> = {
       ...((item.tags as Record<string, string>) ?? {}),
     };
+    if (item.presetRef?.docId) {
+      enrichedTags.presetRefDocId = item.presetRef.docId;
+    }
     if (photoCount > 0) {
       enrichedTags.photoCount = String(photoCount);
       // Store up to 4 photo URLs as comma-separated string
@@ -205,4 +208,45 @@ export async function pullAlerts(
 
   await db.alerts.bulkPut(alerts);
   return alerts;
+}
+
+export async function pullPresets(
+  serverId: string,
+  projectRemoteId: string,
+  projectLocalId: string,
+  config: RequestConfig,
+): Promise<Preset[]> {
+  const response = await apiClient.getPresets(projectRemoteId, config);
+  const db = getDb();
+  const sourceType = 'remoteArchive' as const;
+  const serverRecord = await getRemoteServer(serverId);
+  const stableKey = stableSourceKey(
+    serverRecord?.baseUrl ?? config.baseUrl ?? '',
+  );
+
+  // Map ALL items (including deleted) and write them all to DB as tombstones
+  // matching the pattern from pullObservations / pullAlerts
+  const allPresets: Preset[] = response.data.map((item) => ({
+    localId: `${sourceType}:${stableKey}:${item.docId}`,
+    projectLocalId,
+    sourceType,
+    sourceId: serverId,
+    remoteId: item.docId,
+    name: item.name,
+    color: item.color,
+    iconDocId: item.iconRef?.docId,
+    terms: item.terms ?? [],
+    tags: item.tags,
+    fieldRefs: item.fieldRefs.map((f) => f.docId),
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    dirtyLocal: false,
+    deleted: item.deleted,
+  }));
+
+  await db.presets.bulkPut(allPresets);
+
+  // Return only the non-deleted subset to callers; deleted items remain
+  // locally as tombstones so they are not re-surfaced after server-side deletion
+  return allPresets.filter((p) => !p.deleted);
 }

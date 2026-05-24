@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getDb, resetDb } from '@/lib/db';
+import type { Preset } from '@/lib/db';
 
 beforeEach(async () => {
   await resetDb();
 });
 
 describe('AppDatabase', () => {
-  it('exposes all 6 required tables', async () => {
+  it('exposes all 7 required tables', async () => {
     const db = getDb();
 
     expect(db.projects).toBeDefined();
@@ -16,6 +17,7 @@ describe('AppDatabase', () => {
     expect(db.attachments).toBeDefined();
     expect(db.remoteServers).toBeDefined();
     expect(db.syncMetadata).toBeDefined();
+    expect(db.presets).toBeDefined();
   });
 
   it('defines &localId as the primary key for projects', async () => {
@@ -367,5 +369,91 @@ describe('AppDatabase', () => {
     expect(after).toBeDefined();
     expect(after!.description).toBeUndefined();
     expect('description' in after!).toBe(true);
+  });
+
+  it('defines &localId as the primary key for presets', async () => {
+    const db = getDb();
+
+    expect(db.presets.name).toBe('presets');
+    expect(db.presets.schema.primKey.name).toBe('localId');
+    expect(db.presets.schema.primKey.keyPath).toBe('localId');
+    expect(db.presets.schema.primKey.unique).toBe(true);
+  });
+});
+
+describe('presets table', () => {
+  it('can store and retrieve a preset', async () => {
+    const db = getDb();
+    const preset: Preset = {
+      localId: 'remoteArchive:https://example.com:preset-001',
+      projectLocalId: 'project-local-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      remoteId: 'preset-001',
+      name: 'Deforestation',
+      color: '#FF5733',
+      iconDocId: 'icon-001',
+      terms: ['logging'],
+      fieldRefs: ['field-001'],
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    };
+    await db.presets.put(preset);
+    const stored = await db.presets.get(preset.localId);
+    expect(stored).toBeDefined();
+    expect(stored!.name).toBe('Deforestation');
+    expect(stored!.color).toBe('#FF5733');
+  });
+
+  it('queries presets by projectLocalId', async () => {
+    const db = getDb();
+    await db.presets.bulkPut([
+      {
+        localId: 'p1',
+        projectLocalId: 'proj-a',
+        sourceType: 'remoteArchive',
+        sourceId: 's1',
+        name: 'A',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+        dirtyLocal: false,
+        deleted: false,
+        fieldRefs: [],
+        terms: [],
+      },
+      {
+        localId: 'p2',
+        projectLocalId: 'proj-b',
+        sourceType: 'remoteArchive',
+        sourceId: 's1',
+        name: 'B',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+        dirtyLocal: false,
+        deleted: false,
+        fieldRefs: [],
+        terms: [],
+      },
+      {
+        localId: 'p3',
+        projectLocalId: 'proj-a',
+        sourceType: 'remoteArchive',
+        sourceId: 's1',
+        name: 'C',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+        dirtyLocal: false,
+        deleted: false,
+        fieldRefs: [],
+        terms: [],
+      },
+    ]);
+    const presets = await db.presets
+      .where('projectLocalId')
+      .equals('proj-a')
+      .toArray();
+    expect(presets).toHaveLength(2);
   });
 });

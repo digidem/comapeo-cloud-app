@@ -15,6 +15,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAlerts } from '@/hooks/useAlerts';
+import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
 import { useObservationFilters } from '@/hooks/useObservationFilters';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjects } from '@/hooks/useProjects';
@@ -100,6 +101,14 @@ const messages = defineMessages({
   },
 });
 
+/** Safely extract category label from observation tags */
+function getCategoryLabel(obs: {
+  tags?: Record<string, unknown>;
+}): string | null {
+  const raw = obs.tags?.category;
+  return raw !== undefined && raw !== null ? String(raw) : null;
+}
+
 export function DataScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
@@ -136,6 +145,12 @@ export function DataScreen() {
   useShellSlot(shellSlot);
 
   const filteredObs = obsFilters.filteredObservations;
+
+  // Pre-compute observation display names using preset matching
+  const displayNames = useObservationDisplayNames(
+    filteredObs,
+    selectedProjectId,
+  );
 
   const observationsContent = useMemo(() => {
     if (filteredObs.length === 0) {
@@ -184,9 +199,9 @@ export function DataScreen() {
             <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
               <div className="flex flex-col gap-1">
                 <span className="text-sm font-medium text-text">
-                  {obs.tags?.category
-                    ? String(obs.tags.category)
-                    : intl.formatMessage(messages.observationFallback)}
+                  {displayNames.get(obs.localId) ??
+                    getCategoryLabel(obs) ??
+                    intl.formatMessage(messages.observationFallback)}
                 </span>
                 {obs.lat !== undefined && obs.lon !== undefined && (
                   <span className="text-xs text-text-muted">

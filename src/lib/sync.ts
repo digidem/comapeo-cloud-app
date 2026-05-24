@@ -2,6 +2,7 @@ import { getRemoteServer } from '@/lib/local-repositories';
 import {
   pullAlerts,
   pullObservations,
+  pullPresets,
   pullProjects,
 } from '@/lib/remote-archive';
 import { useAuthStore } from '@/stores/auth-store';
@@ -65,29 +66,81 @@ async function doSync(
     // Pull projects
     const projects = await pullProjects(serverDbId, config);
 
-    // Pull observations and alerts for each project in parallel.
-    // Each project is handled independently so a single failure does not
-    // abort the rest — partial results are still persisted.
+    // Pull observations, alerts, and presets for each project.
+    // Each data type is handled independently so a single failure does not
+    // abort the others — partial results are still persisted.
+    //
+    // Critical failures (observations): these are required for a project to
+    // be considered synced. If observations fail, the project is marked as
+    // failed but does not abort other projects.
+    //
+    // Non-critical failures (alerts, presets): these are logged as warnings
+    // but do NOT cause the project or overall sync to fail.
+    const projectWarnings: string[] = [];
     const projectResults = await Promise.allSettled(
       projects.map(async (project) => {
         if (project.remoteId) {
-          await pullObservations(
-            serverDbId,
-            project.remoteId,
-            project.localId,
-            config,
-          );
-          await pullAlerts(
-            serverDbId,
-            project.remoteId,
-            project.localId,
-            config,
-          );
+          const projectErrors: string[] = [];
+          let observationsOk = false;
+
+          try {
+            await pullObservations(
+              serverDbId,
+              project.remoteId,
+              project.localId,
+              config,
+            );
+            observationsOk = true;
+          } catch (e) {
+            projectErrors.push(
+              `Observations: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+
+          // Alerts are non-critical — log warnings, don't fail
+          try {
+            await pullAlerts(
+              serverDbId,
+              project.remoteId,
+              project.localId,
+              config,
+            );
+          } catch (e) {
+            const msg = `Alerts: ${e instanceof Error ? e.message : String(e)}`;
+            projectWarnings.push(
+              `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
+            );
+          }
+
+          // Presets are non-critical — log warnings, don't fail
+          try {
+            await pullPresets(
+              serverDbId,
+              project.remoteId,
+              project.localId,
+              config,
+            );
+          } catch (e) {
+            const msg = `Presets: ${e instanceof Error ? e.message : String(e)}`;
+            projectWarnings.push(
+              `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
+            );
+          }
+
+          // Only fail the project if observations (critical) failed
+          if (projectErrors.length > 0) {
+            throw new Error(projectErrors.join('; '));
+          }
+
+          // Track warning: observations synced but secondary data failed
+          if (observationsOk && projectWarnings.length > 0) {
+            // warnings already pushed above
+          }
         }
       }),
     );
 
-    // Collect any per-project errors without aborting the overall sync.
+    // Collect critical project errors (observations failures)
     const projectErrors = projectResults
       .map((r, i) => ({ r, i }))
       .filter(
@@ -102,21 +155,48 @@ async function doSync(
         return `${name}: ${reason}`;
       });
 
+    // Filter warnings to only those from projects that actually succeeded
+    // (warnings from failed projects are already covered by projectErrors)
     if (projectErrors.length > 0) {
+      // Some projects had critical failures — but other projects may have
+      // synced successfully. If at least one project succeeded, don't fail
+      // the entire sync; just report partial failure.
+      const succeededCount = projects.length - projectErrors.length;
+
+      if (succeededCount > 0) {
+        // Partial success: some projects synced, some didn't
+        const errorMsg = `Partial sync — ${succeededCount}/${projects.length} projects synced. Errors: ${projectErrors.join('; ')}`;
+        const statusMsg =
+          projectWarnings.length > 0
+            ? `${errorMsg} (warnings: ${projectWarnings.join('; ')})`
+            : errorMsg;
+        await useAuthStore
+          .getState()
+          .updateServerStatus(serverDbId, 'connected', statusMsg);
+        return { success: true, error: undefined };
+      }
+
+      // Complete failure: no projects synced successfully
+      const errorMsg = projectErrors.join('; ');
+      await useAuthStore
+        .getState()
+        .updateServerStatus(serverDbId, 'error', errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    // All projects synced observations successfully
+    if (projectWarnings.length > 0) {
       await useAuthStore
         .getState()
         .updateServerStatus(
           serverDbId,
-          'error',
-          `Partial sync failure — ${projectErrors.join('; ')}`,
+          'connected',
+          `Synced with warnings: ${projectWarnings.join('; ')}`,
         );
-      return {
-        success: false,
-        error: `Partial sync failure — ${projectErrors.join('; ')}`,
-      };
+      return { success: true };
     }
 
-    // Mark server as connected
+    // Perfect sync — no errors or warnings
     await useAuthStore.getState().updateServerStatus(serverDbId, 'connected');
 
     return { success: true };

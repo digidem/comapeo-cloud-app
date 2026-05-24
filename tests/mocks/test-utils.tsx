@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { IntlProvider } from 'react-intl';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -27,7 +27,7 @@ function TestProviders({
   children,
   locale = 'en',
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   locale?: string;
 }) {
   const queryClient = createTestQueryClient();
@@ -47,6 +47,35 @@ function customRender(ui: ReactElement, { locale }: { locale?: string } = {}) {
       <TestProviders locale={locale}>{children}</TestProviders>
     ),
   });
+}
+
+/**
+ * Create a wrapper component for renderHook that provides
+ * TanStack Query and react-intl context.
+ */
+export function createQueryWrapper(locale = 'en') {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+      mutations: {
+        retry: false,
+      },
+    },
+  });
+
+  return function Wrapper({ children }: { children: ReactNode }) {
+    const messages = getMessages(locale);
+    return (
+      <QueryClientProvider client={queryClient}>
+        <IntlProvider locale={locale} defaultLocale="en" messages={messages}>
+          {children}
+        </IntlProvider>
+      </QueryClientProvider>
+    );
+  };
 }
 
 export * from '@testing-library/react';
