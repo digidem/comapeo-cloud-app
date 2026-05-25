@@ -55,15 +55,13 @@ export function useObservationPages(
   // Track deps to detect changes and auto-reset
   const depsRef = useRef<string>(JSON.stringify(deps));
 
-  const depsChanged =
-    deps.length > 0 && JSON.stringify(deps) !== depsRef.current;
-
   useEffect(() => {
-    if (depsChanged) {
-      depsRef.current = JSON.stringify(deps);
-      setCurrentPage(1);
+    const currentDepsKey = JSON.stringify(deps);
+    if (currentDepsKey !== depsRef.current) {
+      depsRef.current = currentDepsKey;
+      queueMicrotask(() => setCurrentPage(1));
     }
-  }, [deps, depsChanged]);
+  }, [deps]);
 
   const totalCount = observations.length;
   const totalPages = Math.ceil(totalCount / safePageSize);

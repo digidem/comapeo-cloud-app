@@ -1004,6 +1004,12 @@
   "observationDetail.updatedAt": {
     "defaultMessage": "Updated"
   },
+  "observationsMap.empty": {
+    "defaultMessage": "No observations with location to show on the map"
+  },
+  "observationsMap.markerLabel": {
+    "defaultMessage": "View observation"
+  },
   "pagination.loadMore": {
     "defaultMessage": "Load more"
   },
