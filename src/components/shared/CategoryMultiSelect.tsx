@@ -52,7 +52,11 @@ export function CategoryMultiSelect({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-2">
+      <div
+        className="flex flex-wrap gap-2"
+        role="group"
+        aria-label="Filter by category"
+      >
         {/* "All" / clear button */}
         <button
           type="button"
@@ -63,6 +67,7 @@ export function CategoryMultiSelect({
               : 'bg-surface text-text-muted border-border border'
           }`}
           style={{ touchAction: 'manipulation' }}
+          aria-pressed={selected.length === 0}
         >
           {intl.formatMessage(messages.allCategories)}
         </button>
