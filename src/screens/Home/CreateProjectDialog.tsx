@@ -121,6 +121,7 @@ function CreateProjectDialog({
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() triggers false positive
   const selectedServerUrl = watch('serverUrl');
 
   function onSubmit(data: FormData) {
