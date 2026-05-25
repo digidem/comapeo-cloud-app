@@ -120,9 +120,7 @@ function SuccessState() {
       <h2 className="text-2xl font-bold text-text">
         {intl.formatMessage(messages.connected)}
       </h2>
-      <p className="text-muted">
-        {intl.formatMessage(messages.redirecting)}
-      </p>
+      <p className="text-muted">{intl.formatMessage(messages.redirecting)}</p>
     </div>
   );
 }
@@ -172,11 +170,7 @@ function ConnectionProgress({
               } ${isPending ? 'opacity-50' : ''}`}
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center text-xs font-semibold">
-                {isPending ? (
-                  stepNumber
-                ) : (
-                  <StepIcon status={step.status} />
-                )}
+                {isPending ? stepNumber : <StepIcon status={step.status} />}
               </span>
               <span
                 className={`text-sm ${isActive ? 'font-semibold' : ''} ${isPending ? 'opacity-50' : ''}`}

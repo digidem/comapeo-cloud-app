@@ -28,9 +28,7 @@ describe('ConnectionProgress', () => {
         heading="Connecting to archive..."
       />,
     );
-    expect(
-      screen.getByText('Connecting to archive...'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Connecting to archive...')).toBeInTheDocument();
   });
 
   it('shows spinner for the active step', () => {
