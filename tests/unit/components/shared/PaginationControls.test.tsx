@@ -111,7 +111,7 @@ describe('PaginationControls', () => {
     );
 
     // When totalCount is 0, nothing should render
-    expect(screen.queryByText(/Showing/)).toBeInTheDocument(); // range text still visible
+    expect(screen.getByText(/Showing/)).toBeInTheDocument(); // range text still visible
     expect(
       screen.queryByRole('button', { name: /load more/i }),
     ).not.toBeInTheDocument();
