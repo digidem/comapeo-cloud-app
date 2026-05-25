@@ -54,8 +54,8 @@ function ExportSheetDemo() {
       <ExportSheet
         open={open}
         onOpenChange={setOpen}
-        onExportGeoJson={() => console.log('export geojson')}
-        onExportCsv={() => console.log('export csv')}
+        onExportGeoJson={async () => { console.log('export geojson'); }}
+        onExportCsv={async () => { console.log('export csv'); }}
       />
     </div>
   );
