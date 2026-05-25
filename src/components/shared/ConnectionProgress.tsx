@@ -2,6 +2,12 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import { Spinner } from '@/components/ui/spinner';
 
+function getStepVariant(isActive: boolean, isError: boolean): string {
+  if (isActive) return 'bg-primary/5 text-primary font-medium';
+  if (isError) return 'text-error';
+  return 'text-text';
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -133,13 +139,12 @@ function ConnectionProgress({
   steps,
   heading,
   isComplete = false,
-  totalSteps,
+  _totalSteps,
 }: ConnectionProgressProps) {
   if (isComplete) {
     return <SuccessState />;
   }
 
-  const shownTotal = totalSteps ?? steps.length;
 
   return (
     <div className="flex flex-col items-center gap-6 px-4">
@@ -161,13 +166,10 @@ function ConnectionProgress({
             <li
               key={step.id}
               role="listitem"
-              className={`flex items-center gap-3 rounded-lg p-2 transition-colors ${
-                isActive
-                  ? 'bg-primary/5 text-primary font-medium'
-                  : isError
-                    ? 'text-error'
-                    : 'text-text'
-              } ${isPending ? 'opacity-50' : ''}`}
+              className={`flex items-center gap-3 rounded-lg p-2 transition-colors ${getStepVariant(
+                  isActive,
+                  isError,
+                )} ${isPending ? 'opacity-50' : ''}`}
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center text-xs font-semibold">
                 {isPending ? stepNumber : <StepIcon status={step.status} />}

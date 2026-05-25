@@ -107,6 +107,23 @@ function initialStatus(invite: ParseInviteResult | null): FlowStatus {
 // Component
 // ---------------------------------------------------------------------------
 
+function getErrorDisplayMessage(
+  status: string,
+  errorMessage: string,
+  intl: IntlShape,
+): string {
+  if (status === 'expired') {
+    return intl.formatMessage(messages.expired);
+  }
+  if (status === 'invalid') {
+    return intl.formatMessage(messages.invalidInvite);
+  }
+  if (status === 'networkError') {
+    return intl.formatMessage(messages.networkError);
+  }
+  return errorMessage || intl.formatMessage(messages.error);
+}
+
 export function InviteScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
@@ -248,7 +265,8 @@ export function InviteScreen() {
   }, [invite, navigate, queryClient, intl]);
 
   useEffect(() => {
-    runFlow();
+    // Schedule via microtask to avoid synchronous setState in effect body
+    queueMicrotask(runFlow);
     return () => {
       cancelledRef.current = true;
     };
@@ -264,14 +282,7 @@ export function InviteScreen() {
     status === 'error' ||
     status === 'networkError'
   ) {
-    const displayMessage =
-      status === 'expired'
-        ? intl.formatMessage(messages.expired)
-        : status === 'invalid'
-          ? intl.formatMessage(messages.invalidInvite)
-          : status === 'networkError'
-            ? intl.formatMessage(messages.networkError)
-            : errorMessage || intl.formatMessage(messages.error);
+    const displayMessage = getErrorDisplayMessage(status, errorMessage, intl);
 
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-6 bg-surface px-4">
