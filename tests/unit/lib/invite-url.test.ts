@@ -121,6 +121,52 @@ describe('parseInviteUrl', () => {
   });
 });
 
+// ---- Raw invite code tests (issue #40) ----
+
+describe('parseInviteUrl — raw invite codes', () => {
+  it('accepts a raw invite code starting with v1.', () => {
+    const result = parseInviteUrl('v1.Y29kZQ');
+    expect(result).toEqual({
+      ok: true,
+      kind: 'encrypted',
+      code: 'v1.Y29kZQ',
+    });
+  });
+
+  it('accepts a raw invite code with leading/trailing whitespace', () => {
+    const result = parseInviteUrl('  v1.Y29kZQ  ');
+    expect(result).toEqual({
+      ok: true,
+      kind: 'encrypted',
+      code: 'v1.Y29kZQ',
+    });
+  });
+
+  it('rejects input that starts with v1 but has invalid characters', () => {
+    const result = parseInviteUrl('v1.invalid!@#$%');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('INVALID_URL');
+    }
+  });
+
+  it('rejects empty or whitespace-only input', () => {
+    const result = parseInviteUrl('   ');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('INVALID_URL');
+    }
+  });
+
+  it('rejects a raw code without v1. prefix', () => {
+    const result = parseInviteUrl('v2.Y29kZQ');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('INVALID_URL');
+    }
+  });
+});
+
 // `warnLegacyInviteUrlOnce` has a module-level guard so it fires at most
 // once per session. Tests use `_resetLegacyWarning` to reset the guard
 // between runs without needing `vi.resetModules()` + dynamic imports.

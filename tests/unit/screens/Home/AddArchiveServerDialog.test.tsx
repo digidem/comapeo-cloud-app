@@ -747,5 +747,57 @@ describe('AddArchiveServerDialog', () => {
       ).toBeInTheDocument();
       expect(mockCreateRemoteServer).not.toHaveBeenCalled();
     });
+
+    // ---- Raw invite code tests (issue #40) ----
+
+    it('accepts a raw invite code pasted directly into the invite URL field', async () => {
+      const code = makeEncryptedCode('https://archive.test', 'decrypted-token');
+      const rawCode = `v1.${code}`;
+
+      const user = userEvent.setup();
+      const onAdded = vi.fn();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={onAdded}
+        />,
+      );
+
+      await user.type(screen.getByLabelText('Invite URL'), rawCode);
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      await waitFor(() => {
+        expect(onAdded).toHaveBeenCalledWith('test-server-id');
+      });
+      expect(mockCreateRemoteServer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: 'https://archive.test',
+          token: 'decrypted-token',
+          label: 'archive.test',
+        }),
+      );
+    });
+
+    it('shows expired error when a raw code is expired', async () => {
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.type(screen.getByLabelText('Invite URL'), 'v1.expired');
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      expect(
+        await screen.findByText(
+          'This invite link has expired. Ask the sender for a new one.',
+        ),
+      ).toBeInTheDocument();
+      expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+    });
   });
 });

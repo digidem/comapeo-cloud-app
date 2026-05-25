@@ -199,7 +199,9 @@ export const handlers = [
         { status: 400 },
       );
     }
-    if (code === 'expired') {
+    // Strip v1. prefix for raw invite codes (issue #40)
+    const strippedCode = code.startsWith('v1.') ? code.slice(3) : code;
+    if (strippedCode === 'expired') {
       return HttpResponse.json(
         {
           error: {
@@ -210,7 +212,7 @@ export const handlers = [
         { status: 410 },
       );
     }
-    if (code === 'invalid') {
+    if (strippedCode === 'invalid') {
       return HttpResponse.json(
         {
           error: {
@@ -222,8 +224,8 @@ export const handlers = [
       );
     }
     const prefix = 'mock-encrypted-code-';
-    if (code.startsWith(prefix)) {
-      const encoded = code.slice(prefix.length);
+    if (strippedCode.startsWith(prefix)) {
+      const encoded = strippedCode.slice(prefix.length);
       try {
         const padLength = (4 - (encoded.length % 4)) % 4;
         const padded =
