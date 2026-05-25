@@ -241,10 +241,12 @@ jobs:
 
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request
+  # NOTE: Dependabot PRs don't have access to secrets (CLOUDFLARE_API_TOKEN
+  # is empty), so the deploy would always fail. Skip preview for dependabot.
   # -----------------------------------------------------------------------
   preview:
     needs: build-e2e
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
