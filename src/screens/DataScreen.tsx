@@ -102,14 +102,6 @@ const messages = defineMessages({
     id: 'data.filterButton',
     defaultMessage: 'Filters',
   },
-  loadMore: {
-    id: 'data.loadMore',
-    defaultMessage: 'Load more',
-  },
-  showing: {
-    id: 'data.showing',
-    defaultMessage: 'Showing {start}–{end} of {total} observations',
-  },
 });
 
 /** Safely extract category label from observation tags */
@@ -161,7 +153,14 @@ export function DataScreen() {
   const pageSize = useResponsivePageSize();
 
   // Pagination — resets to page 1 when filters change
-  const pages = useObservationPages(filteredObs, {
+  const {
+    paginatedObservations,
+    showingStart,
+    showingEnd,
+    totalCount,
+    hasMore,
+    loadMore,
+  } = useObservationPages(filteredObs, {
     pageSize,
     deps: [
       obsFilters.filters.search,
@@ -179,7 +178,7 @@ export function DataScreen() {
   );
 
   const observationsContent = useMemo(() => {
-    const displayObs = pages.paginatedObservations;
+    const displayObs = paginatedObservations;
     if (displayObs.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
@@ -249,15 +248,28 @@ export function DataScreen() {
           ))}
         </div>
         <PaginationControls
-          showingStart={pages.showingStart}
-          showingEnd={pages.showingEnd}
-          totalCount={pages.totalCount}
-          hasMore={pages.hasMore}
-          onLoadMore={pages.loadMore}
+          showingStart={showingStart}
+          showingEnd={showingEnd}
+          totalCount={totalCount}
+          hasMore={hasMore}
+          onLoadMore={loadMore}
         />
       </>
     );
-  }, [filteredObs, pages, viewMode, navigate, intl, obsFilters, displayNames]);
+  }, [
+    filteredObs,
+    paginatedObservations,
+    showingStart,
+    showingEnd,
+    totalCount,
+    hasMore,
+    loadMore,
+    viewMode,
+    navigate,
+    intl,
+    obsFilters,
+    displayNames,
+  ]);
 
   // No project selected
   if (!selectedProjectId || !selectedProject) {

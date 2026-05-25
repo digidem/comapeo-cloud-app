@@ -227,9 +227,6 @@
   "data.filters.startDateLabel": {
     "defaultMessage": "From"
   },
-  "data.loadMore": {
-    "defaultMessage": "Load more"
-  },
   "data.loading": {
     "defaultMessage": "Loading..."
   },
@@ -250,9 +247,6 @@
   },
   "data.observationsError": {
     "defaultMessage": "Failed to load observations. Please try again."
-  },
-  "data.showing": {
-    "defaultMessage": "Showing {start}–{end} of {total} observations"
   },
   "data.switchToGridView": {
     "defaultMessage": "Switch to grid view"
