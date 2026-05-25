@@ -38,7 +38,7 @@ export function ExportObservationsButton({
   const { addToast } = useToast();
   const [open, setOpen] = useState(false);
 
-  function handleExportGeoJson() {
+  async function handleExportGeoJson() {
     try {
       const fc = observationsToGeoJson(observations);
       const json = JSON.stringify(fc, null, 2);
@@ -53,7 +53,7 @@ export function ExportObservationsButton({
     }
   }
 
-  function handleExportCsv() {
+  async function handleExportCsv() {
     try {
       const csv = observationsToCsv(observations);
       const filename = buildExportFilename(projectName, 'csv');

@@ -32,8 +32,8 @@ const messages = defineMessages({
 interface ExportSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onExportGeoJson: () => void;
-  onExportCsv: () => void;
+  onExportGeoJson: () => Promise<void>;
+  onExportCsv: () => Promise<void>;
 }
 
 function ExportSheet({
@@ -44,9 +44,14 @@ function ExportSheet({
 }: ExportSheetProps) {
   const intl = useIntl();
 
-  function handleAction(action: () => void) {
-    action();
-    onOpenChange(false);
+  function handleAction(action: () => Promise<void>) {
+    return async () => {
+      try {
+        await action();
+      } finally {
+        onOpenChange(false);
+      }
+    };
   }
 
   return (
@@ -113,7 +118,7 @@ function ExportSheet({
             {/* GeoJSON */}
             <button
               type="button"
-              onClick={() => handleAction(onExportGeoJson)}
+              onClick={handleAction(onExportGeoJson)}
               className="flex min-h-[44px] w-full items-center gap-3 rounded-btn px-4 py-3 text-left transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               {/* Globe icon */}
@@ -149,7 +154,7 @@ function ExportSheet({
             {/* CSV */}
             <button
               type="button"
-              onClick={() => handleAction(onExportCsv)}
+              onClick={handleAction(onExportCsv)}
               className="flex min-h-[44px] w-full items-center gap-3 rounded-btn px-4 py-3 text-left transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               {/* Table icon */}
