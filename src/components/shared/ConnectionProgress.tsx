@@ -145,7 +145,6 @@ function ConnectionProgress({
     return <SuccessState />;
   }
 
-
   return (
     <div className="flex flex-col items-center gap-6 px-4">
       {heading && (
@@ -167,9 +166,9 @@ function ConnectionProgress({
               key={step.id}
               role="listitem"
               className={`flex items-center gap-3 rounded-lg p-2 transition-colors ${getStepVariant(
-                  isActive,
-                  isError,
-                )} ${isPending ? 'opacity-50' : ''}`}
+                isActive,
+                isError,
+              )} ${isPending ? 'opacity-50' : ''}`}
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center text-xs font-semibold">
                 {isPending ? stepNumber : <StepIcon status={step.status} />}
