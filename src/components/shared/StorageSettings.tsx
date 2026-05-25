@@ -1,0 +1,272 @@
+import { useCallback, useEffect, useState } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
+
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  type StorageStats,
+  clearAllData,
+  getStorageStats,
+} from '@/lib/storage';
+
+const messages = defineMessages({
+  storageTitle: {
+    id: 'settings.storage.title',
+    defaultMessage: 'Storage',
+  },
+  storageDescription: {
+    id: 'settings.storage.description',
+    defaultMessage: 'Manage cached data stored in your browser.',
+  },
+  totalUsage: {
+    id: 'settings.storage.totalUsage',
+    defaultMessage: 'Total Usage',
+  },
+  totalOf: {
+    id: 'settings.storage.totalOf',
+    defaultMessage: '{usage} of {quota}',
+  },
+  recordsLabel: {
+    id: 'settings.storage.records',
+    defaultMessage: '{count} records',
+  },
+  projectsLabel: {
+    id: 'settings.storage.projects',
+    defaultMessage: 'Projects',
+  },
+  observationsLabel: {
+    id: 'settings.storage.observations',
+    defaultMessage: 'Observations',
+  },
+  alertsLabel: {
+    id: 'settings.storage.alerts',
+    defaultMessage: 'Alerts',
+  },
+  presetsLabel: {
+    id: 'settings.storage.presets',
+    defaultMessage: 'Presets',
+  },
+  attachmentsLabel: {
+    id: 'settings.storage.attachments',
+    defaultMessage: 'Attachments',
+  },
+  serversLabel: {
+    id: 'settings.storage.servers',
+    defaultMessage: 'Servers',
+  },
+  syncMetadataLabel: {
+    id: 'settings.storage.syncMetadata',
+    defaultMessage: 'Sync Metadata',
+  },
+  clearButton: {
+    id: 'settings.storage.clearButton',
+    defaultMessage: 'Clear All Cached Data',
+  },
+  clearConfirmTitle: {
+    id: 'settings.storage.clearConfirmTitle',
+    defaultMessage: 'Clear All Cached Data?',
+  },
+  clearConfirmDescription: {
+    id: 'settings.storage.clearConfirmDescription',
+    defaultMessage:
+      'This will remove all locally cached data including projects, observations, alerts, and attachments. Data will need to be re-synced. This cannot be undone.',
+  },
+  clearConfirmButton: {
+    id: 'settings.storage.clearConfirmButton',
+    defaultMessage: 'Yes, Clear Everything',
+  },
+  clearCancelButton: {
+    id: 'settings.storage.clearCancelButton',
+    defaultMessage: 'Cancel',
+  },
+});
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+interface TableRow {
+  label: string;
+  count: number;
+}
+
+function TableRowItem({ label, count }: TableRow) {
+  return (
+    <div className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-b-0">
+      <span className="text-sm text-text">{label}</span>
+      <span className="text-sm text-text-muted tabular-nums">{count}</span>
+    </div>
+  );
+}
+
+interface UsageBarProps {
+  percent: number;
+}
+
+function UsageBar({ percent }: UsageBarProps) {
+  const clamped = Math.min(100, Math.max(0, percent));
+  return (
+    <div className="w-full bg-surface rounded-full h-2 mt-1 mb-2">
+      <div
+        className="h-2 rounded-full transition-all duration-300"
+        style={{
+          width: `${clamped}%`,
+          backgroundColor:
+            clamped > 90 ? '#ef4444' : clamped > 70 ? '#f59e0b' : '#1F6FFF',
+        }}
+      />
+    </div>
+  );
+}
+
+export function StorageSettings() {
+  const intl = useIntl();
+  const [stats, setStats] = useState<StorageStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const loadStats = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getStorageStats();
+      setStats(result);
+    } catch {
+      // Swallow errors — component shows empty state
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  const handleClearAll = useCallback(async () => {
+    setClearing(true);
+    try {
+      await clearAllData();
+      await loadStats();
+    } finally {
+      setClearing(false);
+      setIsConfirmOpen(false);
+    }
+  }, [loadStats]);
+
+  if (loading) {
+    return (
+      <div className="mt-4 space-y-3">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-4 w-64" />
+        <Skeleton className="h-2 w-full rounded-full" />
+        <div className="space-y-2 mt-4">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const tableRows: TableRow[] = [
+    {
+      label: intl.formatMessage(messages.projectsLabel),
+      count: stats?.tables.projects.count ?? 0,
+    },
+    {
+      label: intl.formatMessage(messages.observationsLabel),
+      count: stats?.tables.observations.count ?? 0,
+    },
+    {
+      label: intl.formatMessage(messages.alertsLabel),
+      count: stats?.tables.alerts.count ?? 0,
+    },
+    {
+      label: intl.formatMessage(messages.presetsLabel),
+      count: stats?.tables.presets.count ?? 0,
+    },
+    {
+      label: intl.formatMessage(messages.attachmentsLabel),
+      count: stats?.tables.attachments.count ?? 0,
+    },
+    {
+      label: intl.formatMessage(messages.serversLabel),
+      count: stats?.tables.remoteServers.count ?? 0,
+    },
+    {
+      label: intl.formatMessage(messages.syncMetadataLabel),
+      count: stats?.tables.syncMetadata.count ?? 0,
+    },
+  ];
+
+  const totalRecords = tableRows.reduce((sum, r) => sum + r.count, 0);
+
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-text mt-6">
+        {intl.formatMessage(messages.storageTitle)}
+      </h2>
+      <p className="text-sm text-text-muted mt-2">
+        {intl.formatMessage(messages.storageDescription)}
+      </p>
+
+      <Card className="mt-4 p-4 max-w-md">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-sm font-medium text-text">
+            {intl.formatMessage(messages.totalUsage)}
+          </span>
+          <span className="text-xs text-text-muted tabular-nums">
+            {intl.formatMessage(messages.totalOf, {
+              usage: formatBytes(stats?.usage ?? 0),
+              quota: formatBytes(stats?.quota ?? 0),
+            })}
+          </span>
+        </div>
+        <UsageBar percent={stats?.usagePercent ?? 0} />
+        <p className="text-xs text-text-muted tabular-nums">
+          {stats?.usagePercent.toFixed(1) ?? '0.0'}% used
+        </p>
+      </Card>
+
+      <Card className="mt-3 p-4 max-w-md">
+        <div className="text-sm font-medium text-text mb-2">
+          {intl.formatMessage(messages.recordsLabel, { count: totalRecords })}
+        </div>
+        {tableRows.map((row) => (
+          <TableRowItem key={row.label} label={row.label} count={row.count} />
+        ))}
+      </Card>
+
+      <div className="mt-4 max-w-md">
+        <Button
+          variant="danger"
+          onClick={() => setIsConfirmOpen(true)}
+          loading={clearing}
+          className="w-full sm:w-auto"
+        >
+          {intl.formatMessage(messages.clearButton)}
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={isConfirmOpen}
+        onOpenChange={setIsConfirmOpen}
+        title={intl.formatMessage(messages.clearConfirmTitle)}
+        description={intl.formatMessage(messages.clearConfirmDescription)}
+        confirmLabel={intl.formatMessage(messages.clearConfirmButton)}
+        cancelLabel={intl.formatMessage(messages.clearCancelButton)}
+        variant="danger"
+        onConfirm={handleClearAll}
+      />
+    </div>
+  );
+}
