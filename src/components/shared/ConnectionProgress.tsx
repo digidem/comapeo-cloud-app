@@ -25,8 +25,6 @@ interface ConnectionProgressProps {
   heading?: string;
   /** When true, shows "Connected!" success state with checkmark animation */
   isComplete?: boolean;
-  /** Number of steps that must display; used to show step count like "Step 2 of 4" */
-  totalSteps?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -139,7 +137,6 @@ function ConnectionProgress({
   steps,
   heading,
   isComplete = false,
-  totalSteps: _totalSteps,
 }: ConnectionProgressProps) {
   if (isComplete) {
     return <SuccessState />;

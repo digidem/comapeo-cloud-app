@@ -250,8 +250,13 @@ export function InviteScreen() {
           }
           return;
         }
-        // Check for network errors
-        if (err instanceof TypeError && err.message === 'Failed to fetch') {
+        // Check for network errors (includes Safari-specific messages)
+        const isNetworkError =
+          err instanceof TypeError &&
+          (err.message === 'Failed to fetch' ||
+            err.message === 'Load failed' ||
+            err.message === 'Network request failed');
+        if (isNetworkError) {
           setStatus('networkError');
           setErrorMessage(intl.formatMessage(messages.networkError));
           return;
@@ -320,9 +325,11 @@ export function InviteScreen() {
 
         {/* Action buttons */}
         <div className="flex flex-col gap-3">
-          <Button variant="primary" onClick={runFlow}>
-            {intl.formatMessage(messages.retry)}
-          </Button>
+          {status !== 'invalid' && (
+            <Button variant="primary" onClick={runFlow}>
+              {intl.formatMessage(messages.retry)}
+            </Button>
+          )}
           <Link to="/" className="text-sm text-muted underline hover:text-text">
             {intl.formatMessage(messages.goHome)}
           </Link>
