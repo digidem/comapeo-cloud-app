@@ -530,9 +530,11 @@ describe('DataScreen', () => {
         // Map view should be shown
         expect(screen.getByTestId('observations-map')).toBeInTheDocument();
         // Grid cards should be hidden in map mode — no observation card links
-        const obsLinks = screen.queryAllByRole('link').filter(
-          (el) => el.getAttribute('href')?.includes('/data/observations/'),
-        );
+        const obsLinks = screen
+          .queryAllByRole('link')
+          .filter((el) =>
+            el.getAttribute('href')?.includes('/data/observations/'),
+          );
         expect(obsLinks).toHaveLength(0);
       });
 
