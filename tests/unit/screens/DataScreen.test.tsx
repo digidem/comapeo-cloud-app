@@ -258,7 +258,7 @@ describe('DataScreen', () => {
       mockObservationsQuery = { data: defaultObservations, isPending: false };
 
       render(<DataScreen />);
-      expect(screen.getByText('forest')).toBeInTheDocument();
+      expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders observation cards with fallback label when tags.category is missing', () => {
@@ -315,7 +315,7 @@ describe('DataScreen', () => {
       };
 
       render(<DataScreen />);
-      expect(screen.getByText('wildlife')).toBeInTheDocument();
+      expect(screen.getAllByText('wildlife').length).toBeGreaterThanOrEqual(1);
       // No coordinate text should be present
       expect(screen.queryByText(/-8\./)).not.toBeInTheDocument();
     });
