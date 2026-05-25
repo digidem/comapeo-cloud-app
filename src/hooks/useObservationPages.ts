@@ -39,7 +39,7 @@ export interface UseObservationPagesResult {
  * Uses a "load more" pattern: each call to `loadMore()` appends the next page.
  *
  * The `deps` option enables auto-reset: when any value in `deps` changes
- * (by reference comparison via JSON.stringify), the page resets to 1.
+ * (by shallow comparison of primitive values), the page resets to 1.
  * This is perfect for resetting pagination when filters change.
  */
 export function useObservationPages(
@@ -52,14 +52,20 @@ export function useObservationPages(
 
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Track deps to detect changes and auto-reset
-  const depsRef = useRef<string>(JSON.stringify(deps));
+  // Track deps to detect changes and auto-reset.
+  // Uses shallow comparison of deps values (primitives) instead of
+  // JSON.stringify to avoid wasteful serialization on every render.
+  const prevDepsRef = useRef(deps);
 
   useEffect(() => {
-    const currentDepsKey = JSON.stringify(deps);
-    if (currentDepsKey !== depsRef.current) {
-      depsRef.current = currentDepsKey;
-      queueMicrotask(() => setCurrentPage(1));
+    const prev = prevDepsRef.current;
+    const changed =
+      prev.length !== deps.length ||
+      deps.some((dep, i) => !Object.is(dep, prev[i]));
+
+    if (changed) {
+      prevDepsRef.current = deps;
+      setCurrentPage(1);
     }
   }, [deps]);
 
