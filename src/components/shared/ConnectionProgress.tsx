@@ -139,7 +139,7 @@ function ConnectionProgress({
   steps,
   heading,
   isComplete = false,
-  _totalSteps,
+  totalSteps: _totalSteps,
 }: ConnectionProgressProps) {
   if (isComplete) {
     return <SuccessState />;

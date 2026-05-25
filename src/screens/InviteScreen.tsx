@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { defineMessages, useIntl } from 'react-intl';
+import { defineMessages, IntlShape, useIntl } from 'react-intl';
 
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
