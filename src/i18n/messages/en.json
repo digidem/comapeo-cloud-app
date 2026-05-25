@@ -191,8 +191,11 @@
   "data.filters.categoryAll": {
     "defaultMessage": "All categories"
   },
-  "data.filters.categoryLabel": {
-    "defaultMessage": "Category"
+  "data.filters.categoryShowLess": {
+    "defaultMessage": "Show less"
+  },
+  "data.filters.categoryShowMore": {
+    "defaultMessage": "+{count} more"
   },
   "data.filters.clear": {
     "defaultMessage": "Clear filters"

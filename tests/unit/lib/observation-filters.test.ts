@@ -223,27 +223,44 @@ describe('filterObservations — category', () => {
     makeObs({ localId: '3', tags: { notes: 'no category' } }),
   ];
 
-  it('returns all when category is null', () => {
+  it('returns all when categories array is empty', () => {
     const result = filterObservations(observations, {
       ...DEFAULT_FILTERS,
-      category: null,
+      categories: [],
     });
     expect(result).toHaveLength(3);
   });
 
-  it('filters by exact category match', () => {
+  it('filters by single category match', () => {
     const result = filterObservations(observations, {
       ...DEFAULT_FILTERS,
-      category: 'forest',
+      categories: ['forest'],
     });
     expect(result).toHaveLength(1);
     expect(result[0]!.localId).toBe('1');
   });
 
-  it('excludes observations without tags when filtering by category', () => {
+  it('filters by multiple categories (OR logic)', () => {
     const result = filterObservations(observations, {
       ...DEFAULT_FILTERS,
-      category: 'water',
+      categories: ['forest', 'water'],
+    });
+    expect(result).toHaveLength(2);
+    expect(result.map((o) => o.localId).sort()).toEqual(['1', '2']);
+  });
+
+  it('returns empty when no observation matches any selected category', () => {
+    const result = filterObservations(observations, {
+      ...DEFAULT_FILTERS,
+      categories: ['nonexistent'],
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it('excludes observations without tags when filtering by categories', () => {
+    const result = filterObservations(observations, {
+      ...DEFAULT_FILTERS,
+      categories: ['water'],
     });
     expect(result).toHaveLength(1);
     expect(result[0]!.localId).toBe('2');
@@ -257,7 +274,7 @@ describe('filterObservations — category', () => {
     // Both should match the trimmed category value 'forest'
     const result = filterObservations(obs, {
       ...DEFAULT_FILTERS,
-      category: 'forest',
+      categories: ['forest'],
     });
     expect(result).toHaveLength(2);
     expect(result.map((o) => o.localId).sort()).toEqual(['1', '2']);
@@ -382,7 +399,7 @@ describe('filterObservations — combined filters', () => {
     const result = filterObservations(observations, {
       ...DEFAULT_FILTERS,
       search: 'deforestation',
-      category: 'forest',
+      categories: ['forest'],
     });
     expect(result).toHaveLength(1);
     expect(result[0]!.localId).toBe('1');
@@ -394,7 +411,7 @@ describe('filterObservations — combined filters', () => {
       search: 'deforestation',
       startDate: '2024-03-15',
       endDate: '2024-03-16',
-      category: 'forest',
+      categories: ['forest'],
     });
     // obs-1 matches search ("Deforestation"), date, and category
     // obs-3 matches date and category but not search ("Reforestation effort" does not contain "deforestation")
