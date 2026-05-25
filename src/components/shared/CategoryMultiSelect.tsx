@@ -1,8 +1,6 @@
 import { useCallback, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { Button } from '@/components/ui/button';
-
 const messages = defineMessages({
   allCategories: {
     id: 'data.filters.categoryAll',

@@ -1,6 +1,6 @@
 import userEvent from '@testing-library/user-event';
 import { render, screen } from '@tests/mocks/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { CategoryMultiSelect } from '@/components/shared/CategoryMultiSelect';
 
