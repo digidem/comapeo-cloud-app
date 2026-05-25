@@ -65,7 +65,7 @@ function StepIcon({ status }: { status: StepStatus }) {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="motion-safe:draw-checkmark"
+            className="draw-checkmark"
           />
         </svg>
       );
@@ -118,7 +118,7 @@ function SuccessState() {
           strokeWidth="4"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="motion-safe:draw-checkmark-large"
+          className="draw-checkmark-large"
         />
       </svg>
       <h2 className="text-2xl font-bold text-text">

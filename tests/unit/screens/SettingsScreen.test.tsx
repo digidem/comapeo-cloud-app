@@ -286,7 +286,7 @@ describe('SettingsScreen', () => {
       }
     });
 
-    // FIXME: flaky test — FileReader mock timing issue with jsdom
+    // FIXME: flaky test — FileReader mock timing issue with jsdom. Track: https://github.com/digidem/comapeo-cloud-app/issues/TBD
     it.skip('import button shows loading state during import', async () => {
       const OriginalFileReader = window.FileReader;
       try {

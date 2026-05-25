@@ -134,6 +134,14 @@ export function InviteScreen() {
   const [activeStep, setActiveStep] = useState<FlowStep>('verify');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const cancelledRef = useRef(false);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const intlRef = useRef(intl);
+
+  // Keep intlRef in sync so runFlow (which intentionally omits intl from deps)
+  // always uses the latest intl without restarting the flow on locale changes.
+  useEffect(() => {
+    intlRef.current = intl;
+  });
 
   // Build step objects for ConnectionProgress
   const stepLabels: Record<FlowStep, string> = {
@@ -223,7 +231,7 @@ export function InviteScreen() {
         if (cancelledRef.current) return;
         if (!syncResult || !syncResult.success) {
           setStatus('error');
-          setErrorMessage(intl.formatMessage(messages.error));
+          setErrorMessage(intlRef.current.formatMessage(messages.error));
           return;
         }
 
@@ -237,7 +245,7 @@ export function InviteScreen() {
         if (cancelledRef.current) return;
 
         setStatus('connected');
-        setTimeout(() => {
+        redirectTimerRef.current = setTimeout(() => {
           if (!cancelledRef.current) navigate({ to: '/' });
         }, 1500);
       } catch (err) {
@@ -258,22 +266,24 @@ export function InviteScreen() {
             err.message === 'Network request failed');
         if (isNetworkError) {
           setStatus('networkError');
-          setErrorMessage(intl.formatMessage(messages.networkError));
+          setErrorMessage(intlRef.current.formatMessage(messages.networkError));
           return;
         }
         setStatus('error');
-        setErrorMessage(intl.formatMessage(messages.error));
+        setErrorMessage(intlRef.current.formatMessage(messages.error));
       }
     }
 
     void run();
-  }, [invite, navigate, queryClient, intl]);
+  }, [invite, navigate, queryClient]);
 
   useEffect(() => {
-    // Schedule via microtask to avoid synchronous setState in effect body
+    // Defer via microtask to avoid synchronous setState in effect body
+    // (required by react-hooks/set-state-in-effect; React 18+ batches the updates).
     queueMicrotask(runFlow);
     return () => {
       cancelledRef.current = true;
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     };
   }, [runFlow]);
 
