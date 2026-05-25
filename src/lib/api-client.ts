@@ -276,8 +276,14 @@ export const apiClient = {
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/preset`,
         { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
       );
-      return handleResponse(response, presetsResponseSchema, config);
+      return await handleResponse(response, presetsResponseSchema, config);
     } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        console.warn(
+          `Preset endpoint not found for project ${projectId} — legacy server may not support /preset`,
+        );
+        return { data: [] };
+      }
       if (isNetworkError(error)) throwNetworkError();
       throw error;
     }

@@ -2,7 +2,10 @@ import { useMemo } from 'react';
 
 import { usePresets } from '@/hooks/usePresets';
 import type { Observation } from '@/lib/db';
-import { matchObservationToPreset } from '@/lib/preset-utils';
+import {
+  getLegacyDisplayName,
+  matchObservationToPreset,
+} from '@/lib/preset-utils';
 
 /**
  * Returns a Map from observation localId → display name, using preset matching.
@@ -26,6 +29,11 @@ export function useObservationDisplayNames(
       const preset = matchObservationToPreset(obs, presets);
       if (preset) {
         map.set(obs.localId, preset.name);
+      } else {
+        const legacy = getLegacyDisplayName(obs.tags);
+        if (legacy) {
+          map.set(obs.localId, legacy);
+        }
       }
     }
     return map;
