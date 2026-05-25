@@ -160,6 +160,9 @@ export function InviteScreen() {
   const runFlow = useCallback(() => {
     if (!invite || !invite.ok) return;
 
+    // Capture the narrowed type so the closure can access it without `!`
+    const validInvite = invite;
+
     cancelledRef.current = false;
     setStatus('loading');
     setActiveStep('verify');
@@ -172,16 +175,16 @@ export function InviteScreen() {
         let baseUrl: string;
         let token: string;
 
-        if (invite!.kind === 'encrypted') {
-          const redeemed = await redeemEncryptedInvite(invite!.code);
+        if (validInvite.kind === 'encrypted') {
+          const redeemed = await redeemEncryptedInvite(validInvite.code);
           if (cancelledRef.current) return;
           baseUrl = redeemed.baseUrl;
           token = redeemed.token;
         } else {
           // TODO(issue-#8): remove this legacy branch in the next release.
           warnLegacyInviteUrlOnce();
-          baseUrl = invite!.baseUrl;
-          token = invite!.token;
+          baseUrl = validInvite.baseUrl;
+          token = validInvite.token;
         }
         if (cancelledRef.current) return;
 
