@@ -415,7 +415,7 @@ export function DataScreen() {
                     onStartDateChange={obsFilters.setStartDate}
                     onEndDateChange={obsFilters.setEndDate}
                     onCategoryToggle={obsFilters.toggleCategory}
-                    onCategoriesClear={obsFilters.reset}
+                    onCategoriesClear={() => obsFilters.setCategories([])}
                     onSortChange={obsFilters.setSort}
                     onClear={obsFilters.reset}
                   />
@@ -432,7 +432,7 @@ export function DataScreen() {
                     onStartDateChange={obsFilters.setStartDate}
                     onEndDateChange={obsFilters.setEndDate}
                     onCategoryToggle={obsFilters.toggleCategory}
-                    onCategoriesClear={obsFilters.reset}
+                    onCategoriesClear={() => obsFilters.setCategories([])}
                     onSortChange={obsFilters.setSort}
                     onClear={obsFilters.reset}
                   />
