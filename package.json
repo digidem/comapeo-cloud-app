@@ -88,7 +88,7 @@
     "@chromatic-com/storybook": "^5.2.1",
     "@eslint/compat": "^2.1.0",
     "@eslint/js": "^10.0.1",
-    "@argos-ci/playwright": "^5.0.0",
+    "@argos-ci/playwright": "^7.0.3",
     "@formatjs/cli": "^6.16.3",
     "@playwright/test": "^1.60.0",
     "@sentry/cli": "^3.4.3",
