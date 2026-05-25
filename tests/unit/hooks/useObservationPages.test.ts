@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { useObservationPages } from '@/hooks/useObservationPages';
@@ -130,7 +130,7 @@ describe('useObservationPages', () => {
   });
 
   describe('auto-reset on dependency change', () => {
-    it('resets to page 1 when deps change', () => {
+    it('resets to page 1 when deps change', async () => {
       const obs = makeObservations(30);
       const { result, rerender } = renderHook(
         ({ deps }: { deps: unknown[] }) =>
@@ -145,7 +145,9 @@ describe('useObservationPages', () => {
 
       // Change deps → should auto-reset
       rerender({ deps: ['filter-2'] });
-      expect(result.current.currentPage).toBe(1);
+      await waitFor(() => {
+        expect(result.current.currentPage).toBe(1);
+      });
       expect(result.current.paginatedObservations).toHaveLength(10);
     });
 
