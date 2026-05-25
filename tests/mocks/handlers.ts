@@ -9,6 +9,8 @@ import { projectsFixture } from '@tests/fixtures/projects';
 import { serverInfoFixture } from '@tests/fixtures/server-info';
 import { HttpResponse, http } from 'msw';
 
+import { VERSION_PREFIX } from '@/lib/invite-crypto';
+
 export const handlers = [
   http.get('*/info', () => {
     return HttpResponse.json(serverInfoFixture);
@@ -200,7 +202,9 @@ export const handlers = [
       );
     }
     // Strip v1. prefix for raw invite codes (issue #40)
-    const strippedCode = code.startsWith('v1.') ? code.slice(3) : code;
+    const strippedCode = code.startsWith(VERSION_PREFIX)
+      ? code.slice(VERSION_PREFIX.length)
+      : code;
     if (strippedCode === 'expired') {
       return HttpResponse.json(
         {

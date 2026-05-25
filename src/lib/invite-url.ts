@@ -24,7 +24,11 @@ export function parseInviteUrl(input: string): ParseInviteResult {
   const trimmed = input.trim();
 
   if (trimmed.length === 0) {
-    return { ok: false, code: 'INVALID_URL', message: 'Not a valid URL' };
+    return {
+      ok: false,
+      code: 'INVALID_URL',
+      message: 'Invite code or URL is empty',
+    };
   }
 
   // Detect raw invite code (starts with v1. followed by base64url chars).
