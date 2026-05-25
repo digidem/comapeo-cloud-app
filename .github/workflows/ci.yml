@@ -174,10 +174,13 @@ jobs:
 
   # -----------------------------------------------------------------------
   # Visual regression with Argos CI
+  # NOTE: Dependabot PRs don't have access to secrets (ARGOS_TOKEN is
+  # empty), so Argos upload would fail. Skip visual regression for
+  # dependabot — dep bumps don't need visual review anyway.
   # -----------------------------------------------------------------------
   visual-regression:
     needs: build-e2e
-    if: needs.build-e2e.result == 'success'
+    if: needs.build-e2e.result == 'success' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
