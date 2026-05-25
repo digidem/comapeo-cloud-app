@@ -134,7 +134,7 @@ export function InviteScreen() {
   const [activeStep, setActiveStep] = useState<FlowStep>('verify');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const cancelledRef = useRef(false);
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const intlRef = useRef(intl);
 
   // Keep intlRef in sync so runFlow (which intentionally omits intl from deps)
