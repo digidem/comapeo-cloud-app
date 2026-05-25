@@ -227,6 +227,9 @@
   "data.filters.startDateLabel": {
     "defaultMessage": "From"
   },
+  "data.loadMore": {
+    "defaultMessage": "Load more"
+  },
   "data.loading": {
     "defaultMessage": "Loading..."
   },
@@ -247,6 +250,9 @@
   },
   "data.observationsError": {
     "defaultMessage": "Failed to load observations. Please try again."
+  },
+  "data.showing": {
+    "defaultMessage": "Showing {start}–{end} of {total} observations"
   },
   "data.switchToGridView": {
     "defaultMessage": "Switch to grid view"
@@ -998,11 +1004,11 @@
   "observationDetail.updatedAt": {
     "defaultMessage": "Updated"
   },
-  "observationsMap.empty": {
-    "defaultMessage": "No observations with location to show on the map"
+  "pagination.loadMore": {
+    "defaultMessage": "Load more"
   },
-  "observationsMap.markerLabel": {
-    "defaultMessage": "View observation"
+  "pagination.showing": {
+    "defaultMessage": "Showing {start}–{end} of {total} observations"
   },
   "settings.backup.description": {
     "defaultMessage": "Export your local settings to a JSON file, or import a previously exported backup."
