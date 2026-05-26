@@ -185,6 +185,10 @@ export function InviteScreen() {
   const runFlow = useCallback(() => {
     if (!invite || !invite.ok) return;
 
+    // If the component unmounted between queueMicrotask scheduling and
+    // execution, bail out immediately — don't reset the cancellation flag.
+    if (cancelledRef.current) return;
+
     // Capture the narrowed type so the closure can access it without `!`
     const validInvite = invite;
 
