@@ -124,4 +124,21 @@ describe('ConfirmDialog', () => {
     const button = screen.getByRole('button', { name: 'OK' });
     expect(button).toBeInTheDocument();
   });
+
+  it('applies danger styling for destructive variant', () => {
+    render(
+      <ConfirmDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        title="Clear Data?"
+        confirmLabel="Clear Everything"
+        variant="destructive"
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Clear Everything' });
+    expect(button).toBeInTheDocument();
+    expect(button.className).toContain('bg-error');
+  });
 });

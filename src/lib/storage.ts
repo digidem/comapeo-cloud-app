@@ -1,4 +1,4 @@
-import { getDb } from '@/lib/db';
+import { getDb, resetDb } from '@/lib/db';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,10 +96,7 @@ export async function getStorageStats(): Promise<StorageStats> {
  * Useful for clearing cached data while keeping the app running.
  */
 export async function clearAllData(): Promise<void> {
-  const db = getDb();
-  await db.transaction('rw', db.tables, async () => {
-    await Promise.all(db.tables.map((table) => table.clear()));
-  });
+  await resetDb();
 }
 
 // ---------------------------------------------------------------------------
