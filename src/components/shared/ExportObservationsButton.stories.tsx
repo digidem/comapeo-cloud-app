@@ -56,7 +56,7 @@ type Story = StoryObj<typeof ExportObservationsButton>;
 /** Default state — Export button visible, dropdown closed */
 export const Default: Story = {};
 
-/** Dropdown menu open showing CSV and GeoJSON export options */
+/** Bottom sheet open showing CSV and GeoJSON export options */
 export const Open: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

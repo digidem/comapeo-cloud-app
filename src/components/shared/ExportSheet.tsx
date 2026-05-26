@@ -1,5 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 
+import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 const messages = defineMessages({
@@ -43,12 +44,15 @@ function ExportSheet({
   onExportCsv,
 }: ExportSheetProps) {
   const intl = useIntl();
+  const [loading, setLoading] = useState(false);
 
   function handleAction(action: () => Promise<void>) {
     return async () => {
+      setLoading(true);
       try {
         await action();
       } finally {
+        setLoading(false);
         onOpenChange(false);
       }
     };
@@ -119,7 +123,8 @@ function ExportSheet({
             <button
               type="button"
               onClick={handleAction(onExportGeoJson)}
-              className="flex min-h-[44px] w-full items-center gap-3 rounded-btn px-4 py-3 text-left transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              disabled={loading}
+              className="flex min-h-[44px] w-full items-center gap-3 rounded-btn px-4 py-3 text-left transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 disabled:pointer-events-none"
             >
               {/* Globe icon */}
               <svg
@@ -155,7 +160,8 @@ function ExportSheet({
             <button
               type="button"
               onClick={handleAction(onExportCsv)}
-              className="flex min-h-[44px] w-full items-center gap-3 rounded-btn px-4 py-3 text-left transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              disabled={loading}
+              className="flex min-h-[44px] w-full items-center gap-3 rounded-btn px-4 py-3 text-left transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 disabled:pointer-events-none"
             >
               {/* Table icon */}
               <svg
