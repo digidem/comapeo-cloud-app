@@ -901,7 +901,10 @@ function HomeScreen() {
   }, [
     cpIsActive,
     _cpAttemptId,
-    cpIsComplete,
+    // cpIsComplete intentionally omitted — including it triggers cleanup that
+    // clears the auto-dismiss timer when sync completes, leaving the overlay
+    // stuck forever. The early-return guard `if (cpIsComplete) return` above
+    // is sufficient to prevent re-running the sync.
     cpServerId,
     cpBaseUrl,
     cpToken,
