@@ -99,7 +99,7 @@ describe('AddArchiveServerDialog', () => {
         onAdded={() => {}}
       />,
     );
-    expect(screen.getByLabelText('Invite URL')).toBeInTheDocument();
+    expect(screen.getByLabelText('Invite URL or Code')).toBeInTheDocument();
     expect(screen.queryByLabelText('Server URL')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Bearer Token')).not.toBeInTheDocument();
   });
@@ -115,7 +115,9 @@ describe('AddArchiveServerDialog', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Add' }));
-    expect(screen.getByText('Invite URL is required')).toBeInTheDocument();
+    expect(
+      screen.getByText('Invite URL or code is required'),
+    ).toBeInTheDocument();
   });
 
   it('shows error for invalid invite URL', async () => {
@@ -128,11 +130,14 @@ describe('AddArchiveServerDialog', () => {
       />,
     );
 
-    await user.type(screen.getByLabelText('Invite URL'), 'not-a-valid-url');
+    await user.type(
+      screen.getByLabelText('Invite URL or Code'),
+      'not-a-valid-url',
+    );
     await user.click(screen.getByRole('button', { name: 'Add' }));
     expect(
       screen.getByText(
-        "Invalid invite URL. Make sure it's a full invite link.",
+        "Invalid invite. Make sure it's a full URL or a valid code.",
       ),
     ).toBeInTheDocument();
   });
@@ -149,7 +154,7 @@ describe('AddArchiveServerDialog', () => {
     );
 
     await user.type(
-      screen.getByLabelText('Invite URL'),
+      screen.getByLabelText('Invite URL or Code'),
       'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
     );
     await user.click(screen.getByRole('button', { name: 'Add' }));
@@ -188,7 +193,7 @@ describe('AddArchiveServerDialog', () => {
     );
 
     await user.type(
-      screen.getByLabelText('Invite URL'),
+      screen.getByLabelText('Invite URL or Code'),
       'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
     );
     await user.click(screen.getByRole('button', { name: 'Add' }));
@@ -211,7 +216,7 @@ describe('AddArchiveServerDialog', () => {
     );
 
     await user.type(
-      screen.getByLabelText('Invite URL'),
+      screen.getByLabelText('Invite URL or Code'),
       'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
     );
     await user.click(screen.getByRole('button', { name: 'Add' }));
@@ -233,7 +238,7 @@ describe('AddArchiveServerDialog', () => {
     );
 
     // Default mode shows Invite URL
-    expect(screen.getByLabelText('Invite URL')).toBeInTheDocument();
+    expect(screen.getByLabelText('Invite URL or Code')).toBeInTheDocument();
 
     // Click advanced toggle
     await user.click(screen.getByTestId('advanced-toggle'));
@@ -242,7 +247,9 @@ describe('AddArchiveServerDialog', () => {
     expect(screen.getByLabelText('Label (optional)')).toBeInTheDocument();
     expect(screen.getByLabelText('Server URL')).toBeInTheDocument();
     expect(screen.getByLabelText('Bearer Token')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Invite URL')).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('Invite URL or Code'),
+    ).not.toBeInTheDocument();
   });
 
   it('clicking "Advanced" toggle again hides manual fields and shows invite URL field', async () => {
@@ -261,7 +268,7 @@ describe('AddArchiveServerDialog', () => {
 
     // Toggle back to invite URL mode
     await user.click(screen.getByTestId('advanced-toggle'));
-    expect(screen.getByLabelText('Invite URL')).toBeInTheDocument();
+    expect(screen.getByLabelText('Invite URL or Code')).toBeInTheDocument();
     expect(screen.queryByLabelText('Server URL')).not.toBeInTheDocument();
   });
 
@@ -673,7 +680,7 @@ describe('AddArchiveServerDialog', () => {
         />,
       );
 
-      await user.type(screen.getByLabelText('Invite URL'), inviteUrl);
+      await user.type(screen.getByLabelText('Invite URL or Code'), inviteUrl);
       await user.click(screen.getByRole('button', { name: 'Add' }));
 
       await waitFor(() => {
@@ -700,12 +707,12 @@ describe('AddArchiveServerDialog', () => {
         />,
       );
 
-      await user.type(screen.getByLabelText('Invite URL'), inviteUrl);
+      await user.type(screen.getByLabelText('Invite URL or Code'), inviteUrl);
       await user.click(screen.getByRole('button', { name: 'Add' }));
 
       expect(
         await screen.findByText(
-          'This invite link has expired. Ask the sender for a new one.',
+          'This invite has expired. Ask the sender for a new one.',
         ),
       ).toBeInTheDocument();
       expect(mockCreateRemoteServer).not.toHaveBeenCalled();
@@ -737,12 +744,12 @@ describe('AddArchiveServerDialog', () => {
         />,
       );
 
-      await user.type(screen.getByLabelText('Invite URL'), inviteUrl);
+      await user.type(screen.getByLabelText('Invite URL or Code'), inviteUrl);
       await user.click(screen.getByRole('button', { name: 'Add' }));
 
       expect(
         await screen.findByText(
-          "Invalid invite URL. Make sure it's a full invite link.",
+          "Invalid invite. Make sure it's a full URL or a valid code.",
         ),
       ).toBeInTheDocument();
       expect(mockCreateRemoteServer).not.toHaveBeenCalled();
@@ -764,7 +771,7 @@ describe('AddArchiveServerDialog', () => {
         />,
       );
 
-      await user.type(screen.getByLabelText('Invite URL'), rawCode);
+      await user.type(screen.getByLabelText('Invite URL or Code'), rawCode);
       await user.click(screen.getByRole('button', { name: 'Add' }));
 
       await waitFor(() => {
@@ -789,12 +796,15 @@ describe('AddArchiveServerDialog', () => {
         />,
       );
 
-      await user.type(screen.getByLabelText('Invite URL'), 'v1.expired');
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'v1.expired',
+      );
       await user.click(screen.getByRole('button', { name: 'Add' }));
 
       expect(
         await screen.findByText(
-          'This invite link has expired. Ask the sender for a new one.',
+          'This invite has expired. Ask the sender for a new one.',
         ),
       ).toBeInTheDocument();
       expect(mockCreateRemoteServer).not.toHaveBeenCalled();
