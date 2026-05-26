@@ -193,7 +193,7 @@ describe('InviteScreen', () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          'This invite link has expired. Ask the sender for a new one.',
+          'This invite has expired. Ask the sender for a new one.',
         ),
       ).toBeInTheDocument();
     });
@@ -214,7 +214,7 @@ describe('InviteScreen', () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          "Couldn't accept this invite. The link may be invalid.",
+          "Couldn't accept this invite. The URL or code may be invalid.",
         ),
       ).toBeInTheDocument();
     });
