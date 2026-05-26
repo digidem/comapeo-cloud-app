@@ -93,24 +93,24 @@ const messages = defineMessages({
   },
   inviteUrl: {
     id: 'home.archive.dialog.inviteUrl',
-    defaultMessage: 'Invite URL',
+    defaultMessage: 'Invite URL or Code',
   },
   inviteUrlPlaceholder: {
     id: 'home.archive.dialog.inviteUrlPlaceholder',
-    defaultMessage: 'Paste invite URL',
+    defaultMessage: 'Paste invite URL or code',
   },
   inviteUrlRequired: {
     id: 'home.archive.dialog.inviteUrlRequired',
-    defaultMessage: 'Invite URL is required',
+    defaultMessage: 'Invite URL or code is required',
   },
   invalidInviteUrl: {
     id: 'home.archive.dialog.invalidInviteUrl',
-    defaultMessage: "Invalid invite URL. Make sure it's a full invite link.",
+    defaultMessage:
+      "Invalid invite. Make sure it's a full URL or a valid code.",
   },
   inviteExpired: {
     id: 'home.archive.dialog.inviteExpired',
-    defaultMessage:
-      'This invite link has expired. Ask the sender for a new one.',
+    defaultMessage: 'This invite has expired. Ask the sender for a new one.',
   },
   advanced: {
     id: 'home.archive.dialog.advanced',

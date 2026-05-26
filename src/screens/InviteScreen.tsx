@@ -49,12 +49,12 @@ const messages = defineMessages({
   },
   expired: {
     id: 'invite.expired',
-    defaultMessage:
-      'This invite link has expired. Ask the sender for a new one.',
+    defaultMessage: 'This invite has expired. Ask the sender for a new one.',
   },
   invalidInvite: {
     id: 'invite.invalid',
-    defaultMessage: "Couldn't accept this invite. The link may be invalid.",
+    defaultMessage:
+      "Couldn't accept this invite. The URL or code may be invalid.",
   },
   networkError: {
     id: 'invite.progress.networkError',
