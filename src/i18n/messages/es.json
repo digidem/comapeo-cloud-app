@@ -79,6 +79,8 @@
   "data.untitledProject": "Proyecto sin título",
   "data.viewGrid": "Vista de cuadrícula",
   "data.viewMap": "Vista de mapa",
+  "pagination.loadMore": "Cargar más",
+  "pagination.showing": "Mostrando {start}–{end} de {total} observaciones",
   "home.activity.alert": "Alerta registrado",
   "home.activity.alertDesc": "Nuevo evento de alerta detectado en el área del proyecto.",
   "home.activity.audios": "{count, plural, one {# audio} other {# audios}}",

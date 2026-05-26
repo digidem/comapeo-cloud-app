@@ -152,6 +152,24 @@ export function DataScreen() {
   // Responsive page size: 50 on mobile, 60 on desktop
   const pageSize = useResponsivePageSize();
 
+  // Memoize filter deps so useObservationPages only resets on actual changes
+  const filterDeps = useMemo(
+    () => [
+      obsFilters.filters.search,
+      obsFilters.filters.category,
+      obsFilters.filters.startDate,
+      obsFilters.filters.endDate,
+      obsFilters.filters.sort,
+    ],
+    [
+      obsFilters.filters.search,
+      obsFilters.filters.category,
+      obsFilters.filters.startDate,
+      obsFilters.filters.endDate,
+      obsFilters.filters.sort,
+    ],
+  );
+
   // Pagination — resets to page 1 when filters change
   const {
     paginatedObservations,
@@ -162,13 +180,7 @@ export function DataScreen() {
     loadMore,
   } = useObservationPages(filteredObs, {
     pageSize,
-    deps: [
-      obsFilters.filters.search,
-      obsFilters.filters.category,
-      obsFilters.filters.startDate,
-      obsFilters.filters.endDate,
-      obsFilters.filters.sort,
-    ],
+    deps: filterDeps,
   });
 
   // Pre-compute observation display names using preset matching
