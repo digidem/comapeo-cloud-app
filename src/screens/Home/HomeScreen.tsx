@@ -1027,7 +1027,12 @@ function HomeScreen() {
   // show the skeleton — the stale data remains visible while refreshing.
   // Must be after all hooks (useShellSlot) to avoid Rules of Hooks violations
   if (projectsQuery.isPending) {
-    return <HomeScreenSkeleton />;
+    return (
+      <>
+        {connectionProgressOverlay}
+        <HomeScreenSkeleton />
+      </>
+    );
   }
 
   // ---- Main content area ----
