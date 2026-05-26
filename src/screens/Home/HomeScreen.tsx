@@ -12,8 +12,8 @@ import { type IntlShape, defineMessages, useIntl } from 'react-intl';
 
 import { useQueryClient } from '@tanstack/react-query';
 
-import { ConnectionProgress } from '@/components/shared/ConnectionProgress';
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { ConnectionProgress } from '@/components/shared/ConnectionProgress';
 import { Button } from '@/components/ui/button';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
@@ -799,40 +799,76 @@ function HomeScreen() {
     async function runConnection() {
       try {
         // Step 1: Connecting to server
-        dispatch({ type: 'CONNECTION_STEP_UPDATE', stepIndex: 1, status: 'active' });
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 1,
+          status: 'active',
+        });
 
-        const result = await syncRemoteArchive(cpServerId, { baseUrl: cpBaseUrl, token: cpToken });
+        const result = await syncRemoteArchive(cpServerId, {
+          baseUrl: cpBaseUrl,
+          token: cpToken,
+        });
         if (cancelled) return;
 
         if (!result.success) {
-          dispatch({ type: 'CONNECTION_STEP_UPDATE', stepIndex: 1, status: 'error' });
-          dispatch({ type: 'CONNECTION_ERROR', message: result.error ?? 'Sync failed' });
+          dispatch({
+            type: 'CONNECTION_STEP_UPDATE',
+            stepIndex: 1,
+            status: 'error',
+          });
+          dispatch({
+            type: 'CONNECTION_ERROR',
+            message: result.error ?? 'Sync failed',
+          });
           return;
         }
 
         // Step 1: Connecting complete
-        dispatch({ type: 'CONNECTION_STEP_UPDATE', stepIndex: 1, status: 'completed' });
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 1,
+          status: 'completed',
+        });
 
         // Step 2: Syncing data — show active state
-        dispatch({ type: 'CONNECTION_STEP_UPDATE', stepIndex: 2, status: 'active' });
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 2,
+          status: 'active',
+        });
 
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['projects'] }),
           queryClient.invalidateQueries({ queryKey: ['observations'] }),
-          queryClient.invalidateQueries({ queryKey: ['remoteDetectionAlerts'] }),
+          queryClient.invalidateQueries({
+            queryKey: ['remoteDetectionAlerts'],
+          }),
         ]);
         if (cancelled) return;
 
-        dispatch({ type: 'CONNECTION_STEP_UPDATE', stepIndex: 2, status: 'completed' });
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 2,
+          status: 'completed',
+        });
 
         // Step 3: Preparing dashboard
-        dispatch({ type: 'CONNECTION_STEP_UPDATE', stepIndex: 3, status: 'active' });
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 3,
+          status: 'active',
+        });
 
         // Brief pause for the "Preparing" step to be visible
         await new Promise((resolve) => setTimeout(resolve, 500));
         if (cancelled) return;
 
-        dispatch({ type: 'CONNECTION_STEP_UPDATE', stepIndex: 3, status: 'completed' });
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 3,
+          status: 'completed',
+        });
         dispatch({ type: 'CONNECTION_COMPLETE' });
 
         // Auto-dismiss after 2s
@@ -843,7 +879,11 @@ function HomeScreen() {
         }, 2000);
       } catch (err) {
         if (cancelled) return;
-        dispatch({ type: 'CONNECTION_STEP_UPDATE', stepIndex: 1, status: 'error' });
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 1,
+          status: 'error',
+        });
         dispatch({
           type: 'CONNECTION_ERROR',
           message: err instanceof Error ? err.message : 'Connection failed',
@@ -858,7 +898,15 @@ function HomeScreen() {
         clearTimeout(dismissTimer);
       }
     };
-  }, [cpIsActive, _cpAttemptId, cpIsComplete, cpServerId, cpBaseUrl, cpToken, queryClient]);
+  }, [
+    cpIsActive,
+    _cpAttemptId,
+    cpIsComplete,
+    cpServerId,
+    cpBaseUrl,
+    cpToken,
+    queryClient,
+  ]);
 
   const handleOpenCreateDialog = useCallback(
     () => dispatch({ type: 'OPEN_CREATE_DIALOG' }),
