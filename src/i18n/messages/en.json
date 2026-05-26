@@ -438,22 +438,22 @@
     "defaultMessage": "Failed to add server"
   },
   "home.archive.dialog.invalidInviteUrl": {
-    "defaultMessage": "Invalid invite URL. Make sure it's a full invite link."
+    "defaultMessage": "Invalid invite. Make sure it's a full URL or a valid code."
   },
   "home.archive.dialog.invalidUrl": {
     "defaultMessage": "Enter a full URL including http:// or https://"
   },
   "home.archive.dialog.inviteExpired": {
-    "defaultMessage": "This invite link has expired. Ask the sender for a new one."
+    "defaultMessage": "This invite has expired. Ask the sender for a new one."
   },
   "home.archive.dialog.inviteUrl": {
-    "defaultMessage": "Invite URL"
+    "defaultMessage": "Invite URL or Code"
   },
   "home.archive.dialog.inviteUrlPlaceholder": {
-    "defaultMessage": "Paste invite URL"
+    "defaultMessage": "Paste invite URL or code"
   },
   "home.archive.dialog.inviteUrlRequired": {
-    "defaultMessage": "Invite URL is required"
+    "defaultMessage": "Invite URL or code is required"
   },
   "home.archive.dialog.label": {
     "defaultMessage": "Label (optional)"
@@ -547,6 +547,27 @@
   },
   "home.areaUnit.m2": {
     "defaultMessage": "m²"
+  },
+  "home.connectionProgress.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "home.connectionProgress.heading": {
+    "defaultMessage": "Connecting to archive..."
+  },
+  "home.connectionProgress.retry": {
+    "defaultMessage": "Try Again"
+  },
+  "home.connectionProgress.stepConnect": {
+    "defaultMessage": "Connecting to server..."
+  },
+  "home.connectionProgress.stepPrepare": {
+    "defaultMessage": "Preparing dashboard..."
+  },
+  "home.connectionProgress.stepSync": {
+    "defaultMessage": "Syncing data..."
+  },
+  "home.connectionProgress.stepVerify": {
+    "defaultMessage": "Verifying invite..."
   },
   "home.coverage.calculating": {
     "defaultMessage": "Calculating..."
@@ -825,10 +846,10 @@
     "defaultMessage": "Failed to connect to archive."
   },
   "invite.expired": {
-    "defaultMessage": "This invite link has expired. Ask the sender for a new one."
+    "defaultMessage": "This invite has expired. Ask the sender for a new one."
   },
   "invite.invalid": {
-    "defaultMessage": "Couldn't accept this invite. The link may be invalid."
+    "defaultMessage": "Couldn't accept this invite. The URL or code may be invalid."
   },
   "invite.progress.connected": {
     "defaultMessage": "Connected!"

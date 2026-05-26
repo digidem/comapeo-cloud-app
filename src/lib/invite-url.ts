@@ -21,9 +21,26 @@ export function resetLegacyWarningForTests(): void {
 }
 
 export function parseInviteUrl(input: string): ParseInviteResult {
+  const trimmed = input.trim();
+
+  if (trimmed.length === 0) {
+    return {
+      ok: false,
+      code: 'INVALID_URL',
+      message: 'Invite code or URL is empty',
+    };
+  }
+
+  // Detect raw invite code (starts with v1. followed by base64url chars).
+  // The leading "v1." prefix is the VERSION_PREFIX from invite-crypto.ts.
+  // Base64url charset: [A-Za-z0-9_-]
+  if (/^v1\.[A-Za-z0-9_-]+$/.test(trimmed)) {
+    return { ok: true, kind: 'encrypted', code: trimmed };
+  }
+
   let url: URL;
   try {
-    url = new URL(input.trim());
+    url = new URL(trimmed);
   } catch {
     return { ok: false, code: 'INVALID_URL', message: 'Not a valid URL' };
   }

@@ -20,7 +20,7 @@ export type DecryptResult =
       message: string;
     };
 
-const VERSION_PREFIX = 'v1.';
+export const VERSION_PREFIX = 'v1.';
 const IV_LENGTH = 12;
 const KEY_LENGTH = 32;
 

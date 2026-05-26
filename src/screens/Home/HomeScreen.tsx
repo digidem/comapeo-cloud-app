@@ -13,6 +13,7 @@ import { type IntlShape, defineMessages, useIntl } from 'react-intl';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { ConnectionProgress } from '@/components/shared/ConnectionProgress';
 import { Button } from '@/components/ui/button';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
@@ -92,6 +93,20 @@ interface HomeState {
   unit: AreaUnit;
   coverageRefreshKey: number;
   selectedServerId: string | null;
+  connectionProgress: {
+    isActive: boolean;
+    attemptId: number;
+    serverId: string;
+    baseUrl: string;
+    token: string;
+    steps: Array<{
+      id: string;
+      label: string;
+      status: 'pending' | 'active' | 'completed' | 'error';
+    }>;
+    errorMessage: string | null;
+    isComplete: boolean;
+  } | null;
 }
 
 type HomeAction =
@@ -113,7 +128,26 @@ type HomeAction =
   | { type: 'OPEN_ADD_SERVER_DIALOG' }
   | { type: 'CLOSE_ADD_SERVER_DIALOG' }
   | { type: 'SELECT_SERVER'; id: string | null }
-  | { type: 'CLEAR_PROJECT' };
+  | { type: 'CLEAR_PROJECT' }
+  | {
+      type: 'START_CONNECTION_PROGRESS';
+      serverId: string;
+      baseUrl: string;
+      token: string;
+      steps: Array<{
+        id: string;
+        label: string;
+        status: 'pending' | 'active' | 'completed' | 'error';
+      }>;
+    }
+  | {
+      type: 'CONNECTION_STEP_UPDATE';
+      stepIndex: number;
+      status: 'pending' | 'active' | 'completed' | 'error';
+    }
+  | { type: 'CONNECTION_COMPLETE' }
+  | { type: 'CONNECTION_ERROR'; message: string }
+  | { type: 'DISMISS_CONNECTION_PROGRESS' };
 
 function homeReducer(state: HomeState, action: HomeAction): HomeState {
   switch (action.type) {
@@ -170,6 +204,55 @@ function homeReducer(state: HomeState, action: HomeAction): HomeState {
       return { ...state, selectedServerId: action.id };
     case 'CLEAR_PROJECT':
       return { ...state, selectedProjectId: null };
+    case 'START_CONNECTION_PROGRESS':
+      return {
+        ...state,
+        connectionProgress: {
+          isActive: true,
+          attemptId: (state.connectionProgress?.attemptId ?? 0) + 1,
+          serverId: action.serverId,
+          baseUrl: action.baseUrl,
+          token: action.token,
+          steps: action.steps,
+          errorMessage: null,
+          isComplete: false,
+        },
+      };
+    case 'CONNECTION_STEP_UPDATE': {
+      if (!state.connectionProgress) return state;
+      const updatedSteps = state.connectionProgress.steps.map((step, i) =>
+        i === action.stepIndex ? { ...step, status: action.status } : step,
+      );
+      return {
+        ...state,
+        connectionProgress: {
+          ...state.connectionProgress,
+          steps: updatedSteps,
+        },
+      };
+    }
+    case 'CONNECTION_COMPLETE': {
+      if (!state.connectionProgress) return state;
+      return {
+        ...state,
+        connectionProgress: {
+          ...state.connectionProgress,
+          isComplete: true,
+        },
+      };
+    }
+    case 'CONNECTION_ERROR': {
+      if (!state.connectionProgress) return state;
+      return {
+        ...state,
+        connectionProgress: {
+          ...state.connectionProgress,
+          errorMessage: action.message,
+        },
+      };
+    }
+    case 'DISMISS_CONNECTION_PROGRESS':
+      return { ...state, connectionProgress: null };
     default:
       return state;
   }
@@ -187,6 +270,7 @@ const INITIAL_STATE: HomeState = {
   unit: 'ha',
   coverageRefreshKey: 0,
   selectedServerId: null,
+  connectionProgress: null,
 };
 
 const PRESET_TO_METHOD: Record<string, string> = {
@@ -354,6 +438,34 @@ const messages = defineMessages({
     id: 'home.project.deleteAria',
     defaultMessage: 'Delete project',
   },
+  connectionProgressHeading: {
+    id: 'home.connectionProgress.heading',
+    defaultMessage: 'Connecting to archive...',
+  },
+  connectionProgressStepVerify: {
+    id: 'home.connectionProgress.stepVerify',
+    defaultMessage: 'Verifying invite...',
+  },
+  connectionProgressStepConnect: {
+    id: 'home.connectionProgress.stepConnect',
+    defaultMessage: 'Connecting to server...',
+  },
+  connectionProgressStepSync: {
+    id: 'home.connectionProgress.stepSync',
+    defaultMessage: 'Syncing data...',
+  },
+  connectionProgressStepPrepare: {
+    id: 'home.connectionProgress.stepPrepare',
+    defaultMessage: 'Preparing dashboard...',
+  },
+  connectionProgressCancel: {
+    id: 'home.connectionProgress.cancel',
+    defaultMessage: 'Cancel',
+  },
+  connectionProgressRetry: {
+    id: 'home.connectionProgress.retry',
+    defaultMessage: 'Try Again',
+  },
 });
 
 // ---- Component ----
@@ -365,6 +477,31 @@ const INTERNAL_TAGS = new Set([
   'audioCount',
   'trackCount',
 ]);
+
+function buildConnectionProgressSteps(intl: IntlShape) {
+  return [
+    {
+      id: 'verify',
+      label: intl.formatMessage(messages.connectionProgressStepVerify),
+      status: 'completed' as const,
+    },
+    {
+      id: 'connect',
+      label: intl.formatMessage(messages.connectionProgressStepConnect),
+      status: 'pending' as const,
+    },
+    {
+      id: 'sync',
+      label: intl.formatMessage(messages.connectionProgressStepSync),
+      status: 'pending' as const,
+    },
+    {
+      id: 'prepare',
+      label: intl.formatMessage(messages.connectionProgressStepPrepare),
+      status: 'pending' as const,
+    },
+  ];
+}
 
 function HomeScreen() {
   const [state, dispatch] = useReducer(homeReducer, INITIAL_STATE);
@@ -644,6 +781,136 @@ function HomeScreen() {
     dispatch({ type: 'SELECT_PROJECT', id: sorted[0]!.localId });
   }, [state.selectedProjectId, projects]);
 
+  // Connection progress: drive the sync when START_CONNECTION_PROGRESS is dispatched
+  const cpIsActive = state.connectionProgress?.isActive ?? false;
+  const _cpAttemptId = state.connectionProgress?.attemptId ?? 0;
+  const cpServerId = state.connectionProgress?.serverId ?? '';
+  const cpBaseUrl = state.connectionProgress?.baseUrl ?? '';
+  const cpToken = state.connectionProgress?.token ?? '';
+  const cpIsComplete = state.connectionProgress?.isComplete ?? false;
+
+  useEffect(() => {
+    if (!cpIsActive) return;
+    if (cpIsComplete) return;
+
+    let cancelled = false;
+    let dismissTimer: ReturnType<typeof setTimeout> | undefined;
+
+    async function runConnection() {
+      try {
+        // Step 1: Connecting to server
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 1,
+          status: 'active',
+        });
+
+        const result = await syncRemoteArchive(cpServerId, {
+          baseUrl: cpBaseUrl,
+          token: cpToken,
+        });
+        if (cancelled) return;
+
+        if (!result.success) {
+          dispatch({
+            type: 'CONNECTION_STEP_UPDATE',
+            stepIndex: 1,
+            status: 'error',
+          });
+          dispatch({
+            type: 'CONNECTION_ERROR',
+            message: result.error ?? 'Sync failed',
+          });
+          return;
+        }
+
+        // Step 1: Connecting complete
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 1,
+          status: 'completed',
+        });
+
+        // Step 2: Syncing data — show active state
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 2,
+          status: 'active',
+        });
+
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['projects'] }),
+          queryClient.invalidateQueries({ queryKey: ['observations'] }),
+          queryClient.invalidateQueries({
+            queryKey: ['alerts'],
+          }),
+        ]);
+        if (cancelled) return;
+
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 2,
+          status: 'completed',
+        });
+
+        // Step 3: Preparing dashboard
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 3,
+          status: 'active',
+        });
+
+        // Brief pause for the "Preparing" step to be visible
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (cancelled) return;
+
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 3,
+          status: 'completed',
+        });
+        dispatch({ type: 'CONNECTION_COMPLETE' });
+
+        // Auto-dismiss after 2s
+        dismissTimer = setTimeout(() => {
+          if (!cancelled) {
+            dispatch({ type: 'DISMISS_CONNECTION_PROGRESS' });
+          }
+        }, 2000);
+      } catch (err) {
+        if (cancelled) return;
+        dispatch({
+          type: 'CONNECTION_STEP_UPDATE',
+          stepIndex: 1,
+          status: 'error',
+        });
+        dispatch({
+          type: 'CONNECTION_ERROR',
+          message: err instanceof Error ? err.message : 'Connection failed',
+        });
+      }
+    }
+
+    void runConnection();
+    return () => {
+      cancelled = true;
+      if (dismissTimer !== undefined) {
+        clearTimeout(dismissTimer);
+      }
+    };
+  }, [
+    cpIsActive,
+    _cpAttemptId,
+    // cpIsComplete intentionally omitted — including it triggers cleanup that
+    // clears the auto-dismiss timer when sync completes, leaving the overlay
+    // stuck forever. The early-return guard `if (cpIsComplete) return` above
+    // is sufficient to prevent re-running the sync.
+    cpServerId,
+    cpBaseUrl,
+    cpToken,
+    queryClient,
+  ]);
+
   const handleOpenCreateDialog = useCallback(
     () => dispatch({ type: 'OPEN_CREATE_DIALOG' }),
     [],
@@ -709,12 +976,63 @@ function HomeScreen() {
 
   useShellSlot(shellSlot);
 
+  // Connection progress overlay (rendered in all return paths)
+  const connectionProgressOverlay = state.connectionProgress?.isActive && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface">
+      <div className="flex flex-col items-center">
+        <ConnectionProgress
+          steps={state.connectionProgress.steps}
+          heading={intl.formatMessage(messages.connectionProgressHeading)}
+          isComplete={state.connectionProgress.isComplete}
+        />
+        {state.connectionProgress.errorMessage && (
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <p className="text-sm text-red-600" role="alert">
+              {state.connectionProgress.errorMessage}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="rounded-xl border border-gray-300 px-4 py-2 text-sm"
+                onClick={() =>
+                  dispatch({ type: 'DISMISS_CONNECTION_PROGRESS' })
+                }
+              >
+                {intl.formatMessage(messages.connectionProgressCancel)}
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-primary px-4 py-2 text-sm text-white"
+                onClick={() => {
+                  dispatch({
+                    type: 'START_CONNECTION_PROGRESS',
+                    serverId: state.connectionProgress!.serverId,
+                    baseUrl: state.connectionProgress!.baseUrl,
+                    token: state.connectionProgress!.token,
+                    steps: buildConnectionProgressSteps(intl),
+                  });
+                }}
+              >
+                {intl.formatMessage(messages.connectionProgressRetry)}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   // Loading state — full-page skeleton only on initial load (no data yet).
   // Background re-fetches (e.g., from auto-sync invalidation) should NOT
   // show the skeleton — the stale data remains visible while refreshing.
   // Must be after all hooks (useShellSlot) to avoid Rules of Hooks violations
   if (projectsQuery.isPending) {
-    return <HomeScreenSkeleton />;
+    return (
+      <>
+        {connectionProgressOverlay}
+        <HomeScreenSkeleton />
+      </>
+    );
   }
 
   // ---- Main content area ----
@@ -778,6 +1096,8 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
+
+        {connectionProgressOverlay}
       </>
     );
   }
@@ -801,17 +1121,12 @@ function HomeScreen() {
               .getState()
               .servers.find((s) => s.id === serverId);
             if (server) {
-              void syncRemoteArchive(serverId, {
+              dispatch({
+                type: 'START_CONNECTION_PROGRESS',
+                serverId,
                 baseUrl: server.baseUrl,
                 token: server.token,
-              }).then(() => {
-                void queryClient.invalidateQueries({
-                  queryKey: ['projects'],
-                });
-                void queryClient.invalidateQueries({
-                  queryKey: ['observations'],
-                });
-                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+                steps: buildConnectionProgressSteps(intl),
               });
             }
           }}
@@ -858,6 +1173,8 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
+
+        {connectionProgressOverlay}
       </>
     );
   }
@@ -932,19 +1249,18 @@ function HomeScreen() {
               .getState()
               .servers.find((s) => s.id === serverId);
             if (server) {
-              void syncRemoteArchive(serverId, {
+              dispatch({
+                type: 'START_CONNECTION_PROGRESS',
+                serverId,
                 baseUrl: server.baseUrl,
                 token: server.token,
-              }).then(() => {
-                void queryClient.invalidateQueries({ queryKey: ['projects'] });
-                void queryClient.invalidateQueries({
-                  queryKey: ['observations'],
-                });
-                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+                steps: buildConnectionProgressSteps(intl),
               });
             }
           }}
         />
+
+        {connectionProgressOverlay}
       </>
     );
   }
@@ -1036,19 +1352,18 @@ function HomeScreen() {
               .getState()
               .servers.find((s) => s.id === serverId);
             if (server) {
-              void syncRemoteArchive(serverId, {
+              dispatch({
+                type: 'START_CONNECTION_PROGRESS',
+                serverId,
                 baseUrl: server.baseUrl,
                 token: server.token,
-              }).then(() => {
-                void queryClient.invalidateQueries({ queryKey: ['projects'] });
-                void queryClient.invalidateQueries({
-                  queryKey: ['observations'],
-                });
-                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+                steps: buildConnectionProgressSteps(intl),
               });
             }
           }}
         />
+
+        {connectionProgressOverlay}
       </>
     );
   }
@@ -1278,19 +1593,18 @@ function HomeScreen() {
             .getState()
             .servers.find((s) => s.id === serverId);
           if (server) {
-            void syncRemoteArchive(serverId, {
+            dispatch({
+              type: 'START_CONNECTION_PROGRESS',
+              serverId,
               baseUrl: server.baseUrl,
               token: server.token,
-            }).then(() => {
-              void queryClient.invalidateQueries({ queryKey: ['projects'] });
-              void queryClient.invalidateQueries({
-                queryKey: ['observations'],
-              });
-              void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+              steps: buildConnectionProgressSteps(intl),
             });
           }
         }}
       />
+
+      {connectionProgressOverlay}
     </>
   );
 }

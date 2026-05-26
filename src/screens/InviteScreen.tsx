@@ -49,12 +49,12 @@ const messages = defineMessages({
   },
   expired: {
     id: 'invite.expired',
-    defaultMessage:
-      'This invite link has expired. Ask the sender for a new one.',
+    defaultMessage: 'This invite has expired. Ask the sender for a new one.',
   },
   invalidInvite: {
     id: 'invite.invalid',
-    defaultMessage: "Couldn't accept this invite. The link may be invalid.",
+    defaultMessage:
+      "Couldn't accept this invite. The URL or code may be invalid.",
   },
   networkError: {
     id: 'invite.progress.networkError',
@@ -184,6 +184,10 @@ export function InviteScreen() {
   // Run the connection flow
   const runFlow = useCallback(() => {
     if (!invite || !invite.ok) return;
+
+    // If the component unmounted between queueMicrotask scheduling and
+    // execution, bail out immediately — don't reset the cancellation flag.
+    if (cancelledRef.current) return;
 
     // Capture the narrowed type so the closure can access it without `!`
     const validInvite = invite;
