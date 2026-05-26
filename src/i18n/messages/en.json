@@ -821,12 +821,6 @@
   "home.untitledProject": {
     "defaultMessage": "Untitled Project"
   },
-  "invite.connected": {
-    "defaultMessage": "Connected! Redirecting..."
-  },
-  "invite.connecting": {
-    "defaultMessage": "Connecting to archive..."
-  },
   "invite.error": {
     "defaultMessage": "Failed to connect to archive."
   },
@@ -835,6 +829,36 @@
   },
   "invite.invalid": {
     "defaultMessage": "Couldn't accept this invite. The link may be invalid."
+  },
+  "invite.progress.connected": {
+    "defaultMessage": "Connected!"
+  },
+  "invite.progress.goHome": {
+    "defaultMessage": "Go to Home"
+  },
+  "invite.progress.heading": {
+    "defaultMessage": "Connecting to archive..."
+  },
+  "invite.progress.networkError": {
+    "defaultMessage": "Unable to connect. Check your internet connection."
+  },
+  "invite.progress.redirecting": {
+    "defaultMessage": "Redirecting..."
+  },
+  "invite.progress.retry": {
+    "defaultMessage": "Try Again"
+  },
+  "invite.progress.stepConnect": {
+    "defaultMessage": "Connecting to server..."
+  },
+  "invite.progress.stepPrepare": {
+    "defaultMessage": "Preparing dashboard..."
+  },
+  "invite.progress.stepSync": {
+    "defaultMessage": "Syncing data..."
+  },
+  "invite.progress.stepVerify": {
+    "defaultMessage": "Verifying invite..."
   },
   "map.basemap.label": {
     "defaultMessage": "Basemap"

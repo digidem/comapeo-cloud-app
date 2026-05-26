@@ -221,7 +221,7 @@ export function DataScreen() {
         ))}
       </div>
     );
-  }, [filteredObs, viewMode, navigate, intl, obsFilters]);
+  }, [filteredObs, viewMode, navigate, intl, obsFilters, displayNames]);
 
   // No project selected
   if (!selectedProjectId || !selectedProject) {

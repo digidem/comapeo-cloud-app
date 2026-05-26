@@ -530,7 +530,7 @@ function HomeScreen() {
     items.sort((a, b) => b._sortKey - a._sortKey);
 
     return items.map(({ _sortKey: _, ...rest }) => rest);
-  }, [observations, alerts, intl, now]);
+  }, [observations, alerts, intl, now, observationDisplayNames]);
 
   // Derive territory area from coverage results
   const territoryArea = useMemo(() => {

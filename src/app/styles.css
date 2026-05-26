@@ -341,3 +341,30 @@ html {
     animation-delay: 530ms;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Checkmark draw animations (ConnectionProgress)
+   --------------------------------------------------------------------------- */
+@keyframes drawCheckmark {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.draw-checkmark {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: drawCheckmark 0.3s ease-out forwards;
+}
+
+@keyframes drawCheckmarkLarge {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.draw-checkmark-large {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: drawCheckmarkLarge 0.4s ease-out forwards;
+}

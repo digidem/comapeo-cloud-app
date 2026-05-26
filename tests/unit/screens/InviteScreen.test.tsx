@@ -1,12 +1,14 @@
 import { render, screen, waitFor } from '@tests/mocks/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import React from 'react';
+
 import { syncRemoteArchive } from '@/lib/data-layer';
 import { resetDb } from '@/lib/db';
 import { InviteScreen } from '@/screens/InviteScreen';
 import { useAuthStore } from '@/stores/auth-store';
 
-// Mock the navigate function
+// Mock navigate and Link
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual =
@@ -14,6 +16,19 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   return {
     ...actual,
     useNavigate: () => mockNavigate,
+    Link: ({
+      children,
+      to,
+      ...props
+    }: {
+      children: React.ReactNode;
+      to: string;
+      [key: string]: unknown;
+    }) => (
+      <a href={to} {...props}>
+        {children}
+      </a>
+    ),
   };
 });
 
@@ -26,6 +41,37 @@ vi.mock('@/lib/data-layer', async (importOriginal) => {
   };
 });
 
+// Mock redeemEncryptedInvite — wraps the real implementation so MSW handlers
+// still process encrypted/expired codes, but allows per-test overrides for
+// network-failure simulation.
+vi.mock('@/lib/api-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api-client')>();
+  return {
+    ...actual,
+    redeemEncryptedInvite: vi.fn(
+      (...args: Parameters<typeof actual.redeemEncryptedInvite>) =>
+        actual.redeemEncryptedInvite(...args),
+    ),
+  };
+});
+
+function setSearchParams(params: string) {
+  const origin = 'http://localhost:5173';
+  Object.defineProperty(window, 'location', {
+    value: {
+      search: params,
+      origin,
+      href: `${origin}/invite${params}`,
+      pathname: '/invite',
+      protocol: 'http:',
+      host: 'localhost:5173',
+      hostname: 'localhost',
+      port: '5173',
+    },
+    writable: true,
+  });
+}
+
 describe('InviteScreen', () => {
   beforeEach(async () => {
     await resetDb();
@@ -35,31 +81,182 @@ describe('InviteScreen', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
-    // Clear servers after each test
     useAuthStore.getState().clearAll();
   });
 
-  function setSearchParams(params: string) {
-    // jsdom doesn't fully support URLSearchParams in popstate,
-    // so we patch window.location.search directly. Provide an `href` too
-    // so any code path that resolves relative URLs via window.location keeps
-    // working (the api-client uses fetch with a relative path for /api/...).
-    const origin = 'http://localhost:5173';
-    Object.defineProperty(window, 'location', {
-      value: {
-        search: params,
-        origin,
-        href: `${origin}/invite${params}`,
-        pathname: '/invite',
-        protocol: 'http:',
-        host: 'localhost:5173',
-        hostname: 'localhost',
-        port: '5173',
-      },
-      writable: true,
-    });
-  }
+  // -----------------------------------------------------------------------
+  // Progress UI rendering
+  // -----------------------------------------------------------------------
+  it('renders all four progress steps', async () => {
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+    // Step labels should be visible
+    expect(screen.getByText('Verifying invite...')).toBeInTheDocument();
+    expect(screen.getByText('Connecting to server...')).toBeInTheDocument();
+    expect(screen.getByText('Syncing data...')).toBeInTheDocument();
+    expect(screen.getByText('Preparing dashboard...')).toBeInTheDocument();
+  });
 
+  it('shows spinner inside the progress heading', async () => {
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+    // The heading row has a spinner (role="img")
+    const heading = screen.getByText('Connecting to archive...');
+    const container = heading.closest('div');
+    expect(container?.querySelector('[role="img"]')).toBeTruthy();
+  });
+
+  // -----------------------------------------------------------------------
+  // Success flow
+  // -----------------------------------------------------------------------
+  it('shows Connected! success state after sync completes', async () => {
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+    await waitFor(() => {
+      expect(screen.getByText('Connected!')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Redirecting...')).toBeInTheDocument();
+  });
+
+  it('navigates to home after success delay', async () => {
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+    await waitFor(
+      () => {
+        expect(mockNavigate).toHaveBeenCalledWith({ to: '/' });
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  // -----------------------------------------------------------------------
+  // Error state — retry button
+  // -----------------------------------------------------------------------
+  it('shows Try Again button on error', async () => {
+    vi.mocked(syncRemoteArchive).mockResolvedValue({
+      success: false,
+      error: 'Test error',
+    });
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /try again/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('shows Go to Home link on error', async () => {
+    vi.mocked(syncRemoteArchive).mockResolvedValue({
+      success: false,
+      error: 'Test error',
+    });
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole('link', { name: /go to home/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('Try Again button restarts the connection flow', async () => {
+    // First call fails
+    vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
+      success: false,
+      error: 'Test error',
+    });
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /try again/i }),
+      ).toBeInTheDocument();
+    });
+
+    // Click Try Again
+    screen.getByRole('button', { name: /try again/i }).click();
+
+    // Should reset to loading state with "Verifying invite..." step active
+    await waitFor(() => {
+      expect(screen.getByText('Connecting to archive...')).toBeInTheDocument();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Expired invite
+  // -----------------------------------------------------------------------
+  it('shows expired message with Try Again and Go Home', async () => {
+    setSearchParams('?code=expired');
+    render(<InviteScreen />);
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'This invite link has expired. Ask the sender for a new one.',
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole('button', { name: /try again/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /go to home/i }),
+    ).toBeInTheDocument();
+  });
+
+  // -----------------------------------------------------------------------
+  // Invalid invite
+  // -----------------------------------------------------------------------
+  it('shows invalid message immediately for bad URLs', async () => {
+    setSearchParams('?hash=abc123');
+    render(<InviteScreen />);
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Couldn't accept this invite. The link may be invalid.",
+        ),
+      ).toBeInTheDocument();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Cancelled ref cleanup
+  // -----------------------------------------------------------------------
+  it('does not set state after unmount (cleanup)', async () => {
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    // Use a never-resolving sync to test mid-flight unmount
+    vi.mocked(syncRemoteArchive).mockReturnValue(new Promise(() => {}));
+    const { unmount } = render(<InviteScreen />);
+    // Should show loading
+    expect(screen.getByText('Connecting to archive...')).toBeInTheDocument();
+    // Unmount before sync resolves
+    unmount();
+    // No error — the cancelled ref prevented state updates on unmounted component
+  });
+
+  // -----------------------------------------------------------------------
+  // Network error message
+  // -----------------------------------------------------------------------
+  it('shows network error message when fetch fails', async () => {
+    // Simulate a network-level failure by mocking redeemEncryptedInvite
+    // to throw a TypeError (bypasses MSW which always returns HTTP responses).
+    const { redeemEncryptedInvite } = await import('@/lib/api-client');
+    vi.mocked(redeemEncryptedInvite).mockRejectedValueOnce(
+      new TypeError('Failed to fetch'),
+    );
+    setSearchParams('?code=network-fail');
+    render(<InviteScreen />);
+    await waitFor(() => {
+      expect(
+        screen.getByText('Unable to connect. Check your internet connection.'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Legacy tests (preserved)
+  // -----------------------------------------------------------------------
   it('calls addServer with parsed URL and hash params', async () => {
     setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
 
@@ -90,25 +287,6 @@ describe('InviteScreen', () => {
     });
   });
 
-  it('navigates to home after sync completes', async () => {
-    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
-
-    render(<InviteScreen />);
-
-    // Wait for connected status
-    await waitFor(() => {
-      expect(screen.getByText('Connected! Redirecting...')).toBeInTheDocument();
-    });
-
-    // Wait for navigation
-    await waitFor(
-      () => {
-        expect(mockNavigate).toHaveBeenCalledWith({ to: '/' });
-      },
-      { timeout: 3000 },
-    );
-  });
-
   it('shows invalid-invite message when archive URL is missing from a legacy URL', async () => {
     setSearchParams('?hash=abc123');
 
@@ -124,17 +302,6 @@ describe('InviteScreen', () => {
 
     // No server was added
     expect(useAuthStore.getState().servers).toHaveLength(0);
-  });
-
-  it('shows loading state while connecting', async () => {
-    // Make sync never resolve to keep loading state
-    vi.mocked(syncRemoteArchive).mockReturnValue(new Promise(() => {}));
-
-    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
-
-    render(<InviteScreen />);
-
-    expect(screen.getByText('Connecting to archive...')).toBeInTheDocument();
   });
 
   it('reads the dedicated token param when present', async () => {
@@ -218,9 +385,7 @@ describe('InviteScreen', () => {
       });
 
       await waitFor(() => {
-        expect(
-          screen.getByText('Connected! Redirecting...'),
-        ).toBeInTheDocument();
+        expect(screen.getByText('Connected!')).toBeInTheDocument();
       });
     });
 
@@ -242,11 +407,7 @@ describe('InviteScreen', () => {
   });
 });
 
-// The legacy-invite deprecation warning is guarded by a module-level boolean
-// inside InviteScreen so it fires at most once per browser session. To verify
-// it fires for the first legacy invite of the session, we isolate this test
-// in its own describe block, reset the module registry, and re-import the
-// screen so its module-level state starts fresh.
+// Legacy deprecation test (isolated)
 describe('InviteScreen legacy deprecation warning (isolated)', () => {
   it('logs a deprecation warning when a legacy invite URL is processed', async () => {
     vi.resetModules();

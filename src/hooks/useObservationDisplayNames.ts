@@ -21,7 +21,7 @@ export function useObservationDisplayNames(
   projectLocalId: string | null,
 ): Map<string, string> {
   const presetsQuery = usePresets(projectLocalId);
-  const presets = presetsQuery.data ?? [];
+  const presets = useMemo(() => presetsQuery.data ?? [], [presetsQuery.data]);
 
   return useMemo(() => {
     const map = new Map<string, string>();
