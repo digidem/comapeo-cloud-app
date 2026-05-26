@@ -12,7 +12,6 @@ describe('ConfirmDialog', () => {
         title="Delete Item?"
         description="This action cannot be undone."
         confirmLabel="Delete"
-        cancelLabel="Cancel"
         onConfirm={vi.fn()}
       />,
     );
@@ -32,7 +31,6 @@ describe('ConfirmDialog', () => {
         onOpenChange={vi.fn()}
         title="Delete Item?"
         confirmLabel="Delete"
-        cancelLabel="Cancel"
         onConfirm={vi.fn()}
       />,
     );
@@ -50,7 +48,6 @@ describe('ConfirmDialog', () => {
         onOpenChange={vi.fn()}
         title="Delete Item?"
         confirmLabel="Delete"
-        cancelLabel="Cancel"
         onConfirm={handleConfirm}
       />,
     );
@@ -69,7 +66,6 @@ describe('ConfirmDialog', () => {
         onOpenChange={handleOpenChange}
         title="Delete Item?"
         confirmLabel="Delete"
-        cancelLabel="Cancel"
         onConfirm={vi.fn()}
       />,
     );
@@ -85,7 +81,6 @@ describe('ConfirmDialog', () => {
         onOpenChange={vi.fn()}
         title="Delete Item?"
         confirmLabel="Delete"
-        cancelLabel="Cancel"
         onConfirm={vi.fn()}
       >
         <p>Extra warning content</p>
@@ -102,7 +97,6 @@ describe('ConfirmDialog', () => {
         onOpenChange={vi.fn()}
         title="Confirm?"
         confirmLabel="Yes"
-        cancelLabel="No"
         onConfirm={vi.fn()}
       />,
     );
@@ -112,7 +106,7 @@ describe('ConfirmDialog', () => {
       screen.getByRole('heading', { name: 'Confirm?' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
   it('uses primary variant when specified', () => {
@@ -122,8 +116,7 @@ describe('ConfirmDialog', () => {
         onOpenChange={vi.fn()}
         title="Confirm?"
         confirmLabel="OK"
-        cancelLabel="Cancel"
-        variant="primary"
+        variant="default"
         onConfirm={vi.fn()}
       />,
     );

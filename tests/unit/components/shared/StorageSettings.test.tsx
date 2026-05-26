@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StorageSettings } from '@/components/shared/StorageSettings';
 import { getDb, resetDb } from '@/lib/db';
-import * as storage from '@/lib/storage';
 
 // Mock navigator.storage.estimate
 const mockEstimate = vi.fn();

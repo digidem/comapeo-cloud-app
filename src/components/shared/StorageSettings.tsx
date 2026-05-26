@@ -112,6 +112,12 @@ interface UsageBarProps {
   percent: number;
 }
 
+function getBarColor(percent: number): string {
+  if (percent > 90) return '#ef4444';
+  if (percent > 70) return '#f59e0b';
+  return '#1F6FFF';
+}
+
 function UsageBar({ percent }: UsageBarProps) {
   const clamped = Math.min(100, Math.max(0, percent));
   return (
@@ -120,8 +126,7 @@ function UsageBar({ percent }: UsageBarProps) {
         className="h-2 rounded-full transition-all duration-300"
         style={{
           width: `${clamped}%`,
-          backgroundColor:
-            clamped > 90 ? '#ef4444' : clamped > 70 ? '#f59e0b' : '#1F6FFF',
+          backgroundColor: getBarColor(clamped),
         }}
       />
     </div>
@@ -134,31 +139,50 @@ export function StorageSettings() {
   const [loading, setLoading] = useState(true);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getStorageStats()
+      .then((result) => {
+        if (!cancelled) setStats(result);
+      })
+      .catch((err) => {
+        console.warn('Failed to load storage stats:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadStats = useCallback(async () => {
     setLoading(true);
     try {
       const result = await getStorageStats();
       setStats(result);
-    } catch {
-      // Swallow errors — component shows empty state
+    } catch (err) {
+      console.warn('Failed to load storage stats:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadStats();
-  }, [loadStats]);
-
   const handleClearAll = useCallback(async () => {
     setClearing(true);
+    setClearError(null);
     try {
       await clearAllData();
       await loadStats();
+      setIsConfirmOpen(false);
+    } catch (err) {
+      setClearError(
+        err instanceof Error ? err.message : 'Failed to clear data',
+      );
     } finally {
       setClearing(false);
-      setIsConfirmOpen(false);
     }
   }, [loadStats]);
 
@@ -259,14 +283,20 @@ export function StorageSettings() {
 
       <ConfirmDialog
         open={isConfirmOpen}
-        onOpenChange={setIsConfirmOpen}
+        onOpenChange={(open) => {
+          setIsConfirmOpen(open);
+          if (!open) setClearError(null);
+        }}
         title={intl.formatMessage(messages.clearConfirmTitle)}
         description={intl.formatMessage(messages.clearConfirmDescription)}
         confirmLabel={intl.formatMessage(messages.clearConfirmButton)}
-        cancelLabel={intl.formatMessage(messages.clearCancelButton)}
-        variant="danger"
+        variant="destructive"
         onConfirm={handleClearAll}
-      />
+      >
+        {clearError !== null && (
+          <p className="text-sm text-red-600">{clearError}</p>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }

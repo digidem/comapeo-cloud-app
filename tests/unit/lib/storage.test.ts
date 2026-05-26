@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDb, resetDb } from '@/lib/db';
-import { clearAllStorage } from '@/lib/local-storage-utils';
 import {
   clearAllData,
   clearProjectData,
