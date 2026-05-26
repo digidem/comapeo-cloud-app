@@ -842,7 +842,7 @@ function HomeScreen() {
           queryClient.invalidateQueries({ queryKey: ['projects'] }),
           queryClient.invalidateQueries({ queryKey: ['observations'] }),
           queryClient.invalidateQueries({
-            queryKey: ['remoteDetectionAlerts'],
+            queryKey: ['alerts'],
           }),
         ]);
         if (cancelled) return;
