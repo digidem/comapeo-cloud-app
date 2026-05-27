@@ -84,7 +84,7 @@ const messages = defineMessages({
 });
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
+  if (bytes <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.min(
     Math.floor(Math.log(bytes) / Math.log(1024)),
@@ -101,9 +101,16 @@ interface TableRow {
 
 function TableRowItem({ label, count }: TableRow) {
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-b-0">
-      <span className="text-sm text-text">{label}</span>
-      <span className="text-sm text-text-muted tabular-nums">{count}</span>
+    <div
+      role="row"
+      className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-b-0"
+    >
+      <span role="cell" className="text-sm text-text">
+        {label}
+      </span>
+      <span role="cell" className="text-sm text-text-muted tabular-nums">
+        {count}
+      </span>
     </div>
   );
 }
@@ -121,7 +128,14 @@ function getBarColor(percent: number): string {
 function UsageBar({ percent }: UsageBarProps) {
   const clamped = Math.min(100, Math.max(0, percent));
   return (
-    <div className="w-full bg-surface rounded-full h-2 mt-1 mb-2">
+    <div
+      className="w-full bg-surface rounded-full h-2 mt-1 mb-2"
+      role="progressbar"
+      aria-valuenow={clamped}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuetext={`${clamped}% storage used`}
+    >
       <div
         className="h-2 rounded-full transition-all duration-300"
         style={{
@@ -171,6 +185,7 @@ export function StorageSettings() {
   }, []);
 
   const handleClearAll = useCallback(async () => {
+    if (clearing) return;
     setClearing(true);
     setClearError(null);
     try {
@@ -184,7 +199,7 @@ export function StorageSettings() {
     } finally {
       setClearing(false);
     }
-  }, [loadStats]);
+  }, [loadStats, clearing]);
 
   if (loading) {
     return (
@@ -261,9 +276,11 @@ export function StorageSettings() {
         </p>
       </Card>
 
-      <Card className="mt-3 p-4 max-w-md">
-        <div className="text-sm font-medium text-text mb-2">
-          {intl.formatMessage(messages.recordsLabel, { count: totalRecords })}
+      <Card className="mt-3 p-4 max-w-md" role="table">
+        <div role="row" className="text-sm font-medium text-text mb-2">
+          <span role="columnheader">
+            {intl.formatMessage(messages.recordsLabel, { count: totalRecords })}
+          </span>
         </div>
         {tableRows.map((row) => (
           <TableRowItem key={row.label} label={row.label} count={row.count} />
@@ -276,6 +293,7 @@ export function StorageSettings() {
           onClick={() => setIsConfirmOpen(true)}
           loading={clearing}
           className="w-full sm:w-auto"
+          aria-haspopup="dialog"
         >
           {intl.formatMessage(messages.clearButton)}
         </Button>
