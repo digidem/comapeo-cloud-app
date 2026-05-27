@@ -74,6 +74,8 @@ export function ExportObservationsButton({
         size="sm"
         disabled={disabled}
         onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
       >
         {intl.formatMessage(messages.button)}
       </Button>
