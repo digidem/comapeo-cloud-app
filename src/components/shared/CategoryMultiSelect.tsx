@@ -6,6 +6,14 @@ const messages = defineMessages({
     id: 'data.filters.categoryAll',
     defaultMessage: 'All categories',
   },
+  categoryGroupLabel: {
+    id: 'data.filters.categoryGroupLabel',
+    defaultMessage: 'Filter by category',
+  },
+  categoryHiddenSelected: {
+    id: 'data.filters.categoryHiddenSelected',
+    defaultMessage: '{count} selected',
+  },
   showMore: {
     id: 'data.filters.categoryShowMore',
     defaultMessage: '+{count} more',
@@ -38,6 +46,9 @@ export function CategoryMultiSelect({
     ? categories
     : categories.slice(0, MAX_VISIBLE);
   const remainingCount = categories.length - MAX_VISIBLE;
+  const hiddenSelected = !expanded
+    ? selected.filter((c) => !visibleCategories.includes(c)).length
+    : 0;
 
   const handleToggle = useCallback(
     (category: string) => {
@@ -55,7 +66,7 @@ export function CategoryMultiSelect({
       <div
         className="flex flex-wrap gap-2"
         role="group"
-        aria-label="Filter by category"
+        aria-label={intl.formatMessage(messages.categoryGroupLabel)}
       >
         {/* "All" / clear button */}
         <button
@@ -94,16 +105,26 @@ export function CategoryMultiSelect({
         })}
       </div>
 
-      {/* "+N more" expansion */}
+      {/* "+N more" expansion and hidden selected indicator */}
       {remainingCount > 0 && !expanded && (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="self-start text-sm text-primary hover:underline min-h-[44px] inline-flex items-center"
-          style={{ touchAction: 'manipulation' }}
-        >
-          {intl.formatMessage(messages.showMore, { count: remainingCount })}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="self-start text-sm text-primary hover:underline min-h-[44px] inline-flex items-center"
+            style={{ touchAction: 'manipulation' }}
+            aria-expanded={false}
+          >
+            {intl.formatMessage(messages.showMore, { count: remainingCount })}
+          </button>
+          {hiddenSelected > 0 && (
+            <span className="text-sm text-text-muted">
+              {intl.formatMessage(messages.categoryHiddenSelected, {
+                count: hiddenSelected,
+              })}
+            </span>
+          )}
+        </div>
       )}
 
       {expanded && categories.length > MAX_VISIBLE && (
@@ -112,6 +133,7 @@ export function CategoryMultiSelect({
           onClick={() => setExpanded(false)}
           className="self-start text-sm text-primary hover:underline min-h-[44px] inline-flex items-center"
           style={{ touchAction: 'manipulation' }}
+          aria-expanded={true}
         >
           {intl.formatMessage(messages.showLess)}
         </button>

@@ -52,6 +52,8 @@
   "data.filterSheetClose": "Fechar filtros",
   "data.filterSheetTitle": "Filtros",
   "data.filters.categoryAll": "Todas las categorías",
+  "data.filters.categoryGroupLabel": "Filtrar por categoría",
+  "data.filters.categoryHiddenSelected": "{count} seleccionados",
   "data.filters.categoryShowLess": "Mostrar menos",
   "data.filters.categoryShowMore": "+{count} más",
   "data.filters.clear": "Borrar filtros",

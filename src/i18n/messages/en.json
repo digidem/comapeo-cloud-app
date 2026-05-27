@@ -191,6 +191,12 @@
   "data.filters.categoryAll": {
     "defaultMessage": "All categories"
   },
+  "data.filters.categoryGroupLabel": {
+    "defaultMessage": "Filter by category"
+  },
+  "data.filters.categoryHiddenSelected": {
+    "defaultMessage": "{count} selected"
+  },
   "data.filters.categoryShowLess": {
     "defaultMessage": "Show less"
   },
