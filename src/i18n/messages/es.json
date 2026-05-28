@@ -50,7 +50,7 @@
   "data.exportSheet.csvDescription": "Filas y columnas compatibles con hojas de cálculo",
   "data.exportSheet.geojson": "GeoJSON",
   "data.exportSheet.geojsonDescription": "Datos geográficos para herramientas de mapas",
-  "data.exportSheet.title": "Exportar observaciones"
+  "data.exportSheet.title": "Exportar observaciones",
   "data.filterButton": "Filtrar",
   "data.filterSheetApply": "Mostrar resultados",
   "data.filterSheetClose": "Fechar filtros",

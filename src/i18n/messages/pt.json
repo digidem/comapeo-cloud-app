@@ -50,7 +50,7 @@
   "data.exportSheet.csvDescription": "Linhas e colunas compatíveis com planilhas",
   "data.exportSheet.geojson": "GeoJSON",
   "data.exportSheet.geojsonDescription": "Dados geográficos para ferramentas de mapas",
-  "data.exportSheet.title": "Exportar observações"
+  "data.exportSheet.title": "Exportar observações",
   "data.filterButton": "Filtrar",
   "data.filterSheetApply": "Mostrar resultados",
   "data.filterSheetClose": "Fechar filtros",
