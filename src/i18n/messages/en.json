@@ -167,14 +167,26 @@
   "data.export.button": {
     "defaultMessage": "Export"
   },
-  "data.export.csv": {
-    "defaultMessage": "CSV"
-  },
   "data.export.error": {
     "defaultMessage": "Export failed. Please try again."
   },
-  "data.export.geojson": {
+  "data.exportSheet.close": {
+    "defaultMessage": "Close"
+  },
+  "data.exportSheet.csv": {
+    "defaultMessage": "CSV"
+  },
+  "data.exportSheet.csvDescription": {
+    "defaultMessage": "Spreadsheet-compatible rows and columns"
+  },
+  "data.exportSheet.geojson": {
     "defaultMessage": "GeoJSON"
+  },
+  "data.exportSheet.geojsonDescription": {
+    "defaultMessage": "Geographic data for mapping tools"
+  },
+  "data.exportSheet.title": {
+    "defaultMessage": "Export Observations"
   },
   "data.filterButton": {
     "defaultMessage": "Filters"
