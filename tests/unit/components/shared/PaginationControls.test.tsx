@@ -99,7 +99,7 @@ describe('PaginationControls', () => {
     expect(screen.getByText(/Showing 0–0 of 0/)).toBeInTheDocument();
   });
 
-  it('does not render anything when totalCount is 0', () => {
+  it('hides Load More button but still shows range text when totalCount is 0', () => {
     render(
       <PaginationControls
         showingStart={0}

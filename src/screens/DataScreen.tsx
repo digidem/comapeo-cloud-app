@@ -189,6 +189,8 @@ export function DataScreen() {
     selectedProjectId,
   );
 
+  const { isFiltering: isObsFiltering, reset: resetFilters } = obsFilters;
+
   const observationsContent = useMemo(() => {
     const displayObs = paginatedObservations;
     if (displayObs.length === 0) {
@@ -200,7 +202,7 @@ export function DataScreen() {
           <button
             type="button"
             className="text-primary text-sm font-medium hover:underline cursor-pointer"
-            onClick={obsFilters.reset}
+            onClick={resetFilters}
           >
             {intl.formatMessage({
               id: 'data.filters.clear',
@@ -279,7 +281,8 @@ export function DataScreen() {
     viewMode,
     navigate,
     intl,
-    obsFilters,
+    isObsFiltering,
+    resetFilters,
     displayNames,
   ]);
 
