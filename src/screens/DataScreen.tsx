@@ -10,6 +10,7 @@ import { FilterSheet } from '@/components/shared/FilterSheet';
 import { MediaPreview } from '@/components/shared/MediaPreview';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
 import { ObservationsMap } from '@/components/shared/ObservationsMap';
+import { PaginationControls } from '@/components/shared/PaginationControls';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,7 +19,9 @@ import { useAlerts } from '@/hooks/useAlerts';
 import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
 import { useObservationFilters } from '@/hooks/useObservationFilters';
 import { useObservations } from '@/hooks/useObservations';
+import { usePaginatedItems } from '@/hooks/usePaginatedItems';
 import { useProjects } from '@/hooks/useProjects';
+import { useResponsivePageSize } from '@/hooks/useResponsivePageSize';
 import { useProjectStore } from '@/stores/project-store';
 import { useViewModeStore } from '@/stores/view-mode-store';
 
@@ -146,14 +149,51 @@ export function DataScreen() {
 
   const filteredObs = obsFilters.filteredObservations;
 
+  // Responsive page size: 50 on mobile, 60 on desktop
+  const pageSize = useResponsivePageSize();
+
+  // Memoize filter deps so usePaginatedItems only resets on actual changes
+  const filterDeps = useMemo(
+    () => [
+      obsFilters.filters.search,
+      obsFilters.filters.category,
+      obsFilters.filters.startDate,
+      obsFilters.filters.endDate,
+      obsFilters.filters.sort,
+    ],
+    [
+      obsFilters.filters.search,
+      obsFilters.filters.category,
+      obsFilters.filters.startDate,
+      obsFilters.filters.endDate,
+      obsFilters.filters.sort,
+    ],
+  );
+
+  // Pagination — resets to page 1 when filters change
+  const {
+    paginatedItems: paginatedObservations,
+    showingStart,
+    showingEnd,
+    totalCount,
+    hasMore,
+    loadMore,
+  } = usePaginatedItems(filteredObs, {
+    pageSize,
+    deps: filterDeps,
+  });
+
   // Pre-compute observation display names using preset matching
   const displayNames = useObservationDisplayNames(
     filteredObs,
     selectedProjectId,
   );
 
+  const { reset: resetFilters } = obsFilters;
+
   const observationsContent = useMemo(() => {
-    if (filteredObs.length === 0) {
+    const displayObs = paginatedObservations;
+    if (displayObs.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
           <span className="text-text-muted text-sm">
@@ -162,7 +202,7 @@ export function DataScreen() {
           <button
             type="button"
             className="text-primary text-sm font-medium hover:underline cursor-pointer"
-            onClick={obsFilters.reset}
+            onClick={resetFilters}
           >
             {intl.formatMessage({
               id: 'data.filters.clear',
@@ -188,40 +228,62 @@ export function DataScreen() {
       );
     }
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-        {filteredObs.map((obs) => (
-          <Link
-            key={obs.localId}
-            to="/data/observations/$observationId"
-            params={{ observationId: obs.localId }}
-            className="no-underline"
-          >
-            <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
-              <div className="flex flex-col gap-1">
-                <span className="text-sm font-medium text-text">
-                  {displayNames.get(obs.localId) ??
-                    getCategoryLabel(obs) ??
-                    intl.formatMessage(messages.observationFallback)}
-                </span>
-                {obs.lat !== undefined && obs.lon !== undefined && (
-                  <span className="text-xs text-text-muted">
-                    {obs.lat.toFixed(4)}, {obs.lon.toFixed(4)}
+      <>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+          {displayObs.map((obs) => (
+            <Link
+              key={obs.localId}
+              to="/data/observations/$observationId"
+              params={{ observationId: obs.localId }}
+              className="no-underline"
+            >
+              <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-text">
+                    {displayNames.get(obs.localId) ??
+                      getCategoryLabel(obs) ??
+                      intl.formatMessage(messages.observationFallback)}
                   </span>
-                )}
-                <span className="text-xs text-text-muted">
-                  {new Date(obs.createdAt).toLocaleDateString()}
-                </span>
-                <MediaPreview
-                  observationLocalId={obs.localId}
-                  tags={obs.tags}
-                />
-              </div>
-            </Card>
-          </Link>
-        ))}
-      </div>
+                  {obs.lat !== undefined && obs.lon !== undefined && (
+                    <span className="text-xs text-text-muted">
+                      {obs.lat.toFixed(4)}, {obs.lon.toFixed(4)}
+                    </span>
+                  )}
+                  <span className="text-xs text-text-muted">
+                    {new Date(obs.createdAt).toLocaleDateString()}
+                  </span>
+                  <MediaPreview
+                    observationLocalId={obs.localId}
+                    tags={obs.tags}
+                  />
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+        <PaginationControls
+          showingStart={showingStart}
+          showingEnd={showingEnd}
+          totalCount={totalCount}
+          hasMore={hasMore}
+          onLoadMore={loadMore}
+        />
+      </>
     );
-  }, [filteredObs, viewMode, navigate, intl, obsFilters, displayNames]);
+  }, [
+    filteredObs,
+    paginatedObservations,
+    showingStart,
+    showingEnd,
+    totalCount,
+    hasMore,
+    loadMore,
+    viewMode,
+    navigate,
+    intl,
+    resetFilters,
+    displayNames,
+  ]);
 
   // No project selected
   if (!selectedProjectId || !selectedProject) {
