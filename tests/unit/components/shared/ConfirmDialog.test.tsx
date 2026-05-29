@@ -74,6 +74,50 @@ describe('ConfirmDialog', () => {
     expect(handleOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it('uses a custom cancel label when provided', () => {
+    render(
+      <ConfirmDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        title="Delete Item?"
+        confirmLabel="Delete"
+        cancelLabel="Dismiss"
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Cancel' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('disables the confirm button while loading', async () => {
+    const handleConfirm = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ConfirmDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        title="Delete Item?"
+        confirmLabel="Delete"
+        loading={true}
+        onConfirm={handleConfirm}
+      />,
+    );
+
+    const button = screen.getByText('Delete').closest('button');
+    expect(button).toBeDefined();
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+
+    if (button) {
+      await user.click(button);
+    }
+    expect(handleConfirm).not.toHaveBeenCalled();
+  });
+
   it('renders children content', () => {
     render(
       <ConfirmDialog

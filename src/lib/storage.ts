@@ -1,4 +1,4 @@
-import { getDb, resetDb } from '@/lib/db';
+import { getDb } from '@/lib/db';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,7 +96,16 @@ export async function getStorageStats(): Promise<StorageStats> {
  * Useful for clearing cached data while keeping the app running.
  */
 export async function clearAllData(): Promise<void> {
-  await resetDb();
+  const db = getDb();
+
+  await db.transaction('rw', db.tables, async () => {
+    await db.projects.clear();
+    await db.observations.clear();
+    await db.alerts.clear();
+    await db.presets.clear();
+    await db.attachments.clear();
+    await db.syncMetadata.clear();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -111,13 +120,11 @@ export async function clearAllData(): Promise<void> {
 export async function clearServerData(serverId: string): Promise<void> {
   const db = getDb();
 
-  // Find all projects from this server
-  const allProjects = await db.projects.toArray();
-  const serverProjects = allProjects.filter((p) => p.sourceId === serverId);
-  const projectIds = serverProjects.map((p) => p.localId);
-
-  // Clear all related data per project
   await db.transaction('rw', db.tables, async () => {
+    const allProjects = await db.projects.toArray();
+    const serverProjects = allProjects.filter((p) => p.sourceId === serverId);
+    const projectIds = serverProjects.map((p) => p.localId);
+
     for (const project of serverProjects) {
       await db.projects.delete(project.localId);
     }

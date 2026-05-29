@@ -35,6 +35,10 @@ beforeEach(() => {
 });
 
 describe('getStorageStats', () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
   it('returns total quota and usage from navigator.storage.estimate', async () => {
     const stats = await getStorageStats();
     expect(stats.quota).toBe(1073741824);
@@ -133,9 +137,15 @@ describe('clearAllData', () => {
     expect(count).toBe(0);
   });
 
-  it('clears all data from all tables', async () => {
+  it('clears cached project data while preserving remote servers', async () => {
     const db = getDb();
 
+    await db.remoteServers.add({
+      id: 'server-1',
+      baseUrl: 'https://archive.example.com',
+      status: 'connected',
+      lastSyncedAt: '2026-01-01T00:00:00Z',
+    });
     await db.projects.add({
       localId: 'proj-1',
       sourceType: 'local',
@@ -163,7 +173,7 @@ describe('clearAllData', () => {
     expect(await db.alerts.count()).toBe(0);
     expect(await db.attachments.count()).toBe(0);
     expect(await db.presets.count()).toBe(0);
-    expect(await db.remoteServers.count()).toBe(0);
+    expect(await db.remoteServers.count()).toBe(1);
     expect(await db.syncMetadata.count()).toBe(0);
   });
 });

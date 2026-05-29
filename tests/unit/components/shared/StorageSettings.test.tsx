@@ -1,6 +1,8 @@
 import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { QueryClient } from '@tanstack/react-query';
+
 import { StorageSettings } from '@/components/shared/StorageSettings';
 import { getDb, resetDb } from '@/lib/db';
 
@@ -32,6 +34,9 @@ describe('StorageSettings', () => {
     // Should show skeleton placeholders
     const skeletons = screen.getAllByTestId('skeleton');
     expect(skeletons.length).toBeGreaterThan(0);
+    expect(screen.getByRole('status')).toHaveAccessibleName(
+      'Loading storage information',
+    );
   });
 
   it('displays total usage after loading', async () => {
@@ -150,6 +155,50 @@ describe('StorageSettings', () => {
       const count = await db.projects.count();
       expect(count).toBe(0);
     });
+  });
+
+  it('invalidates query cache after cached data is cleared', async () => {
+    const invalidateQueries = vi
+      .spyOn(QueryClient.prototype, 'invalidateQueries')
+      .mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    render(<StorageSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Total Usage')).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole('button', { name: 'Clear All Cached Data' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+    );
+
+    await waitFor(() => {
+      expect(invalidateQueries).toHaveBeenCalledTimes(1);
+    });
+
+    invalidateQueries.mockRestore();
+  });
+
+  it('uses the localized cancel label in the clear confirmation dialog', async () => {
+    const user = userEvent.setup();
+
+    render(<StorageSettings />, { locale: 'pt' });
+
+    await waitFor(() => {
+      expect(screen.getByText('Uso total')).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole('button', { name: 'Limpar todos os dados em cache' }),
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Cancelar' }),
+    ).toBeInTheDocument();
   });
 
   it('shows zero counts when storage is empty', async () => {

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -149,6 +151,7 @@ function UsageBar({ percent }: UsageBarProps) {
 
 export function StorageSettings() {
   const intl = useIntl();
+  const queryClient = useQueryClient();
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -190,8 +193,9 @@ export function StorageSettings() {
     setClearError(null);
     try {
       await clearAllData();
-      await loadStats();
       setIsConfirmOpen(false);
+      await queryClient.invalidateQueries();
+      await loadStats();
     } catch (err) {
       setClearError(
         err instanceof Error ? err.message : 'Failed to clear data',
@@ -199,11 +203,16 @@ export function StorageSettings() {
     } finally {
       setClearing(false);
     }
-  }, [loadStats, clearing]);
+  }, [loadStats, queryClient, clearing]);
 
   if (loading) {
     return (
-      <div className="mt-4 space-y-3">
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label="Loading storage information"
+        className="mt-4 space-y-3"
+      >
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-4 w-64" />
         <Skeleton className="h-2 w-full rounded-full" />
@@ -308,7 +317,9 @@ export function StorageSettings() {
         title={intl.formatMessage(messages.clearConfirmTitle)}
         description={intl.formatMessage(messages.clearConfirmDescription)}
         confirmLabel={intl.formatMessage(messages.clearConfirmButton)}
+        cancelLabel={intl.formatMessage(messages.clearCancelButton)}
         variant="destructive"
+        loading={clearing}
         onConfirm={handleClearAll}
       >
         {clearError !== null && (
