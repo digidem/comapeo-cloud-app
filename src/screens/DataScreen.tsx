@@ -189,7 +189,7 @@ export function DataScreen() {
     selectedProjectId,
   );
 
-  const { isFiltering: isObsFiltering, reset: resetFilters } = obsFilters;
+  const { reset: resetFilters } = obsFilters;
 
   const observationsContent = useMemo(() => {
     const displayObs = paginatedObservations;
@@ -281,7 +281,6 @@ export function DataScreen() {
     viewMode,
     navigate,
     intl,
-    isObsFiltering,
     resetFilters,
     displayNames,
   ]);
