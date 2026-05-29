@@ -141,13 +141,16 @@ function ArchiveBrowser({
   } | null>(null);
 
   function toggleArchive(id: string) {
+    const isExpanded = expandedArchives.has(id);
+    if (!isExpanded) {
+      selectArchive(id);
+    }
     setExpandedArchives((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
       } else {
         next.add(id);
-        selectArchive(id);
       }
       return next;
     });
