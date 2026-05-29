@@ -38,6 +38,7 @@ _verify_translations.py
 .sortie.env
 WORKFLOW.sortie.md
 contrabass-*.log
+.sisyphus/
 
 *storybook.log
 storybook-static
