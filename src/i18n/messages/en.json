@@ -1097,6 +1097,57 @@
   "settings.invites.title": {
     "defaultMessage": "Remote Archive Invites"
   },
+  "settings.storage.alerts": {
+    "defaultMessage": "Alerts"
+  },
+  "settings.storage.attachments": {
+    "defaultMessage": "Attachments"
+  },
+  "settings.storage.clearButton": {
+    "defaultMessage": "Clear All Cached Data"
+  },
+  "settings.storage.clearCancelButton": {
+    "defaultMessage": "Cancel"
+  },
+  "settings.storage.clearConfirmButton": {
+    "defaultMessage": "Yes, Clear Everything"
+  },
+  "settings.storage.clearConfirmDescription": {
+    "defaultMessage": "This will remove all locally cached data including projects, observations, alerts, and attachments. Data will need to be re-synced. This cannot be undone."
+  },
+  "settings.storage.clearConfirmTitle": {
+    "defaultMessage": "Clear All Cached Data?"
+  },
+  "settings.storage.description": {
+    "defaultMessage": "Manage cached data stored in your browser."
+  },
+  "settings.storage.observations": {
+    "defaultMessage": "Observations"
+  },
+  "settings.storage.presets": {
+    "defaultMessage": "Presets"
+  },
+  "settings.storage.projects": {
+    "defaultMessage": "Projects"
+  },
+  "settings.storage.records": {
+    "defaultMessage": "{count} records"
+  },
+  "settings.storage.servers": {
+    "defaultMessage": "Servers"
+  },
+  "settings.storage.syncMetadata": {
+    "defaultMessage": "Sync Metadata"
+  },
+  "settings.storage.title": {
+    "defaultMessage": "Storage"
+  },
+  "settings.storage.totalOf": {
+    "defaultMessage": "{usage} of {quota}"
+  },
+  "settings.storage.totalUsage": {
+    "defaultMessage": "Total Usage"
+  },
   "settings.title": {
     "defaultMessage": "Settings"
   },
