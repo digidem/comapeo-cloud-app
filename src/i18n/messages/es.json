@@ -43,7 +43,7 @@
   "data.addAlert": "Agregar Alerta",
   "data.alertFallback": "Alerta",
   "data.alertsError": "Error al cargar alertas. Inténtelo de nuevo.",
-"data.export.button": "Exportar",
+  "data.export.button": "Exportar",
   "data.export.error": "Error al exportar. Inténtelo de nuevo.",
   "data.exportSheet.close": "Cerrar",
   "data.exportSheet.csv": "CSV",
