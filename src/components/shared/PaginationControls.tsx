@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 const messages = defineMessages({
   showing: {
     id: 'pagination.showing',
-    defaultMessage: 'Showing {start}–{end} of {total} observations',
+    defaultMessage: 'Showing {start}–{end} of {total} {itemLabel}',
   },
   loadMore: {
     id: 'pagination.loadMore',
@@ -18,12 +18,14 @@ export interface PaginationControlsProps {
   showingStart: number;
   /** End of currently visible range. */
   showingEnd: number;
-  /** Total number of observations. */
+  /** Total number of items. */
   totalCount: number;
-  /** Whether there are more observations to load. */
+  /** Whether there are more items to load. */
   hasMore: boolean;
   /** Called when the user clicks Load More. */
   onLoadMore: () => void;
+  /** Label for the items being paginated. Defaults to "observations". */
+  itemLabel?: string;
 }
 
 export function PaginationControls({
@@ -32,16 +34,20 @@ export function PaginationControls({
   totalCount,
   hasMore,
   onLoadMore,
+  itemLabel = 'observations',
 }: PaginationControlsProps) {
   const intl = useIntl();
 
+  if (totalCount === 0) return null;
+
   return (
     <div className="flex flex-col items-center gap-3 py-4">
-      <span className="text-sm text-text-muted">
+      <span className="text-sm text-text-muted" role="status">
         {intl.formatMessage(messages.showing, {
           start: showingStart,
           end: showingEnd,
           total: totalCount,
+          itemLabel,
         })}
       </span>
       {hasMore && (

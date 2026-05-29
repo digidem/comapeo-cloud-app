@@ -85,8 +85,8 @@ describe('PaginationControls', () => {
     expect(screen.getByText(/Showing 1–7 of 7/)).toBeInTheDocument();
   });
 
-  it('shows correct range for empty dataset', () => {
-    render(
+  it('returns null when totalCount is 0', () => {
+    const { container } = render(
       <PaginationControls
         showingStart={0}
         showingEnd={0}
@@ -95,25 +95,6 @@ describe('PaginationControls', () => {
         onLoadMore={vi.fn()}
       />,
     );
-
-    expect(screen.getByText(/Showing 0–0 of 0/)).toBeInTheDocument();
-  });
-
-  it('hides Load More button but still shows range text when totalCount is 0', () => {
-    render(
-      <PaginationControls
-        showingStart={0}
-        showingEnd={0}
-        totalCount={0}
-        hasMore={false}
-        onLoadMore={vi.fn()}
-      />,
-    );
-
-    // When totalCount is 0, nothing should render
-    expect(screen.getByText(/Showing/)).toBeInTheDocument(); // range text still visible
-    expect(
-      screen.queryByRole('button', { name: /load more/i }),
-    ).not.toBeInTheDocument();
+    expect(container.innerHTML).toBe('');
   });
 });

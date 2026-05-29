@@ -18,8 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
 import { useObservationFilters } from '@/hooks/useObservationFilters';
-import { useObservationPages } from '@/hooks/useObservationPages';
 import { useObservations } from '@/hooks/useObservations';
+import { usePaginatedItems } from '@/hooks/usePaginatedItems';
 import { useProjects } from '@/hooks/useProjects';
 import { useResponsivePageSize } from '@/hooks/useResponsivePageSize';
 import { useProjectStore } from '@/stores/project-store';
@@ -152,7 +152,7 @@ export function DataScreen() {
   // Responsive page size: 50 on mobile, 60 on desktop
   const pageSize = useResponsivePageSize();
 
-  // Memoize filter deps so useObservationPages only resets on actual changes
+  // Memoize filter deps so usePaginatedItems only resets on actual changes
   const filterDeps = useMemo(
     () => [
       obsFilters.filters.search,
@@ -172,13 +172,13 @@ export function DataScreen() {
 
   // Pagination — resets to page 1 when filters change
   const {
-    paginatedObservations,
+    paginatedItems: paginatedObservations,
     showingStart,
     showingEnd,
     totalCount,
     hasMore,
     loadMore,
-  } = useObservationPages(filteredObs, {
+  } = usePaginatedItems(filteredObs, {
     pageSize,
     deps: filterDeps,
   });

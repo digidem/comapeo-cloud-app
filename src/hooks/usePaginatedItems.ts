@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Observation } from '@/lib/db';
+const EMPTY_DEPS: unknown[] = [];
 
-export interface UseObservationPagesOptions {
-  /** Number of observations per page. Default 50. */
+export interface UsePaginatedItemsOptions {
+  /** Number of items per page. Default 50. */
   pageSize?: number;
   /**
    * Dependency array that triggers an auto-reset to page 1 when changed.
@@ -13,18 +13,18 @@ export interface UseObservationPagesOptions {
   deps?: unknown[];
 }
 
-export interface UseObservationPagesResult {
-  /** Observations for the current cumulative set of pages (all loaded so far). */
-  paginatedObservations: Observation[];
+export interface UsePaginatedItemsResult<T> {
+  /** Items for the current cumulative set of pages (all loaded so far). */
+  paginatedItems: T[];
   /** Current page (1-indexed). */
   currentPage: number;
   /** Total number of pages based on full dataset and pageSize. */
   totalPages: number;
-  /** Total number of observations in the full dataset. */
+  /** Total number of items in the full dataset. */
   totalCount: number;
-  /** Whether there are more observations to load. */
+  /** Whether there are more items to load. */
   hasMore: boolean;
-  /** Load the next page (appends to paginatedObservations). */
+  /** Load the next page (appends to paginatedItems). */
   loadMore: () => void;
   /** Reset back to page 1. */
   reset: () => void;
@@ -35,20 +35,21 @@ export interface UseObservationPagesResult {
 }
 
 /**
- * Manages client-side pagination for a list of observations.
+ * Manages client-side pagination for a list of items.
  * Uses a "load more" pattern: each call to `loadMore()` appends the next page.
  *
  * The `deps` option enables auto-reset: when any value in `deps` changes
  * (by shallow comparison of primitive values), the page resets to 1.
  * This is perfect for resetting pagination when filters change.
+ *
+ * @template T The type of items being paginated.
  */
-export function useObservationPages(
-  observations: Observation[],
-  options: UseObservationPagesOptions = {},
-): UseObservationPagesResult {
-  const { pageSize = 50, deps = [] } = options;
-  const safePageSize =
-    pageSize > 0 ? pageSize : Math.max(observations.length, 1);
+export function usePaginatedItems<T>(
+  items: T[],
+  options: UsePaginatedItemsOptions = {},
+): UsePaginatedItemsResult<T> {
+  const { pageSize = 50, deps = EMPTY_DEPS } = options;
+  const safePageSize = pageSize > 0 ? pageSize : Math.max(items.length, 1);
 
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -69,13 +70,13 @@ export function useObservationPages(
     }
   }, [deps]);
 
-  const totalCount = observations.length;
+  const totalCount = items.length;
   const totalPages = Math.ceil(totalCount / safePageSize);
 
-  const paginatedObservations = useMemo(() => {
+  const paginatedItems = useMemo(() => {
     const endIndex = Math.min(currentPage * safePageSize, totalCount);
-    return observations.slice(0, endIndex);
-  }, [observations, currentPage, safePageSize, totalCount]);
+    return items.slice(0, endIndex);
+  }, [items, currentPage, safePageSize, totalCount]);
 
   const hasMore = currentPage < totalPages;
 
@@ -83,24 +84,35 @@ export function useObservationPages(
   const showingEnd = Math.min(currentPage * safePageSize, totalCount);
 
   const loadMore = useCallback(() => {
-    if (hasMore) {
-      setCurrentPage((prev) => prev + 1);
-    }
-  }, [hasMore]);
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  }, [totalPages]);
 
   const reset = useCallback(() => {
     setCurrentPage(1);
   }, []);
 
-  return {
-    paginatedObservations,
-    currentPage,
-    totalPages,
-    totalCount,
-    hasMore,
-    loadMore,
-    reset,
-    showingStart,
-    showingEnd,
-  };
+  return useMemo(
+    () => ({
+      paginatedItems,
+      currentPage,
+      totalPages,
+      totalCount,
+      hasMore,
+      loadMore,
+      reset,
+      showingStart,
+      showingEnd,
+    }),
+    [
+      paginatedItems,
+      currentPage,
+      totalPages,
+      totalCount,
+      hasMore,
+      loadMore,
+      reset,
+      showingStart,
+      showingEnd,
+    ],
+  );
 }

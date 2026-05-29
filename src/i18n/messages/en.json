@@ -284,12 +284,6 @@
   "home.activity.empty": {
     "defaultMessage": "No recent activity"
   },
-  "home.activity.loadMore": {
-    "defaultMessage": "Load More"
-  },
-  "home.activity.loadMoreCount": {
-    "defaultMessage": "Load More ({count} more)"
-  },
   "home.activity.noLocation": {
     "defaultMessage": "No location data"
   },
@@ -1008,7 +1002,7 @@
     "defaultMessage": "Load more"
   },
   "pagination.showing": {
-    "defaultMessage": "Showing {start}–{end} of {total} observations"
+    "defaultMessage": "Showing {start}–{end} of {total} {itemLabel}"
   },
   "settings.backup.description": {
     "defaultMessage": "Export your local settings to a JSON file, or import a previously exported backup."

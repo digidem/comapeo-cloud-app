@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import { RecentActivityList } from '@/screens/Home/RecentActivityList';
 
+const PAGE_SIZE = 5;
+
 const mockActivities = [
   {
     id: 'activity-1',
@@ -144,48 +146,63 @@ describe('RecentActivityList', () => {
     ).toBeVisible();
   });
 
-  // ---- Load More tests ----
+  // ---- Pagination tests (uses usePaginatedItems + PaginationControls) ----
 
-  it('renders only first 3 items by default when given more than 3', () => {
-    const activities = makeActivities(5);
+  it('renders only first PAGE_SIZE items by default when given more', () => {
+    const activities = makeActivities(8);
     render(<RecentActivityList activities={activities} />);
 
-    expect(screen.getByText('Activity 0')).toBeVisible();
-    expect(screen.getByText('Activity 1')).toBeVisible();
-    expect(screen.getByText('Activity 2')).toBeVisible();
-    expect(screen.queryByText('Activity 3')).not.toBeInTheDocument();
-    expect(screen.queryByText('Activity 4')).not.toBeInTheDocument();
+    // First PAGE_SIZE items should be visible
+    for (let i = 0; i < PAGE_SIZE; i++) {
+      expect(screen.getByText(`Activity ${i}`)).toBeVisible();
+    }
+    // Items beyond PAGE_SIZE should NOT be visible
+    expect(screen.queryByText('Activity 5')).not.toBeInTheDocument();
+    expect(screen.queryByText('Activity 6')).not.toBeInTheDocument();
+    expect(screen.queryByText('Activity 7')).not.toBeInTheDocument();
   });
 
-  it('"Load More" button appears when there are more than 3 items', () => {
-    const activities = makeActivities(5);
+  it('"Load more" button appears when there are more items', () => {
+    const activities = makeActivities(8);
     render(<RecentActivityList activities={activities} />);
 
-    expect(screen.getByTestId('load-more-btn')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: /load more/i }),
+    ).toBeInTheDocument();
   });
 
-  it('"Load More" button shows remaining count', () => {
-    const activities = makeActivities(5);
-    render(<RecentActivityList activities={activities} />);
-
-    expect(screen.getByText('Load More (2 more)')).toBeVisible();
-  });
-
-  it('clicking "Load More" reveals all items', async () => {
+  it('clicking "Load more" loads next page of items', async () => {
     const user = userEvent.setup();
-    const activities = makeActivities(5);
+    const activities = makeActivities(8);
     render(<RecentActivityList activities={activities} />);
 
-    await user.click(screen.getByTestId('load-more-btn'));
+    await user.click(screen.getByRole('button', { name: /load more/i }));
 
-    expect(screen.getByText('Activity 3')).toBeVisible();
-    expect(screen.getByText('Activity 4')).toBeVisible();
-    expect(screen.queryByTestId('load-more-btn')).not.toBeInTheDocument();
+    // Now items 0-9 should be visible (PAGE_SIZE * 2 = 10, but only 8 exist)
+    for (let i = 0; i < 8; i++) {
+      expect(screen.getByText(`Activity ${i}`)).toBeVisible();
+    }
+    // Load more button should be gone since all items are shown
+    expect(
+      screen.queryByRole('button', { name: /load more/i }),
+    ).not.toBeInTheDocument();
   });
 
-  it('no "Load More" button when there are 3 or fewer items', () => {
+  it('does not show "Load more" button when all items fit on one page', () => {
     render(<RecentActivityList activities={mockActivities} />);
-    expect(screen.queryByTestId('load-more-btn')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /load more/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows pagination info text', () => {
+    const activities = makeActivities(8);
+    render(<RecentActivityList activities={activities} />);
+
+    // PaginationControls shows "Showing 1–5 of 8 activities"
+    expect(screen.getByText(/Showing/)).toBeInTheDocument();
+    expect(screen.getByText(/1–5/)).toBeInTheDocument();
+    expect(screen.getByText(/8/)).toBeInTheDocument();
   });
 
   // ---- Observation metadata tests ----
