@@ -133,9 +133,6 @@ function ArchiveBrowser({
     () => new Set(archives.map((a) => a.archiveId)),
   );
 
-  // Active archive filter — null means "show all"
-  const [activeArchiveId, setActiveArchiveId] = useState<string | null>(null);
-
   // Overflow sheet state
   const [overflowArchive, setOverflowArchive] = useState<{
     id: string;
@@ -150,7 +147,6 @@ function ArchiveBrowser({
       else next.add(id);
       return next;
     });
-    setActiveArchiveId((prev) => (prev === id ? null : id));
     selectArchive(id);
   }
 
@@ -200,68 +196,64 @@ function ArchiveBrowser({
         </div>
       ) : (
         /* Accordion archive sections */
-        <div className="flex flex-col gap-1">
-          {archives
-            .filter(
-              (archive) =>
-                activeArchiveId === null ||
-                archive.archiveId === activeArchiveId ||
-                archive.archiveId === '_local',
-            )
-            .map((archive) => {
-              const status = archive.url
-                ? statusMap.get(normalizeUrl(archive.url))
-                : null;
-              const archiveProjects = getProjectsForArchive(archive.archiveId);
-              const isExpanded = expandedArchives.has(archive.archiveId);
+        <div className="flex flex-col gap-2">
+          {archives.map((archive) => {
+            const status = archive.url
+              ? statusMap.get(normalizeUrl(archive.url))
+              : null;
+            const archiveProjects = getProjectsForArchive(archive.archiveId);
+            const isExpanded = expandedArchives.has(archive.archiveId);
 
-              return (
-                <div key={archive.archiveId}>
-                  {/* Archive header */}
-                  <div className="w-full flex items-center gap-2 px-3 py-2 rounded-btn text-sm font-medium text-text hover:bg-surface transition-colors">
-                    {/* Clickable archive toggle */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleArchive(archive.archiveId);
-                      }}
-                      className="min-w-0 flex flex-1 items-center gap-2 rounded-btn cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            return (
+              <div
+                key={archive.archiveId}
+                className="rounded-card border border-border overflow-hidden"
+              >
+                {/* Archive header */}
+                <div className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-text hover:bg-surface transition-colors">
+                  {/* Clickable archive toggle */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleArchive(archive.archiveId);
+                    }}
+                    className="min-w-0 flex flex-1 items-center gap-2 rounded-btn cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    aria-expanded={isExpanded}
+                  >
+                    {/* Chevron icon — rotates when expanded */}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className={`transition-transform shrink-0 ${
+                        isExpanded ? 'rotate-90' : ''
+                      }`}
                     >
-                      {/* Chevron icon — rotates when expanded */}
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        className={`transition-transform shrink-0 ${
-                          isExpanded ? 'rotate-90' : ''
-                        }`}
-                      >
-                        <path d="m9 18 6-6-6-6" />
-                      </svg>
-                      {/* Status dot (if applicable) */}
-                      {status && (
-                        <span
-                          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT_COLORS[status] ?? DOT_COLORS['idle']}`}
-                          aria-hidden="true"
-                        />
-                      )}
-                      {/* Archive name */}
-                      <span className="flex-1 text-left truncate">
-                        {archive.name}
-                      </span>
-                      {/* Project count badge */}
-                      <span className="text-xs text-text-muted shrink-0">
-                        ({archive.projectCount})
-                      </span>
-                    </button>
-                    {/* Server overflow button — only for remote archives */}
-                    {archive.url &&
-                      onSelectServer &&
-                      (() => {
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                    {/* Status dot (if applicable) */}
+                    {status && (
+                      <span
+                        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT_COLORS[status] ?? DOT_COLORS['idle']}`}
+                        aria-hidden="true"
+                      />
+                    )}
+                    {/* Archive name */}
+                    <span className="flex-1 text-left truncate">
+                      {archive.name}
+                    </span>
+                    {/* Project count badge */}
+                    <span className="text-xs text-text-muted shrink-0">
+                      ({archive.projectCount})
+                    </span>
+                  </button>
+                  {/* Server overflow button — only for remote archives */}
+                  {archive.url && onSelectServer
+                    ? (() => {
                         const sid = serverIdByUrl.get(
                           normalizeUrl(archive.url),
                         );
@@ -296,50 +288,50 @@ function ArchiveBrowser({
                             </svg>
                           </button>
                         ) : null;
-                      })()}
-                  </div>
+                      })()
+                    : null}
+                </div>
 
-                  {/* Collapsible project list */}
-                  <div
-                    className="grid transition-[grid-template-rows] duration-300 ease-out"
-                    style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
-                  >
-                    <div className="overflow-hidden">
-                      <div className="ml-4 mt-1 flex flex-col gap-0.5">
-                        {archiveProjects.map((project) => {
-                          const isActive =
-                            project.localId === selectedProjectId;
-                          return (
-                            <div
-                              key={project.localId}
-                              className={`flex items-center px-3 py-1.5 rounded-btn text-sm transition-colors ${
-                                isActive
-                                  ? 'bg-primary-soft text-primary font-medium'
-                                  : 'text-text hover:bg-surface'
-                              }`}
+                {/* Collapsible project list */}
+                <div
+                  className="grid transition-[grid-template-rows] duration-300 ease-out"
+                  style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+                >
+                  <div className="overflow-hidden min-h-0">
+                    <div className="ml-4 mt-1 flex flex-col gap-0.5">
+                      {archiveProjects.map((project) => {
+                        const isActive = project.localId === selectedProjectId;
+                        return (
+                          <div
+                            key={project.localId}
+                            className={`flex items-center px-3 py-1.5 rounded-btn text-sm transition-colors ${
+                              isActive
+                                ? 'bg-primary-soft text-primary font-medium'
+                                : 'text-text hover:bg-surface'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => onSelect(project.localId)}
+                              className="flex-1 text-left truncate cursor-pointer focus:outline-none"
                             >
-                              <button
-                                type="button"
-                                onClick={() => onSelect(project.localId)}
-                                className="flex-1 text-left truncate cursor-pointer focus:outline-none"
-                              >
-                                {project.name ?? 'Untitled'}
-                              </button>
-                            </div>
-                          );
-                        })}
-                        {/* Empty state for an archive with no projects */}
-                        {archiveProjects.length === 0 && (
-                          <p className="text-xs text-text-muted px-3 py-2">
-                            {intl.formatMessage(messages.noProjects)}
-                          </p>
-                        )}
-                      </div>
+                              {project.name ?? 'Untitled'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {/* Empty state for an archive with no projects */}
+                      {archiveProjects.length === 0 && (
+                        <p className="text-xs text-text-muted px-3 py-2">
+                          {intl.formatMessage(messages.noProjects)}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            );
+          })}
         </div>
       )}
       {/* Archive Overflow Sheet */}
