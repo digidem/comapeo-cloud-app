@@ -293,7 +293,7 @@ export function SettingsScreen() {
 
       reader.readAsText(file);
     },
-    [],
+    [scheduleTimeout],
   );
 
   const handleClearAll = useCallback(async () => {
