@@ -119,6 +119,46 @@ describe('observationsToGeoJson', () => {
     });
   });
 
+  it('uses first-class attachments and display names in GeoJSON properties', () => {
+    const obs = makeObservation({
+      lat: 10,
+      lon: 20,
+      presetRefDocId: 'preset-1',
+      tags: { category: 'raw-category' },
+    });
+    const fc = observationsToGeoJson([obs], {
+      displayNamesByObservationId: new Map([[obs.localId, 'Forest Alert']]),
+      attachmentsByObservationId: new Map([
+        [
+          obs.localId,
+          [
+            {
+              localId: 'att-1',
+              projectLocalId: 'proj-1',
+              observationLocalId: obs.localId,
+              sourceType: 'remoteArchive',
+              sourceId: 'server-1',
+              remoteUrl: '/projects/proj-1/attachments/d1/photo/a.jpg',
+              resolvedUrl: 'https://archive.example.com/a.jpg',
+              mediaType: 'photo',
+              createdAt: '',
+              updatedAt: '',
+              dirtyLocal: false,
+              deleted: false,
+            },
+          ],
+        ],
+      ]),
+    });
+
+    expect(fc.features[0]!.properties).toMatchObject({
+      category: 'Forest Alert',
+      presetRefDocId: 'preset-1',
+      photoCount: '1',
+      photoUrls: 'https://archive.example.com/a.jpg',
+    });
+  });
+
   it('uses null geometry when lat is missing', () => {
     const obs = makeObservation({ lon: -55.45 });
     const fc = observationsToGeoJson([obs]);
@@ -164,8 +204,14 @@ describe('observationsToGeoJson', () => {
       createdAt: '2024-03-15T10:30:00Z',
       updatedAt: '2024-03-15T10:30:00Z',
     });
-    // Should not have any tag keys beyond the canonical ones
-    expect(Object.keys(props!).length).toBe(3);
+    expect(Object.keys(props!).sort()).toEqual([
+      'category',
+      'createdAt',
+      'docId',
+      'presetRefDocId',
+      'remoteId',
+      'updatedAt',
+    ]);
   });
 
   it('returns empty features array for empty observations', () => {
@@ -310,6 +356,51 @@ describe('observationsToCsv', () => {
 
     // photoUrls contains commas, should be quoted
     expect(csv).toContain('photo1.jpg');
+  });
+
+  it('uses first-class attachment photo URLs before legacy tag photoUrls', () => {
+    const obs = makeObservation({
+      tags: {
+        photoUrls: 'https://example.com/legacy.jpg',
+      },
+    });
+    const csv = observationsToCsv([obs], {
+      attachmentsByObservationId: new Map([
+        [
+          obs.localId,
+          [
+            {
+              localId: 'att-1',
+              projectLocalId: 'proj-1',
+              observationLocalId: obs.localId,
+              sourceType: 'remoteArchive',
+              sourceId: 'server-1',
+              remoteUrl: '/projects/proj-1/attachments/d1/photo/a.jpg',
+              resolvedUrl: 'https://archive.example.com/a.jpg',
+              mediaType: 'photo',
+              createdAt: '',
+              updatedAt: '',
+              dirtyLocal: false,
+              deleted: false,
+            },
+          ],
+        ],
+      ]),
+    });
+
+    expect(csv).toContain('https://archive.example.com/a.jpg');
+    expect(csv).not.toContain('https://example.com/legacy.jpg');
+  });
+
+  it('uses display names for the category column when provided', () => {
+    const obs = makeObservation({ tags: { category: 'raw-category' } });
+    const csv = observationsToCsv([obs], {
+      displayNamesByObservationId: new Map([[obs.localId, 'Forest Alert']]),
+    });
+    const lines = csv.split('\n');
+    const fields = lines[1]!.split(',');
+
+    expect(fields[1]).toBe('Forest Alert');
   });
 
   it('handles empty observations (header only)', () => {

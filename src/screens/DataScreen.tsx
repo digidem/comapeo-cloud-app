@@ -16,6 +16,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAlerts } from '@/hooks/useAlerts';
+import { useAttachmentsForProject } from '@/hooks/useAttachmentsForProject';
 import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
 import { useObservationFilters } from '@/hooks/useObservationFilters';
 import { useObservations } from '@/hooks/useObservations';
@@ -121,6 +122,7 @@ export function DataScreen() {
   const projectsQuery = useProjects();
   const observationsQuery = useObservations(selectedProjectId);
   const alertsQuery = useAlerts(selectedProjectId);
+  const attachmentsQuery = useAttachmentsForProject(selectedProjectId);
   const viewMode = useViewModeStore((s) => s.viewMode);
   const setViewMode = useViewModeStore((s) => s.setViewMode);
   const [activeTab, setActiveTab] = useState('observations');
@@ -190,6 +192,20 @@ export function DataScreen() {
     filteredObs,
     selectedProjectId,
   );
+  const exportDisplayNames = useObservationDisplayNames(
+    observationsQuery.data ?? [],
+    selectedProjectId,
+  );
+  const attachments = attachmentsQuery.data;
+  const attachmentsByObservationId = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof attachments>>();
+    for (const attachment of attachments ?? []) {
+      const existing = map.get(attachment.observationLocalId) ?? [];
+      existing.push(attachment);
+      map.set(attachment.observationLocalId, existing);
+    }
+    return map;
+  }, [attachments]);
 
   const { reset: resetFilters } = obsFilters;
 
@@ -257,6 +273,7 @@ export function DataScreen() {
                   <MediaPreview
                     observationLocalId={obs.localId}
                     tags={obs.tags}
+                    attachments={attachmentsByObservationId.get(obs.localId)}
                   />
                 </div>
               </Card>
@@ -285,6 +302,7 @@ export function DataScreen() {
     intl,
     resetFilters,
     displayNames,
+    attachmentsByObservationId,
   ]);
 
   // No project selected
@@ -343,6 +361,8 @@ export function DataScreen() {
                   observations={observations}
                   projectName={selectedProject?.name}
                   disabled={observations.length === 0}
+                  attachmentsByObservationId={attachmentsByObservationId}
+                  displayNamesByObservationId={exportDisplayNames}
                 />
                 {viewMode === 'grid' ? (
                   <button

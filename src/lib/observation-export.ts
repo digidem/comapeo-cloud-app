@@ -1,9 +1,15 @@
 import type { Feature, FeatureCollection, Point } from 'geojson';
 
 import { isValidCoord } from '@/lib/coords';
-import type { Observation } from '@/lib/data-layer';
+import type { Attachment, Field, FieldOption, Observation } from '@/lib/db';
 
 export type ExportFormat = 'geojson' | 'csv';
+
+export interface ObservationExportContext {
+  attachmentsByObservationId?: Map<string, Attachment[]>;
+  displayNamesByObservationId?: Map<string, string>;
+  fieldsByKey?: Map<string, Field>;
+}
 
 // ---------------------------------------------------------------------------
 // Slugify
@@ -39,6 +45,7 @@ export function buildExportFilename(
 
 export function observationsToGeoJson(
   observations: Observation[],
+  context: ObservationExportContext = {},
 ): FeatureCollection {
   const features: Array<Feature<Point | null>> = observations.map((obs) => {
     const hasValidCoords =
@@ -46,14 +53,21 @@ export function observationsToGeoJson(
       obs.lon !== undefined &&
       isValidCoord(obs.lat, obs.lon);
 
+    const tags = buildExportTags(obs, context);
+
     return {
       type: 'Feature' as const,
       geometry: hasValidCoords
         ? { type: 'Point' as const, coordinates: [obs.lon!, obs.lat!] }
         : null,
       properties: {
-        ...(obs.tags ?? {}),
+        ...tags,
         docId: obs.localId,
+        remoteId: obs.remoteId,
+        category:
+          context.displayNamesByObservationId?.get(obs.localId) ??
+          tags.category,
+        presetRefDocId: obs.presetRefDocId ?? tags.presetRefDocId,
         createdAt: obs.createdAt,
         updatedAt: obs.updatedAt,
       },
@@ -98,14 +112,27 @@ function csvEscape(value: string): string {
   return value;
 }
 
-export function observationsToCsv(observations: Observation[]): string {
+export function observationsToCsv(
+  observations: Observation[],
+  context: ObservationExportContext = {},
+): string {
+  return observationsToCsvWithContext(observations, context);
+}
+
+export function observationsToCsvWithContext(
+  observations: Observation[],
+  context: ObservationExportContext = {},
+): string {
   const header = CSV_COLUMNS.join(',');
   if (observations.length === 0) return header;
 
   const rows = observations.map((obs) => {
-    const tags = obs.tags ?? {};
+    const tags = buildExportTags(obs, context);
     const photoUrls = tags.photoUrls ?? '';
-    const category = tags.category ?? '';
+    const category =
+      context.displayNamesByObservationId?.get(obs.localId) ??
+      tags.category ??
+      '';
 
     const hasValidCoords =
       obs.lat !== undefined &&
@@ -127,4 +154,52 @@ export function observationsToCsv(observations: Observation[]): string {
   });
 
   return [header, ...rows].join('\n');
+}
+
+function buildExportTags(
+  observation: Observation,
+  context: ObservationExportContext,
+): Record<string, string> {
+  const tags = { ...(observation.tags ?? {}) };
+  const attachments = context.attachmentsByObservationId?.get(
+    observation.localId,
+  );
+
+  if (observation.presetRefDocId && !tags.presetRefDocId) {
+    tags.presetRefDocId = observation.presetRefDocId;
+  }
+
+  if (attachments && attachments.length > 0) {
+    const photoUrls = attachments
+      .filter((attachment) => attachment.mediaType === 'photo')
+      .map((attachment) => attachment.resolvedUrl ?? attachment.remoteUrl)
+      .filter(
+        (url): url is string => typeof url === 'string' && url.length > 0,
+      );
+    const audioCount = attachments.filter(
+      (attachment) => attachment.mediaType === 'audio',
+    ).length;
+
+    if (photoUrls.length > 0) {
+      tags.photoCount = String(photoUrls.length);
+      tags.photoUrls = photoUrls.join(',');
+    }
+    if (audioCount > 0) {
+      tags.audioCount = String(audioCount);
+    }
+  }
+
+  if (context.fieldsByKey) {
+    for (const [key, value] of Object.entries(observation.tags ?? {})) {
+      const field: Field | undefined = context.fieldsByKey.get(key);
+      if (!field) continue;
+      const labelKey = field.label || key;
+      const optionLabel = field.options?.find(
+        (option: FieldOption) => option.value === value,
+      )?.label;
+      tags[labelKey] = optionLabel ?? value;
+    }
+  }
+
+  return tags;
 }

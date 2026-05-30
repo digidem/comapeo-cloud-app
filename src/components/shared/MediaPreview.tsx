@@ -1,6 +1,7 @@
 import { defineMessages, useIntl } from 'react-intl';
 
 import { AuthImg } from '@/components/shared/auth-img';
+import type { Attachment } from '@/lib/data-layer';
 
 const messages = defineMessages({
   moreCount: {
@@ -24,6 +25,7 @@ const messages = defineMessages({
 interface MediaPreviewProps {
   observationLocalId: string;
   tags?: Record<string, string>;
+  attachments?: Attachment[];
 }
 
 /**
@@ -40,19 +42,32 @@ interface MediaPreviewProps {
 export function MediaPreview({
   observationLocalId: _observationLocalId,
   tags,
+  attachments = [],
 }: MediaPreviewProps) {
   const intl = useIntl();
 
-  if (!tags) return null;
+  const attachmentPhotoUrls = attachments
+    .filter((attachment) => attachment.mediaType === 'photo')
+    .map((attachment) => attachment.resolvedUrl ?? attachment.remoteUrl)
+    .filter((url): url is string => typeof url === 'string' && url.length > 0);
+  const attachmentAudioCount = attachments.filter(
+    (attachment) => attachment.mediaType === 'audio',
+  ).length;
 
-  // Filter out empty strings from split (handles trailing commas, consecutive commas, empty string)
-  const photoUrls = tags.photoUrls
+  // Filter out empty strings from split (handles trailing commas, consecutive commas, empty string).
+  const tagPhotoUrls = tags?.photoUrls
     ? tags.photoUrls
         .split(',')
         .map((url) => url.trim())
         .filter(Boolean)
     : [];
-  const rawAudioCount = tags.audioCount ? Number(tags.audioCount) : 0;
+
+  const photoUrls =
+    attachmentPhotoUrls.length > 0 ? attachmentPhotoUrls : tagPhotoUrls;
+  let rawAudioCount = attachmentAudioCount;
+  if (rawAudioCount === 0 && tags?.audioCount) {
+    rawAudioCount = Number(tags.audioCount);
+  }
   const safeAudioCount = Number.isFinite(rawAudioCount)
     ? Math.max(0, Math.floor(rawAudioCount))
     : 0;
