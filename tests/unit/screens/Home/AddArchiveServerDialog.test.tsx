@@ -199,7 +199,7 @@ describe('AddArchiveServerDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
     expect(
-      screen.getByText('This server has already been added'),
+      screen.getByText('This archive server is already connected'),
     ).toBeInTheDocument();
   });
 
@@ -428,7 +428,7 @@ describe('AddArchiveServerDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
     expect(
-      screen.getByText('This server has already been added'),
+      screen.getByText('This archive server is already connected'),
     ).toBeInTheDocument();
   });
 
@@ -619,7 +619,7 @@ describe('AddArchiveServerDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
     expect(
-      screen.getByText('This server has already been added'),
+      screen.getByText('This archive server is already connected'),
     ).toBeInTheDocument();
     expect(mockCreateRemoteServer).not.toHaveBeenCalled();
   });

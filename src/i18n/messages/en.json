@@ -438,7 +438,7 @@
     "defaultMessage": "Cancel"
   },
   "home.archive.dialog.duplicateServer": {
-    "defaultMessage": "This server has already been added"
+    "defaultMessage": "This archive server is already connected"
   },
   "home.archive.dialog.error": {
     "defaultMessage": "Failed to add server"
@@ -847,6 +847,9 @@
   },
   "home.untitledProject": {
     "defaultMessage": "Untitled Project"
+  },
+  "invite.alreadyConnected": {
+    "defaultMessage": "This archive server is already connected"
   },
   "invite.error": {
     "defaultMessage": "Failed to connect to archive."
