@@ -171,12 +171,21 @@ describe('AppDatabase', () => {
       sourceType: 'remoteArchive',
       sourceId: 'server-1',
       remoteId: 'remote-obs-1',
+      versionId: 'remote-obs-1/0',
+      originalVersionId: 'remote-obs-1/0',
+      schemaName: 'observation',
+      links: [],
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
       dirtyLocal: false,
       deleted: false,
       metadata: { manualLocation: true },
       presetRefDocId: 'preset-forest',
+      presetRef: {
+        docId: 'preset-forest',
+        versionId: 'preset-forest/0',
+        url: '/projects/proj-1/preset/preset-forest',
+      },
     };
 
     await db.observations.add(observation);
@@ -184,6 +193,10 @@ describe('AppDatabase', () => {
     expect(retrieved).toBeDefined();
     expect(retrieved!.metadata).toEqual({ manualLocation: true });
     expect(retrieved!.presetRefDocId).toBe('preset-forest');
+    expect(retrieved!.versionId).toBe('remote-obs-1/0');
+    expect(retrieved!.presetRef?.url).toBe(
+      '/projects/proj-1/preset/preset-forest',
+    );
   });
 
   it('stores observation without lat/lon (backward compatibility)', async () => {
@@ -240,6 +253,10 @@ describe('AppDatabase', () => {
       sourceId: 'drive-abc',
       remoteId: 'remote-att-1',
       sourceDocId: 'obs-1:0',
+      driveId: 'drive-abc',
+      type: 'photo',
+      name: 'image.jpg',
+      hash: 'hash-1',
       remoteUrl: '/projects/proj-1/attachments/drive-abc/photo/image.jpg',
       resolvedUrl:
         'https://archive.example.com/projects/proj-1/attachments/drive-abc/photo/image.jpg',
@@ -257,6 +274,8 @@ describe('AppDatabase', () => {
     expect(retrieved).toBeDefined();
     expect(retrieved!.localId).toBe('att-1');
     expect(retrieved!.observationLocalId).toBe('obs-1');
+    expect(retrieved!.driveId).toBe('drive-abc');
+    expect(retrieved!.name).toBe('image.jpg');
     expect(retrieved!.mediaType).toBe('photo');
     expect(retrieved!.downloadStatus).toBe('remote-only');
   });
@@ -270,10 +289,32 @@ describe('AppDatabase', () => {
       sourceType: 'remoteArchive',
       sourceId: 'server-1',
       remoteId: 'remote-track-1',
+      versionId: 'remote-track-1/0',
+      originalVersionId: 'remote-track-1/0',
+      schemaName: 'track',
+      links: [],
       tags: { patrol: 'north' },
       presetRefDocId: 'preset-track',
-      locations: [{ lat: -8.1, lon: -55.2, timestamp: '2026-01-01T00:00:00Z' }],
-      observationRefs: ['obs-1'],
+      presetRef: {
+        docId: 'preset-track',
+        versionId: 'preset-track/0',
+        url: '/projects/proj-1/preset/preset-track',
+      },
+      locations: [
+        {
+          coords: { latitude: -8.1, longitude: -55.2 },
+          timestamp: '2026-01-01T00:00:00Z',
+          accuracy: 5,
+          altitude: 20,
+        },
+      ],
+      observationRefs: [
+        {
+          docId: 'obs-1',
+          versionId: 'obs-1/0',
+          url: '/projects/proj-1/observation/obs-1',
+        },
+      ],
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
       dirtyLocal: false,
@@ -284,7 +325,8 @@ describe('AppDatabase', () => {
     const retrieved = await db.tracks.get('track-1');
     expect(retrieved).toBeDefined();
     expect(retrieved!.locations).toEqual(track.locations);
-    expect(retrieved!.observationRefs).toEqual(['obs-1']);
+    expect(retrieved!.observationRefs[0]!.docId).toBe('obs-1');
+    expect(retrieved!.presetRef?.versionId).toBe('preset-track/0');
   });
 
   it('stores and retrieves a field record', async () => {
@@ -296,6 +338,10 @@ describe('AppDatabase', () => {
       sourceType: 'remoteArchive',
       sourceId: 'server-1',
       remoteId: 'remote-field-1',
+      versionId: 'remote-field-1/0',
+      originalVersionId: 'remote-field-1/0',
+      schemaName: 'field',
+      links: [],
       type: 'select_one',
       key: 'condition',
       label: 'Condition',
@@ -314,6 +360,7 @@ describe('AppDatabase', () => {
     await db.fields.add(field);
     const retrieved = await db.fields.get('field-1');
     expect(retrieved).toBeDefined();
+    expect(retrieved!.versionId).toBe('remote-field-1/0');
     expect(retrieved!.key).toBe('condition');
     expect(retrieved!.options).toEqual(field.options);
   });

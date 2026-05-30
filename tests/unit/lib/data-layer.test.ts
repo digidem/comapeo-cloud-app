@@ -165,7 +165,7 @@ describe('data-layer', () => {
           sourceId: 'server-1',
           remoteId: 'track-visible',
           tags: { patrol: 'north' },
-          locations: [{ lat: -8, lon: -55 }],
+          locations: [{ coords: { latitude: -8, longitude: -55 } }],
           observationRefs: [],
           createdAt: '2026-01-01T00:00:00Z',
           updatedAt: '2026-01-01T00:00:00Z',

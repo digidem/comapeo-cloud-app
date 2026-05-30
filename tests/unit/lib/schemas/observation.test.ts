@@ -9,8 +9,12 @@ import {
 describe('observationSchema', () => {
   const validObservation = {
     docId: 'obs-1',
+    versionId: 'obs-1/0',
+    originalVersionId: 'obs-1/0',
+    schemaName: 'observation',
     createdAt: '2025-01-01T00:00:00Z',
     updatedAt: '2025-01-01T00:00:00Z',
+    links: [],
     deleted: false,
     attachments: [{ url: 'https://example.com/photo.jpg' }],
     tags: { species: 'jaguar', count: 2 },
@@ -19,6 +23,15 @@ describe('observationSchema', () => {
   it('parses a valid observation', () => {
     const result = v.parse(observationSchema, validObservation);
     expect(result).toEqual(validObservation);
+  });
+
+  it('preserves optional Mapeo document metadata', () => {
+    const result = v.parse(observationSchema, validObservation);
+
+    expect(result.versionId).toBe('obs-1/0');
+    expect(result.originalVersionId).toBe('obs-1/0');
+    expect(result.schemaName).toBe('observation');
+    expect(result.links).toEqual([]);
   });
 
   it('parses observation with optional lat and lon', () => {

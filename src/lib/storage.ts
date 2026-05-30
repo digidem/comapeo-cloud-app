@@ -22,6 +22,8 @@ export interface StorageStats {
     alerts: TableStats;
     presets: TableStats;
     attachments: TableStats;
+    tracks: TableStats;
+    fields: TableStats;
     remoteServers: TableStats;
     syncMetadata: TableStats;
   };
@@ -59,6 +61,8 @@ export async function getStorageStats(): Promise<StorageStats> {
     alerts,
     presets,
     attachments,
+    tracks,
+    fields,
     remoteServers,
     syncMetadata,
   ] = await Promise.all([
@@ -67,6 +71,8 @@ export async function getStorageStats(): Promise<StorageStats> {
     db.alerts.count(),
     db.presets.count(),
     db.attachments.count(),
+    db.tracks.count(),
+    db.fields.count(),
     db.remoteServers.count(),
     db.syncMetadata.count(),
   ]);
@@ -81,6 +87,8 @@ export async function getStorageStats(): Promise<StorageStats> {
       alerts: { count: alerts },
       presets: { count: presets },
       attachments: { count: attachments },
+      tracks: { count: tracks },
+      fields: { count: fields },
       remoteServers: { count: remoteServers },
       syncMetadata: { count: syncMetadata },
     },
@@ -104,6 +112,8 @@ export async function clearAllData(): Promise<void> {
     await db.alerts.clear();
     await db.presets.clear();
     await db.attachments.clear();
+    await db.tracks.clear();
+    await db.fields.clear();
     await db.syncMetadata.clear();
   });
 }
@@ -133,6 +143,8 @@ export async function clearServerData(serverId: string): Promise<void> {
       await db.alerts.where('projectLocalId').equals(projectId).delete();
       await db.attachments.where('projectLocalId').equals(projectId).delete();
       await db.presets.where('projectLocalId').equals(projectId).delete();
+      await db.tracks.where('projectLocalId').equals(projectId).delete();
+      await db.fields.where('projectLocalId').equals(projectId).delete();
     }
     await db.remoteServers.delete(serverId);
     await db.syncMetadata.where('serverId').equals(serverId).delete();
@@ -162,5 +174,7 @@ export async function clearProjectData(projectLocalId: string): Promise<void> {
       .equals(projectLocalId)
       .delete();
     await db.presets.where('projectLocalId').equals(projectLocalId).delete();
+    await db.tracks.where('projectLocalId').equals(projectLocalId).delete();
+    await db.fields.where('projectLocalId').equals(projectLocalId).delete();
   });
 }

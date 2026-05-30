@@ -17,8 +17,12 @@ export const attachmentSchema = v.object({
 
 export const observationSchema = v.object({
   docId: v.string(),
+  versionId: v.optional(v.string()),
+  originalVersionId: v.optional(v.string()),
+  schemaName: v.optional(v.literal('observation')),
   createdAt: v.string(),
   updatedAt: v.string(),
+  links: v.optional(v.array(v.string())),
   deleted: v.boolean(),
   lat: v.optional(v.number()),
   lon: v.optional(v.number()),

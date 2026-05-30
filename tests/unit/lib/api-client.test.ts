@@ -251,8 +251,12 @@ describe('getObservationDocuments', () => {
             data: [
               {
                 docId: 'obs-doc-1',
+                versionId: 'obs-doc-1/0',
+                originalVersionId: 'obs-doc-1/0',
+                schemaName: 'observation',
                 createdAt: '2024-01-01T00:00:00Z',
                 updatedAt: '2024-01-01T00:00:00Z',
+                links: [],
                 deleted: false,
                 attachments: [
                   { url: '/projects/proj/attachments/drive/photo/a.jpg' },
@@ -288,13 +292,19 @@ describe('getTracks', () => {
           data: [
             {
               docId: 'track-1',
+              versionId: 'track-1/0',
+              originalVersionId: 'track-1/0',
+              schemaName: 'track',
               createdAt: '2024-01-01T00:00:00Z',
               updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
               deleted: false,
               locations: [
                 {
-                  lat: -8.35,
-                  lon: -55.45,
+                  coords: {
+                    latitude: -8.35,
+                    longitude: -55.45,
+                  },
                   timestamp: '2024-01-01T00:00:00Z',
                 },
               ],
@@ -317,6 +327,7 @@ describe('getTracks', () => {
     expect(capturedUrl).toBe(`${BASE_URL}/projects/${projectId}/track`);
     expect(result.data[0]!.docId).toBe('track-1');
     expect(result.data[0]!.locations).toHaveLength(1);
+    expect(result.data[0]!.locations[0]!.coords.longitude).toBe(-55.45);
   });
 });
 
