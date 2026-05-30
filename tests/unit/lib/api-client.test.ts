@@ -235,6 +235,92 @@ describe('getObservations', () => {
 });
 
 // ---------------------------------------------------------------------------
+// getObservationDocuments
+// ---------------------------------------------------------------------------
+describe('getObservationDocuments', () => {
+  const projectId = 'proj-observation-docs-1';
+
+  it('uses the singular 0.4 observation endpoint', async () => {
+    let capturedUrl: string | null = null;
+    server.use(
+      http.get(
+        `${BASE_URL}/projects/${projectId}/observation`,
+        ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json({
+            data: [
+              {
+                docId: 'obs-doc-1',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+                deleted: false,
+                attachments: [
+                  { url: '/projects/proj/attachments/drive/photo/a.jpg' },
+                ],
+                tags: {},
+                metadata: { manualLocation: true },
+              },
+            ],
+          });
+        },
+      ),
+    );
+
+    const result = await apiClient.getObservationDocuments(projectId);
+
+    expect(capturedUrl).toBe(`${BASE_URL}/projects/${projectId}/observation`);
+    expect(result.data[0]!.docId).toBe('obs-doc-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getTracks
+// ---------------------------------------------------------------------------
+describe('getTracks', () => {
+  const projectId = 'proj-track-1';
+
+  it('uses the singular 0.4 track endpoint and validates tracks', async () => {
+    let capturedUrl: string | null = null;
+    server.use(
+      http.get(`${BASE_URL}/projects/${projectId}/track`, ({ request }) => {
+        capturedUrl = request.url;
+        return HttpResponse.json({
+          data: [
+            {
+              docId: 'track-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              locations: [
+                {
+                  lat: -8.35,
+                  lon: -55.45,
+                  timestamp: '2024-01-01T00:00:00Z',
+                },
+              ],
+              observationRefs: [
+                {
+                  docId: 'obs-1',
+                  versionId: 'obs-1/0',
+                  url: '/projects/proj/observation/obs-1',
+                },
+              ],
+              tags: { patrol: 'north' },
+            },
+          ],
+        });
+      }),
+    );
+
+    const result = await apiClient.getTracks(projectId);
+
+    expect(capturedUrl).toBe(`${BASE_URL}/projects/${projectId}/track`);
+    expect(result.data[0]!.docId).toBe('track-1');
+    expect(result.data[0]!.locations).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // ALERTS_PATH constant
 // ---------------------------------------------------------------------------
 describe('ALERTS_PATH constant', () => {

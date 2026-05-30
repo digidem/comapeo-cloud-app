@@ -77,6 +77,38 @@ export const handlers = [
     return HttpResponse.json(observationsFixture);
   }),
 
+  http.get('*/projects/*/observation', ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid bearer token',
+          },
+        },
+        { status: 401 },
+      );
+    }
+    return HttpResponse.json(observationsFixture);
+  }),
+
+  http.get('*/projects/*/track', ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid bearer token',
+          },
+        },
+        { status: 401 },
+      );
+    }
+    return HttpResponse.json(tracksFixture);
+  }),
+
   http.get(
     '*/projects/*/observations/:observationId',
     ({ request, params }) => {

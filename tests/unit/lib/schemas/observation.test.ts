@@ -53,6 +53,34 @@ describe('observationSchema', () => {
     expect(result.tags).toEqual({});
   });
 
+  it('parses observation metadata and typed attachment fields', () => {
+    const result = v.parse(observationSchema, {
+      ...validObservation,
+      attachments: [
+        {
+          driveId: 'drive-1',
+          type: 'photo',
+          name: 'image.jpg',
+          url: '/projects/proj/attachments/drive-1/photo/image.jpg',
+          hash: 'abc123',
+          mimeType: 'image/jpeg',
+        },
+      ],
+      metadata: {
+        manualLocation: true,
+        accuracy: 8,
+        source: 'mobile',
+      },
+    });
+
+    expect(result.attachments[0]!.driveId).toBe('drive-1');
+    expect(result.metadata).toEqual({
+      manualLocation: true,
+      accuracy: 8,
+      source: 'mobile',
+    });
+  });
+
   it('rejects missing docId', () => {
     expect(() =>
       v.parse(observationSchema, {

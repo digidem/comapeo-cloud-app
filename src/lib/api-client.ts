@@ -206,6 +206,34 @@ export const apiClient = {
     }
   },
 
+  async getObservationDocuments(projectId: string, config?: RequestConfig) {
+    try {
+      const request = resolveApiRequest(config);
+      const response = await fetch(
+        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/observation`,
+        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+      );
+      return handleResponse(response, observationsResponseSchema, config);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
+  async getTracks(projectId: string, config?: RequestConfig) {
+    try {
+      const request = resolveApiRequest(config);
+      const response = await fetch(
+        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/track`,
+        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+      );
+      return handleResponse(response, tracksResponseSchema, config);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
   async getAlerts(projectId: string, config?: RequestConfig) {
     try {
       const request = resolveApiRequest(config);
