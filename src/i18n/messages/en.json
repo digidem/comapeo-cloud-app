@@ -218,6 +218,9 @@
   "data.filters.clear": {
     "defaultMessage": "Clear filters"
   },
+  "data.filters.clearCategorySelection": {
+    "defaultMessage": "Clear category selection"
+  },
   "data.filters.endDateLabel": {
     "defaultMessage": "To"
   },
