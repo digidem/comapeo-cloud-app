@@ -480,6 +480,86 @@ describe('remote-archive', () => {
     expect(obs.tags?.photoUrls).toContain('drive2/photo/img2');
   });
 
+  it('stores first-class attachment records while keeping tag compatibility', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-attachments-1',
+              versionId: 'obs-attachments-1/0',
+              originalVersionId: 'obs-attachments-1/0',
+              schemaName: 'observation',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              attachments: [
+                {
+                  driveId: 'drive1',
+                  type: 'photo',
+                  name: 'img1.jpg',
+                  hash: 'hash-1',
+                  mimeType: 'image/jpeg',
+                  url: '/projects/proj-1/attachments/drive1/photo/img1.jpg',
+                },
+                {
+                  url: '/projects/proj-1/attachments/drive2/audio/rec1.m4a',
+                },
+              ],
+              metadata: { manualLocation: true },
+              tags: { species: 'tree' },
+              presetRef: {
+                docId: 'preset-1',
+                versionId: 'preset-1/0',
+                url: '/projects/proj-1/preset/preset-1',
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
+
+    const db = getDb();
+    const storedObservation = await db.observations.get(
+      observations[0]!.localId,
+    );
+    expect(storedObservation!.metadata).toEqual({ manualLocation: true });
+    expect(storedObservation!.presetRefDocId).toBe('preset-1');
+    expect(storedObservation!.presetRef?.versionId).toBe('preset-1/0');
+    expect(storedObservation!.versionId).toBe('obs-attachments-1/0');
+
+    const attachments = await db.attachments
+      .where('observationLocalId')
+      .equals(storedObservation!.localId)
+      .toArray();
+    expect(attachments).toHaveLength(2);
+    expect(attachments[0]!).toMatchObject({
+      projectLocalId: 'local-proj-1',
+      observationLocalId: storedObservation!.localId,
+      driveId: 'drive1',
+      type: 'photo',
+      name: 'img1.jpg',
+      hash: 'hash-1',
+      mediaType: 'photo',
+      contentType: 'image/jpeg',
+      downloadStatus: 'remote-only',
+      deleted: false,
+    });
+    expect(attachments[0]!.resolvedUrl).toBe(
+      'https://archive.example.com/projects/proj-1/attachments/drive1/photo/img1.jpg',
+    );
+    expect(storedObservation!.tags?.photoCount).toBe('1');
+    expect(storedObservation!.tags?.audioCount).toBe('1');
+  });
+
   it('resolves relative photo attachment URLs against the archive base URL before storing', async () => {
     server.use(
       http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
@@ -757,6 +837,149 @@ describe('pullPresets', () => {
       config,
     );
     expect(presets).toHaveLength(0);
+  });
+});
+
+describe('pullTracks', () => {
+  it('fetches singular track endpoint and stores tracks including tombstones', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/track`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'track-1',
+              versionId: 'track-1/0',
+              originalVersionId: 'track-1/0',
+              schemaName: 'track',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:10:00Z',
+              links: [],
+              deleted: false,
+              locations: [
+                {
+                  coords: { latitude: -8.35, longitude: -55.45 },
+                  timestamp: '2024-01-01T00:01:00Z',
+                  accuracy: 6,
+                  altitude: 30,
+                },
+              ],
+              observationRefs: [
+                {
+                  docId: 'obs-1',
+                  versionId: 'obs-1/0',
+                  url: '/projects/proj-remote-1/observation/obs-1',
+                },
+              ],
+              tags: { patrol: 'north' },
+              presetRef: {
+                docId: 'preset-track',
+                versionId: 'preset-track/0',
+                url: '/projects/proj-remote-1/preset/preset-track',
+              },
+            },
+            {
+              docId: 'track-deleted',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:10:00Z',
+              deleted: true,
+              locations: [],
+              observationRefs: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+    );
+
+    const tracks = await pullTracks(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0]!.remoteId).toBe('track-1');
+    expect(tracks[0]!.presetRefDocId).toBe('preset-track');
+
+    const db = getDb();
+    const stored = await db.tracks
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(stored).toHaveLength(2);
+    expect(stored.find((t) => t.remoteId === 'track-deleted')!.deleted).toBe(
+      true,
+    );
+    expect(
+      stored.find((t) => t.remoteId === 'track-1')!.locations[0]!.coords,
+    ).toEqual({ latitude: -8.35, longitude: -55.45 });
+  });
+});
+
+describe('pullFields', () => {
+  it('fetches singular field endpoint and stores fields including tombstones', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/field`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'field-1',
+              versionId: 'field-1/0',
+              originalVersionId: 'field-1/0',
+              schemaName: 'field',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:10:00Z',
+              links: [],
+              deleted: false,
+              type: 'select_one',
+              key: 'condition',
+              label: 'Condition',
+              placeholder: 'Choose one',
+              universal: false,
+              options: [{ label: 'Good', value: 'good' }],
+            },
+            {
+              docId: 'field-deleted',
+              versionId: 'field-deleted/0',
+              originalVersionId: 'field-deleted/0',
+              schemaName: 'field',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:10:00Z',
+              links: [],
+              deleted: true,
+              type: 'text',
+              key: 'deleted',
+              label: 'Deleted',
+              universal: false,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const fields = await pullFields(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    expect(fields).toHaveLength(1);
+    expect(fields[0]!.key).toBe('condition');
+
+    const db = getDb();
+    const stored = await db.fields
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(stored).toHaveLength(2);
+    expect(stored.find((f) => f.remoteId === 'field-deleted')!.deleted).toBe(
+      true,
+    );
+    expect(stored.find((f) => f.remoteId === 'field-1')!.options).toEqual([
+      { label: 'Good', value: 'good' },
+    ]);
   });
 });
 
