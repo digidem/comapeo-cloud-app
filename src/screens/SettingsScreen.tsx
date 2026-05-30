@@ -1,7 +1,7 @@
 import { valibotResolver } from '@hookform/resolvers/valibot';
 import * as v from 'valibot';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -173,6 +173,7 @@ export function SettingsScreen() {
   const [importError, setImportError] = useState<string | null>(null);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const timeoutIdsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const {
     register,
@@ -181,6 +182,28 @@ export function SettingsScreen() {
   } = useForm<GenerateInviteForm>({
     resolver: valibotResolver(generateInviteSchema),
   });
+
+  useEffect(() => {
+    return () => {
+      for (const timeoutId of timeoutIdsRef.current) {
+        clearTimeout(timeoutId);
+      }
+      timeoutIdsRef.current = [];
+    };
+  }, []);
+
+  const scheduleTimeout = useCallback(
+    (callback: () => void, delayMs: number) => {
+      const timeoutId = setTimeout(() => {
+        timeoutIdsRef.current = timeoutIdsRef.current.filter(
+          (currentTimeoutId) => currentTimeoutId !== timeoutId,
+        );
+        callback();
+      }, delayMs);
+      timeoutIdsRef.current.push(timeoutId);
+    },
+    [],
+  );
 
   const onGenerate = useCallback(
     async (data: GenerateInviteForm) => {
@@ -216,12 +239,12 @@ export function SettingsScreen() {
       try {
         await navigator.clipboard.writeText(text);
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        scheduleTimeout(() => setCopied(false), 2000);
       } catch {
         // Clipboard API may not be available in all environments
       }
     },
-    [],
+    [scheduleTimeout],
   );
 
   const handleExport = useCallback(() => {
@@ -235,11 +258,11 @@ export function SettingsScreen() {
       a.click();
       URL.revokeObjectURL(url);
       setExportStatus('success');
-      setTimeout(() => setExportStatus('idle'), 3000);
+      scheduleTimeout(() => setExportStatus('idle'), 3000);
     } catch {
       setExportStatus('error');
     }
-  }, []);
+  }, [scheduleTimeout]);
 
   const handleImport = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,7 +279,7 @@ export function SettingsScreen() {
         const result = importLocalStorageData(reader.result as string);
         if (result.success) {
           setImportStatus('success');
-          setTimeout(() => window.location.reload(), 500);
+          scheduleTimeout(() => window.location.reload(), 500);
         } else {
           setImportStatus('error');
           setImportError(result.error ?? 'Unknown error');
