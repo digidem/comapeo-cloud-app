@@ -288,7 +288,26 @@ describe('setToken — backward compat with active server', () => {
 // ---------------------------------------------------------------------------
 
 describe('addServer deduplication', () => {
-  it('returns existing server ID when adding a duplicate baseUrl', async () => {
+  it('throws DuplicateServerError when adding a duplicate baseUrl without allowDuplicate', async () => {
+    await useAuthStore.getState().addServer({
+      label: 'First',
+      baseUrl: 'https://archive.example.com',
+      token: 'token-1',
+    });
+
+    await expect(
+      useAuthStore.getState().addServer({
+        label: 'Second',
+        baseUrl: 'https://archive.example.com',
+        token: 'token-2',
+      }),
+    ).rejects.toThrow('This archive server has already been added');
+
+    // Still only one server
+    expect(useAuthStore.getState().servers).toHaveLength(1);
+  });
+
+  it('returns existing server ID when allowDuplicate is true', async () => {
     const id1 = await useAuthStore.getState().addServer({
       label: 'First',
       baseUrl: 'https://archive.example.com',
@@ -299,6 +318,7 @@ describe('addServer deduplication', () => {
       label: 'Second',
       baseUrl: 'https://archive.example.com',
       token: 'token-2',
+      allowDuplicate: true,
     });
 
     // Same ID returned — no duplicate created
@@ -306,7 +326,7 @@ describe('addServer deduplication', () => {
     expect(useAuthStore.getState().servers).toHaveLength(1);
   });
 
-  it('updates the token on the existing server when re-adding', async () => {
+  it('updates the token on the existing server when re-adding with allowDuplicate', async () => {
     await useAuthStore.getState().addServer({
       label: 'Server',
       baseUrl: 'https://archive.example.com',
@@ -317,6 +337,7 @@ describe('addServer deduplication', () => {
       label: 'Server',
       baseUrl: 'https://archive.example.com',
       token: 'new-token',
+      allowDuplicate: true,
     });
 
     const state = useAuthStore.getState();
@@ -324,7 +345,7 @@ describe('addServer deduplication', () => {
     expect(state.servers[0]!.token).toBe('new-token');
   });
 
-  it('deduplicates URLs with trailing slashes', async () => {
+  it('deduplicates URLs with trailing slashes (with allowDuplicate)', async () => {
     const id1 = await useAuthStore.getState().addServer({
       label: 'Server',
       baseUrl: 'https://archive.example.com/',
@@ -335,13 +356,14 @@ describe('addServer deduplication', () => {
       label: 'Server',
       baseUrl: 'https://archive.example.com',
       token: 'tok',
+      allowDuplicate: true,
     });
 
     expect(id2).toBe(id1);
     expect(useAuthStore.getState().servers).toHaveLength(1);
   });
 
-  it('deduplicates URLs with different trailing slashes and case', async () => {
+  it('deduplicates URLs with different trailing slashes and case (with allowDuplicate)', async () => {
     const id1 = await useAuthStore.getState().addServer({
       label: 'Server',
       baseUrl: 'https://Archive.Example.COM/api/',
@@ -352,6 +374,7 @@ describe('addServer deduplication', () => {
       label: 'Server',
       baseUrl: 'https://archive.example.com/api',
       token: 'tok',
+      allowDuplicate: true,
     });
 
     expect(id2).toBe(id1);
@@ -387,6 +410,7 @@ describe('addServer deduplication', () => {
       label: 'Production Server',
       baseUrl: 'https://archive.example.com',
       token: 'manual-token',
+      allowDuplicate: true,
     });
 
     expect(id2).toBe(id1);

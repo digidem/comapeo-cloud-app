@@ -16,7 +16,7 @@ import {
   parseInviteUrl,
   warnLegacyInviteUrlOnce,
 } from '@/lib/invite-url';
-import { useAuthStore } from '@/stores/auth-store';
+import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
 // i18n
@@ -59,6 +59,10 @@ const messages = defineMessages({
   networkError: {
     id: 'invite.progress.networkError',
     defaultMessage: 'Unable to connect. Check your internet connection.',
+  },
+  alreadyConnected: {
+    id: 'invite.alreadyConnected',
+    defaultMessage: 'This archive server is already connected',
   },
   retry: {
     id: 'invite.progress.retry',
@@ -254,6 +258,13 @@ export function InviteScreen() {
         }, 1500);
       } catch (err) {
         if (cancelledRef.current) return;
+        if (err instanceof DuplicateServerError) {
+          setStatus('error');
+          setErrorMessage(
+            intlRef.current.formatMessage(messages.alreadyConnected),
+          );
+          return;
+        }
         if (err instanceof InviteApiError) {
           if (err.code === 'INVITE_EXPIRED') {
             setStatus('expired');

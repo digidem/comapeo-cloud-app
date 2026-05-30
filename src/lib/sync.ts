@@ -38,6 +38,7 @@ async function ensureServerInStore(
     label: options.serverLabel ?? options.baseUrl,
     baseUrl: options.baseUrl,
     token: options.token,
+    allowDuplicate: true,
   });
   return id;
 }
