@@ -168,4 +168,20 @@ describe('CategoryMultiSelect', () => {
     );
     expect(screen.queryByText(/more/)).not.toBeInTheDocument();
   });
+
+  it('shows hidden selected count when selected categories are collapsed', () => {
+    const manyCategories = Array.from(
+      { length: 12 },
+      (_, i) => 'Cat ' + (i + 1),
+    );
+    render(
+      <CategoryMultiSelect
+        categories={manyCategories}
+        selected={['Cat 10', 'Cat 11']}
+        onToggle={onToggle}
+        onClear={onClear}
+      />,
+    );
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+  });
 });

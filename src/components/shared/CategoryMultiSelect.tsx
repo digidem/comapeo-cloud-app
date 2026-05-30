@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 const messages = defineMessages({
@@ -21,6 +21,10 @@ const messages = defineMessages({
   showLess: {
     id: 'data.filters.categoryShowLess',
     defaultMessage: 'Show less',
+  },
+  clearCategorySelection: {
+    id: 'data.filters.clearCategorySelection',
+    defaultMessage: 'Clear category selection',
   },
 });
 
@@ -50,13 +54,6 @@ export function CategoryMultiSelect({
     ? selected.filter((c) => !visibleCategories.includes(c)).length
     : 0;
 
-  const handleToggle = useCallback(
-    (category: string) => {
-      onToggle(category);
-    },
-    [onToggle],
-  );
-
   if (categories.length === 0) {
     return null;
   }
@@ -78,7 +75,10 @@ export function CategoryMultiSelect({
               : 'bg-surface text-text-muted border-border border'
           }`}
           style={{ touchAction: 'manipulation' }}
-          aria-pressed={selected.length === 0}
+          aria-current={selected.length === 0 ? 'true' : undefined}
+          {...(selected.length > 0 && {
+            'aria-label': intl.formatMessage(messages.clearCategorySelection),
+          })}
         >
           {intl.formatMessage(messages.allCategories)}
         </button>
@@ -90,7 +90,7 @@ export function CategoryMultiSelect({
             <button
               key={category}
               type="button"
-              onClick={() => handleToggle(category)}
+              onClick={() => onToggle(category)}
               className={`inline-flex min-h-[44px] items-center rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                 isSelected
                   ? 'bg-primary/15 text-primary border-primary/30 border'
@@ -118,7 +118,7 @@ export function CategoryMultiSelect({
             {intl.formatMessage(messages.showMore, { count: remainingCount })}
           </button>
           {hiddenSelected > 0 && (
-            <span className="text-sm text-text-muted">
+            <span className="text-sm text-text-muted" aria-live="polite">
               {intl.formatMessage(messages.categoryHiddenSelected, {
                 count: hiddenSelected,
               })}
