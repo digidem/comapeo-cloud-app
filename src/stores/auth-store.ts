@@ -11,6 +11,16 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
+export class DuplicateServerError extends Error {
+  constructor(
+    public readonly serverId: string,
+    public readonly baseUrl: string,
+  ) {
+    super('This archive server has already been added');
+    this.name = 'DuplicateServerError';
+  }
+}
+
 export type AuthTier = 'local' | 'remoteArchive' | 'cloud';
 
 export interface RemoteArchiveServer {
@@ -42,6 +52,7 @@ export interface AuthState {
     label: string;
     baseUrl: string;
     token: string;
+    allowDuplicate?: boolean;
   }) => Promise<string>;
   removeServer: (id: string) => Promise<void>;
   setActiveServer: (id: string | null) => void;
@@ -96,6 +107,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return serverUrl === normalized;
     });
     if (existing) {
+      if (!config.allowDuplicate) {
+        throw new DuplicateServerError(existing.id, existing.baseUrl);
+      }
       // Update token if it changed
       if (existing.token !== config.token) {
         await updateRemoteServer(existing.id, { token: config.token });

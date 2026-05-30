@@ -12,8 +12,10 @@ interface ConfirmDialogProps {
   title: string;
   description?: string;
   confirmLabel: string;
+  cancelLabel?: string;
   onConfirm: () => void;
   variant?: ConfirmDialogVariant;
+  loading?: boolean;
   /** Optional extra content rendered between description and buttons */
   children?: ReactNode;
 }
@@ -24,8 +26,10 @@ function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel,
   onConfirm,
   variant = 'default',
+  loading = false,
   children,
 }: ConfirmDialogProps) {
   return (
@@ -51,7 +55,7 @@ function ConfirmDialog({
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-4">
             <AlertDialog.Cancel asChild>
               <Button type="button" variant="secondary" size="sm">
-                Cancel
+                {cancelLabel ?? 'Cancel'}
               </Button>
             </AlertDialog.Cancel>
 
@@ -61,6 +65,8 @@ function ConfirmDialog({
                 variant={variant === 'destructive' ? 'danger' : 'primary'}
                 size="sm"
                 onClick={onConfirm}
+                loading={loading}
+                disabled={loading}
               >
                 {confirmLabel}
               </Button>

@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/modal';
 import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { parseInviteUrl, warnLegacyInviteUrlOnce } from '@/lib/invite-url';
-import { useAuthStore } from '@/stores/auth-store';
+import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
 
 interface AddArchiveServerDialogProps {
   isOpen: boolean;
@@ -77,7 +77,7 @@ const messages = defineMessages({
   },
   duplicateServer: {
     id: 'home.archive.dialog.duplicateServer',
-    defaultMessage: 'This server has already been added',
+    defaultMessage: 'This archive server is already connected',
   },
   invalidUrl: {
     id: 'home.archive.dialog.invalidUrl',
@@ -221,6 +221,13 @@ function AddArchiveServerDialog({
         onAdded(serverId);
       },
       (err: unknown) => {
+        if (err instanceof DuplicateServerError) {
+          dispatch({
+            type: 'error',
+            message: intl.formatMessage(messages.duplicateServer),
+          });
+          return;
+        }
         const message =
           err instanceof Error
             ? err.message
@@ -350,6 +357,13 @@ function AddArchiveServerDialog({
         onAdded(serverId);
       },
       (err: unknown) => {
+        if (err instanceof DuplicateServerError) {
+          dispatch({
+            type: 'error',
+            message: intl.formatMessage(messages.duplicateServer),
+          });
+          return;
+        }
         const message =
           err instanceof Error
             ? err.message

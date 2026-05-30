@@ -1,7 +1,8 @@
-import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { PaginationControls } from '@/components/shared/PaginationControls';
 import { Card } from '@/components/ui/card';
+import { usePaginatedItems } from '@/hooks/usePaginatedItems';
 
 interface ActivityItem {
   id: string;
@@ -20,6 +21,8 @@ interface RecentActivityListProps {
   activities: ActivityItem[];
 }
 
+const PAGE_SIZE = 5;
+
 const messages = defineMessages({
   recentTitle: {
     id: 'home.activity.recentTitle',
@@ -28,14 +31,6 @@ const messages = defineMessages({
   empty: {
     id: 'home.activity.empty',
     defaultMessage: 'No recent activity',
-  },
-  loadMore: {
-    id: 'home.activity.loadMore',
-    defaultMessage: 'Load More',
-  },
-  loadMoreCount: {
-    id: 'home.activity.loadMoreCount',
-    defaultMessage: 'Load More ({count} more)',
   },
   photos: {
     id: 'home.activity.photos',
@@ -49,10 +44,14 @@ const messages = defineMessages({
 
 export function RecentActivityList({ activities }: RecentActivityListProps) {
   const intl = useIntl();
-  const [visibleCount, setVisibleCount] = useState(3);
-  const visibleActivities = activities.slice(0, visibleCount);
-  const hasMore = activities.length > visibleCount;
-  const remaining = activities.length - visibleCount;
+  const {
+    paginatedItems: visibleActivities,
+    totalCount,
+    hasMore,
+    loadMore,
+    showingStart,
+    showingEnd,
+  } = usePaginatedItems(activities, { pageSize: PAGE_SIZE });
 
   return (
     <Card className="flex flex-col">
@@ -176,23 +175,14 @@ export function RecentActivityList({ activities }: RecentActivityListProps) {
           ))
         )}
       </div>
-      {/* Load More button */}
-      {hasMore && (
-        <div className="flex justify-center border-t border-border p-3">
-          <button
-            type="button"
-            data-testid="load-more-btn"
-            className="text-sm font-medium text-primary hover:text-primary-dark"
-            onClick={() => setVisibleCount(activities.length)}
-          >
-            {remaining > 0
-              ? intl.formatMessage(messages.loadMoreCount, {
-                  count: remaining,
-                })
-              : intl.formatMessage(messages.loadMore)}
-          </button>
-        </div>
-      )}
+      <PaginationControls
+        showingStart={showingStart}
+        showingEnd={showingEnd}
+        totalCount={totalCount}
+        hasMore={hasMore}
+        onLoadMore={loadMore}
+        itemLabel="activities"
+      />
     </Card>
   );
 }

@@ -5,6 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { StorageSettings } from '@/components/shared/StorageSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
@@ -292,6 +293,9 @@ export function SettingsScreen() {
       <p className="text-xs text-text-muted mt-1">
         Current: {LOCALE_LABELS[locale] ?? locale}
       </p>
+
+      {/* Storage */}
+      <StorageSettings />
 
       {/* Remote Archive Invites */}
       <h2 className="text-lg font-semibold text-text mt-6">

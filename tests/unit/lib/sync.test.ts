@@ -30,6 +30,7 @@ describe('syncRemoteArchive', () => {
       label: 'Test Archive',
       baseUrl: archiveUrl,
       token: archiveToken,
+      allowDuplicate: true,
     });
 
     // Mock all endpoints
@@ -245,6 +246,7 @@ describe('syncRemoteArchive', () => {
       label: 'Ghost Server',
       baseUrl: archiveUrl,
       token: archiveToken,
+      allowDuplicate: true,
     });
 
     // Use a non-existent DB id — getRemoteServer will return undefined
@@ -271,6 +273,7 @@ describe('syncRemoteArchive', () => {
       label: 'Test Archive',
       baseUrl: archiveUrl,
       token: archiveToken,
+      allowDuplicate: true,
     });
 
     // Make the projects endpoint slow so the first sync stays in-flight
@@ -352,6 +355,7 @@ describe('syncRemoteArchive', () => {
       label: 'Test Archive',
       baseUrl: archiveUrl,
       token: archiveToken,
+      allowDuplicate: true,
     });
 
     server.use(
@@ -382,6 +386,7 @@ describe('syncRemoteArchive', () => {
       label: 'Test Archive',
       baseUrl: archiveUrl,
       token: archiveToken,
+      allowDuplicate: true,
     });
 
     // Provide a valid projects mock so the sync starts, then throw a non-Error
@@ -423,6 +428,7 @@ describe('syncRemoteArchive', () => {
       label: 'Test Archive',
       baseUrl: archiveUrl,
       token: archiveToken,
+      allowDuplicate: true,
     });
 
     server.use(
@@ -482,6 +488,7 @@ describe('syncRemoteArchive', () => {
       label: 'Test Archive',
       baseUrl: archiveUrl,
       token: archiveToken,
+      allowDuplicate: true,
     });
 
     server.use(
@@ -533,6 +540,7 @@ describe('syncRemoteArchive', () => {
       label: 'Test Archive',
       baseUrl: archiveUrl,
       token: archiveToken,
+      allowDuplicate: true,
     });
 
     server.use(
@@ -583,6 +591,7 @@ describe('syncRemoteArchive', () => {
       label: 'Test Archive',
       baseUrl: archiveUrl,
       token: archiveToken,
+      allowDuplicate: true,
     });
 
     server.use(
