@@ -10,6 +10,10 @@ import {
   createProject as repoCreateProject,
   deleteProject as repoDeleteProject,
   getAlerts as repoGetAlerts,
+<<<<<<< HEAD
+=======
+  getAttachments as repoGetAttachments,
+>>>>>>> b87357d (feat(sync): add archive data tables)
   getFields as repoGetFields,
   getObservations as repoGetObservations,
   getPresets as repoGetPresets,
@@ -221,8 +225,34 @@ export async function getAlerts(projectLocalId: string) {
 export async function addAttachment(input: {
   projectLocalId: string;
   observationLocalId: string;
+  sourceDocId?: string;
+  remoteUrl?: string;
+  resolvedUrl?: string;
+  mediaType?: 'photo' | 'audio' | 'unknown';
+  contentType?: string;
+  downloadStatus?: 'remote-only' | 'available' | 'failed';
 }) {
   return createAttachment(input);
+}
+
+export async function getAttachments(observationLocalId: string) {
+  return repoGetAttachments(observationLocalId);
+}
+
+// ---------------------------------------------------------------------------
+// Tracks
+// ---------------------------------------------------------------------------
+
+export async function getTracks(projectLocalId: string) {
+  return repoGetTracks(projectLocalId);
+}
+
+// ---------------------------------------------------------------------------
+// Fields
+// ---------------------------------------------------------------------------
+
+export async function getFields(projectLocalId: string) {
+  return repoGetFields(projectLocalId);
 }
 
 // ---------------------------------------------------------------------------
