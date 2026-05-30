@@ -156,14 +156,14 @@ export function DataScreen() {
   const filterDeps = useMemo(
     () => [
       obsFilters.filters.search,
-      obsFilters.filters.category,
+      obsFilters.filters.categories,
       obsFilters.filters.startDate,
       obsFilters.filters.endDate,
       obsFilters.filters.sort,
     ],
     [
       obsFilters.filters.search,
-      obsFilters.filters.category,
+      obsFilters.filters.categories,
       obsFilters.filters.startDate,
       obsFilters.filters.endDate,
       obsFilters.filters.sort,
