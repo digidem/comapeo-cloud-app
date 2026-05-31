@@ -1,4 +1,3 @@
-import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
 
 import { Tooltip } from '@/components/ui/tooltip';
@@ -148,37 +147,28 @@ export const MultiLine: Story = {
 
 /** Always-open tooltip for static visual documentation and screenshots */
 export const AlwaysOpen: Story = {
-  render: () => (
-    <TooltipPrimitive.Provider delayDuration={0}>
-      <TooltipPrimitive.Root open={true}>
-        <TooltipPrimitive.Trigger asChild>
-          <button
-            type="button"
-            style={{
-              padding: '8px 16px',
-              borderRadius: 12,
-              background: '#1F6FFF',
-              color: '#fff',
-              border: 'none',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Static trigger
-          </button>
-        </TooltipPrimitive.Trigger>
-        <TooltipPrimitive.Portal>
-          <TooltipPrimitive.Content
-            side="top"
-            sideOffset={4}
-            forceMount
-            className="z-50 rounded-btn bg-text px-3 py-1.5 text-xs text-white shadow-elevated animate-in fade-in-0 zoom-in-95"
-          >
-            Always visible tooltip
-          </TooltipPrimitive.Content>
-        </TooltipPrimitive.Portal>
-      </TooltipPrimitive.Root>
-    </TooltipPrimitive.Provider>
+  args: {
+    content: 'Always visible tooltip',
+    side: 'top',
+    open: true,
+  },
+  render: (args) => (
+    <Tooltip {...args}>
+      <button
+        type="button"
+        style={{
+          padding: '8px 16px',
+          borderRadius: 12,
+          background: '#1F6FFF',
+          color: '#fff',
+          border: 'none',
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        Static trigger
+      </button>
+    </Tooltip>
   ),
 };

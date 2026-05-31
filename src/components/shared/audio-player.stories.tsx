@@ -27,8 +27,8 @@ type Story = StoryObj<typeof AudioPlayer>;
 /** Default audio player with play button and progress bar */
 export const Default: Story = {};
 
-/** Audio player displaying a file name */
-export const WithFileName: Story = {
+/** Audio player with an MP3 file */
+export const MpegFormat: Story = {
   args: {
     driveId: 'drive-abc123',
     name: 'interview-recording.mp3',
