@@ -7,6 +7,7 @@ import {
 } from '@tests/fixtures/presets';
 import { projectsFixture } from '@tests/fixtures/projects';
 import { serverInfoFixture } from '@tests/fixtures/server-info';
+import { tracksFixture } from '@tests/fixtures/tracks';
 import { HttpResponse, http } from 'msw';
 
 import { VERSION_PREFIX } from '@/lib/invite-crypto';
@@ -311,6 +312,22 @@ export const handlers = [
       );
     }
     return HttpResponse.json(fieldsFixture);
+  }),
+
+  http.get('*/projects/*/track', ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid bearer token',
+          },
+        },
+        { status: 401 },
+      );
+    }
+    return HttpResponse.json(tracksFixture);
   }),
 
   http.get('*/projects/*/icon/*', ({ request }) => {

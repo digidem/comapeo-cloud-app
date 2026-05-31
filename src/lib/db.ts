@@ -59,6 +59,47 @@ export interface Attachment {
   sourceType: string;
   sourceId: string;
   remoteId?: string;
+  remoteUrl?: string;
+  resolvedUrl?: string;
+  mediaType?: 'photo' | 'audio' | 'unknown';
+  contentType?: string;
+  createdAt: string;
+  updatedAt: string;
+  dirtyLocal: boolean;
+  deleted: boolean;
+}
+
+export interface Track {
+  localId: string;
+  projectLocalId: string;
+  sourceType: string;
+  sourceId: string;
+  remoteId?: string;
+  tags?: Record<string, string>;
+  presetRef?: string;
+  locations?: Array<{
+    coords: { latitude: number; longitude: number };
+    timestamp?: string;
+  }>;
+  observationRefs?: string[];
+  createdAt: string;
+  updatedAt: string;
+  dirtyLocal: boolean;
+  deleted: boolean;
+}
+
+export interface Field {
+  localId: string;
+  projectLocalId: string;
+  sourceType: string;
+  sourceId: string;
+  remoteId?: string;
+  type: string;
+  key: string;
+  label: string;
+  placeholder?: string;
+  universal: boolean;
+  options?: Array<{ label: string; value: string }>;
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
@@ -108,6 +149,8 @@ class AppDatabase extends Dexie {
   observations!: EntityTable<Observation, 'localId'>;
   alerts!: EntityTable<Alert, 'localId'>;
   attachments!: EntityTable<Attachment, 'localId'>;
+  tracks!: EntityTable<Track, 'localId'>;
+  fields!: EntityTable<Field, 'localId'>;
   remoteServers!: EntityTable<RemoteServer, 'id'>;
   syncMetadata!: EntityTable<SyncMetadata, 'id'>;
   presets!: EntityTable<Preset, 'localId'>;
@@ -233,6 +276,13 @@ class AppDatabase extends Dexie {
 
     this.version(7).stores({
       presets:
+        '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
+    });
+
+    this.version(8).stores({
+      tracks:
+        '&localId, projectLocalId, [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
+      fields:
         '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
     });
   }

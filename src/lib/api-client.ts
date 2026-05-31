@@ -14,6 +14,7 @@ import {
   projectDetailResponseSchema,
   projectsResponseSchema,
   serverInfoResponseSchema,
+  tracksResponseSchema,
 } from '@/lib/schemas';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -297,6 +298,20 @@ export const apiClient = {
         { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
       );
       return handleResponse(response, fieldsResponseSchema, config);
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
+  async getTracks(projectId: string, config?: RequestConfig) {
+    try {
+      const request = resolveApiRequest(config);
+      const response = await fetch(
+        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/track`,
+        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+      );
+      return handleResponse(response, tracksResponseSchema, config);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;

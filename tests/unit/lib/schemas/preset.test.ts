@@ -70,6 +70,15 @@ describe('presetSchema', () => {
     // iconRef and color are optional
     expect(v.safeParse(presetSchema, minimal).success).toBe(true);
   });
+
+  // Regression: commit d754c56 — fieldRefs must be urlRef objects, not plain strings
+  it('rejects fieldRefs with plain strings (must be urlRef objects)', () => {
+    const invalid = {
+      ...validPreset,
+      fieldRefs: ['just-a-string'],
+    };
+    expect(v.safeParse(presetSchema, invalid).success).toBe(false);
+  });
 });
 
 describe('presetsResponseSchema', () => {

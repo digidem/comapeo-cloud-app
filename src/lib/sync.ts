@@ -1,9 +1,12 @@
 import { getRemoteServer } from '@/lib/local-repositories';
 import {
+  deriveAttachmentsFromObservations,
   pullAlerts,
+  pullFields,
   pullObservations,
   pullPresets,
   pullProjects,
+  pullTracks,
 } from '@/lib/remote-archive';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -126,6 +129,54 @@ async function doSync(
             projectWarnings.push(
               `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
             );
+          }
+
+          // Tracks are non-critical — log warnings, don't fail
+          try {
+            await pullTracks(
+              serverDbId,
+              project.remoteId,
+              project.localId,
+              config,
+            );
+          } catch (e) {
+            const msg = `Tracks: ${e instanceof Error ? e.message : String(e)}`;
+            projectWarnings.push(
+              `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
+            );
+          }
+
+          // Fields are non-critical — log warnings, don't fail
+          try {
+            await pullFields(
+              serverDbId,
+              project.remoteId,
+              project.localId,
+              config,
+            );
+          } catch (e) {
+            const msg = `Fields: ${e instanceof Error ? e.message : String(e)}`;
+            projectWarnings.push(
+              `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
+            );
+          }
+
+          // Derive attachment records from observation data
+          // Non-critical — individual attachment failures produce warnings
+          if (observationsOk) {
+            try {
+              await deriveAttachmentsFromObservations(
+                serverDbId,
+                project.remoteId,
+                project.localId,
+                config,
+              );
+            } catch (e) {
+              const msg = `Attachments: ${e instanceof Error ? e.message : String(e)}`;
+              projectWarnings.push(
+                `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
+              );
+            }
           }
 
           // Only fail the project if observations (critical) failed

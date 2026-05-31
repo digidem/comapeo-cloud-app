@@ -2,11 +2,13 @@ import { getDb } from '@/lib/db';
 import type {
   Alert,
   Attachment,
+  Field,
   Observation,
   Preset,
   Project,
   RemoteServer,
   SyncMetadata,
+  Track,
 } from '@/lib/db';
 import { DbError, wrapDb } from '@/lib/db-error';
 import { uuid } from '@/lib/uuid';
@@ -94,12 +96,22 @@ export async function deleteProject(localId: string): Promise<void> {
     const db = getDb();
     await db.transaction(
       'rw',
-      [db.projects, db.observations, db.alerts, db.attachments, db.presets],
+      [
+        db.projects,
+        db.observations,
+        db.alerts,
+        db.attachments,
+        db.presets,
+        db.tracks,
+        db.fields,
+      ],
       async () => {
         await db.observations.where('projectLocalId').equals(localId).delete();
         await db.alerts.where('projectLocalId').equals(localId).delete();
         await db.attachments.where('projectLocalId').equals(localId).delete();
         await db.presets.where('projectLocalId').equals(localId).delete();
+        await db.tracks.where('projectLocalId').equals(localId).delete();
+        await db.fields.where('projectLocalId').equals(localId).delete();
         await db.projects.delete(localId);
       },
     );
@@ -448,5 +460,49 @@ export async function getPresetByRemoteId(
       .equals([projectLocalId, remoteId])
       .filter((p) => !p.deleted)
       .first();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tracks
+// ---------------------------------------------------------------------------
+
+export async function getTracks(projectLocalId: string): Promise<Track[]> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.tracks
+      .where('projectLocalId')
+      .equals(projectLocalId)
+      .filter((t) => !t.deleted)
+      .toArray();
+  });
+}
+
+export async function getTrack(localId: string): Promise<Track | undefined> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.tracks.get(localId);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Fields
+// ---------------------------------------------------------------------------
+
+export async function getFields(projectLocalId: string): Promise<Field[]> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.fields
+      .where('projectLocalId')
+      .equals(projectLocalId)
+      .filter((f) => !f.deleted)
+      .toArray();
+  });
+}
+
+export async function getField(localId: string): Promise<Field | undefined> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.fields.get(localId);
   });
 }
