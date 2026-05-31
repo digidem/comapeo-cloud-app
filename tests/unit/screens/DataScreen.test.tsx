@@ -69,6 +69,24 @@ let mockAlertsQuery: {
   isPending: boolean;
   isError?: boolean;
 } = { data: defaultAlerts, isPending: false };
+let mockCategoryMetadata: {
+  categories: unknown[];
+  categoryByObservationId: Map<
+    string,
+    {
+      id: string;
+      name: string;
+      color?: string;
+      iconUrl?: string;
+      iconDocId?: string;
+    }
+  >;
+  displayNamesByObservationId: Map<string, string>;
+} = {
+  categories: [],
+  categoryByObservationId: new Map(),
+  displayNamesByObservationId: new Map(),
+};
 
 vi.mock('@/components/layout/shell-slot', () => ({
   useShellSlot: vi.fn(),
@@ -91,6 +109,10 @@ vi.mock('@/hooks/useObservations', () => ({
 
 vi.mock('@/hooks/useAlerts', () => ({
   useAlerts: vi.fn(() => mockAlertsQuery),
+}));
+
+vi.mock('@/hooks/useObservationCategoryMetadata', () => ({
+  useObservationCategoryMetadata: vi.fn(() => mockCategoryMetadata),
 }));
 
 // Mock AuthImg to avoid needing useAuthenticatedImageUrl in DataScreen tests
@@ -175,7 +197,16 @@ vi.mock('@/components/ui/tabs', () => {
 });
 
 vi.mock('@/components/shared/ObservationsMap', () => ({
-  ObservationsMap: () => <div data-testid="observations-map" />,
+  ObservationsMap: ({
+    categoryByObservationId,
+  }: {
+    categoryByObservationId?: Map<string, unknown>;
+  }) => (
+    <div
+      data-testid="observations-map"
+      data-category-count={categoryByObservationId?.size ?? 0}
+    />
+  ),
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -190,6 +221,11 @@ function resetMocks() {
   mockProjectsQuery = { data: defaultProjects, isPending: false };
   mockObservationsQuery = { data: defaultObservations, isPending: false };
   mockAlertsQuery = { data: defaultAlerts, isPending: false };
+  mockCategoryMetadata = {
+    categories: [],
+    categoryByObservationId: new Map(),
+    displayNamesByObservationId: new Map(),
+  };
   useViewModeStore.setState({ viewMode: 'grid' });
 }
 
@@ -259,6 +295,40 @@ describe('DataScreen', () => {
 
       render(<DataScreen />);
       expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders the matched category icon for observation cards', () => {
+      mockObservationsQuery = { data: defaultObservations, isPending: false };
+      mockCategoryMetadata = {
+        categories: [
+          {
+            id: 'forest',
+            name: 'Forest',
+            iconDocId: 'icon-forest',
+            iconUrl: '/projects/proj-remote/icon/icon-forest',
+          },
+        ],
+        categoryByObservationId: new Map([
+          [
+            'obs-1',
+            {
+              id: 'forest',
+              name: 'Forest',
+              iconDocId: 'icon-forest',
+              iconUrl: '/projects/proj-remote/icon/icon-forest',
+            },
+          ],
+        ]),
+        displayNamesByObservationId: new Map([['obs-1', 'Forest']]),
+      };
+
+      render(<DataScreen />);
+
+      expect(screen.getByTestId('category-icon')).toBeInTheDocument();
+      expect(screen.getByAltText('Forest icon')).toHaveAttribute(
+        'src',
+        '/projects/proj-remote/icon/icon-forest',
+      );
     });
 
     it('renders observation cards with fallback label when tags.category is missing', () => {
@@ -555,6 +625,13 @@ describe('DataScreen', () => {
       it('switches to map view on toggle click', async () => {
         const { userEvent } = await import('@tests/mocks/test-utils');
         const user = userEvent.setup();
+        mockCategoryMetadata = {
+          categories: [],
+          categoryByObservationId: new Map([
+            ['obs-1', { id: 'forest', name: 'Forest' }],
+          ]),
+          displayNamesByObservationId: new Map([['obs-1', 'Forest']]),
+        };
         render(<DataScreen />);
 
         // Initially grid view
@@ -569,6 +646,10 @@ describe('DataScreen', () => {
 
         // Map view should be shown
         expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+        expect(screen.getByTestId('observations-map')).toHaveAttribute(
+          'data-category-count',
+          '1',
+        );
         // Grid cards should be hidden in map mode — no observation card links
         const obsLinks = screen
           .queryAllByRole('link')
@@ -576,6 +657,8 @@ describe('DataScreen', () => {
             el.getAttribute('href')?.includes('/data/observations/'),
           );
         expect(obsLinks).toHaveLength(0);
+        // Grid cards should be hidden (no 'forest' category text visible)
+        expect(screen.queryByText('forest')).not.toBeInTheDocument();
       });
 
       it('switches back to grid view on second toggle click', async () => {

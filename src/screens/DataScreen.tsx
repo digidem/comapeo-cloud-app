@@ -8,6 +8,7 @@ import { AlertCard } from '@/components/shared/AlertCard';
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { FilterSheet } from '@/components/shared/FilterSheet';
 import { MediaPreview } from '@/components/shared/MediaPreview';
+import { ObservationCategoryIcon } from '@/components/shared/ObservationCategoryIcon';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
 import { ObservationsMap } from '@/components/shared/ObservationsMap';
 import { PaginationControls } from '@/components/shared/PaginationControls';
@@ -17,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useAttachmentsForProject } from '@/hooks/useAttachmentsForProject';
-import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
+import { useObservationCategoryMetadata } from '@/hooks/useObservationCategoryMetadata';
 import { useObservationFilters } from '@/hooks/useObservationFilters';
 import { useObservations } from '@/hooks/useObservations';
 import { usePaginatedItems } from '@/hooks/usePaginatedItems';
@@ -187,15 +188,14 @@ export function DataScreen() {
     deps: filterDeps,
   });
 
-  // Pre-compute observation display names using preset matching
-  const displayNames = useObservationDisplayNames(
-    filteredObs,
-    selectedProjectId,
-  );
-  const exportDisplayNames = useObservationDisplayNames(
-    observationsQuery.data ?? [],
-    selectedProjectId,
-  );
+  const categoryMetadata = useObservationCategoryMetadata({
+    observations: observationsQuery.data ?? [],
+    projectLocalId: selectedProjectId,
+    projectRemoteId: selectedProject?.remoteId,
+    serverUrl: selectedProject?.serverUrl,
+  });
+  const displayNames = categoryMetadata.displayNamesByObservationId;
+  const categoryByObservationId = categoryMetadata.categoryByObservationId;
   const attachments = attachmentsQuery.data;
   const attachmentsByObservationId = useMemo(() => {
     const map = new Map<string, NonNullable<typeof attachments>>();
@@ -235,6 +235,7 @@ export function DataScreen() {
         <div className="mt-4">
           <ObservationsMap
             observations={filteredObs}
+            categoryByObservationId={categoryByObservationId}
             onMarkerClick={(observationId) =>
               navigate({
                 to: '/data/observations/$observationId',
@@ -257,11 +258,18 @@ export function DataScreen() {
             >
               <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
                 <div className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-text">
-                    {displayNames.get(obs.localId) ??
-                      getCategoryLabel(obs) ??
-                      intl.formatMessage(messages.observationFallback)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {categoryByObservationId.get(obs.localId) && (
+                      <ObservationCategoryIcon
+                        category={categoryByObservationId.get(obs.localId)!}
+                      />
+                    )}
+                    <span className="text-sm font-medium text-text">
+                      {displayNames.get(obs.localId) ??
+                        getCategoryLabel(obs) ??
+                        intl.formatMessage(messages.observationFallback)}
+                    </span>
+                  </div>
                   {obs.lat !== undefined && obs.lon !== undefined && (
                     <span className="text-xs text-text-muted">
                       {obs.lat.toFixed(4)}, {obs.lon.toFixed(4)}
@@ -302,6 +310,7 @@ export function DataScreen() {
     intl,
     resetFilters,
     displayNames,
+    categoryByObservationId,
     attachmentsByObservationId,
   ]);
 
@@ -362,7 +371,7 @@ export function DataScreen() {
                   projectName={selectedProject?.name}
                   disabled={observations.length === 0}
                   attachmentsByObservationId={attachmentsByObservationId}
-                  displayNamesByObservationId={exportDisplayNames}
+                  displayNamesByObservationId={displayNames}
                 />
                 {viewMode === 'grid' ? (
                   <button
