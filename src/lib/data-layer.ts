@@ -10,9 +10,11 @@ import {
   createProject as repoCreateProject,
   deleteProject as repoDeleteProject,
   getAlerts as repoGetAlerts,
+  getFields as repoGetFields,
   getObservations as repoGetObservations,
   getPresets as repoGetPresets,
   getProjects as repoGetProjects,
+  getTracks as repoGetTracks,
   updateProject as repoUpdateProject,
 } from '@/lib/local-repositories';
 import {
@@ -23,7 +25,15 @@ import { syncRemoteArchive as doSync } from '@/lib/sync';
 import { useAuthStore } from '@/stores/auth-store';
 
 // Re-export types from db
-export type { Alert, Attachment, Observation, Preset, Project } from '@/lib/db';
+export type {
+  Alert,
+  Attachment,
+  Field,
+  Observation,
+  Preset,
+  Project,
+  Track,
+} from '@/lib/db';
 
 // ---------------------------------------------------------------------------
 // Projects
@@ -283,4 +293,12 @@ export async function getObservationDisplayName(
   const preset = matchObservationToPreset(observation, presets);
   if (preset) return preset.name;
   return getLegacyDisplayName(observation.tags) ?? 'Observation';
+}
+
+export async function getTracks(projectLocalId: string) {
+  return repoGetTracks(projectLocalId);
+}
+
+export async function getFields(projectLocalId: string) {
+  return repoGetFields(projectLocalId);
 }

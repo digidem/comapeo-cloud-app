@@ -613,4 +613,307 @@ describe('syncRemoteArchive', () => {
 
     expect(result.success).toBe(false);
   });
+
+  it('pulls tracks for each project during sync', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      allowDuplicate: true,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/track`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'track-1',
+              versionId: 'track-1/0',
+              originalVersionId: 'track-1/0',
+              schemaName: 'track',
+              createdAt: '2024-03-15T08:00:00Z',
+              updatedAt: '2024-03-15T08:30:00Z',
+              links: [],
+              deleted: false,
+              locations: [
+                {
+                  coords: { latitude: -8.35, longitude: -55.45 },
+                  timestamp: '2024-03-15T08:00:00Z',
+                },
+              ],
+              observationRefs: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/field`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    expect(result.success).toBe(true);
+
+    const db = getDb();
+    const tracks = await db.tracks.toArray();
+    expect(tracks.length).toBeGreaterThan(0);
+    expect(tracks[0]!.remoteId).toBe('track-1');
+  });
+
+  it('pulls fields for each project during sync', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      allowDuplicate: true,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/track`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/field`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'field-1',
+              versionId: 'field-1/0',
+              originalVersionId: 'field-1/0',
+              schemaName: 'field',
+              createdAt: '2024-03-15T10:00:00Z',
+              updatedAt: '2024-03-15T10:00:00Z',
+              links: [],
+              deleted: false,
+              type: 'text',
+              key: 'notes',
+              label: 'Notes',
+              universal: false,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    expect(result.success).toBe(true);
+
+    const db = getDb();
+    const fields = await db.fields.toArray();
+    expect(fields.length).toBeGreaterThan(0);
+    expect(fields[0]!.key).toBe('notes');
+  });
+
+  it('derives attachment records from observation attachments during sync', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      allowDuplicate: true,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-attach-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [
+                {
+                  url: `${archiveUrl}/projects/proj1/attachments/drive1/photo/img1`,
+                },
+              ],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/track`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/field`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    expect(result.success).toBe(true);
+
+    const db = getDb();
+    const attachments = await db.attachments.toArray();
+    expect(attachments.length).toBeGreaterThan(0);
+    expect(attachments[0]!.mediaType).toBe('photo');
+  });
+
+  it('succeeds when tracks fail (non-critical data type)', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      allowDuplicate: true,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/track`, () =>
+        HttpResponse.json({}, { status: 500 }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/field`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    expect(result.success).toBe(true);
+
+    const db = getDb();
+    const observations = await db.observations.toArray();
+    expect(observations.length).toBeGreaterThan(0);
+  });
+
+  it('succeeds when fields fail (non-critical data type)', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      allowDuplicate: true,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/track`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/field`, () =>
+        HttpResponse.json({}, { status: 500 }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    expect(result.success).toBe(true);
+
+    const db = getDb();
+    const observations = await db.observations.toArray();
+    expect(observations.length).toBeGreaterThan(0);
+  });
 });

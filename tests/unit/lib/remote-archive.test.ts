@@ -4,10 +4,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getDb, resetDb } from '@/lib/db';
 import {
+  deriveAttachmentsFromObservations,
   pullAlerts,
+  pullFields,
   pullObservations,
   pullPresets,
   pullProjects,
+  pullTracks,
 } from '@/lib/remote-archive';
 
 const archiveConfig = {
@@ -704,5 +707,627 @@ describe('pullObservations with presetRef', () => {
     const obs = observations[0]!;
     expect(obs.tags?.category).toBe('forest');
     expect(obs.tags?.presetRefDocId).toBe('preset-forest');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pullTracks
+// ---------------------------------------------------------------------------
+
+describe('pullTracks', () => {
+  const TRACKS_RESPONSE = {
+    data: [
+      {
+        docId: 'track-001',
+        versionId: 'track-001/0',
+        originalVersionId: 'track-001/0',
+        schemaName: 'track' as const,
+        createdAt: '2024-03-15T08:00:00Z',
+        updatedAt: '2024-03-15T08:30:00Z',
+        links: [],
+        deleted: false,
+        locations: [
+          {
+            coords: { latitude: -8.35, longitude: -55.45 },
+            timestamp: '2024-03-15T08:00:00Z',
+          },
+          {
+            coords: { latitude: -8.36, longitude: -55.44 },
+            timestamp: '2024-03-15T08:10:00Z',
+          },
+        ],
+        observationRefs: [
+          {
+            docId: 'obs-001',
+            versionId: 'obs-001/0',
+            url: '/projects/proj1/observation/obs-001',
+          },
+        ],
+        tags: { device: 'gps-tracker' },
+        presetRef: {
+          docId: 'preset-001',
+          versionId: 'preset-001/0',
+          url: '/projects/proj1/preset/preset-001',
+        },
+      },
+      {
+        docId: 'track-002',
+        versionId: 'track-002/0',
+        originalVersionId: 'track-002/0',
+        schemaName: 'track' as const,
+        createdAt: '2024-03-14T10:00:00Z',
+        updatedAt: '2024-03-14T10:30:00Z',
+        links: [],
+        deleted: false,
+        locations: [
+          {
+            coords: { latitude: -8.4, longitude: -55.5 },
+            timestamp: '2024-03-14T10:00:00Z',
+          },
+        ],
+        observationRefs: [],
+        tags: {},
+      },
+    ],
+  };
+
+  it('fetches tracks from API and stores in DB', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/track`, () =>
+        HttpResponse.json(TRACKS_RESPONSE),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    const tracks = await pullTracks(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      config,
+    );
+    expect(tracks).toHaveLength(2);
+    expect(tracks[0]!.remoteId).toBe('track-001');
+    expect(tracks[0]!.projectLocalId).toBe('proj-local-1');
+    expect(tracks[0]!.locations).toHaveLength(2);
+    expect(tracks[0]!.locations![0]!.coords).toEqual({
+      latitude: -8.35,
+      longitude: -55.45,
+    });
+    expect(tracks[0]!.presetRef).toBe('preset-001');
+    expect(tracks[0]!.observationRefs).toEqual(['obs-001']);
+
+    const db = getDb();
+    const stored = await db.tracks
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(stored).toHaveLength(2);
+  });
+
+  it('overwrites existing tracks for the same localId on re-sync', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/track`, () =>
+        HttpResponse.json(TRACKS_RESPONSE),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    await pullTracks('server-1', 'proj-remote-1', 'proj-local-1', config);
+    await pullTracks('server-1', 'proj-remote-1', 'proj-local-1', config);
+    const db = getDb();
+    const stored = await db.tracks
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(stored).toHaveLength(2);
+  });
+
+  it('skips deleted tracks from the return value but stores tombstones', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/track`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'track-del',
+              versionId: 'track-del/0',
+              originalVersionId: 'track-del/0',
+              schemaName: 'track' as const,
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: true,
+              locations: [],
+              observationRefs: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    const tracks = await pullTracks(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      config,
+    );
+    expect(tracks).toHaveLength(0);
+
+    const db = getDb();
+    const stored = await db.tracks.toArray();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.deleted).toBe(true);
+    expect(stored[0]!.remoteId).toBe('track-del');
+  });
+
+  it('uses stable localId based on normalized baseUrl', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/track`, () =>
+        HttpResponse.json(TRACKS_RESPONSE),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    const tracks = await pullTracks(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      config,
+    );
+    expect(tracks[0]!.localId).toBe(
+      'remoteArchive:https://archive.example.com:track-001',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pullFields
+// ---------------------------------------------------------------------------
+
+describe('pullFields', () => {
+  const FIELDS_RESPONSE = {
+    data: [
+      {
+        docId: 'field-001',
+        versionId: 'field-001/0',
+        originalVersionId: 'field-001/0',
+        schemaName: 'field' as const,
+        createdAt: '2024-03-15T10:00:00Z',
+        updatedAt: '2024-03-15T10:00:00Z',
+        links: [],
+        deleted: false,
+        type: 'text' as const,
+        key: 'notes',
+        label: 'Notes',
+        placeholder: 'Enter notes...',
+        universal: false,
+      },
+      {
+        docId: 'field-002',
+        versionId: 'field-002/0',
+        originalVersionId: 'field-002/0',
+        schemaName: 'field' as const,
+        createdAt: '2024-03-14T14:00:00Z',
+        updatedAt: '2024-03-14T14:00:00Z',
+        links: [],
+        deleted: false,
+        type: 'select_one' as const,
+        key: 'severity',
+        label: 'Severity',
+        universal: true,
+        options: [
+          { label: 'Low', value: 'low' },
+          { label: 'High', value: 'high' },
+        ],
+      },
+    ],
+  };
+
+  it('fetches fields from API and stores in DB', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/field`, () =>
+        HttpResponse.json(FIELDS_RESPONSE),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    const fields = await pullFields(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      config,
+    );
+    expect(fields).toHaveLength(2);
+    expect(fields[0]!.key).toBe('notes');
+    expect(fields[0]!.type).toBe('text');
+    expect(fields[0]!.projectLocalId).toBe('proj-local-1');
+    expect(fields[1]!.options).toEqual([
+      { label: 'Low', value: 'low' },
+      { label: 'High', value: 'high' },
+    ]);
+
+    const db = getDb();
+    const stored = await db.fields
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(stored).toHaveLength(2);
+  });
+
+  it('overwrites existing fields for the same localId on re-sync', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/field`, () =>
+        HttpResponse.json(FIELDS_RESPONSE),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    await pullFields('server-1', 'proj-remote-1', 'proj-local-1', config);
+    await pullFields('server-1', 'proj-remote-1', 'proj-local-1', config);
+    const db = getDb();
+    const stored = await db.fields
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(stored).toHaveLength(2);
+  });
+
+  it('skips deleted fields from return value but stores tombstones', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/field`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'field-del',
+              versionId: 'field-del/0',
+              originalVersionId: 'field-del/0',
+              schemaName: 'field' as const,
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: true,
+              type: 'text' as const,
+              key: 'deleted_field',
+              label: 'Deleted Field',
+              universal: false,
+            },
+          ],
+        }),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    const fields = await pullFields(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      config,
+    );
+    expect(fields).toHaveLength(0);
+
+    const db = getDb();
+    const stored = await db.fields.toArray();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.deleted).toBe(true);
+    expect(stored[0]!.remoteId).toBe('field-del');
+  });
+
+  it('uses stable localId based on normalized baseUrl', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/field`, () =>
+        HttpResponse.json(FIELDS_RESPONSE),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    const fields = await pullFields(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      config,
+    );
+    expect(fields[0]!.localId).toBe(
+      'remoteArchive:https://archive.example.com:field-001',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deriveAttachmentsFromObservations
+// ---------------------------------------------------------------------------
+
+describe('deriveAttachmentsFromObservations', () => {
+  it('derives attachment records from observation attachments', async () => {
+    server.use(
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-1/observations`,
+        () =>
+          HttpResponse.json({
+            data: [
+              {
+                docId: 'obs-attach-1',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+                deleted: false,
+                attachments: [
+                  {
+                    url: 'https://archive.example.com/projects/proj1/attachments/drive1/photo/img1',
+                  },
+                  {
+                    url: 'https://archive.example.com/projects/proj1/attachments/drive2/audio/rec1',
+                  },
+                ],
+                tags: {},
+              },
+            ],
+          }),
+      ),
+    );
+
+    await deriveAttachmentsFromObservations(
+      'server-1',
+      'proj-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    const db = getDb();
+    const attachments = await db.attachments
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(attachments).toHaveLength(2);
+
+    const photo = attachments.find((a) => a.mediaType === 'photo');
+    expect(photo).toBeDefined();
+    expect(photo!.observationLocalId).toBe(
+      'remoteArchive:https://archive.example.com:obs-attach-1',
+    );
+    expect(photo!.mediaType).toBe('photo');
+
+    const audio = attachments.find((a) => a.mediaType === 'audio');
+    expect(audio).toBeDefined();
+    expect(audio!.mediaType).toBe('audio');
+  });
+
+  it('skips deleted observations when deriving attachments', async () => {
+    server.use(
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-1/observations`,
+        () =>
+          HttpResponse.json({
+            data: [
+              {
+                docId: 'obs-deleted',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+                deleted: true,
+                attachments: [
+                  {
+                    url: 'https://archive.example.com/projects/proj1/attachments/drive1/photo/img1',
+                  },
+                ],
+                tags: {},
+              },
+            ],
+          }),
+      ),
+    );
+
+    await deriveAttachmentsFromObservations(
+      'server-1',
+      'proj-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    const db = getDb();
+    const attachments = await db.attachments.toArray();
+    expect(attachments).toHaveLength(0);
+  });
+
+  it('resolves relative attachment URLs against archive baseUrl', async () => {
+    server.use(
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-1/observations`,
+        () =>
+          HttpResponse.json({
+            data: [
+              {
+                docId: 'obs-relative',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+                deleted: false,
+                attachments: [
+                  {
+                    url: '/projects/proj1/attachments/drive1/photo/img1',
+                  },
+                ],
+                tags: {},
+              },
+            ],
+          }),
+      ),
+    );
+
+    await deriveAttachmentsFromObservations(
+      'server-1',
+      'proj-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    const db = getDb();
+    const attachments = await db.attachments.toArray();
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0]!.resolvedUrl).toBe(
+      'https://archive.example.com/projects/proj1/attachments/drive1/photo/img1',
+    );
+  });
+
+  it('handles observations with no attachments gracefully', async () => {
+    server.use(
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-1/observations`,
+        () =>
+          HttpResponse.json({
+            data: [
+              {
+                docId: 'obs-no-attach',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+                deleted: false,
+                attachments: [],
+                tags: {},
+              },
+            ],
+          }),
+      ),
+    );
+
+    await deriveAttachmentsFromObservations(
+      'server-1',
+      'proj-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    const db = getDb();
+    const attachments = await db.attachments.toArray();
+    expect(attachments).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tombstone tests (deleted rows preserved)
+// ---------------------------------------------------------------------------
+
+describe('tombstone handling across data types', () => {
+  it('pullObservations stores deleted=true tombstones in DB', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-del-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: true,
+              attachments: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+    );
+
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    expect(observations).toHaveLength(1);
+    expect(observations[0]!.deleted).toBe(true);
+
+    const db = getDb();
+    const stored = await db.observations.get(observations[0]!.localId);
+    expect(stored).toBeDefined();
+    expect(stored!.deleted).toBe(true);
+  });
+
+  it('pullAlerts stores deleted=true tombstones in DB', async () => {
+    server.use(
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-1/remoteDetectionAlerts`,
+        () =>
+          HttpResponse.json({
+            data: [
+              {
+                docId: 'alert-del',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+                deleted: true,
+                geometry: { type: 'Point', coordinates: [0, 0] },
+              },
+            ],
+          }),
+      ),
+    );
+
+    const alerts = await pullAlerts(
+      'server-1',
+      'proj-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]!.deleted).toBe(true);
+
+    const db = getDb();
+    const stored = await db.alerts.get(alerts[0]!.localId);
+    expect(stored).toBeDefined();
+    expect(stored!.deleted).toBe(true);
+  });
+
+  it('pullPresets stores deleted=true tombstones in DB', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'preset-del',
+              versionId: 'preset-del/0',
+              originalVersionId: 'preset-del/0',
+              schemaName: 'preset' as const,
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: true,
+              name: 'Deleted Preset',
+              geometry: ['point'],
+              tags: {},
+              addTags: {},
+              removeTags: {},
+              fieldRefs: [],
+              terms: [],
+            },
+          ],
+        }),
+      ),
+    );
+
+    const presets = await pullPresets(
+      'server-1',
+      'proj-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    expect(presets).toHaveLength(0);
+
+    const db = getDb();
+    const stored = await db.presets.toArray();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.deleted).toBe(true);
   });
 });

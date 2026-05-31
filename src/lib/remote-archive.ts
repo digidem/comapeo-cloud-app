@@ -2,7 +2,14 @@ import { apiClient } from '@/lib/api-client';
 import type { RequestConfig } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { getDb } from '@/lib/db';
-import type { Alert, Observation, Preset, Project } from '@/lib/db';
+import type {
+  Alert,
+  Field,
+  Observation,
+  Preset,
+  Project,
+  Track,
+} from '@/lib/db';
 import { getRemoteServer } from '@/lib/local-repositories';
 
 // ---------------------------------------------------------------------------
@@ -249,4 +256,133 @@ export async function pullPresets(
   // Return only the non-deleted subset to callers; deleted items remain
   // locally as tombstones so they are not re-surfaced after server-side deletion
   return allPresets.filter((p) => !p.deleted);
+}
+
+export async function pullTracks(
+  serverId: string,
+  projectRemoteId: string,
+  projectLocalId: string,
+  config: RequestConfig,
+): Promise<Track[]> {
+  const response = await apiClient.getTracks(projectRemoteId, config);
+  const db = getDb();
+  const sourceType = 'remoteArchive' as const;
+  const serverRecord = await getRemoteServer(serverId);
+  const stableKey = stableSourceKey(
+    serverRecord?.baseUrl ?? config.baseUrl ?? '',
+  );
+
+  const allTracks: Track[] = response.data.map((item) => ({
+    localId: `${sourceType}:${stableKey}:${item.docId}`,
+    projectLocalId,
+    sourceType,
+    sourceId: serverId,
+    remoteId: item.docId,
+    tags:
+      Object.keys(item.tags as Record<string, string>).length > 0
+        ? (item.tags as Record<string, string>)
+        : undefined,
+    presetRef: item.presetRef?.docId,
+    locations: item.locations.map((loc) => ({
+      coords: {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      },
+      timestamp: loc.timestamp,
+    })),
+    observationRefs: item.observationRefs.map((ref) => ref.docId),
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    dirtyLocal: false,
+    deleted: item.deleted,
+  }));
+
+  await db.tracks.bulkPut(allTracks);
+  return allTracks.filter((t) => !t.deleted);
+}
+
+export async function pullFields(
+  serverId: string,
+  projectRemoteId: string,
+  projectLocalId: string,
+  config: RequestConfig,
+): Promise<Field[]> {
+  const response = await apiClient.getFields(projectRemoteId, config);
+  const db = getDb();
+  const sourceType = 'remoteArchive' as const;
+  const serverRecord = await getRemoteServer(serverId);
+  const stableKey = stableSourceKey(
+    serverRecord?.baseUrl ?? config.baseUrl ?? '',
+  );
+
+  const allFields: Field[] = response.data.map((item) => ({
+    localId: `${sourceType}:${stableKey}:${item.docId}`,
+    projectLocalId,
+    sourceType,
+    sourceId: serverId,
+    remoteId: item.docId,
+    type: item.type,
+    key: item.key,
+    label: item.label,
+    placeholder: item.placeholder,
+    universal: item.universal,
+    options: item.options,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    dirtyLocal: false,
+    deleted: item.deleted,
+  }));
+
+  await db.fields.bulkPut(allFields);
+  return allFields.filter((f) => !f.deleted);
+}
+
+export async function deriveAttachmentsFromObservations(
+  serverId: string,
+  projectRemoteId: string,
+  projectLocalId: string,
+  config: RequestConfig,
+): Promise<void> {
+  const response = await apiClient.getObservations(projectRemoteId, config);
+  const db = getDb();
+  const sourceType = 'remoteArchive' as const;
+  const serverRecord = await getRemoteServer(serverId);
+  const stableKey = stableSourceKey(
+    serverRecord?.baseUrl ?? config.baseUrl ?? '',
+  );
+  const baseUrl = serverRecord?.baseUrl ?? config.baseUrl ?? '';
+
+  const attachments: import('@/lib/db').Attachment[] = [];
+
+  for (const obs of response.data) {
+    if (obs.deleted) continue;
+
+    const observationLocalId = `${sourceType}:${stableKey}:${obs.docId}`;
+
+    for (const attachment of obs.attachments) {
+      const mediaType = parseAttachmentMediaType(attachment.url);
+      const resolvedUrl = resolveAttachmentUrl(attachment.url, baseUrl);
+
+      const attachmentLocalId = `${sourceType}:${stableKey}:attachment:${obs.docId}:${attachment.url}`;
+
+      attachments.push({
+        localId: attachmentLocalId,
+        projectLocalId,
+        observationLocalId,
+        sourceType,
+        sourceId: serverId,
+        remoteUrl: attachment.url,
+        resolvedUrl,
+        mediaType,
+        createdAt: obs.createdAt,
+        updatedAt: obs.updatedAt,
+        dirtyLocal: false,
+        deleted: false,
+      });
+    }
+  }
+
+  if (attachments.length > 0) {
+    await db.attachments.bulkPut(attachments);
+  }
 }

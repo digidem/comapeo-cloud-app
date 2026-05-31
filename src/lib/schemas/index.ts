@@ -17,3 +17,4 @@ export type {
 export { presetRefSchema } from './observation';
 export { presetSchema, presetsResponseSchema } from './preset';
 export { fieldSchema, fieldsResponseSchema } from './field';
+export { trackSchema, tracksResponseSchema } from './track';

@@ -160,6 +160,31 @@ describe('matchObservationToPreset', () => {
     const result = matchObservationToPreset(obs, presets);
     expect(result).toEqual(forestPreset);
   });
+
+  // Regression: commit 3772cba — Array.isArray branch in tag scoring
+  it('matches when preset tag value is an array containing the observation value', () => {
+    const arrayPreset: Preset = {
+      localId: 'p:arr',
+      projectLocalId: 'proj-1',
+      sourceType: 'remoteArchive',
+      sourceId: 's1',
+      remoteId: 'preset-array',
+      name: 'Area Type',
+      color: '#AABBCC',
+      tags: { category: ['forest-risk', 'water-risk'] },
+      terms: [],
+      fieldRefs: [],
+      createdAt: '',
+      updatedAt: '',
+      dirtyLocal: false,
+      deleted: false,
+    };
+    const obs = makeObs({
+      tags: { category: 'water-risk' },
+    });
+    const result = matchObservationToPreset(obs, [arrayPreset, ...presets]);
+    expect(result).toEqual(arrayPreset);
+  });
 });
 
 describe('getObservationDisplayNameSync', () => {

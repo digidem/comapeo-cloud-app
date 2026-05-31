@@ -209,4 +209,41 @@ describe('ObservationDetailScreen', () => {
     expect(photos[0]).toHaveAttribute('src', 'https://example.com/photo-1.jpg');
     expect(photos[1]).toHaveAttribute('src', 'https://example.com/photo-2.jpg');
   });
+
+  // Regression: commit 8c145f7 — String() coercion for non-string tags.category
+  it('renders numeric tags.category as string in title without crashing', () => {
+    resetMocks();
+    mockObservationsData = [
+      {
+        localId: 'obs-1',
+        projectLocalId: 'proj-1',
+        tags: { category: 99 },
+        lat: 10.5,
+        lon: -85.2,
+        createdAt: '2026-01-15T00:00:00Z',
+        updatedAt: '2026-01-15T12:00:00Z',
+      },
+    ];
+    render(<ObservationDetailScreen />);
+    expect(screen.getByText('99')).toBeInTheDocument();
+  });
+
+  // Regression: commit 81b005e — null category falls back, does not render "null"
+  it('renders fallback "Observation" when tags.category is null', () => {
+    resetMocks();
+    mockObservationsData = [
+      {
+        localId: 'obs-1',
+        projectLocalId: 'proj-1',
+        tags: { category: null, notes: 'Something' },
+        lat: 10.5,
+        lon: -85.2,
+        createdAt: '2026-01-15T00:00:00Z',
+        updatedAt: '2026-01-15T12:00:00Z',
+      },
+    ];
+    render(<ObservationDetailScreen />);
+    expect(screen.getByText('Observation')).toBeInTheDocument();
+    expect(screen.queryByText('null')).not.toBeInTheDocument();
+  });
 });
