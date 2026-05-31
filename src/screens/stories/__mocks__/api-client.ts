@@ -24,3 +24,14 @@ export async function redeemEncryptedInvite(
     token: 'mock-token',
   };
 }
+
+export function getAttachmentUrl(
+  _projectId: string,
+  _driveId: string,
+  _type: string,
+  _name: string,
+  _variant?: string,
+  _options?: { baseUrl?: string },
+): string {
+  return '/mock-attachment.mp3';
+}
