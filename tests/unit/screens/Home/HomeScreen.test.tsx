@@ -19,6 +19,7 @@ import { useArchiveStatus } from '@/hooks/useArchiveStatus';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
+import { useTracks } from '@/hooks/useTracks';
 import type { CalculationResult } from '@/lib/area-calculator/types';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { useProjectStore } from '@/stores/project-store';
@@ -90,6 +91,10 @@ vi.mock('@/hooks/useAlerts', () => ({
   useAlerts: vi.fn(),
 }));
 
+vi.mock('@/hooks/useTracks', () => ({
+  useTracks: vi.fn(),
+}));
+
 vi.mock('@/components/shared/auth-img', () => ({
   AuthImg: ({
     src,
@@ -136,6 +141,7 @@ const mockUseProjectCoverage = vi.mocked(useProjectCoverage);
 const mockUseArchiveStatus = vi.mocked(useArchiveStatus);
 const mockUseObservations = vi.mocked(useObservations);
 const mockUseAlerts = vi.mocked(useAlerts);
+const mockUseTracks = vi.mocked(useTracks);
 
 const defaultCoverageState = {
   results: [],
@@ -217,6 +223,13 @@ beforeEach(() => {
     error: null,
     status: 'success',
   } as unknown as ReturnType<typeof useAlerts>);
+  mockUseTracks.mockReturnValue({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+    status: 'success',
+  } as unknown as ReturnType<typeof useTracks>);
 });
 
 describe('HomeScreen', () => {
@@ -1193,6 +1206,88 @@ describe('HomeScreen', () => {
       el.closest('.text-4xl'),
     );
     expect(statCardSkeletons.length).toBe(0);
+  });
+
+  it('does not derive track counts from legacy observation tags', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Track Count Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    mockUseObservations.mockReturnValue({
+      data: [
+        {
+          localId: 'obs1',
+          createdAt: new Date().toISOString(),
+          tags: { trackCount: '99' },
+        },
+      ],
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+
+    mockUseTracks.mockReturnValue({
+      data: [
+        {
+          localId: 'track1',
+          projectLocalId: 'p1',
+          sourceType: 'remoteArchive',
+          sourceId: 'server1',
+          remoteId: 'track1',
+          locations: [],
+          observationRefs: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          dirtyLocal: false,
+          deleted: false,
+        },
+        {
+          localId: 'track2',
+          projectLocalId: 'p1',
+          sourceType: 'remoteArchive',
+          sourceId: 'server1',
+          remoteId: 'track2',
+          locations: [],
+          observationRefs: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          dirtyLocal: false,
+          deleted: false,
+        },
+      ],
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useTracks>);
+
+    renderWithShell(<HomeScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Field Data')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('2 tracks')).toBeInTheDocument();
+    expect(screen.queryByText('99 tracks')).not.toBeInTheDocument();
   });
 
   it('resolves relative banner photo URLs against the selected remote project server URL', async () => {

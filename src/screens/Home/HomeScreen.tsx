@@ -22,6 +22,7 @@ import { useObservations } from '@/hooks/useObservations';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
 import { useRemoteArchives } from '@/hooks/useRemoteArchives';
+import { useTracks } from '@/hooks/useTracks';
 import { BUILT_IN_PRESETS, DEFAULTS } from '@/lib/area-calculator/config';
 import type { CalculationParams } from '@/lib/area-calculator/types';
 import type { AreaUnit } from '@/lib/area-format';
@@ -527,6 +528,7 @@ function HomeScreen() {
   );
   const observationsQuery = useObservations(state.selectedProjectId);
   const alertsQuery = useAlerts(state.selectedProjectId);
+  const tracksQuery = useTracks(state.selectedProjectId);
   const archiveStatus = useArchiveStatus();
   const servers = useAuthStore((s) => s.servers);
   const removeServer = useAuthStore((s) => s.removeServer);
@@ -558,6 +560,7 @@ function HomeScreen() {
   );
 
   const alerts = useMemo(() => alertsQuery.data ?? [], [alertsQuery.data]);
+  const tracks = useMemo(() => tracksQuery.data ?? [], [tracksQuery.data]);
 
   // Derive unique tag categories from observations
   const categoryCount = useMemo(() => {
@@ -574,23 +577,21 @@ function HomeScreen() {
     return tagKeys.size;
   }, [observations]);
 
-  // Compute media counts from observation tags (values stored as strings)
+  // Compute media counts from observation tags (values stored as strings).
+  // Track counts come from first-class synced track records.
   const mediaCounts = useMemo(() => {
     let photos = 0;
     let audios = 0;
-    let tracks = 0;
     for (const obs of observations) {
       if (obs.tags) {
         const pc = Number(obs.tags.photoCount);
         if (!Number.isNaN(pc)) photos += pc;
         const ac = Number(obs.tags.audioCount);
         if (!Number.isNaN(ac)) audios += ac;
-        const tc = Number(obs.tags.trackCount);
-        if (!Number.isNaN(tc)) tracks += tc;
       }
     }
-    return { photos, audios, tracks };
-  }, [observations]);
+    return { photos, audios, tracks: tracks.length };
+  }, [observations, tracks.length]);
 
   // Extract latest photo URLs from observation tags for banner collage
   // photoUrls is stored as comma-separated string in tags
