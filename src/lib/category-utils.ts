@@ -10,7 +10,7 @@ export interface ObservationCategory {
   color?: string;
   iconDocId?: string;
   iconUrl?: string;
-  preset: Preset;
+  preset?: Preset;
 }
 
 export interface CategoryContext {
@@ -22,6 +22,19 @@ export interface ObservationCategoryMetadata {
   categories: ObservationCategory[];
   categoryByObservationId: Map<string, ObservationCategory>;
   displayNamesByObservationId: Map<string, string>;
+}
+
+function normalizeCategoryValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function getCategoryTagValue(
+  tags: Record<string, unknown> | undefined,
+): string | undefined {
+  const value = tags?.category;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function buildIconUrl({
@@ -74,10 +87,19 @@ export function buildObservationCategoryMetadata(
   const categoryByPresetId = new Map(
     categories.map((category) => [category.id, category]),
   );
+  const categoryByTagValue = new Map<string, ObservationCategory>();
+  for (const category of categories) {
+    const tagValue = getCategoryTagValue(category.preset?.tags);
+    if (tagValue) {
+      categoryByTagValue.set(normalizeCategoryValue(tagValue), category);
+    }
+    categoryByTagValue.set(normalizeCategoryValue(category.name), category);
+  }
   const categoryByObservationId = new Map<string, ObservationCategory>();
   const displayNamesByObservationId = new Map<string, string>();
 
   for (const observation of observations) {
+    const tagCategoryValue = getCategoryTagValue(observation.tags);
     const preset = matchObservationToPreset(observation, presets);
     if (preset) {
       const id = preset.remoteId ?? preset.localId;
@@ -86,6 +108,18 @@ export function buildObservationCategoryMetadata(
         categoryByObservationId.set(observation.localId, category);
       }
       displayNamesByObservationId.set(observation.localId, preset.name);
+      continue;
+    }
+
+    if (tagCategoryValue) {
+      const category = categoryByTagValue.get(
+        normalizeCategoryValue(tagCategoryValue),
+      ) ?? {
+        id: `tag:${normalizeCategoryValue(tagCategoryValue)}`,
+        name: tagCategoryValue,
+      };
+      categoryByObservationId.set(observation.localId, category);
+      displayNamesByObservationId.set(observation.localId, category.name);
       continue;
     }
 

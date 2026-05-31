@@ -36,8 +36,23 @@ describe('ObservationCategoryIcon', () => {
       />,
     );
 
-    expect(screen.getByTestId('category-icon-fallback')).toHaveStyle({
+    expect(screen.getByRole('img', { name: 'Forest' })).toHaveStyle({
       backgroundColor: '#117733',
     });
+    expect(screen.getByText('F')).toBeInTheDocument();
+  });
+
+  it('renders a visible letter fallback behind icon images', () => {
+    render(
+      <ObservationCategoryIcon
+        category={{
+          id: 'forest',
+          name: 'Forest',
+          iconUrl: '/projects/project-1/icon/icon-forest',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('F')).toBeInTheDocument();
   });
 });

@@ -24,16 +24,35 @@ export function ObservationCategoryIcon({
 }: ObservationCategoryIconProps) {
   const intl = useIntl();
 
-  const baseClassName = `shrink-0 overflow-hidden rounded-full bg-surface-container-low ${className}`;
+  const baseClassName = `relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary ${className}`;
+  const fallbackLetter = category.name.trim().slice(0, 1).toUpperCase() || '?';
+  const fallback = (
+    <span
+      data-testid="category-icon-fallback"
+      className="text-[0.65rem] font-semibold leading-none"
+      aria-hidden="true"
+    >
+      {fallbackLetter}
+    </span>
+  );
+
   if (category.iconUrl) {
     return (
-      <div className={baseClassName} data-testid="category-icon">
+      <div
+        className={baseClassName}
+        data-testid="category-icon"
+        style={{
+          backgroundColor: category.color ?? undefined,
+          color: category.color ? '#fff' : undefined,
+        }}
+      >
+        {fallback}
         <AuthImg
           src={category.iconUrl}
           alt={intl.formatMessage(messages.iconAlt, {
             category: category.name,
           })}
-          className="h-full w-full object-contain p-1"
+          className="absolute inset-0 h-full w-full object-contain p-1"
         />
       </div>
     );
@@ -41,10 +60,15 @@ export function ObservationCategoryIcon({
 
   return (
     <div
-      data-testid="category-icon-fallback"
       className={baseClassName}
-      style={{ backgroundColor: category.color ?? undefined }}
-      aria-hidden="true"
-    />
+      style={{
+        backgroundColor: category.color ?? undefined,
+        color: category.color ? '#fff' : undefined,
+      }}
+      aria-label={category.name}
+      role="img"
+    >
+      {fallback}
+    </div>
   );
 }

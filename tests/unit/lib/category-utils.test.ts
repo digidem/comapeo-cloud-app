@@ -128,4 +128,56 @@ describe('buildObservationCategoryMetadata', () => {
       'Tree Sighting',
     );
   });
+
+  it('adds fallback category metadata from tags.category without a matching preset', () => {
+    const observation = makeObservation({
+      localId: 'obs-tag-category',
+      tags: { category: 'custom forest' },
+    });
+
+    const metadata = buildObservationCategoryMetadata([observation], [], {});
+
+    expect(
+      metadata.categoryByObservationId.get('obs-tag-category'),
+    ).toMatchObject({
+      id: 'tag:custom forest',
+      name: 'custom forest',
+    });
+    expect(metadata.displayNamesByObservationId.get('obs-tag-category')).toBe(
+      'custom forest',
+    );
+  });
+
+  it('maps category tag values to preset category icons when direct refs are absent', () => {
+    const forestPreset = makePreset({
+      remoteId: 'preset-forest',
+      name: 'Forest',
+      iconDocId: 'icon-forest',
+      tags: { category: 'forest' },
+    });
+    const observation = makeObservation({
+      localId: 'obs-forest-tag',
+      tags: { category: 'forest' },
+    });
+
+    const metadata = buildObservationCategoryMetadata(
+      [observation],
+      [forestPreset],
+      {
+        projectRemoteId: 'remote-project',
+      },
+    );
+
+    expect(
+      metadata.categoryByObservationId.get('obs-forest-tag'),
+    ).toMatchObject({
+      id: 'preset-forest',
+      name: 'Forest',
+      iconDocId: 'icon-forest',
+      iconUrl: '/projects/remote-project/icon/icon-forest',
+    });
+    expect(metadata.displayNamesByObservationId.get('obs-forest-tag')).toBe(
+      'Forest',
+    );
+  });
 });
