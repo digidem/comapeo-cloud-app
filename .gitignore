@@ -41,3 +41,21 @@ contrabass-*.log
 
 *storybook.log
 storybook-static
+
+# AI/IDE tooling scratch files
+.sortie*
+WORKFLOW.*.md
+.sisyphus/
+.sisyphus*
+.codex/
+.aider*
+.cursor/
+.copilot/
+.cline/
+.roo/
+.augment/
+.kiro/
+.trae/
+.windsurf/
+.zed/
+*.sarif
