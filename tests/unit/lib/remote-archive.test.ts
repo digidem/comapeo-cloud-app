@@ -1056,28 +1056,26 @@ describe('pullFields', () => {
 describe('deriveAttachmentsFromObservations', () => {
   it('derives attachment records from observation attachments', async () => {
     server.use(
-      http.get(
-        `${archiveConfig.baseUrl}/projects/proj-1/observations`,
-        () =>
-          HttpResponse.json({
-            data: [
-              {
-                docId: 'obs-attach-1',
-                createdAt: '2024-01-01T00:00:00Z',
-                updatedAt: '2024-01-01T00:00:00Z',
-                deleted: false,
-                attachments: [
-                  {
-                    url: 'https://archive.example.com/projects/proj1/attachments/drive1/photo/img1',
-                  },
-                  {
-                    url: 'https://archive.example.com/projects/proj1/attachments/drive2/audio/rec1',
-                  },
-                ],
-                tags: {},
-              },
-            ],
-          }),
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-attach-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [
+                {
+                  url: 'https://archive.example.com/projects/proj1/attachments/drive1/photo/img1',
+                },
+                {
+                  url: 'https://archive.example.com/projects/proj1/attachments/drive2/audio/rec1',
+                },
+              ],
+              tags: {},
+            },
+          ],
+        }),
       ),
     );
 
@@ -1109,25 +1107,23 @@ describe('deriveAttachmentsFromObservations', () => {
 
   it('skips deleted observations when deriving attachments', async () => {
     server.use(
-      http.get(
-        `${archiveConfig.baseUrl}/projects/proj-1/observations`,
-        () =>
-          HttpResponse.json({
-            data: [
-              {
-                docId: 'obs-deleted',
-                createdAt: '2024-01-01T00:00:00Z',
-                updatedAt: '2024-01-01T00:00:00Z',
-                deleted: true,
-                attachments: [
-                  {
-                    url: 'https://archive.example.com/projects/proj1/attachments/drive1/photo/img1',
-                  },
-                ],
-                tags: {},
-              },
-            ],
-          }),
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-deleted',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: true,
+              attachments: [
+                {
+                  url: 'https://archive.example.com/projects/proj1/attachments/drive1/photo/img1',
+                },
+              ],
+              tags: {},
+            },
+          ],
+        }),
       ),
     );
 
@@ -1145,25 +1141,23 @@ describe('deriveAttachmentsFromObservations', () => {
 
   it('resolves relative attachment URLs against archive baseUrl', async () => {
     server.use(
-      http.get(
-        `${archiveConfig.baseUrl}/projects/proj-1/observations`,
-        () =>
-          HttpResponse.json({
-            data: [
-              {
-                docId: 'obs-relative',
-                createdAt: '2024-01-01T00:00:00Z',
-                updatedAt: '2024-01-01T00:00:00Z',
-                deleted: false,
-                attachments: [
-                  {
-                    url: '/projects/proj1/attachments/drive1/photo/img1',
-                  },
-                ],
-                tags: {},
-              },
-            ],
-          }),
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-relative',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [
+                {
+                  url: '/projects/proj1/attachments/drive1/photo/img1',
+                },
+              ],
+              tags: {},
+            },
+          ],
+        }),
       ),
     );
 
@@ -1184,21 +1178,19 @@ describe('deriveAttachmentsFromObservations', () => {
 
   it('handles observations with no attachments gracefully', async () => {
     server.use(
-      http.get(
-        `${archiveConfig.baseUrl}/projects/proj-1/observations`,
-        () =>
-          HttpResponse.json({
-            data: [
-              {
-                docId: 'obs-no-attach',
-                createdAt: '2024-01-01T00:00:00Z',
-                updatedAt: '2024-01-01T00:00:00Z',
-                deleted: false,
-                attachments: [],
-                tags: {},
-              },
-            ],
-          }),
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-no-attach',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [],
+              tags: {},
+            },
+          ],
+        }),
       ),
     );
 

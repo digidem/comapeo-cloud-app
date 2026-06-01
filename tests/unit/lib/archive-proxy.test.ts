@@ -111,10 +111,7 @@ describe('archive proxy helpers', () => {
     });
 
     expect(
-      validateArchiveProxyRequest(
-        'GET',
-        '/projects/proj-1/observation',
-      ),
+      validateArchiveProxyRequest('GET', '/projects/proj-1/observation'),
     ).toEqual({
       ok: true,
       value: '/projects/proj-1/observation',
@@ -135,10 +132,7 @@ describe('archive proxy helpers', () => {
     });
 
     expect(
-      validateArchiveProxyRequest(
-        'GET',
-        '/projects/proj-1/preset/preset-001',
-      ),
+      validateArchiveProxyRequest('GET', '/projects/proj-1/preset/preset-001'),
     ).toEqual({
       ok: true,
       value: '/projects/proj-1/preset/preset-001',
@@ -152,20 +146,14 @@ describe('archive proxy helpers', () => {
     });
 
     expect(
-      validateArchiveProxyRequest(
-        'GET',
-        '/projects/proj-1/field/field-001',
-      ),
+      validateArchiveProxyRequest('GET', '/projects/proj-1/field/field-001'),
     ).toEqual({
       ok: true,
       value: '/projects/proj-1/field/field-001',
     });
 
     expect(
-      validateArchiveProxyRequest(
-        'GET',
-        '/projects/proj-1/icon/icon-001',
-      ),
+      validateArchiveProxyRequest('GET', '/projects/proj-1/icon/icon-001'),
     ).toEqual({
       ok: true,
       value: '/projects/proj-1/icon/icon-001',

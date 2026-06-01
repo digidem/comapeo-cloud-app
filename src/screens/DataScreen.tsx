@@ -109,7 +109,7 @@ function getCategoryLabel(obs: {
   tags?: Record<string, unknown>;
 }): string | null {
   const raw = obs.tags?.category;
-  return raw !== undefined && raw !== null ? String(raw) : null;
+  return raw !== undefined && raw !== null && raw !== '' ? String(raw) : null;
 }
 
 export function DataScreen() {
