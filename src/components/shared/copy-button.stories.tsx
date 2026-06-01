@@ -22,12 +22,14 @@ const meta: Meta<typeof CopyButton> = {
   decorators: [
     (Story) => {
       // Stub clipboard API — unavailable in cross-origin iframes (Storybook)
-      Object.assign(navigator, {
-        clipboard: {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: {
           writeText: async (_text: string) => {
             /* no-op */
           },
         },
+        configurable: true,
+        writable: true,
       });
       return <Story />;
     },
