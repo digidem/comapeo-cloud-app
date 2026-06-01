@@ -61,6 +61,8 @@ const config: StorybookConfig = {
           '@/lib/data-layer': `${mocksDir}data-layer.ts`,
           '@/lib/invite-url': `${mocksDir}invite-url.ts`,
           '@/lib/geojson-export': `${mocksDir}geojson-export.ts`,
+          // Mock authenticated image URL hook for AudioPlayer
+          '@/hooks/useAuthenticatedImageUrl': `${mocksDir}useAuthenticatedImageUrl.ts`,
         },
       },
       // Remove build config that conflicts with Storybook

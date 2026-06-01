@@ -6,12 +6,14 @@ interface TooltipProps {
   content: string;
   children: ReactNode;
   side?: 'top' | 'right' | 'bottom' | 'left';
+  /** Force the tooltip open (useful for stories and screenshots). */
+  open?: boolean;
 }
 
-function TooltipRoot({ content, children, side = 'top' }: TooltipProps) {
+function TooltipRoot({ content, children, side = 'top', open }: TooltipProps) {
   return (
     <TooltipPrimitive.Provider delayDuration={0}>
-      <TooltipPrimitive.Root>
+      <TooltipPrimitive.Root open={open}>
         <TooltipPrimitive.Trigger asChild>
           <span>{children}</span>
         </TooltipPrimitive.Trigger>
@@ -19,6 +21,7 @@ function TooltipRoot({ content, children, side = 'top' }: TooltipProps) {
           <TooltipPrimitive.Content
             side={side}
             sideOffset={4}
+            {...(open ? { forceMount: true } : {})}
             className="z-50 rounded-btn bg-text px-3 py-1.5 text-xs text-white shadow-elevated animate-in fade-in-0 zoom-in-95"
           >
             {content}
