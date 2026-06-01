@@ -42,7 +42,7 @@ contrabass-*.log
 *storybook.log
 storybook-static
 
-# Auto-managed by repo-maintenance cron
+# AI/IDE tooling scratch files
 .sortie*
 WORKFLOW.*.md
 .sisyphus/
