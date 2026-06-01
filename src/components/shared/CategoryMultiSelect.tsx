@@ -75,7 +75,7 @@ export function CategoryMultiSelect({
               : 'bg-surface text-text-muted border-border border'
           }`}
           style={{ touchAction: 'manipulation' }}
-          aria-current={selected.length === 0 ? 'true' : undefined}
+          aria-pressed={selected.length === 0}
           {...(selected.length > 0 && {
             'aria-label': intl.formatMessage(messages.clearCategorySelection),
           })}

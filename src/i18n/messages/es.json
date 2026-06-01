@@ -63,6 +63,7 @@
   "data.filters.categoryShowLess": "Mostrar menos",
   "data.filters.categoryShowMore": "+{count} más",
   "data.filters.clear": "Borrar filtros",
+  "data.filters.clearCategorySelection": "Borrar selección de categoría",
   "data.filters.endDateLabel": "Hasta",
   "data.filters.noResults": "Ninguna observación coincide con los filtros",
   "data.filters.resultCount": "{count, plural, one {# resultado} other {# resultados}}",
