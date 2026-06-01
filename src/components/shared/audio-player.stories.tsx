@@ -19,23 +19,6 @@ const meta: Meta<typeof AudioPlayer> = {
     name: 'recording.mp3',
     projectId: 'project-xyz789',
   },
-  decorators: [
-    (Story) => {
-      // Mock useAuthenticatedImageUrl hook to return immediate success state
-      // This ensures the story doesn't make real network requests in Storybook
-      jest.mock('@/hooks/useAuthenticatedImageUrl', () => ({
-        useAuthenticatedImageUrl: () => ({
-          blobUrl: 'https://example.com/mock-audio.mp3',
-          isLoading: false,
-          error: null,
-        }),
-      }));
-      // Reset the mock module registry to ensure our mock is used
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const _mod = require('@/hooks/useAuthenticatedImageUrl');
-      return <Story {...{}} />;
-    },
-  ],
 };
 
 export default meta;
