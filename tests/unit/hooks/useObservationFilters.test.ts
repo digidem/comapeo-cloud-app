@@ -64,13 +64,59 @@ describe('useObservationFilters', () => {
     expect(result.current.filteredObservations[0]!.localId).toBe('2');
   });
 
-  it('setCategory updates filters and derived list', () => {
+  it('toggleCategory adds and removes categories', () => {
+    const { result } = renderHook(() => useObservationFilters(observations));
+
+    // Add 'forest'
+    act(() => {
+      result.current.toggleCategory('forest');
+    });
+    expect(result.current.filters.categories).toEqual(['forest']);
+    expect(result.current.filteredObservations).toHaveLength(2);
+    expect(result.current.isFiltering).toBe(true);
+
+    // Add 'water' — should have both (OR logic)
+    act(() => {
+      result.current.toggleCategory('water');
+    });
+    expect(result.current.filters.categories).toEqual(['forest', 'water']);
+    expect(result.current.filteredObservations).toHaveLength(3);
+
+    // Remove 'forest'
+    act(() => {
+      result.current.toggleCategory('forest');
+    });
+    expect(result.current.filters.categories).toEqual(['water']);
+    expect(result.current.filteredObservations).toHaveLength(1);
+    expect(result.current.filteredObservations[0]!.localId).toBe('2');
+
+    // Remove 'water' — back to empty
+    act(() => {
+      result.current.toggleCategory('water');
+    });
+    expect(result.current.filters.categories).toEqual([]);
+    expect(result.current.isFiltering).toBe(false);
+    expect(result.current.filteredObservations).toHaveLength(3);
+  });
+
+  it('setCategories replaces entire category array', () => {
     const { result } = renderHook(() => useObservationFilters(observations));
     act(() => {
-      result.current.setCategory('forest');
+      result.current.setCategories(['forest']);
     });
-    expect(result.current.filters.category).toBe('forest');
+    expect(result.current.filters.categories).toEqual(['forest']);
     expect(result.current.filteredObservations).toHaveLength(2);
+
+    act(() => {
+      result.current.setCategories(['water']);
+    });
+    expect(result.current.filters.categories).toEqual(['water']);
+    expect(result.current.filteredObservations).toHaveLength(1);
+
+    act(() => {
+      result.current.setCategories([]);
+    });
+    expect(result.current.filters.categories).toEqual([]);
   });
 
   it('setStartDate updates filters and derived list', () => {
@@ -140,7 +186,7 @@ describe('useObservationFilters', () => {
     const { result } = renderHook(() => useObservationFilters(observations));
     act(() => {
       result.current.setSearch('test');
-      result.current.setCategory('forest');
+      result.current.toggleCategory('forest');
       result.current.setSort('oldest');
     });
     expect(result.current.isFiltering).toBe(true);

@@ -10,7 +10,7 @@ export interface ObservationFilters {
   search: string;
   startDate: string | null;
   endDate: string | null;
-  category: string | null;
+  categories: string[];
   sort: ObservationSort;
 }
 
@@ -18,7 +18,7 @@ export const DEFAULT_FILTERS: ObservationFilters = {
   search: '',
   startDate: null,
   endDate: null,
-  category: null,
+  categories: [],
   sort: 'newest',
 };
 
@@ -81,9 +81,11 @@ function matchesDateRange(
   return true;
 }
 
-function matchesCategory(obs: Observation, category: string | null): boolean {
-  if (category === null) return true;
-  return (obs.tags?.category?.trim() ?? null) === category;
+function matchesCategory(obs: Observation, categories: string[]): boolean {
+  if (categories.length === 0) return true;
+  const obsCategory = obs.tags?.category?.trim() ?? null;
+  if (obsCategory === null) return false;
+  return categories.includes(obsCategory);
 }
 
 function sortObservations(
@@ -160,8 +162,8 @@ export function filterObservations(
   }
 
   // Category filter
-  if (filters.category !== null) {
-    result = result.filter((obs) => matchesCategory(obs, filters.category));
+  if (filters.categories.length > 0) {
+    result = result.filter((obs) => matchesCategory(obs, filters.categories));
   }
 
   // Sort

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, userEvent } from '@tests/mocks/test-utils';
+import { fireEvent, render, screen } from '@tests/mocks/test-utils';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { ObservationFilterBarProps } from '@/components/shared/ObservationFilterBar';
@@ -21,7 +21,8 @@ function renderBar(
     onSearchChange: vi.fn(),
     onStartDateChange: vi.fn(),
     onEndDateChange: vi.fn(),
-    onCategoryChange: vi.fn(),
+    onCategoryToggle: vi.fn(),
+    onCategoriesClear: vi.fn(),
     onSortChange: vi.fn(),
     onClear: vi.fn(),
     ...overrides,
@@ -46,11 +47,15 @@ describe('ObservationFilterBar', () => {
     expect(screen.getByLabelText('To')).toBeInTheDocument();
   });
 
-  it('renders category select with all categories option', () => {
+  it('renders "All categories" chip button', () => {
     renderBar();
-    // The category select should have an aria-label
-    const categoryTrigger = screen.getByRole('combobox', { name: 'Category' });
-    expect(categoryTrigger).toBeInTheDocument();
+    expect(screen.getByText('All categories')).toBeInTheDocument();
+  });
+
+  it('renders category chips for each available category', () => {
+    renderBar();
+    expect(screen.getByText('forest')).toBeInTheDocument();
+    expect(screen.getByText('water')).toBeInTheDocument();
   });
 
   it('renders sort select', () => {
@@ -103,21 +108,40 @@ describe('ObservationFilterBar', () => {
     expect(props.onClear).toHaveBeenCalledOnce();
   });
 
-  it('selecting "All categories" passes null to onCategoryChange', async () => {
-    const user = userEvent.setup();
-    // Start with a non-null category so that selecting "All categories" triggers a change
+  it('clicking a category chip fires onCategoryToggle with category name', () => {
+    const props = renderBar();
+    const forestChip = screen.getByText('forest');
+    fireEvent.click(forestChip);
+    expect(props.onCategoryToggle).toHaveBeenCalledWith('forest');
+  });
+
+  it('clicking "All categories" fires onCategoriesClear', () => {
     const props = renderBar({
-      filters: { ...DEFAULT_FILTERS, category: 'forest' },
+      filters: { ...DEFAULT_FILTERS, categories: ['forest'] },
     });
-    // Open the category select dropdown
-    await user.click(screen.getByRole('combobox', { name: 'Category' }));
-    // Find and click the "All categories" option
-    const allCategoriesOption = await screen.findByRole('option', {
-      name: 'All categories',
+    const allChip = screen.getByText('All categories');
+    fireEvent.click(allChip);
+    expect(props.onCategoriesClear).toHaveBeenCalledOnce();
+  });
+
+  it('selected category chips have aria-pressed="true"', () => {
+    renderBar({
+      filters: { ...DEFAULT_FILTERS, categories: ['forest'] },
     });
-    await user.click(allCategoriesOption);
-    // Should map the sentinel value to null
-    expect(props.onCategoryChange).toHaveBeenCalledWith(null);
+    const forestChip = screen.getByText('forest');
+    expect(forestChip.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('unselected category chips have aria-pressed="false"', () => {
+    renderBar();
+    const forestChip = screen.getByText('forest');
+    expect(forestChip.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('does not render category chips when availableCategories is empty', () => {
+    renderBar({ availableCategories: [] });
+    expect(screen.queryByText('All categories')).not.toBeInTheDocument();
+    expect(screen.queryByText('forest')).not.toBeInTheDocument();
   });
 
   it('renders search placeholder text', () => {

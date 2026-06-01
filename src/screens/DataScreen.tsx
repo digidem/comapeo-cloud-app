@@ -156,14 +156,14 @@ export function DataScreen() {
   const filterDeps = useMemo(
     () => [
       obsFilters.filters.search,
-      obsFilters.filters.category,
+      obsFilters.filters.categories,
       obsFilters.filters.startDate,
       obsFilters.filters.endDate,
       obsFilters.filters.sort,
     ],
     [
       obsFilters.filters.search,
-      obsFilters.filters.category,
+      obsFilters.filters.categories,
       obsFilters.filters.startDate,
       obsFilters.filters.endDate,
       obsFilters.filters.sort,
@@ -476,7 +476,8 @@ export function DataScreen() {
                     onSearchChange={obsFilters.setSearch}
                     onStartDateChange={obsFilters.setStartDate}
                     onEndDateChange={obsFilters.setEndDate}
-                    onCategoryChange={obsFilters.setCategory}
+                    onCategoryToggle={obsFilters.toggleCategory}
+                    onCategoriesClear={() => obsFilters.setCategories([])}
                     onSortChange={obsFilters.setSort}
                     onClear={obsFilters.reset}
                   />
@@ -492,7 +493,8 @@ export function DataScreen() {
                     onSearchChange={obsFilters.setSearch}
                     onStartDateChange={obsFilters.setStartDate}
                     onEndDateChange={obsFilters.setEndDate}
-                    onCategoryChange={obsFilters.setCategory}
+                    onCategoryToggle={obsFilters.toggleCategory}
+                    onCategoriesClear={() => obsFilters.setCategories([])}
                     onSortChange={obsFilters.setSort}
                     onClear={obsFilters.reset}
                   />

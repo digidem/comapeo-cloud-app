@@ -203,11 +203,23 @@
   "data.filters.categoryAll": {
     "defaultMessage": "All categories"
   },
-  "data.filters.categoryLabel": {
-    "defaultMessage": "Category"
+  "data.filters.categoryGroupLabel": {
+    "defaultMessage": "Filter by category"
+  },
+  "data.filters.categoryHiddenSelected": {
+    "defaultMessage": "{count} selected"
+  },
+  "data.filters.categoryShowLess": {
+    "defaultMessage": "Show less"
+  },
+  "data.filters.categoryShowMore": {
+    "defaultMessage": "+{count} more"
   },
   "data.filters.clear": {
     "defaultMessage": "Clear filters"
+  },
+  "data.filters.clearCategorySelection": {
+    "defaultMessage": "Clear category selection"
   },
   "data.filters.endDateLabel": {
     "defaultMessage": "To"

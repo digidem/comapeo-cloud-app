@@ -14,7 +14,8 @@ export interface UseObservationFiltersResult {
   setSearch: (v: string) => void;
   setStartDate: (v: string | null) => void;
   setEndDate: (v: string | null) => void;
-  setCategory: (v: string | null) => void;
+  toggleCategory: (v: string) => void;
+  setCategories: (v: string[]) => void;
   setSort: (v: ObservationSort) => void;
   reset: () => void;
   filteredObservations: Observation[];
@@ -49,8 +50,20 @@ export function useObservationFilters(
     setFilters((prev) => ({ ...prev, endDate: v }));
   }, []);
 
-  const setCategory = useCallback((v: string | null) => {
-    setFilters((prev) => ({ ...prev, category: v }));
+  const toggleCategory = useCallback((v: string) => {
+    setFilters((prev) => {
+      const alreadySelected = prev.categories.includes(v);
+      return {
+        ...prev,
+        categories: alreadySelected
+          ? prev.categories.filter((c) => c !== v)
+          : [...prev.categories, v],
+      };
+    });
+  }, []);
+
+  const setCategories = useCallback((v: string[]) => {
+    setFilters((prev) => ({ ...prev, categories: v }));
   }, []);
 
   const setSort = useCallback((v: ObservationSort) => {
@@ -81,7 +94,7 @@ export function useObservationFilters(
       filters.search !== DEFAULT_FILTERS.search ||
       filters.startDate !== DEFAULT_FILTERS.startDate ||
       filters.endDate !== DEFAULT_FILTERS.endDate ||
-      filters.category !== DEFAULT_FILTERS.category
+      filters.categories.length > 0
     );
   }, [filters]);
 
@@ -90,7 +103,8 @@ export function useObservationFilters(
     setSearch,
     setStartDate,
     setEndDate,
-    setCategory,
+    toggleCategory,
+    setCategories,
     setSort,
     reset,
     filteredObservations,

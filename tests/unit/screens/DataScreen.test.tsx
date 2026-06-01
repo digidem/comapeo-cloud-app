@@ -258,7 +258,7 @@ describe('DataScreen', () => {
       mockObservationsQuery = { data: defaultObservations, isPending: false };
 
       render(<DataScreen />);
-      expect(screen.getByText('forest')).toBeInTheDocument();
+      expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders observation cards with fallback label when tags.category is missing', () => {
@@ -315,7 +315,7 @@ describe('DataScreen', () => {
       };
 
       render(<DataScreen />);
-      expect(screen.getByText('wildlife')).toBeInTheDocument();
+      expect(screen.getAllByText('wildlife').length).toBeGreaterThanOrEqual(1);
       // No coordinate text should be present
       expect(screen.queryByText(/-8\./)).not.toBeInTheDocument();
     });
@@ -502,7 +502,7 @@ describe('DataScreen', () => {
           screen.queryByTestId('observations-map'),
         ).not.toBeInTheDocument();
         // Observation card content is present (grid view)
-        expect(screen.getByText('forest')).toBeInTheDocument();
+        expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
       });
 
       it('renders the toggle button with accessible label', () => {
@@ -529,8 +529,13 @@ describe('DataScreen', () => {
 
         // Map view should be shown
         expect(screen.getByTestId('observations-map')).toBeInTheDocument();
-        // Grid cards should be hidden (no 'forest' category text visible)
-        expect(screen.queryByText('forest')).not.toBeInTheDocument();
+        // Grid cards should be hidden in map mode — no observation card links
+        const obsLinks = screen
+          .queryAllByRole('link')
+          .filter((el) =>
+            el.getAttribute('href')?.includes('/data/observations/'),
+          );
+        expect(obsLinks).toHaveLength(0);
       });
 
       it('switches back to grid view on second toggle click', async () => {
@@ -551,7 +556,7 @@ describe('DataScreen', () => {
         expect(
           screen.queryByTestId('observations-map'),
         ).not.toBeInTheDocument();
-        expect(screen.getByText('forest')).toBeInTheDocument();
+        expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
       });
     });
 

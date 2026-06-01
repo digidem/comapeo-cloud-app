@@ -1,5 +1,6 @@
 import { defineMessages, useIntl } from 'react-intl';
 
+import { CategoryMultiSelect } from '@/components/shared/CategoryMultiSelect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -24,14 +25,6 @@ const messages = defineMessages({
   endDateLabel: {
     id: 'data.filters.endDateLabel',
     defaultMessage: 'To',
-  },
-  categoryLabel: {
-    id: 'data.filters.categoryLabel',
-    defaultMessage: 'Category',
-  },
-  categoryAll: {
-    id: 'data.filters.categoryAll',
-    defaultMessage: 'All categories',
   },
   sortLabel: {
     id: 'data.filters.sortLabel',
@@ -67,12 +60,11 @@ export interface ObservationFilterBarProps {
   onSearchChange: (v: string) => void;
   onStartDateChange: (v: string | null) => void;
   onEndDateChange: (v: string | null) => void;
-  onCategoryChange: (v: string | null) => void;
+  onCategoryToggle: (v: string) => void;
+  onCategoriesClear: () => void;
   onSortChange: (v: ObservationSort) => void;
   onClear: () => void;
 }
-
-const ALL_CATEGORIES_SENTINEL = '__all__';
 
 export function ObservationFilterBar({
   filters,
@@ -82,17 +74,12 @@ export function ObservationFilterBar({
   onSearchChange,
   onStartDateChange,
   onEndDateChange,
-  onCategoryChange,
+  onCategoryToggle,
+  onCategoriesClear,
   onSortChange,
   onClear,
 }: ObservationFilterBarProps) {
   const intl = useIntl();
-
-  const categoryValue = filters.category ?? ALL_CATEGORIES_SENTINEL;
-
-  function handleCategoryChange(value: string) {
-    onCategoryChange(value === ALL_CATEGORIES_SENTINEL ? null : value);
-  }
 
   function handleSortChange(v: string) {
     if (v === 'newest' || v === 'oldest' || v === 'category') {
@@ -133,22 +120,13 @@ export function ObservationFilterBar({
         />
       </div>
 
-      <div className="min-w-[160px]">
-        <Select
-          value={categoryValue}
-          onValueChange={handleCategoryChange}
-          placeholder={intl.formatMessage(messages.categoryAll)}
-          ariaLabel={intl.formatMessage(messages.categoryLabel)}
-        >
-          <Select.Item value={ALL_CATEGORIES_SENTINEL}>
-            {intl.formatMessage(messages.categoryAll)}
-          </Select.Item>
-          {availableCategories.map((cat) => (
-            <Select.Item key={cat} value={cat}>
-              {cat}
-            </Select.Item>
-          ))}
-        </Select>
+      <div className="flex-1 min-w-[200px]">
+        <CategoryMultiSelect
+          categories={availableCategories}
+          selected={filters.categories}
+          onToggle={onCategoryToggle}
+          onClear={onCategoriesClear}
+        />
       </div>
 
       <div className="min-w-[160px]">
