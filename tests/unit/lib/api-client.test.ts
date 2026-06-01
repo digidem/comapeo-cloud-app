@@ -329,6 +329,31 @@ describe('getTracks', () => {
     expect(result.data[0]!.locations).toHaveLength(1);
     expect(result.data[0]!.locations[0]!.coords.longitude).toBe(-55.45);
   });
+
+  it('returns empty data array on 404 (legacy server)', async () => {
+    server.use(
+      http.get(`${BASE_URL}/projects/${projectId}/track`, () =>
+        HttpResponse.json(
+          { error: { code: 'NOT_FOUND', message: 'Not found' } },
+          { status: 404 },
+        ),
+      ),
+    );
+    const result = await apiClient.getTracks(projectId);
+    expect(result).toEqual({ data: [] });
+  });
+
+  it('throws ApiError on non-404 error response', async () => {
+    server.use(
+      http.get(`${BASE_URL}/projects/${projectId}/track`, () =>
+        HttpResponse.json(
+          { error: { code: 'INTERNAL_ERROR', message: 'Boom' } },
+          { status: 500 },
+        ),
+      ),
+    );
+    await expect(apiClient.getTracks(projectId)).rejects.toThrow(ApiError);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -794,6 +819,31 @@ describe('getFields', () => {
     const result = await apiClient.getFields('proj1');
     expect(result.data).toBeInstanceOf(Array);
     expect(result.data[0]).toHaveProperty('key');
+  });
+
+  it('returns empty data array on 404 (legacy server)', async () => {
+    server.use(
+      http.get(`${BASE_URL}/projects/proj1/field`, () =>
+        HttpResponse.json(
+          { error: { code: 'NOT_FOUND', message: 'Not found' } },
+          { status: 404 },
+        ),
+      ),
+    );
+    const result = await apiClient.getFields('proj1');
+    expect(result).toEqual({ data: [] });
+  });
+
+  it('throws ApiError on non-404 error response', async () => {
+    server.use(
+      http.get(`${BASE_URL}/projects/proj1/field`, () =>
+        HttpResponse.json(
+          { error: { code: 'INTERNAL_ERROR', message: 'Boom' } },
+          { status: 500 },
+        ),
+      ),
+    );
+    await expect(apiClient.getFields('proj1')).rejects.toThrow(ApiError);
   });
 });
 

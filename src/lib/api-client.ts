@@ -227,8 +227,14 @@ export const apiClient = {
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/track`,
         { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
       );
-      return handleResponse(response, tracksResponseSchema, config);
+      return await handleResponse(response, tracksResponseSchema, config);
     } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        console.warn(
+          `Track endpoint not found for project ${projectId} — legacy server may not support /track`,
+        );
+        return { data: [] };
+      }
       if (isNetworkError(error)) throwNetworkError();
       throw error;
     }
@@ -325,8 +331,14 @@ export const apiClient = {
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/field`,
         { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
       );
-      return handleResponse(response, fieldsResponseSchema, config);
+      return await handleResponse(response, fieldsResponseSchema, config);
     } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        console.warn(
+          `Field endpoint not found for project ${projectId} — legacy server may not support /field`,
+        );
+        return { data: [] };
+      }
       if (isNetworkError(error)) throwNetworkError();
       throw error;
     }
