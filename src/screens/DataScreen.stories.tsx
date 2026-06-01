@@ -41,3 +41,27 @@ export const Loading: Story = {
     },
   ],
 };
+
+export const WithProjectDesktop: Story = {
+  parameters: {
+    viewport: { defaultViewport: 'desktop' },
+  },
+  decorators: [
+    (Story) => {
+      useProjectStore.setState({ selectedProjectId: 'proj-1' });
+      return <Story />;
+    },
+  ],
+};
+
+export const NoProjectDesktop: Story = {
+  parameters: {
+    viewport: { defaultViewport: 'desktop' },
+  },
+  decorators: [
+    (Story) => {
+      useProjectStore.setState({ selectedProjectId: null });
+      return <Story />;
+    },
+  ],
+};

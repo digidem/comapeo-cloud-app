@@ -84,9 +84,7 @@ describe('trackSchema', () => {
   it('validates location without optional timestamp', () => {
     const track = {
       ...validTrack,
-      locations: [
-        { coords: { latitude: 1.0, longitude: 2.0 } },
-      ],
+      locations: [{ coords: { latitude: 1.0, longitude: 2.0 } }],
     };
     expect(v.safeParse(trackSchema, track).success).toBe(true);
   });

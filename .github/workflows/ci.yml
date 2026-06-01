@@ -220,6 +220,15 @@ jobs:
           ARGOS_TOKEN: ${{ secrets.ARGOS_TOKEN }}
           VITE_PREVIEW: '1'
 
+      - name: Upload screenshot artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: visual-regression-screenshots
+          path: tests/e2e/screenshots/
+          retention-days: 14
+          if-no-files-found: ignore
+
   # -----------------------------------------------------------------------
   # Dependency vulnerability audit
   # -----------------------------------------------------------------------

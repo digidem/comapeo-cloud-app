@@ -794,7 +794,6 @@ function HomeScreen() {
     if (cpIsComplete) return;
 
     let cancelled = false;
-    let dismissTimer: ReturnType<typeof setTimeout> | undefined;
 
     async function runConnection() {
       try {
@@ -870,13 +869,6 @@ function HomeScreen() {
           status: 'completed',
         });
         dispatch({ type: 'CONNECTION_COMPLETE' });
-
-        // Auto-dismiss after 2s
-        dismissTimer = setTimeout(() => {
-          if (!cancelled) {
-            dispatch({ type: 'DISMISS_CONNECTION_PROGRESS' });
-          }
-        }, 2000);
       } catch (err) {
         if (cancelled) return;
         dispatch({
@@ -894,22 +886,28 @@ function HomeScreen() {
     void runConnection();
     return () => {
       cancelled = true;
-      if (dismissTimer !== undefined) {
-        clearTimeout(dismissTimer);
-      }
     };
   }, [
     cpIsActive,
     _cpAttemptId,
-    // cpIsComplete intentionally omitted — including it triggers cleanup that
-    // clears the auto-dismiss timer when sync completes, leaving the overlay
-    // stuck forever. The early-return guard `if (cpIsComplete) return` above
-    // is sufficient to prevent re-running the sync.
+    cpIsComplete,
     cpServerId,
     cpBaseUrl,
     cpToken,
     queryClient,
   ]);
+
+  useEffect(() => {
+    if (!cpIsActive || !cpIsComplete) return;
+
+    const dismissTimer = setTimeout(() => {
+      dispatch({ type: 'DISMISS_CONNECTION_PROGRESS' });
+    }, 2000);
+
+    return () => {
+      clearTimeout(dismissTimer);
+    };
+  }, [cpIsActive, cpIsComplete]);
 
   const handleOpenCreateDialog = useCallback(
     () => dispatch({ type: 'OPEN_CREATE_DIALOG' }),

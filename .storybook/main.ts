@@ -10,7 +10,11 @@ const mocksDir = fileURLToPath(
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(js|jsx|mjs|ts|tsx)'],
-  addons: ['@storybook/addon-a11y', '@storybook/addon-docs'],
+  addons: [
+    '@storybook/addon-a11y',
+    '@storybook/addon-docs',
+    '@storybook/addon-viewport',
+  ],
   framework: '@storybook/tanstack-react',
   core: {
     disableTelemetry: true,

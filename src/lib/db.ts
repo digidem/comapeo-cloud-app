@@ -14,6 +14,11 @@ export interface Project {
   name?: string;
   description?: string;
   serverUrl?: string;
+  iconRef?: {
+    docId: string;
+    name?: string;
+    contentType?: string;
+  };
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;

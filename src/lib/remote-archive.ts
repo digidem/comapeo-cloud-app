@@ -93,29 +93,57 @@ export async function pullProjects(
   }
 
   const now = new Date().toISOString();
-  const projects: Project[] = response.data.map((item) => {
-    const localId = `${sourceType}:${stableKey}:${item.projectId}`;
-    const existing = existingMap.get(localId);
-    const nameChanged = existing
-      ? existing.name !== (item.name ?? undefined)
-      : true;
+  const detailedProjects: Project[] = [];
 
-    return {
-      localId,
-      sourceType,
-      sourceId: serverId,
-      remoteId: item.projectId,
-      name: item.name ?? undefined,
-      serverUrl: baseUrl || undefined,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
-      dirtyLocal: false,
-      deleted: false,
-    };
-  });
+  // Fetch detailed project information for each project with error handling
+  const projectDetails = await Promise.allSettled(
+    response.data.map(async (item) => {
+      try {
+        const detailResponse = await apiClient.getProject(
+          item.projectId,
+          config,
+        );
+        return { basic: item, detail: detailResponse.data };
+      } catch (error) {
+        console.warn(
+          `Failed to fetch details for project ${item.projectId}:`,
+          error,
+        );
+        return { basic: item, detail: null };
+      }
+    }),
+  );
 
-  await db.projects.bulkPut(projects);
-  return projects;
+  for (const result of projectDetails) {
+    if (result.status === 'fulfilled') {
+      const { basic, detail } = result.value;
+      const localId = `${sourceType}:${stableKey}:${basic.projectId}`;
+      const existing = existingMap.get(localId);
+      const nameChanged = existing?.name !== basic.name;
+      const descriptionChanged = existing?.description !== detail?.description;
+
+      detailedProjects.push({
+        localId,
+        sourceType,
+        sourceId: serverId,
+        remoteId: basic.projectId,
+        name: basic.name,
+        description: detail?.description,
+        serverUrl: baseUrl || undefined,
+        iconRef: detail?.iconRef,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt:
+          nameChanged || descriptionChanged
+            ? now
+            : (existing?.updatedAt ?? now),
+        dirtyLocal: false,
+        deleted: false,
+      });
+    }
+  }
+
+  await db.projects.bulkPut(detailedProjects);
+  return detailedProjects;
 }
 
 export async function pullObservations(

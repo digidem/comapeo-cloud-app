@@ -186,6 +186,8 @@ describe('ArchiveBrowser', () => {
     expect(useArchiveStore.getState().selectedArchiveId).toBeNull();
 
     await user.click(archiveToggle);
-    expect(useArchiveStore.getState().selectedArchiveId).toBe('https://archive.example.com');
+    expect(useArchiveStore.getState().selectedArchiveId).toBe(
+      'https://archive.example.com',
+    );
   });
 });
