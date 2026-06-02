@@ -95,51 +95,64 @@ export async function pullProjects(
   const now = new Date().toISOString();
   const detailedProjects: Project[] = [];
 
-  // Fetch detailed project information for each project with error handling
+  // Fetch detailed project information for each project. Per-project
+  // detail failures must NOT drop the basic project info — we keep the
+  // project with detail=null and log a warning so the user can still see
+  // it in the project list.
   const projectDetails = await Promise.allSettled(
     response.data.map(async (item) => {
-      try {
-        const detailResponse = await apiClient.getProject(
-          item.projectId,
-          config,
-        );
-        return { basic: item, detail: detailResponse.data };
-      } catch (error) {
-        console.warn(
-          `Failed to fetch details for project ${item.projectId}:`,
-          error,
-        );
-        return { basic: item, detail: null };
-      }
+      const detailResponse = await apiClient.getProject(item.projectId, config);
+      return { basic: item, detail: detailResponse.data };
     }),
   );
 
-  for (const result of projectDetails) {
-    if (result.status === 'fulfilled') {
-      const { basic, detail } = result.value;
-      const localId = `${sourceType}:${stableKey}:${basic.projectId}`;
-      const existing = existingMap.get(localId);
-      const nameChanged = existing?.name !== basic.name;
-      const descriptionChanged = existing?.description !== detail?.description;
+  for (const [index, result] of projectDetails.entries()) {
+    const basic = response.data[index]!;
+    const localId = `${sourceType}:${stableKey}:${basic.projectId}`;
+    const existing = existingMap.get(localId);
 
+    if (result.status === 'rejected') {
+      console.warn(
+        `Failed to fetch details for project ${basic.projectId}:`,
+        result.reason,
+      );
+      const nameChanged = existing?.name !== basic.name;
       detailedProjects.push({
         localId,
         sourceType,
         sourceId: serverId,
         remoteId: basic.projectId,
         name: basic.name,
-        description: detail?.description,
+        description: undefined,
+        iconRef: undefined,
         serverUrl: baseUrl || undefined,
-        iconRef: detail?.iconRef,
         createdAt: existing?.createdAt ?? now,
-        updatedAt:
-          nameChanged || descriptionChanged
-            ? now
-            : (existing?.updatedAt ?? now),
+        updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
         dirtyLocal: false,
         deleted: false,
       });
+      continue;
     }
+
+    const { detail } = result.value;
+    const nameChanged = existing?.name !== basic.name;
+    const descriptionChanged = existing?.description !== detail?.description;
+
+    detailedProjects.push({
+      localId,
+      sourceType,
+      sourceId: serverId,
+      remoteId: basic.projectId,
+      name: basic.name,
+      description: detail?.description,
+      serverUrl: baseUrl || undefined,
+      iconRef: detail?.iconRef,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt:
+        nameChanged || descriptionChanged ? now : (existing?.updatedAt ?? now),
+      dirtyLocal: false,
+      deleted: false,
+    });
   }
 
   await db.projects.bulkPut(detailedProjects);

@@ -89,6 +89,43 @@ describe('remote-archive', () => {
     expect(capturedAuth).toBe(`Bearer ${archiveConfig.token}`);
   });
 
+  it('keeps basic project info when per-project detail fetch fails', async () => {
+    // /projects lists 2 projects; /projects/:id fails for proj-2 with 500
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [
+            { projectId: 'proj-1', name: 'Project One' },
+            { projectId: 'proj-2', name: 'Project Two' },
+          ],
+        }),
+      ),
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1`, () =>
+        HttpResponse.json({
+          data: {
+            projectId: 'proj-1',
+            name: 'Project One',
+            description: 'first description',
+          },
+        }),
+      ),
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-2`,
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+    );
+
+    const projects = await pullProjects('server-1', archiveConfig);
+
+    expect(projects).toHaveLength(2);
+    const byRemoteId = new Map(projects.map((p) => [p.remoteId, p]));
+    // proj-1 got the detail
+    expect(byRemoteId.get('proj-1')?.description).toBe('first description');
+    // proj-2 still saved with basic info only — NOT silently dropped
+    expect(byRemoteId.get('proj-2')?.name).toBe('Project Two');
+    expect(byRemoteId.get('proj-2')?.description).toBeUndefined();
+  });
+
   it('pulls observations from archive and stores them locally', async () => {
     server.use(
       http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
