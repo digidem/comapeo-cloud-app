@@ -1,6 +1,7 @@
 import * as v from 'valibot';
 
 import { presetRefSchema } from '@/lib/schemas/observation';
+import { docRefSchema } from '@/lib/schemas/refs';
 
 export const trackSchema = v.object({
   docId: v.string(),
@@ -20,8 +21,8 @@ export const trackSchema = v.object({
       timestamp: v.optional(v.string()),
     }),
   ),
-  observationRefs: v.array(presetRefSchema),
-  tags: v.record(v.string(), v.unknown()),
+  observationRefs: v.optional(v.array(docRefSchema), []),
+  tags: v.record(v.string(), v.string()),
   presetRef: v.optional(presetRefSchema),
 });
 

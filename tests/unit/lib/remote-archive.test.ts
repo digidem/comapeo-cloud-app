@@ -126,6 +126,57 @@ describe('remote-archive', () => {
     expect(byRemoteId.get('proj-2')?.description).toBeUndefined();
   });
 
+  it('preserves previously-synced description and iconRef when detail fetch fails on re-sync', async () => {
+    const db = getDb();
+
+    // First sync: detail fetch succeeds, stores description and iconRef
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-detail', name: 'Detail Project' }],
+        }),
+      ),
+      http.get(`${archiveConfig.baseUrl}/projects/proj-detail`, () =>
+        HttpResponse.json({
+          data: {
+            projectId: 'proj-detail',
+            name: 'Detail Project',
+            description: 'Important description',
+            iconRef: {
+              docId: 'icon-1',
+              name: 'tree.png',
+              contentType: 'image/png',
+            },
+          },
+        }),
+      ),
+    );
+    await pullProjects('server-1', archiveConfig);
+
+    const afterFirst = await db.projects.toArray();
+    expect(afterFirst[0]!.description).toBe('Important description');
+    expect(afterFirst[0]!.iconRef?.docId).toBe('icon-1');
+
+    // Second sync: detail fetch fails transiently with 500
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-detail', name: 'Detail Project' }],
+        }),
+      ),
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-detail`,
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+    );
+    await pullProjects('server-1', archiveConfig);
+
+    const afterSecond = await db.projects.toArray();
+    // description and iconRef must be preserved, NOT wiped
+    expect(afterSecond[0]!.description).toBe('Important description');
+    expect(afterSecond[0]!.iconRef?.docId).toBe('icon-1');
+  });
+
   it('pulls observations from archive and stores them locally', async () => {
     server.use(
       http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>

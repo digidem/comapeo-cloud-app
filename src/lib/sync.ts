@@ -1,6 +1,5 @@
 import { getRemoteServer } from '@/lib/local-repositories';
 import {
-  deriveAttachmentsFromObservations,
   pullAlerts,
   pullFields,
   pullObservations,
@@ -19,6 +18,7 @@ export interface SyncOptions {
 export interface SyncResult {
   success: boolean;
   error?: string;
+  warnings?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -85,7 +85,6 @@ async function doSync(
       projects.map(async (project) => {
         if (project.remoteId) {
           const projectErrors: string[] = [];
-          let observationsOk = false;
 
           try {
             await pullObservations(
@@ -94,7 +93,6 @@ async function doSync(
               project.localId,
               config,
             );
-            observationsOk = true;
           } catch (e) {
             projectErrors.push(
               `Observations: ${e instanceof Error ? e.message : String(e)}`,
@@ -161,32 +159,9 @@ async function doSync(
             );
           }
 
-          // Derive attachment records from observation data
-          // Non-critical — individual attachment failures produce warnings
-          if (observationsOk) {
-            try {
-              await deriveAttachmentsFromObservations(
-                serverDbId,
-                project.remoteId,
-                project.localId,
-                config,
-              );
-            } catch (e) {
-              const msg = `Attachments: ${e instanceof Error ? e.message : String(e)}`;
-              projectWarnings.push(
-                `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
-              );
-            }
-          }
-
           // Only fail the project if observations (critical) failed
           if (projectErrors.length > 0) {
             throw new Error(projectErrors.join('; '));
-          }
-
-          // Track warning: observations synced but secondary data failed
-          if (observationsOk && projectWarnings.length > 0) {
-            // warnings already pushed above
           }
         }
       }),
@@ -225,7 +200,11 @@ async function doSync(
         await useAuthStore
           .getState()
           .updateServerStatus(serverDbId, 'connected', statusMsg);
-        return { success: true, error: undefined };
+        return {
+          success: true,
+          error: undefined,
+          warnings: projectWarnings.length > 0 ? projectWarnings : undefined,
+        };
       }
 
       // Complete failure: no projects synced successfully
@@ -245,7 +224,7 @@ async function doSync(
           'connected',
           `Synced with warnings: ${projectWarnings.join('; ')}`,
         );
-      return { success: true };
+      return { success: true, warnings: projectWarnings };
     }
 
     // Perfect sync — no errors or warnings

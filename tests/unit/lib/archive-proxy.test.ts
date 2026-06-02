@@ -113,8 +113,9 @@ describe('archive proxy helpers', () => {
     expect(
       validateArchiveProxyRequest('GET', '/projects/proj-1/observation'),
     ).toEqual({
-      ok: true,
-      value: '/projects/proj-1/observation',
+      ok: false,
+      code: 'UNSUPPORTED_ARCHIVE_PROXY_PATH',
+      message: 'Archive proxy path is not supported',
     });
 
     expect(

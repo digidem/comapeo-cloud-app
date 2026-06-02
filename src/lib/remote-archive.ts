@@ -4,6 +4,7 @@ import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { getDb } from '@/lib/db';
 import type {
   Alert,
+  Attachment,
   Field,
   Observation,
   Preset,
@@ -63,6 +64,34 @@ function resolveAttachmentUrl(url: string, archiveBaseUrl: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Concurrency helper
+// ---------------------------------------------------------------------------
+
+async function allSettledLimited<T>(
+  tasks: Array<() => Promise<T>>,
+  limit = 5,
+): Promise<PromiseSettledResult<T>[]> {
+  const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < tasks.length) {
+      const i = cursor++;
+      try {
+        results[i] = { status: 'fulfilled', value: await tasks[i]!() };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(limit, tasks.length) }, worker),
+  );
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Fetch archive data and store locally
 // ---------------------------------------------------------------------------
 
@@ -95,12 +124,12 @@ export async function pullProjects(
   const now = new Date().toISOString();
   const detailedProjects: Project[] = [];
 
-  // Fetch detailed project information for each project. Per-project
-  // detail failures must NOT drop the basic project info — we keep the
-  // project with detail=null and log a warning so the user can still see
-  // it in the project list.
-  const projectDetails = await Promise.allSettled(
-    response.data.map(async (item) => {
+  // Fetch detailed project information for each project with a concurrency
+  // cap to avoid unbounded N+1 fan-out. Per-project detail failures must
+  // NOT drop the basic project info — we keep the project with detail=null
+  // and log a warning so the user can still see it in the project list.
+  const projectDetails = await allSettledLimited(
+    response.data.map((item) => async () => {
       const detailResponse = await apiClient.getProject(item.projectId, config);
       return { basic: item, detail: detailResponse.data };
     }),
@@ -123,8 +152,8 @@ export async function pullProjects(
         sourceId: serverId,
         remoteId: basic.projectId,
         name: basic.name,
-        description: undefined,
-        iconRef: undefined,
+        description: existing?.description,
+        iconRef: existing?.iconRef,
         serverUrl: baseUrl || undefined,
         createdAt: existing?.createdAt ?? now,
         updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
@@ -169,9 +198,9 @@ export async function pullObservations(
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
   const serverRecord = await getRemoteServer(serverId);
-  const stableKey = stableSourceKey(
-    serverRecord?.baseUrl ?? config.baseUrl ?? '',
-  );
+  const baseUrl = serverRecord?.baseUrl ?? config.baseUrl ?? '';
+  const stableKey = stableSourceKey(baseUrl);
+
   const observations: Observation[] = response.data.map((item) => {
     // Parse attachments to extract media counts and photo URLs
     let photoCount = 0;
@@ -221,7 +250,100 @@ export async function pullObservations(
   });
 
   await db.observations.bulkPut(observations);
+
+  // Derive and persist attachment rows from the same fetch — no second round-trip.
+  // Also tombstones attachments for deleted observations (fix #3).
+  await syncAttachmentRows(
+    response.data,
+    serverId,
+    projectLocalId,
+    sourceType,
+    stableKey,
+    baseUrl,
+    db,
+  );
+
   return observations;
+}
+
+/**
+ * Internal helper: derive Attachment rows from observation data already in
+ * memory. Tombstones attachments for deleted observations and reconciles
+ * removed attachments on non-deleted observations.
+ */
+async function syncAttachmentRows(
+  items: Array<{
+    docId: string;
+    createdAt: string;
+    updatedAt: string;
+    deleted: boolean;
+    attachments: Array<{ url: string }>;
+  }>,
+  serverId: string,
+  projectLocalId: string,
+  sourceType: 'remoteArchive',
+  stableKey: string,
+  baseUrl: string,
+  db: ReturnType<typeof getDb>,
+): Promise<void> {
+  const attachmentsToWrite: Attachment[] = [];
+
+  for (const obs of items) {
+    const observationLocalId = `${sourceType}:${stableKey}:${obs.docId}`;
+
+    if (obs.deleted) {
+      // Tombstone any existing attachment rows for this deleted observation
+      const existing = await db.attachments
+        .where('observationLocalId')
+        .equals(observationLocalId)
+        .toArray();
+      for (const row of existing) {
+        if (!row.deleted) {
+          attachmentsToWrite.push({ ...row, deleted: true });
+        }
+      }
+      continue;
+    }
+
+    // Build the set of current attachment localIds for reconciliation
+    const currentAttachmentIds = new Set<string>();
+    for (const attachment of obs.attachments) {
+      const attachmentLocalId = `${sourceType}:${stableKey}:attachment:${obs.docId}:${attachment.url}`;
+      currentAttachmentIds.add(attachmentLocalId);
+
+      const mediaType = parseAttachmentMediaType(attachment.url);
+      const resolvedUrl = resolveAttachmentUrl(attachment.url, baseUrl);
+      attachmentsToWrite.push({
+        localId: attachmentLocalId,
+        projectLocalId,
+        observationLocalId,
+        sourceType,
+        sourceId: serverId,
+        remoteUrl: attachment.url,
+        resolvedUrl,
+        mediaType,
+        createdAt: obs.createdAt,
+        updatedAt: obs.updatedAt,
+        dirtyLocal: false,
+        deleted: false,
+      });
+    }
+
+    // Tombstone attachment rows that were present before but are now absent
+    const existingRows = await db.attachments
+      .where('observationLocalId')
+      .equals(observationLocalId)
+      .toArray();
+    for (const row of existingRows) {
+      if (!currentAttachmentIds.has(row.localId) && !row.deleted) {
+        attachmentsToWrite.push({ ...row, deleted: true });
+      }
+    }
+  }
+
+  if (attachmentsToWrite.length > 0) {
+    await db.attachments.bulkPut(attachmentsToWrite);
+  }
 }
 
 export async function pullAlerts(
@@ -319,10 +441,7 @@ export async function pullTracks(
     sourceType,
     sourceId: serverId,
     remoteId: item.docId,
-    tags:
-      Object.keys(item.tags as Record<string, string>).length > 0
-        ? (item.tags as Record<string, string>)
-        : undefined,
+    tags: Object.keys(item.tags).length > 0 ? item.tags : undefined,
     presetRef: item.presetRef?.docId,
     locations: item.locations.map((loc) => ({
       coords: {
@@ -331,7 +450,7 @@ export async function pullTracks(
       },
       timestamp: loc.timestamp,
     })),
-    observationRefs: item.observationRefs.map((ref) => ref.docId),
+    observationRefs: (item.observationRefs ?? []).map((ref) => ref.docId),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     dirtyLocal: false,
@@ -384,46 +503,8 @@ export async function deriveAttachmentsFromObservations(
   projectLocalId: string,
   config: RequestConfig,
 ): Promise<void> {
-  const response = await apiClient.getObservations(projectRemoteId, config);
-  const db = getDb();
-  const sourceType = 'remoteArchive' as const;
-  const serverRecord = await getRemoteServer(serverId);
-  const stableKey = stableSourceKey(
-    serverRecord?.baseUrl ?? config.baseUrl ?? '',
-  );
-  const baseUrl = serverRecord?.baseUrl ?? config.baseUrl ?? '';
-
-  const attachments: import('@/lib/db').Attachment[] = [];
-
-  for (const obs of response.data) {
-    if (obs.deleted) continue;
-
-    const observationLocalId = `${sourceType}:${stableKey}:${obs.docId}`;
-
-    for (const attachment of obs.attachments) {
-      const mediaType = parseAttachmentMediaType(attachment.url);
-      const resolvedUrl = resolveAttachmentUrl(attachment.url, baseUrl);
-
-      const attachmentLocalId = `${sourceType}:${stableKey}:attachment:${obs.docId}:${attachment.url}`;
-
-      attachments.push({
-        localId: attachmentLocalId,
-        projectLocalId,
-        observationLocalId,
-        sourceType,
-        sourceId: serverId,
-        remoteUrl: attachment.url,
-        resolvedUrl,
-        mediaType,
-        createdAt: obs.createdAt,
-        updatedAt: obs.updatedAt,
-        dirtyLocal: false,
-        deleted: false,
-      });
-    }
-  }
-
-  if (attachments.length > 0) {
-    await db.attachments.bulkPut(attachments);
-  }
+  // Attachment derivation is now handled inline in pullObservations, using the
+  // same single network fetch. This function delegates to avoid a second
+  // GET /projects/:id/observations round-trip.
+  await pullObservations(serverId, projectRemoteId, projectLocalId, config);
 }
