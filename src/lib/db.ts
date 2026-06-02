@@ -325,7 +325,43 @@ class AppDatabase extends Dexie {
         '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
     });
 
-    this.version(8)
+    // v8: shape-preserving no-op upgrade.
+    //
+    // A previous iteration of this branch folded the v9 work into a revised
+    // v8, which caused Dexie to reject open() for any user whose IndexedDB
+    // was at v9 (the version the post-#67 main build writes) with
+    // `VersionError: The requested version (8) is less than the existing
+    // version (9)`. We keep v8 as a no-op so users upgrading from the v9
+    // main build pass through cleanly, then put the actual schema and data
+    // changes in v10 below. See: Greptile P1 review on PR #63.
+    this.version(8).upgrade(() => {
+      // no-op: schema and data shape are unchanged from main's v9
+    });
+
+    // v9 from main is preserved by reference (string → RemoteDocRef
+    // coercion for Track.presetRef / Track.observationRefs). Re-declared
+    // here only as a passing-through upgrade so that the version number
+    // sequence (8 → 9 → 10) is monotonic for users on any prior build.
+    this.version(9).upgrade(async (tx) => {
+      const table = tx.table('tracks');
+      await table.toCollection().modify((track: Record<string, unknown>) => {
+        if (typeof track.presetRef === 'string') {
+          track.presetRef = { docId: track.presetRef };
+        }
+        if (Array.isArray(track.observationRefs)) {
+          track.observationRefs = track.observationRefs.map((ref) =>
+            typeof ref === 'string' ? { docId: ref } : ref,
+          );
+        }
+      });
+    });
+
+    // v10: sync resource v2 (comapeo-cloud 0.4) — adds the v2 sync indexes
+    // and the observation/attachment field migrations introduced by PR #63.
+    // Safe for users already on main's v9: the string→ref coercion has
+    // already been applied, so the tracks migration block is a no-op for
+    // them.
+    this.version(10)
       .stores({
         observations:
           '&localId, projectLocalId, [sourceType+sourceId+remoteId], [projectLocalId+presetRefDocId], [dirtyLocal+updatedAt]',
@@ -337,6 +373,22 @@ class AppDatabase extends Dexie {
           '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [projectLocalId+key], [dirtyLocal+updatedAt]',
       })
       .upgrade(async (tx) => {
+        // Defensive: re-apply the string→ref migration in case a user
+        // skipped main's v9 (e.g., they were on a pre-#67 build that
+        // landed v10 directly).
+        await tx
+          .table('tracks')
+          .toCollection()
+          .modify((track: Record<string, unknown>) => {
+            if (typeof track.presetRef === 'string') {
+              track.presetRef = { docId: track.presetRef };
+            }
+            if (Array.isArray(track.observationRefs)) {
+              track.observationRefs = track.observationRefs.map((ref) =>
+                typeof ref === 'string' ? { docId: ref } : ref,
+              );
+            }
+          });
         await tx
           .table('observations')
           .toCollection()

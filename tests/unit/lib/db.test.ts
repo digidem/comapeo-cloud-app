@@ -507,6 +507,26 @@ describe('AppDatabase', () => {
     ]);
   });
 
+  it('declares version 10 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
+    const db = getDb();
+
+    // The highest declared version is 10 (v8 no-op, v9 string→ref
+    // re-declared, v10 adds the v2 sync indexes and field migrations).
+    // If any future change drops or renumbers versions, this test fails
+    // and forces the author to think about the upgrade path for users
+    // on prior builds (especially the post-#67 v9 build).
+    expect(db.verno).toBe(10);
+
+    // Verify the v2 sync indexes are present in the schema. These are
+    // required for the index-based queries used by remote-archive.ts.
+    const trackIndexNames = db.tracks.schema.indexes.map((i) => i.src);
+    const fieldIndexNames = db.fields.schema.indexes.map((i) => i.src);
+    expect(trackIndexNames).toContain('[projectLocalId+remoteId]');
+    expect(trackIndexNames).toContain('[projectLocalId+presetRefDocId]');
+    expect(fieldIndexNames).toContain('[projectLocalId+remoteId]');
+    expect(fieldIndexNames).toContain('[projectLocalId+key]');
+  });
+
   it('stores and retrieves a project with description', async () => {
     const db = getDb();
 
