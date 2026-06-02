@@ -4,6 +4,7 @@ import {
   MetadataError,
   generateRobotsTxt,
   generateSitemapXml,
+  replaceHtmlMetadataOrigin,
   validateOrigin,
 } from '../../../scripts/lib/metadata';
 
@@ -50,5 +51,18 @@ describe('generateSitemapXml', () => {
     expect(result).toContain('<?xml version="1.0"');
     expect(result).toContain('<loc>https://example.com/</loc>');
     expect(result).toContain('<priority>1.0</priority>');
+  });
+});
+
+describe('replaceHtmlMetadataOrigin', () => {
+  it('replaces all app origin placeholders in index HTML', () => {
+    const result = replaceHtmlMetadataOrigin(
+      '<meta content="__APP_ORIGIN__/og-image.png"><link href="__APP_ORIGIN__/">',
+      'https://example.com',
+    );
+
+    expect(result).toBe(
+      '<meta content="https://example.com/og-image.png"><link href="https://example.com/">',
+    );
   });
 });

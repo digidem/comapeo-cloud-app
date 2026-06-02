@@ -9,6 +9,11 @@ import type { Plugin } from 'vite';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+import type { DeploymentConfig } from './scripts/lib/metadata';
+import {
+  replaceHtmlMetadataOrigin,
+  validateOrigin,
+} from './scripts/lib/metadata';
 import {
   ARCHIVE_TARGET_HEADER,
   normalizeArchiveBaseUrl,
@@ -139,6 +144,20 @@ function ensureInviteKeyLoaded(mode: string, envDir: string) {
   if (inviteKey) {
     process.env.INVITE_KEY = inviteKey;
   }
+}
+
+function loadDeploymentConfig(rootDir: string): DeploymentConfig {
+  return JSON.parse(
+    readFileSync(resolve(rootDir, 'deployment.config.json'), 'utf-8'),
+  ) as DeploymentConfig;
+}
+
+function getPublicAppOrigin(mode: string, rootDir: string): string {
+  const env = loadEnv(mode, rootDir, '');
+  return validateOrigin(
+    env.VITE_PUBLIC_APP_ORIGIN ??
+      loadDeploymentConfig(rootDir).productionOrigin,
+  );
 }
 
 function getRequestProtocol(req: IncomingMessage): string {
@@ -331,66 +350,77 @@ function archiveApiProxy(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [
-    archiveApiProxy(),
-    react(),
-    tailwindcss(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
-      manifest: false,
-      workbox: {
-        globPatterns: ['**/*.{js,css,svg,png,html,webmanifest,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url, sameOrigin }) =>
-              sameOrigin && url.pathname.startsWith('/api/'),
-            handler: 'NetworkOnly',
-          },
-          {
-            urlPattern: ({ url, sameOrigin }) =>
-              !sameOrigin && url.protocol === 'https:',
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'remote-api-cache',
-              expiration: {
-                maxAgeSeconds: 60 * 60 * 24,
-              },
-              networkTimeoutSeconds: 10,
-            },
-          },
-        ],
-      },
-    }),
-  ],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@tests': fileURLToPath(new URL('./tests', import.meta.url)),
-    },
-  },
-  server: {
-    allowedHosts: ['.trycloudflare.com'],
-  },
-  build: {
-    target: 'es2022',
-    sourcemap: 'hidden',
-    modulePreload: {
-      polyfill: false,
-    },
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          for (const [chunkName, modules] of Object.entries(vendorChunks)) {
-            if (modules.some((mod) => id.includes(`/node_modules/${mod}/`))) {
-              return chunkName;
-            }
-          }
+export default defineConfig(({ mode }) => {
+  const rootDir = fileURLToPath(new URL('.', import.meta.url));
+  const publicAppOrigin = getPublicAppOrigin(mode, rootDir);
+
+  return {
+    plugins: [
+      {
+        name: 'html-metadata-origin',
+        transformIndexHtml(html) {
+          return replaceHtmlMetadataOrigin(html, publicAppOrigin);
         },
       },
+      archiveApiProxy(),
+      react(),
+      tailwindcss(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
+        manifest: false,
+        workbox: {
+          globPatterns: ['**/*.{js,css,svg,png,html,webmanifest,woff2}'],
+          runtimeCaching: [
+            {
+              urlPattern: ({ url, sameOrigin }) =>
+                sameOrigin && url.pathname.startsWith('/api/'),
+              handler: 'NetworkOnly',
+            },
+            {
+              urlPattern: ({ url, sameOrigin }) =>
+                !sameOrigin && url.protocol === 'https:',
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'remote-api-cache',
+                expiration: {
+                  maxAgeSeconds: 60 * 60 * 24,
+                },
+                networkTimeoutSeconds: 10,
+              },
+            },
+          ],
+        },
+      }),
+    ],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+        '@tests': fileURLToPath(new URL('./tests', import.meta.url)),
+      },
     },
-    minify: 'esbuild',
-    cssCodeSplit: true,
-  },
+    server: {
+      allowedHosts: ['.trycloudflare.com'],
+    },
+    build: {
+      target: 'es2022',
+      sourcemap: 'hidden',
+      modulePreload: {
+        polyfill: false,
+      },
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            for (const [chunkName, modules] of Object.entries(vendorChunks)) {
+              if (modules.some((mod) => id.includes(`/node_modules/${mod}/`))) {
+                return chunkName;
+              }
+            }
+          },
+        },
+      },
+      minify: 'esbuild',
+      cssCodeSplit: true,
+    },
+  };
 });
