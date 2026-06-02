@@ -442,7 +442,7 @@ export async function pullTracks(
     sourceId: serverId,
     remoteId: item.docId,
     tags: Object.keys(item.tags).length > 0 ? item.tags : undefined,
-    presetRef: item.presetRef?.docId,
+    presetRef: item.presetRef,
     locations: item.locations.map((loc) => ({
       coords: {
         latitude: loc.coords.latitude,
@@ -450,7 +450,7 @@ export async function pullTracks(
       },
       timestamp: loc.timestamp,
     })),
-    observationRefs: (item.observationRefs ?? []).map((ref) => ref.docId),
+    observationRefs: item.observationRefs ?? [],
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     dirtyLocal: false,

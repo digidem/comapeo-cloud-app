@@ -883,8 +883,18 @@ describe('pullTracks', () => {
       latitude: -8.35,
       longitude: -55.45,
     });
-    expect(tracks[0]!.presetRef).toBe('preset-001');
-    expect(tracks[0]!.observationRefs).toEqual(['obs-001']);
+    expect(tracks[0]!.presetRef).toEqual({
+      docId: 'preset-001',
+      versionId: 'preset-001/0',
+      url: '/projects/proj1/preset/preset-001',
+    });
+    expect(tracks[0]!.observationRefs).toEqual([
+      {
+        docId: 'obs-001',
+        versionId: 'obs-001/0',
+        url: '/projects/proj1/observation/obs-001',
+      },
+    ]);
 
     const db = getDb();
     const stored = await db.tracks
@@ -892,6 +902,21 @@ describe('pullTracks', () => {
       .equals('proj-local-1')
       .toArray();
     expect(stored).toHaveLength(2);
+    // Assert the persisted DB row keeps the full RemoteDocRef object (not
+    // a flattened string/string[]) — verifies lossless storage end-to-end.
+    const storedTrack = stored.find((t) => t.remoteId === 'track-001');
+    expect(storedTrack?.presetRef).toEqual({
+      docId: 'preset-001',
+      versionId: 'preset-001/0',
+      url: '/projects/proj1/preset/preset-001',
+    });
+    expect(storedTrack?.observationRefs).toEqual([
+      {
+        docId: 'obs-001',
+        versionId: 'obs-001/0',
+        url: '/projects/proj1/observation/obs-001',
+      },
+    ]);
   });
 
   it('overwrites existing tracks for the same localId on re-sync', async () => {
