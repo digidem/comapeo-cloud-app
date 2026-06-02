@@ -17,12 +17,12 @@ const optionSchema = v.object({
 
 export const fieldSchema = v.object({
   docId: v.string(),
-  versionId: v.string(),
-  originalVersionId: v.string(),
-  schemaName: v.literal('field'),
+  versionId: v.optional(v.string()),
+  originalVersionId: v.optional(v.string()),
+  schemaName: v.optional(v.literal('field')),
   createdAt: v.string(),
   updatedAt: v.string(),
-  links: v.array(v.string()),
+  links: v.optional(v.array(v.string()), []),
   deleted: v.boolean(),
   type: fieldTypeSchema,
   key: v.string(),

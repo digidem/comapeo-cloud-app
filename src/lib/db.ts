@@ -14,11 +14,6 @@ export interface Project {
   name?: string;
   description?: string;
   serverUrl?: string;
-  iconRef?: {
-    docId: string;
-    name?: string;
-    contentType?: string;
-  };
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
@@ -31,7 +26,14 @@ export interface Observation {
   sourceType: string;
   sourceId: string;
   remoteId?: string;
+  versionId?: string;
+  originalVersionId?: string;
+  schemaName?: string;
+  links?: string[];
   tags?: Record<string, string>;
+  metadata?: Record<string, unknown>;
+  presetRefDocId?: string;
+  presetRef?: RemoteDocRef;
   lat?: number;
   lon?: number;
   createdAt: string;
@@ -64,14 +66,31 @@ export interface Attachment {
   sourceType: string;
   sourceId: string;
   remoteId?: string;
+  sourceDocId?: string;
+  driveId?: string;
+  type?: string;
+  name?: string;
+  hash?: string;
   remoteUrl?: string;
   resolvedUrl?: string;
   mediaType?: 'photo' | 'audio' | 'unknown';
   contentType?: string;
+  downloadStatus?: 'remote-only' | 'available' | 'failed';
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
   deleted: boolean;
+}
+
+export interface TrackLocation {
+  coords: {
+    latitude: number;
+    longitude: number;
+  };
+  timestamp?: string;
+  createdAt?: string;
+  accuracy?: number;
+  altitude?: number;
 }
 
 export interface RemoteDocRef {
@@ -86,17 +105,31 @@ export interface Track {
   sourceType: string;
   sourceId: string;
   remoteId?: string;
-  tags?: Record<string, string>;
+  versionId?: string;
+  originalVersionId?: string;
+  schemaName?: string;
+  links?: string[];
+  tags?: Record<string, unknown>;
+  presetRefDocId?: string;
   presetRef?: RemoteDocRef;
-  locations?: Array<{
-    coords: { latitude: number; longitude: number };
-    timestamp?: string;
-  }>;
-  observationRefs?: RemoteDocRef[];
+  locations: TrackLocation[];
+  /**
+   * Observation refs are stored as full `RemoteDocRef` objects (docId + optional
+   * versionId/url) rather than flattened to `string[]`, so consumers can resolve
+   * to a specific historical version when the server provides it. This is the
+   * canonical model — PR #67 diverges (`string[]`); that PR's choice will be
+   * reconciled at merge time.
+   */
+  observationRefs: RemoteDocRef[];
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
   deleted: boolean;
+}
+
+export interface FieldOption {
+  label: string;
+  value: string;
 }
 
 export interface Field {
@@ -105,12 +138,16 @@ export interface Field {
   sourceType: string;
   sourceId: string;
   remoteId?: string;
+  versionId?: string;
+  originalVersionId?: string;
+  schemaName?: string;
+  links?: string[];
   type: string;
   key: string;
   label: string;
   placeholder?: string;
   universal: boolean;
-  options?: Array<{ label: string; value: string }>;
+  options?: FieldOption[];
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
@@ -290,31 +327,66 @@ class AppDatabase extends Dexie {
         '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
     });
 
-    this.version(8).stores({
-      tracks:
-        '&localId, projectLocalId, [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
-      fields:
-        '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
-    });
-
-    // Migrate Track.presetRef and Track.observationRefs from the previous
-    // flattened shape (string for presetRef, string[] for observationRefs) to
-    // RemoteDocRef objects. Loses `versionId`/`url` for any rows that had them
-    // truncated by the previous build, but preserves the only data the rows
-    // actually contained. Re-sync will recover the full ref shape.
-    this.version(9).upgrade(async (tx) => {
-      const table = tx.table('tracks');
-      await table.toCollection().modify((track: Record<string, unknown>) => {
-        if (typeof track.presetRef === 'string') {
-          track.presetRef = { docId: track.presetRef };
-        }
-        if (Array.isArray(track.observationRefs)) {
-          track.observationRefs = track.observationRefs.map((ref) =>
-            typeof ref === 'string' ? { docId: ref } : ref,
-          );
-        }
+    this.version(8)
+      .stores({
+        observations:
+          '&localId, projectLocalId, [sourceType+sourceId+remoteId], [projectLocalId+presetRefDocId], [dirtyLocal+updatedAt]',
+        attachments:
+          '&localId, projectLocalId, observationLocalId, [sourceType+sourceId+remoteId], [projectLocalId+mediaType], [observationLocalId+mediaType]',
+        tracks:
+          '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [projectLocalId+presetRefDocId], [dirtyLocal+updatedAt]',
+        fields:
+          '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [projectLocalId+key], [dirtyLocal+updatedAt]',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('observations')
+          .toCollection()
+          .modify((obs: Record<string, unknown>) => {
+            if (!('metadata' in obs)) obs.metadata = undefined;
+            if (!('versionId' in obs)) obs.versionId = undefined;
+            if (!('originalVersionId' in obs)) {
+              obs.originalVersionId = undefined;
+            }
+            if (!('schemaName' in obs)) obs.schemaName = undefined;
+            if (!('links' in obs)) obs.links = undefined;
+            if (!('presetRef' in obs)) obs.presetRef = undefined;
+            if (!('presetRefDocId' in obs)) {
+              const tags = obs.tags;
+              obs.presetRefDocId =
+                tags &&
+                typeof tags === 'object' &&
+                !Array.isArray(tags) &&
+                typeof (tags as Record<string, unknown>).presetRefDocId ===
+                  'string'
+                  ? (tags as Record<string, string>).presetRefDocId
+                  : undefined;
+            }
+          });
+        await tx
+          .table('attachments')
+          .toCollection()
+          .modify((attachment: Record<string, unknown>) => {
+            if (!('sourceDocId' in attachment)) {
+              attachment.sourceDocId = attachment.remoteId;
+            }
+            if (!('driveId' in attachment)) attachment.driveId = undefined;
+            if (!('type' in attachment)) attachment.type = undefined;
+            if (!('name' in attachment)) attachment.name = undefined;
+            if (!('hash' in attachment)) attachment.hash = undefined;
+            if (!('remoteUrl' in attachment)) attachment.remoteUrl = undefined;
+            if (!('resolvedUrl' in attachment)) {
+              attachment.resolvedUrl = undefined;
+            }
+            if (!('mediaType' in attachment)) attachment.mediaType = undefined;
+            if (!('contentType' in attachment)) {
+              attachment.contentType = undefined;
+            }
+            if (!('downloadStatus' in attachment)) {
+              attachment.downloadStatus = undefined;
+            }
+          });
       });
-    });
   }
 }
 

@@ -382,6 +382,9 @@ export async function pullTracks(
     serverRecord?.baseUrl ?? config.baseUrl ?? '',
   );
 
+  // Map ALL items (including deleted) and write them all to DB as tombstones,
+  // then mark previously-synced rows that the server no longer returns as
+  // deleted so they don't surface as stale data after remote deletion.
   const allTracks: Track[] = response.data.map((item) => ({
     localId: `${sourceType}:${stableKey}:${item.docId}`,
     projectLocalId,
@@ -391,7 +394,7 @@ export async function pullTracks(
     versionId: item.versionId,
     originalVersionId: item.originalVersionId,
     schemaName: item.schemaName,
-    links: item.links,
+    links: item.links ?? [],
     tags: item.tags,
     presetRefDocId: item.presetRef?.docId,
     presetRef: item.presetRef,
@@ -404,7 +407,55 @@ export async function pullTracks(
   }));
 
   await db.tracks.bulkPut(allTracks);
+  await tombstoneStaleRows(db.tracks, projectLocalId, serverId, allTracks);
   return allTracks.filter((t) => !t.deleted);
+}
+
+/**
+ * Mark previously-synced rows for (projectLocalId, sourceId) as `deleted: true`
+ * when the current pull did not return them. Without this, a remote delete
+ * (or an empty response from a 0.4 server that no longer emits the resource)
+ * leaves stale rows in IndexedDB that the UI continues to show.
+ */
+async function tombstoneStaleRows<
+  T extends {
+    localId: string;
+    projectLocalId: string;
+    sourceId: string;
+    deleted: boolean;
+    updatedAt: string;
+  },
+>(
+  table: {
+    bulkPut: (rows: T[]) => Promise<unknown>;
+    where: (key: string) => {
+      equals: (value: string) => {
+        and: (pred: (row: T) => boolean) => { toArray: () => Promise<T[]> };
+      };
+    };
+  },
+  projectLocalId: string,
+  sourceId: string,
+  currentRows: readonly T[],
+): Promise<void> {
+  const syncedIds = new Set(currentRows.map((r) => r.localId));
+  const staleRows = await table
+    .where('projectLocalId')
+    .equals(projectLocalId)
+    .and(
+      (row) =>
+        row.sourceId === sourceId &&
+        !row.deleted &&
+        !syncedIds.has(row.localId),
+    )
+    .toArray();
+  if (staleRows.length === 0) return;
+  const now = new Date().toISOString();
+  for (const row of staleRows) {
+    row.deleted = true;
+    row.updatedAt = now;
+  }
+  await table.bulkPut(staleRows);
 }
 
 export async function pullFields(
@@ -421,6 +472,9 @@ export async function pullFields(
     serverRecord?.baseUrl ?? config.baseUrl ?? '',
   );
 
+  // Map ALL items (including deleted) and write them all to DB as tombstones,
+  // then mark previously-synced rows that the server no longer returns as
+  // deleted so they don't surface as stale data after remote deletion.
   const allFields: Field[] = response.data.map((item) => ({
     localId: `${sourceType}:${stableKey}:${item.docId}`,
     projectLocalId,
@@ -430,7 +484,7 @@ export async function pullFields(
     versionId: item.versionId,
     originalVersionId: item.originalVersionId,
     schemaName: item.schemaName,
-    links: item.links,
+    links: item.links ?? [],
     type: item.type,
     key: item.key,
     label: item.label,
@@ -444,5 +498,6 @@ export async function pullFields(
   }));
 
   await db.fields.bulkPut(allFields);
+  await tombstoneStaleRows(db.fields, projectLocalId, serverId, allFields);
   return allFields.filter((f) => !f.deleted);
 }

@@ -1011,6 +1011,70 @@ describe('pullTracks', () => {
       stored.find((t) => t.remoteId === 'track-1')!.locations[0]!.coords,
     ).toEqual({ latitude: -8.35, longitude: -55.45 });
   });
+
+  it('tombstones previously-synced tracks when a later sync returns empty data', async () => {
+    // First sync returns track-1
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/track`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'track-1',
+              versionId: 'track-1/0',
+              originalVersionId: 'track-1/0',
+              schemaName: 'track',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              tags: {},
+              locations: [
+                {
+                  coords: { latitude: -8.35, longitude: -55.45 },
+                  timestamp: '2024-01-01T00:00:00Z',
+                },
+              ],
+              observationRefs: [],
+            },
+          ],
+        }),
+      ),
+    );
+    const first = await pullTracks(
+      'srv-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+    expect(first).toHaveLength(1);
+    expect(first[0]!.deleted).toBe(false);
+
+    // Second sync returns empty — track-1 should be tombstoned, not lingering
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/track`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+    const second = await pullTracks(
+      'srv-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    // Caller-visible: empty result (stale tracks no longer surface)
+    expect(second).toEqual([]);
+
+    // Stored: track-1 row now has deleted: true (tombstone, not lingering as live)
+    const db = getDb();
+    const stored = await db.tracks
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    const track1 = stored.find((t) => t.remoteId === 'track-1');
+    expect(track1).toBeDefined();
+    expect(track1!.deleted).toBe(true);
+  });
 });
 
 describe('pullFields', () => {
@@ -1076,6 +1140,64 @@ describe('pullFields', () => {
     expect(stored.find((f) => f.remoteId === 'field-1')!.options).toEqual([
       { label: 'Good', value: 'good' },
     ]);
+  });
+
+  it('tombstones previously-synced fields when a later sync returns empty data', async () => {
+    // First sync returns field-1
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/field`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'field-1',
+              versionId: 'field-1/0',
+              originalVersionId: 'field-1/0',
+              schemaName: 'field',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              type: 'text',
+              key: 'species',
+              label: 'Species',
+              universal: true,
+            },
+          ],
+        }),
+      ),
+    );
+    const first = await pullFields(
+      'srv-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+    expect(first).toHaveLength(1);
+    expect(first[0]!.deleted).toBe(false);
+
+    // Second sync returns empty — field-1 should be tombstoned
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/field`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+    const second = await pullFields(
+      'srv-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    expect(second).toEqual([]);
+
+    const db = getDb();
+    const stored = await db.fields
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    const field1 = stored.find((f) => f.remoteId === 'field-1');
+    expect(field1).toBeDefined();
+    expect(field1!.deleted).toBe(true);
   });
 });
 
