@@ -29,16 +29,17 @@ describe('ObservationCategoryIcon', () => {
     expect(screen.getByAltText('Forest icon')).toBeInTheDocument();
   });
 
-  it('renders a color fallback when there is no icon URL', () => {
+  it('renders a white circle with colored border and letter when there is no icon URL', () => {
     render(
       <ObservationCategoryIcon
         category={{ id: 'forest', name: 'Forest', color: '#117733' }}
       />,
     );
 
-    expect(screen.getByRole('img', { name: 'Forest' })).toHaveStyle({
-      backgroundColor: '#117733',
-    });
+    const icon = screen.getByRole('img', { name: 'Forest' });
+    // White background via Tailwind class + colored border via inline style
+    expect(icon.className).toContain('bg-white');
+    expect(icon).toHaveStyle({ border: '2px solid rgb(17, 119, 51)' });
     expect(screen.getByText('F')).toBeInTheDocument();
   });
 
