@@ -664,6 +664,102 @@ describe('remote-archive', () => {
     expect(urls).toBe(4); // Only first 4 stored
   });
 
+  it('uses stable per-attachment localIds so re-sync preserves identity', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-stable-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [
+                {
+                  driveId: 'driveA',
+                  type: 'photo',
+                  name: 'first.jpg',
+                  url: '/projects/proj-1/attachments/driveA/photo/first.jpg',
+                },
+                {
+                  driveId: 'driveA',
+                  type: 'photo',
+                  name: 'middle.jpg',
+                  url: '/projects/proj-1/attachments/driveA/photo/middle.jpg',
+                },
+                {
+                  driveId: 'driveA',
+                  type: 'photo',
+                  name: 'last.jpg',
+                  url: '/projects/proj-1/attachments/driveA/photo/last.jpg',
+                },
+              ],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+    );
+
+    await pullObservations('server-1', 'proj-1', 'local-proj-1', archiveConfig);
+
+    const db = getDb();
+    const syncedObservationLocalId =
+      'remoteArchive:https://archive.example.com:obs-stable-1';
+    const before = await db.attachments
+      .where('observationLocalId')
+      .equals(syncedObservationLocalId)
+      .toArray();
+    const localIdsBefore = before.map((a) => a.localId).sort();
+    expect(before).toHaveLength(3);
+
+    // Re-sync with the middle attachment removed server-side. The other
+    // two must keep their localIds and the middle one must be tombstoned.
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-stable-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [
+                {
+                  driveId: 'driveA',
+                  type: 'photo',
+                  name: 'first.jpg',
+                  url: '/projects/proj-1/attachments/driveA/photo/first.jpg',
+                },
+                {
+                  driveId: 'driveA',
+                  type: 'photo',
+                  name: 'last.jpg',
+                  url: '/projects/proj-1/attachments/driveA/photo/last.jpg',
+                },
+              ],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+    );
+
+    await pullObservations('server-1', 'proj-1', 'local-proj-1', archiveConfig);
+
+    const after = await db.attachments
+      .where('observationLocalId')
+      .equals(syncedObservationLocalId)
+      .toArray();
+    const localIdsAfter = after.map((a) => a.localId).sort();
+    expect(localIdsAfter).toEqual(localIdsBefore);
+
+    const byName = new Map(after.map((a) => [a.name, a]));
+    expect(byName.get('first.jpg')?.deleted).toBe(false);
+    expect(byName.get('last.jpg')?.deleted).toBe(false);
+    expect(byName.get('middle.jpg')?.deleted).toBe(true);
+  });
+
   it('updates updatedAt when project name changes', async () => {
     const db = getDb();
 

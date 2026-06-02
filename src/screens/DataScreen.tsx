@@ -18,12 +18,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useAttachmentsForProject } from '@/hooks/useAttachmentsForProject';
+import { useFields } from '@/hooks/useFields';
 import { useObservationCategoryMetadata } from '@/hooks/useObservationCategoryMetadata';
 import { useObservationFilters } from '@/hooks/useObservationFilters';
 import { useObservations } from '@/hooks/useObservations';
 import { usePaginatedItems } from '@/hooks/usePaginatedItems';
 import { useProjects } from '@/hooks/useProjects';
 import { useResponsivePageSize } from '@/hooks/useResponsivePageSize';
+import type { Field } from '@/lib/data-layer';
 import { useProjectStore } from '@/stores/project-store';
 import { useViewModeStore } from '@/stores/view-mode-store';
 
@@ -124,6 +126,7 @@ export function DataScreen() {
   const observationsQuery = useObservations(selectedProjectId);
   const alertsQuery = useAlerts(selectedProjectId);
   const attachmentsQuery = useAttachmentsForProject(selectedProjectId);
+  const fieldsQuery = useFields(selectedProjectId);
   const viewMode = useViewModeStore((s) => s.viewMode);
   const setViewMode = useViewModeStore((s) => s.setViewMode);
   const [activeTab, setActiveTab] = useState('observations');
@@ -206,6 +209,15 @@ export function DataScreen() {
     }
     return map;
   }, [attachments]);
+
+  const fieldsByKey = useMemo(() => {
+    const fields = fieldsQuery.data;
+    const map = new Map<string, Field>();
+    for (const field of fields ?? []) {
+      if (!field.deleted) map.set(field.key, field);
+    }
+    return map;
+  }, [fieldsQuery.data]);
 
   const { reset: resetFilters } = obsFilters;
 
@@ -372,6 +384,7 @@ export function DataScreen() {
                   disabled={observations.length === 0}
                   attachmentsByObservationId={attachmentsByObservationId}
                   displayNamesByObservationId={displayNames}
+                  fieldsByKey={fieldsByKey}
                 />
                 {viewMode === 'grid' ? (
                   <button

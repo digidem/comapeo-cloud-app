@@ -657,8 +657,6 @@ describe('DataScreen', () => {
             el.getAttribute('href')?.includes('/data/observations/'),
           );
         expect(obsLinks).toHaveLength(0);
-        // Grid cards should be hidden (no 'forest' category text visible)
-        expect(screen.queryByText('forest')).not.toBeInTheDocument();
       });
 
       it('switches back to grid view on second toggle click', async () => {

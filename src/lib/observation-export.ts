@@ -116,13 +116,6 @@ export function observationsToCsv(
   observations: Observation[],
   context: ObservationExportContext = {},
 ): string {
-  return observationsToCsvWithContext(observations, context);
-}
-
-export function observationsToCsvWithContext(
-  observations: Observation[],
-  context: ObservationExportContext = {},
-): string {
   const header = CSV_COLUMNS.join(',');
   if (observations.length === 0) return header;
 

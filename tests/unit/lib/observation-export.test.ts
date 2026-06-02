@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Observation } from '@/lib/data-layer';
+import type { Field, Observation } from '@/lib/data-layer';
 import {
   buildExportFilename,
   observationsToCsv,
@@ -401,6 +401,69 @@ describe('observationsToCsv', () => {
     const fields = lines[1]!.split(',');
 
     expect(fields[1]).toBe('Forest Alert');
+  });
+
+  it('rewrites tag keys to field labels and values to option labels when fieldsByKey is provided', () => {
+    const obs = makeObservation({
+      tags: { species: 'quercus_robur', severity: 'high' },
+    });
+    const fieldsByKey = new Map<string, Field>([
+      [
+        'species',
+        {
+          localId: 'local-field-species',
+          projectLocalId: 'proj-1',
+          sourceType: 'remoteArchive',
+          sourceId: 'server-1',
+          dirtyLocal: false,
+          versionId: 'v1',
+          originalVersionId: 'v1',
+          schemaName: 'field',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          links: [],
+          deleted: false,
+          type: 'select_one',
+          key: 'species',
+          label: 'Species',
+          universal: true,
+          options: [
+            { label: 'Oak', value: 'quercus_robur' },
+            { label: 'Pine', value: 'pinus_sylvestris' },
+          ],
+        },
+      ],
+      [
+        'severity',
+        {
+          localId: 'local-field-severity',
+          projectLocalId: 'proj-1',
+          sourceType: 'remoteArchive',
+          sourceId: 'server-1',
+          dirtyLocal: false,
+          versionId: 'v1',
+          originalVersionId: 'v1',
+          schemaName: 'field',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          links: [],
+          deleted: false,
+          type: 'select_one',
+          key: 'severity',
+          label: 'Severity Level',
+          universal: true,
+          options: [
+            { label: 'High', value: 'high' },
+            { label: 'Low', value: 'low' },
+          ],
+        },
+      ],
+    ]);
+    const csv = observationsToCsv([obs], { fieldsByKey });
+    // tags column carries the raw values plus a label-keyed enrichment
+    expect(csv).toContain('""Species"":""Oak""');
+    expect(csv).toContain('""Severity Level"":""High""');
+    expect(csv).toContain('""species"":""quercus_robur""');
   });
 
   it('handles empty observations (header only)', () => {

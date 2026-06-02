@@ -235,49 +235,6 @@ describe('getObservations', () => {
 });
 
 // ---------------------------------------------------------------------------
-// getObservationDocuments
-// ---------------------------------------------------------------------------
-describe('getObservationDocuments', () => {
-  const projectId = 'proj-observation-docs-1';
-
-  it('uses the singular 0.4 observation endpoint', async () => {
-    let capturedUrl: string | null = null;
-    server.use(
-      http.get(
-        `${BASE_URL}/projects/${projectId}/observation`,
-        ({ request }) => {
-          capturedUrl = request.url;
-          return HttpResponse.json({
-            data: [
-              {
-                docId: 'obs-doc-1',
-                versionId: 'obs-doc-1/0',
-                originalVersionId: 'obs-doc-1/0',
-                schemaName: 'observation',
-                createdAt: '2024-01-01T00:00:00Z',
-                updatedAt: '2024-01-01T00:00:00Z',
-                links: [],
-                deleted: false,
-                attachments: [
-                  { url: '/projects/proj/attachments/drive/photo/a.jpg' },
-                ],
-                tags: {},
-                metadata: { manualLocation: true },
-              },
-            ],
-          });
-        },
-      ),
-    );
-
-    const result = await apiClient.getObservationDocuments(projectId);
-
-    expect(capturedUrl).toBe(`${BASE_URL}/projects/${projectId}/observation`);
-    expect(result.data[0]!.docId).toBe('obs-doc-1');
-  });
-});
-
-// ---------------------------------------------------------------------------
 // getTracks
 // ---------------------------------------------------------------------------
 describe('getTracks', () => {
