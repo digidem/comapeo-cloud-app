@@ -406,8 +406,10 @@ export async function pullTracks(
     deleted: item.deleted,
   }));
 
-  await db.tracks.bulkPut(allTracks);
-  await tombstoneStaleRows(db.tracks, projectLocalId, serverId, allTracks);
+  await db.transaction('rw', [db.tracks], async () => {
+    await db.tracks.bulkPut(allTracks);
+    await tombstoneStaleRows(db.tracks, projectLocalId, serverId, allTracks);
+  });
   return allTracks.filter((t) => !t.deleted);
 }
 
@@ -497,7 +499,9 @@ export async function pullFields(
     deleted: item.deleted,
   }));
 
-  await db.fields.bulkPut(allFields);
-  await tombstoneStaleRows(db.fields, projectLocalId, serverId, allFields);
+  await db.transaction('rw', [db.fields], async () => {
+    await db.fields.bulkPut(allFields);
+    await tombstoneStaleRows(db.fields, projectLocalId, serverId, allFields);
+  });
   return allFields.filter((f) => !f.deleted);
 }
