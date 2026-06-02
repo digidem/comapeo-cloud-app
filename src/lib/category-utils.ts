@@ -37,7 +37,7 @@ function getCategoryTagValue(
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function buildIconUrl({
+export function buildIconUrl({
   projectRemoteId,
   serverUrl,
   iconDocId,

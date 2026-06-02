@@ -896,6 +896,60 @@ describe('pullPresets', () => {
     expect(stored).toHaveLength(2); // not duplicated
   });
 
+  it('pre-caches category icon blobs during sync', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/preset`, () =>
+        HttpResponse.json(PRESETS_RESPONSE),
+      ),
+      // Serve a TypedArray body (undici can stream it in node, unlike a Blob).
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-remote-1/icon/icon-001`,
+        () =>
+          new HttpResponse(new Uint8Array([60, 115, 118, 103, 47, 62]), {
+            status: 200,
+            headers: { 'Content-Type': 'image/svg+xml' },
+          }),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    await pullPresets('server-1', 'proj-remote-1', 'proj-local-1', config);
+
+    // The cache key must match what the UI derives via buildIconUrl, i.e.
+    // `${serverUrl}/projects/${projectRemoteId}/icon/${iconDocId}`.
+    const { getCachedIconBlob } = await import('@/lib/db');
+    const cached = await getCachedIconBlob(
+      `${archiveConfig.baseUrl}/projects/proj-remote-1/icon/icon-001`,
+    );
+    expect(cached).toBeInstanceOf(Blob);
+  });
+
+  it('does not fail preset sync when icon pre-fetch fails', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/preset`, () =>
+        HttpResponse.json(PRESETS_RESPONSE),
+      ),
+      http.get(
+        `${archiveConfig.baseUrl}/projects/proj-remote-1/icon/icon-001`,
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+    );
+    const config = {
+      baseUrl: archiveConfig.baseUrl,
+      token: archiveConfig.token,
+    };
+    const presets = await pullPresets(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      config,
+    );
+    // Preset sync still succeeds despite the icon fetch failing.
+    expect(presets).toHaveLength(2);
+  });
+
   it('skips deleted presets', async () => {
     server.use(
       http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/preset`, () =>

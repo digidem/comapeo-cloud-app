@@ -450,6 +450,68 @@ describe('useAuthenticatedImageUrl', () => {
     );
   });
 
+  describe('icon caching (cache: true)', () => {
+    it('serves a cached blob without hitting the network', async () => {
+      const url = 'https://archive.example.com/projects/p1/icon/icon-1';
+      const { putCachedIconBlob } = await import('@/lib/db');
+      await putCachedIconBlob(
+        url,
+        new Blob(['cached-icon'], { type: 'image/png' }),
+      );
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      const { result } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+
+      await act(() => Promise.resolve());
+
+      expect(result.current.blobUrl).toBe('blob:mocked-url');
+      expect(result.current.isLoading).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('fetches then writes to the cache on a cache miss', async () => {
+      const url = 'https://archive.example.com/projects/p1/icon/icon-miss';
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      const { result } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result.current.blobUrl).toBe('blob:mocked-url');
+
+      const { getCachedIconBlob } = await import('@/lib/db');
+      const cached = await getCachedIconBlob(url);
+      expect(cached).toBeInstanceOf(Blob);
+    });
+
+    it('does not touch the cache when cache is not enabled', async () => {
+      const url = 'https://archive.example.com/projects/p1/icon/icon-nocache';
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      renderHook(() => useAuthenticatedImageUrl(url));
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      const { getCachedIconBlob } = await import('@/lib/db');
+      expect(await getCachedIconBlob(url)).toBeUndefined();
+    });
+  });
+
   it('does not update state after unmount', async () => {
     let resolveFetch: (value: Response) => void;
     const pendingPromise = new Promise<Response>((resolve) => {

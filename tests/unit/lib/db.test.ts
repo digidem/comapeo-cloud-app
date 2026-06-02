@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getDb, resetDb } from '@/lib/db';
+import {
+  getCachedIconBlob,
+  getDb,
+  putCachedIconBlob,
+  resetDb,
+} from '@/lib/db';
 import type { Field, Preset, Track } from '@/lib/db';
 
 beforeEach(async () => {
@@ -507,15 +512,16 @@ describe('AppDatabase', () => {
     ]);
   });
 
-  it('declares version 10 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
+  it('declares version 11 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
     const db = getDb();
 
-    // The highest declared version is 10 (v8 no-op, v9 string→ref
-    // re-declared, v10 adds the v2 sync indexes and field migrations).
-    // If any future change drops or renumbers versions, this test fails
-    // and forces the author to think about the upgrade path for users
-    // on prior builds (especially the post-#67 v9 build).
-    expect(db.verno).toBe(10);
+    // The highest declared version is 11 (v8 no-op, v9 string→ref
+    // re-declared, v10 adds the v2 sync indexes and field migrations, v11
+    // adds the iconCache table). If any future change drops or renumbers
+    // versions, this test fails and forces the author to think about the
+    // upgrade path for users on prior builds (especially the post-#67 v9
+    // build).
+    expect(db.verno).toBe(11);
 
     // Verify the v2 sync indexes are present in the schema. These are
     // required for the index-based queries used by remote-archive.ts.
@@ -631,6 +637,14 @@ describe('presets table', () => {
     expect(stored!.color).toBe('#FF5733');
   });
 
+  it('exposes the iconCache table with url as primary key', async () => {
+    const db = getDb();
+    expect(db.iconCache).toBeDefined();
+    expect(db.iconCache.name).toBe('iconCache');
+    expect(db.iconCache.schema.primKey.name).toBe('url');
+    expect(db.iconCache.schema.primKey.unique).toBe(true);
+  });
+
   it('queries presets by projectLocalId', async () => {
     const db = getDb();
     await db.presets.bulkPut([
@@ -679,5 +693,40 @@ describe('presets table', () => {
       .equals('proj-a')
       .toArray();
     expect(presets).toHaveLength(2);
+  });
+});
+
+describe('icon cache helpers', () => {
+  it('returns undefined for an uncached icon URL', async () => {
+    const blob = await getCachedIconBlob(
+      'https://archive.example.com/projects/p1/icon/icon-1',
+    );
+    expect(blob).toBeUndefined();
+  });
+
+  it('returns undefined for an empty URL without touching the DB', async () => {
+    expect(await getCachedIconBlob('')).toBeUndefined();
+  });
+
+  it('stores and retrieves a cached icon blob by URL', async () => {
+    const url = 'https://archive.example.com/projects/p1/icon/icon-1';
+    const blob = new Blob(['<svg/>'], { type: 'image/svg+xml' });
+
+    await putCachedIconBlob(url, blob);
+    const retrieved = await getCachedIconBlob(url);
+
+    expect(retrieved).toBeInstanceOf(Blob);
+    expect(retrieved!.type).toBe('image/svg+xml');
+  });
+
+  it('overwrites an existing cache entry on re-put', async () => {
+    const url = 'https://archive.example.com/projects/p1/icon/icon-1';
+    await putCachedIconBlob(url, new Blob(['a'], { type: 'image/png' }));
+    await putCachedIconBlob(url, new Blob(['bb'], { type: 'image/svg+xml' }));
+
+    const db = getDb();
+    const rows = await db.iconCache.where('url').equals(url).toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.contentType).toBe('image/svg+xml');
   });
 });

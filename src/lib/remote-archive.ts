@@ -1,7 +1,8 @@
 import { apiClient } from '@/lib/api-client';
 import type { RequestConfig } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
-import { getDb } from '@/lib/db';
+import { buildIconUrl } from '@/lib/category-utils';
+import { getCachedIconBlob, getDb, putCachedIconBlob } from '@/lib/db';
 import type {
   Alert,
   Attachment,
@@ -406,6 +407,46 @@ export async function pullAlerts(
   return alerts;
 }
 
+/**
+ * Pre-fetch and cache the icon blobs for the given presets so the UI can
+ * render category icons instantly (from IndexedDB) instead of fetching them
+ * on first render. Best-effort: individual icon failures are swallowed and
+ * never affect the preset sync. The cache key matches the icon URL the UI
+ * derives via {@link buildIconUrl}, so cached blobs are found on lookup.
+ */
+async function precacheCategoryIcons(
+  presets: readonly Preset[],
+  projectRemoteId: string,
+  serverUrl: string,
+  config: RequestConfig,
+): Promise<void> {
+  const seen = new Set<string>();
+  await Promise.allSettled(
+    presets
+      .filter((preset) => !preset.deleted && preset.iconDocId)
+      .map(async (preset) => {
+        const iconUrl = buildIconUrl({
+          projectRemoteId,
+          serverUrl,
+          iconDocId: preset.iconDocId,
+        });
+        if (!iconUrl || seen.has(iconUrl)) return;
+        seen.add(iconUrl);
+
+        // Skip if already cached to avoid redundant network fetches.
+        const existing = await getCachedIconBlob(iconUrl);
+        if (existing) return;
+
+        const blob = await apiClient.getIcon(
+          projectRemoteId,
+          preset.iconDocId!,
+          config,
+        );
+        await putCachedIconBlob(iconUrl, blob);
+      }),
+  );
+}
+
 export async function pullPresets(
   serverId: string,
   projectRemoteId: string,
@@ -416,9 +457,8 @@ export async function pullPresets(
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
   const serverRecord = await getRemoteServer(serverId);
-  const stableKey = stableSourceKey(
-    serverRecord?.baseUrl ?? config.baseUrl ?? '',
-  );
+  const baseUrl = serverRecord?.baseUrl ?? config.baseUrl ?? '';
+  const stableKey = stableSourceKey(baseUrl);
 
   // Map ALL items (including deleted) and write them all to DB as tombstones
   // matching the pattern from pullObservations / pullAlerts
@@ -441,6 +481,10 @@ export async function pullPresets(
   }));
 
   await db.presets.bulkPut(allPresets);
+
+  // Pre-cache category icons so the UI renders them instantly. Best-effort;
+  // failures do not affect the preset sync result.
+  await precacheCategoryIcons(allPresets, projectRemoteId, baseUrl, config);
 
   // Return only the non-deleted subset to callers; deleted items remain
   // locally as tombstones so they are not re-surfaced after server-side deletion
