@@ -111,6 +111,10 @@ export function validateArchiveProxyRequest(
     normalizedPath === '/healthcheck' ||
     normalizedPath === '/projects' ||
     /^\/projects\/[^/]+\/observations$/.test(normalizedPath) ||
+    /^\/projects\/[^/]+\/track$/.test(normalizedPath) ||
+    /^\/projects\/[^/]+\/preset(?:\/[^/]+)?$/.test(normalizedPath) ||
+    /^\/projects\/[^/]+\/field(?:\/[^/]+)?$/.test(normalizedPath) ||
+    /^\/projects\/[^/]+\/icon\/[^/]+$/.test(normalizedPath) ||
     /^\/projects\/[^/]+\/remoteDetectionAlerts$/.test(normalizedPath) ||
     /^\/projects\/[^/]+\/track$/.test(normalizedPath) ||
     /^\/projects\/[^/]+\/preset$/.test(normalizedPath) ||

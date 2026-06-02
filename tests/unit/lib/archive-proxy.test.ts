@@ -100,6 +100,51 @@ describe('archive proxy helpers', () => {
       ok: true,
       value: '/projects/proj-1/observations',
     });
+    // The singular /observation endpoint was removed in the 0.4 sync
+    // (replaced by the plural /observations bulk endpoint) — reject it.
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/observation'),
+    ).toEqual({
+      ok: false,
+      code: 'UNSUPPORTED_ARCHIVE_PROXY_PATH',
+      message: 'Archive proxy path is not supported',
+    });
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/track'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/track',
+    });
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/preset'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/preset',
+    });
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/preset/preset-1'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/preset/preset-1',
+    });
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/field'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/field',
+    });
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/field/field-1'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/field/field-1',
+    });
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/icon/icon-1'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/icon/icon-1',
+    });
     expect(
       validateArchiveProxyRequest(
         'POST',
@@ -194,6 +239,27 @@ describe('archive proxy helpers', () => {
       message: 'Archive proxy path is not supported',
     });
     expect(validateArchiveProxyRequest('POST', '/projects')).toEqual({
+      ok: false,
+      code: 'UNSUPPORTED_ARCHIVE_PROXY_PATH',
+      message: 'Archive proxy path is not supported',
+    });
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/tracks'),
+    ).toEqual({
+      ok: false,
+      code: 'UNSUPPORTED_ARCHIVE_PROXY_PATH',
+      message: 'Archive proxy path is not supported',
+    });
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/presets'),
+    ).toEqual({
+      ok: false,
+      code: 'UNSUPPORTED_ARCHIVE_PROXY_PATH',
+      message: 'Archive proxy path is not supported',
+    });
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/fields'),
+    ).toEqual({
       ok: false,
       code: 'UNSUPPORTED_ARCHIVE_PROXY_PATH',
       message: 'Archive proxy path is not supported',

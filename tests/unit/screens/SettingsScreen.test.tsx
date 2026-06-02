@@ -235,6 +235,20 @@ describe('SettingsScreen', () => {
       ).toBeInTheDocument();
     });
 
+    it('clears pending export feedback timers on unmount', async () => {
+      const user = userEvent.setup();
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+      const { unmount } = render(<SettingsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Export Backup' }));
+      unmount();
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+
+      clearTimeoutSpy.mockRestore();
+    });
+
     it('shows error feedback when export fails', async () => {
       vi.mocked(exportLocalStorageData).mockImplementationOnce(() => {
         throw new Error('Storage unavailable');

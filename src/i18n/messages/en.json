@@ -983,6 +983,9 @@
   "notFound.title": {
     "defaultMessage": "Page not found"
   },
+  "observationCategoryIcon.alt": {
+    "defaultMessage": "{category} icon"
+  },
   "observationDetail.coordinates": {
     "defaultMessage": "Coordinates"
   },

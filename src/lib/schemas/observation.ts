@@ -6,19 +6,29 @@ export const presetRefSchema = v.object({
   url: v.string(),
 });
 
+export const attachmentSchema = v.object({
+  url: v.string(),
+  driveId: v.optional(v.string()),
+  type: v.optional(v.string()),
+  name: v.optional(v.string()),
+  hash: v.optional(v.string()),
+  mimeType: v.optional(v.string()),
+});
+
 export const observationSchema = v.object({
   docId: v.string(),
+  versionId: v.optional(v.string()),
+  originalVersionId: v.optional(v.string()),
+  schemaName: v.optional(v.literal('observation')),
   createdAt: v.string(),
   updatedAt: v.string(),
+  links: v.optional(v.array(v.string())),
   deleted: v.boolean(),
   lat: v.optional(v.number()),
   lon: v.optional(v.number()),
-  attachments: v.array(
-    v.object({
-      url: v.string(),
-    }),
-  ),
+  attachments: v.array(attachmentSchema),
   tags: v.record(v.string(), v.unknown()),
+  metadata: v.optional(v.record(v.string(), v.unknown())),
   presetRef: v.optional(presetRefSchema),
 });
 

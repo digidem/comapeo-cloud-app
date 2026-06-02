@@ -235,6 +235,89 @@ describe('getObservations', () => {
 });
 
 // ---------------------------------------------------------------------------
+// getTracks
+// ---------------------------------------------------------------------------
+describe('getTracks', () => {
+  const projectId = 'proj-track-1';
+
+  it('uses the singular 0.4 track endpoint and validates tracks', async () => {
+    let capturedUrl: string | null = null;
+    server.use(
+      http.get(`${BASE_URL}/projects/${projectId}/track`, ({ request }) => {
+        capturedUrl = request.url;
+        return HttpResponse.json({
+          data: [
+            {
+              docId: 'track-1',
+              versionId: 'track-1/0',
+              originalVersionId: 'track-1/0',
+              schemaName: 'track',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              locations: [
+                {
+                  coords: {
+                    latitude: -8.35,
+                    longitude: -55.45,
+                  },
+                  timestamp: '2024-01-01T00:00:00Z',
+                },
+              ],
+              observationRefs: [
+                {
+                  docId: 'obs-1',
+                  versionId: 'obs-1/0',
+                  url: '/projects/proj/observation/obs-1',
+                },
+              ],
+              tags: { patrol: 'north' },
+            },
+          ],
+        });
+      }),
+    );
+
+    const result = await apiClient.getTracks(projectId);
+
+    expect(capturedUrl).toBe(`${BASE_URL}/projects/${projectId}/track`);
+    const firstTrack = result.data[0];
+    expect(firstTrack).toBeDefined();
+    expect(firstTrack!.docId).toBe('track-1');
+    expect(firstTrack!.locations).toHaveLength(1);
+    const firstLocation = firstTrack!.locations?.[0];
+    expect(firstLocation).toBeDefined();
+    expect(firstLocation!.coords.longitude).toBe(-55.45);
+  });
+
+  it('returns empty data array on 404 (legacy server)', async () => {
+    server.use(
+      http.get(`${BASE_URL}/projects/${projectId}/track`, () =>
+        HttpResponse.json(
+          { error: { code: 'NOT_FOUND', message: 'Not found' } },
+          { status: 404 },
+        ),
+      ),
+    );
+    const result = await apiClient.getTracks(projectId);
+    expect(result).toEqual({ data: [] });
+  });
+
+  it('throws ApiError on non-404 error response', async () => {
+    server.use(
+      http.get(`${BASE_URL}/projects/${projectId}/track`, () =>
+        HttpResponse.json(
+          { error: { code: 'INTERNAL_ERROR', message: 'Boom' } },
+          { status: 500 },
+        ),
+      ),
+    );
+    await expect(apiClient.getTracks(projectId)).rejects.toThrow(ApiError);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // ALERTS_PATH constant
 // ---------------------------------------------------------------------------
 describe('ALERTS_PATH constant', () => {
@@ -697,6 +780,31 @@ describe('getFields', () => {
     const result = await apiClient.getFields('proj1');
     expect(result.data).toBeInstanceOf(Array);
     expect(result.data[0]).toHaveProperty('key');
+  });
+
+  it('returns empty data array on 404 (legacy server)', async () => {
+    server.use(
+      http.get(`${BASE_URL}/projects/proj1/field`, () =>
+        HttpResponse.json(
+          { error: { code: 'NOT_FOUND', message: 'Not found' } },
+          { status: 404 },
+        ),
+      ),
+    );
+    const result = await apiClient.getFields('proj1');
+    expect(result).toEqual({ data: [] });
+  });
+
+  it('throws ApiError on non-404 error response', async () => {
+    server.use(
+      http.get(`${BASE_URL}/projects/proj1/field`, () =>
+        HttpResponse.json(
+          { error: { code: 'INTERNAL_ERROR', message: 'Boom' } },
+          { status: 500 },
+        ),
+      ),
+    );
+    await expect(apiClient.getFields('proj1')).rejects.toThrow(ApiError);
   });
 });
 

@@ -1,20 +1,22 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getDb, resetDb } from '@/lib/db';
-import type { Preset } from '@/lib/db';
+import type { Field, Preset, Track } from '@/lib/db';
 
 beforeEach(async () => {
   await resetDb();
 });
 
 describe('AppDatabase', () => {
-  it('exposes all 7 required tables', async () => {
+  it('exposes all 9 required tables', async () => {
     const db = getDb();
 
     expect(db.projects).toBeDefined();
     expect(db.observations).toBeDefined();
     expect(db.alerts).toBeDefined();
     expect(db.attachments).toBeDefined();
+    expect(db.tracks).toBeDefined();
+    expect(db.fields).toBeDefined();
     expect(db.remoteServers).toBeDefined();
     expect(db.syncMetadata).toBeDefined();
     expect(db.presets).toBeDefined();
@@ -55,6 +57,24 @@ describe('AppDatabase', () => {
     expect(db.attachments.schema.primKey.name).toBe('localId');
     expect(db.attachments.schema.primKey.keyPath).toBe('localId');
     expect(db.attachments.schema.primKey.unique).toBe(true);
+  });
+
+  it('defines &localId as the primary key for tracks', async () => {
+    const db = getDb();
+
+    expect(db.tracks.name).toBe('tracks');
+    expect(db.tracks.schema.primKey.name).toBe('localId');
+    expect(db.tracks.schema.primKey.keyPath).toBe('localId');
+    expect(db.tracks.schema.primKey.unique).toBe(true);
+  });
+
+  it('defines &localId as the primary key for fields', async () => {
+    const db = getDb();
+
+    expect(db.fields.name).toBe('fields');
+    expect(db.fields.schema.primKey.name).toBe('localId');
+    expect(db.fields.schema.primKey.keyPath).toBe('localId');
+    expect(db.fields.schema.primKey.unique).toBe(true);
   });
 
   it('defines &id as the primary key for remoteServers', async () => {
@@ -142,6 +162,43 @@ describe('AppDatabase', () => {
     expect(retrieved!.lon).toBe(-60.456);
   });
 
+  it('stores observation metadata and direct preset reference', async () => {
+    const db = getDb();
+
+    const observation: Parameters<typeof db.observations.add>[0] = {
+      localId: 'obs-metadata',
+      projectLocalId: 'proj-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      remoteId: 'remote-obs-1',
+      versionId: 'remote-obs-1/0',
+      originalVersionId: 'remote-obs-1/0',
+      schemaName: 'observation',
+      links: [],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+      metadata: { manualLocation: true },
+      presetRefDocId: 'preset-forest',
+      presetRef: {
+        docId: 'preset-forest',
+        versionId: 'preset-forest/0',
+        url: '/projects/proj-1/preset/preset-forest',
+      },
+    };
+
+    await db.observations.add(observation);
+    const retrieved = await db.observations.get('obs-metadata');
+    expect(retrieved).toBeDefined();
+    expect(retrieved!.metadata).toEqual({ manualLocation: true });
+    expect(retrieved!.presetRefDocId).toBe('preset-forest');
+    expect(retrieved!.versionId).toBe('remote-obs-1/0');
+    expect(retrieved!.presetRef?.url).toBe(
+      '/projects/proj-1/preset/preset-forest',
+    );
+  });
+
   it('stores observation without lat/lon (backward compatibility)', async () => {
     const db = getDb();
 
@@ -195,6 +252,17 @@ describe('AppDatabase', () => {
       sourceType: 'drive',
       sourceId: 'drive-abc',
       remoteId: 'remote-att-1',
+      sourceDocId: 'obs-1:0',
+      driveId: 'drive-abc',
+      type: 'photo',
+      name: 'image.jpg',
+      hash: 'hash-1',
+      remoteUrl: '/projects/proj-1/attachments/drive-abc/photo/image.jpg',
+      resolvedUrl:
+        'https://archive.example.com/projects/proj-1/attachments/drive-abc/photo/image.jpg',
+      mediaType: 'photo',
+      contentType: 'image/jpeg',
+      downloadStatus: 'remote-only',
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
       dirtyLocal: true,
@@ -206,6 +274,95 @@ describe('AppDatabase', () => {
     expect(retrieved).toBeDefined();
     expect(retrieved!.localId).toBe('att-1');
     expect(retrieved!.observationLocalId).toBe('obs-1');
+    expect(retrieved!.driveId).toBe('drive-abc');
+    expect(retrieved!.name).toBe('image.jpg');
+    expect(retrieved!.mediaType).toBe('photo');
+    expect(retrieved!.downloadStatus).toBe('remote-only');
+  });
+
+  it('stores and retrieves a track record', async () => {
+    const db = getDb();
+
+    const track: Track = {
+      localId: 'track-1',
+      projectLocalId: 'proj-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      remoteId: 'remote-track-1',
+      versionId: 'remote-track-1/0',
+      originalVersionId: 'remote-track-1/0',
+      schemaName: 'track',
+      links: [],
+      tags: { patrol: 'north' },
+      presetRefDocId: 'preset-track',
+      presetRef: {
+        docId: 'preset-track',
+        versionId: 'preset-track/0',
+        url: '/projects/proj-1/preset/preset-track',
+      },
+      locations: [
+        {
+          coords: { latitude: -8.1, longitude: -55.2 },
+          timestamp: '2026-01-01T00:00:00Z',
+          accuracy: 5,
+          altitude: 20,
+        },
+      ],
+      observationRefs: [
+        {
+          docId: 'obs-1',
+          versionId: 'obs-1/0',
+          url: '/projects/proj-1/observation/obs-1',
+        },
+      ],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    };
+
+    await db.tracks.add(track);
+    const retrieved = await db.tracks.get('track-1');
+    expect(retrieved).toBeDefined();
+    expect(retrieved!.locations).toEqual(track.locations);
+    expect(retrieved!.observationRefs[0]!.docId).toBe('obs-1');
+    expect(retrieved!.presetRef?.versionId).toBe('preset-track/0');
+  });
+
+  it('stores and retrieves a field record', async () => {
+    const db = getDb();
+
+    const field: Field = {
+      localId: 'field-1',
+      projectLocalId: 'proj-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      remoteId: 'remote-field-1',
+      versionId: 'remote-field-1/0',
+      originalVersionId: 'remote-field-1/0',
+      schemaName: 'field',
+      links: [],
+      type: 'select_one',
+      key: 'condition',
+      label: 'Condition',
+      placeholder: 'Choose one',
+      universal: false,
+      options: [
+        { label: 'Good', value: 'good' },
+        { label: 'Bad', value: 'bad' },
+      ],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    };
+
+    await db.fields.add(field);
+    const retrieved = await db.fields.get('field-1');
+    expect(retrieved).toBeDefined();
+    expect(retrieved!.versionId).toBe('remote-field-1/0');
+    expect(retrieved!.key).toBe('condition');
+    expect(retrieved!.options).toEqual(field.options);
   });
 
   it('stores and retrieves a remoteServer record', async () => {
@@ -348,6 +505,26 @@ describe('AppDatabase', () => {
       { docId: 'obs-old-1' },
       { docId: 'obs-old-2' },
     ]);
+  });
+
+  it('declares version 10 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
+    const db = getDb();
+
+    // The highest declared version is 10 (v8 no-op, v9 string→ref
+    // re-declared, v10 adds the v2 sync indexes and field migrations).
+    // If any future change drops or renumbers versions, this test fails
+    // and forces the author to think about the upgrade path for users
+    // on prior builds (especially the post-#67 v9 build).
+    expect(db.verno).toBe(10);
+
+    // Verify the v2 sync indexes are present in the schema. These are
+    // required for the index-based queries used by remote-archive.ts.
+    const trackIndexNames = db.tracks.schema.indexes.map((i) => i.src);
+    const fieldIndexNames = db.fields.schema.indexes.map((i) => i.src);
+    expect(trackIndexNames).toContain('[projectLocalId+remoteId]');
+    expect(trackIndexNames).toContain('[projectLocalId+presetRefDocId]');
+    expect(fieldIndexNames).toContain('[projectLocalId+remoteId]');
+    expect(fieldIndexNames).toContain('[projectLocalId+key]');
   });
 
   it('stores and retrieves a project with description', async () => {

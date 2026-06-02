@@ -22,7 +22,7 @@ describe('syncRemoteArchive', () => {
     });
   }
 
-  it('syncs projects, observations, and alerts from remote archive', async () => {
+  it('syncs projects, observations, alerts, tracks, presets, fields, and attachments from remote archive', async () => {
     const serverRecord = await seedServer();
     // Store the token alongside the server in the auth store
     const { useAuthStore } = await import('@/stores/auth-store');
@@ -45,10 +45,21 @@ describe('syncRemoteArchive', () => {
           data: [
             {
               docId: 'obs-1',
+              versionId: 'obs-1/0',
+              originalVersionId: 'obs-1/0',
+              schemaName: 'observation',
               createdAt: '2024-01-01T00:00:00Z',
               updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
               deleted: false,
-              attachments: [],
+              attachments: [
+                {
+                  driveId: 'drive1',
+                  type: 'photo',
+                  name: 'img1.jpg',
+                  url: '/projects/proj-1/attachments/drive1/photo/img1.jpg',
+                },
+              ],
               tags: {},
             },
           ],
@@ -63,6 +74,66 @@ describe('syncRemoteArchive', () => {
               updatedAt: '2024-01-01T00:00:00Z',
               deleted: false,
               geometry: { type: 'Point', coordinates: [0, 0] },
+            },
+          ],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/track`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'track-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:10:00Z',
+              deleted: false,
+              locations: [{ coords: { latitude: -8.35, longitude: -55.45 } }],
+              observationRefs: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'preset-1',
+              versionId: 'preset-1/0',
+              originalVersionId: 'preset-1/0',
+              schemaName: 'preset',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              name: 'Forest',
+              geometry: ['point'],
+              tags: {},
+              addTags: {},
+              removeTags: {},
+              fieldRefs: [
+                { docId: 'field-1', versionId: 'field-1/0', url: '/field-1' },
+              ],
+              terms: [],
+            },
+          ],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/field`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'field-1',
+              versionId: 'field-1/0',
+              originalVersionId: 'field-1/0',
+              schemaName: 'field',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              type: 'text',
+              key: 'notes',
+              label: 'Notes',
+              universal: false,
             },
           ],
         }),
@@ -93,6 +164,10 @@ describe('syncRemoteArchive', () => {
     // Alerts should have projectLocalId matching the project's localId
     expect(alerts[0]!.projectLocalId).toBe(projects[0]!.localId);
     expect(alerts[0]!.sourceId).toBe(serverRecord.id);
+    expect(await db.tracks.count()).toBe(1);
+    expect(await db.presets.count()).toBe(1);
+    expect(await db.fields.count()).toBe(1);
+    expect(await db.attachments.count()).toBe(1);
   });
 
   it('returns success false on network failure', async () => {
@@ -583,6 +658,62 @@ describe('syncRemoteArchive', () => {
     const db = getDb();
     const observations = await db.observations.toArray();
     expect(observations.length).toBeGreaterThan(0);
+  });
+
+  it('succeeds when tracks and fields fail (non-critical data types)', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      allowDuplicate: true,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/track`, () =>
+        HttpResponse.json({}, { status: 500 }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/proj-1/field`, () =>
+        HttpResponse.json({}, { status: 500 }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    expect(result.success).toBe(true);
+
+    const db = getDb();
+    const observations = await db.observations.toArray();
+    expect(observations).toHaveLength(1);
   });
 
   it('fails when observations fail for all projects (critical data type)', async () => {

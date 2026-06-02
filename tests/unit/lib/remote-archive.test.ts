@@ -480,6 +480,86 @@ describe('remote-archive', () => {
     expect(obs.tags?.photoUrls).toContain('drive2/photo/img2');
   });
 
+  it('stores first-class attachment records while keeping tag compatibility', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-attachments-1',
+              versionId: 'obs-attachments-1/0',
+              originalVersionId: 'obs-attachments-1/0',
+              schemaName: 'observation',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              attachments: [
+                {
+                  driveId: 'drive1',
+                  type: 'photo',
+                  name: 'img1.jpg',
+                  hash: 'hash-1',
+                  mimeType: 'image/jpeg',
+                  url: '/projects/proj-1/attachments/drive1/photo/img1.jpg',
+                },
+                {
+                  url: '/projects/proj-1/attachments/drive2/audio/rec1.m4a',
+                },
+              ],
+              metadata: { manualLocation: true },
+              tags: { species: 'tree' },
+              presetRef: {
+                docId: 'preset-1',
+                versionId: 'preset-1/0',
+                url: '/projects/proj-1/preset/preset-1',
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
+
+    const db = getDb();
+    const storedObservation = await db.observations.get(
+      observations[0]!.localId,
+    );
+    expect(storedObservation!.metadata).toEqual({ manualLocation: true });
+    expect(storedObservation!.presetRefDocId).toBe('preset-1');
+    expect(storedObservation!.presetRef?.versionId).toBe('preset-1/0');
+    expect(storedObservation!.versionId).toBe('obs-attachments-1/0');
+
+    const attachments = await db.attachments
+      .where('observationLocalId')
+      .equals(storedObservation!.localId)
+      .toArray();
+    expect(attachments).toHaveLength(2);
+    expect(attachments[0]!).toMatchObject({
+      projectLocalId: 'local-proj-1',
+      observationLocalId: storedObservation!.localId,
+      driveId: 'drive1',
+      type: 'photo',
+      name: 'img1.jpg',
+      hash: 'hash-1',
+      mediaType: 'photo',
+      contentType: 'image/jpeg',
+      downloadStatus: 'remote-only',
+      deleted: false,
+    });
+    expect(attachments[0]!.resolvedUrl).toBe(
+      'https://archive.example.com/projects/proj-1/attachments/drive1/photo/img1.jpg',
+    );
+    expect(storedObservation!.tags?.photoCount).toBe('1');
+    expect(storedObservation!.tags?.audioCount).toBe('1');
+  });
+
   it('resolves relative photo attachment URLs against the archive base URL before storing', async () => {
     server.use(
       http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
@@ -582,6 +662,102 @@ describe('remote-archive', () => {
     expect(obs.tags?.photoCount).toBe('5');
     const urls = obs.tags?.photoUrls?.split(',').length;
     expect(urls).toBe(4); // Only first 4 stored
+  });
+
+  it('uses stable per-attachment localIds so re-sync preserves identity', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-stable-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [
+                {
+                  driveId: 'driveA',
+                  type: 'photo',
+                  name: 'first.jpg',
+                  url: '/projects/proj-1/attachments/driveA/photo/first.jpg',
+                },
+                {
+                  driveId: 'driveA',
+                  type: 'photo',
+                  name: 'middle.jpg',
+                  url: '/projects/proj-1/attachments/driveA/photo/middle.jpg',
+                },
+                {
+                  driveId: 'driveA',
+                  type: 'photo',
+                  name: 'last.jpg',
+                  url: '/projects/proj-1/attachments/driveA/photo/last.jpg',
+                },
+              ],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+    );
+
+    await pullObservations('server-1', 'proj-1', 'local-proj-1', archiveConfig);
+
+    const db = getDb();
+    const syncedObservationLocalId =
+      'remoteArchive:https://archive.example.com:obs-stable-1';
+    const before = await db.attachments
+      .where('observationLocalId')
+      .equals(syncedObservationLocalId)
+      .toArray();
+    const localIdsBefore = before.map((a) => a.localId).sort();
+    expect(before).toHaveLength(3);
+
+    // Re-sync with the middle attachment removed server-side. The other
+    // two must keep their localIds and the middle one must be tombstoned.
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-stable-1',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [
+                {
+                  driveId: 'driveA',
+                  type: 'photo',
+                  name: 'first.jpg',
+                  url: '/projects/proj-1/attachments/driveA/photo/first.jpg',
+                },
+                {
+                  driveId: 'driveA',
+                  type: 'photo',
+                  name: 'last.jpg',
+                  url: '/projects/proj-1/attachments/driveA/photo/last.jpg',
+                },
+              ],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+    );
+
+    await pullObservations('server-1', 'proj-1', 'local-proj-1', archiveConfig);
+
+    const after = await db.attachments
+      .where('observationLocalId')
+      .equals(syncedObservationLocalId)
+      .toArray();
+    const localIdsAfter = after.map((a) => a.localId).sort();
+    expect(localIdsAfter).toEqual(localIdsBefore);
+
+    const byName = new Map(after.map((a) => [a.name, a]));
+    expect(byName.get('first.jpg')?.deleted).toBe(false);
+    expect(byName.get('last.jpg')?.deleted).toBe(false);
+    expect(byName.get('middle.jpg')?.deleted).toBe(true);
   });
 
   it('updates updatedAt when project name changes', async () => {
@@ -760,6 +936,271 @@ describe('pullPresets', () => {
   });
 });
 
+describe('pullTracks', () => {
+  it('fetches singular track endpoint and stores tracks including tombstones', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/track`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'track-1',
+              versionId: 'track-1/0',
+              originalVersionId: 'track-1/0',
+              schemaName: 'track',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:10:00Z',
+              links: [],
+              deleted: false,
+              locations: [
+                {
+                  coords: { latitude: -8.35, longitude: -55.45 },
+                  timestamp: '2024-01-01T00:01:00Z',
+                  accuracy: 6,
+                  altitude: 30,
+                },
+              ],
+              observationRefs: [
+                {
+                  docId: 'obs-1',
+                  versionId: 'obs-1/0',
+                  url: '/projects/proj-remote-1/observation/obs-1',
+                },
+              ],
+              tags: { patrol: 'north' },
+              presetRef: {
+                docId: 'preset-track',
+                versionId: 'preset-track/0',
+                url: '/projects/proj-remote-1/preset/preset-track',
+              },
+            },
+            {
+              docId: 'track-deleted',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:10:00Z',
+              deleted: true,
+              locations: [],
+              observationRefs: [],
+              tags: {},
+            },
+          ],
+        }),
+      ),
+    );
+
+    const tracks = await pullTracks(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0]!.remoteId).toBe('track-1');
+    expect(tracks[0]!.presetRefDocId).toBe('preset-track');
+
+    const db = getDb();
+    const stored = await db.tracks
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(stored).toHaveLength(2);
+    expect(stored.find((t) => t.remoteId === 'track-deleted')!.deleted).toBe(
+      true,
+    );
+    expect(
+      stored.find((t) => t.remoteId === 'track-1')!.locations[0]!.coords,
+    ).toEqual({ latitude: -8.35, longitude: -55.45 });
+  });
+
+  it('tombstones previously-synced tracks when a later sync returns empty data', async () => {
+    // First sync returns track-1
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/track`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'track-1',
+              versionId: 'track-1/0',
+              originalVersionId: 'track-1/0',
+              schemaName: 'track',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              tags: {},
+              locations: [
+                {
+                  coords: { latitude: -8.35, longitude: -55.45 },
+                  timestamp: '2024-01-01T00:00:00Z',
+                },
+              ],
+              observationRefs: [],
+            },
+          ],
+        }),
+      ),
+    );
+    const first = await pullTracks(
+      'srv-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+    expect(first).toHaveLength(1);
+    expect(first[0]!.deleted).toBe(false);
+
+    // Second sync returns empty — track-1 should be tombstoned, not lingering
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/track`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+    const second = await pullTracks(
+      'srv-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    // Caller-visible: empty result (stale tracks no longer surface)
+    expect(second).toEqual([]);
+
+    // Stored: track-1 row now has deleted: true (tombstone, not lingering as live)
+    const db = getDb();
+    const stored = await db.tracks
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    const track1 = stored.find((t) => t.remoteId === 'track-1');
+    expect(track1).toBeDefined();
+    expect(track1!.deleted).toBe(true);
+  });
+});
+
+describe('pullFields', () => {
+  it('fetches singular field endpoint and stores fields including tombstones', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/field`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'field-1',
+              versionId: 'field-1/0',
+              originalVersionId: 'field-1/0',
+              schemaName: 'field',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:10:00Z',
+              links: [],
+              deleted: false,
+              type: 'select_one',
+              key: 'condition',
+              label: 'Condition',
+              placeholder: 'Choose one',
+              universal: false,
+              options: [{ label: 'Good', value: 'good' }],
+            },
+            {
+              docId: 'field-deleted',
+              versionId: 'field-deleted/0',
+              originalVersionId: 'field-deleted/0',
+              schemaName: 'field',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:10:00Z',
+              links: [],
+              deleted: true,
+              type: 'text',
+              key: 'deleted',
+              label: 'Deleted',
+              universal: false,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const fields = await pullFields(
+      'server-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    expect(fields).toHaveLength(1);
+    expect(fields[0]!.key).toBe('condition');
+
+    const db = getDb();
+    const stored = await db.fields
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    expect(stored).toHaveLength(2);
+    expect(stored.find((f) => f.remoteId === 'field-deleted')!.deleted).toBe(
+      true,
+    );
+    expect(stored.find((f) => f.remoteId === 'field-1')!.options).toEqual([
+      { label: 'Good', value: 'good' },
+    ]);
+  });
+
+  it('tombstones previously-synced fields when a later sync returns empty data', async () => {
+    // First sync returns field-1
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/field`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'field-1',
+              versionId: 'field-1/0',
+              originalVersionId: 'field-1/0',
+              schemaName: 'field',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              links: [],
+              deleted: false,
+              type: 'text',
+              key: 'species',
+              label: 'Species',
+              universal: true,
+            },
+          ],
+        }),
+      ),
+    );
+    const first = await pullFields(
+      'srv-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+    expect(first).toHaveLength(1);
+    expect(first[0]!.deleted).toBe(false);
+
+    // Second sync returns empty — field-1 should be tombstoned
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-remote-1/field`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+    const second = await pullFields(
+      'srv-1',
+      'proj-remote-1',
+      'proj-local-1',
+      archiveConfig,
+    );
+
+    expect(second).toEqual([]);
+
+    const db = getDb();
+    const stored = await db.fields
+      .where('projectLocalId')
+      .equals('proj-local-1')
+      .toArray();
+    const field1 = stored.find((f) => f.remoteId === 'field-1');
+    expect(field1).toBeDefined();
+    expect(field1!.deleted).toBe(true);
+  });
+});
+
 describe('pullObservations with presetRef', () => {
   it('preserves presetRef on stored observations', async () => {
     server.use(
@@ -795,6 +1236,45 @@ describe('pullObservations with presetRef', () => {
     const obs = observations[0]!;
     expect(obs.tags?.category).toBe('forest');
     expect(obs.tags?.presetRefDocId).toBe('preset-forest');
+  });
+
+  it('coerces non-string tag values to strings in enrichedTags', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-nonstringtags',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [],
+              tags: {
+                count: 42,
+                active: true,
+                ratio: 3.14,
+                label: 'forest',
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
+
+    expect(observations).toHaveLength(1);
+    const obs = observations[0]!;
+    // Non-string values must be coerced so enrichedTags stays Record<string,string>
+    expect(obs.tags?.count).toBe('42');
+    expect(obs.tags?.active).toBe('true');
+    expect(obs.tags?.ratio).toBe('3.14');
+    expect(obs.tags?.label).toBe('forest');
   });
 });
 

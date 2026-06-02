@@ -47,6 +47,59 @@ describe('MediaPreview', () => {
     expect(imgs[0]).toHaveAttribute('src', 'https://example.com/photo1.jpg');
   });
 
+  it('renders first-class attachment thumbnails before legacy tag URLs', () => {
+    render(
+      <MediaPreview
+        observationLocalId="obs-1"
+        tags={{ photoUrls: 'https://example.com/legacy.jpg' }}
+        attachments={[
+          {
+            localId: 'att-1',
+            projectLocalId: 'proj-1',
+            observationLocalId: 'obs-1',
+            sourceType: 'remoteArchive',
+            sourceId: 'server-1',
+            resolvedUrl: 'https://archive.example.com/photo.jpg',
+            mediaType: 'photo',
+            createdAt: '',
+            updatedAt: '',
+            dirtyLocal: false,
+            deleted: false,
+          },
+        ]}
+      />,
+    );
+    const imgs = screen.getAllByTestId('auth-img');
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0]).toHaveAttribute(
+      'src',
+      'https://archive.example.com/photo.jpg',
+    );
+  });
+
+  it('renders audio icon from first-class audio attachments without tags', () => {
+    render(
+      <MediaPreview
+        observationLocalId="obs-1"
+        attachments={[
+          {
+            localId: 'att-1',
+            projectLocalId: 'proj-1',
+            observationLocalId: 'obs-1',
+            sourceType: 'remoteArchive',
+            sourceId: 'server-1',
+            mediaType: 'audio',
+            createdAt: '',
+            updatedAt: '',
+            dirtyLocal: false,
+            deleted: false,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByTestId('audio-icon')).toBeInTheDocument();
+  });
+
   it('renders 2 thumbnails when 2 photo URLs', () => {
     render(
       <MediaPreview

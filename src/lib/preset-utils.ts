@@ -48,11 +48,12 @@ export function getLegacyDisplayName(
  * @returns The best matching Preset, or undefined if no match is found
  */
 export function matchObservationToPreset(
-  observation: Pick<Observation, 'tags'>,
+  observation: Pick<Observation, 'tags' | 'presetRefDocId'>,
   presets: Preset[],
 ): Preset | undefined {
   // Fast path: server-provided direct reference
-  const refDocId = observation.tags?.[PRESET_REF_DOC_ID_KEY];
+  const refDocId =
+    observation.presetRefDocId ?? observation.tags?.[PRESET_REF_DOC_ID_KEY];
   if (refDocId && typeof refDocId === 'string') {
     const directMatch = presets.find((p) => p.remoteId === refDocId);
     if (directMatch) return directMatch;
@@ -100,7 +101,7 @@ export function matchObservationToPreset(
  * @returns The matched preset name, or the fallback 'Observation'
  */
 export function getObservationDisplayNameSync(
-  observation: Pick<Observation, 'tags'>,
+  observation: Pick<Observation, 'tags' | 'presetRefDocId'>,
   presets: Preset[],
 ): string {
   const preset = matchObservationToPreset(observation, presets);

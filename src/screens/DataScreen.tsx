@@ -8,6 +8,7 @@ import { AlertCard } from '@/components/shared/AlertCard';
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { FilterSheet } from '@/components/shared/FilterSheet';
 import { MediaPreview } from '@/components/shared/MediaPreview';
+import { ObservationCategoryIcon } from '@/components/shared/ObservationCategoryIcon';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
 import { ObservationsMap } from '@/components/shared/ObservationsMap';
 import { PaginationControls } from '@/components/shared/PaginationControls';
@@ -16,12 +17,15 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAlerts } from '@/hooks/useAlerts';
-import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
+import { useAttachmentsForProject } from '@/hooks/useAttachmentsForProject';
+import { useFields } from '@/hooks/useFields';
+import { useObservationCategoryMetadata } from '@/hooks/useObservationCategoryMetadata';
 import { useObservationFilters } from '@/hooks/useObservationFilters';
 import { useObservations } from '@/hooks/useObservations';
 import { usePaginatedItems } from '@/hooks/usePaginatedItems';
 import { useProjects } from '@/hooks/useProjects';
 import { useResponsivePageSize } from '@/hooks/useResponsivePageSize';
+import type { Field } from '@/lib/data-layer';
 import { useProjectStore } from '@/stores/project-store';
 import { useViewModeStore } from '@/stores/view-mode-store';
 
@@ -121,6 +125,8 @@ export function DataScreen() {
   const projectsQuery = useProjects();
   const observationsQuery = useObservations(selectedProjectId);
   const alertsQuery = useAlerts(selectedProjectId);
+  const attachmentsQuery = useAttachmentsForProject(selectedProjectId);
+  const fieldsQuery = useFields(selectedProjectId);
   const viewMode = useViewModeStore((s) => s.viewMode);
   const setViewMode = useViewModeStore((s) => s.setViewMode);
   const [activeTab, setActiveTab] = useState('observations');
@@ -185,11 +191,33 @@ export function DataScreen() {
     deps: filterDeps,
   });
 
-  // Pre-compute observation display names using preset matching
-  const displayNames = useObservationDisplayNames(
-    filteredObs,
-    selectedProjectId,
-  );
+  const categoryMetadata = useObservationCategoryMetadata({
+    observations: observationsQuery.data ?? [],
+    projectLocalId: selectedProjectId,
+    projectRemoteId: selectedProject?.remoteId,
+    serverUrl: selectedProject?.serverUrl,
+  });
+  const displayNames = categoryMetadata.displayNamesByObservationId;
+  const categoryByObservationId = categoryMetadata.categoryByObservationId;
+  const attachments = attachmentsQuery.data;
+  const attachmentsByObservationId = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof attachments>>();
+    for (const attachment of attachments ?? []) {
+      const existing = map.get(attachment.observationLocalId) ?? [];
+      existing.push(attachment);
+      map.set(attachment.observationLocalId, existing);
+    }
+    return map;
+  }, [attachments]);
+
+  const fieldsByKey = useMemo(() => {
+    const fields = fieldsQuery.data;
+    const map = new Map<string, Field>();
+    for (const field of fields ?? []) {
+      if (!field.deleted) map.set(field.key, field);
+    }
+    return map;
+  }, [fieldsQuery.data]);
 
   const { reset: resetFilters } = obsFilters;
 
@@ -219,6 +247,7 @@ export function DataScreen() {
         <div className="mt-4">
           <ObservationsMap
             observations={filteredObs}
+            categoryByObservationId={categoryByObservationId}
             onMarkerClick={(observationId) =>
               navigate({
                 to: '/data/observations/$observationId',
@@ -241,11 +270,18 @@ export function DataScreen() {
             >
               <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
                 <div className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-text">
-                    {displayNames.get(obs.localId) ??
-                      getCategoryLabel(obs) ??
-                      intl.formatMessage(messages.observationFallback)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {categoryByObservationId.get(obs.localId) && (
+                      <ObservationCategoryIcon
+                        category={categoryByObservationId.get(obs.localId)!}
+                      />
+                    )}
+                    <span className="text-sm font-medium text-text">
+                      {displayNames.get(obs.localId) ??
+                        getCategoryLabel(obs) ??
+                        intl.formatMessage(messages.observationFallback)}
+                    </span>
+                  </div>
                   {obs.lat !== undefined && obs.lon !== undefined && (
                     <span className="text-xs text-text-muted">
                       {obs.lat.toFixed(4)}, {obs.lon.toFixed(4)}
@@ -257,6 +293,7 @@ export function DataScreen() {
                   <MediaPreview
                     observationLocalId={obs.localId}
                     tags={obs.tags}
+                    attachments={attachmentsByObservationId.get(obs.localId)}
                   />
                 </div>
               </Card>
@@ -285,6 +322,8 @@ export function DataScreen() {
     intl,
     resetFilters,
     displayNames,
+    categoryByObservationId,
+    attachmentsByObservationId,
   ]);
 
   // No project selected
@@ -343,6 +382,9 @@ export function DataScreen() {
                   observations={observations}
                   projectName={selectedProject?.name}
                   disabled={observations.length === 0}
+                  attachmentsByObservationId={attachmentsByObservationId}
+                  displayNamesByObservationId={displayNames}
+                  fieldsByKey={fieldsByKey}
                 />
                 {viewMode === 'grid' ? (
                   <button

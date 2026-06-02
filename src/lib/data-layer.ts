@@ -10,6 +10,7 @@ import {
   createProject as repoCreateProject,
   deleteProject as repoDeleteProject,
   getAlerts as repoGetAlerts,
+  getAttachmentsForProject as repoGetAttachmentsForProject,
   getFields as repoGetFields,
   getObservations as repoGetObservations,
   getPresets as repoGetPresets,
@@ -221,8 +222,34 @@ export async function getAlerts(projectLocalId: string) {
 export async function addAttachment(input: {
   projectLocalId: string;
   observationLocalId: string;
+  sourceDocId?: string;
+  remoteUrl?: string;
+  resolvedUrl?: string;
+  mediaType?: 'photo' | 'audio' | 'unknown';
+  contentType?: string;
+  downloadStatus?: 'remote-only' | 'available' | 'failed';
 }) {
   return createAttachment(input);
+}
+
+export async function getAttachmentsForProject(projectLocalId: string) {
+  return repoGetAttachmentsForProject(projectLocalId);
+}
+
+// ---------------------------------------------------------------------------
+// Tracks
+// ---------------------------------------------------------------------------
+
+export async function getTracks(projectLocalId: string) {
+  return repoGetTracks(projectLocalId);
+}
+
+// ---------------------------------------------------------------------------
+// Fields
+// ---------------------------------------------------------------------------
+
+export async function getFields(projectLocalId: string) {
+  return repoGetFields(projectLocalId);
 }
 
 // ---------------------------------------------------------------------------
@@ -293,12 +320,4 @@ export async function getObservationDisplayName(
   const preset = matchObservationToPreset(observation, presets);
   if (preset) return preset.name;
   return getLegacyDisplayName(observation.tags) ?? 'Observation';
-}
-
-export async function getTracks(projectLocalId: string) {
-  return repoGetTracks(projectLocalId);
-}
-
-export async function getFields(projectLocalId: string) {
-  return repoGetFields(projectLocalId);
 }

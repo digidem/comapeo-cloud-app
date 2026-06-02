@@ -55,6 +55,44 @@ function parseAttachmentMediaType(url: string): 'photo' | 'audio' | 'unknown' {
   return 'unknown';
 }
 
+function parseAttachmentPath(url: string):
+  | {
+      driveId?: string;
+      type?: string;
+      name?: string;
+    }
+  | undefined {
+  const match = url.match(/\/attachments\/([^/]+)\/([^/]+)\/([^/?#]+)/);
+  if (!match) return undefined;
+  return {
+    driveId: decodeURIComponent(match[1] ?? ''),
+    type: decodeURIComponent(match[2] ?? ''),
+    name: decodeURIComponent(match[3] ?? ''),
+  };
+}
+
+/**
+ * Build a stable per-attachment identity key that survives re-syncs and
+ * server-side attachment removal. The localId is derived from the
+ * addressable URL path (driveId/type/name) so removing one attachment in
+ * the middle of a list does not shift the localIds of the others.
+ */
+function stableAttachmentSourceDocId(
+  observationDocId: string,
+  attachment: { driveId?: string; type?: string; name?: string; url: string },
+  parsedPath: { driveId?: string; type?: string; name?: string } | undefined,
+): string {
+  const driveId = attachment.driveId ?? parsedPath?.driveId;
+  const type = attachment.type ?? parsedPath?.type;
+  const name = attachment.name ?? parsedPath?.name;
+  if (driveId && type && name) {
+    return `${observationDocId}:${driveId}:${type}:${name}`;
+  }
+  // Fallback to the raw URL when the path cannot be parsed (e.g. legacy
+  // attachments served from a non-standard path).
+  return `${observationDocId}:${attachment.url}`;
+}
+
 function resolveAttachmentUrl(url: string, archiveBaseUrl: string): string {
   try {
     return new URL(url, archiveBaseUrl).toString();
@@ -64,10 +102,16 @@ function resolveAttachmentUrl(url: string, archiveBaseUrl: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Concurrency helper
+// Internal helpers
 // ---------------------------------------------------------------------------
 
-async function allSettledLimited<T>(
+/**
+ * Run a batch of promise-returning tasks with bounded concurrency. Each
+ * task is invoked at most once, and results are returned in the original
+ * order. Used by the per-project detail fetch in pullProjects to avoid
+ * unbounded N+1 fan-out.
+ */
+function allSettledLimited<T>(
   tasks: Array<() => Promise<T>>,
   limit = 5,
 ): Promise<PromiseSettledResult<T>[]> {
@@ -85,10 +129,9 @@ async function allSettledLimited<T>(
     }
   }
 
-  await Promise.all(
+  return Promise.all(
     Array.from({ length: Math.min(limit, tasks.length) }, worker),
-  );
-  return results;
+  ).then(() => results);
 }
 
 // ---------------------------------------------------------------------------
@@ -198,29 +241,73 @@ export async function pullObservations(
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
   const serverRecord = await getRemoteServer(serverId);
-  const baseUrl = serverRecord?.baseUrl ?? config.baseUrl ?? '';
-  const stableKey = stableSourceKey(baseUrl);
-
+  const stableKey = stableSourceKey(
+    serverRecord?.baseUrl ?? config.baseUrl ?? '',
+  );
+  const attachments: Attachment[] = [];
+  const syncedAttachmentLocalIds = new Set<string>();
+  const syncedObservationLocalIds = new Set<string>();
   const observations: Observation[] = response.data.map((item) => {
     // Parse attachments to extract media counts and photo URLs
     let photoCount = 0;
     let audioCount = 0;
     const photoUrls: string[] = [];
 
-    for (const attachment of item.attachments) {
+    const observationLocalId = `${sourceType}:${stableKey}:${item.docId}`;
+    syncedObservationLocalIds.add(observationLocalId);
+
+    // Skip attachment derivation for deleted observations: the server has
+    // marked the observation as removed, so its attachments are not relevant
+    // for the local UI. (Mirrors the test in deriveAttachmentsFromObservations.)
+    const attachmentItems = item.deleted ? [] : item.attachments;
+
+    for (const attachment of attachmentItems) {
       const mediaType = parseAttachmentMediaType(attachment.url);
+      const parsedPath = parseAttachmentPath(attachment.url);
+      const resolvedUrl = resolveAttachmentUrl(attachment.url, config.baseUrl);
       if (mediaType === 'photo') {
         photoCount++;
-        photoUrls.push(resolveAttachmentUrl(attachment.url, config.baseUrl));
+        photoUrls.push(resolvedUrl);
       } else if (mediaType === 'audio') {
         audioCount++;
       }
+
+      const sourceDocId = stableAttachmentSourceDocId(
+        item.docId,
+        attachment,
+        parsedPath,
+      );
+      const localId = `${sourceType}:${stableKey}:${sourceDocId}`;
+      syncedAttachmentLocalIds.add(localId);
+      attachments.push({
+        localId,
+        projectLocalId,
+        observationLocalId,
+        sourceType,
+        sourceId: serverId,
+        remoteId: sourceDocId,
+        sourceDocId,
+        driveId: attachment.driveId ?? parsedPath?.driveId,
+        type: attachment.type ?? parsedPath?.type,
+        name: attachment.name ?? parsedPath?.name,
+        hash: attachment.hash,
+        remoteUrl: attachment.url,
+        resolvedUrl,
+        mediaType,
+        contentType: attachment.mimeType,
+        downloadStatus: 'remote-only',
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        dirtyLocal: false,
+        deleted: item.deleted,
+      });
     }
 
-    // Merge attachment metadata into tags
-    const enrichedTags: Record<string, string> = {
-      ...((item.tags as Record<string, string>) ?? {}),
-    };
+    // Merge attachment metadata into tags; coerce all tag values to strings
+    // because observation.tags schema allows unknown values at runtime.
+    const enrichedTags: Record<string, string> = Object.fromEntries(
+      Object.entries(item.tags ?? {}).map(([k, v]) => [k, String(v)]),
+    );
     if (item.presetRef?.docId) {
       enrichedTags.presetRefDocId = item.presetRef.docId;
     }
@@ -234,12 +321,19 @@ export async function pullObservations(
     }
 
     return {
-      localId: `${sourceType}:${stableKey}:${item.docId}`,
+      localId: observationLocalId,
       projectLocalId,
       sourceType,
       sourceId: serverId,
       remoteId: item.docId,
+      versionId: item.versionId,
+      originalVersionId: item.originalVersionId,
+      schemaName: item.schemaName,
+      links: item.links,
       tags: Object.keys(enrichedTags).length > 0 ? enrichedTags : undefined,
+      metadata: item.metadata,
+      presetRefDocId: item.presetRef?.docId,
+      presetRef: item.presetRef,
       lat: item.lat,
       lon: item.lon,
       createdAt: item.createdAt,
@@ -249,101 +343,33 @@ export async function pullObservations(
     };
   });
 
-  await db.observations.bulkPut(observations);
+  await db.transaction('rw', [db.observations, db.attachments], async () => {
+    await db.observations.bulkPut(observations);
+    if (attachments.length > 0) await db.attachments.bulkPut(attachments);
 
-  // Derive and persist attachment rows from the same fetch — no second round-trip.
-  // Also tombstones attachments for deleted observations (fix #3).
-  await syncAttachmentRows(
-    response.data,
-    serverId,
-    projectLocalId,
-    sourceType,
-    stableKey,
-    baseUrl,
-    db,
-  );
-
-  return observations;
-}
-
-/**
- * Internal helper: derive Attachment rows from observation data already in
- * memory. Tombstones attachments for deleted observations and reconciles
- * removed attachments on non-deleted observations.
- */
-async function syncAttachmentRows(
-  items: Array<{
-    docId: string;
-    createdAt: string;
-    updatedAt: string;
-    deleted: boolean;
-    attachments: Array<{ url: string }>;
-  }>,
-  serverId: string,
-  projectLocalId: string,
-  sourceType: 'remoteArchive',
-  stableKey: string,
-  baseUrl: string,
-  db: ReturnType<typeof getDb>,
-): Promise<void> {
-  const attachmentsToWrite: Attachment[] = [];
-
-  for (const obs of items) {
-    const observationLocalId = `${sourceType}:${stableKey}:${obs.docId}`;
-
-    if (obs.deleted) {
-      // Tombstone any existing attachment rows for this deleted observation
-      const existing = await db.attachments
+    // Tombstone attachments that belong to the synced observations but
+    // were not returned by the server on this sync. This handles
+    // server-side removal: the local row stays around (preserving the
+    // localId reference) but is marked deleted so the UI can hide it.
+    if (syncedObservationLocalIds.size > 0) {
+      const staleAttachments = await db.attachments
         .where('observationLocalId')
-        .equals(observationLocalId)
+        .anyOf(Array.from(syncedObservationLocalIds))
+        .and(
+          (row) => !syncedAttachmentLocalIds.has(row.localId) && !row.deleted,
+        )
         .toArray();
-      for (const row of existing) {
-        if (!row.deleted) {
-          attachmentsToWrite.push({ ...row, deleted: true });
+      if (staleAttachments.length > 0) {
+        const now = new Date().toISOString();
+        for (const row of staleAttachments) {
+          row.deleted = true;
+          row.updatedAt = now;
         }
-      }
-      continue;
-    }
-
-    // Build the set of current attachment localIds for reconciliation
-    const currentAttachmentIds = new Set<string>();
-    for (const attachment of obs.attachments) {
-      const attachmentLocalId = `${sourceType}:${stableKey}:attachment:${obs.docId}:${attachment.url}`;
-      currentAttachmentIds.add(attachmentLocalId);
-
-      const mediaType = parseAttachmentMediaType(attachment.url);
-      const resolvedUrl = resolveAttachmentUrl(attachment.url, baseUrl);
-      attachmentsToWrite.push({
-        localId: attachmentLocalId,
-        projectLocalId,
-        observationLocalId,
-        sourceType,
-        sourceId: serverId,
-        remoteUrl: attachment.url,
-        resolvedUrl,
-        mediaType,
-        createdAt: obs.createdAt,
-        updatedAt: obs.updatedAt,
-        dirtyLocal: false,
-        deleted: false,
-      });
-    }
-
-    // Tombstone attachment rows that were present before but are now absent
-    const existingRows = await db.attachments
-      .where('observationLocalId')
-      .equals(observationLocalId)
-      .toArray();
-    for (const row of existingRows) {
-      if (!currentAttachmentIds.has(row.localId) && !row.deleted) {
-        attachmentsToWrite.push({ ...row, deleted: true });
+        await db.attachments.bulkPut(staleAttachments);
       }
     }
-  }
-
-  if (attachmentsToWrite.length > 0) {
-    await db.attachments.bulkPut(attachmentsToWrite);
-  }
+  });
+  return observations;
 }
 
 export async function pullAlerts(
@@ -435,21 +461,23 @@ export async function pullTracks(
     serverRecord?.baseUrl ?? config.baseUrl ?? '',
   );
 
+  // Map ALL items (including deleted) and write them all to DB as tombstones,
+  // then mark previously-synced rows that the server no longer returns as
+  // deleted so they don't surface as stale data after remote deletion.
   const allTracks: Track[] = response.data.map((item) => ({
     localId: `${sourceType}:${stableKey}:${item.docId}`,
     projectLocalId,
     sourceType,
     sourceId: serverId,
     remoteId: item.docId,
-    tags: Object.keys(item.tags).length > 0 ? item.tags : undefined,
+    versionId: item.versionId,
+    originalVersionId: item.originalVersionId,
+    schemaName: item.schemaName,
+    links: item.links ?? [],
+    tags: item.tags,
+    presetRefDocId: item.presetRef?.docId,
     presetRef: item.presetRef,
-    locations: item.locations.map((loc) => ({
-      coords: {
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      },
-      timestamp: loc.timestamp,
-    })),
+    locations: item.locations ?? [],
     observationRefs: item.observationRefs ?? [],
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -457,8 +485,58 @@ export async function pullTracks(
     deleted: item.deleted,
   }));
 
-  await db.tracks.bulkPut(allTracks);
+  await db.transaction('rw', [db.tracks], async () => {
+    await db.tracks.bulkPut(allTracks);
+    await tombstoneStaleRows(db.tracks, projectLocalId, serverId, allTracks);
+  });
   return allTracks.filter((t) => !t.deleted);
+}
+
+/**
+ * Mark previously-synced rows for (projectLocalId, sourceId) as `deleted: true`
+ * when the current pull did not return them. Without this, a remote delete
+ * (or an empty response from a 0.4 server that no longer emits the resource)
+ * leaves stale rows in IndexedDB that the UI continues to show.
+ */
+async function tombstoneStaleRows<
+  T extends {
+    localId: string;
+    projectLocalId: string;
+    sourceId: string;
+    deleted: boolean;
+    updatedAt: string;
+  },
+>(
+  table: {
+    bulkPut: (rows: T[]) => Promise<unknown>;
+    where: (key: string) => {
+      equals: (value: string) => {
+        and: (pred: (row: T) => boolean) => { toArray: () => Promise<T[]> };
+      };
+    };
+  },
+  projectLocalId: string,
+  sourceId: string,
+  currentRows: readonly T[],
+): Promise<void> {
+  const syncedIds = new Set(currentRows.map((r) => r.localId));
+  const staleRows = await table
+    .where('projectLocalId')
+    .equals(projectLocalId)
+    .and(
+      (row) =>
+        row.sourceId === sourceId &&
+        !row.deleted &&
+        !syncedIds.has(row.localId),
+    )
+    .toArray();
+  if (staleRows.length === 0) return;
+  const now = new Date().toISOString();
+  for (const row of staleRows) {
+    row.deleted = true;
+    row.updatedAt = now;
+  }
+  await table.bulkPut(staleRows);
 }
 
 export async function pullFields(
@@ -475,12 +553,19 @@ export async function pullFields(
     serverRecord?.baseUrl ?? config.baseUrl ?? '',
   );
 
+  // Map ALL items (including deleted) and write them all to DB as tombstones,
+  // then mark previously-synced rows that the server no longer returns as
+  // deleted so they don't surface as stale data after remote deletion.
   const allFields: Field[] = response.data.map((item) => ({
     localId: `${sourceType}:${stableKey}:${item.docId}`,
     projectLocalId,
     sourceType,
     sourceId: serverId,
     remoteId: item.docId,
+    versionId: item.versionId,
+    originalVersionId: item.originalVersionId,
+    schemaName: item.schemaName,
+    links: item.links ?? [],
     type: item.type,
     key: item.key,
     label: item.label,
@@ -493,7 +578,10 @@ export async function pullFields(
     deleted: item.deleted,
   }));
 
-  await db.fields.bulkPut(allFields);
+  await db.transaction('rw', [db.fields], async () => {
+    await db.fields.bulkPut(allFields);
+    await tombstoneStaleRows(db.fields, projectLocalId, serverId, allFields);
+  });
   return allFields.filter((f) => !f.deleted);
 }
 

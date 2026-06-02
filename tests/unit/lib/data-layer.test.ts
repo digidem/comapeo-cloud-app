@@ -6,6 +6,7 @@ import {
   createObservation,
   createProject,
   getAlerts,
+  getFields,
   getObservationDisplayName,
   getObservations,
   getPresetLookupMap,
@@ -13,6 +14,7 @@ import {
   getProjectPoints,
   getProjects,
   getSyncStatus,
+  getTracks,
   importGeoJsonPoints,
 } from '@/lib/data-layer';
 import { getDb, resetDb } from '@/lib/db';
@@ -98,6 +100,87 @@ describe('data-layer', () => {
 
       expect(att.localId).toBeDefined();
       expect(att.observationLocalId).toBe(obs.localId);
+    });
+  });
+
+  describe('tracks', () => {
+    it('reads non-deleted tracks scoped by project', async () => {
+      const project = await createProject({ name: 'P' });
+      const db = getDb();
+      await db.tracks.bulkAdd([
+        {
+          localId: 'track-visible',
+          projectLocalId: project.localId,
+          sourceType: 'remoteArchive',
+          sourceId: 'server-1',
+          remoteId: 'track-visible',
+          tags: { patrol: 'north' },
+          locations: [{ coords: { latitude: -8, longitude: -55 } }],
+          observationRefs: [],
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+          dirtyLocal: false,
+          deleted: false,
+        },
+        {
+          localId: 'track-deleted',
+          projectLocalId: project.localId,
+          sourceType: 'remoteArchive',
+          sourceId: 'server-1',
+          remoteId: 'track-deleted',
+          locations: [],
+          observationRefs: [],
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+          dirtyLocal: false,
+          deleted: true,
+        },
+      ]);
+
+      const tracks = await getTracks(project.localId);
+      expect(tracks.map((t) => t.localId)).toEqual(['track-visible']);
+    });
+  });
+
+  describe('fields', () => {
+    it('reads non-deleted fields scoped by project', async () => {
+      const project = await createProject({ name: 'P' });
+      const db = getDb();
+      await db.fields.bulkAdd([
+        {
+          localId: 'field-visible',
+          projectLocalId: project.localId,
+          sourceType: 'remoteArchive',
+          sourceId: 'server-1',
+          remoteId: 'field-visible',
+          type: 'text',
+          key: 'notes',
+          label: 'Notes',
+          universal: false,
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+          dirtyLocal: false,
+          deleted: false,
+        },
+        {
+          localId: 'field-deleted',
+          projectLocalId: project.localId,
+          sourceType: 'remoteArchive',
+          sourceId: 'server-1',
+          remoteId: 'field-deleted',
+          type: 'text',
+          key: 'deleted',
+          label: 'Deleted',
+          universal: false,
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+          dirtyLocal: false,
+          deleted: true,
+        },
+      ]);
+
+      const fields = await getFields(project.localId);
+      expect(fields.map((f) => f.localId)).toEqual(['field-visible']);
     });
   });
 

@@ -4,7 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { ExportSheet } from '@/components/shared/ExportSheet';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import type { Observation } from '@/lib/data-layer';
+import type { Attachment, Field, Observation } from '@/lib/data-layer';
 import { downloadText } from '@/lib/file-export';
 import {
   buildExportFilename,
@@ -27,12 +27,18 @@ interface ExportObservationsButtonProps {
   observations: Observation[];
   projectName: string | undefined;
   disabled?: boolean;
+  attachmentsByObservationId?: Map<string, Attachment[]>;
+  displayNamesByObservationId?: Map<string, string>;
+  fieldsByKey?: Map<string, Field>;
 }
 
 export function ExportObservationsButton({
   observations,
   projectName,
   disabled = false,
+  attachmentsByObservationId,
+  displayNamesByObservationId,
+  fieldsByKey,
 }: ExportObservationsButtonProps) {
   const intl = useIntl();
   const { addToast } = useToast();
@@ -40,7 +46,11 @@ export function ExportObservationsButton({
 
   async function handleExportGeoJson() {
     try {
-      const fc = observationsToGeoJson(observations);
+      const fc = observationsToGeoJson(observations, {
+        attachmentsByObservationId,
+        displayNamesByObservationId,
+        fieldsByKey,
+      });
       const json = JSON.stringify(fc, null, 2);
       const filename = buildExportFilename(projectName, 'geojson');
       downloadText(json, filename, 'application/geo+json');
@@ -55,7 +65,11 @@ export function ExportObservationsButton({
 
   async function handleExportCsv() {
     try {
-      const csv = observationsToCsv(observations);
+      const csv = observationsToCsv(observations, {
+        attachmentsByObservationId,
+        displayNamesByObservationId,
+        fieldsByKey,
+      });
       const filename = buildExportFilename(projectName, 'csv');
       downloadText(csv, filename, 'text/csv');
     } catch (e) {

@@ -84,6 +84,15 @@ describe('matchObservationToPreset', () => {
     expect(result).toEqual(forestPreset);
   });
 
+  it('matches by first-class presetRefDocId field before tag fallback', () => {
+    const obs = makeObs({
+      presetRefDocId: 'preset-water',
+      tags: { category: 'forest-risk' },
+    });
+    const result = matchObservationToPreset(obs, presets);
+    expect(result).toEqual(waterPreset);
+  });
+
   it('matches by presetRefDocId even when other tags would score higher', () => {
     // presetRefDocId should win regardless of tag scoring
     const obs = makeObs({

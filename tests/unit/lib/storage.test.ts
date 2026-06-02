@@ -94,6 +94,34 @@ describe('getStorageStats', () => {
         deleted: false,
       },
     ]);
+    await db.tracks.add({
+      localId: 'track-1',
+      projectLocalId: 'proj-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      remoteId: 'track-1',
+      locations: [],
+      observationRefs: [],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    await db.fields.add({
+      localId: 'field-1',
+      projectLocalId: 'proj-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      remoteId: 'field-1',
+      type: 'text',
+      key: 'notes',
+      label: 'Notes',
+      universal: false,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
 
     const stats = await getStorageStats();
     expect(stats.tables.projects.count).toBe(2);
@@ -101,6 +129,8 @@ describe('getStorageStats', () => {
     expect(stats.tables.alerts.count).toBe(0);
     expect(stats.tables.attachments.count).toBe(0);
     expect(stats.tables.presets.count).toBe(0);
+    expect(stats.tables.tracks.count).toBe(1);
+    expect(stats.tables.fields.count).toBe(1);
     expect(stats.tables.remoteServers.count).toBe(0);
     expect(stats.tables.syncMetadata.count).toBe(0);
   });
@@ -165,6 +195,32 @@ describe('clearAllData', () => {
       dirtyLocal: false,
       deleted: false,
     });
+    await db.tracks.add({
+      localId: 'track-1',
+      projectLocalId: 'proj-1',
+      sourceType: 'local',
+      sourceId: 'local',
+      locations: [],
+      observationRefs: [],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    await db.fields.add({
+      localId: 'field-1',
+      projectLocalId: 'proj-1',
+      sourceType: 'local',
+      sourceId: 'local',
+      type: 'text',
+      key: 'notes',
+      label: 'Notes',
+      universal: false,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
 
     await clearAllData();
 
@@ -173,6 +229,8 @@ describe('clearAllData', () => {
     expect(await db.alerts.count()).toBe(0);
     expect(await db.attachments.count()).toBe(0);
     expect(await db.presets.count()).toBe(0);
+    expect(await db.tracks.count()).toBe(0);
+    expect(await db.fields.count()).toBe(0);
     expect(await db.remoteServers.count()).toBe(1);
     expect(await db.syncMetadata.count()).toBe(0);
   });
@@ -217,6 +275,34 @@ describe('clearServerData', () => {
       dirtyLocal: false,
       deleted: false,
     });
+    await db.tracks.add({
+      localId: 'track-s1',
+      projectLocalId: 'proj-s1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      remoteId: 'remote-track-1',
+      locations: [],
+      observationRefs: [],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    await db.fields.add({
+      localId: 'field-s1',
+      projectLocalId: 'proj-s1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      remoteId: 'remote-field-1',
+      type: 'text',
+      key: 'notes',
+      label: 'Notes',
+      universal: false,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
 
     // Add sync metadata
     await db.syncMetadata.add({
@@ -243,6 +329,8 @@ describe('clearServerData', () => {
     expect(await db.remoteServers.get('server-1')).toBeUndefined();
     expect(await db.projects.get('proj-s1')).toBeUndefined();
     expect(await db.observations.get('obs-s1')).toBeUndefined();
+    expect(await db.tracks.get('track-s1')).toBeUndefined();
+    expect(await db.fields.get('field-s1')).toBeUndefined();
     expect(await db.syncMetadata.get('sync-1')).toBeUndefined();
 
     // Unrelated data should remain
@@ -351,6 +439,32 @@ describe('clearProjectData', () => {
       fieldRefs: [],
       terms: [],
     });
+    await db.tracks.add({
+      localId: 'track-1',
+      projectLocalId: 'proj-to-clear',
+      sourceType: 'local',
+      sourceId: 'local',
+      locations: [],
+      observationRefs: [],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    await db.fields.add({
+      localId: 'field-1',
+      projectLocalId: 'proj-to-clear',
+      sourceType: 'local',
+      sourceId: 'local',
+      type: 'text',
+      key: 'notes',
+      label: 'Notes',
+      universal: false,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
 
     // Add another project that should remain
     await db.projects.add({
@@ -372,6 +486,8 @@ describe('clearProjectData', () => {
     expect(await db.alerts.get('alert-1')).toBeUndefined();
     expect(await db.attachments.get('att-1')).toBeUndefined();
     expect(await db.presets.get('preset-1')).toBeUndefined();
+    expect(await db.tracks.get('track-1')).toBeUndefined();
+    expect(await db.fields.get('field-1')).toBeUndefined();
 
     // Unrelated project should remain
     expect(await db.projects.get('proj-keep')).toBeDefined();

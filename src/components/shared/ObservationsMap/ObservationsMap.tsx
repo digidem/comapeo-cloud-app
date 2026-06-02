@@ -8,6 +8,8 @@ import { type MapRef, Marker } from 'react-map-gl/maplibre';
 import { useNavigate } from '@tanstack/react-router';
 
 import { MapContainer } from '@/components/shared/MapContainer';
+import { ObservationCategoryIcon } from '@/components/shared/ObservationCategoryIcon';
+import type { ObservationCategory } from '@/lib/category-utils';
 import type { Observation } from '@/lib/data-layer';
 
 const messages = defineMessages({
@@ -35,6 +37,7 @@ function isValidCoord(lat: number, lon: number): boolean {
 export interface ObservationsMapProps {
   /** Full observation list (geo + non-geo); component filters internally. */
   observations: Observation[];
+  categoryByObservationId?: Map<string, ObservationCategory>;
   /** Optional height override; defaults to responsive mobile-friendly value. */
   height?: string | number;
   /** Test/storybook seam: override navigation. Defaults to TanStack useNavigate. */
@@ -43,6 +46,7 @@ export interface ObservationsMapProps {
 
 export function ObservationsMap({
   observations,
+  categoryByObservationId,
   height = 'h-[min(70vh,560px)]',
   onMarkerClick,
 }: ObservationsMapProps) {
@@ -159,10 +163,19 @@ export function ObservationsMap({
               className="flex items-center justify-center min-h-[44px] min-w-[44px] cursor-pointer"
               aria-label={intl.formatMessage(messages.markerLabel)}
             >
-              <div className="flex flex-col items-center">
-                <div className="h-3 w-3 rounded-full bg-danger border-2 border-white shadow-md" />
-                <div className="h-2.5 w-0.5 rounded-full bg-danger/60" />
-              </div>
+              {categoryByObservationId?.get(o.localId) ? (
+                <div className="rounded-full border-2 border-white bg-surface-card shadow-md">
+                  <ObservationCategoryIcon
+                    category={categoryByObservationId.get(o.localId)!}
+                    className="h-7 w-7"
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center">
+                  <div className="h-3 w-3 rounded-full bg-danger border-2 border-white shadow-md" />
+                  <div className="h-2.5 w-0.5 rounded-full bg-danger/60" />
+                </div>
+              )}
             </button>
           </Marker>
         ))}
