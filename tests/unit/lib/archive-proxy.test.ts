@@ -100,11 +100,14 @@ describe('archive proxy helpers', () => {
       ok: true,
       value: '/projects/proj-1/observations',
     });
+    // The singular /observation endpoint was removed in the 0.4 sync
+    // (replaced by the plural /observations bulk endpoint) — reject it.
     expect(
       validateArchiveProxyRequest('GET', '/projects/proj-1/observation'),
     ).toEqual({
-      ok: true,
-      value: '/projects/proj-1/observation',
+      ok: false,
+      code: 'UNSUPPORTED_ARCHIVE_PROXY_PATH',
+      message: 'Archive proxy path is not supported',
     });
     expect(
       validateArchiveProxyRequest('GET', '/projects/proj-1/track'),

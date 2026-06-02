@@ -1,11 +1,5 @@
 import * as v from 'valibot';
 
-export const docRefSchema = v.object({
-  docId: v.string(),
-  versionId: v.optional(v.string()),
-  url: v.optional(v.string()),
-});
-
 export const presetRefSchema = v.object({
   docId: v.string(),
   versionId: v.string(),

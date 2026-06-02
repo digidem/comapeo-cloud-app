@@ -330,20 +330,6 @@ export const apiClient = {
     }
   },
 
-  async getTracks(projectId: string, config?: RequestConfig) {
-    try {
-      const request = resolveApiRequest(config);
-      const response = await fetch(
-        `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/track`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
-      );
-      return handleResponse(response, tracksResponseSchema, config);
-    } catch (error) {
-      if (isNetworkError(error)) throwNetworkError();
-      throw error;
-    }
-  },
-
   async getIcon(
     projectId: string,
     docId: string,

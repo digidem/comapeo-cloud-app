@@ -1,6 +1,7 @@
 import * as v from 'valibot';
 
-import { docRefSchema, presetRefSchema } from '@/lib/schemas/observation';
+import { presetRefSchema } from '@/lib/schemas/observation';
+import { docRefSchema } from '@/lib/schemas/refs';
 
 const trackLocationSchema = v.object({
   coords: v.object({

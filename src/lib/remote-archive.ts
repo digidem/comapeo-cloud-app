@@ -102,6 +102,39 @@ function resolveAttachmentUrl(url: string, archiveBaseUrl: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a batch of promise-returning tasks with bounded concurrency. Each
+ * task is invoked at most once, and results are returned in the original
+ * order. Used by the per-project detail fetch in pullProjects to avoid
+ * unbounded N+1 fan-out.
+ */
+function allSettledLimited<T>(
+  tasks: Array<() => Promise<T>>,
+  limit = 5,
+): Promise<PromiseSettledResult<T>[]> {
+  const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < tasks.length) {
+      const i = cursor++;
+      try {
+        results[i] = { status: 'fulfilled', value: await tasks[i]!() };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  }
+
+  return Promise.all(
+    Array.from({ length: Math.min(limit, tasks.length) }, worker),
+  ).then(() => results);
+}
+
+// ---------------------------------------------------------------------------
 // Fetch archive data and store locally
 // ---------------------------------------------------------------------------
 
@@ -132,29 +165,70 @@ export async function pullProjects(
   }
 
   const now = new Date().toISOString();
-  const projects: Project[] = response.data.map((item) => {
-    const localId = `${sourceType}:${stableKey}:${item.projectId}`;
-    const existing = existingMap.get(localId);
-    const nameChanged = existing
-      ? existing.name !== (item.name ?? undefined)
-      : true;
+  const detailedProjects: Project[] = [];
 
-    return {
+  // Fetch detailed project information for each project with a concurrency
+  // cap to avoid unbounded N+1 fan-out. Per-project detail failures must
+  // NOT drop the basic project info — we keep the project with detail=null
+  // and log a warning so the user can still see it in the project list.
+  const projectDetails = await allSettledLimited(
+    response.data.map((item) => async () => {
+      const detailResponse = await apiClient.getProject(item.projectId, config);
+      return { basic: item, detail: detailResponse.data };
+    }),
+  );
+
+  for (const [index, result] of projectDetails.entries()) {
+    const basic = response.data[index]!;
+    const localId = `${sourceType}:${stableKey}:${basic.projectId}`;
+    const existing = existingMap.get(localId);
+
+    if (result.status === 'rejected') {
+      console.warn(
+        `Failed to fetch details for project ${basic.projectId}:`,
+        result.reason,
+      );
+      const nameChanged = existing?.name !== basic.name;
+      detailedProjects.push({
+        localId,
+        sourceType,
+        sourceId: serverId,
+        remoteId: basic.projectId,
+        name: basic.name,
+        description: existing?.description,
+        iconRef: existing?.iconRef,
+        serverUrl: baseUrl || undefined,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
+        dirtyLocal: false,
+        deleted: false,
+      });
+      continue;
+    }
+
+    const { detail } = result.value;
+    const nameChanged = existing?.name !== basic.name;
+    const descriptionChanged = existing?.description !== detail?.description;
+
+    detailedProjects.push({
       localId,
       sourceType,
       sourceId: serverId,
-      remoteId: item.projectId,
-      name: item.name ?? undefined,
+      remoteId: basic.projectId,
+      name: basic.name,
+      description: detail?.description,
       serverUrl: baseUrl || undefined,
+      iconRef: detail?.iconRef,
       createdAt: existing?.createdAt ?? now,
-      updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
+      updatedAt:
+        nameChanged || descriptionChanged ? now : (existing?.updatedAt ?? now),
       dirtyLocal: false,
       deleted: false,
-    };
-  });
+    });
+  }
 
-  await db.projects.bulkPut(projects);
-  return projects;
+  await db.projects.bulkPut(detailedProjects);
+  return detailedProjects;
 }
 
 export async function pullObservations(
@@ -182,7 +256,12 @@ export async function pullObservations(
     const observationLocalId = `${sourceType}:${stableKey}:${item.docId}`;
     syncedObservationLocalIds.add(observationLocalId);
 
-    for (const attachment of item.attachments) {
+    // Skip attachment derivation for deleted observations: the server has
+    // marked the observation as removed, so its attachments are not relevant
+    // for the local UI. (Mirrors the test in deriveAttachmentsFromObservations.)
+    const attachmentItems = item.deleted ? [] : item.attachments;
+
+    for (const attachment of attachmentItems) {
       const mediaType = parseAttachmentMediaType(attachment.url);
       const parsedPath = parseAttachmentPath(attachment.url);
       const resolvedUrl = resolveAttachmentUrl(attachment.url, config.baseUrl);
@@ -504,4 +583,16 @@ export async function pullFields(
     await tombstoneStaleRows(db.fields, projectLocalId, serverId, allFields);
   });
   return allFields.filter((f) => !f.deleted);
+}
+
+export async function deriveAttachmentsFromObservations(
+  serverId: string,
+  projectRemoteId: string,
+  projectLocalId: string,
+  config: RequestConfig,
+): Promise<void> {
+  // Attachment derivation is now handled inline in pullObservations, using the
+  // same single network fetch. This function delegates to avoid a second
+  // GET /projects/:id/observations round-trip.
+  await pullObservations(serverId, projectRemoteId, projectLocalId, config);
 }
