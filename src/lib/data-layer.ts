@@ -10,10 +10,7 @@ import {
   createProject as repoCreateProject,
   deleteProject as repoDeleteProject,
   getAlerts as repoGetAlerts,
-<<<<<<< HEAD
-=======
-  getAttachments as repoGetAttachments,
->>>>>>> b87357d (feat(sync): add archive data tables)
+  getAttachmentsForProject as repoGetAttachmentsForProject,
   getFields as repoGetFields,
   getObservations as repoGetObservations,
   getPresets as repoGetPresets,
@@ -235,8 +232,8 @@ export async function addAttachment(input: {
   return createAttachment(input);
 }
 
-export async function getAttachments(observationLocalId: string) {
-  return repoGetAttachments(observationLocalId);
+export async function getAttachmentsForProject(projectLocalId: string) {
+  return repoGetAttachmentsForProject(projectLocalId);
 }
 
 // ---------------------------------------------------------------------------
@@ -323,12 +320,4 @@ export async function getObservationDisplayName(
   const preset = matchObservationToPreset(observation, presets);
   if (preset) return preset.name;
   return getLegacyDisplayName(observation.tags) ?? 'Observation';
-}
-
-export async function getTracks(projectLocalId: string) {
-  return repoGetTracks(projectLocalId);
-}
-
-export async function getFields(projectLocalId: string) {
-  return repoGetFields(projectLocalId);
 }

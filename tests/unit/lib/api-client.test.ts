@@ -282,9 +282,13 @@ describe('getTracks', () => {
     const result = await apiClient.getTracks(projectId);
 
     expect(capturedUrl).toBe(`${BASE_URL}/projects/${projectId}/track`);
-    expect(result.data[0]!.docId).toBe('track-1');
-    expect(result.data[0]!.locations).toHaveLength(1);
-    expect(result.data[0]!.locations[0]!.coords.longitude).toBe(-55.45);
+    const firstTrack = result.data[0];
+    expect(firstTrack).toBeDefined();
+    expect(firstTrack!.docId).toBe('track-1');
+    expect(firstTrack!.locations).toHaveLength(1);
+    const firstLocation = firstTrack!.locations?.[0];
+    expect(firstLocation).toBeDefined();
+    expect(firstLocation!.coords.longitude).toBe(-55.45);
   });
 
   it('returns empty data array on 404 (legacy server)', async () => {

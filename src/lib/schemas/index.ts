@@ -14,7 +14,7 @@ export type {
   BasemapId,
   BasemapCategory,
 } from './imagery-source';
-export { presetRefSchema } from './observation';
+export { docRefSchema, presetRefSchema } from './observation';
 export { presetSchema, presetsResponseSchema } from './preset';
 export { fieldSchema, fieldsResponseSchema } from './field';
 export { trackSchema, tracksResponseSchema } from './track';

@@ -1115,6 +1115,45 @@ describe('pullObservations with presetRef', () => {
     expect(obs.tags?.category).toBe('forest');
     expect(obs.tags?.presetRefDocId).toBe('preset-forest');
   });
+
+  it('coerces non-string tag values to strings in enrichedTags', async () => {
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>
+        HttpResponse.json({
+          data: [
+            {
+              docId: 'obs-nonstringtags',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+              deleted: false,
+              attachments: [],
+              tags: {
+                count: 42,
+                active: true,
+                ratio: 3.14,
+                label: 'forest',
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const observations = await pullObservations(
+      'server-1',
+      'proj-1',
+      'local-proj-1',
+      archiveConfig,
+    );
+
+    expect(observations).toHaveLength(1);
+    const obs = observations[0]!;
+    // Non-string values must be coerced so enrichedTags stays Record<string,string>
+    expect(obs.tags?.count).toBe('42');
+    expect(obs.tags?.active).toBe('true');
+    expect(obs.tags?.ratio).toBe('3.14');
+    expect(obs.tags?.label).toBe('forest');
+  });
 });
 
 // ---------------------------------------------------------------------------

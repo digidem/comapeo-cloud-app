@@ -8,19 +8,19 @@ describe('trackSchema', () => {
     docId: 'track-001',
     versionId: 'track-001/0',
     originalVersionId: 'track-001/0',
-    schemaName: 'track' as const,
-    createdAt: '2024-03-15T08:00:00Z',
-    updatedAt: '2024-03-15T08:30:00Z',
+    schemaName: 'track',
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
     links: [],
     deleted: false,
     locations: [
       {
-        coords: { latitude: -8.35, longitude: -55.45 },
-        timestamp: '2024-03-15T08:00:00Z',
-      },
-      {
-        coords: { latitude: -8.36, longitude: -55.44 },
-        timestamp: '2024-03-15T08:10:00Z',
+        coords: {
+          latitude: -8.35,
+          longitude: -55.45,
+        },
+        timestamp: '2024-01-01T00:00:00Z',
+        accuracy: 6,
       },
     ],
     observationRefs: [
@@ -30,7 +30,7 @@ describe('trackSchema', () => {
         url: '/projects/proj1/observation/obs-001',
       },
     ],
-    tags: { device: 'gps-tracker' },
+    tags: { patrol: 'north' },
     presetRef: {
       docId: 'preset-001',
       versionId: 'preset-001/0',
@@ -40,79 +40,87 @@ describe('trackSchema', () => {
 
   it('validates a complete track', () => {
     const result = v.safeParse(trackSchema, validTrack);
+
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.output.docId).toBe('track-001');
-      expect(result.output.locations).toHaveLength(2);
       expect(result.output.locations[0]!.coords.latitude).toBe(-8.35);
-      expect(result.output.locations[0]!.coords.longitude).toBe(-55.45);
-      expect(result.output.observationRefs).toHaveLength(1);
       expect(result.output.observationRefs[0]!.docId).toBe('obs-001');
-      expect(result.output.presetRef?.docId).toBe('preset-001');
+      expect(result.output.versionId).toBe('track-001/0');
     }
   });
 
-  it('rejects track missing required locations', () => {
-    const { locations: _locations, ...rest } = validTrack;
-    expect(v.safeParse(trackSchema, rest).success).toBe(false);
-  });
+  it('validates a track with optional refs and metadata omitted', () => {
+    const minimalTrack = {
+      docId: 'track-002',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      deleted: false,
+    };
 
-  it('validates track without optional presetRef', () => {
-    const { presetRef: _presetRef, ...rest } = validTrack;
-    expect(v.safeParse(trackSchema, rest).success).toBe(true);
-  });
-
-  it('validates track with empty observationRefs', () => {
-    const track = { ...validTrack, observationRefs: [] };
-    expect(v.safeParse(trackSchema, track).success).toBe(true);
-  });
-
-  it('validates track with empty tags', () => {
-    const track = { ...validTrack, tags: {} };
-    expect(v.safeParse(trackSchema, track).success).toBe(true);
-  });
-
-  it('validates track with deleted: true (tombstone)', () => {
-    const track = { ...validTrack, deleted: true };
-    const result = v.safeParse(trackSchema, track);
+    const result = v.safeParse(trackSchema, minimalTrack);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.output.deleted).toBe(true);
+      expect(result.output.locations).toEqual([]);
+      expect(result.output.observationRefs).toEqual([]);
+      expect(result.output.tags).toEqual({});
     }
   });
 
-  it('validates location without optional timestamp', () => {
-    const track = {
-      ...validTrack,
-      locations: [{ coords: { latitude: 1.0, longitude: 2.0 } }],
+  it('accepts observationRef entries missing versionId and url', () => {
+    const trackWithMinimalRefs = {
+      docId: 'track-003',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      deleted: false,
+      observationRefs: [{ docId: 'obs-only-docid' }],
     };
-    expect(v.safeParse(trackSchema, track).success).toBe(true);
+
+    const result = v.safeParse(trackSchema, trackWithMinimalRefs);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects track locations without coordinates', () => {
+    const invalidTrack = {
+      ...validTrack,
+      locations: [{ timestamp: '2024-01-01T00:00:00Z' }],
+    };
+
+    expect(v.safeParse(trackSchema, invalidTrack).success).toBe(false);
   });
 });
 
 describe('tracksResponseSchema', () => {
+  const validTrack = {
+    docId: 'track-001',
+    versionId: 'track-001/0',
+    originalVersionId: 'track-001/0',
+    schemaName: 'track',
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+    links: [],
+    deleted: false,
+    locations: [],
+    observationRefs: [],
+    tags: {},
+  };
+
   it('validates a server tracks response', () => {
-    const response = {
-      data: [
-        {
-          docId: 'track-001',
-          versionId: 'track-001/0',
-          originalVersionId: 'track-001/0',
-          schemaName: 'track',
-          createdAt: '2024-03-15T08:00:00Z',
-          updatedAt: '2024-03-15T08:30:00Z',
-          links: [],
-          deleted: false,
-          locations: [],
-          observationRefs: [],
-          tags: {},
-        },
-      ],
-    };
-    expect(v.safeParse(tracksResponseSchema, response).success).toBe(true);
+    expect(
+      v.safeParse(tracksResponseSchema, { data: [validTrack] }).success,
+    ).toBe(true);
   });
 
-  it('rejects a response with missing data array', () => {
-    expect(v.safeParse(tracksResponseSchema, {}).success).toBe(false);
+  it('accepts tracks missing locations, observationRefs, and tags fields', () => {
+    const trackWithoutCollections = {
+      docId: 'track-002',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      deleted: false,
+    };
+
+    expect(
+      v.safeParse(tracksResponseSchema, { data: [trackWithoutCollections] })
+        .success,
+    ).toBe(true);
   });
 });

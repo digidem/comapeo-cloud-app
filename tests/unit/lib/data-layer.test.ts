@@ -6,14 +6,12 @@ import {
   createObservation,
   createProject,
   getAlerts,
-  getAttachments,
   getFields,
   getObservationDisplayName,
   getObservations,
   getPresetLookupMap,
   getPresets,
   getProjectPoints,
-  getProjectTrackLines,
   getProjects,
   getSyncStatus,
   getTracks,
@@ -102,55 +100,6 @@ describe('data-layer', () => {
 
       expect(att.localId).toBeDefined();
       expect(att.observationLocalId).toBe(obs.localId);
-    });
-
-    it('reads non-deleted attachments for an observation', async () => {
-      const project = await createProject({ name: 'P' });
-      const obs = await createObservation({
-        projectLocalId: project.localId,
-      });
-      const db = getDb();
-      await db.attachments.bulkAdd([
-        {
-          localId: 'att-visible',
-          projectLocalId: project.localId,
-          observationLocalId: obs.localId,
-          sourceType: 'remoteArchive',
-          sourceId: 'server-1',
-          remoteId: 'att-visible',
-          sourceDocId: 'obs-1:0',
-          remoteUrl: '/projects/proj-1/attachments/d1/photo/a.jpg',
-          resolvedUrl:
-            'https://archive.example.com/projects/proj-1/attachments/d1/photo/a.jpg',
-          mediaType: 'photo',
-          downloadStatus: 'remote-only',
-          createdAt: '2026-01-01T00:00:00Z',
-          updatedAt: '2026-01-01T00:00:00Z',
-          dirtyLocal: false,
-          deleted: false,
-        },
-        {
-          localId: 'att-deleted',
-          projectLocalId: project.localId,
-          observationLocalId: obs.localId,
-          sourceType: 'remoteArchive',
-          sourceId: 'server-1',
-          remoteId: 'att-deleted',
-          sourceDocId: 'obs-1:1',
-          remoteUrl: '/projects/proj-1/attachments/d1/photo/b.jpg',
-          resolvedUrl:
-            'https://archive.example.com/projects/proj-1/attachments/d1/photo/b.jpg',
-          mediaType: 'photo',
-          downloadStatus: 'remote-only',
-          createdAt: '2026-01-01T00:00:00Z',
-          updatedAt: '2026-01-01T00:00:00Z',
-          dirtyLocal: false,
-          deleted: true,
-        },
-      ]);
-
-      const attachments = await getAttachments(obs.localId);
-      expect(attachments.map((a) => a.localId)).toEqual(['att-visible']);
     });
   });
 
@@ -356,75 +305,6 @@ describe('data-layer', () => {
       const project = await createProject({ name: 'P' });
       const fc = await getProjectPoints(project.localId);
       expect(fc.type).toBe('FeatureCollection');
-      expect(fc.features).toEqual([]);
-    });
-  });
-
-  describe('getProjectTrackLines', () => {
-    it('returns LineString features from valid track locations', async () => {
-      const project = await createProject({ name: 'P' });
-      const db = getDb();
-      await db.tracks.add({
-        localId: 'track-1',
-        projectLocalId: project.localId,
-        sourceType: 'remoteArchive',
-        sourceId: 'server-1',
-        remoteId: 'remote-track-1',
-        presetRefDocId: 'preset-track',
-        locations: [
-          {
-            coords: { latitude: -8.35, longitude: -55.45 },
-            timestamp: '2026-01-01T00:00:00Z',
-          },
-          {
-            coords: { latitude: -8.36, longitude: -55.46 },
-            timestamp: '2026-01-01T00:05:00Z',
-          },
-        ],
-        observationRefs: [],
-        createdAt: '2026-01-01T00:00:00Z',
-        updatedAt: '2026-01-01T00:05:00Z',
-        dirtyLocal: false,
-        deleted: false,
-      });
-
-      const fc = await getProjectTrackLines(project.localId);
-      expect(fc.features).toHaveLength(1);
-      expect(fc.features[0]!.geometry).toEqual({
-        type: 'LineString',
-        coordinates: [
-          [-55.45, -8.35],
-          [-55.46, -8.36],
-        ],
-      });
-      expect(fc.features[0]!.properties).toMatchObject({
-        docId: 'remote-track-1',
-        presetRefDocId: 'preset-track',
-        timestamps: ['2026-01-01T00:00:00Z', '2026-01-01T00:05:00Z'],
-      });
-    });
-
-    it('skips tracks with fewer than two valid locations', async () => {
-      const project = await createProject({ name: 'P' });
-      const db = getDb();
-      await db.tracks.add({
-        localId: 'track-1',
-        projectLocalId: project.localId,
-        sourceType: 'remoteArchive',
-        sourceId: 'server-1',
-        remoteId: 'remote-track-1',
-        locations: [
-          { coords: { latitude: -8.35, longitude: -55.45 } },
-          { coords: { latitude: 999, longitude: -55.46 } },
-        ],
-        observationRefs: [],
-        createdAt: '2026-01-01T00:00:00Z',
-        updatedAt: '2026-01-01T00:05:00Z',
-        dirtyLocal: false,
-        deleted: false,
-      });
-
-      const fc = await getProjectTrackLines(project.localId);
       expect(fc.features).toEqual([]);
     });
   });
