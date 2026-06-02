@@ -316,7 +316,10 @@ describe('AppDatabase', () => {
       remoteId: 'track-old-1',
       presetRef: 'preset-old-1' as unknown as Track['presetRef'],
       locations: [],
-      observationRefs: ['obs-old-1', 'obs-old-2'] as unknown as Track['observationRefs'],
+      observationRefs: [
+        'obs-old-1',
+        'obs-old-2',
+      ] as unknown as Track['observationRefs'],
       createdAt: '2024-01-01T00:00:00Z',
       updatedAt: '2024-01-01T00:00:00Z',
       dirtyLocal: false,
