@@ -110,6 +110,56 @@ describe('archive proxy helpers', () => {
       value: '/projects/proj-1/remoteDetectionAlerts',
     });
 
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/observation'),
+    ).toEqual({
+      ok: false,
+      code: 'UNSUPPORTED_ARCHIVE_PROXY_PATH',
+      message: 'Archive proxy path is not supported',
+    });
+
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/track'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/track',
+    });
+
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/preset'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/preset',
+    });
+
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/preset/preset-001'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/preset/preset-001',
+    });
+
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/field'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/field',
+    });
+
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/field/field-001'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/field/field-001',
+    });
+
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/proj-1/icon/icon-001'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/proj-1/icon/icon-001',
+    });
+
     // Attachment paths for authenticated image loading
     expect(
       validateArchiveProxyRequest(

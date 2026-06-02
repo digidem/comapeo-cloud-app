@@ -154,9 +154,10 @@ export function ObservationDetailScreen() {
   }
 
   const tags = observation.tags ?? {};
+  const rawCategory = tags.category;
   const categoryLabel =
-    tags.category !== undefined && tags.category !== null
-      ? String(tags.category)
+    rawCategory !== undefined && rawCategory !== null
+      ? String(rawCategory) || null
       : null;
   const photoList =
     tags.photoUrls === undefined

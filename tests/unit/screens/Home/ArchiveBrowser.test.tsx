@@ -161,4 +161,33 @@ describe('ArchiveBrowser', () => {
 
     expect(onParentClick).toHaveBeenCalled();
   });
+
+  // Regression: commit dd11b75 — selectArchive outside state updater (Strict Mode safety)
+  it('calls selectArchive when expanding an archive (not when collapsing)', async () => {
+    const user = userEvent.setup();
+    const { useArchiveStore } = await import('@/stores/archive-store');
+    useArchiveStore.setState({ selectedArchiveId: null });
+
+    render(
+      <ArchiveBrowser
+        selectedProjectId={null}
+        onSelect={vi.fn()}
+        onCreateNew={vi.fn()}
+        onAddServer={vi.fn()}
+        onSelectServer={vi.fn()}
+      />,
+    );
+
+    const archiveToggle = screen.getByText('North Archive').closest('button');
+    if (archiveToggle === null) {
+      throw new Error('Archive toggle button not found');
+    }
+    await user.click(archiveToggle);
+    expect(useArchiveStore.getState().selectedArchiveId).toBeNull();
+
+    await user.click(archiveToggle);
+    expect(useArchiveStore.getState().selectedArchiveId).toBe(
+      'https://archive.example.com',
+    );
+  });
 });

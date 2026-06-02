@@ -279,6 +279,46 @@ describe('DataScreen', () => {
       expect(screen.getByText('Observation')).toBeInTheDocument();
     });
 
+    // Regression: commit 81b005e — empty-string tags.category falls back
+    it('renders fallback when tags.category is an empty string', () => {
+      mockObservationsQuery = {
+        data: [
+          {
+            localId: 'obs-empty-cat',
+            projectLocalId: 'proj-1',
+            tags: { category: '', notes: 'Empty category' },
+            createdAt: '2024-03-14T14:20:00Z',
+            updatedAt: '2024-03-14T14:20:00Z',
+          },
+        ],
+        isPending: false,
+      };
+
+      render(<DataScreen />);
+      expect(screen.getByText('Observation')).toBeInTheDocument();
+    });
+
+    it('renders fallback when tags.category is explicitly null', () => {
+      mockObservationsQuery = {
+        data: [
+          {
+            localId: 'obs-null-cat',
+            projectLocalId: 'proj-1',
+            tags: {
+              category: null as unknown as string,
+              notes: 'Null category',
+            },
+            createdAt: '2024-03-14T14:20:00Z',
+            updatedAt: '2024-03-14T14:20:00Z',
+          },
+        ],
+        isPending: false,
+      };
+
+      render(<DataScreen />);
+      expect(screen.getByText('Observation')).toBeInTheDocument();
+    });
+
     it('renders coordinates when obs.lat and obs.lon are present', () => {
       mockObservationsQuery = {
         data: [

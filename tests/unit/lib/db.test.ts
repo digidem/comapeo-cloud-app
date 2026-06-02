@@ -303,6 +303,53 @@ describe('AppDatabase', () => {
     expect('lon' in after!).toBe(true);
   });
 
+  it('v9 track migration: converts string presetRef and string[] observationRefs to RemoteDocRef objects', async () => {
+    const db = getDb();
+
+    // Simulate the pre-v9 shape: presetRef is a string docId, observationRefs
+    // is string[]. (This was the previous PR #67 storage shape.)
+    await db.tracks.add({
+      localId: 'remoteArchive:server1:track-old-1',
+      projectLocalId: 'proj-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server1',
+      remoteId: 'track-old-1',
+      presetRef: 'preset-old-1' as unknown as Track['presetRef'],
+      locations: [],
+      observationRefs: [
+        'obs-old-1',
+        'obs-old-2',
+      ] as unknown as Track['observationRefs'],
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    // Run the same upgrade logic the migration uses
+    type Track = import('@/lib/db').Track;
+    const upgrade = (track: Track) => {
+      const t = track as unknown as Record<string, unknown>;
+      if (typeof t.presetRef === 'string') {
+        t.presetRef = { docId: t.presetRef };
+      }
+      if (Array.isArray(t.observationRefs)) {
+        t.observationRefs = t.observationRefs.map((ref) =>
+          typeof ref === 'string' ? { docId: ref } : ref,
+        );
+      }
+    };
+    await db.tracks.toCollection().modify(upgrade as never);
+
+    const migrated = await db.tracks.get('remoteArchive:server1:track-old-1');
+    expect(migrated).toBeDefined();
+    expect(migrated!.presetRef).toEqual({ docId: 'preset-old-1' });
+    expect(migrated!.observationRefs).toEqual([
+      { docId: 'obs-old-1' },
+      { docId: 'obs-old-2' },
+    ]);
+  });
+
   it('stores and retrieves a project with description', async () => {
     const db = getDb();
 

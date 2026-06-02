@@ -1,9 +1,11 @@
 import { getRemoteServer } from '@/lib/local-repositories';
 import {
   pullAlerts,
+  pullFields,
   pullObservations,
   pullPresets,
   pullProjects,
+  pullTracks,
 } from '@/lib/remote-archive';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -16,6 +18,7 @@ export interface SyncOptions {
 export interface SyncResult {
   success: boolean;
   error?: string;
+  warnings?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +85,6 @@ async function doSync(
       projects.map(async (project) => {
         if (project.remoteId) {
           const projectErrors: string[] = [];
-          let observationsOk = false;
 
           try {
             await pullObservations(
@@ -91,7 +93,6 @@ async function doSync(
               project.localId,
               config,
             );
-            observationsOk = true;
           } catch (e) {
             projectErrors.push(
               `Observations: ${e instanceof Error ? e.message : String(e)}`,
@@ -128,14 +129,39 @@ async function doSync(
             );
           }
 
+          // Tracks are non-critical — log warnings, don't fail
+          try {
+            await pullTracks(
+              serverDbId,
+              project.remoteId,
+              project.localId,
+              config,
+            );
+          } catch (e) {
+            const msg = `Tracks: ${e instanceof Error ? e.message : String(e)}`;
+            projectWarnings.push(
+              `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
+            );
+          }
+
+          // Fields are non-critical — log warnings, don't fail
+          try {
+            await pullFields(
+              serverDbId,
+              project.remoteId,
+              project.localId,
+              config,
+            );
+          } catch (e) {
+            const msg = `Fields: ${e instanceof Error ? e.message : String(e)}`;
+            projectWarnings.push(
+              `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
+            );
+          }
+
           // Only fail the project if observations (critical) failed
           if (projectErrors.length > 0) {
             throw new Error(projectErrors.join('; '));
-          }
-
-          // Track warning: observations synced but secondary data failed
-          if (observationsOk && projectWarnings.length > 0) {
-            // warnings already pushed above
           }
         }
       }),
@@ -174,7 +200,11 @@ async function doSync(
         await useAuthStore
           .getState()
           .updateServerStatus(serverDbId, 'connected', statusMsg);
-        return { success: true, error: undefined };
+        return {
+          success: true,
+          error: undefined,
+          warnings: projectWarnings.length > 0 ? projectWarnings : undefined,
+        };
       }
 
       // Complete failure: no projects synced successfully
@@ -194,7 +224,7 @@ async function doSync(
           'connected',
           `Synced with warnings: ${projectWarnings.join('; ')}`,
         );
-      return { success: true };
+      return { success: true, warnings: projectWarnings };
     }
 
     // Perfect sync — no errors or warnings

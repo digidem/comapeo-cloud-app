@@ -14,6 +14,11 @@ export interface Project {
   name?: string;
   description?: string;
   serverUrl?: string;
+  iconRef?: {
+    docId: string;
+    name?: string;
+    contentType?: string;
+  };
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
@@ -59,6 +64,53 @@ export interface Attachment {
   sourceType: string;
   sourceId: string;
   remoteId?: string;
+  remoteUrl?: string;
+  resolvedUrl?: string;
+  mediaType?: 'photo' | 'audio' | 'unknown';
+  contentType?: string;
+  createdAt: string;
+  updatedAt: string;
+  dirtyLocal: boolean;
+  deleted: boolean;
+}
+
+export interface RemoteDocRef {
+  docId: string;
+  versionId?: string;
+  url?: string;
+}
+
+export interface Track {
+  localId: string;
+  projectLocalId: string;
+  sourceType: string;
+  sourceId: string;
+  remoteId?: string;
+  tags?: Record<string, string>;
+  presetRef?: RemoteDocRef;
+  locations?: Array<{
+    coords: { latitude: number; longitude: number };
+    timestamp?: string;
+  }>;
+  observationRefs?: RemoteDocRef[];
+  createdAt: string;
+  updatedAt: string;
+  dirtyLocal: boolean;
+  deleted: boolean;
+}
+
+export interface Field {
+  localId: string;
+  projectLocalId: string;
+  sourceType: string;
+  sourceId: string;
+  remoteId?: string;
+  type: string;
+  key: string;
+  label: string;
+  placeholder?: string;
+  universal: boolean;
+  options?: Array<{ label: string; value: string }>;
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
@@ -108,6 +160,8 @@ class AppDatabase extends Dexie {
   observations!: EntityTable<Observation, 'localId'>;
   alerts!: EntityTable<Alert, 'localId'>;
   attachments!: EntityTable<Attachment, 'localId'>;
+  tracks!: EntityTable<Track, 'localId'>;
+  fields!: EntityTable<Field, 'localId'>;
   remoteServers!: EntityTable<RemoteServer, 'id'>;
   syncMetadata!: EntityTable<SyncMetadata, 'id'>;
   presets!: EntityTable<Preset, 'localId'>;
@@ -234,6 +288,32 @@ class AppDatabase extends Dexie {
     this.version(7).stores({
       presets:
         '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
+    });
+
+    this.version(8).stores({
+      tracks:
+        '&localId, projectLocalId, [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
+      fields:
+        '&localId, projectLocalId, [projectLocalId+remoteId], [sourceType+sourceId+remoteId], [dirtyLocal+updatedAt]',
+    });
+
+    // Migrate Track.presetRef and Track.observationRefs from the previous
+    // flattened shape (string for presetRef, string[] for observationRefs) to
+    // RemoteDocRef objects. Loses `versionId`/`url` for any rows that had them
+    // truncated by the previous build, but preserves the only data the rows
+    // actually contained. Re-sync will recover the full ref shape.
+    this.version(9).upgrade(async (tx) => {
+      const table = tx.table('tracks');
+      await table.toCollection().modify((track: Record<string, unknown>) => {
+        if (typeof track.presetRef === 'string') {
+          track.presetRef = { docId: track.presetRef };
+        }
+        if (Array.isArray(track.observationRefs)) {
+          track.observationRefs = track.observationRefs.map((ref) =>
+            typeof ref === 'string' ? { docId: ref } : ref,
+          );
+        }
+      });
     });
   }
 }
