@@ -113,13 +113,6 @@ export interface Track {
   presetRefDocId?: string;
   presetRef?: RemoteDocRef;
   locations: TrackLocation[];
-  /**
-   * Observation refs are stored as full `RemoteDocRef` objects (docId + optional
-   * versionId/url) rather than flattened to `string[]`, so consumers can resolve
-   * to a specific historical version when the server provides it. This is the
-   * canonical model — PR #67 diverges (`string[]`); that PR's choice will be
-   * reconciled at merge time.
-   */
   observationRefs: RemoteDocRef[];
   createdAt: string;
   updatedAt: string;
