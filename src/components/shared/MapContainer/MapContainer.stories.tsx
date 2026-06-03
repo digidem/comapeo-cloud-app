@@ -41,6 +41,13 @@ export const WithoutSwitcher: Story = {
   },
 };
 
+/**
+ * `interactive: false` disables pan/zoom — a runtime behavior that is invisible
+ * in a static screenshot. To keep this state visually distinct (and to give
+ * users a real affordance), the container renders a "View only" badge in the
+ * top-left whenever the map is non-interactive. Set `showViewOnlyBadge: false`
+ * to opt out of the badge while keeping the non-interactive behavior.
+ */
 export const NonInteractive: Story = {
   args: {
     initialViewState: {

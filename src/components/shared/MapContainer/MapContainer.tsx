@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
 } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
 import type { MapRef } from 'react-map-gl/maplibre';
 import Map from 'react-map-gl/maplibre';
 
@@ -17,6 +18,13 @@ import type { BasemapId, ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { useMapStore } from '@/stores/map-store';
 
 import { BasemapSwitcher } from './BasemapSwitcher';
+
+const messages = defineMessages({
+  viewOnly: {
+    id: 'mapContainer.viewOnly',
+    defaultMessage: 'View only',
+  },
+});
 
 type SwitcherPosition =
   | 'top-right'
@@ -47,6 +55,11 @@ export interface MapContainerProps extends MapPassthroughProps {
 
   /** Whether the map is interactive (default: true) */
   interactive?: boolean;
+
+  /** Whether to show a "View only" badge while non-interactive (default: true).
+   *  Renders only when `interactive` is false; gives the otherwise
+   *  behavior-only state a visible affordance (also distinguishes screenshots). */
+  showViewOnlyBadge?: boolean;
 
   /** Controlled basemap selection — overrides the store */
   basemapId?: BasemapId;
@@ -99,6 +112,7 @@ const POSITION_CLASSES: Record<SwitcherPosition, string> = {
 function MapContainer({
   initialViewState,
   interactive = true,
+  showViewOnlyBadge = true,
   basemapId: controlledBasemapId,
   defaultBasemapId,
   onBasemapChange,
@@ -114,6 +128,7 @@ function MapContainer({
   children,
   ...mapPassthrough
 }: MapContainerProps) {
+  const intl = useIntl();
   const storeBasemapId = useMapStore((s) => s.basemapId);
   const storeSetBasemap = useMapStore((s) => s.setBasemap);
 
@@ -179,6 +194,41 @@ function MapContainer({
       >
         {children}
       </Map>
+
+      {/* View-only affordance for the non-interactive state. Without this the
+          difference between interactive and non-interactive maps is behavior
+          only (pan/zoom) and invisible in static screenshots. */}
+      {!interactive && showViewOnlyBadge && (
+        <div className="absolute top-3 left-3 z-10">
+          <span
+            data-testid="map-view-only-badge"
+            className="inline-flex items-center gap-1 rounded-full bg-[#04145C]/85 px-2.5 py-1 text-xs font-medium text-white shadow-[0_8px_24px_rgba(9,30,66,0.08)] backdrop-blur-sm"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-3.5 w-3.5"
+            >
+              <path
+                d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <circle
+                cx="12"
+                cy="12"
+                r="3"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+            </svg>
+            {intl.formatMessage(messages.viewOnly)}
+          </span>
+        </div>
+      )}
 
       {/* Basemap switcher overlay */}
       {showBasemapSwitcher && (
