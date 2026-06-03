@@ -114,13 +114,28 @@ describe('MediaPreview', () => {
     expect(imgs).toHaveLength(2);
   });
 
-  it('renders "+N more" text when total media exceeds 2', () => {
+  it('renders 3 thumbnails when 3 photo URLs', () => {
     render(
       <MediaPreview
         observationLocalId="obs-1"
         tags={{
           photoUrls:
             'https://example.com/photo1.jpg,https://example.com/photo2.jpg,https://example.com/photo3.jpg',
+        }}
+      />,
+    );
+    const imgs = screen.getAllByTestId('auth-img');
+    expect(imgs).toHaveLength(3);
+    expect(screen.queryByText(/more/)).not.toBeInTheDocument();
+  });
+
+  it('renders "+N more" text when total media exceeds 3', () => {
+    render(
+      <MediaPreview
+        observationLocalId="obs-1"
+        tags={{
+          photoUrls:
+            'https://example.com/photo1.jpg,https://example.com/photo2.jpg,https://example.com/photo3.jpg,https://example.com/photo4.jpg',
         }}
       />,
     );
@@ -139,8 +154,8 @@ describe('MediaPreview', () => {
         }}
       />,
     );
-    // 2 photos + 3 audio = 5 total, showing 2 photos → +3 more
-    expect(screen.getByText('+3 more')).toBeInTheDocument();
+    // 2 photos + 3 audio = 5 total, showing 2 photos + 1 audio icon → +2 more
+    expect(screen.getByText('+2 more')).toBeInTheDocument();
   });
 
   it('renders audio icon placeholder when audioCount > 0 and no photos', () => {
@@ -249,11 +264,12 @@ describe('MediaPreview', () => {
           observationLocalId="obs-1"
           tags={{
             photoUrls:
-              'https://example.com/photo1.jpg,https://example.com/photo2.jpg',
+              'https://example.com/photo1.jpg,https://example.com/photo2.jpg,https://example.com/photo3.jpg',
             audioCount: '1.9',
           }}
         />,
       );
+      // 3 photos visible + audioCount floored to 1 = 4 total, 3 shown → +1 more
       expect(screen.getByText('+1 more')).toBeInTheDocument();
     });
   });
@@ -275,10 +291,11 @@ describe('MediaPreview', () => {
           observationLocalId="obs-1"
           tags={{
             photoUrls:
-              'https://example.com/photo1.jpg,https://example.com/photo2.jpg,https://example.com/photo3.jpg',
+              'https://example.com/photo1.jpg,https://example.com/photo2.jpg,https://example.com/photo3.jpg,https://example.com/photo4.jpg',
           }}
         />,
       );
+      // 4 photos, 3 visible → +1 more
       const moreText = screen.getByText('+1 more');
       expect(moreText).toHaveAttribute('aria-label');
       expect(moreText.getAttribute('aria-label')).toContain('1');

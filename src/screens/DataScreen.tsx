@@ -269,27 +269,25 @@ export function DataScreen() {
               className="no-underline"
             >
               <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    {categoryByObservationId.get(obs.localId) && (
-                      <ObservationCategoryIcon
-                        category={categoryByObservationId.get(obs.localId)!}
-                      />
-                    )}
-                    <span className="text-sm font-medium text-text">
+                <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+                  {categoryByObservationId.get(obs.localId) ? (
+                    <ObservationCategoryIcon
+                      category={categoryByObservationId.get(obs.localId)!}
+                      className="h-12 w-12"
+                    />
+                  ) : (
+                    <div className="h-12 w-12" aria-hidden="true" />
+                  )}
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-sm font-medium text-text truncate">
                       {displayNames.get(obs.localId) ??
                         getCategoryLabel(obs) ??
                         intl.formatMessage(messages.observationFallback)}
                     </span>
-                  </div>
-                  {obs.lat !== undefined && obs.lon !== undefined && (
                     <span className="text-xs text-text-muted">
-                      {obs.lat.toFixed(4)}, {obs.lon.toFixed(4)}
+                      {new Date(obs.createdAt).toLocaleDateString()}
                     </span>
-                  )}
-                  <span className="text-xs text-text-muted">
-                    {new Date(obs.createdAt).toLocaleDateString()}
-                  </span>
+                  </div>
                   <MediaPreview
                     observationLocalId={obs.localId}
                     tags={obs.tags}

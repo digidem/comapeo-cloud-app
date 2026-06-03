@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { ARCHIVE_TARGET_HEADER } from '@/lib/archive-proxy';
+import { getCachedIconBlob, putCachedIconBlob } from '@/lib/db';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface AuthenticatedImageState {
   blobUrl: string | null;
   isLoading: boolean;
   error: Error | null;
+}
+
+interface UseAuthenticatedImageUrlOptions {
+  /**
+   * When true, the fetched blob is cached in IndexedDB (keyed by `url`) and
+   * served from there on subsequent loads for instant display. Intended for
+   * small, stable assets like category icons — NOT large photos.
+   */
+  cache?: boolean;
 }
 
 interface ArchiveCredentials {
@@ -80,7 +90,11 @@ function getRelativeArchiveCredentials({
  *
  * Re-tries when auth store servers change (e.g. after hydration from IndexedDB).
  */
-export function useAuthenticatedImageUrl(url: string): AuthenticatedImageState {
+export function useAuthenticatedImageUrl(
+  url: string,
+  options?: UseAuthenticatedImageUrlOptions,
+): AuthenticatedImageState {
+  const cache = options?.cache ?? false;
   const [state, setState] = useState<AuthenticatedImageState>(() => {
     if (!url) return { blobUrl: null, isLoading: false, error: null };
     return { blobUrl: null, isLoading: true, error: null };
@@ -154,24 +168,52 @@ export function useAuthenticatedImageUrl(url: string): AuthenticatedImageState {
 
     setImageState({ blobUrl: null, isLoading: true, error: null });
 
-    fetch(fetchUrl, { headers: fetchHeaders, signal: controller.signal })
-      .then((response) => {
+    const publishBlob = (blob: Blob) => {
+      if (cancelled || !mountedRef.current) return;
+      const blobUrl = URL.createObjectURL(blob);
+      previousBlobUrlRef.current = blobUrl;
+      setState({ blobUrl, isLoading: false, error: null });
+    };
+
+    const run = async () => {
+      // Serve from the local icon cache first when caching is enabled, so
+      // cached icons render instantly without a network round-trip.
+      if (cache) {
+        try {
+          const cachedBlob = await getCachedIconBlob(url);
+          if (cancelled || !mountedRef.current) return;
+          if (cachedBlob) {
+            publishBlob(cachedBlob);
+            return;
+          }
+        } catch {
+          // Cache read failed — fall through to the network fetch.
+        }
+      }
+
+      try {
+        const response = await fetch(fetchUrl, {
+          headers: fetchHeaders,
+          signal: controller.signal,
+        });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
-        return response.blob();
-      })
-      .then((blob) => {
+        const blob = await response.blob();
         if (cancelled || !mountedRef.current) return;
-        const blobUrl = URL.createObjectURL(blob);
-        previousBlobUrlRef.current = blobUrl;
-        setState({ blobUrl, isLoading: false, error: null });
-      })
-      .catch((err: unknown) => {
+        if (cache) {
+          // Best-effort write; never block display on the cache.
+          void putCachedIconBlob(url, blob).catch(() => {});
+        }
+        publishBlob(blob);
+      } catch (err: unknown) {
         if (cancelled || !mountedRef.current) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setState({ blobUrl: null, isLoading: false, error: err as Error });
-      });
+      }
+    };
+
+    void run();
 
     return () => {
       cancelled = true;
@@ -182,7 +224,7 @@ export function useAuthenticatedImageUrl(url: string): AuthenticatedImageState {
         previousBlobUrlRef.current = null;
       }
     };
-  }, [url, servers, token, baseUrl]);
+  }, [url, servers, token, baseUrl, cache]);
 
   return state;
 }

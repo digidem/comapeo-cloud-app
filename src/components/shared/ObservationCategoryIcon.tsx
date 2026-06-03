@@ -54,6 +54,7 @@ export function ObservationCategoryIcon({
             category: category.name,
           })}
           className="absolute inset-0 z-10 h-full w-full object-contain p-1"
+          cache
         />
       </div>
     );

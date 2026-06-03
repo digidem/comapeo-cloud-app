@@ -1,7 +1,8 @@
 import { apiClient } from '@/lib/api-client';
 import type { RequestConfig } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
-import { getDb } from '@/lib/db';
+import { buildIconUrl } from '@/lib/category-utils';
+import { getCachedIconBlob, getDb, putCachedIconBlob } from '@/lib/db';
 import type {
   Alert,
   Attachment,
@@ -406,6 +407,57 @@ export async function pullAlerts(
   return alerts;
 }
 
+/**
+ * Pre-fetch and cache the icon blobs for the given presets so the UI can
+ * render category icons instantly (from IndexedDB) instead of fetching them
+ * on first render. Best-effort: individual icon failures are swallowed and
+ * never affect the preset sync. The cache key matches the icon URL the UI
+ * derives via {@link buildIconUrl}, so cached blobs are found on lookup.
+ *
+ * Concurrency is capped at 4 to avoid overwhelming the server with
+ * parallel authenticated requests during first sync.
+ */
+const ICON_FETCH_CONCURRENCY = 4;
+
+async function precacheCategoryIcons(
+  presets: readonly Preset[],
+  projectRemoteId: string,
+  serverUrl: string,
+  config: RequestConfig,
+): Promise<void> {
+  const seen = new Set<string>();
+  const uniqueIconDocIds = presets
+    .filter((preset) => !preset.deleted && preset.iconDocId)
+    .map((preset) => {
+      const iconUrl = buildIconUrl({
+        projectRemoteId,
+        serverUrl,
+        iconDocId: preset.iconDocId,
+      });
+      if (!iconUrl || seen.has(iconUrl)) return null;
+      seen.add(iconUrl);
+      return { iconUrl, docId: preset.iconDocId! };
+    })
+    .filter(
+      (item): item is { iconUrl: string; docId: string } => item !== null,
+    );
+
+  // Process with bounded concurrency
+  for (let i = 0; i < uniqueIconDocIds.length; i += ICON_FETCH_CONCURRENCY) {
+    const batch = uniqueIconDocIds.slice(i, i + ICON_FETCH_CONCURRENCY);
+    await Promise.allSettled(
+      batch.map(async ({ iconUrl, docId }) => {
+        // Skip if already cached to avoid redundant network fetches.
+        const existing = await getCachedIconBlob(iconUrl);
+        if (existing) return;
+
+        const blob = await apiClient.getIcon(projectRemoteId, docId, config);
+        await putCachedIconBlob(iconUrl, blob);
+      }),
+    );
+  }
+}
+
 export async function pullPresets(
   serverId: string,
   projectRemoteId: string,
@@ -416,9 +468,8 @@ export async function pullPresets(
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
   const serverRecord = await getRemoteServer(serverId);
-  const stableKey = stableSourceKey(
-    serverRecord?.baseUrl ?? config.baseUrl ?? '',
-  );
+  const baseUrl = serverRecord?.baseUrl ?? config.baseUrl ?? '';
+  const stableKey = stableSourceKey(baseUrl);
 
   // Map ALL items (including deleted) and write them all to DB as tombstones
   // matching the pattern from pullObservations / pullAlerts
@@ -441,6 +492,11 @@ export async function pullPresets(
   }));
 
   await db.presets.bulkPut(allPresets);
+
+  // Pre-cache category icons so the UI renders them instantly. Fire-and-forget
+  // so a slow/hung icon fetch never blocks the sync. The hook lazily caches on
+  // first render as a fallback.
+  void precacheCategoryIcons(allPresets, projectRemoteId, baseUrl, config);
 
   // Return only the non-deleted subset to callers; deleted items remain
   // locally as tombstones so they are not re-surfaced after server-side deletion

@@ -31,7 +31,7 @@ interface MediaPreviewProps {
 /**
  * Renders a compact media preview for an observation card.
  *
- * Shows up to 2 photo thumbnails using AuthImg, an audio icon when audio
+ * Shows up to 3 photo thumbnails using AuthImg, an audio icon when audio
  * attachments exist, and a "+N more" text indicator when total media exceeds
  * the visible slots. Returns null when no media is present.
  *
@@ -75,19 +75,19 @@ export function MediaPreview({
 
   if (totalMedia === 0) return null;
 
-  // Show up to 2 photo thumbnails
-  const visiblePhotos = photoUrls.slice(0, 2);
+  // Show up to 3 photo thumbnails
+  const visiblePhotos = photoUrls.slice(0, 3);
 
   // Calculate remaining: total - what we actually show (photos + audio icon if visible)
   const shownItems = visiblePhotos.length + (safeAudioCount > 0 ? 1 : 0);
-  const actualRemaining = totalMedia - Math.min(shownItems, 2);
+  const actualRemaining = totalMedia - Math.min(shownItems, 3);
 
   return (
     <div className="flex items-center gap-1.5 mt-1">
       {visiblePhotos.map((url, index) => (
         <div
           key={url}
-          className="h-10 w-10 overflow-hidden rounded-md bg-surface-container-low"
+          className="h-11 w-11 overflow-hidden rounded-md bg-surface-container-low"
         >
           <AuthImg
             src={url}
@@ -97,11 +97,11 @@ export function MediaPreview({
         </div>
       ))}
 
-      {safeAudioCount > 0 && visiblePhotos.length < 2 && (
+      {safeAudioCount > 0 && visiblePhotos.length < 3 && (
         <div
           data-testid="audio-icon"
           role="img"
-          className="flex h-10 w-10 items-center justify-center rounded-md bg-surface-container-low"
+          className="flex h-11 w-11 items-center justify-center rounded-md bg-surface-container-low"
           aria-label={intl.formatMessage(messages.audioAlt)}
         >
           <svg

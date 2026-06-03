@@ -5,6 +5,11 @@ interface AuthImgProps {
   src: string;
   alt: string;
   className?: string;
+  /**
+   * When true, the image blob is cached in IndexedDB for instant display on
+   * subsequent loads. Use only for small, stable assets (e.g. category icons).
+   */
+  cache?: boolean;
 }
 
 /**
@@ -16,8 +21,10 @@ interface AuthImgProps {
  * - Error: Invisible placeholder div (preserves layout)
  * - Success: <img> with blob URL
  */
-export function AuthImg({ src, alt, className }: AuthImgProps) {
-  const { blobUrl, isLoading, error } = useAuthenticatedImageUrl(src);
+export function AuthImg({ src, alt, className, cache }: AuthImgProps) {
+  const { blobUrl, isLoading, error } = useAuthenticatedImageUrl(src, {
+    cache,
+  });
 
   if (isLoading) {
     return (

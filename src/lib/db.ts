@@ -186,6 +186,26 @@ export interface Preset {
   deleted: boolean;
 }
 
+/**
+ * Locally cached category icon blob, keyed by the icon's authenticated URL.
+ *
+ * Icons are small, immutable-per-docId assets fetched from the archive with
+ * Authorization headers. Caching the decoded blob lets the UI render them
+ * instantly on subsequent loads instead of re-fetching on every render.
+ */
+export interface CachedIcon {
+  url: string;
+  /**
+   * Raw icon bytes. Stored as an ArrayBuffer (not a Blob) so the record
+   * round-trips through every structured-clone implementation, including the
+   * fake-indexeddb used in tests. The Blob is reconstructed on read.
+   */
+  data: ArrayBuffer;
+  contentType?: string;
+  /** Timestamp when the icon was cached. Reserved for future TTL-based eviction. */
+  cachedAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Database class
 // ---------------------------------------------------------------------------
@@ -200,6 +220,7 @@ class AppDatabase extends Dexie {
   remoteServers!: EntityTable<RemoteServer, 'id'>;
   syncMetadata!: EntityTable<SyncMetadata, 'id'>;
   presets!: EntityTable<Preset, 'localId'>;
+  iconCache!: EntityTable<CachedIcon, 'url'>;
 
   constructor() {
     super('comapeo-cloud-app');
@@ -437,6 +458,14 @@ class AppDatabase extends Dexie {
             }
           });
       });
+
+    // v11: add the iconCache key-value table for storing category icon blobs
+    // locally (keyed by authenticated icon URL). Purely additive — no existing
+    // table or record shape changes, so users on any prior version upgrade
+    // cleanly.
+    this.version(11).stores({
+      iconCache: '&url',
+    });
   }
 }
 
@@ -463,5 +492,42 @@ export async function resetDb(): Promise<void> {
   const db = getDb();
   await db.transaction('rw', db.tables, async () => {
     await Promise.all(db.tables.map((table) => table.clear()));
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Icon cache helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the cached icon blob for the given authenticated icon URL, or
+ * `undefined` if it has not been cached yet.
+ */
+export async function getCachedIconBlob(
+  url: string,
+): Promise<Blob | undefined> {
+  if (!url) return undefined;
+  const db = getDb();
+  const row = await db.iconCache.get(url);
+  if (!row) return undefined;
+  return new Blob([row.data], { type: row.contentType ?? '' });
+}
+
+/**
+ * Store (or overwrite) the icon blob for the given authenticated icon URL.
+ */
+export async function putCachedIconBlob(
+  url: string,
+  blob: Blob,
+  contentType?: string,
+): Promise<void> {
+  if (!url) return;
+  const data = await blob.arrayBuffer();
+  const db = getDb();
+  await db.iconCache.put({
+    url,
+    data,
+    contentType: contentType ?? (blob.type || undefined),
+    cachedAt: new Date().toISOString(),
   });
 }
