@@ -62,3 +62,6 @@ WORKFLOW.*.md
 .windsurf/
 .zed/
 *.sarif
+
+# Local test cache (UUIDs mapped to worktree paths)
+cache/
