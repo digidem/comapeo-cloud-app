@@ -6,7 +6,8 @@ import { IntlProvider } from 'react-intl';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ShellSlotProvider } from '@/components/layout/shell-slot';
-import { getMessages } from '@/i18n/load-messages';
+import { SUPPORTED_LOCALES, getMessages } from '@/i18n/load-messages';
+import type { Locale } from '@/stores/locale-store';
 
 // Import the app's global styles (Tailwind v4 + design tokens)
 import '../src/app/styles.css';
@@ -18,12 +19,17 @@ const queryClient = new QueryClient({
   },
 });
 
-const messages = getMessages('en');
-
-function StorybookProviders({ children }: { children: ReactNode }) {
+function StorybookProviders({
+  locale,
+  children,
+}: {
+  locale: Locale;
+  children: ReactNode;
+}) {
+  const messages = getMessages(locale);
   return (
     <QueryClientProvider client={queryClient}>
-      <IntlProvider locale="en" defaultLocale="en" messages={messages}>
+      <IntlProvider locale={locale} defaultLocale="en" messages={messages}>
         <ShellSlotProvider>{children}</ShellSlotProvider>
       </IntlProvider>
     </QueryClientProvider>
@@ -31,6 +37,20 @@ function StorybookProviders({ children }: { children: ReactNode }) {
 }
 
 const preview: Preview = {
+  globalTypes: {
+    locale: {
+      name: 'Locale',
+      description: 'i18n locale for stories',
+      defaultValue: 'en',
+      toolbar: {
+        icon: 'globe',
+        items: SUPPORTED_LOCALES.map((l) => ({
+          value: l,
+          title: l.toUpperCase(),
+        })),
+      },
+    },
+  },
   parameters: {
     controls: {
       matchers: {
@@ -61,8 +81,8 @@ const preview: Preview = {
     },
   },
   decorators: [
-    (Story) => (
-      <StorybookProviders>
+    (Story, context) => (
+      <StorybookProviders locale={(context.globals.locale ?? 'en') as Locale}>
         <Story />
       </StorybookProviders>
     ),
