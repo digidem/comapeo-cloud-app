@@ -6,7 +6,7 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 
-import { useStorybookLoadingStore } from '../storybook-loading-control';
+import { useStorybookDataStore } from '../storybook-loading-control';
 import { useArchiveStore, useAuthStore } from './stores';
 
 // ---------------------------------------------------------------------------
@@ -114,36 +114,72 @@ export const MOCK_ALERTS: Alert[] = [
 // Mock hooks
 // ---------------------------------------------------------------------------
 
-export function useProjects() {
-  // When a story opts into the loading state, swap in a query that never
-  // resolves (under a distinct key so it doesn't share the resolved cache) so
-  // `isPending` stays true and the screen renders its loading skeleton.
-  const projectsPending = useStorybookLoadingStore((s) => s.projectsPending);
+/**
+ * Resolve a query based on the current Storybook data mode (set by the
+ * DataScreen decorator). Returns either the fixture data, a never-resolving
+ * promise (loading), a rejected promise (error), or an empty array (empty).
+ */
+function resolveByMode<T>(data: T[], projectLocalId: string | null) {
+  const dataMode = useStorybookDataStore.getState().dataMode;
+  const queryKey = [
+    // include the mode in the key so toggling it re-runs the query
+    dataMode,
+    projectLocalId,
+  ];
+  switch (dataMode) {
+    case 'loading':
+      return {
+        queryKey,
+        queryFn: () => new Promise<{ data: T[] }>(() => {}),
+      };
+    case 'error':
+      return {
+        queryKey,
+        queryFn: () =>
+          Promise.reject(
+            new Error('Mock network error (Storybook dataMode=error)'),
+          ),
+      };
+    case 'empty':
+      return { queryKey, queryFn: () => Promise.resolve({ data: [] as T[] }) };
+    case 'normal':
+    default:
+      return { queryKey, queryFn: () => Promise.resolve({ data }) };
+  }
+}
 
+export function useProjects() {
+  const { queryKey, queryFn } = resolveByMode<Project>(
+    MOCK_PROJECTS,
+    'all-projects',
+  );
   return useQuery({
-    queryKey: projectsPending ? ['projects', 'pending'] : ['projects'],
-    queryFn: () =>
-      projectsPending
-        ? new Promise<{ data: Project[] }>(() => {
-            /* never resolves: keeps the query pending */
-          })
-        : Promise.resolve({ data: MOCK_PROJECTS }),
+    queryKey,
+    queryFn,
     select: (data: { data: Project[] }) => data.data,
   });
 }
 
-export function useObservations(_projectLocalId: string | null) {
+export function useObservations(projectLocalId: string | null) {
+  const { queryKey, queryFn } = resolveByMode<Observation>(
+    MOCK_OBSERVATIONS,
+    projectLocalId,
+  );
   return useQuery({
-    queryKey: ['observations', _projectLocalId],
-    queryFn: () => Promise.resolve({ data: MOCK_OBSERVATIONS }),
+    queryKey,
+    queryFn,
     select: (data: { data: Observation[] }) => data.data,
   });
 }
 
-export function useAlerts(_projectLocalId: string | null) {
+export function useAlerts(projectLocalId: string | null) {
+  const { queryKey, queryFn } = resolveByMode<Alert>(
+    MOCK_ALERTS,
+    projectLocalId,
+  );
   return useQuery({
-    queryKey: ['alerts', _projectLocalId],
-    queryFn: () => Promise.resolve({ data: MOCK_ALERTS }),
+    queryKey,
+    queryFn,
     select: (data: { data: Alert[] }) => data.data,
   });
 }

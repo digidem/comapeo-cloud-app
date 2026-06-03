@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { useProjectStore } from '@/stores/project-store';
 
 import { DataScreen } from './DataScreen';
-import { useStorybookLoadingStore } from './stories/storybook-loading-control';
+import { useStorybookDataStore } from './stories/storybook-loading-control';
 
 /**
  * Custom args for the Data screen stories.
@@ -15,15 +15,19 @@ import { useStorybookLoadingStore } from './stories/storybook-loading-control';
  * and sync it into the mock store via a shared decorator. This lets reviewers
  * flip between "no project" and the available fixture projects from the
  * Controls panel instead of editing the story source.
+ *
+ * `dataMode` is a separate control that drives the mock data hooks
+ * (useProjects, useObservations, useAlerts) into a particular state:
+ *   - normal  (default): fixture data — observations, alerts, projects
+ *   - loading: queries stay pending → loading skeleton renders
+ *   - error  : queries reject → error state renders
+ *   - empty  : queries return [] → empty state renders
  */
 interface DataScreenArgs {
   /** ID of the project to mark as selected in the mock project store. */
   selectedProjectId: string | null;
-  /**
-   * When true, the mock `useProjects` hook is held in a pending state so the
-   * screen renders its loading skeleton (see issue #86).
-   */
-  loading: boolean;
+  /** Data mode passed to the mock hooks (see useStorybookDataStore). */
+  dataMode: 'normal' | 'loading' | 'error' | 'empty';
 }
 
 const meta: Meta<DataScreenArgs> = {
@@ -34,7 +38,7 @@ const meta: Meta<DataScreenArgs> = {
   },
   args: {
     selectedProjectId: 'proj-1',
-    loading: false,
+    dataMode: 'normal',
   },
   argTypes: {
     selectedProjectId: {
@@ -48,14 +52,15 @@ const meta: Meta<DataScreenArgs> = {
         defaultValue: { summary: 'proj-1' },
       },
     },
-    loading: {
-      name: 'Loading',
+    dataMode: {
+      name: 'Data mode',
       description:
-        'When true, the mock `useProjects` hook is held pending so the screen renders its loading skeleton (see issue #86).',
-      control: 'boolean',
+        'What the mock data hooks should return. Reviewers can flip any story into a loading / error / empty state from the Controls panel.',
+      control: { type: 'select' },
+      options: ['normal', 'loading', 'error', 'empty'],
       table: {
-        type: { summary: 'boolean' },
-        defaultValue: { summary: 'false' },
+        type: { summary: 'normal | loading | error | empty' },
+        defaultValue: { summary: 'normal' },
       },
     },
   },
@@ -64,18 +69,9 @@ const meta: Meta<DataScreenArgs> = {
       useProjectStore.setState({
         selectedProjectId: context.args.selectedProjectId,
       });
-      useStorybookLoadingStore.setState({
-        projectsPending: Boolean(context.args.loading),
+      useStorybookDataStore.setState({
+        dataMode: context.args.dataMode,
       });
-
-      // Reset the loading store when navigating away to prevent
-      // cross-story state leaks (see Greptile review finding).
-      useEffect(() => {
-        return () => {
-          useStorybookLoadingStore.setState({ projectsPending: false });
-        };
-      }, []);
-
       return <Story />;
     },
   ],
@@ -88,29 +84,34 @@ export default meta;
 type Story = StoryObj<DataScreenArgs>;
 
 export const NoProjectSelected: Story = {
-  args: { selectedProjectId: null },
+  args: { selectedProjectId: null, dataMode: 'normal' },
 };
 
 export const WithProjectAndData: Story = {
-  args: { selectedProjectId: 'proj-1' },
+  args: { selectedProjectId: 'proj-1', dataMode: 'normal' },
 };
 
-// Note: a "Loading" story is intentionally omitted when no project is
-// selected — the screen would render the empty state (skeleton only renders
-// for a project query that is pending). With the `loading` control wired
-// to the mock `useProjects` hook via the decorator, reviewers can flip
-// any existing story into the loading state from the Controls panel and
-// see the skeleton render in place of the project list.
+export const Loading: Story = {
+  args: { selectedProjectId: 'proj-1', dataMode: 'loading' },
+};
+
+export const Error: Story = {
+  args: { selectedProjectId: 'proj-1', dataMode: 'error' },
+};
+
+export const Empty: Story = {
+  args: { selectedProjectId: 'proj-1', dataMode: 'empty' },
+};
 
 export const WithProjectDesktop: Story = {
-  args: { selectedProjectId: 'proj-1' },
+  args: { selectedProjectId: 'proj-1', dataMode: 'normal' },
   parameters: {
     viewport: { defaultViewport: 'desktop' },
   },
 };
 
 export const NoProjectDesktop: Story = {
-  args: { selectedProjectId: null },
+  args: { selectedProjectId: null, dataMode: 'normal' },
   parameters: {
     viewport: { defaultViewport: 'desktop' },
   },
