@@ -19,7 +19,7 @@ interface AuthenticatedImageState {
 
 // 100x100 primary brand color (#1F6FFF) SVG — loadable by <img src=...>
 const PLACEHOLDER_IMG =
-  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%231F6FFF'/></svg>";
+  "data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%231F6FFF'/></svg>";
 
 export function useAuthenticatedImageUrl(
   _url: string,
