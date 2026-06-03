@@ -45,6 +45,8 @@
     "storybook:screenshots": "npx tsx scripts/storybook-screenshots.ts",
     "storybook:screenshots:mobile": "npx tsx scripts/storybook-screenshots.ts --viewport mobile",
     "storybook:screenshots:desktop": "npx tsx scripts/storybook-screenshots.ts --viewport desktop",
+    "storybook:screenshots:check": "npx tsx scripts/storybook-screenshots-diff.ts --check",
+    "storybook:screenshots:baseline": "npx tsx scripts/storybook-screenshots-diff.ts --update",
     "review:mobile": "npx tsx scripts/review-mobile-visuals.ts",
     "review:mobile:storybook": "npx tsx scripts/review-mobile-visuals.ts --only storybook",
     "review:mobile:e2e": "npx tsx scripts/review-mobile-visuals.ts --only e2e",
