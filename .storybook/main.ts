@@ -50,9 +50,7 @@ const config: StorybookConfig = {
     }
 
     // Specific mock aliases first (Vite alias resolution is first-match-wins,
-    // so the generic '@' from baseConfig must NOT shadow these). Includes
-    // '@/tests' override too — baseConfig adds it from the root vite.config,
-    // but in Storybook stories prefer the src/screens/stories/__mocks__ mocks.
+    // so the generic '@' from baseConfig must NOT shadow these).
     const storybookAliases = [
       // Mock Zustand stores with controllable state
       { find: '@/stores/project-store', replacement: `${mocksDir}stores.ts` },
@@ -81,7 +79,18 @@ const config: StorybookConfig = {
         find: '@/hooks/useAuthenticatedImageUrl',
         replacement: `${mocksDir}useAuthenticatedImageUrl.ts`,
       },
+      // Bare-specifier fallbacks pinned here so Storybook does not silently
+      // break if vite.config.ts ever removes them. Specific mocks above
+      // still take precedence (first-match-wins).
+      { find: '@', replacement: fileURLToPath(new URL('../src/', import.meta.url)) },
+      { find: '@tests', replacement: fileURLToPath(new URL('../tests/', import.meta.url)) },
     ];
+
+    // Drop '@' and '@tests' from base aliases so the explicit entries in
+    // storybookAliases above don't get duplicated.
+    const baseAliasesFiltered = baseAliases.filter(
+      (a) => a.find !== '@' && a.find !== '@tests',
+    );
 
     // Build a clean config that replaces the base entirely
     const storybookConfig: InlineConfig = {
@@ -93,7 +102,7 @@ const config: StorybookConfig = {
         // baseConfig. Vite 5+ resolve.alias is first-match-wins; if the
         // generic '@' → 'src/' comes first, it shadows every specific mock
         // and the static build falls back to the real code. See #82.
-        alias: [...storybookAliases, ...baseAliases],
+        alias: [...storybookAliases, ...baseAliasesFiltered],
       },
       // Remove build config that conflicts with Storybook
       build: {

@@ -5,6 +5,8 @@
  * cleanly; fill in if a specific story needs a non-empty data set).
  */
 
+// `never[]` is assignable to any `T[]`, so empty arrays work as flexible
+// fixtures without needing an explicit element type.
 export async function getAttachmentsForProject(
   _projectLocalId: string,
 ): Promise<never[]> {
