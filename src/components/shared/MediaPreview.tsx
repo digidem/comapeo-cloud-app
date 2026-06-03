@@ -87,7 +87,7 @@ export function MediaPreview({
       {visiblePhotos.map((url, index) => (
         <div
           key={url}
-          className="h-10 w-10 overflow-hidden rounded-md bg-surface-container-low"
+          className="h-11 w-11 overflow-hidden rounded-md bg-surface-container-low"
         >
           <AuthImg
             src={url}
@@ -101,7 +101,7 @@ export function MediaPreview({
         <div
           data-testid="audio-icon"
           role="img"
-          className="flex h-10 w-10 items-center justify-center rounded-md bg-surface-container-low"
+          className="flex h-11 w-11 items-center justify-center rounded-md bg-surface-container-low"
           aria-label={intl.formatMessage(messages.audioAlt)}
         >
           <svg

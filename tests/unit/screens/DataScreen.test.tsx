@@ -389,7 +389,7 @@ describe('DataScreen', () => {
       expect(screen.getByText('Observation')).toBeInTheDocument();
     });
 
-    it('renders coordinates when obs.lat and obs.lon are present', () => {
+    it('renders observation card with category and date when obs.lat and obs.lon are present', () => {
       mockObservationsQuery = {
         data: [
           {
@@ -406,11 +406,12 @@ describe('DataScreen', () => {
       };
 
       render(<DataScreen />);
-      expect(screen.getByText(/-8\.3500/)).toBeInTheDocument();
-      expect(screen.getByText(/-55\.4500/)).toBeInTheDocument();
+      // Coordinates are no longer shown in the card — only category and date
+      expect(screen.getAllByText('water').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText(/-8\.3500/)).not.toBeInTheDocument();
     });
 
-    it('omits coordinates when obs.lat/obs.lon are undefined', () => {
+    it('renders observation card without coordinates when obs.lat/obs.lon are undefined', () => {
       mockObservationsQuery = {
         data: [
           {
