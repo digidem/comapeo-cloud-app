@@ -46,7 +46,7 @@ const preview: Preview = {
         icon: 'globe',
         items: SUPPORTED_LOCALES.map((l) => ({
           value: l,
-          title: l.toUpperCase(),
+          title: { en: 'English', pt: 'Português', es: 'Español' }[l] ?? l,
         })),
       },
     },
