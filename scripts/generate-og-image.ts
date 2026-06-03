@@ -1,7 +1,9 @@
-import { mkdir, stat } from 'node:fs/promises';
+import { stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
 import { chromium } from 'playwright';
+import sharp from 'sharp';
 
 const IMAGE_WIDTH = 1200;
 const IMAGE_HEIGHT = 630;
@@ -17,31 +19,12 @@ async function assertOutputDimensions(path: string): Promise<void> {
     throw new Error(`Expected ${path} to be a file.`);
   }
 
-  const browser = await chromium.launch();
+  const metadata = await sharp(path).metadata();
 
-  try {
-    const page = await browser.newPage();
-    await page.goto(pathToFileURL(path).href);
-
-    const dimensions = await page.evaluate(() => {
-      const image = document.querySelector('img');
-
-      return {
-        height: image?.naturalHeight,
-        width: image?.naturalWidth,
-      };
-    });
-
-    if (
-      dimensions.width !== IMAGE_WIDTH ||
-      dimensions.height !== IMAGE_HEIGHT
-    ) {
-      throw new Error(
-        `Expected ${IMAGE_WIDTH}x${IMAGE_HEIGHT}, received ${dimensions.width}x${dimensions.height}.`,
-      );
-    }
-  } finally {
-    await browser.close();
+  if (metadata.width !== IMAGE_WIDTH || metadata.height !== IMAGE_HEIGHT) {
+    throw new Error(
+      `Expected ${IMAGE_WIDTH}x${IMAGE_HEIGHT}, received ${metadata.width}x${metadata.height}.`,
+    );
   }
 }
 
@@ -56,20 +39,30 @@ async function generateOgImage(): Promise<void> {
 
     await page.goto(pathToFileURL(htmlPath).href, { waitUntil: 'networkidle' });
     await page.evaluate(() => document.fonts.ready);
-    await mkdir(dirname(outputPath), { recursive: true });
-    await page.screenshot({
+
+    const screenshotBuffer = await page.screenshot({
       animations: 'disabled',
       fullPage: false,
       omitBackground: false,
-      path: outputPath,
       type: 'png',
     });
+
+    // Optimize: convert to 8-bit palette PNG for ~88% size reduction
+    const optimized = await sharp(screenshotBuffer)
+      .png({ palette: true, effort: 10 })
+      .toBuffer();
+
+    await writeFile(outputPath, optimized);
   } finally {
     await browser.close();
   }
 
   await assertOutputDimensions(outputPath);
-  console.log(`Generated ${outputPath} at ${IMAGE_WIDTH}x${IMAGE_HEIGHT}.`);
+
+  const { size } = await stat(outputPath);
+  const kb = (size / 1024).toFixed(0);
+
+  console.log(`Generated ${outputPath} at ${IMAGE_WIDTH}x${IMAGE_HEIGHT} (${kb}KB).`);
 }
 
 await generateOgImage();
