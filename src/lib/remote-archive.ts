@@ -493,9 +493,10 @@ export async function pullPresets(
 
   await db.presets.bulkPut(allPresets);
 
-  // Pre-cache category icons so the UI renders them instantly. Best-effort;
-  // failures do not affect the preset sync result.
-  await precacheCategoryIcons(allPresets, projectRemoteId, baseUrl, config);
+  // Pre-cache category icons so the UI renders them instantly. Fire-and-forget
+  // so a slow/hung icon fetch never blocks the sync. The hook lazily caches on
+  // first render as a fallback.
+  void precacheCategoryIcons(allPresets, projectRemoteId, baseUrl, config);
 
   // Return only the non-deleted subset to callers; deleted items remain
   // locally as tombstones so they are not re-surfaced after server-side deletion

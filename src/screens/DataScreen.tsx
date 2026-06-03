@@ -270,11 +270,13 @@ export function DataScreen() {
             >
               <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
                 <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-                  {categoryByObservationId.get(obs.localId) && (
+                  {categoryByObservationId.get(obs.localId) ? (
                     <ObservationCategoryIcon
                       category={categoryByObservationId.get(obs.localId)!}
                       className="h-12 w-12"
                     />
+                  ) : (
+                    <div className="h-12 w-12" aria-hidden="true" />
                   )}
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <span className="text-sm font-medium text-text truncate">

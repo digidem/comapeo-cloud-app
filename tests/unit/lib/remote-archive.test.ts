@@ -1,6 +1,6 @@
 import { server } from '@tests/mocks/node';
 import { HttpResponse, http } from 'msw';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDb, resetDb } from '@/lib/db';
 import {
@@ -917,13 +917,18 @@ describe('pullPresets', () => {
     };
     await pullPresets('server-1', 'proj-remote-1', 'proj-local-1', config);
 
-    // The cache key must match what the UI derives via buildIconUrl, i.e.
-    // `${serverUrl}/projects/${projectRemoteId}/icon/${iconDocId}`.
-    const { getCachedIconBlob } = await import('@/lib/db');
-    const cached = await getCachedIconBlob(
-      `${archiveConfig.baseUrl}/projects/proj-remote-1/icon/icon-001`,
+    // precacheCategoryIcons is fire-and-forget, so we need a small delay
+    // for the async icon fetch to settle before checking the cache.
+    await vi.waitFor(
+      async () => {
+        const { getCachedIconBlob } = await import('@/lib/db');
+        const cached = await getCachedIconBlob(
+          `${archiveConfig.baseUrl}/projects/proj-remote-1/icon/icon-001`,
+        );
+        expect(cached).toBeInstanceOf(Blob);
+      },
+      { timeout: 2000, interval: 50 },
     );
-    expect(cached).toBeInstanceOf(Blob);
   });
 
   it('does not fail preset sync when icon pre-fetch fails', async () => {
