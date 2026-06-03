@@ -189,6 +189,7 @@ async function captureViewport(
               const rect = canvas.getBoundingClientRect();
               return rect.width > 0 && rect.height > 0;
             },
+            undefined,
             { timeout: 5_000 },
           )
           .catch(() => {});
@@ -196,16 +197,18 @@ async function captureViewport(
         // Wait for fonts, then two animation frames so the captured paint
         // reflects loaded fonts and tiles — a deterministic paint barrier
         // instead of an arbitrary fixed sleep.
-        await page.evaluate(
-          () =>
-            new Promise<void>((resolveFrame) => {
-              void document.fonts.ready.then(() => {
-                requestAnimationFrame(() =>
-                  requestAnimationFrame(() => resolveFrame()),
-                );
-              });
-            }),
-        );
+        await page
+          .evaluate(
+            () =>
+              new Promise<void>((resolveFrame) => {
+                void document.fonts.ready.then(() => {
+                  requestAnimationFrame(() =>
+                    requestAnimationFrame(() => resolveFrame()),
+                  );
+                });
+              }),
+          )
+          .catch(() => {});
 
         await page.screenshot({
           path: filePath,
