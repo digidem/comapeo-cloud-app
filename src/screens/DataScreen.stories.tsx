@@ -95,7 +95,7 @@ export const Loading: Story = {
   args: { selectedProjectId: 'proj-1', dataMode: 'loading' },
 };
 
-export const Error: Story = {
+export const ErrorState: Story = {
   args: { selectedProjectId: 'proj-1', dataMode: 'error' },
 };
 

@@ -116,70 +116,88 @@ export const MOCK_ALERTS: Alert[] = [
 
 /**
  * Resolve a query based on the current Storybook data mode (set by the
- * DataScreen decorator). Returns either the fixture data, a never-resolving
- * promise (loading), a rejected promise (error), or an empty array (empty).
- */
-function resolveByMode<T>(data: T[], projectLocalId: string | null) {
-  const dataMode = useStorybookDataStore.getState().dataMode;
-  const queryKey = [
-    // include the mode in the key so toggling it re-runs the query
-    dataMode,
-    projectLocalId,
-  ];
-  switch (dataMode) {
-    case 'loading':
-      return {
-        queryKey,
-        queryFn: () => new Promise<{ data: T[] }>(() => {}),
-      };
-    case 'error':
-      return {
-        queryKey,
-        queryFn: () =>
-          Promise.reject(
-            new Error('Mock network error (Storybook dataMode=error)'),
-          ),
-      };
-    case 'empty':
-      return { queryKey, queryFn: () => Promise.resolve({ data: [] as T[] }) };
-    case 'normal':
-    default:
-      return { queryKey, queryFn: () => Promise.resolve({ data }) };
-  }
-}
+ /**
+  * Resolve a query based on the current Storybook data mode (set by the
+  * DataScreen decorator). Returns either the fixture data, a never-resolving
+  * promise (loading), a rejected promise (error), or an empty array (empty).
+  *
+  * The query key includes a per-hook segment so `useObservations('proj-1')`
+  * and `useAlerts('proj-1')` don't collide in the TanStack Query cache. A
+  * shared `['dataMode', projectLocalId]` key would deduplicate the two
+  * queries to the same cache slot, so whichever hook executed its queryFn
+  * first would win and the other would receive the same payload (alerts
+  * shown as observations, etc.).
+  */
+ function resolveByMode<T>(
+   data: T[],
+   projectLocalId: string | null,
+   hookName: string,
+ ) {
+   const dataMode = useStorybookDataStore.getState().dataMode;
+   const queryKey = [
+     // include the mode in the key so toggling it re-runs the query
+     dataMode,
+     hookName,
+     projectLocalId,
+   ];
+   switch (dataMode) {
+     case 'loading':
+       return {
+         queryKey,
+         queryFn: () => new Promise<{ data: T[] }>(() => {}),
+       };
+     case 'error':
+       return {
+         queryKey,
+         queryFn: () =>
+           Promise.reject(new Error('Mock network error (Storybook dataMode=error)')),
+       };
+     case 'empty':
+       return { queryKey, queryFn: () => Promise.resolve({ data: [] as T[] }) };
+     case 'normal':
+     default:
+       return { queryKey, queryFn: () => Promise.resolve({ data }) };
+   }
+ }
 
-export function useProjects() {
-  const { queryKey, queryFn } = resolveByMode<Project>(
-    MOCK_PROJECTS,
-    'all-projects',
-  );
-  return useQuery({
-    queryKey,
-    queryFn,
-    select: (data: { data: Project[] }) => data.data,
-  });
-}
+ export function useProjects() {
+   const { queryKey, queryFn } = resolveByMode<Project>(
+     MOCK_PROJECTS,
+     'all-projects',
+     'projects',
+   );
+   return useQuery({
+     queryKey,
+     queryFn,
+     select: (data: { data: Project[] }) => data.data,
+   });
+ }
 
-export function useObservations(projectLocalId: string | null) {
-  const { queryKey, queryFn } = resolveByMode<Observation>(
-    MOCK_OBSERVATIONS,
-    projectLocalId,
-  );
-  return useQuery({
-    queryKey,
-    queryFn,
-    select: (data: { data: Observation[] }) => data.data,
-  });
-}
+ export function useObservations(projectLocalId: string | null) {
+   const { queryKey, queryFn } = resolveByMode<Observation>(
+     MOCK_OBSERVATIONS,
+     projectLocalId,
+     'observations',
+   );
+   return useQuery({
+     queryKey,
+     queryFn,
+     select: (data: { data: Observation[] }) => data.data,
+   });
+ }
 
-export function useAlerts(projectLocalId: string | null) {
-  const { queryKey, queryFn } = resolveByMode<Alert>(
-    MOCK_ALERTS,
-    projectLocalId,
-  );
-  return useQuery({
-    queryKey,
-    queryFn,
+ export function useAlerts(projectLocalId: string | null) {
+   const { queryKey, queryFn } = resolveByMode<Alert>(
+     MOCK_ALERTS,
+     projectLocalId,
+     'alerts',
+   );
+   return useQuery({
+     queryKey,
+     queryFn,
+     select: (data: { data: Alert[] }) => data.data,
+   });
+ }
     select: (data: { data: Alert[] }) => data.data,
   });
 }
