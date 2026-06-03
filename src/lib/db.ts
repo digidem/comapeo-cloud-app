@@ -202,6 +202,7 @@ export interface CachedIcon {
    */
   data: ArrayBuffer;
   contentType?: string;
+  /** Timestamp when the icon was cached. Reserved for future TTL-based eviction. */
   cachedAt: string;
 }
 
@@ -502,7 +503,9 @@ export async function resetDb(): Promise<void> {
  * Return the cached icon blob for the given authenticated icon URL, or
  * `undefined` if it has not been cached yet.
  */
-export async function getCachedIconBlob(url: string): Promise<Blob | undefined> {
+export async function getCachedIconBlob(
+  url: string,
+): Promise<Blob | undefined> {
   if (!url) return undefined;
   const db = getDb();
   const row = await db.iconCache.get(url);

@@ -413,7 +413,12 @@ export async function pullAlerts(
  * on first render. Best-effort: individual icon failures are swallowed and
  * never affect the preset sync. The cache key matches the icon URL the UI
  * derives via {@link buildIconUrl}, so cached blobs are found on lookup.
+ *
+ * Concurrency is capped at 4 to avoid overwhelming the server with
+ * parallel authenticated requests during first sync.
  */
+const ICON_FETCH_CONCURRENCY = 4;
+
 async function precacheCategoryIcons(
   presets: readonly Preset[],
   projectRemoteId: string,
@@ -421,30 +426,36 @@ async function precacheCategoryIcons(
   config: RequestConfig,
 ): Promise<void> {
   const seen = new Set<string>();
-  await Promise.allSettled(
-    presets
-      .filter((preset) => !preset.deleted && preset.iconDocId)
-      .map(async (preset) => {
-        const iconUrl = buildIconUrl({
-          projectRemoteId,
-          serverUrl,
-          iconDocId: preset.iconDocId,
-        });
-        if (!iconUrl || seen.has(iconUrl)) return;
-        seen.add(iconUrl);
+  const uniqueIconDocIds = presets
+    .filter((preset) => !preset.deleted && preset.iconDocId)
+    .map((preset) => {
+      const iconUrl = buildIconUrl({
+        projectRemoteId,
+        serverUrl,
+        iconDocId: preset.iconDocId,
+      });
+      if (!iconUrl || seen.has(iconUrl)) return null;
+      seen.add(iconUrl);
+      return { iconUrl, docId: preset.iconDocId! };
+    })
+    .filter(
+      (item): item is { iconUrl: string; docId: string } => item !== null,
+    );
 
+  // Process with bounded concurrency
+  for (let i = 0; i < uniqueIconDocIds.length; i += ICON_FETCH_CONCURRENCY) {
+    const batch = uniqueIconDocIds.slice(i, i + ICON_FETCH_CONCURRENCY);
+    await Promise.allSettled(
+      batch.map(async ({ iconUrl, docId }) => {
         // Skip if already cached to avoid redundant network fetches.
         const existing = await getCachedIconBlob(iconUrl);
         if (existing) return;
 
-        const blob = await apiClient.getIcon(
-          projectRemoteId,
-          preset.iconDocId!,
-          config,
-        );
+        const blob = await apiClient.getIcon(projectRemoteId, docId, config);
         await putCachedIconBlob(iconUrl, blob);
       }),
-  );
+    );
+  }
 }
 
 export async function pullPresets(
