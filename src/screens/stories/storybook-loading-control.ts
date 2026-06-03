@@ -16,12 +16,10 @@ import { create } from 'zustand';
 interface StorybookLoadingState {
   /** When true, the mock `useProjects` hook stays in its pending state. */
   projectsPending: boolean;
-  setProjectsPending: (pending: boolean) => void;
 }
 
 export const useStorybookLoadingStore = create<StorybookLoadingState>()(
-  (set) => ({
+  () => ({
     projectsPending: false,
-    setProjectsPending: (projectsPending) => set({ projectsPending }),
   }),
 );
