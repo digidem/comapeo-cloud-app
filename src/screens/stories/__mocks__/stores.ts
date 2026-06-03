@@ -7,6 +7,22 @@
 import { create } from 'zustand';
 
 // ---------------------------------------------------------------------------
+// Error class shared by the auth store (re-exported so consumers like
+// InviteScreen and AddArchiveServerDialog can import it from the same
+// path they do in production: `@/stores/auth-store`).
+// ---------------------------------------------------------------------------
+
+export class DuplicateServerError extends Error {
+  constructor(
+    public readonly serverId: string,
+    public readonly baseUrl: string,
+  ) {
+    super('This archive server has already been added');
+    this.name = 'DuplicateServerError';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Project store mock
 // ---------------------------------------------------------------------------
 

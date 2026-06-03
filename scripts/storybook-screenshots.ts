@@ -169,8 +169,15 @@ async function captureViewport(
           timeout: 30_000,
         });
 
-        // Wait for React to render
-        await page.waitForTimeout(1500);
+        // Wait for network to settle so async resources (map tiles, auth-img
+        // fetches, MSW responses) are captured in the screenshot. Best-effort:
+        // if the page never goes fully idle within 10s, proceed anyway so a
+        // slow story doesn't block the whole batch. See issue #87.
+        await page
+          .waitForLoadState('networkidle', { timeout: 10_000 })
+          .catch(() => {});
+
+        // Fonts ready is a separate, fast promise.
         await page.evaluate(() => document.fonts.ready);
 
         await page.screenshot({
