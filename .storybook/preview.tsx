@@ -50,6 +50,18 @@ const preview: Preview = {
         })),
       },
     },
+    theme: {
+      name: 'Theme',
+      description: 'Color theme for stories (matches the app theme store)',
+      defaultValue: 'light',
+      toolbar: {
+        icon: 'circlehollow',
+        items: [
+          { value: 'light', title: 'Light' },
+          { value: 'dark', title: 'Dark' },
+        ],
+      },
+    },
   },
   parameters: {
     controls: {
@@ -83,10 +95,35 @@ const preview: Preview = {
   decorators: [
     (Story, context) => (
       <StorybookProviders locale={(context.globals.locale ?? 'en') as Locale}>
-        <Story />
+        <ThemeProvider theme={(context.globals.theme ?? 'light') as Theme}>
+          <Story />
+        </ThemeProvider>
       </StorybookProviders>
     ),
   ],
 };
+
+const SUPPORTED_THEMES = ['light', 'dark'] as const;
+type Theme = (typeof SUPPORTED_THEMES)[number];
+
+/**
+ * Preview decorator: applies the global `theme` arg to the document so the
+ * existing `[data-theme='dark']` CSS in src/app/styles.css takes effect.
+ * Mirrors what the app's useThemeStore does at runtime — see
+ * src/stores/theme-store.ts.
+ */
+function ThemeProvider({
+  theme,
+  children,
+}: {
+  theme: Theme;
+  children: ReactNode;
+}) {
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }
+  return <>{children}</>;
+}
 
 export default preview;
