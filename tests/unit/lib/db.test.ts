@@ -1,11 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  getCachedIconBlob,
-  getDb,
-  putCachedIconBlob,
-  resetDb,
-} from '@/lib/db';
+import { getCachedIconBlob, getDb, putCachedIconBlob, resetDb } from '@/lib/db';
 import type { Field, Preset, Track } from '@/lib/db';
 
 beforeEach(async () => {

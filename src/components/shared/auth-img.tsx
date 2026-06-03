@@ -22,7 +22,9 @@ interface AuthImgProps {
  * - Success: <img> with blob URL
  */
 export function AuthImg({ src, alt, className, cache }: AuthImgProps) {
-  const { blobUrl, isLoading, error } = useAuthenticatedImageUrl(src, { cache });
+  const { blobUrl, isLoading, error } = useAuthenticatedImageUrl(src, {
+    cache,
+  });
 
   if (isLoading) {
     return (

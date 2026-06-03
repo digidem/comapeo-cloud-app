@@ -491,7 +491,7 @@ describe('DataScreen', () => {
               tags: {
                 category: 'forest',
                 photoUrls:
-                  'https://example.com/photo1.jpg,https://example.com/photo2.jpg,https://example.com/photo3.jpg',
+                  'https://example.com/photo1.jpg,https://example.com/photo2.jpg,https://example.com/photo3.jpg,https://example.com/photo4.jpg',
               },
               createdAt: '2024-03-15T10:30:00Z',
               updatedAt: '2024-03-15T10:30:00Z',
