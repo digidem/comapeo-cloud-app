@@ -64,9 +64,11 @@ export const WithProjectAndData: Story = {
   args: { selectedProjectId: 'proj-1' },
 };
 
-export const Loading: Story = {
-  args: { selectedProjectId: null },
-};
+// Note: a "Loading" story is intentionally omitted. The screen renders a
+// skeleton only when `projectsQuery.isPending` is true AND no project is
+// selected; the mock hooks resolve immediately, so a `Loading` story would
+// render the same UI as `NoProjectSelected`. A real loading state would
+// require an MSW delay, which is out of scope here.
 
 export const WithProjectDesktop: Story = {
   args: { selectedProjectId: 'proj-1' },
