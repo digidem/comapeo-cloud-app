@@ -197,9 +197,11 @@ function MapContainer({
 
       {/* View-only affordance for the non-interactive state. Without this the
           difference between interactive and non-interactive maps is behavior
-          only (pan/zoom) and invisible in static screenshots. */}
+          only (pan/zoom) and invisible in static screenshots. The z-20
+          keeps the badge above the basemap switcher (z-10) when both are
+          positioned top-left. */}
       {!interactive && showViewOnlyBadge && (
-        <div className="absolute top-3 left-3 z-10">
+        <div className="absolute top-3 left-3 z-20">
           <span
             data-testid="map-view-only-badge"
             className="inline-flex items-center gap-1 rounded-full bg-[#04145C]/85 px-2.5 py-1 text-xs font-medium text-white shadow-[0_8px_24px_rgba(9,30,66,0.08)] backdrop-blur-sm"
