@@ -1,7 +1,6 @@
 import { stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 
@@ -62,7 +61,9 @@ async function generateOgImage(): Promise<void> {
   const { size } = await stat(outputPath);
   const kb = (size / 1024).toFixed(0);
 
-  console.log(`Generated ${outputPath} at ${IMAGE_WIDTH}x${IMAGE_HEIGHT} (${kb}KB).`);
+  console.log(
+    `Generated ${outputPath} at ${IMAGE_WIDTH}x${IMAGE_HEIGHT} (${kb}KB).`,
+  );
 }
 
 await generateOgImage();
