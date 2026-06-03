@@ -82,8 +82,8 @@ const config: StorybookConfig = {
       // Bare-specifier fallbacks pinned here so Storybook does not silently
       // break if vite.config.ts ever removes them. Specific mocks above
       // still take precedence (first-match-wins).
-      { find: '@', replacement: fileURLToPath(new URL('../src/', import.meta.url)) },
-      { find: '@tests', replacement: fileURLToPath(new URL('../tests/', import.meta.url)) },
+      { find: '@', replacement: fileURLToPath(new URL('../src', import.meta.url)) },
+      { find: '@tests', replacement: fileURLToPath(new URL('../tests', import.meta.url)) },
     ];
 
     // Drop '@' and '@tests' from base aliases so the explicit entries in
