@@ -80,7 +80,9 @@ export const ScrolledToBackup: Story = {
 export const ClearDataDialogOpen: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement.ownerDocument.body);
-    const clearButton = await canvas.findByRole('button', { name: 'Clear All Data' });
+    const clearButton = await canvas.findByRole('button', {
+      name: 'Clear All Data',
+    });
     await userEvent.click(clearButton);
 
     // Wait for dialog animation
