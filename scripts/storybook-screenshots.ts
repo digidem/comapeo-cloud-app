@@ -177,8 +177,38 @@ async function captureViewport(
           .waitForLoadState('networkidle', { timeout: 10_000 })
           .catch(() => {});
 
-        // Fonts ready is a separate, fast promise.
-        await page.evaluate(() => document.fonts.ready);
+        // For stories that mount a MapLibre map, networkidle can fire a frame
+        // or two before the WebGL canvas composites the freshly-fetched tiles.
+        // Wait (best-effort, bounded) for the canvas to have a real rendered
+        // size. Stories without a map resolve instantly. See issue #87.
+        await page
+          .waitForFunction(
+            () => {
+              const canvas = document.querySelector('.maplibregl-canvas');
+              if (!canvas) return true; // no map on this story
+              const rect = canvas.getBoundingClientRect();
+              return rect.width > 0 && rect.height > 0;
+            },
+            undefined,
+            { timeout: 5_000 },
+          )
+          .catch(() => {});
+
+        // Wait for fonts, then two animation frames so the captured paint
+        // reflects loaded fonts and tiles — a deterministic paint barrier
+        // instead of an arbitrary fixed sleep.
+        await page
+          .evaluate(
+            () =>
+              new Promise<void>((resolveFrame) => {
+                void document.fonts.ready.then(() => {
+                  requestAnimationFrame(() =>
+                    requestAnimationFrame(() => resolveFrame()),
+                  );
+                });
+              }),
+          )
+          .catch(() => {});
 
         await page.screenshot({
           path: filePath,
