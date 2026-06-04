@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { expect, within } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
 
 import { useProjectStore } from '@/stores/project-store';
 
@@ -23,14 +23,18 @@ export const WithObservation: Story = {
       return <Story />;
     },
   ],
-  /**
-   * Interaction test: assert the screen renders the expected back-nav
-   * affordance (arrow + 'Data' label) per the AGENTS.md screen conventions.
-   * Run by the test-runner (#95) and the addon-vitest story tests (#94).
-   */
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement.ownerDocument.body);
-    // The back button uses an SVG chevron — query by accessible name.
+    await waitFor(
+      () => {
+        const prep = canvasElement.ownerDocument.querySelector(
+          '.sb-preparing-story',
+        );
+        if (prep) throw new Error('story still preparing');
+      },
+      { timeout: 10_000 },
+    );
+
+    const canvas = within(canvasElement);
     const back = await canvas.findByRole('link', { name: /data/i });
     await expect(back).toBeInTheDocument();
   },

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { Button } from '@/components/ui/button';
 
@@ -59,11 +59,6 @@ export const Disabled: Story = {
 
 /**
  * Interaction test: clicking fires onClick, loading blocks clicks.
- *
- * Uses `findByRole` (async) instead of `getByRole` (sync) because
- * addon-vitest browser mode renders stories asynchronously — the play()
- * function may execute before the story DOM has finished mounting.
- * `findBy*` retries until the element appears or times out.
  */
 export const Test: Story = {
   args: {
@@ -71,7 +66,17 @@ export const Test: Story = {
     onClick: fn(),
   },
   play: async ({ args, canvasElement, step }) => {
-    const canvas = within(canvasElement.ownerDocument.body);
+    await waitFor(
+      () => {
+        const prep = canvasElement.ownerDocument.querySelector(
+          '.sb-preparing-story',
+        );
+        if (prep) throw new Error('story still preparing');
+      },
+      { timeout: 10_000 },
+    );
+
+    const canvas = within(canvasElement);
 
     await step('renders the label', async () => {
       await expect(
@@ -97,7 +102,17 @@ export const LoadingBlocksClicks: Story = {
     onClick: fn(),
   },
   play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement.ownerDocument.body);
+    await waitFor(
+      () => {
+        const prep = canvasElement.ownerDocument.querySelector(
+          '.sb-preparing-story',
+        );
+        if (prep) throw new Error('story still preparing');
+      },
+      { timeout: 10_000 },
+    );
+
+    const canvas = within(canvasElement);
     const button = await canvas.findByRole('button');
 
     await expect(button).toBeDisabled();

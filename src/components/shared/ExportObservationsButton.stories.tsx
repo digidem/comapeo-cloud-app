@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { userEvent, within } from '@storybook/test';
+import { userEvent, waitFor, within } from 'storybook/test';
 
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { ToastProvider } from '@/components/ui/toast';
@@ -59,6 +59,16 @@ export const Default: Story = {};
 /** Bottom sheet open showing CSV and GeoJSON export options */
 export const Open: Story = {
   play: async ({ canvasElement }) => {
+    await waitFor(
+      () => {
+        const prep = canvasElement.ownerDocument.querySelector(
+          '.sb-preparing-story',
+        );
+        if (prep) throw new Error('story still preparing');
+      },
+      { timeout: 10_000 },
+    );
+
     const canvas = within(canvasElement.ownerDocument.body);
 
     const exportButton = await canvas.findByRole('button', { name: 'Export' });

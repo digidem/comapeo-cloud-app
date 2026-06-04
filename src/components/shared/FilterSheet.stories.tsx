@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { userEvent, within } from '@storybook/test';
+import { userEvent, waitFor, within } from 'storybook/test';
 
 import { useState } from 'react';
 
@@ -94,6 +94,16 @@ export const Closed: Story = {
 export const Open: Story = {
   render: () => <FilterSheetDemo initialOpen={false} />,
   play: async ({ canvasElement }) => {
+    await waitFor(
+      () => {
+        const prep = canvasElement.ownerDocument.querySelector(
+          '.sb-preparing-story',
+        );
+        if (prep) throw new Error('story still preparing');
+      },
+      { timeout: 10_000 },
+    );
+
     const canvas = within(canvasElement.ownerDocument.body);
     const trigger = await canvas.findByTestId('filter-trigger');
     await userEvent.click(trigger);
