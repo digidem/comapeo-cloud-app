@@ -1,2 +1,3 @@
-import { configure } from "@testing-library/dom";
+import { configure } from '@testing-library/dom';
+
 configure({ asyncUtilTimeout: 5_000 });
