@@ -18,8 +18,6 @@ interface StorybookLoadingState {
   projectsPending: boolean;
 }
 
-export const useStorybookLoadingStore = create<StorybookLoadingState>()(
-  () => ({
-    projectsPending: false,
-  }),
-);
+export const useStorybookLoadingStore = create<StorybookLoadingState>()(() => ({
+  projectsPending: false,
+}));
