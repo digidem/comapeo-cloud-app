@@ -1,6 +1,6 @@
 import type { Preview } from '@storybook/tanstack-react';
 
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { IntlProvider } from 'react-intl';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -18,6 +18,47 @@ const queryClient = new QueryClient({
     mutations: { retry: false },
   },
 });
+
+type Theme = 'light' | 'dark';
+const SUPPORTED_THEMES: readonly Theme[] = ['light', 'dark'];
+
+/**
+ * Preview decorator: applies the global `theme` arg to the document so the
+ * existing `[data-theme='dark']` CSS in src/app/styles.css takes effect.
+ * Mirrors what the app's useThemeStore does at runtime — see
+ * src/stores/theme-store.ts.
+ *
+ * The DOM mutations live in a useEffect so they don't run during the render
+ * phase (the React rules: a render must be a pure function of props and
+ * state, with no side effects). The effect re-runs when the theme changes,
+ * and the cleanup function reverts the document when the Storybook
+ * preview unmounts (e.g., when the user navigates to a different story).
+ */
+function ThemeProvider({
+  theme,
+  children,
+}: {
+  theme: Theme;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const previousTheme = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    return () => {
+      // Restore on unmount: drop back to the default 'light' theme so a
+      // subsequent story that doesn't set a theme doesn't inherit the
+      // previous story's dark background by accident.
+      document.documentElement.setAttribute(
+        'data-theme',
+        previousTheme ?? 'light',
+      );
+      document.documentElement.classList.remove('dark');
+    };
+  }, [theme]);
+  return <>{children}</>;
+}
 
 function StorybookProviders({
   locale,
@@ -47,6 +88,18 @@ const preview: Preview = {
         items: SUPPORTED_LOCALES.map((l) => ({
           value: l,
           title: { en: 'English', pt: 'Português', es: 'Español' }[l] ?? l,
+        })),
+      },
+    },
+    theme: {
+      name: 'Theme',
+      description: 'Color theme for stories (matches the app theme store)',
+      defaultValue: 'light',
+      toolbar: {
+        icon: 'circlehollow',
+        items: SUPPORTED_THEMES.map((t) => ({
+          value: t,
+          title: t.charAt(0).toUpperCase() + t.slice(1),
         })),
       },
     },
@@ -83,7 +136,9 @@ const preview: Preview = {
   decorators: [
     (Story, context) => (
       <StorybookProviders locale={(context.globals.locale ?? 'en') as Locale}>
-        <Story />
+        <ThemeProvider theme={(context.globals.theme ?? 'light') as Theme}>
+          <Story />
+        </ThemeProvider>
       </StorybookProviders>
     ),
   ],
