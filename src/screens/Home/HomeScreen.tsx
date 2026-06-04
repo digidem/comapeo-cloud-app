@@ -672,7 +672,8 @@ function HomeScreen() {
 
   // Derive territory area from coverage results
   const territoryArea = useMemo(() => {
-    const activeResult = coverage.results.find(
+    const results = coverage?.results ?? [];
+    const activeResult = results.find(
       (r) => r.methodId === state.activeMethodId,
     );
     if (activeResult?.result?.areaM2) {
