@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
 
 import { useProjectStore } from '@/stores/project-store';
@@ -65,6 +67,15 @@ const meta: Meta<DataScreenArgs> = {
       useStorybookLoadingStore.setState({
         projectsPending: Boolean(context.args.loading),
       });
+
+      // Reset the loading store when navigating away to prevent
+      // cross-story state leaks (see Greptile review finding).
+      useEffect(() => {
+        return () => {
+          useStorybookLoadingStore.setState({ projectsPending: false });
+        };
+      }, []);
+
       return <Story />;
     },
   ],
