@@ -1,8 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
 
+import { useEffect } from 'react';
+
 import { useProjectStore } from '@/stores/project-store';
 
 import { DataScreen } from './DataScreen';
+import { useStorybookLoadingStore } from './stories/storybook-loading-control';
 
 /**
  * Custom args for the Data screen stories.
@@ -16,6 +19,11 @@ import { DataScreen } from './DataScreen';
 interface DataScreenArgs {
   /** ID of the project to mark as selected in the mock project store. */
   selectedProjectId: string | null;
+  /**
+   * When true, the mock `useProjects` hook is held in a pending state so the
+   * screen renders its loading skeleton (see issue #86).
+   */
+  loading: boolean;
 }
 
 const meta: Meta<DataScreenArgs> = {
@@ -26,6 +34,7 @@ const meta: Meta<DataScreenArgs> = {
   },
   args: {
     selectedProjectId: 'proj-1',
+    loading: false,
   },
   argTypes: {
     selectedProjectId: {
@@ -39,12 +48,34 @@ const meta: Meta<DataScreenArgs> = {
         defaultValue: { summary: 'proj-1' },
       },
     },
+    loading: {
+      name: 'Loading',
+      description:
+        'When true, the mock `useProjects` hook is held pending so the screen renders its loading skeleton (see issue #86).',
+      control: 'boolean',
+      table: {
+        type: { summary: 'boolean' },
+        defaultValue: { summary: 'false' },
+      },
+    },
   },
   decorators: [
     (Story, context) => {
       useProjectStore.setState({
         selectedProjectId: context.args.selectedProjectId,
       });
+      useStorybookLoadingStore.setState({
+        projectsPending: Boolean(context.args.loading),
+      });
+
+      // Reset the loading store when navigating away to prevent
+      // cross-story state leaks (see Greptile review finding).
+      useEffect(() => {
+        return () => {
+          useStorybookLoadingStore.setState({ projectsPending: false });
+        };
+      }, []);
+
       return <Story />;
     },
   ],
@@ -64,11 +95,12 @@ export const WithProjectAndData: Story = {
   args: { selectedProjectId: 'proj-1' },
 };
 
-// Note: a "Loading" story is intentionally omitted. The screen renders a
-// skeleton only when `projectsQuery.isPending` is true AND no project is
-// selected; the mock hooks resolve immediately, so a `Loading` story would
-// render the same UI as `NoProjectSelected`. A real loading state would
-// require an MSW delay, which is out of scope here.
+// Note: a "Loading" story is intentionally omitted when no project is
+// selected — the screen would render the empty state (skeleton only renders
+// for a project query that is pending). With the `loading` control wired
+// to the mock `useProjects` hook via the decorator, reviewers can flip
+// any existing story into the loading state from the Controls panel and
+// see the skeleton render in place of the project list.
 
 export const WithProjectDesktop: Story = {
   args: { selectedProjectId: 'proj-1' },

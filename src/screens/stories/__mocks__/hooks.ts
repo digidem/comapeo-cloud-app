@@ -6,6 +6,7 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 
+import { useStorybookLoadingStore } from '../storybook-loading-control';
 import { useArchiveStore, useAuthStore } from './stores';
 
 // ---------------------------------------------------------------------------
@@ -114,9 +115,19 @@ export const MOCK_ALERTS: Alert[] = [
 // ---------------------------------------------------------------------------
 
 export function useProjects() {
+  // When a story opts into the loading state, swap in a query that never
+  // resolves (under a distinct key so it doesn't share the resolved cache) so
+  // `isPending` stays true and the screen renders its loading skeleton.
+  const projectsPending = useStorybookLoadingStore((s) => s.projectsPending);
+
   return useQuery({
-    queryKey: ['projects'],
-    queryFn: () => Promise.resolve({ data: MOCK_PROJECTS }),
+    queryKey: projectsPending ? ['projects', 'pending'] : ['projects'],
+    queryFn: () =>
+      projectsPending
+        ? new Promise<{ data: Project[] }>(() => {
+            /* never resolves: keeps the query pending */
+          })
+        : Promise.resolve({ data: MOCK_PROJECTS }),
     select: (data: { data: Project[] }) => data.data,
   });
 }
