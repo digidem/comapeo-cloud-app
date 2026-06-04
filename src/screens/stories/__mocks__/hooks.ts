@@ -116,9 +116,7 @@ export const MOCK_ALERTS: Alert[] = [
 
 /**
  * Resolve a query based on the current Storybook data mode (set by the
- /**
-  * Resolve a query based on the current Storybook data mode (set by the
-  * DataScreen decorator). Returns either the fixture data, a never-resolving
+ * DataScreen decorator). Returns either the fixture data, a never-resolving
   * promise (loading), a rejected promise (error), or an empty array (empty).
   *
   * The query key includes a per-hook segment so `useObservations('proj-1')`
