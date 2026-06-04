@@ -6,7 +6,10 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 
-import { useStorybookLoadingStore } from '../storybook-loading-control';
+import {
+  type StorybookDataMode,
+  useStorybookDataStore,
+} from '../storybook-loading-control';
 import { useArchiveStore, useAuthStore } from './stores';
 
 // ---------------------------------------------------------------------------
@@ -114,36 +117,98 @@ export const MOCK_ALERTS: Alert[] = [
 // Mock hooks
 // ---------------------------------------------------------------------------
 
-export function useProjects() {
-  // When a story opts into the loading state, swap in a query that never
-  // resolves (under a distinct key so it doesn't share the resolved cache) so
-  // `isPending` stays true and the screen renders its loading skeleton.
-  const projectsPending = useStorybookLoadingStore((s) => s.projectsPending);
+/**
+ * Resolve a query based on the current Storybook data mode (set by the
+ * DataScreen decorator). Returns either the fixture data, a never-resolving
+ * promise (loading), a rejected promise (error), or an empty array (empty).
+ *
+ * The query key includes a per-hook segment so `useObservations('proj-1')`
+ * and `useAlerts('proj-1')` don't collide in the TanStack Query cache. A
+ * shared `['dataMode', projectLocalId]` key would deduplicate the two
+ * queries to the same cache slot, so whichever hook executed its queryFn
+ * first would win and the other would receive the same payload (alerts
+ * shown as observations, etc.).
+ */
+function resolveByMode<T>(
+  data: T[],
+  projectLocalId: string | null,
+  hookName: string,
+  mode: StorybookDataMode,
+) {
+  const queryKey = [
+    // include the mode in the key so toggling it re-runs the query
+    mode,
+    hookName,
+    projectLocalId,
+  ];
+  switch (mode) {
+    case 'loading':
+      return {
+        queryKey,
+        queryFn: () => new Promise<{ data: T[] }>(() => {}),
+      };
+    case 'error':
+      return {
+        queryKey,
+        queryFn: () =>
+          Promise.reject(
+            new Error('Mock network error (Storybook dataMode=error)'),
+          ),
+      };
+    case 'empty':
+      return { queryKey, queryFn: () => Promise.resolve({ data: [] as T[] }) };
+    case 'normal':
+    default:
+      // The queryKey above intentionally omits `data`: it's a module-level
+      // constant fixture (MOCK_PROJECTS / MOCK_OBSERVATIONS / MOCK_ALERTS)
+      // and the same reference is passed in on every call. Including it
+      // would just bloat the cache key without adding any re-run signal.
+      // eslint-disable-next-line @tanstack/query/exhaustive-deps
+      return { queryKey, queryFn: () => Promise.resolve({ data }) };
+  }
+}
 
+export function useProjects() {
+  const { projectDataMode } = useStorybookDataStore.getState();
+  const { queryKey, queryFn } = resolveByMode<Project>(
+    MOCK_PROJECTS,
+    'all-projects',
+    'projects',
+    projectDataMode,
+  );
   return useQuery({
-    queryKey: projectsPending ? ['projects', 'pending'] : ['projects'],
-    queryFn: () =>
-      projectsPending
-        ? new Promise<{ data: Project[] }>(() => {
-            /* never resolves: keeps the query pending */
-          })
-        : Promise.resolve({ data: MOCK_PROJECTS }),
+    queryKey,
+    queryFn,
     select: (data: { data: Project[] }) => data.data,
   });
 }
 
-export function useObservations(_projectLocalId: string | null) {
+export function useObservations(projectLocalId: string | null) {
+  const { dataMode } = useStorybookDataStore.getState();
+  const { queryKey, queryFn } = resolveByMode<Observation>(
+    MOCK_OBSERVATIONS,
+    projectLocalId,
+    'observations',
+    dataMode,
+  );
   return useQuery({
-    queryKey: ['observations', _projectLocalId],
-    queryFn: () => Promise.resolve({ data: MOCK_OBSERVATIONS }),
+    queryKey,
+    queryFn,
     select: (data: { data: Observation[] }) => data.data,
   });
 }
 
-export function useAlerts(_projectLocalId: string | null) {
+export function useAlerts(projectLocalId: string | null) {
+  const { dataMode } = useStorybookDataStore.getState();
+  const { queryKey, queryFn } = resolveByMode<Alert>(
+    MOCK_ALERTS,
+    projectLocalId,
+    'alerts',
+    dataMode,
+  );
   return useQuery({
-    queryKey: ['alerts', _projectLocalId],
-    queryFn: () => Promise.resolve({ data: MOCK_ALERTS }),
+    queryKey,
+    queryFn,
     select: (data: { data: Alert[] }) => data.data,
   });
 }
