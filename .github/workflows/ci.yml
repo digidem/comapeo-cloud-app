@@ -175,10 +175,65 @@ jobs:
           retention-days: 7
 
   # -----------------------------------------------------------------------
+  # Storybook test-runner (a11y + play() functions) — see issue #77
+  # Boots the static index.json produced by build-storybook, serves the
+  # storybook-static/ bundle on localhost:6006, opens every story in a
+  # real browser, and surfaces both axe-core violations and broken
+  # `play()` interactions.
+  # -----------------------------------------------------------------------
+  storybook-test-runner:
+    needs: [lint, typecheck]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (chromium-only for test-runner)
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Storybook static index
+        run: npm run build-storybook
+
+      - name: Serve Storybook static bundle (background)
+        run: |
+          nohup npx http-server storybook-static -p 6006 --silent > /tmp/storybook-server.log 2>&1 &
+          echo $! > /tmp/storybook-server.pid
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:6006/index.html | grep -q "200"; then
+              echo "Storybook server ready on port 6006 (after ${i}s)"
+              break
+            fi
+            sleep 1
+          done
+          curl -sI http://localhost:6006/index.html | head -3
+
+      - name: Run Storybook test-runner (a11y + play() functions)
+        run: npm run test:storybook:runner
+        env:
+          VITE_STORYBOOK_A11Y_ENFORCE: ${{ secrets.VITE_STORYBOOK_A11Y_ENFORCE || vars.VITE_STORYBOOK_A11Y_ENFORCE || '' }}
+
+      - name: Stop Storybook server
+        if: always()
+        run: |
+          if [ -f /tmp/storybook-server.pid ]; then
+            kill "$(cat /tmp/storybook-server.pid)" 2>/dev/null || true
+          fi
+
+  # -----------------------------------------------------------------------
   # Build + E2E (gated on all parallel checks)
   # -----------------------------------------------------------------------
   build-e2e:
-    needs: [trufflehog, lint, typecheck, unit-tests, audit, storybook-tests]
+    needs: [trufflehog, lint, typecheck, unit-tests, audit, storybook-tests, storybook-test-runner]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

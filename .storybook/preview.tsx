@@ -140,7 +140,25 @@ const preview: Preview = {
       },
     },
     a11y: {
-      test: 'todo',
+      // Surface real axe-core violations in the Storybook a11y panel.
+      //
+      // We use 'todo' (warn-only) here so the test-runner's built-in
+      // smoke-test and the Vitest story project (issue #94) BOTH log
+      // violations without failing the build. The existing stories had
+      // not been audited for a11y when this runner was introduced; the
+      // intent is to TURN ON the check so we can SEE the violations in
+      // CI, not to fix them in the same PR. The fail-on-violation gate
+      // is ratcheted in a follow-up PR once the existing stories are
+      // remediated (tracked separately).
+      //
+      // To make the gate fail-on-violation, set the
+      // STORYBOOK_A11Y_ENFORCE=true env var in the CI workflow (or
+      // override the parameter per-story with `a11y: { test: 'error' }`).
+      // The local-development run that completes the remediation will
+      // flip the env var to confirm zero violations before that follow-up
+      // PR lands. See issue #77.
+      test:
+        import.meta.env.STORYBOOK_A11Y_ENFORCE === 'true' ? 'error' : 'todo',
     },
     layout: 'fullscreen',
     viewport: {
