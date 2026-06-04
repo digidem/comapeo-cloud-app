@@ -6,7 +6,10 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 
-import { useStorybookDataStore } from '../storybook-loading-control';
+import {
+  type StorybookDataMode,
+  useStorybookDataStore,
+} from '../storybook-loading-control';
 import { useArchiveStore, useAuthStore } from './stores';
 
 // ---------------------------------------------------------------------------
@@ -130,15 +133,15 @@ function resolveByMode<T>(
   data: T[],
   projectLocalId: string | null,
   hookName: string,
+  mode: StorybookDataMode,
 ) {
-  const dataMode = useStorybookDataStore.getState().dataMode;
   const queryKey = [
     // include the mode in the key so toggling it re-runs the query
-    dataMode,
+    mode,
     hookName,
     projectLocalId,
   ];
-  switch (dataMode) {
+  switch (mode) {
     case 'loading':
       return {
         queryKey,
@@ -166,10 +169,12 @@ function resolveByMode<T>(
 }
 
 export function useProjects() {
+  const { projectDataMode } = useStorybookDataStore.getState();
   const { queryKey, queryFn } = resolveByMode<Project>(
     MOCK_PROJECTS,
     'all-projects',
     'projects',
+    projectDataMode,
   );
   return useQuery({
     queryKey,
@@ -179,10 +184,12 @@ export function useProjects() {
 }
 
 export function useObservations(projectLocalId: string | null) {
+  const { dataMode } = useStorybookDataStore.getState();
   const { queryKey, queryFn } = resolveByMode<Observation>(
     MOCK_OBSERVATIONS,
     projectLocalId,
     'observations',
+    dataMode,
   );
   return useQuery({
     queryKey,
@@ -192,10 +199,12 @@ export function useObservations(projectLocalId: string | null) {
 }
 
 export function useAlerts(projectLocalId: string | null) {
+  const { dataMode } = useStorybookDataStore.getState();
   const { queryKey, queryFn } = resolveByMode<Alert>(
     MOCK_ALERTS,
     projectLocalId,
     'alerts',
+    dataMode,
   );
   return useQuery({
     queryKey,

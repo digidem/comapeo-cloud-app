@@ -21,12 +21,20 @@ interface StorybookLoadingState {
    * The mock data mode the screens should render. Read by the mock hooks
    * (see src/screens/stories/__mocks__/hooks.ts) to decide what to return
    * for the current query.
+   *
+   * Controls useObservations and useAlerts.
    */
   dataMode: StorybookDataMode;
+  /**
+   * Separate mode for useProjects so that error / empty data-list stories
+   * still have a valid project in the store.  Defaults to 'normal'.
+   */
+  projectDataMode: StorybookDataMode;
 }
 
 export const useStorybookDataStore = create<StorybookLoadingState>()(() => ({
   dataMode: 'normal',
+  projectDataMode: 'normal',
 }));
 
 /**

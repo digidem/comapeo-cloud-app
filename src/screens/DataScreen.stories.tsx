@@ -16,9 +16,13 @@ import { useStorybookDataStore } from './stories/storybook-loading-control';
  * flip between "no project" and the available fixture projects from the
  * Controls panel instead of editing the story source.
  *
- * `dataMode` is a separate control that drives the mock data hooks
- * (useProjects, useObservations, useAlerts) into a particular state:
- *   - normal  (default): fixture data — observations, alerts, projects
+ * `dataMode` controls the mock data hooks for observations and alerts
+ * (useObservations, useAlerts), while `projectDataMode` controls useProjects
+ * independently.  This separation ensures that error / empty stories for the
+ * data list still have a valid project in the store.
+ *
+ * Modes (both args accept the same values):
+ *   - normal  (default): fixture data
  *   - loading: queries stay pending → loading skeleton renders
  *   - error  : queries reject → error state renders
  *   - empty  : queries return [] → empty state renders
@@ -26,8 +30,10 @@ import { useStorybookDataStore } from './stories/storybook-loading-control';
 interface DataScreenArgs {
   /** ID of the project to mark as selected in the mock project store. */
   selectedProjectId: string | null;
-  /** Data mode passed to the mock hooks (see useStorybookDataStore). */
+  /** Data mode for observations / alerts (see useStorybookDataStore). */
   dataMode: 'normal' | 'loading' | 'error' | 'empty';
+  /** Data mode for useProjects (defaults to 'normal'). */
+  projectDataMode: 'normal' | 'loading' | 'error' | 'empty';
 }
 
 const meta: Meta<DataScreenArgs> = {
@@ -39,6 +45,7 @@ const meta: Meta<DataScreenArgs> = {
   args: {
     selectedProjectId: 'proj-1',
     dataMode: 'normal',
+    projectDataMode: 'normal',
   },
   argTypes: {
     selectedProjectId: {
@@ -55,7 +62,18 @@ const meta: Meta<DataScreenArgs> = {
     dataMode: {
       name: 'Data mode',
       description:
-        'What the mock data hooks should return. Reviewers can flip any story into a loading / error / empty state from the Controls panel.',
+        'What the mock observation / alert hooks should return. Reviewers can flip any story into a loading / error / empty state from the Controls panel.',
+      control: { type: 'select' },
+      options: ['normal', 'loading', 'error', 'empty'],
+      table: {
+        type: { summary: 'normal | loading | error | empty' },
+        defaultValue: { summary: 'normal' },
+      },
+    },
+    projectDataMode: {
+      name: 'Project data mode',
+      description:
+        'What the mock useProjects hook should return. Kept separate from dataMode so that error / empty data-list stories still have a valid project.',
       control: { type: 'select' },
       options: ['normal', 'loading', 'error', 'empty'],
       table: {
@@ -71,6 +89,7 @@ const meta: Meta<DataScreenArgs> = {
       });
       useStorybookDataStore.setState({
         dataMode: context.args.dataMode,
+        projectDataMode: context.args.projectDataMode,
       });
       return <Story />;
     },
@@ -84,34 +103,62 @@ export default meta;
 type Story = StoryObj<DataScreenArgs>;
 
 export const NoProjectSelected: Story = {
-  args: { selectedProjectId: null, dataMode: 'normal' },
+  args: {
+    selectedProjectId: null,
+    dataMode: 'normal',
+    projectDataMode: 'normal',
+  },
 };
 
 export const WithProjectAndData: Story = {
-  args: { selectedProjectId: 'proj-1', dataMode: 'normal' },
+  args: {
+    selectedProjectId: 'proj-1',
+    dataMode: 'normal',
+    projectDataMode: 'normal',
+  },
 };
 
 export const Loading: Story = {
-  args: { selectedProjectId: 'proj-1', dataMode: 'loading' },
+  args: {
+    selectedProjectId: 'proj-1',
+    dataMode: 'loading',
+    projectDataMode: 'normal',
+  },
 };
 
 export const ErrorState: Story = {
-  args: { selectedProjectId: 'proj-1', dataMode: 'error' },
+  args: {
+    selectedProjectId: 'proj-1',
+    dataMode: 'error',
+    projectDataMode: 'normal',
+  },
 };
 
 export const Empty: Story = {
-  args: { selectedProjectId: 'proj-1', dataMode: 'empty' },
+  args: {
+    selectedProjectId: 'proj-1',
+    dataMode: 'empty',
+    projectDataMode: 'normal',
+  },
 };
 
 export const WithProjectDesktop: Story = {
-  args: { selectedProjectId: 'proj-1', dataMode: 'normal' },
+  args: {
+    selectedProjectId: 'proj-1',
+    dataMode: 'normal',
+    projectDataMode: 'normal',
+  },
   parameters: {
     viewport: { defaultViewport: 'desktop' },
   },
 };
 
 export const NoProjectDesktop: Story = {
-  args: { selectedProjectId: null, dataMode: 'normal' },
+  args: {
+    selectedProjectId: null,
+    dataMode: 'normal',
+    projectDataMode: 'normal',
+  },
   parameters: {
     viewport: { defaultViewport: 'desktop' },
   },
