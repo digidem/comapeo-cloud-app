@@ -158,6 +158,11 @@ function resolveByMode<T>(
       return { queryKey, queryFn: () => Promise.resolve({ data: [] as T[] }) };
     case 'normal':
     default:
+      // The queryKey above intentionally omits `data`: it's a module-level
+      // constant fixture (MOCK_PROJECTS / MOCK_OBSERVATIONS / MOCK_ALERTS)
+      // and the same reference is passed in on every call. Including it
+      // would just bloat the cache key without adding any re-run signal.
+      // eslint-disable-next-line @tanstack/query/exhaustive-deps
       return { queryKey, queryFn: () => Promise.resolve({ data }) };
   }
 }
