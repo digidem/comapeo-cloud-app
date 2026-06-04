@@ -21,10 +21,12 @@ export const Default: Story = {};
 export const InviteFormFilled: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const urlInput = await canvas.findByLabelText('Remote Archive URL', {
-      timeout: 5_000,
-    });
-    const tokenInput = await canvas.findByLabelText('Bearer Token', {
+    const urlInput = await canvas.findByLabelText(
+      'Remote Archive URL',
+      undefined,
+      { timeout: 5_000 },
+    );
+    const tokenInput = await canvas.findByLabelText('Bearer Token', undefined, {
       timeout: 5_000,
     });
 
@@ -37,10 +39,12 @@ export const InviteFormFilled: Story = {
 export const WithInviteResults: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const urlInput = await canvas.findByLabelText('Remote Archive URL', {
-      timeout: 5_000,
-    });
-    const tokenInput = await canvas.findByLabelText('Bearer Token', {
+    const urlInput = await canvas.findByLabelText(
+      'Remote Archive URL',
+      undefined,
+      { timeout: 5_000 },
+    );
+    const tokenInput = await canvas.findByLabelText('Bearer Token', undefined, {
       timeout: 5_000,
     });
 
