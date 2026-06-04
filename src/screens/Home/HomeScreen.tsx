@@ -689,7 +689,8 @@ function HomeScreen() {
       isActive: boolean;
     }> = [];
 
-    for (const item of coverage.results) {
+    const results = coverage?.results ?? [];
+    for (const item of results) {
       if (item.result) {
         mapLayers.push({
           id: item.methodId,
