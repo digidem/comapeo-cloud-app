@@ -93,8 +93,8 @@ export const Closed: Story = {
 
 export const Open: Story = {
   render: () => <FilterSheetDemo initialOpen={false} />,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = within(document.body);
     const trigger = await canvas.findByTestId('filter-trigger', undefined, {
       timeout: 5_000,
     });

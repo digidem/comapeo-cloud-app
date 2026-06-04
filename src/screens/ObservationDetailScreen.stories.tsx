@@ -23,8 +23,8 @@ export const WithObservation: Story = {
       return <Story />;
     },
   ],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = within(document.body);
     const back = await canvas.findByRole(
       'link',
       { name: /data/i },

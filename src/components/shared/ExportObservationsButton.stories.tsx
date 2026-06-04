@@ -58,8 +58,8 @@ export const Default: Story = {};
 
 /** Bottom sheet open showing CSV and GeoJSON export options */
 export const Open: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = within(document.body);
 
     const exportButton = await canvas.findByRole(
       'button',

@@ -65,8 +65,8 @@ export const Test: Story = {
     children: 'Submit',
     onClick: fn(),
   },
-  play: async ({ args, canvasElement, step }) => {
-    const canvas = within(canvasElement);
+  play: async ({ args, step }) => {
+    const canvas = within(document.body);
 
     await step('renders the label', async () => {
       await expect(
@@ -95,8 +95,8 @@ export const LoadingBlocksClicks: Story = {
     children: 'Loading',
     onClick: fn(),
   },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async ({ args }) => {
+    const canvas = within(document.body);
     const button = await canvas.findByRole('button', undefined, {
       timeout: 5_000,
     });

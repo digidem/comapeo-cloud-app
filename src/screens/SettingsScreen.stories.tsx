@@ -19,8 +19,8 @@ export const Default: Story = {};
 
 /** Invite form filled with valid data (before submit) */
 export const InviteFormFilled: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = within(document.body);
     const urlInput = await canvas.findByLabelText(
       'Remote Archive URL',
       undefined,
@@ -37,8 +37,8 @@ export const InviteFormFilled: Story = {
 
 /** Invite form after successful generation — shows invite URL and code */
 export const WithInviteResults: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = within(document.body);
     const urlInput = await canvas.findByLabelText(
       'Remote Archive URL',
       undefined,
@@ -65,8 +65,8 @@ export const WithInviteResults: Story = {
 
 /** Invite form showing an error state */
 export const InviteFormError: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = within(document.body);
     // Submit empty form to trigger validation errors
     const submitButton = await canvas.findByRole(
       'button',
@@ -79,10 +79,10 @@ export const InviteFormError: Story = {
 
 /** Scrolled to Backup & Restore section */
 export const ScrolledToBackup: Story = {
-  play: async ({ canvasElement }) => {
+  play: async () => {
     // Wait for render
     await new Promise((r) => setTimeout(r, 300));
-    const headings = canvasElement.querySelectorAll('h2');
+    const headings = document.body.querySelectorAll('h2');
     for (const h of headings) {
       if (h.textContent?.includes('Backup')) {
         h.scrollIntoView({ behavior: 'instant', block: 'start' });
@@ -94,8 +94,8 @@ export const ScrolledToBackup: Story = {
 
 /** Clear data confirm dialog open */
 export const ClearDataDialogOpen: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = within(document.body);
     const clearButton = await canvas.findByRole(
       'button',
       { name: 'Clear All Data' },
