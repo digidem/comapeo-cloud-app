@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { Button } from '@/components/ui/button';
 
@@ -66,26 +66,20 @@ export const Test: Story = {
     onClick: fn(),
   },
   play: async ({ args, canvasElement, step }) => {
-    await waitFor(
-      () => {
-        const prep = canvasElement.ownerDocument.querySelector(
-          '.sb-preparing-story',
-        );
-        if (prep) throw new Error('story still preparing');
-      },
-      { timeout: 10_000 },
-    );
-
     const canvas = within(canvasElement);
 
     await step('renders the label', async () => {
       await expect(
-        canvas.findByRole('button', { name: 'Submit' }),
+        canvas.findByRole('button', { name: 'Submit' }, { timeout: 5_000 }),
       ).resolves.toBeInTheDocument();
     });
 
     await step('fires onClick when pressed', async () => {
-      const button = await canvas.findByRole('button', { name: 'Submit' });
+      const button = await canvas.findByRole(
+        'button',
+        { name: 'Submit' },
+        { timeout: 5_000 },
+      );
       await userEvent.click(button);
       await expect(args.onClick).toHaveBeenCalledTimes(1);
     });
@@ -102,18 +96,10 @@ export const LoadingBlocksClicks: Story = {
     onClick: fn(),
   },
   play: async ({ args, canvasElement }) => {
-    await waitFor(
-      () => {
-        const prep = canvasElement.ownerDocument.querySelector(
-          '.sb-preparing-story',
-        );
-        if (prep) throw new Error('story still preparing');
-      },
-      { timeout: 10_000 },
-    );
-
     const canvas = within(canvasElement);
-    const button = await canvas.findByRole('button');
+    const button = await canvas.findByRole('button', undefined, {
+      timeout: 5_000,
+    });
 
     await expect(button).toBeDisabled();
     await expect(button).toHaveAttribute('aria-busy', 'true');

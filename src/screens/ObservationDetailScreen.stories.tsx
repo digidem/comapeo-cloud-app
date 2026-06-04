@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { expect, waitFor, within } from 'storybook/test';
+import { expect, within } from 'storybook/test';
 
 import { useProjectStore } from '@/stores/project-store';
 
@@ -24,18 +24,12 @@ export const WithObservation: Story = {
     },
   ],
   play: async ({ canvasElement }) => {
-    await waitFor(
-      () => {
-        const prep = canvasElement.ownerDocument.querySelector(
-          '.sb-preparing-story',
-        );
-        if (prep) throw new Error('story still preparing');
-      },
-      { timeout: 10_000 },
-    );
-
     const canvas = within(canvasElement);
-    const back = await canvas.findByRole('link', { name: /data/i });
+    const back = await canvas.findByRole(
+      'link',
+      { name: /data/i },
+      { timeout: 5_000 },
+    );
     await expect(back).toBeInTheDocument();
   },
 };
