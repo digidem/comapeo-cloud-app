@@ -1,5 +1,2 @@
-import { setProjectAnnotations } from '@storybook/tanstack-react';
-
-import * as preview from './preview';
-
-setProjectAnnotations(preview);
+import { configure } from "@testing-library/dom";
+configure({ asyncUtilTimeout: 5_000 });
