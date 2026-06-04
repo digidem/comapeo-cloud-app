@@ -117,15 +117,15 @@ export const MOCK_ALERTS: Alert[] = [
 /**
  * Resolve a query based on the current Storybook data mode (set by the
  * DataScreen decorator). Returns either the fixture data, a never-resolving
-  * promise (loading), a rejected promise (error), or an empty array (empty).
-  *
-  * The query key includes a per-hook segment so `useObservations('proj-1')`
-  * and `useAlerts('proj-1')` don't collide in the TanStack Query cache. A
-  * shared `['dataMode', projectLocalId]` key would deduplicate the two
-  * queries to the same cache slot, so whichever hook executed its queryFn
-  * first would win and the other would receive the same payload (alerts
-  * shown as observations, etc.).
-  */
+ * promise (loading), a rejected promise (error), or an empty array (empty).
+ *
+ * The query key includes a per-hook segment so `useObservations('proj-1')`
+ * and `useAlerts('proj-1')` don't collide in the TanStack Query cache. A
+ * shared `['dataMode', projectLocalId]` key would deduplicate the two
+ * queries to the same cache slot, so whichever hook executed its queryFn
+ * first would win and the other would receive the same payload (alerts
+ * shown as observations, etc.).
+ */
 function resolveByMode<T>(
   data: T[],
   projectLocalId: string | null,
