@@ -94,8 +94,8 @@ export const Closed: Story = {
 export const Open: Story = {
   render: () => <FilterSheetDemo initialOpen={false} />,
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByTestId('filter-trigger');
+    const canvas = within(canvasElement.ownerDocument.body);
+    const trigger = await canvas.findByTestId('filter-trigger');
     await userEvent.click(trigger);
   },
 };

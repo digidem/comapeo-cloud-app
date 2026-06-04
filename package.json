@@ -38,6 +38,7 @@
     "upload-sourcemaps": "npx tsx scripts/upload-sourcemaps.ts",
     "translate:locale": "npx tsx scripts/translate-locale.ts",
     "test:unit": "vitest run --project=unit",
+    "test:storybook": "vitest run --project=storybook",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "storybook:screenshots": "npx tsx scripts/storybook-screenshots.ts",

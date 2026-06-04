@@ -59,9 +59,9 @@ export const Default: Story = {};
 /** Bottom sheet open showing CSV and GeoJSON export options */
 export const Open: Story = {
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = within(canvasElement.ownerDocument.body);
 
-    const exportButton = canvas.getByRole('button', { name: 'Export' });
+    const exportButton = await canvas.findByRole('button', { name: 'Export' });
     await userEvent.click(exportButton);
 
     // Wait for the Radix Dialog animation to complete

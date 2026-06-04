@@ -29,9 +29,9 @@ export const WithObservation: Story = {
    * Run by the test-runner (#95) and the addon-vitest story tests (#94).
    */
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = within(canvasElement.ownerDocument.body);
     // The back button uses an SVG chevron — query by accessible name.
-    const back = canvas.getByRole('link', { name: /data/i });
+    const back = await canvas.findByRole('link', { name: /data/i });
     await expect(back).toBeInTheDocument();
   },
 };

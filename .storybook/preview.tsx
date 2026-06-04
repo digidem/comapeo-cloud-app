@@ -4,6 +4,12 @@ import { type ReactNode, useEffect } from 'react';
 import { IntlProvider } from 'react-intl';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  Outlet,
+  RouterProvider,
+  createRootRoute,
+  createRouter,
+} from '@tanstack/react-router';
 
 import { ShellSlotProvider } from '@/components/layout/shell-slot';
 import { SUPPORTED_LOCALES, getMessages } from '@/i18n/load-messages';
@@ -60,6 +66,18 @@ function ThemeProvider({
   return <>{children}</>;
 }
 
+/**
+ * Minimal TanStack Router instance for Storybook.  Provides just enough
+ * context so that hooks like useParams / useLocation / useMatch resolve
+ * without crashing.  Individual stories can override route state via
+ * parameters or args when they need specific values.
+ */
+const rootRoute = createRootRoute({ component: Outlet });
+const storybookRouter = createRouter({
+  routeTree: rootRoute,
+  defaultPreload: false,
+});
+
 function StorybookProviders({
   locale,
   children,
@@ -71,7 +89,9 @@ function StorybookProviders({
   return (
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale={locale} defaultLocale="en" messages={messages}>
-        <ShellSlotProvider>{children}</ShellSlotProvider>
+        <RouterProvider router={storybookRouter}>
+          <ShellSlotProvider>{children}</ShellSlotProvider>
+        </RouterProvider>
       </IntlProvider>
     </QueryClientProvider>
   );

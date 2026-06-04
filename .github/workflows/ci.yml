@@ -120,10 +120,44 @@ jobs:
           if-no-files-found: ignore
 
   # -----------------------------------------------------------------------
+  # Storybook component tests (@storybook/addon-vitest, browser mode)
+  # -----------------------------------------------------------------------
+  storybook-tests:
+    needs: [lint, typecheck]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright browsers (chromium-only for storybook tests)
+        run: npx playwright install --with-deps chromium
+
+      - name: Storybook component tests (browser mode)
+        run: npm run test:storybook
+
+  # -----------------------------------------------------------------------
   # Build + E2E (gated on all parallel checks)
   # -----------------------------------------------------------------------
   build-e2e:
-    needs: [trufflehog, lint, typecheck, unit-tests, audit]
+    needs: [trufflehog, lint, typecheck, unit-tests, audit, storybook-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

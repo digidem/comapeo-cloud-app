@@ -20,9 +20,9 @@ export const Default: Story = {};
 /** Invite form filled with valid data (before submit) */
 export const InviteFormFilled: Story = {
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const urlInput = canvas.getByLabelText('Remote Archive URL');
-    const tokenInput = canvas.getByLabelText('Bearer Token');
+    const canvas = within(canvasElement.ownerDocument.body);
+    const urlInput = await canvas.findByLabelText('Remote Archive URL');
+    const tokenInput = await canvas.findByLabelText('Bearer Token');
 
     await userEvent.type(urlInput, 'https://archive.example.com');
     await userEvent.type(tokenInput, 'my-secret-token');
@@ -32,14 +32,14 @@ export const InviteFormFilled: Story = {
 /** Invite form after successful generation — shows invite URL and code */
 export const WithInviteResults: Story = {
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const urlInput = canvas.getByLabelText('Remote Archive URL');
-    const tokenInput = canvas.getByLabelText('Bearer Token');
+    const canvas = within(canvasElement.ownerDocument.body);
+    const urlInput = await canvas.findByLabelText('Remote Archive URL');
+    const tokenInput = await canvas.findByLabelText('Bearer Token');
 
     await userEvent.type(urlInput, 'https://archive.example.com');
     await userEvent.type(tokenInput, 'my-secret-token');
 
-    const submitButton = canvas.getByRole('button', {
+    const submitButton = await canvas.findByRole('button', {
       name: 'Generate Invite',
     });
     await userEvent.click(submitButton);
@@ -52,9 +52,9 @@ export const WithInviteResults: Story = {
 /** Invite form showing an error state */
 export const InviteFormError: Story = {
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = within(canvasElement.ownerDocument.body);
     // Submit empty form to trigger validation errors
-    const submitButton = canvas.getByRole('button', {
+    const submitButton = await canvas.findByRole('button', {
       name: 'Generate Invite',
     });
     await userEvent.click(submitButton);
@@ -79,8 +79,8 @@ export const ScrolledToBackup: Story = {
 /** Clear data confirm dialog open */
 export const ClearDataDialogOpen: Story = {
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const clearButton = canvas.getByRole('button', { name: 'Clear All Data' });
+    const canvas = within(canvasElement.ownerDocument.body);
+    const clearButton = await canvas.findByRole('button', { name: 'Clear All Data' });
     await userEvent.click(clearButton);
 
     // Wait for dialog animation
