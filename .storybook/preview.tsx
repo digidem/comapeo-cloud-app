@@ -19,8 +19,8 @@ const queryClient = new QueryClient({
   },
 });
 
-const SUPPORTED_THEMES = ['light', 'dark'] as const;
-type Theme = (typeof SUPPORTED_THEMES)[number];
+type Theme = 'light' | 'dark';
+const SUPPORTED_THEMES: readonly Theme[] = ['light', 'dark'];
 
 /**
  * Preview decorator: applies the global `theme` arg to the document so the
@@ -97,10 +97,10 @@ const preview: Preview = {
       defaultValue: 'light',
       toolbar: {
         icon: 'circlehollow',
-        items: [
-          { value: 'light', title: 'Light' },
-          { value: 'dark', title: 'Dark' },
-        ],
+        items: SUPPORTED_THEMES.map((t) => ({
+          value: t,
+          title: t.charAt(0).toUpperCase() + t.slice(1),
+        })),
       },
     },
   },
