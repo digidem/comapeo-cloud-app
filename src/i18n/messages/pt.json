@@ -283,6 +283,7 @@
   "invite.invalid": "Não foi possível aceitar este convite. A URL ou código pode ser inválido.",
   "invite.progress.connected": "Conectado!",
   "invite.progress.redirecting": "Redirecionando...",
+  "mapContainer.viewOnly": "Apenas visualização",
   "map.basemap.label": "Mapa base",
   "mediaPreview.audioAlt": "Anexo de áudio",
   "mediaPreview.moreCount": "+{count} mais",

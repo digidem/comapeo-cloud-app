@@ -211,6 +211,22 @@ describe('MapContainer', () => {
     expect(container.style.height).toBe('100%');
   });
 
+  it('shows the view-only badge when interactive is false', () => {
+    render(<MapContainer interactive={false} />);
+    expect(screen.getByTestId('map-view-only-badge')).toBeInTheDocument();
+    expect(screen.getByText('View only')).toBeInTheDocument();
+  });
+
+  it('does not show the view-only badge when interactive (default)', () => {
+    render(<MapContainer />);
+    expect(screen.queryByTestId('map-view-only-badge')).not.toBeInTheDocument();
+  });
+
+  it('hides the view-only badge when showViewOnlyBadge is false', () => {
+    render(<MapContainer interactive={false} showViewOnlyBadge={false} />);
+    expect(screen.queryByTestId('map-view-only-badge')).not.toBeInTheDocument();
+  });
+
   it('forwards passthrough props to the underlying Map', () => {
     render(<MapContainer cursor="crosshair" />);
     // The last Map render should have received the cursor prop
