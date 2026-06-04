@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
+
+import { useEffect } from 'react';
 
 import { useProjectStore } from '@/stores/project-store';
 
