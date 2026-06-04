@@ -1,3 +1,3 @@
-import { configure } from '@testing-library/dom';
-
-configure({ asyncUtilTimeout: 5_000 });
+// This file is intentionally empty.
+// Vitest browser mode setup — the asyncUtilTimeout is configured
+// per-query via { timeout: 5_000 } in each findBy* call.
