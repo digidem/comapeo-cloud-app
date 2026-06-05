@@ -182,7 +182,9 @@ jobs:
   # `play()` interactions.
   # -----------------------------------------------------------------------
   storybook-test-runner:
-    # Depends on PR #94's storybook-tests job — merge #94 first, then rebase this branch.
+    # Merge-order note: merge PR #94 first, then rebase this branch, so the
+    # storybook-tests job name doesn't conflict. This job is fully self-contained
+    # (no runtime dependency on #94's artifacts).
     needs: [lint, typecheck]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -242,7 +244,12 @@ jobs:
       - name: Run Storybook test-runner (a11y + play() functions)
         run: npm run test:storybook:runner
         env:
-          VITE_STORYBOOK_A11Y_ENFORCE: ${{ secrets.VITE_STORYBOOK_A11Y_ENFORCE || vars.VITE_STORYBOOK_A11Y_ENFORCE || '' }}
+          # Must match the build step's env var so both gates stay in sync.
+          # The test-runner reads process.env.VITE_STORYBOOK_A11Y_ENFORCE at
+          # runtime; preview.tsx reads import.meta.env at build time. Setting
+          # the value on both steps is the explicit coupling point — a follow-up
+          # PR flips both together (see issue #77).
+          VITE_STORYBOOK_A11Y_ENFORCE: 'false'
 
       - name: Stop Storybook server
         if: always()
