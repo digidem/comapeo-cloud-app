@@ -59,6 +59,8 @@ describe('repository guardrails', () => {
     expect(ci).toMatch(/check:\n(?:[\s\S]*?)timeout-minutes: 15/);
     expect(ci).toMatch(/deploy:\n(?:[\s\S]*?)timeout-minutes: 5/);
     expect(ci).toMatch(/lighthouse:\n(?:[\s\S]*?)timeout-minutes: 5/);
+    // Node setup follows the checked-in runtime pin
+    expect(ci).toContain('node-version-file: .node-version');
     // Deterministic installs via bun lockfile
     expect(ci).toContain('bun install --frozen-lockfile');
     // i18n check blocks CI
