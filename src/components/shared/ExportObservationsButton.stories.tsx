@@ -54,12 +54,3 @@ type Story = StoryObj<typeof ExportObservationsButton>;
 
 /** Default state — Export button visible, dropdown closed */
 export const Default: Story = {};
-
-/**
- * Bottom sheet open showing CSV and GeoJSON export options.
- *
- * TODO: Re-enable play() tests when Storybook vitest-browser rendering
- * issue is resolved (stories with play() hang in sb-preparing-story state).
- * @see https://github.com/storybookjs/storybook/issues/18663
- */
-export const Open: Story = {};

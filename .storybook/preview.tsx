@@ -6,7 +6,7 @@ import { IntlProvider } from 'react-intl';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
-  RouterProvider,
+  RouterContextProvider,
   createRootRoute,
   createRouter,
 } from '@tanstack/react-router';
@@ -89,9 +89,9 @@ function StorybookProviders({
   return (
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale={locale} defaultLocale="en" messages={messages}>
-        <RouterProvider router={storybookRouter}>
+        <RouterContextProvider router={storybookRouter}>
           <ShellSlotProvider>{children}</ShellSlotProvider>
-        </RouterProvider>
+        </RouterContextProvider>
       </IntlProvider>
     </QueryClientProvider>
   );
