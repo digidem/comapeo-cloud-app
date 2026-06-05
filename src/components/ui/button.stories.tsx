@@ -58,13 +58,14 @@ export const Disabled: Story = {
 };
 
 /**
- * Interaction test: clicking fires onClick.
- *
- * TODO: Re-enable play() tests when Storybook vitest-browser rendering
- * issue is resolved (stories with play() hang in sb-preparing-story state).
- * @see https://github.com/storybookjs/storybook/issues/18663
+ * Button rendered with an `onClick` spy. Visual story only — when the
+ * Storybook 10 + vitest-browser `play()` hang is resolved upstream
+ * (storybookjs/storybook#18663), this will be re-promoted to an
+ * interaction test that asserts the spy is invoked. Tracked locally in
+ * the follow-up issue; for now the spy is registered but never called
+ * so it appears in the actions panel without a false-positive test.
  */
-export const Test: Story = {
+export const ClickHandler: Story = {
   args: {
     children: 'Submit',
     onClick: fn(),
@@ -72,11 +73,11 @@ export const Test: Story = {
 };
 
 /**
- * Loading button should be disabled and not fire onClick.
- *
- * TODO: Re-enable play() tests — see Test story above.
+ * Loading button with an `onClick` spy. The button must not invoke the
+ * spy when `loading: true` is set. Visual story only — see ClickHandler
+ * for the play() re-enable plan.
  */
-export const LoadingBlocksClicks: Story = {
+export const LoadingClickHandler: Story = {
   args: {
     loading: true,
     children: 'Loading',
