@@ -153,6 +153,22 @@ jobs:
       - name: Storybook component tests (browser mode)
         run: npm run test:storybook
 
+      # Upload the test report and any browser test artifacts on failure so
+      # failures are debuggable from the GitHub UI (no need to re-run locally
+      # just to read the trace). The default vitest reporter is verbose;
+      # --reporter=html emits a self-contained report directory.
+      - name: Upload storybook test report (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-tests-report
+          path: |
+            storybook-test-output
+            **/test-results
+            **/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
   # -----------------------------------------------------------------------
   # Build + E2E (gated on all parallel checks)
   # -----------------------------------------------------------------------

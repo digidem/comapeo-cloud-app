@@ -71,6 +71,14 @@ function ThemeProvider({
  * context so that hooks like useParams / useLocation / useMatch resolve
  * without crashing.  Individual stories can override route state via
  * parameters or args when they need specific values.
+ *
+ * IMPORTANT: this is a module-level singleton, shared across every story
+ * AND every test run. Do not call `router.navigate`, push to history, or
+ * mutate `router.context` from inside a story or `play()` block — the
+ * state would leak across stories in the same render and across test
+ * cases. If a story needs a specific route, set the path via TanStack's
+ * `parameters.router` or scope a private router inside the story's
+ * `decorators` array.
  */
 const rootRoute = createRootRoute({ component: Outlet });
 const storybookRouter = createRouter({

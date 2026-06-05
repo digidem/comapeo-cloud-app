@@ -62,8 +62,11 @@ export const Disabled: Story = {
  * Storybook 10 + vitest-browser `play()` hang is resolved upstream
  * (storybookjs/storybook#18663), this will be re-promoted to an
  * interaction test that asserts the spy is invoked. Tracked locally in
- * the follow-up issue; for now the spy is registered but never called
- * so it appears in the actions panel without a false-positive test.
+ * #103 (test(storybook): re-add play() interaction tests for PR #94
+ * stories); for now the spy is registered but never called so it
+ * appears in the actions panel without a false-positive test.
+ *
+ * TODO(#103): convert to `play()` interaction test.
  */
 export const ClickHandler: Story = {
   args: {
@@ -74,8 +77,12 @@ export const ClickHandler: Story = {
 
 /**
  * Loading button with an `onClick` spy. The button must not invoke the
- * spy when `loading: true` is set. Visual story only — see ClickHandler
- * for the play() re-enable plan.
+ * spy when `loading: true` is set. Visual story only — see
+ * `ClickHandler` for the play() re-enable plan and #103 for the
+ * tracking issue.
+ *
+ * TODO(#103): convert to `play()` interaction test that asserts the
+ * spy is NOT invoked while `loading: true`.
  */
 export const LoadingClickHandler: Story = {
   args: {
