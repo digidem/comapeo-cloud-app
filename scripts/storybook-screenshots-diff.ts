@@ -48,11 +48,26 @@ const log = (msg: string) => console.log(`[sb-screenshots-diff] ${msg}`);
 // 1. Generate current screenshots
 // ---------------------------------------------------------------------------
 
-function generateCurrent(viewport: Viewport, skipBuild: boolean): void {
+/**
+ * Build Storybook once. Both --update and --check run on fresh CI checkouts
+ * with no pre-existing storybook-static/ (gitignored), so the build must
+ * happen unconditionally in either mode. Hoisted out of the per-viewport
+ * loop so we build once, not once per viewport.
+ */
+function buildStorybook(): void {
+  log('Building Storybook...');
+  execSync('npm run build-storybook', { cwd: ROOT, stdio: 'inherit' });
+}
+
+/**
+ * Capture screenshots for a viewport. Always passes --skip-build because
+ * buildStorybook() has already run; storybook-screenshots.ts then reads the
+ * existing storybook-static/index.json directly.
+ */
+function generateCurrent(viewport: Viewport): void {
   log(`Generating ${viewport} screenshots...`);
-  const skipFlag = skipBuild ? ' --skip-build' : '';
   execSync(
-    `npx tsx scripts/storybook-screenshots.ts${skipFlag} --viewport ${viewport}`,
+    `npx tsx scripts/storybook-screenshots.ts --skip-build --viewport ${viewport}`,
     { cwd: ROOT, stdio: 'inherit' },
   );
 }
@@ -192,9 +207,11 @@ async function updateBaseline(viewport: Viewport): Promise<void> {
 
 async function main(): Promise<void> {
   let exitCode = 0;
+  // Build Storybook once up front; each viewport reuses the static build.
+  buildStorybook();
   for (const viewport of STORYBOOK_VIEWPORTS) {
     log(`--- ${viewport} ---`);
-    generateCurrent(viewport, update);
+    generateCurrent(viewport);
 
     const currentDir = join(CURRENT_DIR, viewport, 'storybook');
     const baselineDir = join(BASELINE_DIR, viewport);
