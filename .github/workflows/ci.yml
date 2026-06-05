@@ -454,6 +454,7 @@ jobs:
             tests/e2e/screenshots/desktop/storybook
             tests/e2e/screenshots/mobile/storybook
             tests/e2e/storybook-screenshots-baseline
+            tests/e2e/storybook-screenshots-diff
           retention-days: 7
           if-no-files-found: ignore
 

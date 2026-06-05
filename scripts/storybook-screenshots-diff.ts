@@ -36,6 +36,13 @@ import { PNG } from 'pngjs';
 const ROOT = resolve(import.meta.dirname, '..');
 const CURRENT_DIR = resolve(ROOT, 'tests/e2e/screenshots');
 const BASELINE_DIR = resolve(ROOT, 'tests/e2e/storybook-screenshots-baseline');
+/**
+ * Where per-file pixelmatch diff visualisations are written on a failed
+ * --check. One PNG per changed file, mirroring the relative baseline path.
+ * Uploaded as a CI artifact (see ci.yml) so reviewers can see *what*
+ * changed without re-running the pipeline locally.
+ */
+const DIFF_DIR = resolve(ROOT, 'tests/e2e/storybook-screenshots-diff');
 const STORYBOOK_VIEWPORTS = ['mobile', 'desktop'] as const;
 type Viewport = (typeof STORYBOOK_VIEWPORTS)[number];
 
@@ -129,36 +136,83 @@ const PIXEL_THRESHOLD_OVERRIDES: ReadonlyArray<{
   { match: 'mapcontainer', threshold: 0.15 },
 ];
 
-/** Resolve the pixel threshold for a given relative baseline path. */
-function thresholdFor(relPath: string): number {
+/**
+ * Resolve the pixel threshold for a given relative baseline path. Returns
+ * both the threshold and the override substring that matched (if any), so
+ * callers can log when a non-default tolerance was applied.
+ */
+function thresholdFor(relPath: string): {
+  threshold: number;
+  override?: string;
+} {
   const lower = relPath.toLowerCase();
   for (const { match, threshold } of PIXEL_THRESHOLD_OVERRIDES) {
-    if (lower.includes(match)) return threshold;
+    if (lower.includes(match)) return { threshold, override: match };
   }
-  return PIXEL_THRESHOLD;
+  return { threshold: PIXEL_THRESHOLD };
 }
 
 /**
- * Returns true if the two PNG buffers are visually identical within the
- * configured pixel threshold. Returns false for size mismatches or when
- * the fraction of differing pixels exceeds the threshold. The threshold
- * is per-file: stories that mount non-deterministic renders (maps, etc.)
- * get a higher tolerance via `PIXEL_THRESHOLD_OVERRIDES`.
+ * Pad a PNG up to the target dimensions, anchoring the original content at
+ * the top-left and leaving the rest as transparent black (the zero-filled
+ * default of a fresh PNG buffer). Used so two differently-sized captures can
+ * still be compared pixel-for-pixel: a small reflow yields a small diff, a
+ * large resize yields a large one — instead of failing outright.
  */
-function pixelsMatch(bufA: Buffer, bufB: Buffer, relPath = ''): boolean {
+function padToSize(img: PNG, width: number, height: number): PNG {
+  if (img.width === width && img.height === height) return img;
+  const padded = new PNG({ width, height });
+  PNG.bitblt(img, padded, 0, 0, img.width, img.height, 0, 0);
+  return padded;
+}
+
+type CompareReason = 'match' | 'pixel-diff' | 'size-mismatch';
+
+interface CompareResult {
+  match: boolean;
+  reason: CompareReason;
+  /** Fraction of pixels that differ after padding to a common canvas. */
+  fraction: number;
+  threshold: number;
+  override?: string;
+  /** Dimensions of A and B, for size-mismatch diagnostics. */
+  dims: { a: [number, number]; b: [number, number] };
+  /** Encoded pixelmatch diff PNG; only present when the buffers differ. */
+  diff?: Buffer;
+}
+
+/**
+ * Compare two PNG buffers within the configured (per-file) pixel threshold.
+ * Differently-sized images are padded to a common canvas before comparison
+ * rather than failing outright, so a 1px reflow doesn't read as a total
+ * failure. Returns a diagnostic result distinguishing a clean match, a pixel
+ * diff, and a size mismatch, plus an encoded diff image when they differ.
+ */
+function comparePng(bufA: Buffer, bufB: Buffer, relPath = ''): CompareResult {
   const imgA = PNG.sync.read(bufA);
   const imgB = PNG.sync.read(bufB);
-  if (imgA.width !== imgB.width || imgA.height !== imgB.height) return false;
-  const totalPixels = imgA.width * imgA.height;
-  const mismatched = pixelmatch(
-    imgA.data,
-    imgB.data,
-    null,
-    imgA.width,
-    imgA.height,
-    { threshold: 0.1 },
-  );
-  return mismatched / totalPixels <= thresholdFor(relPath);
+  const { threshold, override } = thresholdFor(relPath);
+  const sizeMismatch = imgA.width !== imgB.width || imgA.height !== imgB.height;
+  const width = Math.max(imgA.width, imgB.width);
+  const height = Math.max(imgA.height, imgB.height);
+  const a = padToSize(imgA, width, height);
+  const b = padToSize(imgB, width, height);
+  const totalPixels = width * height;
+  const diffImg = new PNG({ width, height });
+  const mismatched = pixelmatch(a.data, b.data, diffImg.data, width, height, {
+    threshold: 0.1,
+  });
+  const fraction = mismatched / totalPixels;
+  const match = fraction <= threshold;
+  return {
+    match,
+    reason: match ? 'match' : sizeMismatch ? 'size-mismatch' : 'pixel-diff',
+    fraction,
+    threshold,
+    override,
+    dims: { a: [imgA.width, imgA.height], b: [imgB.width, imgB.height] },
+    diff: match ? undefined : PNG.sync.write(diffImg),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +229,7 @@ interface DiffResult {
 async function diffManifests(
   currentFiles: Map<string, string>,
   baselineFiles: Map<string, string>,
+  viewport: Viewport,
 ): Promise<DiffResult> {
   const added: string[] = [];
   const removed: string[] = [];
@@ -189,10 +244,40 @@ async function diffManifests(
         readFile(absCurrent),
         readFile(absBaseline),
       ]);
-      if (pixelsMatch(bufCurrent, bufBaseline, file)) {
+      const result = comparePng(bufCurrent, bufBaseline, file);
+      if (result.override !== undefined) {
+        log(
+          `  override "${result.override}" applied to ${file}: ` +
+            `tolerance ${(result.threshold * 100).toFixed(2)}% ` +
+            `(${(result.fraction * 100).toFixed(2)}% differ)`,
+        );
+      }
+      if (result.match) {
         unchanged++;
       } else {
         changed.push(file);
+        // Per-failure diagnostic: distinguish a size change from a pure
+        // pixel diff so CI logs say *why* a story regressed.
+        if (result.reason === 'size-mismatch') {
+          const [aw, ah] = result.dims.a;
+          const [bw, bh] = result.dims.b;
+          log(
+            `  size mismatch ${file}: current ${aw}x${ah} vs baseline ` +
+              `${bw}x${bh} (${(result.fraction * 100).toFixed(2)}% differ ` +
+              `after padding, threshold ${(result.threshold * 100).toFixed(2)}%)`,
+          );
+        } else {
+          log(
+            `  pixel diff ${file}: ${(result.fraction * 100).toFixed(2)}% ` +
+              `differ (threshold ${(result.threshold * 100).toFixed(2)}%)`,
+          );
+        }
+        if (result.diff) {
+          const diffPath = join(DIFF_DIR, viewport, file);
+          await mkdir(dirname(diffPath), { recursive: true });
+          await writeFile(diffPath, result.diff);
+          log(`    diff image: ${relative(ROOT, diffPath)}`);
+        }
       }
     }
   }
@@ -292,6 +377,9 @@ async function updateBaseline(viewport: Viewport): Promise<void> {
 
 async function main(): Promise<void> {
   let exitCode = 0;
+  // Clear stale diff images from a previous run so the artifact only ever
+  // contains the current run's failures.
+  if (!update) await rm(DIFF_DIR, { recursive: true, force: true });
   // Build Storybook once up front; each viewport reuses the static build.
   buildStorybook();
   for (const viewport of STORYBOOK_VIEWPORTS) {
@@ -320,7 +408,7 @@ async function main(): Promise<void> {
       exitCode = 1;
       continue;
     }
-    const result = await diffManifests(currentFiles, baselineFiles);
+    const result = await diffManifests(currentFiles, baselineFiles, viewport);
     log(
       `${result.unchanged} unchanged, ${result.added.length} added, ` +
         `${result.removed.length} removed, ${result.changed.length} changed.`,
