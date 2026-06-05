@@ -19,7 +19,7 @@ describe('repository guardrails', () => {
     expect(readRepoFile('.node-version').trim()).toBe('22');
     expect(readRepoFile('.npmrc')).toContain('engine-strict=true');
     expect(packageJson.engines?.node).toBe('>=22.0.0');
-    expect(packageJson.packageManager).toMatch(/^npm@\d+\.\d+\.\d+$/);
+    expect(packageJson.packageManager).toMatch(/^bun@\d+\.\d+\.\d+$/);
     expect(packageJson.scripts?.['check:i18n']).toBe(
       'npm run extract-messages && git diff --exit-code -- src/i18n/messages/en.json',
     );
@@ -59,9 +59,10 @@ describe('repository guardrails', () => {
     expect(ci).toMatch(/check:\n(?:[\s\S]*?)timeout-minutes: 15/);
     expect(ci).toMatch(/deploy:\n(?:[\s\S]*?)timeout-minutes: 5/);
     expect(ci).toMatch(/lighthouse:\n(?:[\s\S]*?)timeout-minutes: 5/);
-    // Deterministic Node version from file
-    expect(ci).toMatch(/node-version-file: \.node-version/);
-    expect(ci).toMatch(/cache-dependency-path: package-lock\.json/);
+    // Node setup follows the checked-in runtime pin
+    expect(ci).toContain('node-version-file: .node-version');
+    // Deterministic installs via bun lockfile
+    expect(ci).toContain('bun install --frozen-lockfile');
     // i18n check blocks CI
     expect(ci).toContain('run: npm run check:i18n');
     // Screenshots job should not silently pass on failure
