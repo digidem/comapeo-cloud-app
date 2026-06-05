@@ -1,3 +1,5 @@
 // This file is intentionally empty.
-// Vitest browser mode setup — the asyncUtilTimeout is configured
-// per-query via { timeout: 5_000 } in each findBy* call.
+//
+// `findBy*` timeouts are configured per-query via `{ timeout: 5_000 }`
+// in the tests themselves (see e.g. tests/unit/components/shared/MapContainer).
+// Do not add globals here; keep setup colocated with the assertions.

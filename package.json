@@ -133,7 +133,8 @@
     "vite": "^8.0.14",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.5",
-    "wrangler": "^4.95.0"
+    "wrangler": "^4.95.0",
+    "@vitest/ui": "^4.1.5"
   },
   "overrides": {
     "@storybook/test": {
