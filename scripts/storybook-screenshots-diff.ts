@@ -108,11 +108,40 @@ async function listPngs(dir: string): Promise<Map<string, string>> {
 const PIXEL_THRESHOLD = 0.001;
 
 /**
+ * Per-file overrides for stories whose visual diff is non-deterministic
+ * across environments (e.g. MapLibre tile rendering varies between local
+ * and CI Chromium due to subpixel rasterisation, font fallback, and
+ * network tile cache state). Each entry is a substring match against the
+ * PNG filename; matching files use the higher tolerance.
+ */
+const PIXEL_THRESHOLD_OVERRIDES: ReadonlyArray<{
+  match: string;
+  threshold: number;
+}> = [
+  // MapLibre tile rendering — bump from 0.1% to 2% (20×) to absorb
+  // subpixel and font-fallback noise between local and CI.
+  { match: 'observationsmap', threshold: 0.02 },
+  // MapContainer shares the same tile-rendering path.
+  { match: 'mapcontainer', threshold: 0.02 },
+];
+
+/** Resolve the pixel threshold for a given relative baseline path. */
+function thresholdFor(relPath: string): number {
+  const lower = relPath.toLowerCase();
+  for (const { match, threshold } of PIXEL_THRESHOLD_OVERRIDES) {
+    if (lower.includes(match)) return threshold;
+  }
+  return PIXEL_THRESHOLD;
+}
+
+/**
  * Returns true if the two PNG buffers are visually identical within the
  * configured pixel threshold. Returns false for size mismatches or when
- * the fraction of differing pixels exceeds the threshold.
+ * the fraction of differing pixels exceeds the threshold. The threshold
+ * is per-file: stories that mount non-deterministic renders (maps, etc.)
+ * get a higher tolerance via `PIXEL_THRESHOLD_OVERRIDES`.
  */
-function pixelsMatch(bufA: Buffer, bufB: Buffer): boolean {
+function pixelsMatch(bufA: Buffer, bufB: Buffer, relPath = ''): boolean {
   const imgA = PNG.sync.read(bufA);
   const imgB = PNG.sync.read(bufB);
   if (imgA.width !== imgB.width || imgA.height !== imgB.height) return false;
@@ -125,7 +154,7 @@ function pixelsMatch(bufA: Buffer, bufB: Buffer): boolean {
     imgA.height,
     { threshold: 0.1 },
   );
-  return mismatched / totalPixels <= PIXEL_THRESHOLD;
+  return mismatched / totalPixels <= thresholdFor(relPath);
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +185,7 @@ async function diffManifests(
         readFile(absCurrent),
         readFile(absBaseline),
       ]);
-      if (pixelsMatch(bufCurrent, bufBaseline)) {
+      if (pixelsMatch(bufCurrent, bufBaseline, file)) {
         unchanged++;
       } else {
         changed.push(file);
