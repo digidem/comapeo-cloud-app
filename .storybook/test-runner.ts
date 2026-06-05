@@ -44,14 +44,20 @@ const config: TestRunnerConfig = {
 
     await checkA11y(
       page,
-      '#storybook-root',
+      // Use 'body' instead of '#storybook-root' so portaled content from Radix
+      // UI components (Dialogs, Sheets) is also audited. These render through
+      // portals to document.body, so '#storybook-root' would miss them.
+      'body',
       {
         detailedReport: true,
         axeOptions: a11yConfig?.options,
       },
-      // skipFailures=true: observer-only during the phased rollout.
-      // Flipped to false in the follow-up that ratchets the addon to 'error'.
-      true,
+      // skipFailures is driven by the same env var as the addon's a11y.test
+      // gate in preview.tsx. When VITE_STORYBOOK_A11Y_ENFORCE='true', the
+      // addon sets a11y.test='error' (failing) and the test-runner also
+      // enforces violations as failures. When unset or 'false', both gates
+      // are in observer-only mode. This keeps the two gates in sync.
+      process.env.VITE_STORYBOOK_A11Y_ENFORCE !== 'true',
     );
   },
 };
