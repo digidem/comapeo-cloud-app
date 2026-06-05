@@ -120,10 +120,65 @@ jobs:
           if-no-files-found: ignore
 
   # -----------------------------------------------------------------------
+  # Storybook component tests (@storybook/addon-vitest, browser mode)
+  # -----------------------------------------------------------------------
+  storybook-tests:
+    needs: [lint, typecheck]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          # Keyed on package-lock.json hash so a dependency bump
+          # automatically invalidates the cache. Restore-keys falls
+          # back to the most recent key for this OS+arch when the
+          # exact hash misses — keeps cold-cache runs from being
+          # slowed by a full `playwright install` on every PR.
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright browsers (chromium-only for storybook tests)
+        run: npx playwright install --with-deps chromium
+
+      - name: Storybook component tests (browser mode)
+        run: npm run test:storybook
+
+      # Upload the test report and any browser test artifacts on failure so
+      # failures are debuggable from the GitHub UI (no need to re-run locally
+      # just to read the trace). The default vitest reporter is verbose;
+      # --reporter=html emits a self-contained report directory.
+      - name: Upload storybook test report (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-tests-report
+          path: |
+            storybook-test-output
+            **/test-results
+            **/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # -----------------------------------------------------------------------
   # Build + E2E (gated on all parallel checks)
   # -----------------------------------------------------------------------
   build-e2e:
-    needs: [trufflehog, lint, typecheck, unit-tests, audit]
+    needs: [trufflehog, lint, typecheck, unit-tests, audit, storybook-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -143,6 +198,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
+          # Keyed on package-lock.json hash so a dependency bump
+          # automatically invalidates the cache. Restore-keys falls
+          # back to the most recent key for this OS+arch when the
+          # exact hash misses — keeps cold-cache runs from being
+          # slowed by a full `playwright install` on every PR.
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             playwright-${{ runner.os }}-
@@ -206,6 +266,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
+          # Keyed on package-lock.json hash so a dependency bump
+          # automatically invalidates the cache. Restore-keys falls
+          # back to the most recent key for this OS+arch when the
+          # exact hash misses — keeps cold-cache runs from being
+          # slowed by a full `playwright install` on every PR.
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             playwright-${{ runner.os }}-
