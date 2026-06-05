@@ -209,8 +209,9 @@ jobs:
       - name: Serve Storybook static bundle (background)
         # The test-runner connects to a live HTTP server (default
         # localhost:6006). Without this server the runner fails immediately
-        # with connection-refused. http-server is an explicit devDependency
-        # added in this PR (see package.json).
+        # with connection-refused. We use `npx http-server` (no install step)
+        # so the runner download is cached by the npm cache step above; the
+        # package is small (~2MB) and the download is sub-5s in practice.
         #
         # The readiness loop MUST fail the step if the server never comes up
         # — otherwise the test-runner hits connection-refused and the failure
