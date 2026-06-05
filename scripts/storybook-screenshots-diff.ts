@@ -177,27 +177,79 @@ async function updateBaseline(viewport: Viewport): Promise<void> {
   const src = join(CURRENT_DIR, viewport, 'storybook');
   const dst = join(BASELINE_DIR, viewport);
   await mkdir(dst, { recursive: true });
-  // Clear dst so removed screenshots actually disappear from baseline.
-  await rm(dst, { recursive: true, force: true });
-  await mkdir(dst, { recursive: true });
+  // Per-file sync: only write when content changes, so unchanged files keep
+  // their existing git blob. This preserves git history for partial updates
+  // (one story's intentional change shows as a single-file diff, not 100%
+  // of the baseline as "new"). Files that no longer exist in current are
+  // also removed from baseline to keep the two manifests in sync.
   let copied = 0;
-  async function walk(from: string, to: string): Promise<void> {
+  let unchanged = 0;
+  const srcFiles = new Map<string, string>();
+  async function walk(from: string): Promise<void> {
     const entries = await readdir(from, { withFileTypes: true });
     for (const e of entries) {
       const absFrom = join(from, e.name);
-      const absTo = join(to, e.name);
       if (e.isDirectory()) {
-        await mkdir(absTo, { recursive: true });
-        await walk(absFrom, absTo);
+        await walk(absFrom);
       } else if (e.name.endsWith('.png')) {
-        await readFile(absFrom).then((buf) => writeFile(absTo, buf));
-        copied++;
+        const rel = relative(src, absFrom);
+        srcFiles.set(rel, absFrom);
       }
     }
   }
-  await walk(src, dst);
+  await walk(src);
+  for (const [rel, absFrom] of srcFiles) {
+    const absTo = join(dst, rel);
+    await mkdir(dirname(absTo), { recursive: true });
+    const [bufSrc, bufDst] = await Promise.all([
+      readFile(absFrom),
+      readFile(absTo).catch(() => null),
+    ]);
+    if (bufDst && bufSrc.equals(bufDst)) {
+      unchanged++;
+    } else {
+      await writeFile(absTo, bufSrc);
+      copied++;
+    }
+  }
+  // Remove baseline files that are no longer in current.
+  let removed = 0;
+  const dstFiles = new Map<string, string>();
+  async function walkDst(from: string): Promise<void> {
+    const entries = await readdir(from, { withFileTypes: true });
+    for (const e of entries) {
+      const absFrom = join(from, e.name);
+      if (e.isDirectory()) await walkDst(absFrom);
+      else if (e.name.endsWith('.png')) {
+        dstFiles.set(relative(dst, absFrom), absFrom);
+      }
+    }
+  }
+  await walkDst(dst);
+  for (const [rel, absDst] of dstFiles) {
+    if (!srcFiles.has(rel)) {
+      await rm(absDst, { force: true });
+      removed++;
+    }
+  }
+  // Clean up empty directories left behind.
+  async function cleanEmptyDirs(dir: string): Promise<void> {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        const abs = join(dir, e.name);
+        await cleanEmptyDirs(abs);
+        const left = await readdir(abs, { withFileTypes: true }).catch(
+          () => [],
+        );
+        if (left.length === 0) await rm(abs, { recursive: true, force: true });
+      }
+    }
+  }
+  await cleanEmptyDirs(dst);
   log(
-    `Updated ${viewport} baseline: ${copied} files copied to ${relative(ROOT, dst)}`,
+    `Updated ${viewport} baseline: ${copied} updated, ${unchanged} unchanged, ` +
+      `${removed} removed (in ${relative(ROOT, dst)}).`,
   );
 }
 
