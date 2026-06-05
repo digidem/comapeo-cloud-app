@@ -442,6 +442,18 @@ jobs:
       - name: Run Storybook visual regression check
         run: npm run storybook:screenshots:check
 
+      - name: Upload screenshot diff artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-diff
+          path: |
+            tests/e2e/screenshots/desktop/storybook
+            tests/e2e/screenshots/mobile/storybook
+            tests/e2e/storybook-screenshots-baseline
+          retention-days: 7
+          if-no-files-found: ignore
+
   # -----------------------------------------------------------------------
   # Dependency vulnerability audit
   # -----------------------------------------------------------------------
