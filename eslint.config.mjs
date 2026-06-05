@@ -108,5 +108,16 @@ export default pluginTs.config(
     files: ['.storybook/**/*.{js,jsx,ts,tsx}'],
     extends: [pluginTs.configs.recommended],
   },
+  // Scripts — Node.js runtime, not browser
+  {
+    name: 'scripts',
+    files: ['scripts/**/*.{js,jsx,ts,tsx}'],
+    extends: [pluginTs.configs.recommended],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
   storybook.configs['flat/recommended'],
 );
