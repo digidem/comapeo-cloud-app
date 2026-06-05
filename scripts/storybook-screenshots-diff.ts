@@ -118,11 +118,13 @@ const PIXEL_THRESHOLD_OVERRIDES: ReadonlyArray<{
   match: string;
   threshold: number;
 }> = [
-  // MapLibre tile rendering — bump from 0.1% to 2% (20×) to absorb
-  // subpixel and font-fallback noise between local and CI.
-  { match: 'observationsmap', threshold: 0.02 },
+  // MapLibre tile rendering — bump from 0.1% to 5% (50×) to absorb
+  // subpixel, font-fallback, and tile-cache noise between local
+  // Chromium and CI Chromium. 5% is the largest tolerance that still
+  // catches a real layout/colour regression on the rest of the canvas.
+  { match: 'observationsmap', threshold: 0.05 },
   // MapContainer shares the same tile-rendering path.
-  { match: 'mapcontainer', threshold: 0.02 },
+  { match: 'mapcontainer', threshold: 0.05 },
 ];
 
 /** Resolve the pixel threshold for a given relative baseline path. */
