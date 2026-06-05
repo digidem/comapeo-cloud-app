@@ -38,7 +38,7 @@
     "upload-sourcemaps": "npx tsx scripts/upload-sourcemaps.ts",
     "translate:locale": "npx tsx scripts/translate-locale.ts",
     "test:unit": "vitest run --project=unit",
-    "test:storybook": "vitest run --project=storybook --reporter=html --outputFile=storybook-test-output/index.html",
+    "test:storybook": "vitest run --project=storybook --reporter=default --reporter=html --outputFile=storybook-test-output/index.html",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "storybook:screenshots": "npx tsx scripts/storybook-screenshots.ts",
@@ -135,10 +135,5 @@
     "vitest": "^4.1.8",
     "wrangler": "^4.95.0",
     "@vitest/ui": "^4.1.8"
-  },
-  "overrides": {
-    "@storybook/test": {
-      "storybook": "$storybook"
-    }
   }
 }
