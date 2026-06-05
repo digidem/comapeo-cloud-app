@@ -1,0 +1,37 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "bun": {
+    "enabled": true
+  },
+  "npm": {
+    "enabled": false
+  },
+  "labels": ["dependencies"],
+  "schedule": ["on monday"],
+  "timezone": "America/Sao_Paulo",
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    {
+      "description": "Group all non-major updates together",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "non-major dependencies",
+      "automerge": true,
+      "platformAutomerge": true,
+      "matchCategories": ["devDependencies"]
+    },
+    {
+      "description": "Major updates — separate PRs, no automerge",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["on monday"]
+  }
+}
