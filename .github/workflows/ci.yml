@@ -207,17 +207,35 @@ jobs:
           VITE_STORYBOOK_A11Y_ENFORCE: 'false'
 
       - name: Serve Storybook static bundle (background)
+        # The test-runner connects to a live HTTP server (default
+        # localhost:6006). Without this server the runner fails immediately
+        # with connection-refused. http-server is an explicit devDependency
+        # added in this PR (see package.json).
+        #
+        # The readiness loop MUST fail the step if the server never comes up
+        # — otherwise the test-runner hits connection-refused and the failure
+        # mode is opaque. `set -e` ensures the loop exit code propagates, and
+        # the final `curl -fsS` (with -f) gates on a real 2xx response.
         run: |
+          set -e
           nohup npx http-server storybook-static -p 6006 --silent > /tmp/storybook-server.log 2>&1 &
           echo $! > /tmp/storybook-server.pid
+          # Wait up to 30s for the server to actually start accepting connections
+          ready=0
           for i in $(seq 1 30); do
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost:6006/index.html | grep -q "200"; then
+            if curl -fsS -o /dev/null http://localhost:6006/index.html; then
               echo "Storybook server ready on port 6006 (after ${i}s)"
+              ready=1
               break
             fi
             sleep 1
           done
-          curl -sI http://localhost:6006/index.html | head -3
+          if [ "$ready" -ne 1 ]; then
+            echo "::error::Storybook server failed to start within 30s. Last log lines:"
+            tail -20 /tmp/storybook-server.log || true
+            exit 1
+          fi
+          curl -fsS -I http://localhost:6006/index.html | head -3
 
       - name: Run Storybook test-runner (a11y + play() functions)
         run: npm run test:storybook:runner
