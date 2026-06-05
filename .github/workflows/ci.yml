@@ -175,10 +175,103 @@ jobs:
           retention-days: 7
 
   # -----------------------------------------------------------------------
+  # Storybook test-runner (a11y + play() functions) — see issue #77
+  # Boots the static index.json produced by build-storybook, serves the
+  # storybook-static/ bundle on localhost:6006, opens every story in a
+  # real browser, and surfaces both axe-core violations and broken
+  # `play()` interactions.
+  # -----------------------------------------------------------------------
+  storybook-test-runner:
+    # Merge-order note: merge PR #94 first, then rebase this branch, so the
+    # storybook-tests job name doesn't conflict. This job is fully self-contained
+    # (no runtime dependency on #94's artifacts).
+    needs: [lint, typecheck]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (chromium-only for test-runner)
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Storybook static index
+        run: npm run build-storybook
+        env:
+          VITE_STORYBOOK_A11Y_ENFORCE: 'false'
+
+      - name: Serve Storybook static bundle (background)
+        # The test-runner connects to a live HTTP server (default
+        # localhost:6006). Without this server the runner fails immediately
+        # with connection-refused. No explicit devDep — http-server@14.1.1 is
+        # small (~2MB) and the npx download is sub-5s in practice. The version
+        # is pinned in the npx call itself for reproducibility.
+        #
+        # The readiness loop MUST fail the step if the server never comes up
+        # — otherwise the test-runner hits connection-refused and the failure
+        # mode is opaque. `set -e` ensures the loop exit code propagates, and
+        # the final `curl -fsS` (with -f) gates on a real 2xx response.
+        run: |
+          set -e
+          nohup npx http-server@14.1.1 storybook-static -p 6006 --silent > /tmp/storybook-server.log 2>&1 &
+          echo $! > /tmp/storybook-server.pid
+          # Wait up to 30s for the server to actually start accepting connections
+          ready=0
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://localhost:6006/index.html; then
+              echo "Storybook server ready on port 6006 (after ${i}s)"
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "::error::Storybook server failed to start within 30s. Last log lines:"
+            tail -20 /tmp/storybook-server.log || true
+            exit 1
+          fi
+          curl -fsS -I http://localhost:6006/index.html | head -3
+
+      - name: Run Storybook test-runner (a11y + play() functions)
+        run: npm run test:storybook:runner
+        env:
+          # Must match the build step's env var so both gates stay in sync.
+          # The test-runner reads process.env.VITE_STORYBOOK_A11Y_ENFORCE at
+          # runtime; preview.tsx reads import.meta.env at build time. Setting
+          # the value on both steps is the explicit coupling point — a follow-up
+          # PR flips both together (see issue #77).
+          VITE_STORYBOOK_A11Y_ENFORCE: 'false'
+
+      - name: Stop Storybook server
+        if: always()
+        run: |
+          if [ -f /tmp/storybook-server.pid ]; then
+            kill "$(cat /tmp/storybook-server.pid)" 2>/dev/null || true
+          fi
+
+  # -----------------------------------------------------------------------
   # Build + E2E (gated on all parallel checks)
   # -----------------------------------------------------------------------
   build-e2e:
-    needs: [trufflehog, lint, typecheck, unit-tests, audit, storybook-tests]
+    needs:
+      [
+        trufflehog,
+        lint,
+        typecheck,
+        unit-tests,
+        audit,
+        storybook-tests,
+        storybook-test-runner,
+      ]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
