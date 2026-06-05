@@ -152,13 +152,15 @@ const preview: Preview = {
       // remediated (tracked separately).
       //
       // To make the gate fail-on-violation, set the
-      // STORYBOOK_A11Y_ENFORCE=true env var in the CI workflow (or
+      // VITE_STORYBOOK_A11Y_ENFORCE=true env var in the CI workflow (or
       // override the parameter per-story with `a11y: { test: 'error' }`).
       // The local-development run that completes the remediation will
       // flip the env var to confirm zero violations before that follow-up
       // PR lands. See issue #77.
       test:
-        import.meta.env.STORYBOOK_A11Y_ENFORCE === 'true' ? 'error' : 'todo',
+        import.meta.env.VITE_STORYBOOK_A11Y_ENFORCE === 'true'
+          ? 'error'
+          : 'todo',
     },
     layout: 'fullscreen',
     viewport: {

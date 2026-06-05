@@ -203,6 +203,8 @@ jobs:
 
       - name: Build Storybook static index
         run: npm run build-storybook
+        env:
+          VITE_STORYBOOK_A11Y_ENFORCE: 'false'
 
       - name: Serve Storybook static bundle (background)
         run: |

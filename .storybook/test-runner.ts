@@ -7,7 +7,7 @@
  *      axe-playwright, which reads the global `a11y.test` parameter set in
  *      `.storybook/preview.tsx`:
  *        - `'todo'` (default in CI): violations are logged but tests pass.
- *        - `'error'` (when STORYBOOK_A11Y_ENFORCE=true): violations fail.
+ *        - `'error'` (when VITE_STORYBOOK_A11Y_ENFORCE=true): violations fail.
  *   2. Any `play()` functions on the story (catches broken interactions that
  *      would otherwise silently regress).
  *
