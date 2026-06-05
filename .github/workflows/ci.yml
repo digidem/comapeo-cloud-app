@@ -143,6 +143,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
+          # Keyed on package-lock.json hash so a dependency bump
+          # automatically invalidates the cache. Restore-keys falls
+          # back to the most recent key for this OS+arch when the
+          # exact hash misses — keeps cold-cache runs from being
+          # slowed by a full `playwright install` on every PR.
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             playwright-${{ runner.os }}-
@@ -193,6 +198,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
+          # Keyed on package-lock.json hash so a dependency bump
+          # automatically invalidates the cache. Restore-keys falls
+          # back to the most recent key for this OS+arch when the
+          # exact hash misses — keeps cold-cache runs from being
+          # slowed by a full `playwright install` on every PR.
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             playwright-${{ runner.os }}-
@@ -256,6 +266,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
+          # Keyed on package-lock.json hash so a dependency bump
+          # automatically invalidates the cache. Restore-keys falls
+          # back to the most recent key for this OS+arch when the
+          # exact hash misses — keeps cold-cache runs from being
+          # slowed by a full `playwright install` on every PR.
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             playwright-${{ runner.os }}-
