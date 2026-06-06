@@ -9,7 +9,6 @@
  */
 import * as v from 'valibot';
 
-import type { EncryptedInvitePayload } from '@/lib/invite-crypto';
 import { decryptInvite, encryptInvite } from '@/lib/invite-crypto';
 import {
   decodeBase64Key,

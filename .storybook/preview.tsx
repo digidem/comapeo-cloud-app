@@ -4,6 +4,12 @@ import { type ReactNode, useEffect } from 'react';
 import { IntlProvider } from 'react-intl';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  Outlet,
+  RouterContextProvider,
+  createRootRoute,
+  createRouter,
+} from '@tanstack/react-router';
 
 import { ShellSlotProvider } from '@/components/layout/shell-slot';
 import { SUPPORTED_LOCALES, getMessages } from '@/i18n/load-messages';
@@ -60,6 +66,26 @@ function ThemeProvider({
   return <>{children}</>;
 }
 
+/**
+ * Minimal TanStack Router instance for Storybook.  Provides just enough
+ * context so that hooks like useParams / useLocation / useMatch resolve
+ * without crashing.  Individual stories can override route state via
+ * parameters or args when they need specific values.
+ *
+ * IMPORTANT: this is a module-level singleton, shared across every story
+ * AND every test run. Do not call `router.navigate`, push to history, or
+ * mutate `router.context` from inside a story or `play()` block — the
+ * state would leak across stories in the same render and across test
+ * cases. If a story needs a specific route, set the path via TanStack's
+ * `parameters.router` or scope a private router inside the story's
+ * `decorators` array.
+ */
+const rootRoute = createRootRoute({ component: Outlet });
+const storybookRouter = createRouter({
+  routeTree: rootRoute,
+  defaultPreload: false,
+});
+
 function StorybookProviders({
   locale,
   children,
@@ -71,7 +97,9 @@ function StorybookProviders({
   return (
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale={locale} defaultLocale="en" messages={messages}>
-        <ShellSlotProvider>{children}</ShellSlotProvider>
+        <RouterContextProvider router={storybookRouter}>
+          <ShellSlotProvider>{children}</ShellSlotProvider>
+        </RouterContextProvider>
       </IntlProvider>
     </QueryClientProvider>
   );
@@ -112,7 +140,27 @@ const preview: Preview = {
       },
     },
     a11y: {
-      test: 'todo',
+      // Surface real axe-core violations in the Storybook a11y panel.
+      //
+      // We use 'todo' (warn-only) here so the test-runner's built-in
+      // smoke-test and the Vitest story project (issue #94) BOTH log
+      // violations without failing the build. The existing stories had
+      // not been audited for a11y when this runner was introduced; the
+      // intent is to TURN ON the check so we can SEE the violations in
+      // CI, not to fix them in the same PR. The fail-on-violation gate
+      // is ratcheted in a follow-up PR once the existing stories are
+      // remediated (tracked separately).
+      //
+      // To make the gate fail-on-violation, set the
+      // VITE_STORYBOOK_A11Y_ENFORCE=true env var in the CI workflow (or
+      // override the parameter per-story with `a11y: { test: 'error' }`).
+      // The local-development run that completes the remediation will
+      // flip the env var to confirm zero violations before that follow-up
+      // PR lands. See issue #77.
+      test:
+        import.meta.env.VITE_STORYBOOK_A11Y_ENFORCE === 'true'
+          ? 'error'
+          : 'todo',
     },
     layout: 'fullscreen',
     viewport: {
