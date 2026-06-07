@@ -796,6 +796,110 @@ describe('useAuthenticatedImageUrl', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it('two subscribers preserve refCount after fetch resolves — no overwrites', async () => {
+      vi.useFakeTimers();
+
+      let resolveFetch: (value: Response) => void;
+      const pendingPromise = new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+
+      fetchMock.mockImplementationOnce(() => pendingPromise);
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      const url = 'http://localhost:8080/photo.jpg';
+
+      // Subscriber 1 — originating (Path 3)
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url),
+      );
+
+      // Subscriber 2 — in-flight joiner (Path 2)
+      const { unmount: unmount2 } = renderHook(() =>
+        useAuthenticatedImageUrl(url),
+      );
+
+      // Both are now subscribed. Resolve the fetch.
+      await act(async () => {
+        resolveFetch!(createMockImageResponse());
+      });
+
+      await act(() => Promise.resolve());
+
+      // Unmount subscriber 1 — subscriber 2 is still mounted so blob should
+      // NOT be revoked even after the grace period.
+      unmount1();
+      await act(() => Promise.resolve());
+
+      // Advance past the default 30s grace period
+      await act(() => {
+        vi.advanceTimersByTime(31_000);
+      });
+
+      // BUG: if publishBlob overwrites refCount to 1, then unmounting
+      // subscriber 1 drops refCount to 0, which schedules revocation.
+      // After the grace period, the blob URL is revoked even though
+      // subscriber 2 is still mounted.
+      expect(revokeMock).not.toHaveBeenCalled();
+
+      unmount2();
+      await act(() => vi.advanceTimersByTime(31_000));
+
+      vi.useRealTimers();
+    });
+
+    it('URL change unrefs old key exactly once (no double-unref)', async () => {
+      vi.useFakeTimers();
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      const urlA = 'http://localhost:8080/photo-a.jpg';
+      const urlB = 'http://localhost:8080/photo-b.jpg';
+
+      // Subscriber A1: holds a ref on URL A (stays mounted throughout)
+      const { result: resultA1 } = renderHook(() =>
+        useAuthenticatedImageUrl(urlA),
+      );
+
+      await act(() => Promise.resolve());
+
+      // Subscriber A2: also holds a ref on URL A, then switches to URL B
+      const { rerender, unmount: unmountA2 } = renderHook(
+        ({ url }) => useAuthenticatedImageUrl(url),
+        { initialProps: { url: urlA } },
+      );
+
+      await act(() => Promise.resolve());
+
+      // Both subscribers are on URL A → refCount should be 2
+      // Now subscriber A2 changes to URL B
+      rerender({ url: urlB });
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // URL A should have been unref'd exactly once (from 2 → 1).
+      // If double-unref'd (from 2 → 0), the grace period timer fires and
+      // revokes the blob while subscriber A1 is still using it.
+      await act(() => {
+        vi.advanceTimersByTime(31_000);
+      });
+
+      // Subscriber A1 is still mounted with URL A — blob must NOT be revoked
+      expect(revokeMock).not.toHaveBeenCalledWith('blob:mocked-url-1');
+      expect(resultA1.current.blobUrl).toBe('blob:mocked-url-1');
+
+      unmountA2();
+      await act(() => vi.advanceTimersByTime(31_000));
+
+      vi.useRealTimers();
+    });
+
     it('originating subscriber unmount does not abort shared in-flight fetch', async () => {
       let resolveFetch: (value: Response) => void;
       const pendingPromise = new Promise<Response>((resolve) => {

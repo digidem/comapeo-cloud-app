@@ -180,13 +180,9 @@ export function useAuthenticatedImageUrl(
     // Compute the in-memory cache key
     const cacheKey = buildImageCacheKey(url, matchingServer, token);
 
-    // Unref the previous cache key on URL change
-    if (
-      previousCacheKeyRef.current &&
-      previousCacheKeyRef.current !== cacheKey
-    ) {
-      blobCache.unref(previousCacheKeyRef.current);
-    }
+    // Track which key THIS effect invocation holds a ref on.
+    // The cleanup function handles unref — no need to unref the previous
+    // key here (that would double-unref when the cleanup already ran).
     previousCacheKeyRef.current = cacheKey;
 
     let fetchUrl: string;
@@ -268,6 +264,10 @@ export function useAuthenticatedImageUrl(
     const publishBlob = (blob: Blob) => {
       // Only this path creates a blob URL. Subsequent subscribers reuse it.
       const blobUrl = URL.createObjectURL(blob);
+      // Preserve the current refCount — in-flight subscribers may have already
+      // claimed additional refs via blobCache.ref() while the fetch was pending.
+      const existing = blobCache.get(cacheKey);
+      const preservedRefCount = existing?.refCount ?? 1;
       // Always store in the in-memory cache — even if the originating
       // subscriber has unmounted, other in-flight subscribers need the
       // resolved blob URL.
@@ -275,7 +275,7 @@ export function useAuthenticatedImageUrl(
         blobUrl,
         serverToken: matchingServer?.token ?? token ?? '',
         serverSignature: JSON.stringify(servers.map((s) => s.id)),
-        refCount: 1,
+        refCount: preservedRefCount,
       });
       // Only update React state if the originating subscriber is still mounted
       if (!cancelled && mountedRef.current) {
