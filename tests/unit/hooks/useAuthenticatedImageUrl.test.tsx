@@ -936,5 +936,141 @@ describe('useAuthenticatedImageUrl', () => {
       expect(result2.current.blobUrl).toBe('blob:mocked-url-1');
       expect(result2.current.error).toBeNull();
     });
+
+    it('last subscriber unmount aborts the shared in-flight fetch exactly once', async () => {
+      // Use a fetch impl that records the AbortSignal so we can assert that
+      // exactly one abort fires when the LAST subscriber unmounts before
+      // resolution.
+      const abortEvents: AbortSignal[] = [];
+      let resolveFetch: (value: Response) => void;
+      const pendingPromise = new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+
+      fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+        if (init?.signal) abortEvents.push(init.signal as AbortSignal);
+        return pendingPromise;
+      });
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Subscriber A (originator) and B (joiner) both mount before the fetch
+      // resolves.
+      const { unmount: unmountA } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+      const { unmount: unmountB } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      await act(() => Promise.resolve());
+
+      // Abort should not have fired yet.
+      expect(abortEvents.some((s) => s.aborted)).toBe(false);
+
+      // A unmounts first — fetch must continue because B is still subscribed.
+      unmountA();
+      await act(() => Promise.resolve());
+      expect(abortEvents.some((s) => s.aborted)).toBe(false);
+
+      // B unmounts last — shared fetch must be aborted exactly once.
+      unmountB();
+      await act(() => Promise.resolve());
+
+      const abortedCount = abortEvents.filter((s) => s.aborted).length;
+      expect(abortedCount).toBe(1);
+
+      // Resolve the fetch so the test doesn't leak pending promises.
+      await act(async () => {
+        resolveFetch!(createMockImageResponse());
+      });
+    });
+
+    it('two simultaneous mounts with cache:true and IDB hit share one blob URL and read IDB once', async () => {
+      const url = 'https://archive.example.com/projects/p1/icon/icon-shared';
+      const { putCachedIconBlob, getCachedIconBlob } = await import('@/lib/db');
+      await putCachedIconBlob(
+        url,
+        new Blob(['cached-icon'], { type: 'image/png' }),
+      );
+
+      // Wrap getCachedIconBlob with a spy so we can assert call count.
+      const db = await import('@/lib/db');
+      const idbSpy = vi.spyOn(db, 'getCachedIconBlob');
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Mount both hooks synchronously (same microtask) so they both enter
+      // Path 3 before either resolves.
+      const { result: result1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+
+      // Drain microtasks: IDB read, blob URL creation, React state updates.
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Both hooks share the same blob URL.
+      expect(result1.current.blobUrl).toBe('blob:mocked-url-1');
+      expect(result2.current.blobUrl).toBe('blob:mocked-url-1');
+
+      // Only ONE createObjectURL call — the joiner reuses the originator's URL.
+      expect(createUrlMock).toHaveBeenCalledTimes(1);
+
+      // Only ONE IDB read — the joiner attached to the in-flight entry.
+      expect(idbSpy).toHaveBeenCalledTimes(1);
+
+      // Network was never hit (IDB had the blob).
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      // Sanity: confirm the IDB cache actually had the entry.
+      expect(await getCachedIconBlob(url)).toBeInstanceOf(Blob);
+    });
+
+    it('two simultaneous mounts with cache:true and IDB miss share one network fetch and one blob URL', async () => {
+      const url =
+        'https://archive.example.com/projects/p1/icon/icon-miss-dual-mount';
+
+      const db = await import('@/lib/db');
+      const idbSpy = vi.spyOn(db, 'getCachedIconBlob');
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Mount both hooks synchronously before any fetch resolves.
+      const { result: result1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Both hooks share the same blob URL.
+      expect(result1.current.blobUrl).toBe('blob:mocked-url-1');
+      expect(result2.current.blobUrl).toBe('blob:mocked-url-1');
+
+      // Only ONE createObjectURL call.
+      expect(createUrlMock).toHaveBeenCalledTimes(1);
+
+      // Only ONE IDB read.
+      expect(idbSpy).toHaveBeenCalledTimes(1);
+
+      // Only ONE network fetch.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -11,6 +11,13 @@
  *
  * Entries can also be removed earlier via explicit invalidation
  * (e.g. on auth changes) or clear().
+ *
+ * The cache also tracks an optional shared `AbortController` for the
+ * in-flight fetch. The originator registers its controller on the entry;
+ * subsequent joiners reuse it. When refCount drops to 0 the eviction
+ * logic aborts the shared controller so that any pending network request
+ * is cancelled by exactly one signal — no matter how many subscribers
+ * attached to the entry.
  */
 
 export type CacheKey = string;
@@ -19,6 +26,14 @@ export interface CacheEntry {
   blobUrl: string;
   refCount: number;
   inflight?: Promise<Blob>;
+  /**
+   * Shared AbortController for the in-flight fetch. The originator registers
+   * its controller when it sets the entry; joiners reuse it. The cache
+   * aborts this controller when refCount drops to 0 so that exactly one
+   * abort fires per shared fetch, regardless of how many subscribers
+   * attached and detached.
+   */
+  controller?: AbortController;
   serverToken: string;
   serverSignature: string;
   /** Internal: timer handle for grace-period eviction. Not part of the public API. */
@@ -69,12 +84,30 @@ export function createImageBlobCache(
     }
   }
 
+  /**
+   * Abort the shared controller (if any) and clear the reference. Idempotent
+   * — safe to call from any cleanup path. Does NOT throw if the controller
+   * has already been aborted by the originator's URL change or by a prior
+   * eviction.
+   */
+  function abortController(entry: CacheEntry): void {
+    if (entry.controller) {
+      try {
+        entry.controller.abort();
+      } catch {
+        // ignore — already aborted
+      }
+      entry.controller = undefined;
+    }
+  }
+
   function scheduleEviction(key: CacheKey, entry: CacheEntry): void {
     cancelEvictionTimer(entry);
     if (revokeAfterMs <= 0) {
       // Synchronous eviction (test mode)
       if (store.get(key) === entry) {
         store.delete(key);
+        abortController(entry);
         if (entry.blobUrl) {
           URL.revokeObjectURL(entry.blobUrl);
         }
@@ -86,6 +119,7 @@ export function createImageBlobCache(
       const current = store.get(key);
       if (current === entry && current.refCount === 0) {
         store.delete(key);
+        abortController(current);
         if (current.blobUrl) {
           URL.revokeObjectURL(current.blobUrl);
         }
@@ -139,6 +173,10 @@ export function createImageBlobCache(
       }
 
       if (entry.refCount === 0) {
+        // No more subscribers. Abort the shared in-flight fetch (if any) so
+        // it doesn't continue running with no one waiting for the result,
+        // then start the grace-period eviction timer.
+        abortController(entry);
         // Start the grace-period eviction timer. A subsequent ref() cancels it.
         scheduleEviction(key, entry);
       }
@@ -149,6 +187,7 @@ export function createImageBlobCache(
       for (const [key, entry] of store) {
         if (matcher(key, entry)) {
           store.delete(key);
+          abortController(entry);
           revokeEntry(entry);
           count++;
         }
@@ -158,6 +197,7 @@ export function createImageBlobCache(
 
     clear(): void {
       for (const entry of store.values()) {
+        abortController(entry);
         revokeEntry(entry);
       }
       store.clear();
