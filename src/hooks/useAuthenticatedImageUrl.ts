@@ -121,6 +121,15 @@ function buildImageCacheKey(
  * - Blob URLs survive component unmount/remount (30s grace period)
  * - Cache entries are scoped to (URL + auth context), so token changes
  *   produce new keys and old entries are simply unused until eviction
+ *
+ * Dedup model:
+ * - The originator creates a shared AbortController and registers an
+ *   in-flight entry in the cache BEFORE doing any async work (IDB read
+ *   or network fetch). Concurrent mounts see the in-flight entry and
+ *   attach to it instead of starting a parallel fetch.
+ * - The cache aborts the shared controller when refCount drops to 0, so
+ *   exactly one abort fires per shared fetch regardless of how many
+ *   subscribers attached.
  */
 export function useAuthenticatedImageUrl(
   url: string,
@@ -204,8 +213,6 @@ export function useAuthenticatedImageUrl(
       fetchHeaders = token ? { Authorization: `Bearer ${token}` } : {};
     }
 
-    const controller = new AbortController();
-
     // === Path 1: cache hit on a resolved entry — reuse the blob URL ===
     const cachedEntry = blobCache.get(cacheKey);
     if (cachedEntry && cachedEntry.blobUrl && !cachedEntry.inflight) {
@@ -253,13 +260,48 @@ export function useAuthenticatedImageUrl(
       return () => {
         cancelled = true;
         mountedRef.current = false;
-        controller.abort();
+        // Joiners don't own the controller — the cache's unref handles the
+        // shared abort when refCount drops to 0.
         blobCache.unref(cacheKey);
       };
     }
 
     // === Path 3: cache miss — start a new fetch and claim the first ref slot ===
     setImageState({ blobUrl: null, isLoading: true, error: null });
+
+    // Shared AbortController owned by the cache entry. The originator
+    // registers it; joiners reuse it. The cache aborts it on last unref.
+    const controller = new AbortController();
+
+    // Deferred promise that resolves once the in-flight work (IDB read +
+    // optional network fetch) completes. We register it in the cache BEFORE
+    // any async work so concurrent mounts attach to it instead of starting
+    // parallel fetches.
+    let resolveInflight!: (blob: Blob) => void;
+    let rejectInflight!: (err: unknown) => void;
+    const inflight: Promise<Blob> = new Promise((resolve, reject) => {
+      resolveInflight = resolve;
+      rejectInflight = reject;
+    });
+    // Swallow unhandled-rejection warnings on the stored reference. When the
+    // originator is the only subscriber and the fetch fails, no one attaches
+    // a .then() to the stored inflight. Joiners attach their own handlers,
+    // which create separate derived promises that still propagate the
+    // rejection.
+    inflight.catch(() => {});
+
+    // Register the in-flight entry IMMEDIATELY — before the IDB read.
+    // This is what dedupes concurrent cache:true mounts during the IDB
+    // phase: the second mount sees the in-flight entry and joins via
+    // Path 2 instead of starting its own IDB lookup.
+    blobCache.set(cacheKey, {
+      blobUrl: '',
+      serverToken: matchingServer?.token ?? token ?? '',
+      serverSignature: JSON.stringify(servers.map((s) => s.id)),
+      inflight,
+      controller,
+      refCount: 1,
+    });
 
     const publishBlob = (blob: Blob) => {
       // Only this path creates a blob URL. Subsequent subscribers reuse it.
@@ -276,7 +318,15 @@ export function useAuthenticatedImageUrl(
         serverToken: matchingServer?.token ?? token ?? '',
         serverSignature: JSON.stringify(servers.map((s) => s.id)),
         refCount: preservedRefCount,
+        // Keep the controller so that a later all-subscribers-unmount can
+        // still abort. The fetch has already resolved at this point so
+        // abort() is a no-op on the network, but the reference stays
+        // consistent for any cleanup path that reads it.
+        controller,
       });
+      // Resolve the in-flight promise so any Path 2 joiners can read the
+      // cached blobUrl.
+      resolveInflight(blob);
       // Only update React state if the originating subscriber is still mounted
       if (!cancelled && mountedRef.current) {
         setState({ blobUrl, isLoading: false, error: null });
@@ -284,23 +334,24 @@ export function useAuthenticatedImageUrl(
     };
 
     const run = async () => {
-      // Serve from the local icon cache first when caching is enabled, so
-      // cached icons render instantly without a network round-trip.
-      if (cache) {
-        try {
-          const cachedBlob = await getCachedIconBlob(url);
-          if (cancelled || !mountedRef.current) return;
-          if (cachedBlob) {
-            publishBlob(cachedBlob);
-            return;
+      try {
+        // Serve from the local icon cache first when caching is enabled, so
+        // cached icons render instantly without a network round-trip.
+        if (cache) {
+          try {
+            const cachedBlob = await getCachedIconBlob(url);
+            if (controller.signal.aborted) return;
+            if (cachedBlob) {
+              publishBlob(cachedBlob);
+              return;
+            }
+          } catch {
+            // Cache read failed — fall through to the network fetch.
           }
-        } catch {
-          // Cache read failed — fall through to the network fetch.
         }
-      }
 
-      // Create a fetch promise for deduplication
-      const fetchPromise = (async () => {
+        if (controller.signal.aborted) return;
+
         const response = await fetch(fetchUrl, {
           headers: fetchHeaders,
           signal: controller.signal,
@@ -308,22 +359,10 @@ export function useAuthenticatedImageUrl(
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
-        return response.blob();
-      })();
+        const blob = await response.blob();
 
-      // Register the inflight promise so other subscribers can share it.
-      // refCount: 1 claims the first slot for THIS hook. Other subscribers
-      // call ref() to claim additional slots.
-      blobCache.set(cacheKey, {
-        blobUrl: '',
-        serverToken: matchingServer?.token ?? token ?? '',
-        serverSignature: JSON.stringify(servers.map((s) => s.id)),
-        inflight: fetchPromise,
-        refCount: 1,
-      });
+        if (controller.signal.aborted) return;
 
-      try {
-        const blob = await fetchPromise;
         // Always publish to cache (other subscribers may be waiting),
         // but only write to the IDB icon cache if still mounted.
         if (cache && !cancelled && mountedRef.current) {
@@ -335,6 +374,8 @@ export function useAuthenticatedImageUrl(
         // Drop the failed inflight entry so the next mount can retry
         // instead of attaching to a permanently rejected promise.
         blobCache.invalidate((k) => k === cacheKey);
+        // Propagate to in-flight joiners so they see the error too.
+        rejectInflight(err);
         if (cancelled || !mountedRef.current) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setState({ blobUrl: null, isLoading: false, error: err as Error });
@@ -346,13 +387,11 @@ export function useAuthenticatedImageUrl(
     return () => {
       cancelled = true;
       mountedRef.current = false;
-      // Unref first, then check if other subscribers are still waiting.
-      // If so, don't abort — let the shared fetch continue for them.
+      // Unref hands the entry to the cache. If this is the last subscriber
+      // (refCount → 0), the cache aborts the shared controller and
+      // schedules grace-period eviction. If other subscribers are still
+      // attached, the fetch continues uninterrupted.
       blobCache.unref(cacheKey);
-      const afterUnref = blobCache.get(cacheKey);
-      if (!afterUnref || afterUnref.refCount === 0) {
-        controller.abort();
-      }
     };
   }, [url, servers, token, baseUrl, cache]);
 
