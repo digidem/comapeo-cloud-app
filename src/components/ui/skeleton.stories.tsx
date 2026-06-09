@@ -6,7 +6,7 @@ const meta: Meta<typeof Skeleton> = {
   title: 'Components/Skeleton',
   component: Skeleton,
   parameters: {
-    layout: 'centered',
+    layout: 'padded',
   },
   argTypes: {
     width: {
@@ -16,17 +16,18 @@ const meta: Meta<typeof Skeleton> = {
       control: { type: 'text' },
     },
   },
-  args: {
-    width: '100%',
-    height: 16,
-  },
 };
 
 export default meta;
 type Story = StoryObj<typeof Skeleton>;
 
 /** Default skeleton — full width, 16px height */
-export const Default: Story = {};
+export const Default: Story = {
+  args: {
+    width: '100%',
+    height: 16,
+  },
+};
 
 /** Simulates a single line of text */
 export const TextLine: Story = {

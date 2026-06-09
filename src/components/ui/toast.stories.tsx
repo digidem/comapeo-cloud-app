@@ -1,15 +1,20 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
 
+import { useEffect } from 'react';
+
 import { ToastProvider, useToast } from '@/components/ui/toast';
 
 function ToastDemo({
   variant = 'info',
   title = 'Toast title',
   description,
+  autoTrigger = false,
 }: {
   variant?: 'info' | 'success' | 'error';
   title?: string;
   description?: string;
+  /** Automatically trigger the toast on mount (for static screenshots). */
+  autoTrigger?: boolean;
 }) {
   return (
     <ToastProvider>
@@ -27,6 +32,7 @@ function ToastDemo({
           variant={variant}
           title={title}
           description={description}
+          autoTrigger={autoTrigger}
         />
       </div>
     </ToastProvider>
@@ -37,12 +43,20 @@ function TriggerButton({
   variant,
   title,
   description,
+  autoTrigger = false,
 }: {
   variant: 'info' | 'success' | 'error';
   title: string;
   description?: string;
+  autoTrigger?: boolean;
 }) {
   const { addToast } = useToast();
+
+  useEffect(() => {
+    if (autoTrigger) {
+      addToast({ variant, title, description, duration: 999999 });
+    }
+  }, [autoTrigger, addToast, variant, title, description]);
 
   return (
     <button
@@ -66,7 +80,7 @@ function TriggerButton({
   );
 }
 
-function StackedToastsDemo() {
+function StackedToastsDemo({ autoTrigger = false }: { autoTrigger?: boolean }) {
   return (
     <ToastProvider>
       <div
@@ -79,14 +93,35 @@ function StackedToastsDemo() {
           gap: 8,
         }}
       >
-        <StackedTriggerButton />
+        <StackedTriggerButton autoTrigger={autoTrigger} />
       </div>
     </ToastProvider>
   );
 }
 
-function StackedTriggerButton() {
+function StackedTriggerButton({
+  autoTrigger = false,
+}: {
+  autoTrigger?: boolean;
+}) {
   const { addToast } = useToast();
+
+  useEffect(() => {
+    if (autoTrigger) {
+      addToast({
+        variant: 'success',
+        title: 'Export complete',
+        description: 'Your file has been downloaded.',
+        duration: 999999,
+      });
+      addToast({
+        variant: 'info',
+        title: 'Sync finished',
+        description: 'All data is up to date.',
+        duration: 999999,
+      });
+    }
+  }, [autoTrigger, addToast]);
 
   return (
     <button
@@ -131,51 +166,55 @@ const meta: Meta = {
 export default meta;
 type Story = StoryObj;
 
-/** Info toast with blue styling */
+/** Info toast with blue styling (auto-triggered for screenshot) */
 export const InfoToast: Story = {
   render: () => (
     <ToastDemo
       variant="info"
       title="Information"
       description="This is an informational message."
+      autoTrigger
     />
   ),
 };
 
-/** Success toast with green styling */
+/** Success toast with green styling (auto-triggered for screenshot) */
 export const SuccessToast: Story = {
   render: () => (
     <ToastDemo
       variant="success"
       title="Success"
       description="Operation completed successfully."
+      autoTrigger
     />
   ),
 };
 
-/** Error toast with red styling */
+/** Error toast with red styling (auto-triggered for screenshot) */
 export const ErrorToast: Story = {
   render: () => (
     <ToastDemo
       variant="error"
       title="Error"
       description="Something went wrong. Please try again."
+      autoTrigger
     />
   ),
 };
 
-/** Toast with both title and description */
+/** Toast with both title and description (auto-triggered for screenshot) */
 export const WithDescription: Story = {
   render: () => (
     <ToastDemo
       variant="info"
       title="New update available"
       description="Version 2.0 is ready to install. Restart to apply changes."
+      autoTrigger
     />
   ),
 };
 
-/** Two toasts triggered simultaneously to demonstrate stacking */
+/** Two toasts triggered simultaneously to demonstrate stacking (auto-triggered for screenshot) */
 export const StackedToasts: Story = {
-  render: () => <StackedToastsDemo />,
+  render: () => <StackedToastsDemo autoTrigger />,
 };

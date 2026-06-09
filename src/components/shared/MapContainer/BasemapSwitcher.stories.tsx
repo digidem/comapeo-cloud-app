@@ -24,10 +24,17 @@ export const Default: Story = {
   },
 };
 
+/**
+ * Satellite basemap selected with the popover forced open so the selected
+ * item is visible in a static screenshot. Without `defaultOpen`, the popover
+ * is closed by default and both Default / SatelliteSelected render
+ * byte-identical trigger buttons.
+ */
 export const SatelliteSelected: Story = {
   args: {
     value: 'esri-world-imagery',
     basemaps: BASEMAP_CATALOG,
     onChange: noop,
+    defaultOpen: true,
   },
 };
