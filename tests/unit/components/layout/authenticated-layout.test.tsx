@@ -92,6 +92,7 @@ describe('AuthenticatedLayout', () => {
   it('renders AppShell with navigation items', () => {
     render(<AuthenticatedLayout />);
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Alerts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
   });
 
@@ -124,6 +125,7 @@ describe('AuthenticatedLayout', () => {
     await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
     // Drawer should contain nav items
     expect(screen.getAllByText('Home').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Alerts').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
   });
 
