@@ -1,3 +1,254 @@
+import { useReducer, useState } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
+
+import { useNavigate } from '@tanstack/react-router';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
+import { useAuthStore } from '@/stores/auth-store';
+
+// ---------------------------------------------------------------------------
+// i18n
+// ---------------------------------------------------------------------------
+
+const messages = defineMessages({
+  heading: {
+    id: 'login.heading',
+    defaultMessage: 'CoMapeo Cloud',
+  },
+  subtitle: {
+    id: 'login.subtitle',
+    defaultMessage: 'Connect to your remote archive server',
+  },
+  urlLabel: {
+    id: 'login.urlLabel',
+    defaultMessage: 'Server URL',
+  },
+  urlPlaceholder: {
+    id: 'login.urlPlaceholder',
+    defaultMessage: 'https://archive.example.com',
+  },
+  tokenLabel: {
+    id: 'login.tokenLabel',
+    defaultMessage: 'Bearer Token',
+  },
+  tokenPlaceholder: {
+    id: 'login.tokenPlaceholder',
+    defaultMessage: 'Enter bearer token',
+  },
+  connectButton: {
+    id: 'login.connect',
+    defaultMessage: 'Connect',
+  },
+  connectingButton: {
+    id: 'login.connecting',
+    defaultMessage: 'Connecting...',
+  },
+  urlRequired: {
+    id: 'login.urlRequired',
+    defaultMessage: 'Server URL is required',
+  },
+  tokenRequired: {
+    id: 'login.tokenRequired',
+    defaultMessage: 'Bearer Token is required',
+  },
+  invalidUrl: {
+    id: 'login.invalidUrl',
+    defaultMessage: 'Enter a full URL including http:// or https://',
+  },
+  unableToConnect: {
+    id: 'login.unableToConnect',
+    defaultMessage: 'Unable to connect. Check the server URL and try again.',
+  },
+  connectionFailed: {
+    id: 'login.connectionFailed',
+    defaultMessage: 'Connection failed',
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type LoginState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string };
+
+type LoginAction =
+  | { type: 'submit' }
+  | { type: 'success' }
+  | { type: 'error'; message: string }
+  | { type: 'reset' };
+
+// ---------------------------------------------------------------------------
+// Reducer
+// ---------------------------------------------------------------------------
+
+function loginReducer(_state: LoginState, action: LoginAction): LoginState {
+  switch (action.type) {
+    case 'submit':
+      return { status: 'loading' };
+    case 'success':
+      return { status: 'idle' };
+    case 'error':
+      return { status: 'error', message: action.message };
+    case 'reset':
+      return { status: 'idle' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export function LoginScreen() {
-  return <div className="text-text">Login</div>;
+  const intl = useIntl();
+  const navigate = useNavigate();
+  const [state, dispatch] = useReducer(loginReducer, { status: 'idle' });
+
+  const [url, setUrl] = useState('');
+  const [token, setToken] = useState('');
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    const trimmedUrl = url.trim();
+    const trimmedToken = token.trim();
+
+    // Clear previous errors
+    setUrlError(null);
+    setTokenError(null);
+
+    // Validate required fields
+    let hasError = false;
+    if (!trimmedUrl) {
+      setUrlError(intl.formatMessage(messages.urlRequired));
+      hasError = true;
+    }
+    if (!trimmedToken) {
+      setTokenError(intl.formatMessage(messages.tokenRequired));
+      hasError = true;
+    }
+    if (hasError) return;
+
+    // Validate URL format
+    const normalizedUrl = normalizeArchiveBaseUrl(trimmedUrl);
+    if (!normalizedUrl.ok) {
+      setUrlError(intl.formatMessage(messages.invalidUrl));
+      return;
+    }
+
+    dispatch({ type: 'submit' });
+
+    try {
+      // Verify server connectivity by fetching /info with auth
+      const response = await fetch(`${normalizedUrl.value}/info`, {
+        headers: {
+          Authorization: `Bearer ${trimmedToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        let errorMessage = intl.formatMessage(messages.connectionFailed);
+        try {
+          const body = (await response.json()) as {
+            error?: { message?: string };
+          };
+          if (body.error?.message) {
+            errorMessage = body.error.message;
+          }
+        } catch {
+          // keep default error message
+        }
+        dispatch({ type: 'error', message: errorMessage });
+        return;
+      }
+
+      // Server responded successfully — add it to the auth store
+      const hostname = (() => {
+        try {
+          return new URL(normalizedUrl.value).hostname;
+        } catch {
+          return normalizedUrl.value;
+        }
+      })();
+
+      const serverId = await useAuthStore.getState().addServer({
+        label: hostname,
+        baseUrl: normalizedUrl.value,
+        token: trimmedToken,
+      });
+
+      useAuthStore.getState().setActiveServer(serverId);
+
+      dispatch({ type: 'success' });
+
+      // Navigate to home
+      await navigate({ to: '/' });
+    } catch {
+      dispatch({
+        type: 'error',
+        message: intl.formatMessage(messages.unableToConnect),
+      });
+    }
+  }
+
+  const isLoading = state.status === 'loading';
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-surface px-4">
+      <div className="w-full max-w-sm">
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl font-bold text-text">
+            {intl.formatMessage(messages.heading)}
+          </h1>
+          <p className="mt-2 text-sm text-text-muted">
+            {intl.formatMessage(messages.subtitle)}
+          </p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Input
+            label={intl.formatMessage(messages.urlLabel)}
+            type="text"
+            placeholder={intl.formatMessage(messages.urlPlaceholder)}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            error={urlError ?? undefined}
+            disabled={isLoading}
+          />
+          <Input
+            label={intl.formatMessage(messages.tokenLabel)}
+            type="password"
+            placeholder={intl.formatMessage(messages.tokenPlaceholder)}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            error={tokenError ?? undefined}
+            disabled={isLoading}
+          />
+
+          {state.status === 'error' && (
+            <p className="text-sm text-error">{state.message}</p>
+          )}
+
+          <Button
+            type="submit"
+            loading={isLoading}
+            disabled={isLoading}
+            className="w-full"
+          >
+            {isLoading
+              ? intl.formatMessage(messages.connectingButton)
+              : intl.formatMessage(messages.connectButton)}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
 }

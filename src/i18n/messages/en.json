@@ -902,6 +902,45 @@
   "invite.progress.stepVerify": {
     "defaultMessage": "Verifying invite..."
   },
+  "login.connect": {
+    "defaultMessage": "Connect"
+  },
+  "login.connecting": {
+    "defaultMessage": "Connecting..."
+  },
+  "login.connectionFailed": {
+    "defaultMessage": "Connection failed"
+  },
+  "login.heading": {
+    "defaultMessage": "CoMapeo Cloud"
+  },
+  "login.invalidUrl": {
+    "defaultMessage": "Enter a full URL including http:// or https://"
+  },
+  "login.subtitle": {
+    "defaultMessage": "Connect to your remote archive server"
+  },
+  "login.tokenLabel": {
+    "defaultMessage": "Bearer Token"
+  },
+  "login.tokenPlaceholder": {
+    "defaultMessage": "Enter bearer token"
+  },
+  "login.tokenRequired": {
+    "defaultMessage": "Bearer Token is required"
+  },
+  "login.unableToConnect": {
+    "defaultMessage": "Unable to connect. Check the server URL and try again."
+  },
+  "login.urlLabel": {
+    "defaultMessage": "Server URL"
+  },
+  "login.urlPlaceholder": {
+    "defaultMessage": "https://archive.example.com"
+  },
+  "login.urlRequired": {
+    "defaultMessage": "Server URL is required"
+  },
   "map.basemap.label": {
     "defaultMessage": "Basemap"
   },
