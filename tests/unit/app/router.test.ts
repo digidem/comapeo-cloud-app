@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   _authenticatedRoute,
+  alertsRoute,
   dataRoute,
   homeRoute,
   inviteRoute,
@@ -32,6 +33,7 @@ describe('router', () => {
         { path: '/login', route: loginRoute, name: 'Login' },
         { path: '/invite', route: inviteRoute, name: 'Invite' },
         { path: '/data', route: dataRoute, name: 'Data' },
+        { path: '/alerts', route: alertsRoute, name: 'Alerts' },
         { path: '/settings', route: settingsRoute, name: 'Settings' },
       ];
 
@@ -79,6 +81,7 @@ describe('router', () => {
       );
       expect(authPaths).toContain('/');
       expect(authPaths).toContain('data');
+      expect(authPaths).toContain('alerts');
       expect(authPaths).toContain('settings');
 
       // Login stays at root (no shell)

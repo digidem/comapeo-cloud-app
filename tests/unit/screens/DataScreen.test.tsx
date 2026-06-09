@@ -40,19 +40,6 @@ const defaultObservations: ObservationMock[] = [
   },
 ];
 
-const defaultAlerts = [
-  {
-    localId: 'alert-1',
-    projectLocalId: 'proj-1',
-    geometry: { type: 'Point', coordinates: [12.34, 56.78] },
-    metadata: { severity: 'high', alert_type: 'deforestation' },
-    detectionDateStart: '2024-03-14T00:00:00Z',
-    detectionDateEnd: '2024-03-15T00:00:00Z',
-    createdAt: '2024-03-15T08:00:00Z',
-    updatedAt: '2024-03-15T08:00:00Z',
-  },
-];
-
 let mockSelectedProjectId: string | null = null;
 let mockProjectsQuery: {
   data?: typeof defaultProjects;
@@ -64,11 +51,6 @@ let mockObservationsQuery: {
   isPending: boolean;
   isError?: boolean;
 } = { data: defaultObservations, isPending: false };
-let mockAlertsQuery: {
-  data?: typeof defaultAlerts;
-  isPending: boolean;
-  isError?: boolean;
-} = { data: defaultAlerts, isPending: false };
 let mockCategoryMetadata: {
   categories: unknown[];
   categoryByObservationId: Map<
@@ -107,10 +89,6 @@ vi.mock('@/hooks/useObservations', () => ({
   useObservations: vi.fn(() => mockObservationsQuery),
 }));
 
-vi.mock('@/hooks/useAlerts', () => ({
-  useAlerts: vi.fn(() => mockAlertsQuery),
-}));
-
 vi.mock('@/hooks/useObservationCategoryMetadata', () => ({
   useObservationCategoryMetadata: vi.fn(() => mockCategoryMetadata),
 }));
@@ -144,58 +122,6 @@ vi.mock('@/components/shared/ExportObservationsButton', () => ({
   ),
 }));
 
-vi.mock('@/components/ui/tabs', () => {
-  // Mock Tabs to always render all tab content (Radix hides inactive tabs)
-  function TabsMock({
-    children,
-    value,
-  }: {
-    children: React.ReactNode;
-    defaultValue?: string;
-    value?: string;
-    onValueChange?: (value: string) => void;
-  }) {
-    return (
-      <div data-testid="tabs" data-value={value}>
-        {children}
-      </div>
-    );
-  }
-  TabsMock.List = ({
-    children,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => <div>{children}</div>;
-  TabsMock.Trigger = ({
-    children,
-    value,
-    onClick,
-  }: {
-    children: React.ReactNode;
-    value: string;
-    className?: string;
-    onClick?: () => void;
-  }) => (
-    <button data-testid={`tab-trigger-${value}`} onClick={onClick}>
-      {children}
-    </button>
-  );
-  TabsMock.Content = ({
-    children,
-  }: {
-    children: React.ReactNode;
-    value: string;
-    className?: string;
-  }) => <div>{children}</div>;
-  return {
-    Tabs: TabsMock,
-    TabsList: TabsMock.List,
-    TabsTrigger: TabsMock.Trigger,
-    TabsContent: TabsMock.Content,
-  };
-});
-
 vi.mock('@/components/shared/ObservationsMap', () => ({
   ObservationsMap: ({
     categoryByObservationId,
@@ -220,7 +146,6 @@ function resetMocks() {
   mockSelectedProjectId = null;
   mockProjectsQuery = { data: defaultProjects, isPending: false };
   mockObservationsQuery = { data: defaultObservations, isPending: false };
-  mockAlertsQuery = { data: defaultAlerts, isPending: false };
   mockCategoryMetadata = {
     categories: [],
     categoryByObservationId: new Map(),
@@ -526,51 +451,6 @@ describe('DataScreen', () => {
       });
     });
 
-    // ---- Alerts tab ----
-
-    it('renders alerts loading state when alertsQuery is pending', () => {
-      mockAlertsQuery = { data: undefined, isPending: true };
-      mockObservationsQuery = { data: [], isPending: false };
-
-      render(<DataScreen />);
-      // Both tabs render content with mocked Tabs; observations is empty, alerts is loading
-      const loadingTexts = screen.getAllByText('Loading...');
-      expect(loadingTexts.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('renders alerts error state before empty state', () => {
-      mockAlertsQuery = { data: [], isPending: false, isError: true };
-      mockObservationsQuery = { data: [], isPending: false };
-
-      render(<DataScreen />);
-      expect(
-        screen.getByText('Failed to load alerts. Please try again.'),
-      ).toBeInTheDocument();
-      expect(screen.queryByText('No alerts yet')).not.toBeInTheDocument();
-    });
-
-    it('renders "No alerts yet" when alerts array is empty', () => {
-      mockAlertsQuery = { data: [], isPending: false };
-      mockObservationsQuery = { data: [], isPending: false };
-
-      render(<DataScreen />);
-      expect(screen.getByText('No alerts yet')).toBeInTheDocument();
-    });
-
-    it('renders alert cards when alerts exist', () => {
-      mockAlertsQuery = { data: defaultAlerts, isPending: false };
-      mockObservationsQuery = { data: [], isPending: false };
-
-      render(<DataScreen />);
-      // The alert card renders the alert_type badge
-      expect(screen.getByText('deforestation')).toBeInTheDocument();
-    });
-
-    it('renders the Add Alert link', () => {
-      render(<DataScreen />);
-      expect(screen.getByText('Add Alert')).toBeInTheDocument();
-    });
-
     it('renders Data title', () => {
       render(<DataScreen />);
       expect(screen.getByText('Data')).toBeInTheDocument();
@@ -579,7 +459,7 @@ describe('DataScreen', () => {
     // ---- Export button ----
 
     describe('Export button', () => {
-      it('renders Export button on observations tab when observations exist', () => {
+      it('renders Export button when observations exist', () => {
         mockObservationsQuery = { data: defaultObservations, isPending: false };
 
         render(<DataScreen />);

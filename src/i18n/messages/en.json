@@ -59,6 +59,12 @@
   "alertDetail.tryAgain": {
     "defaultMessage": "Please try again later."
   },
+  "alerts.addAlert": {
+    "defaultMessage": "Add Alert"
+  },
+  "alerts.alertsError": {
+    "defaultMessage": "Failed to load alerts. Please try again."
+  },
   "alerts.create.cancel": {
     "defaultMessage": "Cancel"
   },
@@ -94,6 +100,24 @@
   },
   "alerts.create.title": {
     "defaultMessage": "Create Alert"
+  },
+  "alerts.loading": {
+    "defaultMessage": "Loading..."
+  },
+  "alerts.noAlerts": {
+    "defaultMessage": "No alerts yet"
+  },
+  "alerts.noProject": {
+    "defaultMessage": "Select a project from Home to view alerts"
+  },
+  "alerts.noProjectLink": {
+    "defaultMessage": "Go to Home"
+  },
+  "alerts.title": {
+    "defaultMessage": "Alerts"
+  },
+  "alerts.untitledProject": {
+    "defaultMessage": "Untitled Project"
   },
   "app.title": {
     "defaultMessage": "CoMapeo Cloud"
@@ -157,12 +181,6 @@
   },
   "dashboard.banner.territoryArea": {
     "defaultMessage": "Territory Area"
-  },
-  "data.addAlert": {
-    "defaultMessage": "Add Alert"
-  },
-  "data.alertsError": {
-    "defaultMessage": "Failed to load alerts. Please try again."
   },
   "data.export.button": {
     "defaultMessage": "Export"
@@ -254,9 +272,6 @@
   "data.loading": {
     "defaultMessage": "Loading..."
   },
-  "data.noAlerts": {
-    "defaultMessage": "No alerts yet"
-  },
   "data.noObservations": {
     "defaultMessage": "No observations yet"
   },
@@ -277,12 +292,6 @@
   },
   "data.switchToMapView": {
     "defaultMessage": "Switch to map view"
-  },
-  "data.tabs.alerts": {
-    "defaultMessage": "Alerts"
-  },
-  "data.tabs.observations": {
-    "defaultMessage": "Observations"
   },
   "data.title": {
     "defaultMessage": "Data"
