@@ -23,12 +23,12 @@ export const WithObservation: Story = {
       return <Story />;
     },
   ],
-  play: async () => {
+  play: async ({ canvasElement }) => {
     // The component loads data via useObservations() which requires MSW.
     // In Storybook without MSW, it renders the loading skeleton state.
     // We verify the component mounted by checking for skeleton placeholders.
     // Skeleton components render div elements with animate-pulse class
-    const skeletonElements = document.body.querySelectorAll('.animate-pulse');
+    const skeletonElements = canvasElement.querySelectorAll('.animate-pulse');
     await expect(skeletonElements.length).toBeGreaterThan(0);
   },
 };
