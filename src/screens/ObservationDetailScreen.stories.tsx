@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { expect, within } from 'storybook/test';
+import { expect } from 'storybook/test';
 
 import { useProjectStore } from '@/stores/project-store';
 
@@ -27,9 +27,8 @@ export const WithObservation: Story = {
     // The component loads data via useObservations() which requires MSW.
     // In Storybook without MSW, it renders the loading skeleton state.
     // We verify the component mounted by checking for skeleton placeholders.
-    const { container } = within(document.body);
     // Skeleton components render div elements with animate-pulse class
-    const skeletonElements = container.querySelectorAll('.animate-pulse');
+    const skeletonElements = document.body.querySelectorAll('.animate-pulse');
     await expect(skeletonElements.length).toBeGreaterThan(0);
   },
 };
