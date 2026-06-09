@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { userEvent, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 
 import { SettingsScreen } from './SettingsScreen';
 
@@ -58,7 +58,7 @@ export const WithInviteResults: Story = {
     );
     await userEvent.click(submitButton);
 
-    // Wait for the results to appear
+    // Wait for the API call to resolve (will show error without MSW mock)
     await new Promise((r) => setTimeout(r, 500));
   },
 };
@@ -80,15 +80,13 @@ export const InviteFormError: Story = {
 /** Scrolled to Backup & Restore section */
 export const ScrolledToBackup: Story = {
   play: async () => {
-    // Wait for render
-    await new Promise((r) => setTimeout(r, 300));
-    const headings = document.body.querySelectorAll('h2');
-    for (const h of headings) {
-      if (h.textContent?.includes('Backup')) {
-        h.scrollIntoView({ behavior: 'instant', block: 'start' });
-        break;
-      }
-    }
+    const canvas = within(document.body);
+    const backupHeading = await canvas.findByRole('heading', {
+      name: /backup/i,
+      level: 2,
+    });
+    backupHeading.scrollIntoView({ behavior: 'instant', block: 'start' });
+    await expect(backupHeading).toBeVisible();
   },
 };
 
