@@ -7,6 +7,13 @@ import { AudioPlayer } from '@/components/shared/audio-player';
  * Loading and error states cannot be demonstrated without modifying the mock
  * per-story. If needed in the future, the mock could be enhanced to read from
  * a module-level variable or Zustand-like store.
+ *
+ * NOTE: All four format variants (Default, MpegFormat, WavFormat, M4aFormat)
+ * render byte-identical screenshots because the `name` prop only affects the
+ * MIME type passed to the mocked `getAttachmentUrl`. The mock always returns
+ * the same blob URL, so the player visually renders identically regardless of
+ * file format. This is intentional — the stories verify the component accepts
+ * different file types without error, not that it looks different.
  */
 const meta: Meta<typeof AudioPlayer> = {
   title: 'Components/AudioPlayer',
