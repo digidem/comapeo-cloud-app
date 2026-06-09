@@ -4,7 +4,12 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
-import { ApiError, InviteApiError, redeemEncryptedInvite, apiClient } from '@/lib/api-client';
+import {
+  ApiError,
+  InviteApiError,
+  apiClient,
+  redeemEncryptedInvite,
+} from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { parseInviteUrl, warnLegacyInviteUrlOnce } from '@/lib/invite-url';
 import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
@@ -176,7 +181,9 @@ function checkDuplicate(normalizedUrl: string): boolean {
 async function validateConnection(
   baseUrl: string,
   token: string,
-): Promise<{ valid: true } | { valid: false; messageKey: keyof typeof messages }> {
+): Promise<
+  { valid: true } | { valid: false; messageKey: keyof typeof messages }
+> {
   const config = { baseUrl, token };
 
   // First check server reachability (no auth required)
