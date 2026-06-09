@@ -1,6 +1,10 @@
-import { useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { useQueryClient } from '@tanstack/react-query';
+
+import { ConnectionProgress } from '@/components/shared/ConnectionProgress';
+import type { ConnectionStep } from '@/components/shared/ConnectionProgress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
@@ -11,6 +15,7 @@ import {
   redeemEncryptedInvite,
 } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
+import { syncRemoteArchive } from '@/lib/data-layer';
 import { parseInviteUrl, warnLegacyInviteUrlOnce } from '@/lib/invite-url';
 import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
 
@@ -30,6 +35,26 @@ type DialogAction =
   | { type: 'success' }
   | { type: 'error'; message: string }
   | { type: 'reset' };
+
+interface ConnectionProgressState {
+  isActive: boolean;
+  serverId: string;
+  baseUrl: string;
+  token: string;
+  steps: ConnectionStep[];
+  isComplete: boolean;
+  errorMessage: string | null;
+}
+
+const INITIAL_CP_STATE: ConnectionProgressState = {
+  isActive: false,
+  serverId: '',
+  baseUrl: '',
+  token: '',
+  steps: [],
+  isComplete: false,
+  errorMessage: null,
+};
 
 const messages = defineMessages({
   title: {
@@ -132,6 +157,26 @@ const messages = defineMessages({
   invalidToken: {
     id: 'home.archive.dialog.invalidToken',
     defaultMessage: 'Invalid token or unauthorized',
+  },
+  connectionProgressHeading: {
+    id: 'home.archive.dialog.connectionProgress.heading',
+    defaultMessage: 'Connecting to archive...',
+  },
+  connectionProgressStepVerify: {
+    id: 'home.archive.dialog.connectionProgress.stepVerify',
+    defaultMessage: 'Verifying invite...',
+  },
+  connectionProgressStepConnect: {
+    id: 'home.archive.dialog.connectionProgress.stepConnect',
+    defaultMessage: 'Connecting to server...',
+  },
+  connectionProgressStepSync: {
+    id: 'home.archive.dialog.connectionProgress.stepSync',
+    defaultMessage: 'Syncing data...',
+  },
+  connectionProgressStepPrepare: {
+    id: 'home.archive.dialog.connectionProgress.stepPrepare',
+    defaultMessage: 'Preparing dashboard...',
   },
 });
 
@@ -243,6 +288,31 @@ async function validateConnection(
   }
 }
 
+function buildConnectionProgressSteps(intl: ReturnType<typeof useIntl>) {
+  return [
+    {
+      id: 'verify',
+      label: intl.formatMessage(messages.connectionProgressStepVerify),
+      status: 'completed' as const,
+    },
+    {
+      id: 'connect',
+      label: intl.formatMessage(messages.connectionProgressStepConnect),
+      status: 'pending' as const,
+    },
+    {
+      id: 'sync',
+      label: intl.formatMessage(messages.connectionProgressStepSync),
+      status: 'pending' as const,
+    },
+    {
+      id: 'prepare',
+      label: intl.formatMessage(messages.connectionProgressStepPrepare),
+      status: 'pending' as const,
+    },
+  ];
+}
+
 function AddArchiveServerDialog({
   isOpen,
   onClose,
@@ -251,6 +321,10 @@ function AddArchiveServerDialog({
   const intl = useIntl();
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Connection progress state
+  const [cpState, setCpState] =
+    useState<ConnectionProgressState>(INITIAL_CP_STATE);
 
   // Refs for advanced mode fields
   const labelRef = useRef<HTMLInputElement>(null);
@@ -263,6 +337,107 @@ function AddArchiveServerDialog({
   const [urlError, setUrlError] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [inviteUrlError, setInviteUrlError] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
+
+  // Drive the connection progress steps
+  useEffect(() => {
+    if (!cpState.isActive || cpState.isComplete) return;
+
+    let cancelled = false;
+
+    async function runConnection() {
+      const steps = [...cpState.steps];
+
+      // Step 1: Connecting to server (index 1)
+      steps[1] = { ...steps[1]!, status: 'active' };
+      setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+      const result = await syncRemoteArchive(cpState.serverId, {
+        baseUrl: cpState.baseUrl,
+        token: cpState.token,
+      });
+      if (cancelled) return;
+
+      if (!result.success) {
+        steps[1] = { ...steps[1]!, status: 'error' };
+        setCpState((prev) => ({
+          ...prev,
+          steps: [...steps],
+          errorMessage: result.error ?? 'Sync failed',
+        }));
+        return;
+      }
+
+      // Step 1: Connecting complete
+      steps[1] = { ...steps[1]!, status: 'completed' };
+      setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+      // Step 2: Syncing data (index 2)
+      steps[2] = { ...steps[2]!, status: 'active' };
+      setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['projects'] }),
+        queryClient.invalidateQueries({ queryKey: ['observations'] }),
+        queryClient.invalidateQueries({ queryKey: ['alerts'] }),
+      ]);
+      if (cancelled) return;
+
+      steps[2] = { ...steps[2]!, status: 'completed' };
+      setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+      // Step 3: Preparing dashboard (index 3)
+      steps[3] = { ...steps[3]!, status: 'active' };
+      setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+      // Brief pause for the "Preparing" step to be visible
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (cancelled) return;
+
+      steps[3] = { ...steps[3]!, status: 'completed' };
+      setCpState((prev) => ({
+        ...prev,
+        steps: [...steps],
+        isComplete: true,
+      }));
+    }
+
+    void runConnection();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cpState.isActive, cpState.isComplete]);
+
+  // After connection progress completes, call onAdded
+  useEffect(() => {
+    if (!cpState.isActive || !cpState.isComplete) return;
+
+    const timer = setTimeout(() => {
+      onAdded(cpState.serverId);
+    }, 1500);
+
+    return () => {
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cpState.isActive, cpState.isComplete]);
+
+  const startConnectionProgress = useCallback(
+    (serverId: string, baseUrl: string, token: string) => {
+      setCpState({
+        isActive: true,
+        serverId,
+        baseUrl,
+        token,
+        steps: buildConnectionProgressSteps(intl),
+        isComplete: false,
+        errorMessage: null,
+      });
+    },
+    [intl],
+  );
 
   async function finalizeAddServer(baseUrl: string, token: string) {
     const normalizedUrl = normalizeArchiveBaseUrl(baseUrl);
@@ -309,8 +484,9 @@ function AddArchiveServerDialog({
       token,
     }).then(
       (serverId) => {
+        // Instead of immediately calling onAdded, start connection progress
         dispatch({ type: 'success' });
-        onAdded(serverId);
+        startConnectionProgress(serverId, normalizedUrl.value, token);
       },
       (err: unknown) => {
         if (err instanceof DuplicateServerError) {
@@ -462,8 +638,9 @@ function AddArchiveServerDialog({
       token,
     }).then(
       (serverId) => {
+        // Instead of immediately calling onAdded, start connection progress
         dispatch({ type: 'success' });
-        onAdded(serverId);
+        startConnectionProgress(serverId, normalizedUrl.value, token);
       },
       (err: unknown) => {
         if (err instanceof DuplicateServerError) {
@@ -498,6 +675,58 @@ function AddArchiveServerDialog({
     setShowAdvanced(false);
     dispatch({ type: 'reset' });
     onClose();
+  }
+
+  // When connection progress is active, show it inside the dialog
+  if (cpState.isActive) {
+    return (
+      <Modal
+        open={isOpen}
+        onOpenChange={() => {
+          // Prevent closing during connection progress
+        }}
+        title={intl.formatMessage(messages.title)}
+      >
+        <div className="flex flex-col items-center gap-6 py-6">
+          <ConnectionProgress
+            steps={cpState.steps}
+            heading={intl.formatMessage(messages.connectionProgressHeading)}
+            isComplete={cpState.isComplete}
+          />
+          {cpState.errorMessage && (
+            <div className="mt-2 flex flex-col items-center gap-3">
+              <p className="text-sm text-red-600" role="alert">
+                {cpState.errorMessage}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleClose}
+                >
+                  {intl.formatMessage(messages.cancel)}
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    startConnectionProgress(
+                      cpState.serverId,
+                      cpState.baseUrl,
+                      cpState.token,
+                    );
+                  }}
+                >
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+    );
   }
 
   return (
