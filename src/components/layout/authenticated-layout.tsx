@@ -22,6 +22,7 @@ import { useProjectStore } from '@/stores/project-store';
 const messages = defineMessages({
   home: { id: 'home.title', defaultMessage: 'Home' },
   data: { id: 'data.title', defaultMessage: 'Data' },
+  alerts: { id: 'alerts.title', defaultMessage: 'Alerts' },
   settings: { id: 'settings.title', defaultMessage: 'Settings' },
   appTitle: { id: 'app.title', defaultMessage: 'CoMapeo Cloud' },
 });
@@ -51,7 +52,22 @@ function DataIcon(): ReactNode {
       fill="currentColor"
       aria-hidden="true"
     >
-      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+      <path d="M10 1C6.686 1 4 3.686 4 7c0 5 6 11 6 11s6-6 6-11c0-3.314-2.686-6-6-6zm0 9a3 3 0 110-6 3 3 0 010 6z" />
+    </svg>
+  );
+}
+
+function AlertsIcon(): ReactNode {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={20}
+      height={20}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M10 2a1 1 0 011 1v1.07A7.001 7.001 0 0117 11v3l1 1v1H2v-1l1-1v-3a7.001 7.001 0 016-6.93V3a1 1 0 011-1zm0 16a2 2 0 01-2-2h4a2 2 0 01-2 2z" />
     </svg>
   );
 }
@@ -166,6 +182,11 @@ function AuthenticatedLayoutInner() {
       path: '/data',
       label: intl.formatMessage(messages.data),
       icon: <DataIcon />,
+    },
+    {
+      path: '/alerts',
+      label: intl.formatMessage(messages.alerts),
+      icon: <AlertsIcon />,
     },
     {
       path: '/settings',
