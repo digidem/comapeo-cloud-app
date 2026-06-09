@@ -15,5 +15,5 @@ type Story = StoryObj<typeof InviteScreen>;
 
 export const Loading: Story = {};
 
-/** Connected state — InviteScreen manages its own state via useEffect. */
+/** Connected state — the invite screen manages its own state via useEffect. */
 export const Connected: Story = {};

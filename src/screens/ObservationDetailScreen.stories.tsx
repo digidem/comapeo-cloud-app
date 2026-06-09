@@ -15,13 +15,6 @@ const meta: Meta<typeof ObservationDetailScreen> = {
 export default meta;
 type Story = StoryObj<typeof ObservationDetailScreen>;
 
-/**
- * Story showing an observation with project context.
- *
- * TODO: Re-enable play() tests when Storybook vitest-browser rendering
- * issue is resolved (stories with play() hang in sb-preparing-story state).
- * @see https://github.com/storybookjs/storybook/issues/18663
- */
 export const WithObservation: Story = {
   decorators: [
     (Story) => {

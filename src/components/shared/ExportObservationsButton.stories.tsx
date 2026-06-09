@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
+import { userEvent, within } from 'storybook/test';
 
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { ToastProvider } from '@/components/ui/toast';
@@ -54,3 +55,20 @@ type Story = StoryObj<typeof ExportObservationsButton>;
 
 /** Default state — Export button visible, dropdown closed */
 export const Default: Story = {};
+
+/** Bottom sheet open showing CSV and GeoJSON export options */
+export const Open: Story = {
+  play: async () => {
+    const canvas = within(document.body);
+
+    const exportButton = await canvas.findByRole(
+      'button',
+      { name: 'Export' },
+      { timeout: 5_000 },
+    );
+    await userEvent.click(exportButton);
+
+    // Wait for the Radix Dialog animation to complete
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  },
+};
