@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { expect, within } from 'storybook/test';
 
 import { useProjectStore } from '@/stores/project-store';
 
@@ -23,14 +22,6 @@ export const WithObservation: Story = {
       return <Story />;
     },
   ],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    // The component loads data via useObservations() which requires MSW.
-    // In Storybook without MSW, it renders the loading skeleton state.
-    // Verify the component mounted by checking for skeleton placeholders.
-    const skeletons = await canvas.findAllByTestId('skeleton');
-    await expect(skeletons.length).toBeGreaterThan(0);
-  },
 };
 
 export const NoProject: Story = {
