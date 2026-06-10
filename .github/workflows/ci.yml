@@ -539,6 +539,7 @@ jobs:
           command: pages deploy dist/ --project-name=comapeo-cloud-app --branch=${{ github.head_ref }}
 
       - name: Comment preview URL on PR
+        continue-on-error: true
         uses: actions/github-script@v9
         env:
           PREVIEW_ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
