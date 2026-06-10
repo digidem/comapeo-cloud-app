@@ -336,7 +336,7 @@ describe('syncRemoteArchive', () => {
     expect(result.error).toContain('not found');
   });
 
-  it('rejects concurrent sync for the same server', async () => {
+  it('waits for existing sync when concurrent call is made for the same server', async () => {
     const serverRecord = await seedServer();
     useAuthStore.setState({
       servers: [],
@@ -377,21 +377,21 @@ describe('syncRemoteArchive', () => {
       token: archiveToken,
     });
 
-    // Start second sync while first is still in-flight
+    // Start second sync while first is still in-flight.
+    // It should return the same result as the first (wait, not reject).
     const second = syncRemoteArchive(serverRecord.id, {
       baseUrl: archiveUrl,
       token: archiveToken,
     });
 
-    // Second should fail immediately
-    const secondResult = await second;
-    expect(secondResult.success).toBe(false);
-    expect(secondResult.error).toContain('already in progress');
-
     // Release the first sync
     resolveProjects!();
     const firstResult = await first;
     expect(firstResult.success).toBe(true);
+
+    // Second should also succeed (it waited for the first)
+    const secondResult = await second;
+    expect(secondResult.success).toBe(true);
   });
 
   it('uses baseUrl as fallback label when serverLabel is not provided', async () => {

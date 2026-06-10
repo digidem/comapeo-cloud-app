@@ -4,7 +4,12 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
-import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
+import {
+  ApiError,
+  InviteApiError,
+  apiClient,
+  redeemEncryptedInvite,
+} from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { parseInviteUrl, warnLegacyInviteUrlOnce } from '@/lib/invite-url';
 import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
@@ -120,6 +125,14 @@ const messages = defineMessages({
     id: 'home.archive.dialog.advancedDescription',
     defaultMessage: 'Enter server details manually',
   },
+  connectionFailed: {
+    id: 'home.archive.dialog.connectionFailed',
+    defaultMessage: 'Could not connect to server',
+  },
+  invalidToken: {
+    id: 'home.archive.dialog.invalidToken',
+    defaultMessage: 'Invalid token or unauthorized',
+  },
 });
 
 function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
@@ -161,6 +174,37 @@ function checkDuplicate(normalizedUrl: string): boolean {
   });
 }
 
+/**
+ * Validates that the server is reachable and the token is valid before adding.
+ * Returns an error message key (i18n) or null if validation passes.
+ */
+async function validateConnection(
+  baseUrl: string,
+  token: string,
+): Promise<
+  { valid: true } | { valid: false; messageKey: keyof typeof messages }
+> {
+  const config = { baseUrl, token };
+
+  // First check server reachability (no auth required)
+  const healthy = await apiClient.healthCheck(config);
+  if (!healthy) {
+    return { valid: false, messageKey: 'connectionFailed' };
+  }
+
+  // Then check token validity by trying to fetch projects
+  try {
+    await apiClient.getProjects(config);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      return { valid: false, messageKey: 'invalidToken' };
+    }
+    // Other errors (e.g. 500) — server is reachable, let the sync handle it
+  }
+
+  return { valid: true };
+}
+
 function AddArchiveServerDialog({
   isOpen,
   onClose,
@@ -182,7 +226,7 @@ function AddArchiveServerDialog({
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [inviteUrlError, setInviteUrlError] = useState<string | null>(null);
 
-  function finalizeAddServer(baseUrl: string, token: string) {
+  async function finalizeAddServer(baseUrl: string, token: string) {
     const normalizedUrl = normalizeArchiveBaseUrl(baseUrl);
     if (!normalizedUrl.ok) {
       const urlMessage = getUrlValidationMessage(normalizedUrl.code);
@@ -198,6 +242,16 @@ function AddArchiveServerDialog({
       dispatch({
         type: 'error',
         message: intl.formatMessage(messages.duplicateServer),
+      });
+      return;
+    }
+
+    // Validate server is reachable and token is valid
+    const validation = await validateConnection(normalizedUrl.value, token);
+    if (!validation.valid) {
+      dispatch({
+        type: 'error',
+        message: intl.formatMessage(messages[validation.messageKey]),
       });
       return;
     }
@@ -237,7 +291,7 @@ function AddArchiveServerDialog({
     );
   }
 
-  function handleInviteSubmit() {
+  async function handleInviteSubmit() {
     const inviteUrl = inviteUrlRef.current?.value?.trim() ?? '';
 
     setInviteUrlError(null);
@@ -276,15 +330,15 @@ function AddArchiveServerDialog({
       }
 
       dispatch({ type: 'submit' });
-      finalizeAddServer(parsed.baseUrl, parsed.token);
+      await finalizeAddServer(parsed.baseUrl, parsed.token);
       return;
     }
 
     // Encrypted: redeem the code first, then proceed with the same flow.
     dispatch({ type: 'submit' });
     redeemEncryptedInvite(parsed.code).then(
-      (redeemed) => {
-        finalizeAddServer(redeemed.baseUrl, redeemed.token);
+      async (redeemed) => {
+        await finalizeAddServer(redeemed.baseUrl, redeemed.token);
       },
       (err: unknown) => {
         if (err instanceof InviteApiError && err.code === 'INVITE_EXPIRED') {
@@ -307,7 +361,7 @@ function AddArchiveServerDialog({
     );
   }
 
-  function handleAdvancedSubmit() {
+  async function handleAdvancedSubmit() {
     const url = urlRef.current?.value?.trim() ?? '';
     const token = tokenRef.current?.value?.trim() ?? '';
     const label = labelRef.current?.value?.trim() ?? '';
@@ -345,6 +399,16 @@ function AddArchiveServerDialog({
     }
 
     dispatch({ type: 'submit' });
+
+    // Validate server is reachable and token is valid
+    const validation = await validateConnection(normalizedUrl.value, token);
+    if (!validation.valid) {
+      dispatch({
+        type: 'error',
+        message: intl.formatMessage(messages[validation.messageKey]),
+      });
+      return;
+    }
 
     const addServer = useAuthStore.getState().addServer;
     addServer({
