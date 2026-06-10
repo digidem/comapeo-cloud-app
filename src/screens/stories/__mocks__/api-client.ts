@@ -1,6 +1,18 @@
 /**
  * Mock for API client functions used by screens.
  */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 export class InviteApiError extends Error {
   code: string;
   constructor(message: string, code: string) {
@@ -8,6 +20,15 @@ export class InviteApiError extends Error {
     this.code = code;
   }
 }
+
+export const apiClient = {
+  async healthCheck(_config?: unknown): Promise<boolean> {
+    return true;
+  },
+  async getProjects(_config?: unknown) {
+    return { data: [] };
+  },
+} as const;
 
 export async function createEncryptedInvite(
   _url: string,
