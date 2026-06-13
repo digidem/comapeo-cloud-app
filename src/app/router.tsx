@@ -7,6 +7,7 @@ import {
 
 import { AuthenticatedLayout } from '@/components/layout/authenticated-layout';
 import { AlertDetailScreen } from '@/screens/AlertDetailScreen';
+import { AlertsScreen } from '@/screens/AlertsScreen';
 import { CreateAlertScreen } from '@/screens/CreateAlertScreen';
 import { DataScreen } from '@/screens/DataScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
@@ -73,6 +74,12 @@ const alertDetailRoute = createRoute({
   component: AlertDetailScreen,
 });
 
+const alertsRoute = createRoute({
+  getParentRoute: () => _authenticatedRoute,
+  path: '/alerts',
+  component: AlertsScreen,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => _authenticatedRoute,
   path: '/settings',
@@ -92,6 +99,7 @@ const routeTree = rootRoute.addChildren([
   _authenticatedRoute.addChildren([
     homeRoute,
     dataRoute,
+    alertsRoute,
     observationDetailRoute,
     createAlertRoute,
     alertDetailRoute,
@@ -114,6 +122,7 @@ export {
   loginRoute,
   inviteRoute,
   dataRoute,
+  alertsRoute,
   observationDetailRoute,
   createAlertRoute,
   alertDetailRoute,
