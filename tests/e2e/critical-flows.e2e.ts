@@ -121,9 +121,9 @@ test.describe('Critical User Flows', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Flow 1: Home → Data → Observations tab
+  // Flow 1: Home → Data → Observations list
   // -------------------------------------------------------------------------
-  test('user can navigate from home to data observations tab', async ({
+  test('user can navigate from home to data observations list', async ({
     page,
   }) => {
     await seedProjectWithObservations(page, 'Test Project');
@@ -134,11 +134,6 @@ test.describe('Critical User Flows', () => {
     // Data heading visible
     await expect(
       page.getByRole('heading', { level: 1, name: 'Data' }),
-    ).toBeVisible();
-
-    // Observations tab is visible
-    await expect(
-      page.getByRole('tab', { name: /observations/i }),
     ).toBeVisible();
 
     // At least one observation card link visible
@@ -214,19 +209,16 @@ test.describe('Critical User Flows', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Flow 3: Data → Alerts tab → Add Alert
+  // Flow 3: Alerts → Add Alert
   // -------------------------------------------------------------------------
   test('user can navigate to create alert form', async ({ page }) => {
     await seedProjectWithObservations(page, 'Test Project');
 
-    // Navigate to /data via the nav link
-    await page.getByRole('link', { name: 'Data' }).click();
+    // Navigate to /alerts via the nav link
+    await page.getByRole('link', { name: 'Alerts' }).click();
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Data' }),
+      page.getByRole('heading', { level: 1, name: 'Alerts' }),
     ).toBeVisible();
-
-    // Click the Alerts tab
-    await page.getByRole('tab', { name: /alerts/i }).click();
 
     // "No alerts yet" is visible
     await expect(page.getByText(/no alerts yet/i)).toBeVisible();
