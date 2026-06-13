@@ -29,7 +29,7 @@ interface ArchiveCredentials {
 const blobCache = createImageBlobCache();
 
 /** @internal Reset the in-memory blob cache between tests */
-export function __resetImageBlobCache(): void {
+export function resetImageBlobCacheForTests(): void {
   blobCache.clear();
 }
 
