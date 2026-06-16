@@ -119,6 +119,46 @@ describe('LoginScreen', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows "already added" message when reconnecting to a known server', async () => {
+    loginServer.use(
+      http.get('https://good.example.com/info', () => {
+        return HttpResponse.json({
+          data: { deviceId: 'test-device', name: 'Test Server' },
+        });
+      }),
+    );
+
+    // Seed the store with the same server so addServer throws DuplicateServerError
+    const existingId = await useAuthStore.getState().addServer({
+      label: 'good.example.com',
+      baseUrl: 'https://good.example.com',
+      token: 'old-token',
+      allowDuplicate: true,
+    });
+    expect(useAuthStore.getState().servers.length).toBe(1);
+
+    const user = userEvent.setup();
+    render(<LoginScreen />);
+
+    await user.type(
+      screen.getByLabelText(/server url/i),
+      'https://good.example.com',
+    );
+    await user.type(screen.getByLabelText(/bearer token/i), 'valid-token');
+    await user.click(screen.getByRole('button', { name: /connect/i }));
+
+    // Should surface the accurate "already added" message, NOT the misleading
+    // "unable to connect" error.
+    expect(
+      await screen.findByText(/this server has already been added/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/unable to connect/i)).not.toBeInTheDocument();
+
+    // The pre-existing server is untouched (no duplicate added).
+    expect(useAuthStore.getState().servers.length).toBe(1);
+    expect(useAuthStore.getState().servers[0]!.id).toBe(existingId);
+  });
+
   it('adds server to auth store on successful connection', async () => {
     loginServer.use(
       http.get('https://good.example.com/info', () => {
@@ -147,10 +187,12 @@ describe('LoginScreen', () => {
   });
 
   it('shows loading state while connecting', async () => {
-    // Create a delayed response
+    // Create a delayed response — a short delay is enough to observe the
+    // loading state before the response resolves. Avoids 2s of wall-clock
+    // wait per run (and the associated act()/open-handle warnings).
     loginServer.use(
       http.get('https://slow.example.com/info', async () => {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         return HttpResponse.json({
           data: { deviceId: 'test-device', name: 'Test Server' },
         });

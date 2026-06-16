@@ -917,6 +917,9 @@
   "login.invalidUrl": {
     "defaultMessage": "Enter a full URL including http:// or https://"
   },
+  "login.serverAlreadyAdded": {
+    "defaultMessage": "This server has already been added."
+  },
   "login.subtitle": {
     "defaultMessage": "Connect to your remote archive server"
   },

@@ -6,7 +6,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
-import { useAuthStore } from '@/stores/auth-store';
+import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
 // i18n
@@ -60,6 +60,10 @@ const messages = defineMessages({
   unableToConnect: {
     id: 'login.unableToConnect',
     defaultMessage: 'Unable to connect. Check the server URL and try again.',
+  },
+  serverAlreadyAdded: {
+    id: 'login.serverAlreadyAdded',
+    defaultMessage: 'This server has already been added.',
   },
   connectionFailed: {
     id: 'login.connectionFailed',
@@ -177,11 +181,25 @@ export function LoginScreen() {
         }
       })();
 
-      const serverId = await useAuthStore.getState().addServer({
-        label: hostname,
-        baseUrl: normalizedUrl.value,
-        token: trimmedToken,
-      });
+      let serverId: string;
+      try {
+        serverId = await useAuthStore.getState().addServer({
+          label: hostname,
+          baseUrl: normalizedUrl.value,
+          token: trimmedToken,
+        });
+      } catch (err) {
+        // The server was reachable, but it's already in the store. Surface an
+        // accurate message instead of the generic "unable to connect" error.
+        if (err instanceof DuplicateServerError) {
+          dispatch({
+            type: 'error',
+            message: intl.formatMessage(messages.serverAlreadyAdded),
+          });
+          return;
+        }
+        throw err;
+      }
 
       useAuthStore.getState().setActiveServer(serverId);
 
