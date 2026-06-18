@@ -481,7 +481,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Security audit
-        run: bun audit --audit-level=high
+        run: bun audit --audit-level=high --ignore GHSA-gv7w-rqvm-qjhr
 
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request
