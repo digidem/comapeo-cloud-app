@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { ToastProvider, useToast } from '@/components/ui/toast';
 
@@ -51,9 +51,11 @@ function TriggerButton({
   autoTrigger?: boolean;
 }) {
   const { addToast } = useToast();
+  const fired = useRef(false);
 
   useEffect(() => {
-    if (autoTrigger) {
+    if (autoTrigger && !fired.current) {
+      fired.current = true;
       addToast({ variant, title, description, duration: 999999 });
     }
   }, [autoTrigger, addToast, variant, title, description]);
@@ -105,9 +107,11 @@ function StackedTriggerButton({
   autoTrigger?: boolean;
 }) {
   const { addToast } = useToast();
+  const fired = useRef(false);
 
   useEffect(() => {
-    if (autoTrigger) {
+    if (autoTrigger && !fired.current) {
+      fired.current = true;
       addToast({
         variant: 'success',
         title: 'Export complete',
