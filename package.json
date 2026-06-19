@@ -58,6 +58,11 @@
     "pipeline:desktop-review": "npm run storybook:screenshots:desktop && npm run review:desktop:storybook",
     "pipeline:review": "npm run storybook:screenshots && npm run review:all"
   },
+  "overrides": {
+    "form-data": "^4.0.6",
+    "ws": "^8.21.0",
+    "undici": "^7.28.0"
+  },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
     "@radix-ui/react-alert-dialog": "^1.1.15",
