@@ -64,6 +64,10 @@ const messages = defineMessages({
     id: 'data.title',
     defaultMessage: 'Data',
   },
+  alertsLabel: {
+    id: 'alerts.title',
+    defaultMessage: 'Alerts',
+  },
   untitledProject: {
     id: 'data.untitledProject',
     defaultMessage: 'Untitled Project',
@@ -210,7 +214,7 @@ export function AlertDetailScreen() {
       {/* Back navigation */}
       <div className="flex items-center gap-3">
         <Link
-          to="/data"
+          to="/alerts"
           className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-text transition-colors min-h-[44px]"
         >
           <svg
@@ -226,7 +230,7 @@ export function AlertDetailScreen() {
           >
             <path d="m15 18-6-6 6-6" />
           </svg>
-          {intl.formatMessage(messages.dataLabel)}
+          {intl.formatMessage(messages.alertsLabel)}
         </Link>
       </div>
 
