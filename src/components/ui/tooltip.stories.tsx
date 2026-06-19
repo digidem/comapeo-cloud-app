@@ -23,8 +23,9 @@ const meta: Meta<typeof Tooltip> = {
 export default meta;
 type Story = StoryObj<typeof Tooltip>;
 
-/** Default tooltip appearing above the trigger */
+/** Default tooltip appearing above the trigger (forced open for screenshot) */
 export const Default: Story = {
+  args: { open: true },
   render: (args) => (
     <Tooltip {...args}>
       <button
@@ -46,9 +47,9 @@ export const Default: Story = {
   ),
 };
 
-/** Tooltip appearing below the trigger */
+/** Tooltip appearing below the trigger (forced open for screenshot) */
 export const Bottom: Story = {
-  args: { side: 'bottom' },
+  args: { side: 'bottom', open: true },
   render: (args) => (
     <Tooltip {...args}>
       <button
@@ -70,9 +71,9 @@ export const Bottom: Story = {
   ),
 };
 
-/** Tooltip appearing to the left of the trigger */
+/** Tooltip appearing to the left of the trigger (forced open for screenshot) */
 export const Left: Story = {
-  args: { side: 'left' },
+  args: { side: 'left', open: true },
   render: (args) => (
     <Tooltip {...args}>
       <button
@@ -94,9 +95,9 @@ export const Left: Story = {
   ),
 };
 
-/** Tooltip appearing to the right of the trigger */
+/** Tooltip appearing to the right of the trigger (forced open for screenshot) */
 export const Right: Story = {
-  args: { side: 'right' },
+  args: { side: 'right', open: true },
   render: (args) => (
     <Tooltip {...args}>
       <button
@@ -118,11 +119,12 @@ export const Right: Story = {
   ),
 };
 
-/** Tooltip with multi-line content */
+/** Tooltip with multi-line content (forced open for screenshot) */
 export const MultiLine: Story = {
   args: {
     content: 'This is a longer tooltip with more descriptive text for context.',
     side: 'top',
+    open: true,
   },
   render: (args) => (
     <Tooltip {...args}>

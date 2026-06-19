@@ -39,25 +39,58 @@ const meta: Meta<typeof CopyButton> = {
 export default meta;
 type Story = StoryObj<typeof CopyButton>;
 
-/** Default copy button with a URL */
+function CopyButtonWithLabel(args: {
+  text: string;
+  label?: string;
+  successLabel?: string;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        alignItems: 'center',
+      }}
+    >
+      <code
+        style={{
+          fontSize: 13,
+          color: '#172033',
+          background: '#F4F6FA',
+          padding: '4px 8px',
+          borderRadius: 6,
+        }}
+      >
+        {args.text}
+      </code>
+      <CopyButton {...args} />
+    </div>
+  );
+}
+
+/** Default copy button with a URL displayed above */
 export const Default: Story = {
   args: {
     text: 'https://example.com/invite/abc123',
   },
+  render: (args) => <CopyButtonWithLabel {...args} />,
 };
 
-/** Short text content */
+/** Short text content displayed above */
 export const ShortText: Story = {
   args: {
     text: 'abc',
   },
+  render: (args) => <CopyButtonWithLabel {...args} />,
 };
 
-/** Custom label and success label */
+/** Custom label and success label displayed with URL */
 export const CustomLabels: Story = {
   args: {
     text: 'https://example.com/invite/abc123',
     label: 'Copy link',
     successLabel: 'Link copied!',
   },
+  render: (args) => <CopyButtonWithLabel {...args} />,
 };

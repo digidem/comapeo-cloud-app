@@ -1,2 +1,2 @@
-# Generated pixelmatch diff images — CI artifacts, not source
-*.png
+# Diff images are CI-generated artifacts — do not track in git
+*

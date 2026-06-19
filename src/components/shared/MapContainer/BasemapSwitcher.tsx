@@ -17,6 +17,8 @@ export interface BasemapSwitcherProps {
   onChange: (id: BasemapId) => void;
   basemaps: ImageryBasemap[];
   className?: string;
+  /** Force the popover open (useful for Storybook static screenshots). */
+  defaultOpen?: boolean;
 }
 
 /** Layer icon — stacked map layers */
@@ -51,9 +53,10 @@ function BasemapSwitcher({
   onChange,
   basemaps,
   className,
+  defaultOpen = false,
 }: BasemapSwitcherProps) {
   const intl = useIntl();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
 
   if (basemaps.length === 0) {
     return null;
