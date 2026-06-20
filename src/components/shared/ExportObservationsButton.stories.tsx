@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent } from 'storybook/test';
 
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { ToastProvider } from '@/components/ui/toast';
 import type { Observation } from '@/lib/data-layer';
+import { PLAY_TIMEOUT, getCanvas } from '@/stories/test-utils';
 
 // ---- Helpers ----
 
@@ -59,12 +60,12 @@ export const Default: Story = {};
 /** Bottom sheet open showing CSV and GeoJSON export options */
 export const Open: Story = {
   play: async () => {
-    const canvas = within(document.body);
+    const canvas = getCanvas();
 
     const exportButton = await canvas.findByRole(
       'button',
       { name: 'Export' },
-      { timeout: 5_000 },
+      { timeout: PLAY_TIMEOUT },
     );
     await userEvent.click(exportButton);
 
@@ -73,7 +74,7 @@ export const Open: Story = {
       'dialog',
       { name: 'Export Observations' },
       {
-        timeout: 5_000,
+        timeout: PLAY_TIMEOUT,
       },
     );
     await expect(dialog).toBeVisible();

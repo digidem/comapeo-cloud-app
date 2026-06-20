@@ -1,11 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent } from 'storybook/test';
 
 import { useState } from 'react';
 
 import { FilterSheet } from '@/components/shared/FilterSheet';
 import type { ObservationFilterBarProps } from '@/components/shared/ObservationFilterBar';
 import { DEFAULT_FILTERS } from '@/lib/observation-filters';
+import { PLAY_TIMEOUT, getCanvas } from '@/stories/test-utils';
 
 const meta: Meta<typeof FilterSheet> = {
   title: 'Components/FilterSheet',
@@ -94,15 +95,15 @@ export const Closed: Story = {
 export const Open: Story = {
   render: () => <FilterSheetDemo initialOpen={false} />,
   play: async () => {
-    const canvas = within(document.body);
+    const canvas = getCanvas();
     const trigger = await canvas.findByTestId('filter-trigger', undefined, {
-      timeout: 5_000,
+      timeout: PLAY_TIMEOUT,
     });
     await userEvent.click(trigger);
 
     // Assert the sheet actually opened
     const dialog = await canvas.findByRole('dialog', undefined, {
-      timeout: 5_000,
+      timeout: PLAY_TIMEOUT,
     });
     await expect(dialog).toBeVisible();
   },
