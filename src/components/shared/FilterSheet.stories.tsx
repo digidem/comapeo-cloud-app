@@ -1,4 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
+import { userEvent, within } from 'storybook/test';
+
+import { useState } from 'react';
 
 import { FilterSheet } from '@/components/shared/FilterSheet';
 import type { ObservationFilterBarProps } from '@/components/shared/ObservationFilterBar';
@@ -34,40 +37,84 @@ const defaultFilterProps: ObservationFilterBarProps = {
   onClear: noop,
 };
 
+function FilterSheetDemo({
+  initialOpen = false,
+  filterProps = {},
+}: {
+  initialOpen?: boolean;
+  filterProps?: Partial<ObservationFilterBarProps>;
+}) {
+  const [open, setOpen] = useState(initialOpen);
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#F4F6FA',
+        display: 'flex',
+        alignItems: 'flex-end',
+      }}
+    >
+      <div style={{ padding: '16px', width: '100%' }}>
+        <p style={{ color: '#172033', fontSize: 14, marginBottom: 12 }}>
+          Tap the button below to open the filter sheet.
+        </p>
+        <button
+          type="button"
+          data-testid="filter-trigger"
+          onClick={() => setOpen(true)}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 12,
+            background: '#1F6FFF',
+            color: '#fff',
+            border: 'none',
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          Open Filters
+        </button>
+      </div>
+      <FilterSheet
+        open={open}
+        onOpenChange={setOpen}
+        {...defaultFilterProps}
+        {...filterProps}
+      />
+    </div>
+  );
+}
+
 export const Closed: Story = {
-  args: {
-    open: false,
-    onOpenChange: noop,
-    ...defaultFilterProps,
-  },
+  render: () => <FilterSheetDemo initialOpen={false} />,
 };
 
-/**
- * Open filter sheet.
- *
- * TODO: Re-enable play() tests when Storybook vitest-browser rendering
- * issue is resolved (stories with play() hang in sb-preparing-story state).
- * @see https://github.com/storybookjs/storybook/issues/18663
- */
 export const Open: Story = {
-  args: {
-    open: true,
-    onOpenChange: noop,
-    ...defaultFilterProps,
+  render: () => <FilterSheetDemo initialOpen={false} />,
+  play: async () => {
+    const canvas = within(document.body);
+    const trigger = await canvas.findByTestId('filter-trigger', undefined, {
+      timeout: 5_000,
+    });
+    await userEvent.click(trigger);
   },
 };
 
 export const WithCategorySelected: Story = {
-  args: {
-    open: true,
-    onOpenChange: noop,
-    ...defaultFilterProps,
-    filters: {
-      ...DEFAULT_FILTERS,
-      categories: ['Water Quality'],
-    },
-    availableCategories: ['Water Quality', 'Wildlife', 'Forest Cover'],
-    resultCount: 15,
-    isFiltering: true,
-  },
+  render: () => (
+    <FilterSheetDemo
+      initialOpen={true}
+      filterProps={{
+        filters: {
+          ...DEFAULT_FILTERS,
+          categories: ['Water Quality'],
+        },
+        availableCategories: ['Water Quality', 'Wildlife', 'Forest Cover'],
+        resultCount: 15,
+        isFiltering: true,
+      }}
+    />
+  ),
 };
