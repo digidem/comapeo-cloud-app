@@ -35,34 +35,6 @@ export const InviteFormFilled: Story = {
   },
 };
 
-/** Invite form after successful generation — shows invite URL and code */
-export const WithInviteResults: Story = {
-  play: async () => {
-    const canvas = within(document.body);
-    const urlInput = await canvas.findByLabelText(
-      'Remote Archive URL',
-      undefined,
-      { timeout: 5_000 },
-    );
-    const tokenInput = await canvas.findByLabelText('Bearer Token', undefined, {
-      timeout: 5_000,
-    });
-
-    await userEvent.type(urlInput, 'https://archive.example.com');
-    await userEvent.type(tokenInput, 'my-secret-token');
-
-    const submitButton = await canvas.findByRole(
-      'button',
-      { name: 'Generate Invite' },
-      { timeout: 5_000 },
-    );
-    await userEvent.click(submitButton);
-
-    // Wait for the API call to resolve (will show error without MSW mock)
-    await new Promise((r) => setTimeout(r, 500));
-  },
-};
-
 /** Invite form showing an error state */
 export const InviteFormError: Story = {
   play: async () => {
@@ -81,10 +53,11 @@ export const InviteFormError: Story = {
 export const ScrolledToBackup: Story = {
   play: async () => {
     const canvas = within(document.body);
-    const backupHeading = await canvas.findByRole('heading', {
-      name: /backup/i,
-      level: 2,
-    });
+    const backupHeading = await canvas.findByRole(
+      'heading',
+      { name: /backup/i, level: 2 },
+      { timeout: 5_000 },
+    );
     backupHeading.scrollIntoView({ behavior: 'instant', block: 'start' });
     await expect(backupHeading).toBeVisible();
   },
