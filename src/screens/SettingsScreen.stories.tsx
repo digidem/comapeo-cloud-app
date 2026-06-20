@@ -74,7 +74,13 @@ export const ClearDataDialogOpen: Story = {
     );
     await userEvent.click(clearButton);
 
-    // Wait for dialog animation
-    await new Promise((r) => setTimeout(r, 300));
+    // Assert the confirm dialog is present (state-based, not time-based)
+    const dialog = await canvas.findByRole('dialog', undefined, {
+      timeout: 5_000,
+    });
+    await expect(dialog).toBeVisible();
+    await expect(
+      canvas.getByRole('heading', { name: 'Clear All Data?' }),
+    ).toBeInTheDocument();
   },
 };

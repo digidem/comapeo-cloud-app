@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { userEvent, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 
 import { useState } from 'react';
 
@@ -99,6 +99,12 @@ export const Open: Story = {
       timeout: 5_000,
     });
     await userEvent.click(trigger);
+
+    // Assert the sheet actually opened
+    const dialog = await canvas.findByRole('dialog', undefined, {
+      timeout: 5_000,
+    });
+    await expect(dialog).toBeVisible();
   },
 };
 

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { userEvent, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { ToastProvider } from '@/components/ui/toast';
@@ -68,7 +68,14 @@ export const Open: Story = {
     );
     await userEvent.click(exportButton);
 
-    // Wait for the Radix Dialog animation to complete
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    // Assert the Radix Dialog content is present (state-based, not time-based)
+    const dialog = await canvas.findByRole(
+      'dialog',
+      { name: 'Export Observations' },
+      {
+        timeout: 5_000,
+      },
+    );
+    await expect(dialog).toBeVisible();
   },
 };
