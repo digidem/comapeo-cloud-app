@@ -137,6 +137,10 @@ const PIXEL_THRESHOLD_OVERRIDES: ReadonlyArray<{
   { match: 'observationsmap', threshold: 0.15 },
   // MapContainer shares the same tile-rendering path.
   { match: 'mapcontainer', threshold: 0.15 },
+  // FilterSheet closed-state has minor cross-environment rendering noise
+  // (~1.6% differ between local and CI Chromium). 3% absorbs this while
+  // still catching real layout regressions.
+  { match: 'filtersheet', threshold: 0.03 },
 ];
 
 /**
