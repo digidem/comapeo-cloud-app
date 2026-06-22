@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent } from 'storybook/test';
 
 import { Button } from '@/components/ui/button';
+
+import { getCanvas } from '../../stories/test-utils';
 
 const meta: Meta<typeof Button> = {
   title: 'UI/Button',
@@ -66,7 +68,7 @@ export const ClickHandler: Story = {
     onClick: fn(),
   },
   play: async ({ args, step }) => {
-    const canvas = within(document.body);
+    const canvas = getCanvas();
 
     await step('renders the label', async () => {
       await expect(
@@ -96,7 +98,7 @@ export const LoadingClickHandler: Story = {
     onClick: fn(),
   },
   play: async ({ args }) => {
-    const canvas = within(document.body);
+    const canvas = getCanvas();
     const button = await canvas.findByRole('button', undefined, {
       timeout: 5_000,
     });
