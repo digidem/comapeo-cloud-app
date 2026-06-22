@@ -1,8 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
+import { expect, userEvent } from 'storybook/test';
 
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { ToastProvider } from '@/components/ui/toast';
 import type { Observation } from '@/lib/data-layer';
+import { PLAY_TIMEOUT, getCanvas } from '@/stories/test-utils';
 
 // ---- Helpers ----
 
@@ -54,3 +56,27 @@ type Story = StoryObj<typeof ExportObservationsButton>;
 
 /** Default state — Export button visible, dropdown closed */
 export const Default: Story = {};
+
+/** Bottom sheet open showing CSV and GeoJSON export options */
+export const Open: Story = {
+  play: async () => {
+    const canvas = getCanvas();
+
+    const exportButton = await canvas.findByRole(
+      'button',
+      { name: 'Export' },
+      { timeout: PLAY_TIMEOUT },
+    );
+    await userEvent.click(exportButton);
+
+    // Assert the Radix Dialog content is present (state-based, not time-based)
+    const dialog = await canvas.findByRole(
+      'dialog',
+      { name: 'Export Observations' },
+      {
+        timeout: PLAY_TIMEOUT,
+      },
+    );
+    await expect(dialog).toBeVisible();
+  },
+};
