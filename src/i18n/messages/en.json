@@ -449,6 +449,21 @@
   "home.archive.dialog.cancel": {
     "defaultMessage": "Cancel"
   },
+  "home.archive.dialog.connectionProgress.heading": {
+    "defaultMessage": "Connecting to archive..."
+  },
+  "home.archive.dialog.connectionProgress.stepConnect": {
+    "defaultMessage": "Connecting to server..."
+  },
+  "home.archive.dialog.connectionProgress.stepPrepare": {
+    "defaultMessage": "Preparing dashboard..."
+  },
+  "home.archive.dialog.connectionProgress.stepSync": {
+    "defaultMessage": "Syncing data..."
+  },
+  "home.archive.dialog.connectionProgress.stepVerify": {
+    "defaultMessage": "Verifying invite..."
+  },
   "home.archive.dialog.duplicateServer": {
     "defaultMessage": "This archive server is already connected"
   },
