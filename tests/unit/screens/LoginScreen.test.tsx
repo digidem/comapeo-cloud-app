@@ -65,7 +65,7 @@ describe('LoginScreen', () => {
 
   it('shows error when server is unreachable', async () => {
     loginServer.use(
-      http.get('https://bad.example.com/info', () => {
+      http.get('https://bad.example.com/projects', () => {
         return HttpResponse.error();
       }),
     );
@@ -85,7 +85,7 @@ describe('LoginScreen', () => {
 
   it('shows error on 401 unauthorized', async () => {
     loginServer.use(
-      http.get('https://auth-fail.example.com/info', ({ request }) => {
+      http.get('https://auth-fail.example.com/projects', ({ request }) => {
         const authHeader = request.headers.get('Authorization');
         if (authHeader !== 'Bearer valid-token') {
           return HttpResponse.json(
@@ -121,9 +121,9 @@ describe('LoginScreen', () => {
 
   it('logs in and navigates away when reconnecting to a known server', async () => {
     loginServer.use(
-      http.get('https://good.example.com/info', () => {
+      http.get('https://good.example.com/projects', () => {
         return HttpResponse.json({
-          data: { deviceId: 'test-device', name: 'Test Server' },
+          data: [],
         });
       }),
     );
@@ -167,9 +167,9 @@ describe('LoginScreen', () => {
 
   it('adds server to auth store on successful connection', async () => {
     loginServer.use(
-      http.get('https://good.example.com/info', () => {
+      http.get('https://good.example.com/projects', () => {
         return HttpResponse.json({
-          data: { deviceId: 'test-device', name: 'Test Server' },
+          data: [],
         });
       }),
     );
@@ -197,10 +197,10 @@ describe('LoginScreen', () => {
     // loading state before the response resolves. Avoids 2s of wall-clock
     // wait per run (and the associated act()/open-handle warnings).
     loginServer.use(
-      http.get('https://slow.example.com/info', async () => {
+      http.get('https://slow.example.com/projects', async () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
         return HttpResponse.json({
-          data: { deviceId: 'test-device', name: 'Test Server' },
+          data: [],
         });
       }),
     );

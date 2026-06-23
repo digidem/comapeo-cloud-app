@@ -65,6 +65,10 @@ const messages = defineMessages({
     id: 'login.connectionFailed',
     defaultMessage: 'Connection failed',
   },
+  serverUpdateFailed: {
+    id: 'login.serverUpdateFailed',
+    defaultMessage: 'Failed to save server details. Please try again.',
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -145,8 +149,8 @@ export function LoginScreen() {
     dispatch({ type: 'submit' });
 
     try {
-      // Verify server connectivity by fetching /info with auth
-      const response = await fetch(`${normalizedUrl.value}/info`, {
+      // Verify credentials by fetching /projects with auth
+      const response = await fetch(`${normalizedUrl.value}/projects`, {
         headers: {
           Authorization: `Bearer ${trimmedToken}`,
         },
@@ -186,13 +190,21 @@ export function LoginScreen() {
         });
       } catch (err) {
         // The server was reachable and is already in the store. Since the
-        // connectivity check (/info) succeeded, we can complete the login:
+        // connectivity check (/projects) succeeded, we can complete the login:
         // activate the existing server and navigate away instead of stranding
         // the user on the login screen.
         if (err instanceof DuplicateServerError) {
-          await useAuthStore
-            .getState()
-            .updateServer(err.serverId, { token: trimmedToken });
+          try {
+            await useAuthStore
+              .getState()
+              .updateServer(err.serverId, { token: trimmedToken });
+          } catch {
+            dispatch({
+              type: 'error',
+              message: intl.formatMessage(messages.serverUpdateFailed),
+            });
+            return;
+          }
           useAuthStore.getState().setActiveServer(err.serverId);
           dispatch({ type: 'success' });
           await navigate({ to: '/' });

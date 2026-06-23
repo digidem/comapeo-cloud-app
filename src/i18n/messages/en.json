@@ -917,6 +917,9 @@
   "login.invalidUrl": {
     "defaultMessage": "Enter a full URL including http:// or https://"
   },
+  "login.serverUpdateFailed": {
+    "defaultMessage": "Failed to save server details. Please try again."
+  },
   "login.subtitle": {
     "defaultMessage": "Connect to your remote archive server"
   },
