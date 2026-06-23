@@ -2,10 +2,22 @@ import userEvent from '@testing-library/user-event';
 import { render, screen, waitFor } from '@tests/mocks/test-utils';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { LoginScreen } from '@/screens/LoginScreen';
 import { useAuthStore } from '@/stores/auth-store';
+
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
+}));
 
 // Reset auth store between tests
 afterEach(() => {
