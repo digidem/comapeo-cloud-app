@@ -196,7 +196,11 @@ async function validateConnection(
   try {
     await apiClient.getProjects(config);
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
+    // Reject both 401 (unauthenticated) and 403 (authenticated but
+    // unauthorized / invalid bearer token) — many archive/auth stacks
+    // return 403 for an invalid token, and the UI should block adding an
+    // unusable server in either case.
+    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
       return { valid: false, messageKey: 'invalidToken' };
     }
     // Other errors (e.g. 500) — server is reachable, let the sync handle it

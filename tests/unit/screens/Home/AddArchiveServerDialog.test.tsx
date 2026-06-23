@@ -654,6 +654,84 @@ describe('AddArchiveServerDialog', () => {
     });
   });
 
+  // ---- Pre-add token validation tests ----
+
+  it('blocks adding when /projects returns 401 (invalid token) in advanced mode', async () => {
+    server.use(
+      http.get('*/projects', () =>
+        HttpResponse.json(
+          {
+            error: { code: 'UNAUTHORIZED', message: 'Invalid bearer token' },
+          },
+          { status: 401 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    // Switch to advanced mode
+    await user.click(screen.getByTestId('advanced-toggle'));
+
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://archive.test',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'bad-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      await screen.findByText('Invalid token or unauthorized'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
+  it('blocks adding when /projects returns 403 (unauthorized) in advanced mode', async () => {
+    // Many archive/auth stacks return 403 for an invalid or unauthorized
+    // bearer token; this must be treated the same as 401 (regression guard).
+    server.use(
+      http.get('*/projects', () =>
+        HttpResponse.json(
+          {
+            error: { code: 'FORBIDDEN', message: 'Access denied' },
+          },
+          { status: 403 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    // Switch to advanced mode
+    await user.click(screen.getByTestId('advanced-toggle'));
+
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://archive.test',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'revoked-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      await screen.findByText('Invalid token or unauthorized'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
   // ---- Encrypted invite URL tests ----
 
   describe('encrypted invite URLs', () => {
