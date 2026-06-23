@@ -1,11 +1,11 @@
-import { useReducer, useState } from 'react';
+import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { useNavigate } from '@tanstack/react-router';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ApiError, apiClient } from '@/lib/api-client';
+import { ApiError, NetworkError, apiClient } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
 
@@ -46,6 +46,10 @@ const messages = defineMessages({
     id: 'login.connecting',
     defaultMessage: 'Connecting...',
   },
+  connectFailed: {
+    id: 'login.connectFailed',
+    defaultMessage: 'Something went wrong connecting. Please try again.',
+  },
   urlRequired: {
     id: 'login.urlRequired',
     defaultMessage: 'Server URL is required',
@@ -69,45 +73,19 @@ const messages = defineMessages({
 });
 
 // ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type LoginState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'error'; message: string };
-
-type LoginAction =
-  | { type: 'submit' }
-  | { type: 'success' }
-  | { type: 'error'; message: string }
-  | { type: 'reset' };
-
-// ---------------------------------------------------------------------------
-// Reducer
-// ---------------------------------------------------------------------------
-
-function loginReducer(_state: LoginState, action: LoginAction): LoginState {
-  switch (action.type) {
-    case 'submit':
-      return { status: 'loading' };
-    case 'success':
-      return { status: 'idle' };
-    case 'error':
-      return { status: 'error', message: action.message };
-    case 'reset':
-      return { status: 'idle' };
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export function LoginScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
-  const [state, dispatch] = useReducer(loginReducer, { status: 'idle' });
+
+  type SubmitState =
+    | { status: 'idle' | 'loading' }
+    | { status: 'error'; message: string };
+  const [submitState, setSubmitState] = useState<SubmitState>({
+    status: 'idle',
+  });
 
   const [url, setUrl] = useState('');
   const [token, setToken] = useState('');
@@ -143,7 +121,7 @@ export function LoginScreen() {
       return;
     }
 
-    dispatch({ type: 'submit' });
+    setSubmitState({ status: 'loading' });
 
     try {
       // Verify credentials by fetching /projects with auth via the api-client,
@@ -180,14 +158,13 @@ export function LoginScreen() {
               .getState()
               .updateServer(err.serverId, { token: trimmedToken });
           } catch {
-            dispatch({
-              type: 'error',
+            setSubmitState({
+              status: 'error',
               message: intl.formatMessage(messages.serverUpdateFailed),
             });
             return;
           }
           useAuthStore.getState().setActiveServer(err.serverId);
-          dispatch({ type: 'success' });
           await navigate({ to: '/' });
           return;
         }
@@ -196,28 +173,26 @@ export function LoginScreen() {
 
       useAuthStore.getState().setActiveServer(serverId);
 
-      dispatch({ type: 'success' });
-
       // Navigate to home
       await navigate({ to: '/' });
     } catch (err) {
       if (err instanceof ApiError) {
-        dispatch({ type: 'error', message: err.message });
-      } else if (err instanceof Error && err.message === 'Unable to connect') {
-        dispatch({
-          type: 'error',
+        setSubmitState({ status: 'error', message: err.message });
+      } else if (err instanceof NetworkError) {
+        setSubmitState({
+          status: 'error',
           message: intl.formatMessage(messages.unableToConnect),
         });
       } else {
-        dispatch({
-          type: 'error',
-          message: intl.formatMessage(messages.serverUpdateFailed),
+        setSubmitState({
+          status: 'error',
+          message: intl.formatMessage(messages.connectFailed),
         });
       }
     }
   }
 
-  const isLoading = state.status === 'loading';
+  const isLoading = submitState.status === 'loading';
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4">
@@ -237,6 +212,7 @@ export function LoginScreen() {
           <Input
             label={intl.formatMessage(messages.urlLabel)}
             type="text"
+            autoComplete="url"
             placeholder={intl.formatMessage(messages.urlPlaceholder)}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -246,6 +222,7 @@ export function LoginScreen() {
           <Input
             label={intl.formatMessage(messages.tokenLabel)}
             type="password"
+            autoComplete="off"
             placeholder={intl.formatMessage(messages.tokenPlaceholder)}
             value={token}
             onChange={(e) => setToken(e.target.value)}
@@ -253,8 +230,10 @@ export function LoginScreen() {
             disabled={isLoading}
           />
 
-          {state.status === 'error' && (
-            <p className="text-sm text-error">{state.message}</p>
+          {submitState.status === 'error' && (
+            <p role="alert" className="text-sm text-error">
+              {submitState.message}
+            </p>
           )}
 
           <Button

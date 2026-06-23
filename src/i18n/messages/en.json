@@ -905,6 +905,9 @@
   "login.connect": {
     "defaultMessage": "Connect"
   },
+  "login.connectFailed": {
+    "defaultMessage": "Something went wrong connecting. Please try again."
+  },
   "login.connecting": {
     "defaultMessage": "Connecting..."
   },

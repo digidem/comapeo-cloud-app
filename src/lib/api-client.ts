@@ -50,6 +50,13 @@ export class ApiError extends Error {
   }
 }
 
+export class NetworkError extends Error {
+  constructor(message = 'Unable to connect') {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Request resolution — determines baseUrl and extra headers per request
 // ---------------------------------------------------------------------------
@@ -101,7 +108,7 @@ function isNetworkError(error: unknown): boolean {
 }
 
 function throwNetworkError(): never {
-  throw new Error('Unable to connect');
+  throw new NetworkError();
 }
 
 async function handleResponse<T>(

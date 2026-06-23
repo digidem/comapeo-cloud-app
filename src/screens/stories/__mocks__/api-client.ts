@@ -13,6 +13,13 @@ export class ApiError extends Error {
   }
 }
 
+export class NetworkError extends Error {
+  constructor(message = 'Unable to connect') {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
 export const apiClient = {
   async getProjects(_config?: unknown) {
     return { data: [] };
