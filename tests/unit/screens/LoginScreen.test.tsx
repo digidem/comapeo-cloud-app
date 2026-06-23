@@ -119,7 +119,7 @@ describe('LoginScreen', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows "already added" message when reconnecting to a known server', async () => {
+  it('logs in and navigates away when reconnecting to a known server', async () => {
     loginServer.use(
       http.get('https://good.example.com/info', () => {
         return HttpResponse.json({
@@ -147,12 +147,15 @@ describe('LoginScreen', () => {
     await user.type(screen.getByLabelText(/bearer token/i), 'valid-token');
     await user.click(screen.getByRole('button', { name: /connect/i }));
 
-    // Should surface the accurate "already added" message, NOT the misleading
-    // "unable to connect" error.
+    // The duplicate server becomes the active server — the user is logged in.
+    await waitFor(() => {
+      expect(useAuthStore.getState().activeServerId).toBe(existingId);
+    });
+
+    // The duplicate error message is NOT shown.
     expect(
-      await screen.findByText(/this server has already been added/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/unable to connect/i)).not.toBeInTheDocument();
+      screen.queryByText(/this server has already been added/i),
+    ).not.toBeInTheDocument();
 
     // The pre-existing server is untouched (no duplicate added).
     expect(useAuthStore.getState().servers.length).toBe(1);

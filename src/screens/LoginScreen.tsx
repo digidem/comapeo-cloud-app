@@ -61,10 +61,6 @@ const messages = defineMessages({
     id: 'login.unableToConnect',
     defaultMessage: 'Unable to connect. Check the server URL and try again.',
   },
-  serverAlreadyAdded: {
-    id: 'login.serverAlreadyAdded',
-    defaultMessage: 'This server has already been added.',
-  },
   connectionFailed: {
     id: 'login.connectionFailed',
     defaultMessage: 'Connection failed',
@@ -189,13 +185,14 @@ export function LoginScreen() {
           token: trimmedToken,
         });
       } catch (err) {
-        // The server was reachable, but it's already in the store. Surface an
-        // accurate message instead of the generic "unable to connect" error.
+        // The server was reachable and is already in the store. Since the
+        // connectivity check (/info) succeeded, we can complete the login:
+        // activate the existing server and navigate away instead of stranding
+        // the user on the login screen.
         if (err instanceof DuplicateServerError) {
-          dispatch({
-            type: 'error',
-            message: intl.formatMessage(messages.serverAlreadyAdded),
-          });
+          useAuthStore.getState().setActiveServer(err.serverId);
+          dispatch({ type: 'success' });
+          await navigate({ to: '/' });
           return;
         }
         throw err;
