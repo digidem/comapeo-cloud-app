@@ -190,6 +190,9 @@ export function LoginScreen() {
         // activate the existing server and navigate away instead of stranding
         // the user on the login screen.
         if (err instanceof DuplicateServerError) {
+          await useAuthStore
+            .getState()
+            .updateServer(err.serverId, { token: trimmedToken });
           useAuthStore.getState().setActiveServer(err.serverId);
           dispatch({ type: 'success' });
           await navigate({ to: '/' });

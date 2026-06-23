@@ -160,6 +160,9 @@ describe('LoginScreen', () => {
     // The pre-existing server is untouched (no duplicate added).
     expect(useAuthStore.getState().servers.length).toBe(1);
     expect(useAuthStore.getState().servers[0]!.id).toBe(existingId);
+
+    // The new token is saved (old/stale token is replaced on reconnect).
+    expect(useAuthStore.getState().servers[0]!.token).toBe('valid-token');
   });
 
   it('adds server to auth store on successful connection', async () => {
