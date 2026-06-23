@@ -5,6 +5,7 @@ import { useNavigate } from '@tanstack/react-router';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ApiError, apiClient } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
 
@@ -60,10 +61,6 @@ const messages = defineMessages({
   unableToConnect: {
     id: 'login.unableToConnect',
     defaultMessage: 'Unable to connect. Check the server URL and try again.',
-  },
-  connectionFailed: {
-    id: 'login.connectionFailed',
-    defaultMessage: 'Connection failed',
   },
   serverUpdateFailed: {
     id: 'login.serverUpdateFailed',
@@ -149,28 +146,12 @@ export function LoginScreen() {
     dispatch({ type: 'submit' });
 
     try {
-      // Verify credentials by fetching /projects with auth
-      const response = await fetch(`${normalizedUrl.value}/projects`, {
-        headers: {
-          Authorization: `Bearer ${trimmedToken}`,
-        },
+      // Verify credentials by fetching /projects with auth via the api-client,
+      // which routes through the /api proxy and validates the response.
+      await apiClient.getProjects({
+        baseUrl: normalizedUrl.value,
+        token: trimmedToken,
       });
-
-      if (!response.ok) {
-        let errorMessage = intl.formatMessage(messages.connectionFailed);
-        try {
-          const body = (await response.json()) as {
-            error?: { message?: string };
-          };
-          if (body.error?.message) {
-            errorMessage = body.error.message;
-          }
-        } catch {
-          // keep default error message
-        }
-        dispatch({ type: 'error', message: errorMessage });
-        return;
-      }
 
       // Server responded successfully — add it to the auth store
       const hostname = (() => {
@@ -219,11 +200,20 @@ export function LoginScreen() {
 
       // Navigate to home
       await navigate({ to: '/' });
-    } catch {
-      dispatch({
-        type: 'error',
-        message: intl.formatMessage(messages.unableToConnect),
-      });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        dispatch({ type: 'error', message: err.message });
+      } else if (err instanceof Error && err.message === 'Unable to connect') {
+        dispatch({
+          type: 'error',
+          message: intl.formatMessage(messages.unableToConnect),
+        });
+      } else {
+        dispatch({
+          type: 'error',
+          message: intl.formatMessage(messages.serverUpdateFailed),
+        });
+      }
     }
   }
 

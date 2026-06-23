@@ -908,9 +908,6 @@
   "login.connecting": {
     "defaultMessage": "Connecting..."
   },
-  "login.connectionFailed": {
-    "defaultMessage": "Connection failed"
-  },
   "login.heading": {
     "defaultMessage": "CoMapeo Cloud"
   },

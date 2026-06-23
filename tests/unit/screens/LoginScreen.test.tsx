@@ -123,7 +123,7 @@ describe('LoginScreen', () => {
     loginServer.use(
       http.get('https://good.example.com/projects', () => {
         return HttpResponse.json({
-          data: [],
+          data: [{ projectId: 'proj-1' }],
         });
       }),
     );
@@ -169,7 +169,7 @@ describe('LoginScreen', () => {
     loginServer.use(
       http.get('https://good.example.com/projects', () => {
         return HttpResponse.json({
-          data: [],
+          data: [{ projectId: 'proj-1' }],
         });
       }),
     );
@@ -200,7 +200,7 @@ describe('LoginScreen', () => {
       http.get('https://slow.example.com/projects', async () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
         return HttpResponse.json({
-          data: [],
+          data: [{ projectId: 'proj-1' }],
         });
       }),
     );
