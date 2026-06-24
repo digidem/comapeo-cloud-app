@@ -1116,20 +1116,10 @@ function HomeScreen() {
         <AddArchiveServerDialog
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(serverId) => {
+          onAdded={(_serverId) => {
+            // The dialog already invalidates projects/observations/alerts as
+            // part of its connection-progress flow, so just close here.
             dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-            const server = useAuthStore
-              .getState()
-              .servers.find((s) => s.id === serverId);
-            if (server) {
-              dispatch({
-                type: 'START_CONNECTION_PROGRESS',
-                serverId,
-                baseUrl: server.baseUrl,
-                token: server.token,
-                steps: buildConnectionProgressSteps(intl),
-              });
-            }
           }}
         />
 
@@ -1244,20 +1234,8 @@ function HomeScreen() {
         <AddArchiveServerDialog
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(serverId) => {
+          onAdded={(_serverId) => {
             dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-            const server = useAuthStore
-              .getState()
-              .servers.find((s) => s.id === serverId);
-            if (server) {
-              dispatch({
-                type: 'START_CONNECTION_PROGRESS',
-                serverId,
-                baseUrl: server.baseUrl,
-                token: server.token,
-                steps: buildConnectionProgressSteps(intl),
-              });
-            }
           }}
         />
 
@@ -1347,20 +1325,8 @@ function HomeScreen() {
         <AddArchiveServerDialog
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(serverId) => {
+          onAdded={(_serverId) => {
             dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-            const server = useAuthStore
-              .getState()
-              .servers.find((s) => s.id === serverId);
-            if (server) {
-              dispatch({
-                type: 'START_CONNECTION_PROGRESS',
-                serverId,
-                baseUrl: server.baseUrl,
-                token: server.token,
-                steps: buildConnectionProgressSteps(intl),
-              });
-            }
           }}
         />
 
@@ -1588,20 +1554,8 @@ function HomeScreen() {
       <AddArchiveServerDialog
         isOpen={state.isAddServerDialogOpen}
         onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-        onAdded={(serverId) => {
+        onAdded={(_serverId) => {
           dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-          const server = useAuthStore
-            .getState()
-            .servers.find((s) => s.id === serverId);
-          if (server) {
-            dispatch({
-              type: 'START_CONNECTION_PROGRESS',
-              serverId,
-              baseUrl: server.baseUrl,
-              token: server.token,
-              steps: buildConnectionProgressSteps(intl),
-            });
-          }
         }}
       />
 
