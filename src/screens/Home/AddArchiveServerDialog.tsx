@@ -597,6 +597,21 @@ function AddArchiveServerDialog({
   }
 
   function handleClose() {
+    // If the user cancels a connection that failed to sync, the server was
+    // already persisted to the auth store — addServer runs before connection
+    // progress starts, so cancelling would otherwise leave behind an orphaned,
+    // half-connected server entry. Remove it to restore the pre-attempt state.
+    // This is safe because addServer always takes the create-new path here
+    // (the dialog pre-checks for duplicates), so we only ever delete the server
+    // we just created this session — never one the user already had.
+    if (
+      cpState.isActive &&
+      !cpState.isComplete &&
+      cpState.serverId !== '' &&
+      cpState.errorMessage !== null
+    ) {
+      void useAuthStore.getState().removeServer(cpState.serverId);
+    }
     resetDialogState();
     onClose();
   }
