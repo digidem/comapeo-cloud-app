@@ -39,6 +39,8 @@ interface ConnectionProgressState {
   steps: ConnectionStep[];
   isComplete: boolean;
   errorMessage: string | null;
+  /** Bumped on each "Try Again" so the connection effect re-runs. */
+  attempt: number;
 }
 
 const INITIAL_CP_STATE: ConnectionProgressState = {
@@ -49,6 +51,7 @@ const INITIAL_CP_STATE: ConnectionProgressState = {
   steps: [],
   isComplete: false,
   errorMessage: null,
+  attempt: 0,
 };
 
 const messages = defineMessages({
@@ -165,6 +168,10 @@ const messages = defineMessages({
     id: 'home.archive.dialog.connectionProgress.stepPrepare',
     defaultMessage: 'Preparing dashboard...',
   },
+  tryAgain: {
+    id: 'home.archive.dialog.connectionProgress.retry',
+    defaultMessage: 'Try Again',
+  },
 });
 
 function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
@@ -258,6 +265,19 @@ function AddArchiveServerDialog({
 
   const queryClient = useQueryClient();
 
+  // Reset every piece of transient UI state. Used both when the user cancels
+  // (handleClose) and after a successful connection, which closes the dialog
+  // via onAdded without going through handleClose. Declared ahead of the
+  // effects below so it is in scope where they reference it.
+  const resetDialogState = useCallback(() => {
+    setUrlError(null);
+    setTokenError(null);
+    setInviteUrlError(null);
+    setShowAdvanced(false);
+    dispatch({ type: 'reset' });
+    setCpState(INITIAL_CP_STATE);
+  }, []);
+
   // Drive the connection progress steps
   useEffect(() => {
     if (!cpState.isActive || cpState.isComplete) return;
@@ -326,14 +346,18 @@ function AddArchiveServerDialog({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cpState.isActive, cpState.isComplete]);
+  }, [cpState.isActive, cpState.isComplete, cpState.attempt]);
 
-  // After connection progress completes, call onAdded
+  // After connection progress completes, call onAdded. The success path closes
+  // the dialog via onAdded → CLOSE_ADD_SERVER_DIALOG without invoking onClose(),
+  // so reset transient state here too — otherwise it leaks into the next session
+  // (e.g. cpState left as { isActive: true, isComplete: true }).
   useEffect(() => {
     if (!cpState.isActive || !cpState.isComplete) return;
 
     const timer = setTimeout(() => {
       onAdded(cpState.serverId);
+      resetDialogState();
     }, 1500);
 
     return () => {
@@ -352,10 +376,24 @@ function AddArchiveServerDialog({
         steps: buildConnectionProgressSteps(intl),
         isComplete: false,
         errorMessage: null,
+        attempt: 0,
       });
     },
     [intl],
   );
+
+  // "Try Again": rebuild the steps, clear the error, and bump `attempt` so the
+  // connection effect re-runs (isActive/isComplete are unchanged on failure, so
+  // without the bump the effect's dependency array would see no change).
+  const retryConnection = useCallback(() => {
+    setCpState((prev) => ({
+      ...prev,
+      steps: buildConnectionProgressSteps(intl),
+      isComplete: false,
+      errorMessage: null,
+      attempt: prev.attempt + 1,
+    }));
+  }, [intl]);
 
   function finalizeAddServer(baseUrl: string, token: string) {
     const normalizedUrl = normalizeArchiveBaseUrl(baseUrl);
@@ -559,11 +597,7 @@ function AddArchiveServerDialog({
   }
 
   function handleClose() {
-    setUrlError(null);
-    setTokenError(null);
-    setInviteUrlError(null);
-    setShowAdvanced(false);
-    dispatch({ type: 'reset' });
+    resetDialogState();
     onClose();
   }
 
@@ -601,15 +635,9 @@ function AddArchiveServerDialog({
                   type="button"
                   variant="primary"
                   size="sm"
-                  onClick={() => {
-                    startConnectionProgress(
-                      cpState.serverId,
-                      cpState.baseUrl,
-                      cpState.token,
-                    );
-                  }}
+                  onClick={retryConnection}
                 >
-                  Try Again
+                  {intl.formatMessage(messages.tryAgain)}
                 </Button>
               </div>
             </div>

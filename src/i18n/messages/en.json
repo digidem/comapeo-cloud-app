@@ -452,6 +452,9 @@
   "home.archive.dialog.connectionProgress.heading": {
     "defaultMessage": "Connecting to archive..."
   },
+  "home.archive.dialog.connectionProgress.retry": {
+    "defaultMessage": "Try Again"
+  },
   "home.archive.dialog.connectionProgress.stepConnect": {
     "defaultMessage": "Connecting to server..."
   },
