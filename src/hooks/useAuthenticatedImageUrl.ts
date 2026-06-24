@@ -142,7 +142,6 @@ export function useAuthenticatedImageUrl(
   });
 
   const mountedRef = useRef(true);
-  const previousCacheKeyRef = useRef<CacheKey | null>(null);
 
   // Subscribe to auth store to re-fetch when servers or token change
   const servers = useAuthStore((s) => s.servers);
@@ -188,11 +187,6 @@ export function useAuthenticatedImageUrl(
 
     // Compute the in-memory cache key
     const cacheKey = buildImageCacheKey(url, matchingServer, token);
-
-    // Track which key THIS effect invocation holds a ref on.
-    // The cleanup function handles unref — no need to unref the previous
-    // key here (that would double-unref when the cleanup already ran).
-    previousCacheKeyRef.current = cacheKey;
 
     let fetchUrl: string;
     let fetchHeaders: Record<string, string>;
@@ -333,6 +327,19 @@ export function useAuthenticatedImageUrl(
       }
     };
 
+    // Settle the in-flight promise and drop the cache entry when the shared
+    // AbortController has fired (the last subscriber unmounted). Returning
+    // without this — the old behavior — left `inflight` pending forever, so
+    // any joiner (including a remount during the grace period) hung on a
+    // promise that never settled. Rejecting surfaces the abort to joiners,
+    // and invalidating lets the next mount retry instead of attaching to a
+    // dead entry. Does not touch React state: by the time the controller
+    // fires, the originator has already unmounted.
+    const settleOnAbort = () => {
+      blobCache.invalidate((k) => k === cacheKey);
+      rejectInflight(new DOMException('Aborted', 'AbortError'));
+    };
+
     const run = async () => {
       try {
         // Serve from the local icon cache first when caching is enabled, so
@@ -340,7 +347,10 @@ export function useAuthenticatedImageUrl(
         if (cache) {
           try {
             const cachedBlob = await getCachedIconBlob(url);
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted) {
+              settleOnAbort();
+              return;
+            }
             if (cachedBlob) {
               publishBlob(cachedBlob);
               return;
@@ -350,7 +360,10 @@ export function useAuthenticatedImageUrl(
           }
         }
 
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          settleOnAbort();
+          return;
+        }
 
         const response = await fetch(fetchUrl, {
           headers: fetchHeaders,
@@ -361,7 +374,10 @@ export function useAuthenticatedImageUrl(
         }
         const blob = await response.blob();
 
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          settleOnAbort();
+          return;
+        }
 
         // Always publish to cache (other subscribers may be waiting),
         // but only write to the IDB icon cache if still mounted.

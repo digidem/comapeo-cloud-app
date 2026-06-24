@@ -518,6 +518,55 @@ describe('useAuthenticatedImageUrl', () => {
       const { getCachedIconBlob } = await import('@/lib/db');
       expect(await getCachedIconBlob(url)).toBeUndefined();
     });
+
+    it('aborted IDB read settles inflight so a later remount retries instead of hanging', async () => {
+      const url =
+        'https://archive.example.com/projects/p1/icon/icon-abort-remount';
+      const db = await import('@/lib/db');
+
+      // Hold the first mount's IDB read pending so it can be aborted in flight.
+      let resolveIdb!: (b: Blob | undefined) => void;
+      const pendingIdb = new Promise<Blob | undefined>((resolve) => {
+        resolveIdb = resolve;
+      });
+      const idbSpy = vi.spyOn(db, 'getCachedIconBlob');
+      idbSpy.mockImplementationOnce(() => pendingIdb);
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Originator (Path 3) — the IDB read is pending.
+      const { unmount } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+
+      // Last subscriber unmounts while the IDB read is still in flight, so the
+      // shared AbortController fires.
+      unmount();
+      await act(() => Promise.resolve());
+
+      // The IDB read now completes. Before the fix, run() returned early at the
+      // abort check and left the in-flight promise pending forever — leaking the
+      // cache entry and hanging any future joiner.
+      await act(async () => {
+        resolveIdb(undefined);
+      });
+      await act(() => Promise.resolve());
+
+      // A fresh mount must NOT attach to a leaked pending inflight. It should
+      // start its own fetch and resolve to a blob URL.
+      const { result } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result.current.blobUrl).not.toBeNull();
+      expect(result.current.isLoading).toBe(false);
+    });
   });
 
   it('does not update state after unmount', async () => {
