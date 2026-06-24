@@ -1117,12 +1117,9 @@ function HomeScreen() {
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
           onAdded={(_serverId) => {
+            // The dialog already invalidates projects/observations/alerts as
+            // part of its connection-progress flow, so just close here.
             dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-            // Connection progress is now handled inside the dialog.
-            // Just invalidate queries to refresh data.
-            void queryClient.invalidateQueries({ queryKey: ['projects'] });
-            void queryClient.invalidateQueries({ queryKey: ['observations'] });
-            void queryClient.invalidateQueries({ queryKey: ['alerts'] });
           }}
         />
 
@@ -1239,9 +1236,6 @@ function HomeScreen() {
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
           onAdded={(_serverId) => {
             dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-            void queryClient.invalidateQueries({ queryKey: ['projects'] });
-            void queryClient.invalidateQueries({ queryKey: ['observations'] });
-            void queryClient.invalidateQueries({ queryKey: ['alerts'] });
           }}
         />
 
@@ -1333,9 +1327,6 @@ function HomeScreen() {
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
           onAdded={(_serverId) => {
             dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-            void queryClient.invalidateQueries({ queryKey: ['projects'] });
-            void queryClient.invalidateQueries({ queryKey: ['observations'] });
-            void queryClient.invalidateQueries({ queryKey: ['alerts'] });
           }}
         />
 
@@ -1565,9 +1556,6 @@ function HomeScreen() {
         onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
         onAdded={(_serverId) => {
           dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-          void queryClient.invalidateQueries({ queryKey: ['projects'] });
-          void queryClient.invalidateQueries({ queryKey: ['observations'] });
-          void queryClient.invalidateQueries({ queryKey: ['alerts'] });
         }}
       />
 

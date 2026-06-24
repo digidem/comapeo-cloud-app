@@ -143,6 +143,7 @@
   "home.archive.dialog.advancedDescription": "Inserir detalhes do servidor manualmente",
   "home.archive.dialog.cancel": "Cancelar",
   "home.archive.dialog.connectionFailed": "Não foi possível conectar ao servidor",
+  "home.archive.dialog.connectionProgress.retry": "Tentar novamente",
   "home.archive.dialog.duplicateServer": "Este servidor já foi adicionado",
   "home.archive.dialog.error": "Falha ao adicionar servidor",
   "home.archive.dialog.invalidInviteUrl": "Convite inválido. Certifique-se de que é uma URL completa ou um código válido.",
