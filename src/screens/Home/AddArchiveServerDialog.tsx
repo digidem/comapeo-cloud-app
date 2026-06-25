@@ -176,7 +176,8 @@ function checkDuplicate(normalizedUrl: string): boolean {
 
 /**
  * Validates that the server is reachable and the token is valid before adding.
- * Returns an error message key (i18n) or null if validation passes.
+ * Returns a discriminated union: `{ valid: true }` or
+ * `{ valid: false, messageKey }`.
  */
 async function validateConnection(
   baseUrl: string,
@@ -186,27 +187,60 @@ async function validateConnection(
 > {
   const config = { baseUrl, token };
 
-  // First check server reachability (no auth required)
-  const healthy = await apiClient.healthCheck(config);
-  if (!healthy) {
-    return { valid: false, messageKey: 'connectionFailed' };
-  }
-
-  // Then check token validity by trying to fetch projects
-  try {
-    await apiClient.getProjects(config);
-  } catch (err) {
-    // Reject both 401 (unauthenticated) and 403 (authenticated but
-    // unauthorized / invalid bearer token) — many archive/auth stacks
-    // return 403 for an invalid token, and the UI should block adding an
-    // unusable server in either case.
-    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-      return { valid: false, messageKey: 'invalidToken' };
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const validationPromise = (async () => {
+    // First check server reachability (no auth required)
+    const healthy = await apiClient.healthCheck(config);
+    if (!healthy) {
+      return { valid: false, messageKey: 'connectionFailed' as const };
     }
-    // Other errors (e.g. 500) — server is reachable, let the sync handle it
-  }
 
-  return { valid: true };
+    // Then check token validity by trying to fetch projects
+    try {
+      await apiClient.getProjects(config);
+    } catch (err) {
+      // Reject both 401 (unauthenticated) and 403 (authenticated but
+      // unauthorized / invalid bearer token) — many archive/auth stacks
+      // return 403 for an invalid token, and the UI should block adding an
+      // unusable server in either case.
+      if (
+        err instanceof ApiError &&
+        (err.status === 401 || err.status === 403)
+      ) {
+        return { valid: false, messageKey: 'invalidToken' as const };
+      }
+      // Non-auth errors (e.g. 500, schema validation, proxy failures) are
+      // intentionally allowed through. The server responded (unlike a network
+      // failure), so it's reachable — sync will surface real errors with
+      // proper context. Blocking here would prevent adding a temporarily
+      // erroring but otherwise valid server.
+      console.warn(
+        'validateConnection: non-auth error from /projects, allowing through',
+        err,
+      );
+    }
+
+    return { valid: true } as const;
+  })();
+
+  // Structural safety net: if the underlying fetches hang indefinitely
+  // (api-client methods don't accept an AbortSignal), race against a
+  // 10-second timeout and treat it as a connection failure.
+  const timeoutPromise = new Promise<{
+    valid: false;
+    messageKey: keyof typeof messages;
+  }>((resolve) => {
+    timeoutId = setTimeout(
+      () => resolve({ valid: false, messageKey: 'connectionFailed' }),
+      10_000,
+    );
+  });
+
+  try {
+    return await Promise.race([validationPromise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
 }
 
 function AddArchiveServerDialog({
