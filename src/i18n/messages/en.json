@@ -1182,7 +1182,7 @@
     "defaultMessage": "Yes, Clear Everything"
   },
   "settings.storage.clearConfirmDescription": {
-    "defaultMessage": "This will remove all locally cached data including projects, observations, alerts, and attachments. Data will need to be re-synced. This cannot be undone."
+    "defaultMessage": "This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. This cannot be undone."
   },
   "settings.storage.clearConfirmTitle": {
     "defaultMessage": "Clear All Cached Data?"
