@@ -732,6 +732,39 @@ describe('AddArchiveServerDialog', () => {
     expect(mockCreateRemoteServer).not.toHaveBeenCalled();
   });
 
+  it('blocks adding when server is unreachable (healthCheck fails) in advanced mode', async () => {
+    server.use(
+      http.get('*/healthcheck', () =>
+        HttpResponse.json(
+          { error: { message: 'Connection refused' } },
+          { status: 502 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    await user.click(screen.getByTestId('advanced-toggle'));
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://archive.test',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'some-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      await screen.findByText('Could not connect to server'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
   // ---- Encrypted invite URL tests ----
 
   describe('encrypted invite URLs', () => {
