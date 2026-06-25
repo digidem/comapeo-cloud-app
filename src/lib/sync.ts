@@ -250,13 +250,18 @@ export async function syncRemoteArchive(
   serverDbId: string,
   options: SyncOptions,
 ): Promise<SyncResult> {
-  // Check the lock BEFORE any side effects (ensureServerInStore, status updates)
+  // Check the lock BEFORE any side effects (ensureServerInStore, status updates).
+  // If a sync is already running for this server, wait for it to complete
+  // and return its result instead of rejecting — this prevents confusing
+  // "Sync already in progress" errors when auto-sync and manual add compete.
+  // Note: when a sync is already running, the second caller's options are
+  // intentionally ignored — the first call's result is shared. This is
+  // acceptable because concurrent syncs for the same server typically use
+  // identical credentials (e.g. auto-sync + manual add). If token rotation
+  // during sync becomes common, revisit to merge or queue options.
   const existingSync = activeSyncs.get(serverDbId);
   if (existingSync) {
-    return {
-      success: false,
-      error: 'Sync already in progress',
-    };
+    return existingSync;
   }
 
   const syncPromise = doSync(serverDbId, options).finally(() => {

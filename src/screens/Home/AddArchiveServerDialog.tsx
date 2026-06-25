@@ -4,7 +4,12 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
-import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
+import {
+  ApiError,
+  InviteApiError,
+  apiClient,
+  redeemEncryptedInvite,
+} from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { parseInviteUrl, warnLegacyInviteUrlOnce } from '@/lib/invite-url';
 import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
@@ -120,6 +125,14 @@ const messages = defineMessages({
     id: 'home.archive.dialog.advancedDescription',
     defaultMessage: 'Enter server details manually',
   },
+  connectionFailed: {
+    id: 'home.archive.dialog.connectionFailed',
+    defaultMessage: 'Could not connect to server',
+  },
+  invalidToken: {
+    id: 'home.archive.dialog.invalidToken',
+    defaultMessage: 'Invalid token or unauthorized',
+  },
 });
 
 function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
@@ -161,6 +174,75 @@ function checkDuplicate(normalizedUrl: string): boolean {
   });
 }
 
+/**
+ * Validates that the server is reachable and the token is valid before adding.
+ * Returns a discriminated union: `{ valid: true }` or
+ * `{ valid: false, messageKey }`.
+ */
+async function validateConnection(
+  baseUrl: string,
+  token: string,
+): Promise<
+  { valid: true } | { valid: false; messageKey: keyof typeof messages }
+> {
+  const config = { baseUrl, token };
+
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const validationPromise = (async () => {
+    // First check server reachability (no auth required)
+    const healthy = await apiClient.healthCheck(config);
+    if (!healthy) {
+      return { valid: false, messageKey: 'connectionFailed' as const };
+    }
+
+    // Then check token validity by trying to fetch projects
+    try {
+      await apiClient.getProjects(config);
+    } catch (err) {
+      // Reject both 401 (unauthenticated) and 403 (authenticated but
+      // unauthorized / invalid bearer token) — many archive/auth stacks
+      // return 403 for an invalid token, and the UI should block adding an
+      // unusable server in either case.
+      if (
+        err instanceof ApiError &&
+        (err.status === 401 || err.status === 403)
+      ) {
+        return { valid: false, messageKey: 'invalidToken' as const };
+      }
+      // Non-auth errors (e.g. 500, schema validation, proxy failures) are
+      // intentionally allowed through. The server responded (unlike a network
+      // failure), so it's reachable — sync will surface real errors with
+      // proper context. Blocking here would prevent adding a temporarily
+      // erroring but otherwise valid server.
+      console.warn(
+        'validateConnection: non-auth error from /projects, allowing through',
+        err,
+      );
+    }
+
+    return { valid: true } as const;
+  })();
+
+  // Structural safety net: if the underlying fetches hang indefinitely
+  // (api-client methods don't accept an AbortSignal), race against a
+  // 10-second timeout and treat it as a connection failure.
+  const timeoutPromise = new Promise<{
+    valid: false;
+    messageKey: keyof typeof messages;
+  }>((resolve) => {
+    timeoutId = setTimeout(
+      () => resolve({ valid: false, messageKey: 'connectionFailed' }),
+      10_000,
+    );
+  });
+
+  try {
+    return await Promise.race([validationPromise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
+}
+
 function AddArchiveServerDialog({
   isOpen,
   onClose,
@@ -182,7 +264,7 @@ function AddArchiveServerDialog({
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [inviteUrlError, setInviteUrlError] = useState<string | null>(null);
 
-  function finalizeAddServer(baseUrl: string, token: string) {
+  async function finalizeAddServer(baseUrl: string, token: string) {
     const normalizedUrl = normalizeArchiveBaseUrl(baseUrl);
     if (!normalizedUrl.ok) {
       const urlMessage = getUrlValidationMessage(normalizedUrl.code);
@@ -198,6 +280,16 @@ function AddArchiveServerDialog({
       dispatch({
         type: 'error',
         message: intl.formatMessage(messages.duplicateServer),
+      });
+      return;
+    }
+
+    // Validate server is reachable and token is valid
+    const validation = await validateConnection(normalizedUrl.value, token);
+    if (!validation.valid) {
+      dispatch({
+        type: 'error',
+        message: intl.formatMessage(messages[validation.messageKey]),
       });
       return;
     }
@@ -237,7 +329,7 @@ function AddArchiveServerDialog({
     );
   }
 
-  function handleInviteSubmit() {
+  async function handleInviteSubmit() {
     const inviteUrl = inviteUrlRef.current?.value?.trim() ?? '';
 
     setInviteUrlError(null);
@@ -276,38 +368,45 @@ function AddArchiveServerDialog({
       }
 
       dispatch({ type: 'submit' });
-      finalizeAddServer(parsed.baseUrl, parsed.token);
+      await finalizeAddServer(parsed.baseUrl, parsed.token);
       return;
     }
 
     // Encrypted: redeem the code first, then proceed with the same flow.
     dispatch({ type: 'submit' });
-    redeemEncryptedInvite(parsed.code).then(
-      (redeemed) => {
-        finalizeAddServer(redeemed.baseUrl, redeemed.token);
-      },
-      (err: unknown) => {
-        if (err instanceof InviteApiError && err.code === 'INVITE_EXPIRED') {
-          dispatch({
-            type: 'error',
-            message: intl.formatMessage(messages.inviteExpired),
-          });
-          return;
-        }
-        let message: string;
-        if (err instanceof InviteApiError) {
-          message = intl.formatMessage(messages.invalidInviteUrl);
-        } else if (err instanceof Error) {
-          message = err.message;
-        } else {
-          message = intl.formatMessage(messages.failed);
-        }
-        dispatch({ type: 'error', message });
-      },
-    );
+    redeemEncryptedInvite(parsed.code)
+      .then(
+        async (redeemed) => {
+          await finalizeAddServer(redeemed.baseUrl, redeemed.token);
+        },
+        (err: unknown) => {
+          if (err instanceof InviteApiError && err.code === 'INVITE_EXPIRED') {
+            dispatch({
+              type: 'error',
+              message: intl.formatMessage(messages.inviteExpired),
+            });
+            return;
+          }
+          let message: string;
+          if (err instanceof InviteApiError) {
+            message = intl.formatMessage(messages.invalidInviteUrl);
+          } else if (err instanceof Error) {
+            message = err.message;
+          } else {
+            message = intl.formatMessage(messages.failed);
+          }
+          dispatch({ type: 'error', message });
+        },
+      )
+      .catch(() => {
+        dispatch({
+          type: 'error',
+          message: intl.formatMessage(messages.failed),
+        });
+      });
   }
 
-  function handleAdvancedSubmit() {
+  async function handleAdvancedSubmit() {
     const url = urlRef.current?.value?.trim() ?? '';
     const token = tokenRef.current?.value?.trim() ?? '';
     const label = labelRef.current?.value?.trim() ?? '';
@@ -346,6 +445,16 @@ function AddArchiveServerDialog({
 
     dispatch({ type: 'submit' });
 
+    // Validate server is reachable and token is valid
+    const validation = await validateConnection(normalizedUrl.value, token);
+    if (!validation.valid) {
+      dispatch({
+        type: 'error',
+        message: intl.formatMessage(messages[validation.messageKey]),
+      });
+      return;
+    }
+
     const addServer = useAuthStore.getState().addServer;
     addServer({
       label: label || normalizedUrl.value,
@@ -374,11 +483,12 @@ function AddArchiveServerDialog({
   }
 
   function handleSubmit() {
-    if (showAdvanced) {
-      handleAdvancedSubmit();
-    } else {
-      handleInviteSubmit();
-    }
+    const promise = showAdvanced
+      ? handleAdvancedSubmit()
+      : handleInviteSubmit();
+    promise.catch(() => {
+      dispatch({ type: 'error', message: intl.formatMessage(messages.failed) });
+    });
   }
 
   function handleClose() {

@@ -167,7 +167,7 @@ describe('clearAllData', () => {
     expect(count).toBe(0);
   });
 
-  it('clears cached project data while preserving remote servers', async () => {
+  it('clears all data including remote servers and icon cache', async () => {
     const db = getDb();
 
     await db.remoteServers.add({
@@ -231,7 +231,9 @@ describe('clearAllData', () => {
     expect(await db.presets.count()).toBe(0);
     expect(await db.tracks.count()).toBe(0);
     expect(await db.fields.count()).toBe(0);
-    expect(await db.remoteServers.count()).toBe(1);
+    // remoteServers and iconCache are now also cleared
+    expect(await db.remoteServers.count()).toBe(0);
+    expect(await db.iconCache.count()).toBe(0);
     expect(await db.syncMetadata.count()).toBe(0);
   });
 });

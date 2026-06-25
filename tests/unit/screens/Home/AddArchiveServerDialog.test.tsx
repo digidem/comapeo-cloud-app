@@ -1,8 +1,15 @@
 import { server } from '@tests/mocks/node';
-import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
+import {
+  fireEvent,
+  render,
+  screen,
+  userEvent,
+  waitFor,
+} from '@tests/mocks/test-utils';
 import { HttpResponse, http } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { apiClient } from '@/lib/api-client';
 import { resetDb } from '@/lib/db';
 import { AddArchiveServerDialog } from '@/screens/Home/AddArchiveServerDialog';
 import { useAuthStore } from '@/stores/auth-store';
@@ -46,6 +53,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -201,6 +209,39 @@ describe('AddArchiveServerDialog', () => {
     expect(
       screen.getByText('This archive server is already connected'),
     ).toBeInTheDocument();
+  });
+
+  it('blocks adding via legacy invite URL when /projects returns 401', async () => {
+    server.use(
+      http.get('*/projects', () =>
+        HttpResponse.json(
+          {
+            error: { code: 'UNAUTHORIZED', message: 'Invalid bearer token' },
+          },
+          { status: 401 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText('Invite URL or Code'),
+      'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+    );
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      await screen.findByText('Invalid token or unauthorized'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
   });
 
   it('invite URL mode shows loading state on submit', async () => {
@@ -654,6 +695,191 @@ describe('AddArchiveServerDialog', () => {
     });
   });
 
+  // ---- Pre-add token validation tests ----
+
+  it('blocks adding when /projects returns 401 (invalid token) in advanced mode', async () => {
+    server.use(
+      http.get('*/projects', () =>
+        HttpResponse.json(
+          {
+            error: { code: 'UNAUTHORIZED', message: 'Invalid bearer token' },
+          },
+          { status: 401 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    // Switch to advanced mode
+    await user.click(screen.getByTestId('advanced-toggle'));
+
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://archive.test',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'bad-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      await screen.findByText('Invalid token or unauthorized'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
+  it('blocks adding when /projects returns 403 (unauthorized) in advanced mode', async () => {
+    // Many archive/auth stacks return 403 for an invalid or unauthorized
+    // bearer token; this must be treated the same as 401 (regression guard).
+    server.use(
+      http.get('*/projects', () =>
+        HttpResponse.json(
+          {
+            error: { code: 'FORBIDDEN', message: 'Access denied' },
+          },
+          { status: 403 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    // Switch to advanced mode
+    await user.click(screen.getByTestId('advanced-toggle'));
+
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://archive.test',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'revoked-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      await screen.findByText('Invalid token or unauthorized'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
+  it('blocks adding when server is unreachable (healthCheck fails) in advanced mode', async () => {
+    server.use(
+      http.get('*/healthcheck', () =>
+        HttpResponse.json(
+          { error: { message: 'Connection refused' } },
+          { status: 502 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    await user.click(screen.getByTestId('advanced-toggle'));
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://archive.test',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'some-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      await screen.findByText('Could not connect to server'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
+  it('allows adding when /projects returns 500 (non-auth error) in advanced mode', async () => {
+    server.use(
+      http.get('*/projects', () =>
+        HttpResponse.json(
+          { error: { message: 'Internal server error' } },
+          { status: 500 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    const onAdded = vi.fn();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={onAdded}
+      />,
+    );
+
+    await user.click(screen.getByTestId('advanced-toggle'));
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://archive.test',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'some-token');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => {
+      expect(onAdded).toHaveBeenCalledWith('test-server-id');
+    });
+  });
+
+  it('shows connection error when validation times out (server hangs)', async () => {
+    // Mock healthCheck to never resolve (simulates a server that hangs).
+    // We spy directly on the api-client to avoid fake-timer interference
+    // with MSW's underlying fetch plumbing.
+    const neverResolves = new Promise<boolean>(() => {});
+    vi.spyOn(apiClient, 'healthCheck').mockImplementation(() => neverResolves);
+
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        onAdded={() => {}}
+      />,
+    );
+
+    await user.click(screen.getByTestId('advanced-toggle'));
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://archive.test',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'some-token');
+
+    // Enable fake timers BEFORE clicking "Add" so the 10s setTimeout inside
+    // validateConnection is registered as a fake timer. We use fireEvent
+    // (synchronous, no internal timers) instead of userEvent for the click.
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    // Advance past the 10s timeout — this fires the setTimeout callback
+    // that resolves timeoutPromise with { valid: false, connectionFailed }
+    await vi.advanceTimersByTimeAsync(10_500);
+
+    // Restore real timers so findByText polling works normally
+    vi.useRealTimers();
+    expect(
+      await screen.findByText('Could not connect to server'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
   // ---- Encrypted invite URL tests ----
 
   describe('encrypted invite URLs', () => {
@@ -693,6 +919,37 @@ describe('AddArchiveServerDialog', () => {
           label: 'archive.test',
         }),
       );
+    });
+
+    it('blocks adding via encrypted invite when server is unreachable', async () => {
+      server.use(
+        http.get('*/healthcheck', () =>
+          HttpResponse.json(
+            { error: { message: 'Connection refused' } },
+            { status: 502 },
+          ),
+        ),
+      );
+
+      const code = makeEncryptedCode('https://archive.test', 'some-token');
+      const inviteUrl = `https://app.com/invite?code=${encodeURIComponent(code)}`;
+
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.type(screen.getByLabelText('Invite URL or Code'), inviteUrl);
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      expect(
+        await screen.findByText('Could not connect to server'),
+      ).toBeInTheDocument();
+      expect(mockCreateRemoteServer).not.toHaveBeenCalled();
     });
 
     it('shows the expired error when the encrypted code is expired', async () => {

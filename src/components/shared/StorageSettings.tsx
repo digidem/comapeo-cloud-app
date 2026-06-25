@@ -12,6 +12,7 @@ import {
   clearAllData,
   getStorageStats,
 } from '@/lib/storage';
+import { useAuthStore } from '@/stores/auth-store';
 
 const messages = defineMessages({
   storageTitle: {
@@ -73,7 +74,7 @@ const messages = defineMessages({
   clearConfirmDescription: {
     id: 'settings.storage.clearConfirmDescription',
     defaultMessage:
-      'This will remove all locally cached data including projects, observations, alerts, and attachments. Data will need to be re-synced. This cannot be undone.',
+      'This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. This cannot be undone.',
   },
   clearConfirmButton: {
     id: 'settings.storage.clearConfirmButton',
@@ -193,6 +194,10 @@ export function StorageSettings() {
     setClearError(null);
     try {
       await clearAllData();
+      // Clear in-memory auth store so it's consistent with the now-empty IndexedDB.
+      // Without this, stale server records in memory would block re-adding the
+      // same server (duplicate check) even though IndexedDB is empty.
+      useAuthStore.getState().clearAll();
       setIsConfirmOpen(false);
       await queryClient.invalidateQueries();
       await loadStats();

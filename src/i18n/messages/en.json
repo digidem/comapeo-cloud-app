@@ -449,6 +449,9 @@
   "home.archive.dialog.cancel": {
     "defaultMessage": "Cancel"
   },
+  "home.archive.dialog.connectionFailed": {
+    "defaultMessage": "Could not connect to server"
+  },
   "home.archive.dialog.duplicateServer": {
     "defaultMessage": "This archive server is already connected"
   },
@@ -457,6 +460,9 @@
   },
   "home.archive.dialog.invalidInviteUrl": {
     "defaultMessage": "Invalid invite. Make sure it's a full URL or a valid code."
+  },
+  "home.archive.dialog.invalidToken": {
+    "defaultMessage": "Invalid token or unauthorized"
   },
   "home.archive.dialog.invalidUrl": {
     "defaultMessage": "Enter a full URL including http:// or https://"
@@ -1176,7 +1182,7 @@
     "defaultMessage": "Yes, Clear Everything"
   },
   "settings.storage.clearConfirmDescription": {
-    "defaultMessage": "This will remove all locally cached data including projects, observations, alerts, and attachments. Data will need to be re-synced. This cannot be undone."
+    "defaultMessage": "This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. This cannot be undone."
   },
   "settings.storage.clearConfirmTitle": {
     "defaultMessage": "Clear All Cached Data?"
