@@ -340,29 +340,36 @@ function AddArchiveServerDialog({
 
     // Encrypted: redeem the code first, then proceed with the same flow.
     dispatch({ type: 'submit' });
-    redeemEncryptedInvite(parsed.code).then(
-      async (redeemed) => {
-        await finalizeAddServer(redeemed.baseUrl, redeemed.token);
-      },
-      (err: unknown) => {
-        if (err instanceof InviteApiError && err.code === 'INVITE_EXPIRED') {
-          dispatch({
-            type: 'error',
-            message: intl.formatMessage(messages.inviteExpired),
-          });
-          return;
-        }
-        let message: string;
-        if (err instanceof InviteApiError) {
-          message = intl.formatMessage(messages.invalidInviteUrl);
-        } else if (err instanceof Error) {
-          message = err.message;
-        } else {
-          message = intl.formatMessage(messages.failed);
-        }
-        dispatch({ type: 'error', message });
-      },
-    );
+    redeemEncryptedInvite(parsed.code)
+      .then(
+        async (redeemed) => {
+          await finalizeAddServer(redeemed.baseUrl, redeemed.token);
+        },
+        (err: unknown) => {
+          if (err instanceof InviteApiError && err.code === 'INVITE_EXPIRED') {
+            dispatch({
+              type: 'error',
+              message: intl.formatMessage(messages.inviteExpired),
+            });
+            return;
+          }
+          let message: string;
+          if (err instanceof InviteApiError) {
+            message = intl.formatMessage(messages.invalidInviteUrl);
+          } else if (err instanceof Error) {
+            message = err.message;
+          } else {
+            message = intl.formatMessage(messages.failed);
+          }
+          dispatch({ type: 'error', message });
+        },
+      )
+      .catch(() => {
+        dispatch({
+          type: 'error',
+          message: intl.formatMessage(messages.failed),
+        });
+      });
   }
 
   async function handleAdvancedSubmit() {
@@ -442,11 +449,12 @@ function AddArchiveServerDialog({
   }
 
   function handleSubmit() {
-    if (showAdvanced) {
-      handleAdvancedSubmit();
-    } else {
-      handleInviteSubmit();
-    }
+    const promise = showAdvanced
+      ? handleAdvancedSubmit()
+      : handleInviteSubmit();
+    promise.catch(() => {
+      dispatch({ type: 'error', message: intl.formatMessage(messages.failed) });
+    });
   }
 
   function handleClose() {
