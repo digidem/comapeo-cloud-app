@@ -358,7 +358,15 @@ export function useAuthenticatedImageUrl(
     // dead entry. Does not touch React state: by the time the controller
     // fires, the originator has already unmounted.
     const settleOnAbort = () => {
-      blobCache.invalidate((k) => k === cacheKey);
+      // Identity-guard: only invalidate the entry this run created. A servers
+      // store change mid-flight triggers effect cleanup → re-run, which creates
+      // a replacement entry (new controller) under the same cache key. Without
+      // this guard, the aborted originator would invalidate + abort the
+      // replacement entry, leaving the remounted hook stuck at isLoading:true.
+      const cur = blobCache.get(cacheKey);
+      if (cur && cur.controller === controller) {
+        blobCache.invalidate((k) => k === cacheKey);
+      }
       rejectInflight(new DOMException('Aborted', 'AbortError'));
     };
 
@@ -413,9 +421,15 @@ export function useAuthenticatedImageUrl(
         }
         publishBlob(blob);
       } catch (err: unknown) {
-        // Drop the failed inflight entry so the next mount can retry
-        // instead of attaching to a permanently rejected promise.
-        blobCache.invalidate((k) => k === cacheKey);
+        // Identity-guard: only invalidate the entry this run created. A servers
+        // store change mid-flight triggers effect cleanup → re-run, which creates
+        // a replacement entry (new controller) under the same cache key. Without
+        // this guard, the aborted originator would invalidate + abort the
+        // replacement entry, leaving the remounted hook stuck at isLoading:true.
+        const cur = blobCache.get(cacheKey);
+        if (cur && cur.controller === controller) {
+          blobCache.invalidate((k) => k === cacheKey);
+        }
         // Propagate to in-flight joiners so they see the error too.
         rejectInflight(err);
         if (cancelled || !mountedRef.current) return;

@@ -458,6 +458,85 @@ describe('useAuthenticatedImageUrl', () => {
     );
   });
 
+  it('servers reference change mid-flight does not abort replacement fetch (identity-guard)', async () => {
+    // LOCAL url → cache key is `local:token|url`, which does NOT change when
+    // the `servers` array gets a new reference. When servers change mid-flight,
+    // the old run's settleOnAbort fires invalidate(key) — which without the
+    // identity-guard kills the replacement entry (E2), aborts E2's controller,
+    // and leaves the hook stuck at isLoading:true.
+    //
+    // Both fetches must be held pending so E2 is still in-flight when E1's
+    // abort fires. If E2 resolves immediately, it completes before the race.
+    useAuthStore.setState({ token: 'tok1', baseUrl: 'http://localhost:8080' });
+
+    let resolveFirst!: (value: Response) => void;
+    let resolveSecond!: (value: Response) => void;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveSecond = resolve;
+        }),
+    );
+
+    const { useAuthenticatedImageUrl } =
+      await import('@/hooks/useAuthenticatedImageUrl');
+
+    const { result } = renderHook(({ url }) => useAuthenticatedImageUrl(url), {
+      initialProps: { url: 'http://localhost:8080/photo.jpg' },
+    });
+
+    // Let E1's fetch go in-flight.
+    await act(() => Promise.resolve());
+    expect(result.current.isLoading).toBe(true);
+
+    // New `servers` array reference → effect cleanup (unref → abort E1) +
+    // re-run (creates E2 with a NEW controller under the SAME cache key).
+    await act(() => {
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 's1',
+            label: 'Archive',
+            baseUrl: 'https://archive.example.com',
+            token: 'tok1',
+            status: 'connected' as const,
+          },
+        ],
+      });
+    });
+    await act(() => Promise.resolve());
+    await act(() => Promise.resolve());
+
+    // Resolve E1's fetch. E1's controller is aborted, so run() hits the
+    // `controller.signal.aborted` check and calls settleOnAbort(). Without the
+    // fix, settleOnAbort's invalidate(key) matches E2 → deletes E2 + aborts
+    // E2's controller.
+    await act(async () => {
+      resolveFirst(createMockImageResponse());
+    });
+    await act(() => Promise.resolve());
+    await act(() => Promise.resolve());
+
+    // Resolve E2's fetch. Without the fix, E2's controller was aborted by E1's
+    // invalidate, so E2 hits its own abort check and returns without setState
+    // → hook stuck at isLoading:true forever.
+    await act(async () => {
+      resolveSecond(createMockImageResponse());
+    });
+    await act(() => Promise.resolve());
+    await act(() => Promise.resolve());
+
+    // E2 must complete normally; the hook must NOT be stuck loading.
+    expect(result.current.blobUrl).not.toBeNull();
+    expect(result.current.isLoading).toBe(false);
+  });
+
   describe('icon caching (cache: true)', () => {
     it('serves a cached blob without hitting the network', async () => {
       const url = 'https://archive.example.com/projects/p1/icon/icon-1';
