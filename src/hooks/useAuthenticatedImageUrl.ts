@@ -211,6 +211,11 @@ export function useAuthenticatedImageUrl(
     const cachedEntry = blobCache.get(cacheKey);
     if (cachedEntry && cachedEntry.blobUrl && !cachedEntry.inflight) {
       blobCache.ref(cacheKey);
+      // Honor the cache:true IDB write contract even when this consumer
+      // attaches to an entry originated by a cache:false consumer.
+      if (cache && cachedEntry.blob) {
+        void putCachedIconBlob(url, cachedEntry.blob).catch(() => {});
+      }
       setImageState({
         blobUrl: cachedEntry.blobUrl,
         isLoading: false,

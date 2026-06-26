@@ -49,6 +49,12 @@ export interface ImageBlobCacheOptions {
    * 0) in tests to make eviction deterministic with fake timers.
    */
   revokeAfterMs?: number;
+  /**
+   * Maximum number of entries the cache will hold. When a new entry is added
+   * beyond this limit, the oldest entry with refCount === 0 is evicted
+   * (revoking its blob URL). Set to 0 to disable the cap. Default: 30.
+   */
+  maxEntries?: number;
 }
 
 export interface ImageBlobCache {
@@ -69,7 +75,7 @@ export interface ImageBlobCache {
 export function createImageBlobCache(
   opts: ImageBlobCacheOptions = {},
 ): ImageBlobCache {
-  const { revokeAfterMs = 30_000 } = opts;
+  const { revokeAfterMs = 30_000, maxEntries = 30 } = opts;
   const store = new Map<CacheKey, CacheEntry>();
 
   function cancelEvictionTimer(entry: CacheEntry): void {
@@ -155,6 +161,20 @@ export function createImageBlobCache(
         ...entry,
         refCount: entry.refCount ?? 0,
       });
+
+      // Bound the cache: evict the oldest zero-ref entry when over capacity.
+      // This prevents unbounded memory growth in virtualized photo grids where
+      // many large blobs can accumulate during the grace period.
+      if (maxEntries > 0 && store.size > maxEntries) {
+        for (const [k, e] of store) {
+          if (k !== key && e.refCount === 0) {
+            store.delete(k);
+            abortController(e);
+            revokeEntry(e);
+            break;
+          }
+        }
+      }
     },
 
     ref(key: CacheKey): void {
