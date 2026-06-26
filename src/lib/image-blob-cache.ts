@@ -34,6 +34,8 @@ export interface CacheEntry {
    * attached and detached.
    */
   controller?: AbortController;
+  /** The resolved Blob, stored alongside blobUrl for joiner-side IDB writes. */
+  blob?: Blob;
   serverToken: string;
   serverSignature: string;
   /** Internal: timer handle for grace-period eviction. Not part of the public API. */
@@ -174,11 +176,21 @@ export function createImageBlobCache(
 
       if (entry.refCount === 0) {
         // No more subscribers. Abort the shared in-flight fetch (if any) so
-        // it doesn't continue running with no one waiting for the result,
-        // then start the grace-period eviction timer.
+        // it doesn't continue running with no one waiting for the result.
         abortController(entry);
-        // Start the grace-period eviction timer. A subsequent ref() cancels it.
-        scheduleEviction(key, entry);
+
+        // If the fetch never completed (still has an unresolved inflight),
+        // remove the entry immediately. Dead in-flight promises must not
+        // remain joinable during the grace period — a rapid remount would
+        // attach to the aborted promise and surface a spurious AbortError
+        // instead of starting a fresh fetch. The grace period only applies
+        // to resolved blob URLs (completed fetches worth reusing).
+        if (entry.inflight) {
+          store.delete(key);
+        } else {
+          // Start the grace-period eviction timer. A subsequent ref() cancels it.
+          scheduleEviction(key, entry);
+        }
       }
     },
 

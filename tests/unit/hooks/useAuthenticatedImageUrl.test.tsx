@@ -1122,4 +1122,97 @@ describe('useAuthenticatedImageUrl', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('abort-remount race (regression)', () => {
+    it('rapid remount after in-flight abort starts a fresh fetch, not a dead joiner', async () => {
+      const url = 'http://localhost:8080/abort-remount-race.jpg';
+
+      // Hold the fetch pending so it is still in-flight when we unmount.
+      let _resolveFetch!: (value: Response) => void;
+      const pendingFetch = new Promise<Response>((resolve) => {
+        _resolveFetch = resolve;
+      });
+      fetchMock.mockImplementationOnce(() => pendingFetch);
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Originator (Path 3) — fetch is in-flight.
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Last subscriber unmounts while fetch is STILL in-flight → AbortController fires.
+      unmount1();
+      await act(() => Promise.resolve());
+
+      // A rapid remount must NOT join the dead in-flight promise. Before the
+      // fix it would hit Path 2, attach to the aborted inflight, and surface
+      // a spurious AbortError instead of starting a new fetch.
+      fetchMock.mockResolvedValueOnce(createMockImageResponse());
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl(url),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Fetch was called twice: once for the aborted originator, once for the remount.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      // The remount resolved successfully — no AbortError.
+      expect(result2.current.blobUrl).toBe('blob:mocked-url-1');
+      expect(result2.current.isLoading).toBe(false);
+      expect(result2.current.error).toBeNull();
+    });
+
+    it('cache:true joiner writes to IDB when originator unmounts before completing', async () => {
+      const url = 'http://localhost:8080/joiner-idb-gap.jpg';
+      const db = await import('@/lib/db');
+      // IDB cache miss — forces fallthrough to network fetch.
+      vi.spyOn(db, 'getCachedIconBlob').mockResolvedValue(undefined);
+      const putSpy = vi.spyOn(db, 'putCachedIconBlob');
+
+      // Hold the fetch pending so the originator is still in-flight.
+      let resolveFetch!: (value: Response) => void;
+      const pendingFetch = new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+      fetchMock.mockImplementationOnce(() => pendingFetch);
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Originator (Path 3) with cache: true — fetch in-flight.
+      const first = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Joiner (Path 2) mounts while originator is still fetching.
+      const second = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+
+      // Originator unmounts before the fetch resolves.
+      first.unmount();
+      await act(() => Promise.resolve());
+
+      // Fetch resolves — joiner should publish the blob AND write to IDB.
+      await act(async () => {
+        resolveFetch(createMockImageResponse());
+      });
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Joiner got the blob URL.
+      expect(second.result.current.blobUrl).toBe('blob:mocked-url-1');
+      // Joiner wrote to IDB (originator was unmounted before it could).
+      expect(putSpy).toHaveBeenCalledWith(url, expect.any(Blob));
+    });
+  });
 });

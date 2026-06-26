@@ -240,6 +240,12 @@ export function useAuthenticatedImageUrl(
               isLoading: false,
               error: null,
             });
+            // Joiner-side IDB write: if the originator unmounted before
+            // writing to IDB, this joiner fills the cache so subsequent
+            // mounts skip the network entirely.
+            if (cache && resolved.blob) {
+              void putCachedIconBlob(url, resolved.blob).catch(() => {});
+            }
           }
         })
         .catch((err: unknown) => {
@@ -309,6 +315,7 @@ export function useAuthenticatedImageUrl(
       // resolved blob URL.
       blobCache.set(cacheKey, {
         blobUrl,
+        blob,
         serverToken: matchingServer?.token ?? token ?? '',
         serverSignature: JSON.stringify(servers.map((s) => s.id)),
         refCount: preservedRefCount,
