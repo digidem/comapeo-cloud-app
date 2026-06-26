@@ -319,6 +319,11 @@ export function useAuthenticatedImageUrl(
       // claimed additional refs via blobCache.ref() while the fetch was pending.
       const existing = blobCache.get(cacheKey);
       const preservedRefCount = existing?.refCount ?? 1;
+      // Carry the _persisted flag so the originator's IDB write (set on the
+      // inflight entry before publishBlob) survives the entry reconstruction.
+      // Without this, publishBlob creates a fresh object that drops _persisted,
+      // and the first cache-hit consumer redundantly re-writes to IDB.
+      const wasPersisted = existing?._persisted ?? false;
       // Always store in the in-memory cache — even if the originating
       // subscriber has unmounted, other in-flight subscribers need the
       // resolved blob URL.
@@ -333,6 +338,7 @@ export function useAuthenticatedImageUrl(
         // abort() is a no-op on the network, but the reference stays
         // consistent for any cleanup path that reads it.
         controller,
+        _persisted: wasPersisted,
       });
       // Resolve the in-flight promise so any Path 2 joiners can read the
       // cached blobUrl.

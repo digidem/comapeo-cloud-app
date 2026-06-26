@@ -37,7 +37,7 @@ export interface CacheEntry {
   /** The resolved Blob, stored alongside blobUrl for joiner-side IDB writes. */
   blob?: Blob;
   /**
-   * Auth token used to fetch this entry. Prim metadata — the cache key already
+   * Auth token used to fetch this entry. Primary metadata — the cache key already
    * encodes the token for invalidation. Kept for diagnostics and for callers
    * that match entries via `invalidate((_, e) => e.serverToken === ...)`.
    */
