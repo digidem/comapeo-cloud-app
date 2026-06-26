@@ -212,8 +212,10 @@ export function useAuthenticatedImageUrl(
     if (cachedEntry && cachedEntry.blobUrl && !cachedEntry.inflight) {
       blobCache.ref(cacheKey);
       // Honor the cache:true IDB write contract even when this consumer
-      // attaches to an entry originated by a cache:false consumer.
-      if (cache && cachedEntry.blob) {
+      // attaches to an entry originated by a cache:false consumer. Guard with
+      // the _persisted flag to avoid redundant IDB writes across consumers.
+      if (cache && cachedEntry.blob && !cachedEntry._persisted) {
+        cachedEntry._persisted = true;
         void putCachedIconBlob(url, cachedEntry.blob).catch(() => {});
       }
       setImageState({
@@ -247,8 +249,10 @@ export function useAuthenticatedImageUrl(
             });
             // Joiner-side IDB write: if the originator unmounted before
             // writing to IDB, this joiner fills the cache so subsequent
-            // mounts skip the network entirely.
-            if (cache && resolved.blob) {
+            // mounts skip the network entirely. Guard with _persisted to
+            // avoid redundant writes across originator + joiners.
+            if (cache && resolved.blob && !resolved._persisted) {
+              resolved._persisted = true;
               void putCachedIconBlob(url, resolved.blob).catch(() => {});
             }
           }
@@ -395,7 +399,11 @@ export function useAuthenticatedImageUrl(
         // but only write to the IDB icon cache if still mounted.
         if (cache && !cancelled && mountedRef.current) {
           // Best-effort write; never block display on the cache.
-          void putCachedIconBlob(url, blob).catch(() => {});
+          const existing = blobCache.get(cacheKey);
+          if (existing && !existing._persisted) {
+            existing._persisted = true;
+            void putCachedIconBlob(url, blob).catch(() => {});
+          }
         }
         publishBlob(blob);
       } catch (err: unknown) {

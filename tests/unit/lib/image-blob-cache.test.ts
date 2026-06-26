@@ -339,4 +339,64 @@ describe('image-blob-cache', () => {
     // Should not throw
     cache.ref('nonexistent');
   });
+
+  describe('maxEntries cap (LRU eviction of oldest zero-ref entry)', () => {
+    it('evicts the oldest zero-ref entry when over capacity', () => {
+      const cache = createImageBlobCache({ maxEntries: 2, revokeAfterMs: 0 });
+      cache.set('key1', {
+        blobUrl: 'blob:1',
+        serverToken: 'tok1',
+        serverSignature: 'sig1',
+      });
+      cache.set('key2', {
+        blobUrl: 'blob:2',
+        serverToken: 'tok2',
+        serverSignature: 'sig2',
+      });
+      // Both fit within the cap
+      expect(cache.size()).toBe(2);
+
+      // Adding a third should evict the oldest zero-ref entry (key1)
+      cache.set('key3', {
+        blobUrl: 'blob:3',
+        serverToken: 'tok3',
+        serverSignature: 'sig3',
+      });
+
+      expect(cache.size()).toBe(2);
+      expect(cache.get('key1')).toBeUndefined();
+      expect(cache.get('key2')).toBeDefined();
+      expect(cache.get('key3')).toBeDefined();
+      // key1's blob URL should be revoked on eviction
+      expect(revokeMock).toHaveBeenCalledWith('blob:1');
+    });
+
+    it('does not evict entries with refCount > 0', () => {
+      const cache = createImageBlobCache({ maxEntries: 2, revokeAfterMs: 0 });
+      // key1 has an active ref — it must not be evicted
+      cache.set('key1', {
+        blobUrl: 'blob:1',
+        serverToken: 'tok1',
+        serverSignature: 'sig1',
+        refCount: 1,
+      });
+      cache.set('key2', {
+        blobUrl: 'blob:2',
+        serverToken: 'tok2',
+        serverSignature: 'sig2',
+      });
+
+      // key2 is the only zero-ref entry → it gets evicted
+      cache.set('key3', {
+        blobUrl: 'blob:3',
+        serverToken: 'tok3',
+        serverSignature: 'sig3',
+      });
+
+      expect(cache.get('key1')).toBeDefined();
+      expect(cache.get('key2')).toBeUndefined();
+      expect(cache.get('key3')).toBeDefined();
+      expect(revokeMock).toHaveBeenCalledWith('blob:2');
+    });
+  });
 });

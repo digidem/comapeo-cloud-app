@@ -36,10 +36,26 @@ export interface CacheEntry {
   controller?: AbortController;
   /** The resolved Blob, stored alongside blobUrl for joiner-side IDB writes. */
   blob?: Blob;
+  /**
+   * Auth token used to fetch this entry. Prim metadata — the cache key already
+   * encodes the token for invalidation. Kept for diagnostics and for callers
+   * that match entries via `invalidate((_, e) => e.serverToken === ...)`.
+   */
   serverToken: string;
+  /**
+   * Stable signature of the server list at fetch time. Metadata — invalidation
+   * works via cache-key change, not by reading this field. Retained for
+   * `invalidate()` matcher use and debugging.
+   */
   serverSignature: string;
   /** Internal: timer handle for grace-period eviction. Not part of the public API. */
   _evictionTimer?: ReturnType<typeof setTimeout>;
+  /**
+   * Internal: whether this entry's blob has been persisted to IndexedDB.
+   * Prevents redundant IDB writes across originator + joiners. The first
+   * consumer to persist sets this flag; subsequent consumers skip the write.
+   */
+  _persisted?: boolean;
 }
 
 export interface ImageBlobCacheOptions {

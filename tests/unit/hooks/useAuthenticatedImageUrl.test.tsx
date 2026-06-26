@@ -653,7 +653,7 @@ describe('useAuthenticatedImageUrl', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    it('change auth store token invalidates cache and triggers refetch', async () => {
+    it('change auth store token produces new cache key and triggers refetch', async () => {
       useAuthStore.setState({
         token: 'token-v1',
         baseUrl: 'http://localhost:8080',
