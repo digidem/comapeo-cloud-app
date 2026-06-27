@@ -60,10 +60,6 @@ const messages = defineMessages({
     id: 'alertDetail.coordinates',
     defaultMessage: 'Coordinates',
   },
-  dataLabel: {
-    id: 'data.title',
-    defaultMessage: 'Data',
-  },
   alertsLabel: {
     id: 'alerts.title',
     defaultMessage: 'Alerts',
@@ -152,7 +148,7 @@ export function AlertDetailScreen() {
   const shellSlot = useMemo(
     () => ({
       topbarWorkspaceName: selectedProjectId ? topbarWorkspaceName : undefined,
-      topbarModeLabel: intl.formatMessage(messages.dataLabel),
+      topbarModeLabel: intl.formatMessage(messages.alertsLabel),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [selectedProjectId, topbarWorkspaceName],
