@@ -392,6 +392,14 @@ export function useAuthenticatedImageUrl(
               return;
             }
             if (cachedBlob) {
+              // The blob originated from IDB — mark the entry as already
+              // persisted so publishBlob carries _persisted: true. Without
+              // this, a later cache-hit consumer sees _persisted: false and
+              // redundantly writes the same blob back to IDB.
+              const existing = blobCache.get(cacheKey);
+              if (existing) {
+                existing._persisted = true;
+              }
               publishBlob(cachedBlob);
               return;
             }

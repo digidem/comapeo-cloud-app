@@ -1163,6 +1163,53 @@ describe('useAuthenticatedImageUrl', () => {
       expect(await getCachedIconBlob(url)).toBeInstanceOf(Blob);
     });
 
+    it('IDB-hit originator marks entry _persisted so cache-hit consumer does not re-write IDB', async () => {
+      const url =
+        'https://archive.example.com/projects/p1/icon/icon-idb-persisted';
+      const db = await import('@/lib/db');
+      // Seed IDB with a blob.
+      await db.putCachedIconBlob(
+        url,
+        new Blob(['cached-icon'], { type: 'image/png' }),
+      );
+      // Spy on putCachedIconBlob to count IDB writes.
+      const putSpy = vi.spyOn(db, 'putCachedIconBlob');
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // First mount: cache miss in-memory, hits IDB, publishes the IDB blob.
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Unmount so the in-memory entry enters the grace period (refCount 0),
+      // but remains in the cache. We revokeAfterMs defaults to 30s.
+      unmount1();
+      await act(() => Promise.resolve());
+
+      // Second mount: cache HIT on the published entry (still in grace period).
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // The second mount should reuse the cached blob URL without a network
+      // fetch and WITHOUT writing the blob back to IDB — it originated there.
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result2.current.blobUrl).not.toBeNull();
+
+      // The fix: putCachedIconBlob should NEVER be called, because the blob
+      // originated from IDB. Before the fix, the second mount redundantly
+      // wrote the same blob back to IDB.
+      expect(putSpy).not.toHaveBeenCalled();
+    });
+
     it('two simultaneous mounts with cache:true and IDB miss share one network fetch and one blob URL', async () => {
       const url =
         'https://archive.example.com/projects/p1/icon/icon-miss-dual-mount';
