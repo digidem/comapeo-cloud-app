@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { setupBlobUrlMocks } from '@tests/mocks/blob-url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetImageBlobCacheForTests } from '@/hooks/useAuthenticatedImageUrl';
 import { ARCHIVE_TARGET_HEADER } from '@/lib/archive-proxy';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -39,10 +40,12 @@ function createMockImageResponse(): Response {
 describe('useAuthenticatedImageUrl', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   let revokeMock: ReturnType<typeof vi.fn>;
+  let createUrlMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     const mocks = setupBlobUrlMocks();
     revokeMock = mocks.revokeObjectUrlMock;
+    createUrlMock = mocks.createObjectUrlMock;
 
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -59,6 +62,7 @@ describe('useAuthenticatedImageUrl', () => {
   });
 
   afterEach(() => {
+    resetImageBlobCacheForTests();
     vi.restoreAllMocks();
   });
 
@@ -219,7 +223,7 @@ describe('useAuthenticatedImageUrl', () => {
 
     // After fetch resolves, isLoading should be false
     expect(result.current.isLoading).toBe(false);
-    expect(result.current.blobUrl).toBe('blob:mocked-url');
+    expect(result.current.blobUrl).toBe('blob:mocked-url-1');
   });
 
   it('returns blobUrl on successful fetch', async () => {
@@ -235,7 +239,7 @@ describe('useAuthenticatedImageUrl', () => {
     await act(() => Promise.resolve());
 
     expect(result.current).toEqual({
-      blobUrl: 'blob:mocked-url',
+      blobUrl: 'blob:mocked-url-1',
       isLoading: false,
       error: null,
     });
@@ -282,7 +286,7 @@ describe('useAuthenticatedImageUrl', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
-  it('cleans up blob URL on unmount', async () => {
+  it('blob URL is kept in cache on unmount (not immediately revoked)', async () => {
     fetchMock.mockResolvedValue(createMockImageResponse());
 
     const { useAuthenticatedImageUrl } =
@@ -294,9 +298,13 @@ describe('useAuthenticatedImageUrl', () => {
 
     await act(() => Promise.resolve());
 
+    // Blob URL should have been created
+    expect(URL.createObjectURL).toHaveBeenCalled();
+
+    // Unmount does NOT revoke — the cache keeps the entry alive
     unmount();
 
-    expect(revokeMock).toHaveBeenCalledWith('blob:mocked-url');
+    expect(revokeMock).not.toHaveBeenCalled();
   });
 
   it('returns null blobUrl for malformed URL', async () => {
@@ -450,6 +458,85 @@ describe('useAuthenticatedImageUrl', () => {
     );
   });
 
+  it('servers reference change mid-flight does not abort replacement fetch (identity-guard)', async () => {
+    // LOCAL url → cache key is `local:token|url`, which does NOT change when
+    // the `servers` array gets a new reference. When servers change mid-flight,
+    // the old run's settleOnAbort fires invalidate(key) — which without the
+    // identity-guard kills the replacement entry (E2), aborts E2's controller,
+    // and leaves the hook stuck at isLoading:true.
+    //
+    // Both fetches must be held pending so E2 is still in-flight when E1's
+    // abort fires. If E2 resolves immediately, it completes before the race.
+    useAuthStore.setState({ token: 'tok1', baseUrl: 'http://localhost:8080' });
+
+    let resolveFirst!: (value: Response) => void;
+    let resolveSecond!: (value: Response) => void;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveSecond = resolve;
+        }),
+    );
+
+    const { useAuthenticatedImageUrl } =
+      await import('@/hooks/useAuthenticatedImageUrl');
+
+    const { result } = renderHook(({ url }) => useAuthenticatedImageUrl(url), {
+      initialProps: { url: 'http://localhost:8080/photo.jpg' },
+    });
+
+    // Let E1's fetch go in-flight.
+    await act(() => Promise.resolve());
+    expect(result.current.isLoading).toBe(true);
+
+    // New `servers` array reference → effect cleanup (unref → abort E1) +
+    // re-run (creates E2 with a NEW controller under the SAME cache key).
+    await act(() => {
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 's1',
+            label: 'Archive',
+            baseUrl: 'https://archive.example.com',
+            token: 'tok1',
+            status: 'connected' as const,
+          },
+        ],
+      });
+    });
+    await act(() => Promise.resolve());
+    await act(() => Promise.resolve());
+
+    // Resolve E1's fetch. E1's controller is aborted, so run() hits the
+    // `controller.signal.aborted` check and calls settleOnAbort(). Without the
+    // fix, settleOnAbort's invalidate(key) matches E2 → deletes E2 + aborts
+    // E2's controller.
+    await act(async () => {
+      resolveFirst(createMockImageResponse());
+    });
+    await act(() => Promise.resolve());
+    await act(() => Promise.resolve());
+
+    // Resolve E2's fetch. Without the fix, E2's controller was aborted by E1's
+    // invalidate, so E2 hits its own abort check and returns without setState
+    // → hook stuck at isLoading:true forever.
+    await act(async () => {
+      resolveSecond(createMockImageResponse());
+    });
+    await act(() => Promise.resolve());
+    await act(() => Promise.resolve());
+
+    // E2 must complete normally; the hook must NOT be stuck loading.
+    expect(result.current.blobUrl).not.toBeNull();
+    expect(result.current.isLoading).toBe(false);
+  });
+
   describe('icon caching (cache: true)', () => {
     it('serves a cached blob without hitting the network', async () => {
       const url = 'https://archive.example.com/projects/p1/icon/icon-1';
@@ -468,7 +555,7 @@ describe('useAuthenticatedImageUrl', () => {
 
       await act(() => Promise.resolve());
 
-      expect(result.current.blobUrl).toBe('blob:mocked-url');
+      expect(result.current.blobUrl).toBe('blob:mocked-url-1');
       expect(result.current.isLoading).toBe(false);
       expect(fetchMock).not.toHaveBeenCalled();
     });
@@ -488,7 +575,7 @@ describe('useAuthenticatedImageUrl', () => {
       await act(() => Promise.resolve());
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(result.current.blobUrl).toBe('blob:mocked-url');
+      expect(result.current.blobUrl).toBe('blob:mocked-url-1');
 
       const { getCachedIconBlob } = await import('@/lib/db');
       const cached = await getCachedIconBlob(url);
@@ -509,6 +596,55 @@ describe('useAuthenticatedImageUrl', () => {
 
       const { getCachedIconBlob } = await import('@/lib/db');
       expect(await getCachedIconBlob(url)).toBeUndefined();
+    });
+
+    it('aborted IDB read settles inflight so a later remount retries instead of hanging', async () => {
+      const url =
+        'https://archive.example.com/projects/p1/icon/icon-abort-remount';
+      const db = await import('@/lib/db');
+
+      // Hold the first mount's IDB read pending so it can be aborted in flight.
+      let resolveIdb!: (b: Blob | undefined) => void;
+      const pendingIdb = new Promise<Blob | undefined>((resolve) => {
+        resolveIdb = resolve;
+      });
+      const idbSpy = vi.spyOn(db, 'getCachedIconBlob');
+      idbSpy.mockImplementationOnce(() => pendingIdb);
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Originator (Path 3) — the IDB read is pending.
+      const { unmount } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+
+      // Last subscriber unmounts while the IDB read is still in flight, so the
+      // shared AbortController fires.
+      unmount();
+      await act(() => Promise.resolve());
+
+      // The IDB read now completes. Before the fix, run() returned early at the
+      // abort check and left the in-flight promise pending forever — leaking the
+      // cache entry and hanging any future joiner.
+      await act(async () => {
+        resolveIdb(undefined);
+      });
+      await act(() => Promise.resolve());
+
+      // A fresh mount must NOT attach to a leaked pending inflight. It should
+      // start its own fetch and resolve to a blob URL.
+      const { result } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result.current.blobUrl).not.toBeNull();
+      expect(result.current.isLoading).toBe(false);
     });
   });
 
@@ -537,5 +673,672 @@ describe('useAuthenticatedImageUrl', () => {
 
     // No assertion needed — the test passes if no React state-update-on-unmount warning fires
     expect(true).toBe(true);
+  });
+
+  describe('in-memory cache', () => {
+    it('two hooks with the same URL fetch only once and share the blob URL', async () => {
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      const { result: result1 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      await act(() => Promise.resolve());
+
+      // Both hooks should get the same blob URL (only ONE createObjectURL call)
+      const blobUrl = result1.current.blobUrl;
+      expect(blobUrl).toBe('blob:mocked-url-1');
+      expect(result2.current.blobUrl).toBe(blobUrl);
+      // Only one createObjectURL call — the second subscriber reuses
+      expect(createUrlMock).toHaveBeenCalledTimes(1);
+      // Fetch should be called once (deduplicated)
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('cache survives unmount/remount — fetch called once total', async () => {
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      await act(() => Promise.resolve());
+
+      // Unmount the first hook
+      unmount1();
+
+      await act(() => Promise.resolve());
+
+      // Mount a second hook with the same URL
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // The second hook should get a blob URL
+      expect(result2.current.blobUrl).toBe('blob:mocked-url-1');
+      // Fetch should be called only once total (cache survived unmount)
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('change auth store token produces new cache key and triggers refetch', async () => {
+      useAuthStore.setState({
+        token: 'token-v1',
+        baseUrl: 'http://localhost:8080',
+      });
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      await act(() => Promise.resolve());
+
+      // Unmount — entry is cached
+      unmount1();
+
+      await act(() => Promise.resolve());
+
+      // Change auth token
+      useAuthStore.setState({ token: 'token-v2' });
+
+      await act(() => Promise.resolve());
+
+      fetchMock.mockClear();
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      // Mount again — should refetch because cache was invalidated
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      expect(result2.current.blobUrl).toBe('blob:mocked-url-2');
+      // Should have refetched after auth change
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('two hooks with different URLs fetch independently', async () => {
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo1.jpg'),
+      );
+      renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo2.jpg'),
+      );
+
+      await act(() => Promise.resolve());
+
+      // Two different URLs = two fetches
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('in-memory cache works alongside icon cache (cache: true)', async () => {
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // First hook with cache: true
+      const { result: result1 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/icon.png', {
+          cache: true,
+        }),
+      );
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      expect(result1.current.blobUrl).toBe('blob:mocked-url-1');
+
+      // Second hook with same URL and cache: true should use in-memory cache
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/icon.png', {
+          cache: true,
+        }),
+      );
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      expect(result2.current.blobUrl).toBe('blob:mocked-url-1');
+      // Only one fetch — in-memory cache deduplicated
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('archive URL with old token cached; new mount with new token refetches', async () => {
+      // Set up archive server with token-v1
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 's1',
+            label: 'Archive',
+            baseUrl: 'https://archive.example.com',
+            token: 'token-v1',
+            status: 'connected' as const,
+          },
+        ],
+      });
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      const url =
+        'https://archive.example.com/projects/p1/attachments/d1/photo/img.jpg';
+
+      // Mount, fetch, unmount — entry cached with token-v1 key
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url),
+      );
+
+      await act(() => Promise.resolve());
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      unmount1();
+      await act(() => Promise.resolve());
+
+      // Change the server token (simulates re-auth)
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 's1',
+            label: 'Archive',
+            baseUrl: 'https://archive.example.com',
+            token: 'token-v2',
+            status: 'connected' as const,
+          },
+        ],
+      });
+
+      await act(() => Promise.resolve());
+
+      fetchMock.mockClear();
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      // Mount again — new token means new cache key, so should refetch
+      const { result } = renderHook(() => useAuthenticatedImageUrl(url));
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      expect(result.current.blobUrl).toBe('blob:mocked-url-2');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejected in-flight is removed from cache so next mount retries', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('HTTP 500'));
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // First mount: fetch fails
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      await act(() => Promise.resolve());
+
+      // Error should be set
+      // (we can't easily check result because it may have unmounted)
+
+      unmount1();
+      await act(() => Promise.resolve());
+
+      // Now set up a successful response
+      fetchMock.mockClear();
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      // Second mount should retry (not attach to the rejected promise)
+      const { result } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      expect(result.current.blobUrl).toBe('blob:mocked-url-1');
+      expect(result.current.error).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('two subscribers preserve refCount after fetch resolves — no overwrites', async () => {
+      vi.useFakeTimers();
+
+      let resolveFetch: (value: Response) => void;
+      const pendingPromise = new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+
+      fetchMock.mockImplementationOnce(() => pendingPromise);
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      const url = 'http://localhost:8080/photo.jpg';
+
+      // Subscriber 1 — originating (Path 3)
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url),
+      );
+
+      // Subscriber 2 — in-flight joiner (Path 2)
+      const { unmount: unmount2 } = renderHook(() =>
+        useAuthenticatedImageUrl(url),
+      );
+
+      // Both are now subscribed. Resolve the fetch.
+      await act(async () => {
+        resolveFetch!(createMockImageResponse());
+      });
+
+      await act(() => Promise.resolve());
+
+      // Unmount subscriber 1 — subscriber 2 is still mounted so blob should
+      // NOT be revoked even after the grace period.
+      unmount1();
+      await act(() => Promise.resolve());
+
+      // Advance past the default 30s grace period
+      await act(() => {
+        vi.advanceTimersByTime(31_000);
+      });
+
+      // BUG: if publishBlob overwrites refCount to 1, then unmounting
+      // subscriber 1 drops refCount to 0, which schedules revocation.
+      // After the grace period, the blob URL is revoked even though
+      // subscriber 2 is still mounted.
+      expect(revokeMock).not.toHaveBeenCalled();
+
+      unmount2();
+      await act(() => vi.advanceTimersByTime(31_000));
+
+      vi.useRealTimers();
+    });
+
+    it('URL change unrefs old key exactly once (no double-unref)', async () => {
+      vi.useFakeTimers();
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      const urlA = 'http://localhost:8080/photo-a.jpg';
+      const urlB = 'http://localhost:8080/photo-b.jpg';
+
+      // Subscriber A1: holds a ref on URL A (stays mounted throughout)
+      const { result: resultA1 } = renderHook(() =>
+        useAuthenticatedImageUrl(urlA),
+      );
+
+      await act(() => Promise.resolve());
+
+      // Subscriber A2: also holds a ref on URL A, then switches to URL B
+      const { rerender, unmount: unmountA2 } = renderHook(
+        ({ url }) => useAuthenticatedImageUrl(url),
+        { initialProps: { url: urlA } },
+      );
+
+      await act(() => Promise.resolve());
+
+      // Both subscribers are on URL A → refCount should be 2
+      // Now subscriber A2 changes to URL B
+      rerender({ url: urlB });
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // URL A should have been unref'd exactly once (from 2 → 1).
+      // If double-unref'd (from 2 → 0), the grace period timer fires and
+      // revokes the blob while subscriber A1 is still using it.
+      await act(() => {
+        vi.advanceTimersByTime(31_000);
+      });
+
+      // Subscriber A1 is still mounted with URL A — blob must NOT be revoked
+      expect(revokeMock).not.toHaveBeenCalledWith('blob:mocked-url-1');
+      expect(resultA1.current.blobUrl).toBe('blob:mocked-url-1');
+
+      unmountA2();
+      await act(() => vi.advanceTimersByTime(31_000));
+
+      vi.useRealTimers();
+    });
+
+    it('originating subscriber unmount does not abort shared in-flight fetch', async () => {
+      let resolveFetch: (value: Response) => void;
+      const pendingPromise = new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+
+      fetchMock.mockImplementationOnce(() => pendingPromise);
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // First subscriber starts the fetch (Path 3 — originating)
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      // Second subscriber joins the in-flight (Path 2 — waiting)
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      // Unmount the originating subscriber — should NOT abort the fetch
+      unmount1();
+      await act(() => Promise.resolve());
+
+      // Now resolve the fetch — the second subscriber should still get the blob URL
+      await act(async () => {
+        resolveFetch!(createMockImageResponse());
+      });
+
+      await act(() => Promise.resolve());
+
+      // Second subscriber should have received the blob URL
+      expect(result2.current.blobUrl).toBe('blob:mocked-url-1');
+      expect(result2.current.error).toBeNull();
+    });
+
+    it('last subscriber unmount aborts the shared in-flight fetch exactly once', async () => {
+      // Use a fetch impl that records the AbortSignal so we can assert that
+      // exactly one abort fires when the LAST subscriber unmounts before
+      // resolution.
+      const abortEvents: AbortSignal[] = [];
+      let resolveFetch: (value: Response) => void;
+      const pendingPromise = new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+
+      fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+        if (init?.signal) abortEvents.push(init.signal as AbortSignal);
+        return pendingPromise;
+      });
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Subscriber A (originator) and B (joiner) both mount before the fetch
+      // resolves.
+      const { unmount: unmountA } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+      const { unmount: unmountB } = renderHook(() =>
+        useAuthenticatedImageUrl('http://localhost:8080/photo.jpg'),
+      );
+
+      await act(() => Promise.resolve());
+
+      // Abort should not have fired yet.
+      expect(abortEvents.some((s) => s.aborted)).toBe(false);
+
+      // A unmounts first — fetch must continue because B is still subscribed.
+      unmountA();
+      await act(() => Promise.resolve());
+      expect(abortEvents.some((s) => s.aborted)).toBe(false);
+
+      // B unmounts last — shared fetch must be aborted exactly once.
+      unmountB();
+      await act(() => Promise.resolve());
+
+      const abortedCount = abortEvents.filter((s) => s.aborted).length;
+      expect(abortedCount).toBe(1);
+
+      // Resolve the fetch so the test doesn't leak pending promises.
+      await act(async () => {
+        resolveFetch!(createMockImageResponse());
+      });
+    });
+
+    it('two simultaneous mounts with cache:true and IDB hit share one blob URL and read IDB once', async () => {
+      const url = 'https://archive.example.com/projects/p1/icon/icon-shared';
+      const { putCachedIconBlob, getCachedIconBlob } = await import('@/lib/db');
+      await putCachedIconBlob(
+        url,
+        new Blob(['cached-icon'], { type: 'image/png' }),
+      );
+
+      // Wrap getCachedIconBlob with a spy so we can assert call count.
+      const db = await import('@/lib/db');
+      const idbSpy = vi.spyOn(db, 'getCachedIconBlob');
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Mount both hooks synchronously (same microtask) so they both enter
+      // Path 3 before either resolves.
+      const { result: result1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+
+      // Drain microtasks: IDB read, blob URL creation, React state updates.
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Both hooks share the same blob URL.
+      expect(result1.current.blobUrl).toBe('blob:mocked-url-1');
+      expect(result2.current.blobUrl).toBe('blob:mocked-url-1');
+
+      // Only ONE createObjectURL call — the joiner reuses the originator's URL.
+      expect(createUrlMock).toHaveBeenCalledTimes(1);
+
+      // Only ONE IDB read — the joiner attached to the in-flight entry.
+      expect(idbSpy).toHaveBeenCalledTimes(1);
+
+      // Network was never hit (IDB had the blob).
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      // Sanity: confirm the IDB cache actually had the entry.
+      expect(await getCachedIconBlob(url)).toBeInstanceOf(Blob);
+    });
+
+    it('IDB-hit originator marks entry _persisted so cache-hit consumer does not re-write IDB', async () => {
+      const url =
+        'https://archive.example.com/projects/p1/icon/icon-idb-persisted';
+      const db = await import('@/lib/db');
+      // Seed IDB with a blob.
+      await db.putCachedIconBlob(
+        url,
+        new Blob(['cached-icon'], { type: 'image/png' }),
+      );
+      // Spy on putCachedIconBlob to count IDB writes.
+      const putSpy = vi.spyOn(db, 'putCachedIconBlob');
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // First mount: cache miss in-memory, hits IDB, publishes the IDB blob.
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Unmount so the in-memory entry enters the grace period (refCount 0),
+      // but remains in the cache. We revokeAfterMs defaults to 30s.
+      unmount1();
+      await act(() => Promise.resolve());
+
+      // Second mount: cache HIT on the published entry (still in grace period).
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // The second mount should reuse the cached blob URL without a network
+      // fetch and WITHOUT writing the blob back to IDB — it originated there.
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result2.current.blobUrl).not.toBeNull();
+
+      // The fix: putCachedIconBlob should NEVER be called, because the blob
+      // originated from IDB. Before the fix, the second mount redundantly
+      // wrote the same blob back to IDB.
+      expect(putSpy).not.toHaveBeenCalled();
+    });
+
+    it('two simultaneous mounts with cache:true and IDB miss share one network fetch and one blob URL', async () => {
+      const url =
+        'https://archive.example.com/projects/p1/icon/icon-miss-dual-mount';
+
+      const db = await import('@/lib/db');
+      const idbSpy = vi.spyOn(db, 'getCachedIconBlob');
+
+      fetchMock.mockResolvedValue(createMockImageResponse());
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Mount both hooks synchronously before any fetch resolves.
+      const { result: result1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Both hooks share the same blob URL.
+      expect(result1.current.blobUrl).toBe('blob:mocked-url-1');
+      expect(result2.current.blobUrl).toBe('blob:mocked-url-1');
+
+      // Only ONE createObjectURL call.
+      expect(createUrlMock).toHaveBeenCalledTimes(1);
+
+      // Only ONE IDB read.
+      expect(idbSpy).toHaveBeenCalledTimes(1);
+
+      // Only ONE network fetch.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('abort-remount race (regression)', () => {
+    it('rapid remount after in-flight abort starts a fresh fetch, not a dead joiner', async () => {
+      const url = 'http://localhost:8080/abort-remount-race.jpg';
+
+      // Hold the fetch pending so it is still in-flight when we unmount.
+      let _resolveFetch!: (value: Response) => void;
+      const pendingFetch = new Promise<Response>((resolve) => {
+        _resolveFetch = resolve;
+      });
+      fetchMock.mockImplementationOnce(() => pendingFetch);
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Originator (Path 3) — fetch is in-flight.
+      const { unmount: unmount1 } = renderHook(() =>
+        useAuthenticatedImageUrl(url),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Last subscriber unmounts while fetch is STILL in-flight → AbortController fires.
+      unmount1();
+      await act(() => Promise.resolve());
+
+      // A rapid remount must NOT join the dead in-flight promise. Before the
+      // fix it would hit Path 2, attach to the aborted inflight, and surface
+      // a spurious AbortError instead of starting a new fetch.
+      fetchMock.mockResolvedValueOnce(createMockImageResponse());
+      const { result: result2 } = renderHook(() =>
+        useAuthenticatedImageUrl(url),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Fetch was called twice: once for the aborted originator, once for the remount.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      // The remount resolved successfully — no AbortError.
+      expect(result2.current.blobUrl).toBe('blob:mocked-url-1');
+      expect(result2.current.isLoading).toBe(false);
+      expect(result2.current.error).toBeNull();
+    });
+
+    it('cache:true joiner writes to IDB when originator unmounts before completing', async () => {
+      const url = 'http://localhost:8080/joiner-idb-gap.jpg';
+      const db = await import('@/lib/db');
+      // IDB cache miss — forces fallthrough to network fetch.
+      vi.spyOn(db, 'getCachedIconBlob').mockResolvedValue(undefined);
+      const putSpy = vi.spyOn(db, 'putCachedIconBlob');
+
+      // Hold the fetch pending so the originator is still in-flight.
+      let resolveFetch!: (value: Response) => void;
+      const pendingFetch = new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+      fetchMock.mockImplementationOnce(() => pendingFetch);
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+
+      // Originator (Path 3) with cache: true — fetch in-flight.
+      const first = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Joiner (Path 2) mounts while originator is still fetching.
+      const second = renderHook(() =>
+        useAuthenticatedImageUrl(url, { cache: true }),
+      );
+      await act(() => Promise.resolve());
+
+      // Originator unmounts before the fetch resolves.
+      first.unmount();
+      await act(() => Promise.resolve());
+
+      // Fetch resolves — joiner should publish the blob AND write to IDB.
+      await act(async () => {
+        resolveFetch(createMockImageResponse());
+      });
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+      await act(() => Promise.resolve());
+
+      // Joiner got the blob URL.
+      expect(second.result.current.blobUrl).toBe('blob:mocked-url-1');
+      // Joiner wrote to IDB (originator was unmounted before it could).
+      expect(putSpy).toHaveBeenCalledWith(url, expect.any(Blob));
+    });
   });
 });
