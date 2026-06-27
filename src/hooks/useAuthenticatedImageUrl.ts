@@ -363,6 +363,16 @@ export function useAuthenticatedImageUrl(
       // a replacement entry (new controller) under the same cache key. Without
       // this guard, the aborted originator would invalidate + abort the
       // replacement entry, leaving the remounted hook stuck at isLoading:true.
+      //
+      // Note: in this abort path the guard is defensively dead code — the
+      // cache deletes the entry in the same operation that aborts the
+      // controller, so `get(cacheKey)` returns either undefined or a
+      // replacement entry (different controller). The genuine own-entry
+      // invalidate fires in the catch block below (network failure where the
+      // controller is NOT aborted and the entry is still live). We keep the
+      // guard here for symmetry and as a safety net if the cache's abort
+      // coupling ever changes. The meaningful work in this path is
+      // `rejectInflight`, which settles joiners on the aborted promise.
       const cur = blobCache.get(cacheKey);
       if (cur && cur.controller === controller) {
         blobCache.invalidate((k) => k === cacheKey);
