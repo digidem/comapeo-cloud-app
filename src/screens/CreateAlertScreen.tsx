@@ -65,9 +65,9 @@ const messages = defineMessages({
     id: 'alerts.create.noProject',
     defaultMessage: 'Select a project first',
   },
-  dataLabel: {
-    id: 'data.title',
-    defaultMessage: 'Data',
+  alertsLabel: {
+    id: 'alerts.title',
+    defaultMessage: 'Alerts',
   },
   untitledProject: {
     id: 'data.untitledProject',
@@ -133,7 +133,7 @@ export function CreateAlertScreen() {
   const shellSlot = useMemo(
     () => ({
       topbarWorkspaceName: selectedProjectId ? topbarWorkspaceName : undefined,
-      topbarModeLabel: intl.formatMessage(messages.dataLabel),
+      topbarModeLabel: intl.formatMessage(messages.alertsLabel),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [selectedProjectId, topbarWorkspaceName],
@@ -184,7 +184,7 @@ export function CreateAlertScreen() {
       },
       {
         onSuccess: () => {
-          void navigate({ to: '/data' });
+          void navigate({ to: '/alerts' });
         },
       },
     );
@@ -310,7 +310,7 @@ export function CreateAlertScreen() {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => navigate({ to: '/data' })}
+              onClick={() => navigate({ to: '/alerts' })}
             >
               {intl.formatMessage(messages.cancel)}
             </Button>

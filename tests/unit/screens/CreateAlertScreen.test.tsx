@@ -201,7 +201,7 @@ describe('CreateAlertScreen', () => {
     setTextareaValue(geometryInput, '{"type":"Point","coordinates":[0,0]}');
     await user.click(screen.getByText('Create'));
 
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/data' });
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/alerts' });
   });
 
   it('submit button shows loading state when isPending is true', () => {
@@ -216,6 +216,6 @@ describe('CreateAlertScreen', () => {
     render(<CreateAlertScreen />);
 
     await user.click(screen.getByText('Cancel'));
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/data' });
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/alerts' });
   });
 });

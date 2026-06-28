@@ -126,13 +126,13 @@ describe('AlertDetailScreen', () => {
     expect(screen.getByText(/102\.000000/)).toBeInTheDocument();
   });
 
-  it('renders arrow back link to data', () => {
+  it('renders arrow back link to alerts', () => {
     resetMocks();
     render(<AlertDetailScreen />);
-    const link = screen.getByRole('link', { name: 'Data' });
-    expect(link).toHaveAttribute('href', '/data');
+    const link = screen.getByRole('link', { name: 'Alerts' });
+    expect(link).toHaveAttribute('href', '/alerts');
     expect(link).toHaveClass('min-h-[44px]');
-    expect(screen.queryByText('Back to Data')).not.toBeInTheDocument();
+    expect(screen.queryByText('Back to Alerts')).not.toBeInTheDocument();
   });
 
   it('renders detection period', () => {
