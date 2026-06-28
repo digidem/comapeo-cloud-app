@@ -512,6 +512,9 @@
   "home.archive.dialog.labelPlaceholder": {
     "defaultMessage": "e.g. Production Server"
   },
+  "home.archive.dialog.syncFailed": {
+    "defaultMessage": "Sync failed"
+  },
   "home.archive.dialog.title": {
     "defaultMessage": "Add Archive Server"
   },
@@ -598,27 +601,6 @@
   },
   "home.areaUnit.m2": {
     "defaultMessage": "m²"
-  },
-  "home.connectionProgress.cancel": {
-    "defaultMessage": "Cancel"
-  },
-  "home.connectionProgress.heading": {
-    "defaultMessage": "Connecting to archive..."
-  },
-  "home.connectionProgress.retry": {
-    "defaultMessage": "Try Again"
-  },
-  "home.connectionProgress.stepConnect": {
-    "defaultMessage": "Connecting to server..."
-  },
-  "home.connectionProgress.stepPrepare": {
-    "defaultMessage": "Preparing dashboard..."
-  },
-  "home.connectionProgress.stepSync": {
-    "defaultMessage": "Syncing data..."
-  },
-  "home.connectionProgress.stepVerify": {
-    "defaultMessage": "Verifying invite..."
   },
   "home.coverage.calculating": {
     "defaultMessage": "Calculating..."

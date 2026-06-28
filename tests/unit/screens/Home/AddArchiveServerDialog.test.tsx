@@ -10,6 +10,7 @@ import { HttpResponse, http } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiClient } from '@/lib/api-client';
+import { syncRemoteArchive } from '@/lib/data-layer';
 import { resetDb } from '@/lib/db';
 import { AddArchiveServerDialog } from '@/screens/Home/AddArchiveServerDialog';
 import { useAuthStore } from '@/stores/auth-store';
@@ -1211,6 +1212,114 @@ describe('AddArchiveServerDialog', () => {
       expect(
         await screen.findByText('Connecting to server...'),
       ).toBeInTheDocument();
+    });
+
+    // ---- Sync failure & retry tests (issue #74) ----
+
+    it('shows error message and Try Again when syncRemoteArchive fails', async () => {
+      vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
+        success: false,
+        error: 'Network error',
+      });
+
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+      );
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Error message should be displayed
+      expect(await screen.findByText('Network error')).toBeInTheDocument();
+
+      // Try Again button should appear
+      expect(
+        screen.getByRole('button', { name: 'Try Again' }),
+      ).toBeInTheDocument();
+    });
+
+    it('retries sync successfully after clicking Try Again', async () => {
+      // First attempt fails
+      vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
+        success: false,
+        error: 'Network error',
+      });
+
+      const user = userEvent.setup();
+      const onAdded = vi.fn();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={onAdded}
+        />,
+      );
+
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+      );
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Wait for failure
+      expect(await screen.findByText('Network error')).toBeInTheDocument();
+
+      // Second attempt will succeed (default mock returns { success: true })
+      await user.click(screen.getByRole('button', { name: 'Try Again' }));
+
+      // onAdded should be called after successful retry
+      await waitFor(
+        () => {
+          expect(onAdded).toHaveBeenCalledWith('test-server-id');
+        },
+        { timeout: 5000 },
+      );
+    });
+
+    it('removes orphaned server when cancelling after sync failure', async () => {
+      vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
+        success: false,
+        error: 'Network error',
+      });
+
+      const removeServerSpy = vi.spyOn(useAuthStore.getState(), 'removeServer');
+      removeServerSpy.mockResolvedValue(undefined);
+
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+      );
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Wait for sync failure
+      expect(await screen.findByText('Network error')).toBeInTheDocument();
+
+      // Click Cancel
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      // removeServer should have been called with the server ID
+      await waitFor(() => {
+        expect(removeServerSpy).toHaveBeenCalledWith('test-server-id');
+      });
+
+      removeServerSpy.mockRestore();
     });
   });
 });

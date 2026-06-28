@@ -185,6 +185,10 @@ const messages = defineMessages({
     id: 'home.archive.dialog.connectionProgress.retry',
     defaultMessage: 'Try Again',
   },
+  syncFailed: {
+    id: 'home.archive.dialog.syncFailed',
+    defaultMessage: 'Sync failed',
+  },
 });
 
 function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
@@ -341,6 +345,12 @@ function AddArchiveServerDialog({
   // Ref for invite URL field
   const inviteUrlRef = useRef<HTMLInputElement>(null);
 
+  // Guard against cancel-during-pre-progress-async race: if the user clicks
+  // Cancel while validateConnection/redeemEncryptedInvite/addServer is
+  // pending, we need to prevent the continuation from starting connection
+  // progress and calling onAdded after the dialog closed.
+  const cancelledRef = useRef(false);
+
   const [urlError, setUrlError] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [inviteUrlError, setInviteUrlError] = useState<string | null>(null);
@@ -352,6 +362,7 @@ function AddArchiveServerDialog({
   // via onAdded without going through handleClose. Declared ahead of the
   // effects below so it is in scope where they reference it.
   const resetDialogState = useCallback(() => {
+    cancelledRef.current = false;
     setUrlError(null);
     setTokenError(null);
     setInviteUrlError(null);
@@ -368,59 +379,72 @@ function AddArchiveServerDialog({
 
     async function runConnection() {
       const steps = [...cpState.steps];
+      try {
+        // Step 1: Connecting to server (index 1)
+        steps[1] = { ...steps[1]!, status: 'active' };
+        setCpState((prev) => ({ ...prev, steps: [...steps] }));
 
-      // Step 1: Connecting to server (index 1)
-      steps[1] = { ...steps[1]!, status: 'active' };
-      setCpState((prev) => ({ ...prev, steps: [...steps] }));
+        const result = await syncRemoteArchive(cpState.serverId, {
+          baseUrl: cpState.baseUrl,
+          token: cpState.token,
+        });
+        if (cancelled) return;
 
-      const result = await syncRemoteArchive(cpState.serverId, {
-        baseUrl: cpState.baseUrl,
-        token: cpState.token,
-      });
-      if (cancelled) return;
+        if (!result.success) {
+          steps[1] = { ...steps[1]!, status: 'error' };
+          setCpState((prev) => ({
+            ...prev,
+            steps: [...steps],
+            errorMessage:
+              result.error ?? intl.formatMessage(messages.syncFailed),
+          }));
+          return;
+        }
 
-      if (!result.success) {
+        // Step 1: Connecting complete
+        steps[1] = { ...steps[1]!, status: 'completed' };
+        setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+        // Step 2: Syncing data (index 2)
+        steps[2] = { ...steps[2]!, status: 'active' };
+        setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['projects'] }),
+          queryClient.invalidateQueries({ queryKey: ['observations'] }),
+          queryClient.invalidateQueries({ queryKey: ['alerts'] }),
+        ]);
+        if (cancelled) return;
+
+        steps[2] = { ...steps[2]!, status: 'completed' };
+        setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+        // Step 3: Preparing dashboard (index 3)
+        steps[3] = { ...steps[3]!, status: 'active' };
+        setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+        // Brief pause for the "Preparing" step to be visible
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (cancelled) return;
+
+        steps[3] = { ...steps[3]!, status: 'completed' };
+        setCpState((prev) => ({
+          ...prev,
+          steps: [...steps],
+          isComplete: true,
+        }));
+      } catch (err) {
+        if (cancelled) return;
         steps[1] = { ...steps[1]!, status: 'error' };
         setCpState((prev) => ({
           ...prev,
           steps: [...steps],
-          errorMessage: result.error ?? 'Sync failed',
+          errorMessage:
+            err instanceof Error
+              ? err.message
+              : intl.formatMessage(messages.syncFailed),
         }));
-        return;
       }
-
-      // Step 1: Connecting complete
-      steps[1] = { ...steps[1]!, status: 'completed' };
-      setCpState((prev) => ({ ...prev, steps: [...steps] }));
-
-      // Step 2: Syncing data (index 2)
-      steps[2] = { ...steps[2]!, status: 'active' };
-      setCpState((prev) => ({ ...prev, steps: [...steps] }));
-
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['projects'] }),
-        queryClient.invalidateQueries({ queryKey: ['observations'] }),
-        queryClient.invalidateQueries({ queryKey: ['alerts'] }),
-      ]);
-      if (cancelled) return;
-
-      steps[2] = { ...steps[2]!, status: 'completed' };
-      setCpState((prev) => ({ ...prev, steps: [...steps] }));
-
-      // Step 3: Preparing dashboard (index 3)
-      steps[3] = { ...steps[3]!, status: 'active' };
-      setCpState((prev) => ({ ...prev, steps: [...steps] }));
-
-      // Brief pause for the "Preparing" step to be visible
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      if (cancelled) return;
-
-      steps[3] = { ...steps[3]!, status: 'completed' };
-      setCpState((prev) => ({
-        ...prev,
-        steps: [...steps],
-        isComplete: true,
-      }));
     }
 
     void runConnection();
@@ -522,6 +546,7 @@ function AddArchiveServerDialog({
       token,
     }).then(
       (serverId) => {
+        if (cancelledRef.current) return;
         // Instead of immediately calling onAdded, start connection progress
         dispatch({ type: 'success' });
         startConnectionProgress(serverId, normalizedUrl.value, token);
@@ -676,6 +701,7 @@ function AddArchiveServerDialog({
       token,
     }).then(
       (serverId) => {
+        if (cancelledRef.current) return;
         // Instead of immediately calling onAdded, start connection progress
         dispatch({ type: 'success' });
         startConnectionProgress(serverId, normalizedUrl.value, token);
@@ -714,13 +740,19 @@ function AddArchiveServerDialog({
     // This is safe because addServer always takes the create-new path here
     // (the dialog pre-checks for duplicates), so we only ever delete the server
     // we just created this session — never one the user already had.
+    cancelledRef.current = true;
     if (
       cpState.isActive &&
       !cpState.isComplete &&
       cpState.serverId !== '' &&
       cpState.errorMessage !== null
     ) {
-      void useAuthStore.getState().removeServer(cpState.serverId);
+      void useAuthStore
+        .getState()
+        .removeServer(cpState.serverId)
+        .catch((err) => {
+          console.error('Failed to remove orphaned server:', err);
+        });
     }
     resetDialogState();
     onClose();
