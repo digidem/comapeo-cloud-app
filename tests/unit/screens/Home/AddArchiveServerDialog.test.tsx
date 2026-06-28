@@ -1321,5 +1321,46 @@ describe('AddArchiveServerDialog', () => {
 
       removeServerSpy.mockRestore();
     });
+
+    it('does not call onAdded when cancel clicked during pre-progress async work', async () => {
+      // Make addServer (createRemoteServer) return a controllable promise so we
+      // can keep it pending while the user clicks Cancel.
+      let resolveCreate: (value: { id: string }) => void = () => {};
+      mockCreateRemoteServer.mockReturnValue(
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+      );
+
+      const user = userEvent.setup();
+      const onAdded = vi.fn();
+      const onClose = vi.fn();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={onClose}
+          onAdded={onAdded}
+        />,
+      );
+
+      // Submit a valid invite URL — this starts the async flow
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+      );
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // While addServer is pending, click Cancel
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      // Now resolve the pending addServer promise — the continuation should
+      // be blocked by the cancelledRef guard and NOT call onAdded
+      resolveCreate({ id: 'test-server-id' });
+
+      // Give any pending microtasks a chance to flush
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(onAdded).not.toHaveBeenCalled();
+    });
   });
 });

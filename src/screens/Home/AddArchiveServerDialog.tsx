@@ -362,7 +362,6 @@ function AddArchiveServerDialog({
   // via onAdded without going through handleClose. Declared ahead of the
   // effects below so it is in scope where they reference it.
   const resetDialogState = useCallback(() => {
-    cancelledRef.current = false;
     setUrlError(null);
     setTokenError(null);
     setInviteUrlError(null);
@@ -606,12 +605,14 @@ function AddArchiveServerDialog({
         return;
       }
 
+      cancelledRef.current = false;
       dispatch({ type: 'submit' });
       await finalizeAddServer(parsed.baseUrl, parsed.token);
       return;
     }
 
     // Encrypted: redeem the code first, then proceed with the same flow.
+    cancelledRef.current = false;
     dispatch({ type: 'submit' });
     redeemEncryptedInvite(parsed.code)
       .then(
@@ -682,6 +683,7 @@ function AddArchiveServerDialog({
       return;
     }
 
+    cancelledRef.current = false;
     dispatch({ type: 'submit' });
 
     // Validate server is reachable and token is valid
