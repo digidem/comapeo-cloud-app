@@ -863,9 +863,13 @@ describe('AddArchiveServerDialog', () => {
     await user.type(screen.getByLabelText('Bearer Token'), 'some-token');
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
-    await waitFor(() => {
-      expect(onAdded).toHaveBeenCalledWith('test-server-id');
-    });
+    // Connection progress runs before onAdded is called
+    await waitFor(
+      () => {
+        expect(onAdded).toHaveBeenCalledWith('test-server-id');
+      },
+      { timeout: 5000 },
+    );
   });
 
   it('shows connection error when validation times out (server hangs)', async () => {
