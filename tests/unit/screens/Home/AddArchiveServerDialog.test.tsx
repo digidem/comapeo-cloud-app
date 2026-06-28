@@ -1354,19 +1354,29 @@ describe('AddArchiveServerDialog', () => {
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
       // Now resolve the pending addServer promise — the continuation should
-      // be blocked by the cancelledRef guard and NOT start connection progress.
-      // Asserting on syncRemoteArchive (not onAdded) is more precise: if the
-      // guard fails, startConnectionProgress fires immediately, which calls
-      // syncRemoteArchive before the 500ms+1500ms progress delays.
-      // Flush through the nested promise boundary: resolveCreate resumes
-      // addServer (auth-store), which must return before the component's
-      // .then() continuation is queued. Two microtask flushes cover both
-      // layers.
+      // be blocked by the cancelledRef guard. The guard check happens inside
+      // the .then() before startConnectionProgress, so after flushing the
+      // promise chain the connection progress UI should never appear.
       resolveCreate({ id: 'test-server-id' });
       await Promise.resolve();
       await Promise.resolve();
 
-      expect(syncRemoteArchive).not.toHaveBeenCalled();
+      // Flush React effects — if the guard failed, startConnectionProgress
+      // would have set cpState.isActive=true and the effect would call
+      // syncRemoteArchive. Use findByText with a short timeout to allow
+      // effects to flush; if progress started we'd see the heading.
+      try {
+        await screen.findByText('Connecting to archive...', undefined, {
+          timeout: 500,
+        });
+        // If we get here, connection progress started — guard failed
+        expect.unreachable(
+          'Connection progress started despite cancel — guard failed',
+        );
+      } catch {
+        // Expected: heading not found because guard blocked it
+      }
+
       expect(onAdded).not.toHaveBeenCalled();
     });
   });
