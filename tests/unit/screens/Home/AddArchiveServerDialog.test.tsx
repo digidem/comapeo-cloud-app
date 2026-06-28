@@ -1354,12 +1354,16 @@ describe('AddArchiveServerDialog', () => {
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
       // Now resolve the pending addServer promise — the continuation should
-      // be blocked by the cancelledRef guard and NOT call onAdded
+      // be blocked by the cancelledRef guard and NOT start connection progress.
+      // Asserting on syncRemoteArchive (not onAdded) is more precise: if the
+      // guard fails, startConnectionProgress fires immediately, which calls
+      // syncRemoteArchive before the 500ms+1500ms progress delays.
       resolveCreate({ id: 'test-server-id' });
 
-      // Give any pending microtasks a chance to flush
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
+      // Flush microtasks so the .then() continuation has a chance to run
+      await vi.waitFor(() => {
+        expect(vi.mocked(syncRemoteArchive)).not.toHaveBeenCalled();
+      });
       expect(onAdded).not.toHaveBeenCalled();
     });
   });
