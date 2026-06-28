@@ -1360,10 +1360,10 @@ describe('AddArchiveServerDialog', () => {
       // syncRemoteArchive before the 500ms+1500ms progress delays.
       resolveCreate({ id: 'test-server-id' });
 
-      // Flush microtasks so the .then() continuation has a chance to run
-      await vi.waitFor(() => {
-        expect(vi.mocked(syncRemoteArchive)).not.toHaveBeenCalled();
-      });
+      // Flush the promise microtask queue so the .then() continuation runs
+      await Promise.resolve();
+
+      expect(syncRemoteArchive).not.toHaveBeenCalled();
       expect(onAdded).not.toHaveBeenCalled();
     });
   });
