@@ -1362,20 +1362,14 @@ describe('AddArchiveServerDialog', () => {
       await Promise.resolve();
 
       // Flush React effects — if the guard failed, startConnectionProgress
-      // would have set cpState.isActive=true and the effect would call
-      // syncRemoteArchive. Use findByText with a short timeout to allow
-      // effects to flush; if progress started we'd see the heading.
-      try {
-        await screen.findByText('Connecting to archive...', undefined, {
+      // would have set cpState.isActive=true and the component would render
+      // the progress heading. findByText rejects when the element is not
+      // found after the timeout, so we assert it rejects (guard worked).
+      await expect(
+        screen.findByText('Connecting to archive...', undefined, {
           timeout: 500,
-        });
-        // If we get here, connection progress started — guard failed
-        expect.unreachable(
-          'Connection progress started despite cancel — guard failed',
-        );
-      } catch {
-        // Expected: heading not found because guard blocked it
-      }
+        }),
+      ).rejects.toThrow();
 
       expect(onAdded).not.toHaveBeenCalled();
     });
