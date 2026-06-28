@@ -64,13 +64,13 @@ const observationDetailRoute = createRoute({
 
 const createAlertRoute = createRoute({
   getParentRoute: () => _authenticatedRoute,
-  path: '/data/alerts/new',
+  path: '/alerts/new',
   component: CreateAlertScreen,
 });
 
 const alertDetailRoute = createRoute({
   getParentRoute: () => _authenticatedRoute,
-  path: '/data/alerts/$alertId',
+  path: '/alerts/$alertId',
   component: AlertDetailScreen,
 });
 

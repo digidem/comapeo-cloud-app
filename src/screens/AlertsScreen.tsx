@@ -106,7 +106,7 @@ export function AlertsScreen() {
 
         <div className="flex items-center gap-2">
           <Link
-            to="/data/alerts/new"
+            to="/alerts/new"
             className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white no-underline hover:bg-primary-dark transition-colors text-center"
           >
             {intl.formatMessage(messages.addAlert)}
@@ -147,7 +147,7 @@ export function AlertsScreen() {
             {alerts.map((alert) => (
               <Link
                 key={alert.localId}
-                to="/data/alerts/$alertId"
+                to="/alerts/$alertId"
                 params={{ alertId: alert.localId }}
                 className="no-underline"
               >

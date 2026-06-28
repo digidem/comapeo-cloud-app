@@ -156,7 +156,7 @@ describe('AlertsScreen', () => {
       const link = screen.getByRole('link', { name: /deforestation/i });
       expect(link).toBeInTheDocument();
       // Verify the link points to the alert detail route
-      expect(link).toHaveAttribute('href', '/data/alerts/$alertId');
+      expect(link).toHaveAttribute('href', '/alerts/$alertId');
     });
   });
 });

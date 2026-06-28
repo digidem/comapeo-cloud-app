@@ -70,7 +70,7 @@ test.describe('CSP Runtime Verification', () => {
   test('route navigation works across all screens', async ({ page }) => {
     await installCspListener(page);
 
-    const routes = ['/', '/data', '/data/alerts/new', '/settings'];
+    const routes = ['/', '/data', '/alerts/new', '/settings'];
 
     for (const route of routes) {
       await page.goto(route);

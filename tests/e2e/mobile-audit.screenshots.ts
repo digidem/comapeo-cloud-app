@@ -196,7 +196,7 @@ test.describe('Mobile audit screenshots', () => {
     try {
       await setupMockServer(page);
       await createProjectViaUI(page);
-      await page.goto('/data/alerts/new');
+      await page.goto('/alerts/new');
       await page.waitForLoadState('domcontentloaded');
       await takeScreenshot(page, 'mobile-create-alert', 'mobile');
     } finally {

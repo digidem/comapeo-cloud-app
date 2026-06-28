@@ -55,7 +55,7 @@ test.describe('Alerts - visual screenshots', () => {
           await setTheme(page, themeId as ThemeId);
 
           // Navigate to create alert form
-          await page.goto('/data/alerts/new');
+          await page.goto('/alerts/new');
           await page.waitForLoadState('domcontentloaded');
 
           await takeScreenshot(
@@ -83,7 +83,7 @@ test.describe('Alerts - visual screenshots', () => {
           await setTheme(page, themeId as ThemeId);
 
           // Navigate to alert detail
-          await page.goto('/data/alerts/alert-1');
+          await page.goto('/alerts/alert-1');
           await page.waitForLoadState('domcontentloaded');
 
           await takeScreenshot(
