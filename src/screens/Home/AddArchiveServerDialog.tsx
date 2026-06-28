@@ -1,6 +1,10 @@
-import { useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { useQueryClient } from '@tanstack/react-query';
+
+import { ConnectionProgress } from '@/components/shared/ConnectionProgress';
+import type { ConnectionStep } from '@/components/shared/ConnectionProgress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
@@ -11,6 +15,7 @@ import {
   redeemEncryptedInvite,
 } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
+import { syncRemoteArchive } from '@/lib/data-layer';
 import { parseInviteUrl, warnLegacyInviteUrlOnce } from '@/lib/invite-url';
 import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
 
@@ -30,6 +35,29 @@ type DialogAction =
   | { type: 'success' }
   | { type: 'error'; message: string }
   | { type: 'reset' };
+
+interface ConnectionProgressState {
+  isActive: boolean;
+  serverId: string;
+  baseUrl: string;
+  token: string;
+  steps: ConnectionStep[];
+  isComplete: boolean;
+  errorMessage: string | null;
+  /** Bumped on each "Try Again" so the connection effect re-runs. */
+  attempt: number;
+}
+
+const INITIAL_CP_STATE: ConnectionProgressState = {
+  isActive: false,
+  serverId: '',
+  baseUrl: '',
+  token: '',
+  steps: [],
+  isComplete: false,
+  errorMessage: null,
+  attempt: 0,
+};
 
 const messages = defineMessages({
   title: {
@@ -132,6 +160,34 @@ const messages = defineMessages({
   invalidToken: {
     id: 'home.archive.dialog.invalidToken',
     defaultMessage: 'Invalid token or unauthorized',
+  },
+  connectionProgressHeading: {
+    id: 'home.archive.dialog.connectionProgress.heading',
+    defaultMessage: 'Connecting to archive...',
+  },
+  connectionProgressStepVerify: {
+    id: 'home.archive.dialog.connectionProgress.stepVerify',
+    defaultMessage: 'Verifying invite...',
+  },
+  connectionProgressStepConnect: {
+    id: 'home.archive.dialog.connectionProgress.stepConnect',
+    defaultMessage: 'Connecting to server...',
+  },
+  connectionProgressStepSync: {
+    id: 'home.archive.dialog.connectionProgress.stepSync',
+    defaultMessage: 'Syncing data...',
+  },
+  connectionProgressStepPrepare: {
+    id: 'home.archive.dialog.connectionProgress.stepPrepare',
+    defaultMessage: 'Preparing dashboard...',
+  },
+  tryAgain: {
+    id: 'home.archive.dialog.connectionProgress.retry',
+    defaultMessage: 'Try Again',
+  },
+  syncFailed: {
+    id: 'home.archive.dialog.syncFailed',
+    defaultMessage: 'Sync failed',
   },
 });
 
@@ -243,6 +299,31 @@ async function validateConnection(
   }
 }
 
+function buildConnectionProgressSteps(intl: ReturnType<typeof useIntl>) {
+  return [
+    {
+      id: 'verify',
+      label: intl.formatMessage(messages.connectionProgressStepVerify),
+      status: 'completed' as const,
+    },
+    {
+      id: 'connect',
+      label: intl.formatMessage(messages.connectionProgressStepConnect),
+      status: 'pending' as const,
+    },
+    {
+      id: 'sync',
+      label: intl.formatMessage(messages.connectionProgressStepSync),
+      status: 'pending' as const,
+    },
+    {
+      id: 'prepare',
+      label: intl.formatMessage(messages.connectionProgressStepPrepare),
+      status: 'pending' as const,
+    },
+  ];
+}
+
 function AddArchiveServerDialog({
   isOpen,
   onClose,
@@ -252,6 +333,10 @@ function AddArchiveServerDialog({
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // Connection progress state
+  const [cpState, setCpState] =
+    useState<ConnectionProgressState>(INITIAL_CP_STATE);
+
   // Refs for advanced mode fields
   const labelRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
@@ -260,9 +345,160 @@ function AddArchiveServerDialog({
   // Ref for invite URL field
   const inviteUrlRef = useRef<HTMLInputElement>(null);
 
+  // Guard against cancel-during-pre-progress-async race: if the user clicks
+  // Cancel while validateConnection/redeemEncryptedInvite/addServer is
+  // pending, we need to prevent the continuation from starting connection
+  // progress and calling onAdded after the dialog closed.
+  const cancelledRef = useRef(false);
+
   const [urlError, setUrlError] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [inviteUrlError, setInviteUrlError] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
+
+  // Reset every piece of transient UI state. Used both when the user cancels
+  // (handleClose) and after a successful connection, which closes the dialog
+  // via onAdded without going through handleClose. Declared ahead of the
+  // effects below so it is in scope where they reference it.
+  const resetDialogState = useCallback(() => {
+    setUrlError(null);
+    setTokenError(null);
+    setInviteUrlError(null);
+    setShowAdvanced(false);
+    dispatch({ type: 'reset' });
+    setCpState(INITIAL_CP_STATE);
+  }, []);
+
+  // Drive the connection progress steps
+  useEffect(() => {
+    if (!cpState.isActive || cpState.isComplete) return;
+
+    let cancelled = false;
+
+    async function runConnection() {
+      const steps = [...cpState.steps];
+      try {
+        // Step 1: Connecting to server (index 1)
+        steps[1] = { ...steps[1]!, status: 'active' };
+        setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+        const result = await syncRemoteArchive(cpState.serverId, {
+          baseUrl: cpState.baseUrl,
+          token: cpState.token,
+        });
+        if (cancelled) return;
+
+        if (!result.success) {
+          steps[1] = { ...steps[1]!, status: 'error' };
+          setCpState((prev) => ({
+            ...prev,
+            steps: [...steps],
+            errorMessage:
+              result.error ?? intl.formatMessage(messages.syncFailed),
+          }));
+          return;
+        }
+
+        // Step 1: Connecting complete
+        steps[1] = { ...steps[1]!, status: 'completed' };
+        setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+        // Step 2: Syncing data (index 2)
+        steps[2] = { ...steps[2]!, status: 'active' };
+        setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['projects'] }),
+          queryClient.invalidateQueries({ queryKey: ['observations'] }),
+          queryClient.invalidateQueries({ queryKey: ['alerts'] }),
+        ]);
+        if (cancelled) return;
+
+        steps[2] = { ...steps[2]!, status: 'completed' };
+        setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+        // Step 3: Preparing dashboard (index 3)
+        steps[3] = { ...steps[3]!, status: 'active' };
+        setCpState((prev) => ({ ...prev, steps: [...steps] }));
+
+        // Brief pause for the "Preparing" step to be visible
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (cancelled) return;
+
+        steps[3] = { ...steps[3]!, status: 'completed' };
+        setCpState((prev) => ({
+          ...prev,
+          steps: [...steps],
+          isComplete: true,
+        }));
+      } catch (err) {
+        if (cancelled) return;
+        steps[1] = { ...steps[1]!, status: 'error' };
+        setCpState((prev) => ({
+          ...prev,
+          steps: [...steps],
+          errorMessage:
+            err instanceof Error
+              ? err.message
+              : intl.formatMessage(messages.syncFailed),
+        }));
+      }
+    }
+
+    void runConnection();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cpState.isActive, cpState.isComplete, cpState.attempt]);
+
+  // After connection progress completes, call onAdded. The success path closes
+  // the dialog via onAdded → CLOSE_ADD_SERVER_DIALOG without invoking onClose(),
+  // so reset transient state here too — otherwise it leaks into the next session
+  // (e.g. cpState left as { isActive: true, isComplete: true }).
+  useEffect(() => {
+    if (!cpState.isActive || !cpState.isComplete) return;
+
+    const timer = setTimeout(() => {
+      onAdded(cpState.serverId);
+      resetDialogState();
+    }, 1500);
+
+    return () => {
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cpState.isActive, cpState.isComplete]);
+
+  const startConnectionProgress = useCallback(
+    (serverId: string, baseUrl: string, token: string) => {
+      setCpState({
+        isActive: true,
+        serverId,
+        baseUrl,
+        token,
+        steps: buildConnectionProgressSteps(intl),
+        isComplete: false,
+        errorMessage: null,
+        attempt: 0,
+      });
+    },
+    [intl],
+  );
+
+  // "Try Again": rebuild the steps, clear the error, and bump `attempt` so the
+  // connection effect re-runs (isActive/isComplete are unchanged on failure, so
+  // without the bump the effect's dependency array would see no change).
+  const retryConnection = useCallback(() => {
+    setCpState((prev) => ({
+      ...prev,
+      steps: buildConnectionProgressSteps(intl),
+      isComplete: false,
+      errorMessage: null,
+      attempt: prev.attempt + 1,
+    }));
+  }, [intl]);
 
   async function finalizeAddServer(baseUrl: string, token: string) {
     const normalizedUrl = normalizeArchiveBaseUrl(baseUrl);
@@ -309,8 +545,10 @@ function AddArchiveServerDialog({
       token,
     }).then(
       (serverId) => {
+        if (cancelledRef.current) return;
+        // Instead of immediately calling onAdded, start connection progress
         dispatch({ type: 'success' });
-        onAdded(serverId);
+        startConnectionProgress(serverId, normalizedUrl.value, token);
       },
       (err: unknown) => {
         if (err instanceof DuplicateServerError) {
@@ -367,12 +605,14 @@ function AddArchiveServerDialog({
         return;
       }
 
+      cancelledRef.current = false;
       dispatch({ type: 'submit' });
       await finalizeAddServer(parsed.baseUrl, parsed.token);
       return;
     }
 
     // Encrypted: redeem the code first, then proceed with the same flow.
+    cancelledRef.current = false;
     dispatch({ type: 'submit' });
     redeemEncryptedInvite(parsed.code)
       .then(
@@ -443,6 +683,7 @@ function AddArchiveServerDialog({
       return;
     }
 
+    cancelledRef.current = false;
     dispatch({ type: 'submit' });
 
     // Validate server is reachable and token is valid
@@ -462,8 +703,10 @@ function AddArchiveServerDialog({
       token,
     }).then(
       (serverId) => {
+        if (cancelledRef.current) return;
+        // Instead of immediately calling onAdded, start connection progress
         dispatch({ type: 'success' });
-        onAdded(serverId);
+        startConnectionProgress(serverId, normalizedUrl.value, token);
       },
       (err: unknown) => {
         if (err instanceof DuplicateServerError) {
@@ -492,12 +735,75 @@ function AddArchiveServerDialog({
   }
 
   function handleClose() {
-    setUrlError(null);
-    setTokenError(null);
-    setInviteUrlError(null);
-    setShowAdvanced(false);
-    dispatch({ type: 'reset' });
+    // If the user cancels a connection that failed to sync, the server was
+    // already persisted to the auth store — addServer runs before connection
+    // progress starts, so cancelling would otherwise leave behind an orphaned,
+    // half-connected server entry. Remove it to restore the pre-attempt state.
+    // This is safe because addServer always takes the create-new path here
+    // (the dialog pre-checks for duplicates), so we only ever delete the server
+    // we just created this session — never one the user already had.
+    cancelledRef.current = true;
+    if (
+      cpState.isActive &&
+      !cpState.isComplete &&
+      cpState.serverId !== '' &&
+      cpState.errorMessage !== null
+    ) {
+      void useAuthStore
+        .getState()
+        .removeServer(cpState.serverId)
+        .catch((err) => {
+          console.error('Failed to remove orphaned server:', err);
+        });
+    }
+    resetDialogState();
     onClose();
+  }
+
+  // When connection progress is active, show it inside the dialog
+  if (cpState.isActive) {
+    return (
+      <Modal
+        open={isOpen}
+        onOpenChange={() => {
+          // Prevent closing during connection progress
+        }}
+        title={intl.formatMessage(messages.title)}
+      >
+        <div className="flex flex-col items-center gap-6 py-6">
+          <ConnectionProgress
+            steps={cpState.steps}
+            heading={intl.formatMessage(messages.connectionProgressHeading)}
+            isComplete={cpState.isComplete}
+          />
+          {cpState.errorMessage && (
+            <div className="mt-2 flex flex-col items-center gap-3">
+              <p className="text-sm text-red-600" role="alert">
+                {cpState.errorMessage}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleClose}
+                >
+                  {intl.formatMessage(messages.cancel)}
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={retryConnection}
+                >
+                  {intl.formatMessage(messages.tryAgain)}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+    );
   }
 
   return (

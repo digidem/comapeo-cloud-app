@@ -10,6 +10,7 @@ import { HttpResponse, http } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiClient } from '@/lib/api-client';
+import { syncRemoteArchive } from '@/lib/data-layer';
 import { resetDb } from '@/lib/db';
 import { AddArchiveServerDialog } from '@/screens/Home/AddArchiveServerDialog';
 import { useAuthStore } from '@/stores/auth-store';
@@ -31,6 +32,27 @@ vi.mock('@/lib/local-repositories', () => ({
   getRemoteServer: vi.fn(),
   getRemoteServerByBaseUrl: vi.fn().mockResolvedValue(undefined),
 }));
+
+// Mock data-layer for syncRemoteArchive
+vi.mock('@/lib/data-layer', () => ({
+  syncRemoteArchive: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+// Mock sync module (data-layer re-exports from sync)
+vi.mock('@/lib/sync', () => ({
+  syncRemoteArchive: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+// Mock @tanstack/react-query for useQueryClient
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    useQueryClient: () => ({
+      invalidateQueries: vi.fn().mockResolvedValue(undefined),
+    }),
+  };
+});
 
 beforeEach(async () => {
   await resetDb();
@@ -167,9 +189,13 @@ describe('AddArchiveServerDialog', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
-    await waitFor(() => {
-      expect(onAdded).toHaveBeenCalledWith('test-server-id');
-    });
+    // Connection progress runs before onAdded is called
+    await waitFor(
+      () => {
+        expect(onAdded).toHaveBeenCalledWith('test-server-id');
+      },
+      { timeout: 5000 },
+    );
     expect(mockCreateRemoteServer).toHaveBeenCalledWith(
       expect.objectContaining({
         baseUrl: 'https://archive.test',
@@ -376,9 +402,13 @@ describe('AddArchiveServerDialog', () => {
     await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
-    await waitFor(() => {
-      expect(onAdded).toHaveBeenCalledWith('test-server-id');
-    });
+    // Connection progress runs before onAdded is called
+    await waitFor(
+      () => {
+        expect(onAdded).toHaveBeenCalledWith('test-server-id');
+      },
+      { timeout: 5000 },
+    );
   });
 
   it('uses label when provided in advanced mode', async () => {
@@ -834,9 +864,13 @@ describe('AddArchiveServerDialog', () => {
     await user.type(screen.getByLabelText('Bearer Token'), 'some-token');
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
-    await waitFor(() => {
-      expect(onAdded).toHaveBeenCalledWith('test-server-id');
-    });
+    // Connection progress runs before onAdded is called
+    await waitFor(
+      () => {
+        expect(onAdded).toHaveBeenCalledWith('test-server-id');
+      },
+      { timeout: 5000 },
+    );
   });
 
   it('shows connection error when validation times out (server hangs)', async () => {
@@ -909,9 +943,13 @@ describe('AddArchiveServerDialog', () => {
       await user.type(screen.getByLabelText('Invite URL or Code'), inviteUrl);
       await user.click(screen.getByRole('button', { name: 'Add' }));
 
-      await waitFor(() => {
-        expect(onAdded).toHaveBeenCalledWith('test-server-id');
-      });
+      // Connection progress runs before onAdded is called
+      await waitFor(
+        () => {
+          expect(onAdded).toHaveBeenCalledWith('test-server-id');
+        },
+        { timeout: 5000 },
+      );
       expect(mockCreateRemoteServer).toHaveBeenCalledWith(
         expect.objectContaining({
           baseUrl: 'https://archive.test',
@@ -1031,9 +1069,13 @@ describe('AddArchiveServerDialog', () => {
       await user.type(screen.getByLabelText('Invite URL or Code'), rawCode);
       await user.click(screen.getByRole('button', { name: 'Add' }));
 
-      await waitFor(() => {
-        expect(onAdded).toHaveBeenCalledWith('test-server-id');
-      });
+      // Connection progress runs before onAdded is called
+      await waitFor(
+        () => {
+          expect(onAdded).toHaveBeenCalledWith('test-server-id');
+        },
+        { timeout: 5000 },
+      );
       expect(mockCreateRemoteServer).toHaveBeenCalledWith(
         expect.objectContaining({
           baseUrl: 'https://archive.test',
@@ -1065,6 +1107,271 @@ describe('AddArchiveServerDialog', () => {
         ),
       ).toBeInTheDocument();
       expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+    });
+
+    // ---- Connection progress tests (issue #74) ----
+
+    it('shows connection progress steps after invite code is submitted', async () => {
+      const user = userEvent.setup();
+      const onAdded = vi.fn();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={onAdded}
+        />,
+      );
+
+      const code = makeEncryptedCode('https://archive.test', 'decrypted-token');
+      const rawCode = `v1.${code}`;
+
+      await user.type(screen.getByLabelText('Invite URL or Code'), rawCode);
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // After submitting, the dialog should show connection progress steps
+      expect(
+        await screen.findByText('Verifying invite...'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Connecting to server...')).toBeInTheDocument();
+      expect(screen.getByText('Syncing data...')).toBeInTheDocument();
+      expect(screen.getByText('Preparing dashboard...')).toBeInTheDocument();
+    });
+
+    it('calls onAdded only after connection progress completes', async () => {
+      const user = userEvent.setup();
+      const onAdded = vi.fn();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={onAdded}
+        />,
+      );
+
+      const code = makeEncryptedCode('https://archive.test', 'decrypted-token');
+      const rawCode = `v1.${code}`;
+
+      await user.type(screen.getByLabelText('Invite URL or Code'), rawCode);
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // onAdded should NOT be called immediately
+      expect(onAdded).not.toHaveBeenCalled();
+
+      // Wait for connection progress to complete and onAdded to be called
+      await waitFor(
+        () => {
+          expect(onAdded).toHaveBeenCalledWith('test-server-id');
+        },
+        { timeout: 5000 },
+      );
+    });
+
+    it('shows connection progress after legacy invite URL is submitted', async () => {
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+      );
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // After submitting, the dialog should show connection progress steps
+      expect(
+        await screen.findByText('Connecting to server...'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows connection progress for advanced mode submit', async () => {
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      // Switch to advanced mode
+      await user.click(screen.getByTestId('advanced-toggle'));
+
+      await user.type(
+        screen.getByLabelText('Server URL'),
+        'https://archive.test',
+      );
+      await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // After submitting, the dialog should show connection progress steps
+      expect(
+        await screen.findByText('Connecting to server...'),
+      ).toBeInTheDocument();
+    });
+
+    // ---- Sync failure & retry tests (issue #74) ----
+
+    it('shows error message and Try Again when syncRemoteArchive fails', async () => {
+      vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
+        success: false,
+        error: 'Network error',
+      });
+
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+      );
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Error message should be displayed
+      expect(await screen.findByText('Network error')).toBeInTheDocument();
+
+      // Try Again button should appear
+      expect(
+        screen.getByRole('button', { name: 'Try Again' }),
+      ).toBeInTheDocument();
+    });
+
+    it('retries sync successfully after clicking Try Again', async () => {
+      // First attempt fails
+      vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
+        success: false,
+        error: 'Network error',
+      });
+
+      const user = userEvent.setup();
+      const onAdded = vi.fn();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={onAdded}
+        />,
+      );
+
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+      );
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Wait for failure
+      expect(await screen.findByText('Network error')).toBeInTheDocument();
+
+      // Second attempt will succeed (default mock returns { success: true })
+      await user.click(screen.getByRole('button', { name: 'Try Again' }));
+
+      // onAdded should be called after successful retry
+      await waitFor(
+        () => {
+          expect(onAdded).toHaveBeenCalledWith('test-server-id');
+        },
+        { timeout: 5000 },
+      );
+    });
+
+    it('removes orphaned server when cancelling after sync failure', async () => {
+      vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
+        success: false,
+        error: 'Network error',
+      });
+
+      const removeServerSpy = vi.spyOn(useAuthStore.getState(), 'removeServer');
+      removeServerSpy.mockResolvedValue(undefined);
+
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+      );
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Wait for sync failure
+      expect(await screen.findByText('Network error')).toBeInTheDocument();
+
+      // Click Cancel
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      // removeServer should have been called with the server ID
+      await waitFor(() => {
+        expect(removeServerSpy).toHaveBeenCalledWith('test-server-id');
+      });
+
+      removeServerSpy.mockRestore();
+    });
+
+    it('does not call onAdded when cancel clicked during pre-progress async work', async () => {
+      // Make addServer (createRemoteServer) return a controllable promise so we
+      // can keep it pending while the user clicks Cancel.
+      let resolveCreate: (value: { id: string }) => void = () => {};
+      mockCreateRemoteServer.mockReturnValue(
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+      );
+
+      const user = userEvent.setup();
+      const onAdded = vi.fn();
+      const onClose = vi.fn();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={onClose}
+          onAdded={onAdded}
+        />,
+      );
+
+      // Submit a valid invite URL — this starts the async flow
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+      );
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // While addServer is pending, click Cancel
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      // Now resolve the pending addServer promise — the continuation should
+      // be blocked by the cancelledRef guard. The guard check happens inside
+      // the .then() before startConnectionProgress, so after flushing the
+      // promise chain the connection progress UI should never appear.
+      resolveCreate({ id: 'test-server-id' });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Flush React effects — if the guard failed, startConnectionProgress
+      // would have set cpState.isActive=true and the component would render
+      // the progress heading. findByText rejects when the element is not
+      // found after the timeout, so we assert it rejects (guard worked).
+      await expect(
+        screen.findByText('Connecting to archive...', undefined, {
+          timeout: 500,
+        }),
+      ).rejects.toThrow();
+
+      expect(onAdded).not.toHaveBeenCalled();
     });
   });
 });

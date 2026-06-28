@@ -461,6 +461,24 @@
   "home.archive.dialog.connectionFailed": {
     "defaultMessage": "Could not connect to server"
   },
+  "home.archive.dialog.connectionProgress.heading": {
+    "defaultMessage": "Connecting to archive..."
+  },
+  "home.archive.dialog.connectionProgress.retry": {
+    "defaultMessage": "Try Again"
+  },
+  "home.archive.dialog.connectionProgress.stepConnect": {
+    "defaultMessage": "Connecting to server..."
+  },
+  "home.archive.dialog.connectionProgress.stepPrepare": {
+    "defaultMessage": "Preparing dashboard..."
+  },
+  "home.archive.dialog.connectionProgress.stepSync": {
+    "defaultMessage": "Syncing data..."
+  },
+  "home.archive.dialog.connectionProgress.stepVerify": {
+    "defaultMessage": "Verifying invite..."
+  },
   "home.archive.dialog.duplicateServer": {
     "defaultMessage": "This archive server is already connected"
   },
@@ -493,6 +511,9 @@
   },
   "home.archive.dialog.labelPlaceholder": {
     "defaultMessage": "e.g. Production Server"
+  },
+  "home.archive.dialog.syncFailed": {
+    "defaultMessage": "Sync failed"
   },
   "home.archive.dialog.title": {
     "defaultMessage": "Add Archive Server"
@@ -580,27 +601,6 @@
   },
   "home.areaUnit.m2": {
     "defaultMessage": "m²"
-  },
-  "home.connectionProgress.cancel": {
-    "defaultMessage": "Cancel"
-  },
-  "home.connectionProgress.heading": {
-    "defaultMessage": "Connecting to archive..."
-  },
-  "home.connectionProgress.retry": {
-    "defaultMessage": "Try Again"
-  },
-  "home.connectionProgress.stepConnect": {
-    "defaultMessage": "Connecting to server..."
-  },
-  "home.connectionProgress.stepPrepare": {
-    "defaultMessage": "Preparing dashboard..."
-  },
-  "home.connectionProgress.stepSync": {
-    "defaultMessage": "Syncing data..."
-  },
-  "home.connectionProgress.stepVerify": {
-    "defaultMessage": "Verifying invite..."
   },
   "home.coverage.calculating": {
     "defaultMessage": "Calculating..."
