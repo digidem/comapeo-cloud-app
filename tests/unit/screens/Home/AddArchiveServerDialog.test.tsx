@@ -1358,9 +1358,12 @@ describe('AddArchiveServerDialog', () => {
       // Asserting on syncRemoteArchive (not onAdded) is more precise: if the
       // guard fails, startConnectionProgress fires immediately, which calls
       // syncRemoteArchive before the 500ms+1500ms progress delays.
+      // Flush through the nested promise boundary: resolveCreate resumes
+      // addServer (auth-store), which must return before the component's
+      // .then() continuation is queued. Two microtask flushes cover both
+      // layers.
       resolveCreate({ id: 'test-server-id' });
-
-      // Flush the promise microtask queue so the .then() continuation runs
+      await Promise.resolve();
       await Promise.resolve();
 
       expect(syncRemoteArchive).not.toHaveBeenCalled();
