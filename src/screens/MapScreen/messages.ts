@@ -1,0 +1,229 @@
+import { defineMessages } from 'react-intl';
+
+export const mapMessages = defineMessages({
+  title: {
+    id: 'map.title',
+    defaultMessage: 'Map',
+  },
+  untitledProject: {
+    id: 'map.saved.untitledProject',
+    defaultMessage: 'Untitled Project',
+  },
+  noProject: {
+    id: 'map.saved.noProject',
+    defaultMessage: 'Select a project from Home to author maps',
+  },
+  noProjectLink: {
+    id: 'map.saved.noProjectLink',
+    defaultMessage: 'Go to Home',
+  },
+  canvasAria: {
+    id: 'map.saved.canvasAria',
+    defaultMessage: 'Map authoring canvas',
+  },
+  settings: {
+    id: 'map.saved.settings',
+    defaultMessage: 'Map settings',
+  },
+  closeSettings: {
+    id: 'map.saved.closeSettings',
+    defaultMessage: 'Close map settings',
+  },
+  saveMap: {
+    id: 'map.saved.saveMap',
+    defaultMessage: 'Save Map',
+  },
+  savedMaps: {
+    id: 'map.saved.title',
+    defaultMessage: 'Saved maps',
+  },
+  savedMapsEmpty: {
+    id: 'map.saved.empty',
+    defaultMessage: 'No saved maps yet',
+  },
+  statusDraft: {
+    id: 'map.saved.statusDraft',
+    defaultMessage: 'Draft',
+  },
+  statusDownloading: {
+    id: 'map.saved.statusDownloading',
+    defaultMessage: 'Downloading',
+  },
+  statusReady: {
+    id: 'map.saved.statusReady',
+    defaultMessage: 'Ready',
+  },
+  statusError: {
+    id: 'map.saved.statusError',
+    defaultMessage: 'Error',
+  },
+  setActive: {
+    id: 'map.saved.setActive',
+    defaultMessage: 'Set active',
+  },
+  removeActive: {
+    id: 'map.saved.removeActive',
+    defaultMessage: 'Remove active',
+  },
+  rename: {
+    id: 'map.saved.rename',
+    defaultMessage: 'Rename',
+  },
+  renamePrompt: {
+    id: 'map.saved.renamePrompt',
+    defaultMessage: 'Map name',
+  },
+  delete: {
+    id: 'map.saved.delete',
+    defaultMessage: 'Delete',
+  },
+  confirmDelete: {
+    id: 'map.saved.confirmDelete',
+    defaultMessage: 'Delete this saved map?',
+  },
+  stylePickerTitle: {
+    id: 'map.stylePicker.title',
+    defaultMessage: 'Base map',
+  },
+  presetsMode: {
+    id: 'map.stylePicker.presetsMode',
+    defaultMessage: 'Presets',
+  },
+  customMode: {
+    id: 'map.stylePicker.customMode',
+    defaultMessage: 'Custom URL',
+  },
+  customUrlLabel: {
+    id: 'map.stylePicker.customUrlLabel',
+    defaultMessage: 'Custom URL',
+  },
+  customUrlPlaceholder: {
+    id: 'map.stylePicker.customUrlPlaceholder',
+    defaultMessage: 'https://tiles.example.com/{z}/{x}/{y}.png',
+  },
+  mapTypeLabel: {
+    id: 'map.stylePicker.mapTypeLabel',
+    defaultMessage: 'Map type',
+  },
+  typeRaster: {
+    id: 'map.stylePicker.typeRaster',
+    defaultMessage: 'Raster tiles',
+  },
+  typeStyle: {
+    id: 'map.stylePicker.typeStyle',
+    defaultMessage: 'Style JSON',
+  },
+  schemeLabel: {
+    id: 'map.stylePicker.schemeLabel',
+    defaultMessage: 'Tile scheme',
+  },
+  schemeXyz: {
+    id: 'map.stylePicker.schemeXyz',
+    defaultMessage: 'XYZ',
+  },
+  schemeTms: {
+    id: 'map.stylePicker.schemeTms',
+    defaultMessage: 'TMS',
+  },
+  useCustomUrl: {
+    id: 'map.stylePicker.useCustomUrl',
+    defaultMessage: 'Use custom URL',
+  },
+  invalidUrl: {
+    id: 'map.stylePicker.invalidUrl',
+    defaultMessage: 'Enter an http:// or https:// URL',
+  },
+  selectedStyle: {
+    id: 'map.stylePicker.selectedStyle',
+    defaultMessage: 'Selected',
+  },
+  boundsTitle: {
+    id: 'map.bounds.title',
+    defaultMessage: 'Bounds',
+  },
+  west: {
+    id: 'map.bounds.west',
+    defaultMessage: 'West',
+  },
+  south: {
+    id: 'map.bounds.south',
+    defaultMessage: 'South',
+  },
+  east: {
+    id: 'map.bounds.east',
+    defaultMessage: 'East',
+  },
+  north: {
+    id: 'map.bounds.north',
+    defaultMessage: 'North',
+  },
+  useCurrentView: {
+    id: 'map.bounds.useCurrentView',
+    defaultMessage: 'Use current view',
+  },
+  useProjectArea: {
+    id: 'map.bounds.useProjectArea',
+    defaultMessage: 'Use project area',
+  },
+  noProjectPoints: {
+    id: 'map.bounds.noProjectPoints',
+    defaultMessage: 'No observations with coordinates in this project yet',
+  },
+  invalidLongitude: {
+    id: 'map.bounds.invalidLongitude',
+    defaultMessage: 'Longitude must be between -180 and 180',
+  },
+  invalidLatitude: {
+    id: 'map.bounds.invalidLatitude',
+    defaultMessage: 'Latitude must be between -90 and 90',
+  },
+  zoomTitle: {
+    id: 'map.zoom.title',
+    defaultMessage: 'Zoom range',
+  },
+  minZoom: {
+    id: 'map.zoom.minZoom',
+    defaultMessage: 'Minimum zoom',
+  },
+  maxZoom: {
+    id: 'map.zoom.maxZoom',
+    defaultMessage: 'Maximum zoom',
+  },
+  invalidZoom: {
+    id: 'map.zoom.invalidZoom',
+    defaultMessage: 'Zoom must be between 0 and 22',
+  },
+  invalidZoomRange: {
+    id: 'map.zoom.invalidRange',
+    defaultMessage: 'Max zoom must be greater than or equal to min zoom',
+  },
+  nameDialogTitle: {
+    id: 'map.nameDialog.title',
+    defaultMessage: 'Save map',
+  },
+  nameDialogDescription: {
+    id: 'map.nameDialog.description',
+    defaultMessage:
+      'Save this map configuration as a draft. Download support comes later.',
+  },
+  nameLabel: {
+    id: 'map.nameDialog.nameLabel',
+    defaultMessage: 'Map name',
+  },
+  namePlaceholder: {
+    id: 'map.nameDialog.namePlaceholder',
+    defaultMessage: 'Territory basemap',
+  },
+  nameRequired: {
+    id: 'map.nameDialog.nameRequired',
+    defaultMessage: 'Enter a map name',
+  },
+  cancel: {
+    id: 'map.nameDialog.cancel',
+    defaultMessage: 'Cancel',
+  },
+  saveDraft: {
+    id: 'map.nameDialog.saveDraft',
+    defaultMessage: 'Save draft',
+  },
+});
