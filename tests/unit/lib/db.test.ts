@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getCachedIconBlob, getDb, putCachedIconBlob, resetDb } from '@/lib/db';
-import type { Field, Preset, Track } from '@/lib/db';
+import type { Field, Preset, SavedMap, Track } from '@/lib/db';
 
 beforeEach(async () => {
   await resetDb();
 });
 
 describe('AppDatabase', () => {
-  it('exposes all 9 required tables', async () => {
+  it('exposes all 10 required tables', async () => {
     const db = getDb();
 
     expect(db.projects).toBeDefined();
@@ -20,6 +20,7 @@ describe('AppDatabase', () => {
     expect(db.remoteServers).toBeDefined();
     expect(db.syncMetadata).toBeDefined();
     expect(db.presets).toBeDefined();
+    expect(db.maps).toBeDefined();
   });
 
   it('defines &localId as the primary key for projects', async () => {
@@ -507,16 +508,16 @@ describe('AppDatabase', () => {
     ]);
   });
 
-  it('declares version 11 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
+  it('declares version 12 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
     const db = getDb();
 
-    // The highest declared version is 11 (v8 no-op, v9 string→ref
+    // The highest declared version is 12 (v8 no-op, v9 string→ref
     // re-declared, v10 adds the v2 sync indexes and field migrations, v11
-    // adds the iconCache table). If any future change drops or renumbers
-    // versions, this test fails and forces the author to think about the
-    // upgrade path for users on prior builds (especially the post-#67 v9
-    // build).
-    expect(db.verno).toBe(11);
+    // adds the iconCache table, v12 adds the maps table). If any future
+    // change drops or renumbers versions, this test fails and forces the
+    // author to think about the upgrade path for users on prior builds
+    // (especially the post-#67 v9 build).
+    expect(db.verno).toBe(12);
 
     // Verify the v2 sync indexes are present in the schema. These are
     // required for the index-based queries used by remote-archive.ts.
@@ -723,5 +724,105 @@ describe('icon cache helpers', () => {
     const rows = await db.iconCache.where('url').equals(url).toArray();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.contentType).toBe('image/svg+xml');
+  });
+});
+
+describe('maps table', () => {
+  it('exposes the maps table with id as primary key', async () => {
+    const db = getDb();
+    expect(db.maps).toBeDefined();
+    expect(db.maps.name).toBe('maps');
+    expect(db.maps.schema.primKey.name).toBe('id');
+    expect(db.maps.schema.primKey.unique).toBe(true);
+  });
+
+  it('declares the projectLocalId and status indexes', async () => {
+    const db = getDb();
+    const indexNames = db.maps.schema.indexes.map((i) => i.src);
+    expect(indexNames).toContain('projectLocalId');
+    expect(indexNames).toContain('status');
+    expect(indexNames).toContain('[projectLocalId+updatedAt]');
+  });
+
+  it('stores and retrieves a saved map record', async () => {
+    const db = getDb();
+    const map: SavedMap = {
+      id: 'map-1',
+      projectLocalId: 'proj-1',
+      name: 'Territory Basemap',
+      type: 'raster',
+      styleUrl: 'https://example.com/tiles/{z}/{x}/{y}.png',
+      bbox: [-73.0, -3.5, -70.0, -1.0],
+      minZoom: 0,
+      maxZoom: 14,
+      scheme: 'xyz',
+      status: 'draft',
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+    };
+    await db.maps.add(map);
+    const retrieved = await db.maps.get('map-1');
+    expect(retrieved).toBeDefined();
+    expect(retrieved!.name).toBe('Territory Basemap');
+    expect(retrieved!.bbox).toEqual([-73.0, -3.5, -70.0, -1.0]);
+  });
+
+  it('queries saved maps by projectLocalId', async () => {
+    const db = getDb();
+    await db.maps.bulkAdd([
+      {
+        id: 'map-a',
+        projectLocalId: 'proj-a',
+        name: 'A',
+        type: 'raster',
+        styleUrl: 'https://example.com/a.json',
+        bbox: [0, 0, 1, 1],
+        minZoom: 0,
+        maxZoom: 14,
+        status: 'draft',
+        createdAt: '2026-06-28T00:00:00Z',
+        updatedAt: '2026-06-28T00:00:00Z',
+      },
+      {
+        id: 'map-b',
+        projectLocalId: 'proj-b',
+        name: 'B',
+        type: 'style',
+        styleUrl: 'https://example.com/b.json',
+        bbox: [0, 0, 1, 1],
+        minZoom: 0,
+        maxZoom: 14,
+        status: 'ready',
+        createdAt: '2026-06-28T00:00:00Z',
+        updatedAt: '2026-06-28T00:00:00Z',
+      },
+    ]);
+    const forA = await db.maps
+      .where('projectLocalId')
+      .equals('proj-a')
+      .toArray();
+    expect(forA).toHaveLength(1);
+    expect(forA[0]!.id).toBe('map-a');
+  });
+
+  it('stores a project with activeMapId and supports clearing it to null', async () => {
+    const db = getDb();
+    await db.projects.add({
+      localId: 'proj-active-map',
+      sourceType: 'local',
+      sourceId: 'local',
+      activeMapId: 'map-1',
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    expect((await db.projects.get('proj-active-map'))?.activeMapId).toBe(
+      'map-1',
+    );
+
+    await db.projects.update('proj-active-map', { activeMapId: null });
+    expect((await db.projects.get('proj-active-map'))?.activeMapId).toBeNull();
   });
 });

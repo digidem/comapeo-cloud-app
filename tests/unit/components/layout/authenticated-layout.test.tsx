@@ -93,6 +93,7 @@ describe('AuthenticatedLayout', () => {
     render(<AuthenticatedLayout />);
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Alerts' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Map' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
   });
 
@@ -126,6 +127,7 @@ describe('AuthenticatedLayout', () => {
     // Drawer should contain nav items
     expect(screen.getAllByText('Home').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Alerts').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Map').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
   });
 

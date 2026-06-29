@@ -7,6 +7,7 @@ import {
   homeRoute,
   inviteRoute,
   loginRoute,
+  mapRoute,
   routeTree,
   router,
   settingsRoute,
@@ -34,6 +35,7 @@ describe('router', () => {
         { path: '/invite', route: inviteRoute, name: 'Invite' },
         { path: '/data', route: dataRoute, name: 'Data' },
         { path: '/alerts', route: alertsRoute, name: 'Alerts' },
+        { path: '/map', route: mapRoute, name: 'Map' },
         { path: '/settings', route: settingsRoute, name: 'Settings' },
       ];
 
@@ -82,6 +84,7 @@ describe('router', () => {
       expect(authPaths).toContain('/');
       expect(authPaths).toContain('data');
       expect(authPaths).toContain('alerts');
+      expect(authPaths).toContain('map');
       expect(authPaths).toContain('settings');
 
       // Login stays at root (no shell)

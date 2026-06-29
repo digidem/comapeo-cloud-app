@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -13,16 +13,19 @@ import {
 import { useAutoSync } from '@/hooks/useAutoSync';
 import { useProjects } from '@/hooks/useProjects';
 import { syncRemoteArchive } from '@/lib/data-layer';
+import { getDb } from '@/lib/db';
 import { AddArchiveServerDialog } from '@/screens/Home/AddArchiveServerDialog';
 import { ArchiveBrowser } from '@/screens/Home/ArchiveBrowser';
 import { CreateProjectDialog } from '@/screens/Home/CreateProjectDialog';
 import { useAuthStore } from '@/stores/auth-store';
+import { useMapStore } from '@/stores/map-store';
 import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
   home: { id: 'home.title', defaultMessage: 'Home' },
   data: { id: 'data.title', defaultMessage: 'Data' },
   alerts: { id: 'alerts.title', defaultMessage: 'Alerts' },
+  map: { id: 'map.title', defaultMessage: 'Map' },
   settings: { id: 'settings.title', defaultMessage: 'Settings' },
   appTitle: { id: 'app.title', defaultMessage: 'CoMapeo Cloud' },
 });
@@ -68,6 +71,24 @@ function AlertsIcon(): ReactNode {
       aria-hidden="true"
     >
       <path d="M10 2a1 1 0 011 1v1.07A7.001 7.001 0 0117 11v3l1 1v1H2v-1l1-1v-3a7.001 7.001 0 016-6.93V3a1 1 0 011-1zm0 16a2 2 0 01-2-2h4a2 2 0 01-2 2z" />
+    </svg>
+  );
+}
+
+function MapIcon(): ReactNode {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={20}
+      height={20}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      {/* Stacked map layers: top rhombus + two offset front-face bands */}
+      <path d="M10 1L18 5 10 9 2 5Z" />
+      <path d="M2 9L10 13 18 9 18 11 10 15 2 11Z" />
+      <path d="M2 13L10 17 18 13 18 15 10 19 2 15Z" />
     </svg>
   );
 }
@@ -145,8 +166,44 @@ function AuthenticatedLayoutInner() {
   });
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const selectedServerId = useProjectStore((s) => s.selectedServerId);
+  const hydrateActiveMap = useMapStore((s) => s.hydrateActiveMap);
   const { topbarWorkspaceName, topbarModeLabel, topbarActions } =
     useShellOverrides();
+
+  // Hydrate the active saved map for the selected project from Dexie whenever
+  // the active project changes. The `cancelled` flag guards against stale
+  // async: if the user switches projects before the read resolves, the
+  // previous project's result is discarded instead of overwriting the store.
+  useEffect(() => {
+    if (!selectedProjectId) {
+      // No project selected — clear any leaked activeMapId from a previous project
+      hydrateActiveMap(null, null);
+      return;
+    }
+    let cancelled = false;
+    void getDb()
+      .projects.get(selectedProjectId)
+      .then((proj) => {
+        if (!cancelled) {
+          hydrateActiveMap(selectedProjectId, proj?.activeMapId ?? null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          // Preserve the current selection on a transient same-project read
+          // failure. Only reset when the store still represents a different
+          // project to avoid leaking that project's activeMapId.
+          if (
+            useMapStore.getState().activeProjectLocalId !== selectedProjectId
+          ) {
+            hydrateActiveMap(selectedProjectId, null);
+          }
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId, hydrateActiveMap]);
 
   // Shared dialog state for mobile drawer and sidebar actions.
   const [isAddServerOpen, setAddServerOpen] = useState(false);
@@ -187,6 +244,11 @@ function AuthenticatedLayoutInner() {
       path: '/alerts',
       label: intl.formatMessage(messages.alerts),
       icon: <AlertsIcon />,
+    },
+    {
+      path: '/map',
+      label: intl.formatMessage(messages.map),
+      icon: <MapIcon />,
     },
     {
       path: '/settings',

@@ -67,4 +67,8 @@ describe('schemas index', () => {
   it('exports presetRefSchema', () => {
     expect(schemas.presetRefSchema).toBeDefined();
   });
+
+  it('exports savedMapSchema', () => {
+    expect(schemas.savedMapSchema).toBeDefined();
+  });
 });

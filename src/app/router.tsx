@@ -13,6 +13,7 @@ import { DataScreen } from '@/screens/DataScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { InviteScreen } from '@/screens/InviteScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
+import { MapScreen } from '@/screens/MapScreen/MapScreen';
 import { NotFoundScreen } from '@/screens/NotFoundScreen';
 import { ObservationDetailScreen } from '@/screens/ObservationDetailScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
@@ -80,6 +81,12 @@ const alertsRoute = createRoute({
   component: AlertsScreen,
 });
 
+const mapRoute = createRoute({
+  getParentRoute: () => _authenticatedRoute,
+  path: '/map',
+  component: MapScreen,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => _authenticatedRoute,
   path: '/settings',
@@ -100,6 +107,7 @@ const routeTree = rootRoute.addChildren([
     homeRoute,
     dataRoute,
     alertsRoute,
+    mapRoute,
     observationDetailRoute,
     createAlertRoute,
     alertDetailRoute,
@@ -123,6 +131,7 @@ export {
   inviteRoute,
   dataRoute,
   alertsRoute,
+  mapRoute,
   observationDetailRoute,
   createAlertRoute,
   alertDetailRoute,

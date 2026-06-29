@@ -106,6 +106,7 @@ export async function deleteProject(localId: string): Promise<void> {
         db.tracks,
         db.fields,
         db.presets,
+        db.maps,
       ],
       async () => {
         await db.observations.where('projectLocalId').equals(localId).delete();
@@ -114,6 +115,7 @@ export async function deleteProject(localId: string): Promise<void> {
         await db.tracks.where('projectLocalId').equals(localId).delete();
         await db.fields.where('projectLocalId').equals(localId).delete();
         await db.presets.where('projectLocalId').equals(localId).delete();
+        await db.maps.where('projectLocalId').equals(localId).delete();
         await db.projects.delete(localId);
       },
     );

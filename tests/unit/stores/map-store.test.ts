@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getDb, resetDb } from '@/lib/db';
 import { DEFAULT_BASEMAP_ID } from '@/lib/map/basemaps';
 import { useMapStore } from '@/stores/map-store';
 
@@ -55,5 +56,222 @@ describe('map-store', () => {
     const parsed = JSON.parse(stored!);
     // Only basemapId should be persisted, not the function
     expect(parsed.state).toEqual({ basemapId: 'osm-standard' });
+  });
+});
+
+describe('map-store activeMapId', () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    await resetDb();
+    useMapStore.setState({ activeProjectLocalId: null, activeMapId: null });
+  });
+
+  it('default activeMapId is null', () => {
+    expect(useMapStore.getState().activeMapId).toBeNull();
+  });
+
+  it('setActiveMap updates the cache and writes activeMapId to the project', async () => {
+    const db = getDb();
+    await db.projects.add({
+      localId: 'proj-1',
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    // Hydrate so the store knows it is representing proj-1.
+    useMapStore.getState().hydrateActiveMap('proj-1', null);
+    useMapStore.getState().setActiveMap('proj-1', 'map-1');
+
+    // Cache updates synchronously.
+    expect(useMapStore.getState().activeMapId).toBe('map-1');
+
+    // The Dexie write is fire-and-forget; poll for it to settle.
+    await vi.waitFor(async () => {
+      const project = await db.projects.get('proj-1');
+      expect(project?.activeMapId).toBe('map-1');
+    });
+  });
+
+  it('setActiveMap with null clears activeMapId on the project', async () => {
+    const db = getDb();
+    await db.projects.add({
+      localId: 'proj-2',
+      sourceType: 'local',
+      sourceId: 'local',
+      activeMapId: 'map-old',
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    // Hydrate so the store knows it is representing proj-2.
+    useMapStore.getState().hydrateActiveMap('proj-2', 'map-old');
+    useMapStore.getState().setActiveMap('proj-2', null);
+    expect(useMapStore.getState().activeMapId).toBeNull();
+
+    await vi.waitFor(async () => {
+      const project = await db.projects.get('proj-2');
+      expect(project?.activeMapId).toBeNull();
+    });
+  });
+
+  it('setActiveMap does not write or change cache when called for a non-hydrated project', async () => {
+    // Store represents nothing (activeProjectLocalId: null). Calling setActiveMap
+    // for an unknown project must be a no-op: no cache mutation, no Dexie write.
+    const db = getDb();
+    expect(() =>
+      useMapStore.getState().setActiveMap('does-not-exist', 'map-x'),
+    ).not.toThrow();
+
+    // Cache must remain untouched.
+    expect(useMapStore.getState().activeMapId).toBeNull();
+    expect(useMapStore.getState().activeProjectLocalId).toBeNull();
+
+    // No project row is created.
+    expect(await db.projects.get('does-not-exist')).toBeUndefined();
+  });
+
+  it('restores the previous activeMapId when a same-project Dexie update rejects', async () => {
+    const db = getDb();
+    const updateSpy = vi
+      .spyOn(db.projects, 'update')
+      .mockRejectedValueOnce(new Error('idb rejected'));
+
+    useMapStore.getState().hydrateActiveMap('proj-rejects', 'map-before');
+    useMapStore.getState().setActiveMap('proj-rejects', 'map-after');
+
+    expect(useMapStore.getState().activeProjectLocalId).toBe('proj-rejects');
+    expect(useMapStore.getState().activeMapId).toBe('map-after');
+
+    await vi.waitFor(() => {
+      expect(useMapStore.getState().activeMapId).toBe('map-before');
+    });
+
+    updateSpy.mockRestore();
+  });
+
+  it('restores the previous activeMapId when a same-project Dexie update touches zero rows', async () => {
+    const db = getDb();
+    const updateSpy = vi.spyOn(db.projects, 'update').mockResolvedValueOnce(0);
+
+    useMapStore.getState().hydrateActiveMap('proj-missing', 'map-before');
+    useMapStore.getState().setActiveMap('proj-missing', 'map-after');
+
+    expect(useMapStore.getState().activeProjectLocalId).toBe('proj-missing');
+    expect(useMapStore.getState().activeMapId).toBe('map-after');
+
+    await vi.waitFor(() => {
+      expect(useMapStore.getState().activeMapId).toBe('map-before');
+    });
+
+    updateSpy.mockRestore();
+  });
+
+  it('hydrateActiveMap sets the cache only and does not write to Dexie', async () => {
+    const db = getDb();
+    await db.projects.add({
+      localId: 'proj-3',
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    useMapStore.getState().hydrateActiveMap('proj-3', 'map-h');
+    expect(useMapStore.getState().activeMapId).toBe('map-h');
+    expect(useMapStore.getState().activeProjectLocalId).toBe('proj-3');
+
+    // Drain any stray microtasks; the project record must be untouched.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const project = await db.projects.get('proj-3');
+    expect(project?.activeMapId).toBeUndefined();
+  });
+
+  it('round-trip: setActiveMap then re-hydrate yields the same value', async () => {
+    const db = getDb();
+    await db.projects.add({
+      localId: 'proj-4',
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    // Hydrate so the store knows it is representing proj-4.
+    useMapStore.getState().hydrateActiveMap('proj-4', null);
+    useMapStore.getState().setActiveMap('proj-4', 'map-r');
+
+    await vi.waitFor(async () => {
+      expect((await db.projects.get('proj-4'))?.activeMapId).toBe('map-r');
+    });
+
+    // Simulate the hydration effect reading from Dexie and re-hydrating.
+    useMapStore.setState({ activeMapId: null });
+    const stored = (await db.projects.get('proj-4'))?.activeMapId ?? null;
+    useMapStore.getState().hydrateActiveMap('proj-4', stored);
+
+    expect(useMapStore.getState().activeMapId).toBe('map-r');
+  });
+
+  it('partialize excludes activeMapId from persisted state', () => {
+    useMapStore.getState().hydrateActiveMap('proj-x', 'map-persist-check');
+
+    const stored = localStorage.getItem('comapeo-map');
+    expect(stored).not.toBeNull();
+    const parsed = JSON.parse(stored!);
+    expect(parsed.state).not.toHaveProperty('activeMapId');
+    expect(parsed.state).not.toHaveProperty('activeProjectLocalId');
+  });
+
+  it('a failed write does not roll back into a different project slot', async () => {
+    // Repro for "rollback crosses project state": a write for project A fails
+    // after the user has switched to project B. Both projects currently show
+    // null, so a value-only rollback guard would restore project A's previous
+    // selection into project B's slot. The project-aware guard must prevent it.
+    const db = getDb();
+    await db.projects.add({
+      localId: 'proj-b',
+      sourceType: 'local',
+      sourceId: 'local',
+      activeMapId: null,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    // Store is representing project A with a persisted selection 'map-a'.
+    useMapStore.getState().hydrateActiveMap('proj-a', 'map-a');
+    expect(useMapStore.getState().activeMapId).toBe('map-a');
+
+    // The Dexie update for the clear will reject.
+    const updateSpy = vi
+      .spyOn(db.projects, 'update')
+      .mockRejectedValueOnce(new Error('idb rejected'));
+
+    // User clears project A's selection; the optimistic cache updates.
+    useMapStore.getState().setActiveMap('proj-a', null);
+    expect(useMapStore.getState().activeMapId).toBeNull();
+
+    // User switches to project B (whose persisted selection is also null)
+    // before the failed write settles.
+    useMapStore.getState().hydrateActiveMap('proj-b', null);
+
+    // Drain the rejection + rollback microtask.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    updateSpy.mockRestore();
+
+    // Project A's failed clear must NOT bleed 'map-a' into project B's slot.
+    expect(useMapStore.getState().activeProjectLocalId).toBe('proj-b');
+    expect(useMapStore.getState().activeMapId).toBeNull();
   });
 });

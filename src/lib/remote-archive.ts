@@ -1,3 +1,5 @@
+import type { UpdateSpec } from 'dexie';
+
 import { apiClient } from '@/lib/api-client';
 import type { RequestConfig } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
@@ -228,7 +230,38 @@ export async function pullProjects(
     });
   }
 
-  await db.projects.bulkPut(detailedProjects);
+  // Persist. Existing rows get a PARTIAL update so this sync never overwrites
+  // the local-only `activeMapId`: that field is written independently by
+  // setActiveMap, which can land while the per-project detail fetches above
+  // were still in flight. The `existing` snapshot was captured at the start of
+  // the pull, BEFORE those fetches, so a full-row bulkPut would silently
+  // clobber a selection made during the sync and revert the UI on the next
+  // hydration. New rows have no prior selection to preserve, so they get a
+  // full put (activeMapId stays undefined for a brand-new remote project).
+  //
+  // INVARIANT: `changes` (the spread of `project` minus `localId` and
+  // `activeMapId`) must include ALL sync-managed Project fields — including
+  // optional ones as `undefined` when absent — so the partial update is
+  // semantically equivalent to a full replace of those fields. Any new
+  // sync-managed field added to the Project type in the future must appear in
+  // `detailedProjects` entries (and therefore in `changes`) or it will be
+  // silently omitted from updates, leaving stale values in existing rows.
+  const inserts: Project[] = [];
+  const updates: Array<{ key: string; changes: UpdateSpec<Project> }> = [];
+  for (const project of detailedProjects) {
+    if (existingMap.has(project.localId)) {
+      const { localId, activeMapId: _preserve, ...changes } = project;
+      updates.push({ key: localId, changes });
+    } else {
+      inserts.push(project);
+    }
+  }
+
+  await db.transaction('rw', db.projects, async () => {
+    if (inserts.length > 0) await db.projects.bulkPut(inserts);
+    if (updates.length > 0) await db.projects.bulkUpdate(updates);
+  });
+
   return detailedProjects;
 }
 
