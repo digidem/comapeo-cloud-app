@@ -74,7 +74,7 @@ export function useDeleteMap(projectLocalId: string | null) {
       });
 
       if (useMapStore.getState().activeMapId === mapId) {
-        useMapStore.getState().hydrateActiveMap(null);
+        useMapStore.getState().hydrateActiveMap(projectLocalId, null);
       }
     },
     onSuccess: () => {
@@ -94,7 +94,7 @@ export function useSetActiveMapMutation(projectLocalId: string | null) {
       if (!projectLocalId) return;
 
       await getDb().projects.update(projectLocalId, { activeMapId: mapId });
-      useMapStore.getState().hydrateActiveMap(mapId);
+      useMapStore.getState().hydrateActiveMap(projectLocalId, mapId);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
