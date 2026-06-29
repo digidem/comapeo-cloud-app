@@ -1,0 +1,122 @@
+import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { SavedMap } from '@/lib/db';
+import { getDb, resetDb } from '@/lib/db';
+import { SavedMapsList } from '@/screens/MapScreen/SavedMapsList';
+import { useMapStore } from '@/stores/map-store';
+
+function createMap(overrides: Partial<SavedMap> = {}): SavedMap {
+  return {
+    id: 'map-1',
+    projectLocalId: 'project-1',
+    name: 'Territory draft',
+    type: 'raster',
+    styleUrl: 'https://example.com/{z}/{x}/{y}.png',
+    bbox: [-70, -5, -60, 2],
+    minZoom: 0,
+    maxZoom: 14,
+    scheme: 'xyz',
+    status: 'draft',
+    createdAt: '2026-06-29T10:00:00.000Z',
+    updatedAt: '2026-06-29T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+async function addProject(localId: string, activeMapId?: string | null) {
+  await getDb().projects.add({
+    localId,
+    sourceType: 'local',
+    sourceId: 'local',
+    activeMapId,
+    createdAt: '2026-06-29T00:00:00.000Z',
+    updatedAt: '2026-06-29T00:00:00.000Z',
+    dirtyLocal: false,
+    deleted: false,
+  });
+}
+
+describe('SavedMapsList', () => {
+  beforeEach(async () => {
+    await resetDb();
+    localStorage.clear();
+    useMapStore.setState({ activeMapId: null });
+    vi.restoreAllMocks();
+  });
+
+  it('renders an empty state when no saved maps exist', async () => {
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    expect(await screen.findByText('No saved maps yet')).toBeInTheDocument();
+  });
+
+  it('lists saved maps sorted by most recently updated first', async () => {
+    await getDb().maps.bulkAdd([
+      createMap({
+        id: 'older',
+        name: 'Older map',
+        updatedAt: '2026-06-29T09:00:00.000Z',
+      }),
+      createMap({
+        id: 'newer',
+        name: 'Newer map',
+        updatedAt: '2026-06-29T11:00:00.000Z',
+      }),
+    ]);
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    expect(await screen.findByText('Newer map')).toBeInTheDocument();
+    const rows = screen.getAllByTestId('saved-map-row');
+    expect(rows[0]).toHaveTextContent('Newer map');
+    expect(rows[1]).toHaveTextContent('Older map');
+  });
+
+  it('sets a saved map as active for the current project', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1');
+    await getDb().maps.add(createMap());
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+
+    await waitFor(async () => {
+      const project = await getDb().projects.get('project-1');
+      expect(project?.activeMapId).toBe('map-1');
+    });
+    expect(useMapStore.getState().activeMapId).toBe('map-1');
+  });
+
+  it('renames a saved map', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'prompt').mockReturnValue('Renamed territory');
+    await getDb().maps.add(createMap());
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Rename' }));
+
+    expect(await screen.findByText('Renamed territory')).toBeInTheDocument();
+    expect((await getDb().maps.get('map-1'))?.name).toBe('Renamed territory');
+  });
+
+  it('deletes a saved map and clears activeMapId on every referencing project', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await addProject('project-1', 'map-1');
+    await addProject('project-2', 'map-1');
+    await getDb().maps.add(createMap());
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    await waitFor(async () => {
+      expect(await getDb().maps.get('map-1')).toBeUndefined();
+      expect((await getDb().projects.get('project-1'))?.activeMapId).toBeNull();
+      expect((await getDb().projects.get('project-2'))?.activeMapId).toBeNull();
+    });
+  });
+});
