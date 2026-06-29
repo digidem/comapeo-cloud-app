@@ -19,3 +19,5 @@ export { presetSchema, presetsResponseSchema } from './preset';
 export { fieldSchema, fieldsResponseSchema } from './field';
 export { trackSchema, tracksResponseSchema } from './track';
 export { docRefSchema } from './refs';
+export { savedMapSchema } from './saved-map';
+export type { SavedMapInput } from './saved-map';

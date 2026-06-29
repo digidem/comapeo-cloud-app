@@ -962,6 +962,9 @@
   "map.basemap.label": {
     "defaultMessage": "Basemap"
   },
+  "map.title": {
+    "defaultMessage": "Map"
+  },
   "mapContainer.viewOnly": {
     "defaultMessage": "View only"
   },

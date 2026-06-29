@@ -19,6 +19,13 @@ export interface Project {
     name?: string;
     contentType?: string;
   };
+  /**
+   * The currently active saved map for this project, or `null` when cleared.
+   * Not indexed (schemaless field), so adding it does not require a Dexie
+   * version bump. Nullable (not `undefined`) so `setActiveMap` can write
+   * `null` to clear it under strict TypeScript.
+   */
+  activeMapId?: string | null;
   createdAt: string;
   updatedAt: string;
   dirtyLocal: boolean;
@@ -206,6 +213,32 @@ export interface CachedIcon {
   cachedAt: string;
 }
 
+/**
+ * A saved offline map authored within a project.
+ *
+ * Created in Phase 1b's authoring UI and downloaded to a styled-map-package
+ * blob in Phase 1c. This is the foundation data model that every later phase
+ * of the offline-map feature (#70) builds on.
+ */
+export interface SavedMap {
+  id: string; // crypto.randomUUID()
+  projectLocalId: string; // Origin project
+  name: string; // Non-empty after validation
+  type: 'raster' | 'style';
+  styleUrl: string;
+  bbox: [number, number, number, number]; // [west, south, east, north]
+  minZoom: number; // Default 0
+  maxZoom: number; // Default 14
+  attribution?: string;
+  scheme?: 'xyz' | 'tms'; // Raster only
+  smpBlob?: Blob; // Set when status='ready' (Phase 1c writes this)
+  smpSize?: number; // Blob byte length
+  status: 'draft' | 'downloading' | 'ready' | 'error';
+  errorMessage?: string;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
 // ---------------------------------------------------------------------------
 // Database class
 // ---------------------------------------------------------------------------
@@ -221,6 +254,7 @@ class AppDatabase extends Dexie {
   syncMetadata!: EntityTable<SyncMetadata, 'id'>;
   presets!: EntityTable<Preset, 'localId'>;
   iconCache!: EntityTable<CachedIcon, 'url'>;
+  maps!: EntityTable<SavedMap, 'id'>;
 
   constructor() {
     super('comapeo-cloud-app');
@@ -465,6 +499,14 @@ class AppDatabase extends Dexie {
     // cleanly.
     this.version(11).stores({
       iconCache: '&url',
+    });
+
+    // v12: add the maps table for saved offline maps (offline-map authoring
+    // feature #70, Phase 1a). Purely additive — no existing table or record
+    // shape changes, so no upgrade function is needed and users on any prior
+    // version upgrade cleanly. Matches the additive iconCache pattern in v11.
+    this.version(12).stores({
+      maps: '&id, projectLocalId, [projectLocalId+updatedAt], status',
     });
   }
 }

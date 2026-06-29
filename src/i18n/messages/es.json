@@ -290,6 +290,7 @@
   "invite.progress.redirecting": "Redirigiendo...",
   "mapContainer.viewOnly": "Solo visualización",
   "map.basemap.label": "Mapa base",
+  "map.title": "Mapa",
   "mediaPreview.audioAlt": "Adjunto de audio",
   "mediaPreview.moreCount": "+{count} más",
   "mediaPreview.moreCountAriaLabel": "{count} archivos multimedia más",
