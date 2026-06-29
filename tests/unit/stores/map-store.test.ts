@@ -82,6 +82,8 @@ describe('map-store activeMapId', () => {
       deleted: false,
     });
 
+    // Hydrate so the store knows it is representing proj-1.
+    useMapStore.getState().hydrateActiveMap('proj-1', null);
     useMapStore.getState().setActiveMap('proj-1', 'map-1');
 
     // Cache updates synchronously.
@@ -107,6 +109,8 @@ describe('map-store activeMapId', () => {
       deleted: false,
     });
 
+    // Hydrate so the store knows it is representing proj-2.
+    useMapStore.getState().hydrateActiveMap('proj-2', 'map-old');
     useMapStore.getState().setActiveMap('proj-2', null);
     expect(useMapStore.getState().activeMapId).toBeNull();
 
@@ -116,13 +120,19 @@ describe('map-store activeMapId', () => {
     });
   });
 
-  it('setActiveMap does not throw when projectLocalId does not exist', async () => {
+  it('setActiveMap does not write or change cache when called for a non-hydrated project', async () => {
+    // Store represents nothing (activeProjectLocalId: null). Calling setActiveMap
+    // for an unknown project must be a no-op: no cache mutation, no Dexie write.
     const db = getDb();
     expect(() =>
       useMapStore.getState().setActiveMap('does-not-exist', 'map-x'),
     ).not.toThrow();
 
-    // No project row is created, and no existing row is mutated.
+    // Cache must remain untouched.
+    expect(useMapStore.getState().activeMapId).toBeNull();
+    expect(useMapStore.getState().activeProjectLocalId).toBeNull();
+
+    // No project row is created.
     expect(await db.projects.get('does-not-exist')).toBeUndefined();
   });
 
@@ -196,6 +206,8 @@ describe('map-store activeMapId', () => {
       deleted: false,
     });
 
+    // Hydrate so the store knows it is representing proj-4.
+    useMapStore.getState().hydrateActiveMap('proj-4', null);
     useMapStore.getState().setActiveMap('proj-4', 'map-r');
 
     await vi.waitFor(async () => {

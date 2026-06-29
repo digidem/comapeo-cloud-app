@@ -52,6 +52,10 @@ export const useMapStore = create<MapState>()(
       // matches the still-unchanged project row instead of showing a selection
       // that would silently revert on the next hydration.
       setActiveMap: (projectLocalId, mapId) => {
+        // Guard: only act when the store is already representing this project.
+        // A mismatch means the hydration effect has not yet run for this project
+        // (or the user switched away), so writing would corrupt the wrong slot.
+        if (get().activeProjectLocalId !== projectLocalId) return;
         const previousMapId = get().activeMapId;
         set({ activeMapId: mapId });
         // Revert the optimistic selection only when the store still represents

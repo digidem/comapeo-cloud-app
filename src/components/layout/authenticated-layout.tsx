@@ -189,9 +189,15 @@ function AuthenticatedLayoutInner() {
         }
       })
       .catch(() => {
-        // Missing project or Dexie read failure — clear to a known state.
         if (!cancelled) {
-          hydrateActiveMap(selectedProjectId, null);
+          // Preserve the current selection on a transient same-project read
+          // failure. Only reset when the store still represents a different
+          // project to avoid leaking that project's activeMapId.
+          if (
+            useMapStore.getState().activeProjectLocalId !== selectedProjectId
+          ) {
+            hydrateActiveMap(selectedProjectId, null);
+          }
         }
       });
     return () => {
