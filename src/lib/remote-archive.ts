@@ -1,4 +1,4 @@
-import { type UpdateSpec } from 'dexie';
+import type { UpdateSpec } from 'dexie';
 
 import { apiClient } from '@/lib/api-client';
 import type { RequestConfig } from '@/lib/api-client';
@@ -201,10 +201,6 @@ export async function pullProjects(
         description: existing?.description,
         iconRef: existing?.iconRef,
         serverUrl: baseUrl || undefined,
-        // activeMapId is a local-only field (the API does not model the active
-        // saved map). Carry it over from the existing row so a full-row bulkPut
-        // does not wipe the user's selection on the next sync.
-        activeMapId: existing?.activeMapId,
         createdAt: existing?.createdAt ?? now,
         updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
         dirtyLocal: false,
@@ -226,10 +222,6 @@ export async function pullProjects(
       description: detail?.description,
       serverUrl: baseUrl || undefined,
       iconRef: detail?.iconRef,
-      // activeMapId is a local-only field (the API does not model the active
-      // saved map). Carry it over from the existing row so a full-row bulkPut
-      // does not wipe the user's selection on the next sync.
-      activeMapId: existing?.activeMapId,
       createdAt: existing?.createdAt ?? now,
       updatedAt:
         nameChanged || descriptionChanged ? now : (existing?.updatedAt ?? now),

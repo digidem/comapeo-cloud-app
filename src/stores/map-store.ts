@@ -24,6 +24,11 @@ interface MapState {
    * deliberately excluded from persistence below.
    */
   activeMapId: string | null;
+  /**
+   * Persist the map selection for the currently hydrated/selected project.
+   * Callers must pass that project localId; this does not change
+   * activeProjectLocalId.
+   */
   setActiveMap: (projectLocalId: string, mapId: string | null) => void;
   hydrateActiveMap: (
     projectLocalId: string | null,

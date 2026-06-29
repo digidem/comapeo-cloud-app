@@ -113,6 +113,7 @@ const styleSchema = v.pipe(
  * Discriminated on `type`: `scheme` is validated only for raster maps. For
  * style maps any `scheme` value is ignored (valibot objects strip unknown
  * entries), matching the `SavedMap` interface's "raster only" contract.
+ * Warning: validate for acceptance only; do not persist parse output when runtime fields (`smpBlob`, `smpSize`) or a stripped style-map `scheme` must be preserved.
  */
 export const savedMapSchema = v.variant('type', [rasterSchema, styleSchema]);
 

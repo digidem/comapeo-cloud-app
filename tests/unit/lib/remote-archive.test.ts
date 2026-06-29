@@ -216,7 +216,9 @@ describe('remote-archive', () => {
       }),
     );
 
-    await pullProjects('server-1', archiveConfig);
+    const projects = await pullProjects('server-1', archiveConfig);
+
+    expect(projects[0]).not.toHaveProperty('activeMapId');
 
     const after = await db.projects.get(localId);
     // The sync must NOT clobber the in-flight selection with the stale

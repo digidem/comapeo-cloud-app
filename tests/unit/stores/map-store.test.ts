@@ -126,6 +126,42 @@ describe('map-store activeMapId', () => {
     expect(await db.projects.get('does-not-exist')).toBeUndefined();
   });
 
+  it('restores the previous activeMapId when a same-project Dexie update rejects', async () => {
+    const db = getDb();
+    const updateSpy = vi
+      .spyOn(db.projects, 'update')
+      .mockRejectedValueOnce(new Error('idb rejected'));
+
+    useMapStore.getState().hydrateActiveMap('proj-rejects', 'map-before');
+    useMapStore.getState().setActiveMap('proj-rejects', 'map-after');
+
+    expect(useMapStore.getState().activeProjectLocalId).toBe('proj-rejects');
+    expect(useMapStore.getState().activeMapId).toBe('map-after');
+
+    await vi.waitFor(() => {
+      expect(useMapStore.getState().activeMapId).toBe('map-before');
+    });
+
+    updateSpy.mockRestore();
+  });
+
+  it('restores the previous activeMapId when a same-project Dexie update touches zero rows', async () => {
+    const db = getDb();
+    const updateSpy = vi.spyOn(db.projects, 'update').mockResolvedValueOnce(0);
+
+    useMapStore.getState().hydrateActiveMap('proj-missing', 'map-before');
+    useMapStore.getState().setActiveMap('proj-missing', 'map-after');
+
+    expect(useMapStore.getState().activeProjectLocalId).toBe('proj-missing');
+    expect(useMapStore.getState().activeMapId).toBe('map-after');
+
+    await vi.waitFor(() => {
+      expect(useMapStore.getState().activeMapId).toBe('map-before');
+    });
+
+    updateSpy.mockRestore();
+  });
+
   it('hydrateActiveMap sets the cache only and does not write to Dexie', async () => {
     const db = getDb();
     await db.projects.add({
