@@ -72,7 +72,7 @@ const baseFields = {
   id: v.string(),
   projectLocalId: v.string(),
   name: v.pipe(v.string(), v.minLength(1)),
-  styleUrl: v.string(),
+  styleUrl: v.pipe(v.string(), v.minLength(1)),
   bbox: bboxSchema,
   minZoom: zoomSchema,
   maxZoom: zoomSchema,

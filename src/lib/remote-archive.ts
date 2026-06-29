@@ -238,6 +238,14 @@ export async function pullProjects(
   // clobber a selection made during the sync and revert the UI on the next
   // hydration. New rows have no prior selection to preserve, so they get a
   // full put (activeMapId stays undefined for a brand-new remote project).
+  //
+  // INVARIANT: `changes` (the spread of `project` minus `localId` and
+  // `activeMapId`) must include ALL sync-managed Project fields — including
+  // optional ones as `undefined` when absent — so the partial update is
+  // semantically equivalent to a full replace of those fields. Any new
+  // sync-managed field added to the Project type in the future must appear in
+  // `detailedProjects` entries (and therefore in `changes`) or it will be
+  // silently omitted from updates, leaving stale values in existing rows.
   const inserts: Project[] = [];
   const updates: Array<{ key: string; changes: UpdateSpec<Project> }> = [];
   for (const project of detailedProjects) {

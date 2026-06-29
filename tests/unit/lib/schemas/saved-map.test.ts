@@ -50,6 +50,12 @@ describe('savedMapSchema', () => {
     ).toBe(false);
   });
 
+  it('rejects an empty styleUrl', () => {
+    expect(
+      v.safeParse(savedMapSchema, { ...validRaster, styleUrl: '' }).success,
+    ).toBe(false);
+  });
+
   it('rejects a bbox with an extra entry (strictTuple)', () => {
     expect(
       v.safeParse(savedMapSchema, {
