@@ -8,12 +8,34 @@ import * as v from 'valibot';
  * Bounding box `[west, south, east, north]`.
  *
  * `strictTuple` rejects inputs with the wrong arity (extra entries are NOT
- * silently dropped, as they would be with `v.tuple`). Each element uses
- * `v.finite()` because `v.number()` accepts `Infinity`/`-Infinity`, which are
- * nonsensical map bounds.
+ * silently dropped, as they would be with `v.tuple`). Longitude entries (west,
+ * east) are constrained to the WGS-84 range `[-180, 180]` and latitude entries
+ * (south, north) to `[-90, 90]`; each element also uses `v.finite()` because
+ * `v.number()` accepts `Infinity`/`-Infinity`, which are nonsensical map bounds.
+ * The cross-element `west <= east` constraint is enforced by `v.check` since it
+ * cannot be expressed as a per-entry pipe. Without these guards an inverted or
+ * out-of-range bbox validates and then misleads downstream map display / tile
+ * download code.
  */
-const bboxEntry = v.pipe(v.number(), v.finite());
-const bboxSchema = v.strictTuple([bboxEntry, bboxEntry, bboxEntry, bboxEntry]);
+const longitudeEntry = v.pipe(
+  v.number(),
+  v.finite(),
+  v.minValue(-180),
+  v.maxValue(180),
+);
+const latitudeEntry = v.pipe(
+  v.number(),
+  v.finite(),
+  v.minValue(-90),
+  v.maxValue(90),
+);
+const bboxSchema = v.pipe(
+  v.strictTuple([longitudeEntry, latitudeEntry, longitudeEntry, latitudeEntry]),
+  v.check(
+    ([west, , east]) => west <= east,
+    'bbox west must be less than or equal to east',
+  ),
+);
 
 /** Integer zoom level within the standard web-mercator range 0–22. */
 const zoomSchema = v.pipe(

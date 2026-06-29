@@ -22,22 +22,32 @@ type PersistedMapState = Pick<MapState, 'basemapId'>;
 
 export const useMapStore = create<MapState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       basemapId: DEFAULT_BASEMAP_ID,
       setBasemap: (basemapId) => set({ basemapId }),
       activeMapId: null,
-      // Updates the in-memory cache and persists the choice on the Dexie
-      // Project record. Dexie's update() returns 0 (no rows touched) when the
-      // project does not exist, so a stale projectLocalId is a silent no-op
-      // rather than a throw.
+      // Optimistically updates the in-memory cache, then persists the choice on
+      // the Dexie Project record. If the write never lands — either IndexedDB
+      // rejects it, or Dexie's update() touches 0 rows because the project no
+      // longer exists — the optimistic cache update is rolled back so the UI
+      // matches the still-unchanged project row instead of showing a selection
+      // that would silently revert on the next hydration.
       setActiveMap: (projectLocalId, mapId) => {
+        const previousMapId = get().activeMapId;
         set({ activeMapId: mapId });
+        // Revert the optimistic selection only if no later setActiveMap call has
+        // since changed it — otherwise we would clobber the newer choice.
+        const rollback = () => {
+          if (get().activeMapId === mapId) {
+            set({ activeMapId: previousMapId });
+          }
+        };
         void getDb()
           .projects.update(projectLocalId, { activeMapId: mapId })
-          .catch(() => {
-            // Swallow Dexie errors — the cache update above remains the source
-            // of truth for the current session.
-          });
+          .then((rowsUpdated) => {
+            if (rowsUpdated === 0) rollback();
+          })
+          .catch(() => rollback());
       },
       // Cache-only setter used by the hydration effect to avoid writing back
       // the value it just read from Dexie.
