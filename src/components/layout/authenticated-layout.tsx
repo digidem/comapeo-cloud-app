@@ -177,7 +177,7 @@ function AuthenticatedLayoutInner() {
   useEffect(() => {
     if (!selectedProjectId) {
       // No project selected — clear any leaked activeMapId from a previous project
-      hydrateActiveMap(null);
+      hydrateActiveMap(null, null);
       return;
     }
     let cancelled = false;
@@ -185,13 +185,13 @@ function AuthenticatedLayoutInner() {
       .projects.get(selectedProjectId)
       .then((proj) => {
         if (!cancelled) {
-          hydrateActiveMap(proj?.activeMapId ?? null);
+          hydrateActiveMap(selectedProjectId, proj?.activeMapId ?? null);
         }
       })
       .catch(() => {
         // Missing project or Dexie read failure — clear to a known state.
         if (!cancelled) {
-          hydrateActiveMap(null);
+          hydrateActiveMap(selectedProjectId, null);
         }
       });
     return () => {

@@ -63,7 +63,7 @@ describe('map-store activeMapId', () => {
   beforeEach(async () => {
     localStorage.clear();
     await resetDb();
-    useMapStore.setState({ activeMapId: null });
+    useMapStore.setState({ activeProjectLocalId: null, activeMapId: null });
   });
 
   it('default activeMapId is null', () => {
@@ -138,8 +138,9 @@ describe('map-store activeMapId', () => {
       deleted: false,
     });
 
-    useMapStore.getState().hydrateActiveMap('map-h');
+    useMapStore.getState().hydrateActiveMap('proj-3', 'map-h');
     expect(useMapStore.getState().activeMapId).toBe('map-h');
+    expect(useMapStore.getState().activeProjectLocalId).toBe('proj-3');
 
     // Drain any stray microtasks; the project record must be untouched.
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -168,17 +169,61 @@ describe('map-store activeMapId', () => {
     // Simulate the hydration effect reading from Dexie and re-hydrating.
     useMapStore.setState({ activeMapId: null });
     const stored = (await db.projects.get('proj-4'))?.activeMapId ?? null;
-    useMapStore.getState().hydrateActiveMap(stored);
+    useMapStore.getState().hydrateActiveMap('proj-4', stored);
 
     expect(useMapStore.getState().activeMapId).toBe('map-r');
   });
 
   it('partialize excludes activeMapId from persisted state', () => {
-    useMapStore.getState().hydrateActiveMap('map-persist-check');
+    useMapStore.getState().hydrateActiveMap('proj-x', 'map-persist-check');
 
     const stored = localStorage.getItem('comapeo-map');
     expect(stored).not.toBeNull();
     const parsed = JSON.parse(stored!);
     expect(parsed.state).not.toHaveProperty('activeMapId');
+    expect(parsed.state).not.toHaveProperty('activeProjectLocalId');
+  });
+
+  it('a failed write does not roll back into a different project slot', async () => {
+    // Repro for "rollback crosses project state": a write for project A fails
+    // after the user has switched to project B. Both projects currently show
+    // null, so a value-only rollback guard would restore project A's previous
+    // selection into project B's slot. The project-aware guard must prevent it.
+    const db = getDb();
+    await db.projects.add({
+      localId: 'proj-b',
+      sourceType: 'local',
+      sourceId: 'local',
+      activeMapId: null,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    // Store is representing project A with a persisted selection 'map-a'.
+    useMapStore.getState().hydrateActiveMap('proj-a', 'map-a');
+    expect(useMapStore.getState().activeMapId).toBe('map-a');
+
+    // The Dexie update for the clear will reject.
+    const updateSpy = vi
+      .spyOn(db.projects, 'update')
+      .mockRejectedValueOnce(new Error('idb rejected'));
+
+    // User clears project A's selection; the optimistic cache updates.
+    useMapStore.getState().setActiveMap('proj-a', null);
+    expect(useMapStore.getState().activeMapId).toBeNull();
+
+    // User switches to project B (whose persisted selection is also null)
+    // before the failed write settles.
+    useMapStore.getState().hydrateActiveMap('proj-b', null);
+
+    // Drain the rejection + rollback microtask.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    updateSpy.mockRestore();
+
+    // Project A's failed clear must NOT bleed 'map-a' into project B's slot.
+    expect(useMapStore.getState().activeProjectLocalId).toBe('proj-b');
+    expect(useMapStore.getState().activeMapId).toBeNull();
   });
 });
