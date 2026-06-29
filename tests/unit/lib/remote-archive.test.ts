@@ -177,6 +177,55 @@ describe('remote-archive', () => {
     expect(afterSecond[0]!.iconRef?.docId).toBe('icon-1');
   });
 
+  it('does not overwrite activeMapId selected during an in-flight sync', async () => {
+    const db = getDb();
+    const localId = 'remoteArchive:https://archive.example.com:proj-1';
+
+    // Seed the project row as it exists at the START of the pull, with a
+    // stale activeMapId representing a selection that predates this sync.
+    await db.projects.put({
+      localId,
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      remoteId: 'proj-1',
+      name: 'Old Name',
+      activeMapId: 'stale-selection',
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    // While the per-project detail fetch is in flight, the user picks a map.
+    // setActiveMap writes the new activeMapId directly to Dexie AFTER the
+    // snapshot pullProjects captured at the start — so that snapshot is stale.
+    server.use(
+      http.get(`${archiveConfig.baseUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'proj-1', name: 'New Name' }],
+        }),
+      ),
+      http.get(`${archiveConfig.baseUrl}/projects/proj-1`, async () => {
+        // Simulate the in-flight selection landing after the snapshot was read.
+        await db.projects.update(localId, {
+          activeMapId: 'selected-during-sync',
+        });
+        return HttpResponse.json({
+          data: { projectId: 'proj-1', name: 'New Name' },
+        });
+      }),
+    );
+
+    await pullProjects('server-1', archiveConfig);
+
+    const after = await db.projects.get(localId);
+    // The sync must NOT clobber the in-flight selection with the stale
+    // snapshot value — a full-row bulkPut would restore 'stale-selection'.
+    expect(after?.activeMapId).toBe('selected-during-sync');
+    // Sanity: the sync-managed fields still updated.
+    expect(after?.name).toBe('New Name');
+  });
+
   it('pulls observations from archive and stores them locally', async () => {
     server.use(
       http.get(`${archiveConfig.baseUrl}/projects/proj-1/observations`, () =>

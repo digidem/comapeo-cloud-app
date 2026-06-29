@@ -12,10 +12,11 @@ import * as v from 'valibot';
  * east) are constrained to the WGS-84 range `[-180, 180]` and latitude entries
  * (south, north) to `[-90, 90]`; each element also uses `v.finite()` because
  * `v.number()` accepts `Infinity`/`-Infinity`, which are nonsensical map bounds.
- * The cross-element `west <= east` constraint is enforced by `v.check` since it
- * cannot be expressed as a per-entry pipe. Without these guards an inverted or
- * out-of-range bbox validates and then misleads downstream map display / tile
- * download code.
+ * The cross-element `west <= east` and `south <= north` constraints are
+ * enforced by `v.check` since neither can be expressed as a per-entry pipe.
+ * Without these guards an inverted or out-of-range bbox (e.g. a vertical
+ * extent like `[-73, 10, -70, -10]` where south > north) validates and then
+ * misleads downstream map display / tile download code.
  */
 const longitudeEntry = v.pipe(
   v.number(),
@@ -34,6 +35,14 @@ const bboxSchema = v.pipe(
   v.check(
     ([west, , east]) => west <= east,
     'bbox west must be less than or equal to east',
+  ),
+  // Tuple layout is [west, south, east, north]. Reject an inverted vertical
+  // extent (e.g. [-73, 10, -70, -10], where south > north) that would pass the
+  // per-entry range and west<=east checks but mislead downstream map display /
+  // tile download code.
+  v.check(
+    ([, south, , north]) => south <= north,
+    'bbox south must be less than or equal to north',
   ),
 );
 

@@ -77,6 +77,54 @@ describe('savedMapSchema', () => {
     ).toBe(false);
   });
 
+  it('rejects a longitude outside [-180, 180] (west)', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        bbox: [-200.0, -3.5, -70.0, -1.0],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a longitude outside [-180, 180] (east)', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        bbox: [-73.0, -3.5, 181.0, -1.0],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a latitude outside [-90, 90]', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        bbox: [-73.0, -95.0, -70.0, -1.0],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an inverted horizontal extent (west > east)', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        bbox: [-70.0, -3.5, -73.0, -1.0],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an inverted vertical extent (south > north)', () => {
+    // [-73, 10, -70, -10] is finite and in range and passes west <= east,
+    // but south (10) > north (-10) — an inverted vertical extent that must
+    // fail validation instead of misleading downstream map display.
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        bbox: [-73.0, 10.0, -70.0, -10.0],
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects when minZoom > maxZoom', () => {
     expect(
       v.safeParse(savedMapSchema, {
