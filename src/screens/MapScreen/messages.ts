@@ -202,6 +202,14 @@ export const mapMessages = defineMessages({
     id: 'map.bounds.invalidLatitude',
     defaultMessage: 'Latitude must be between -90 and 90',
   },
+  invalidLngOrder: {
+    id: 'map.bounds.invalidLngOrder',
+    defaultMessage: 'East must be greater than west',
+  },
+  invalidLatOrder: {
+    id: 'map.bounds.invalidLatOrder',
+    defaultMessage: 'North must be greater than south',
+  },
   zoomTitle: {
     id: 'map.zoom.title',
     defaultMessage: 'Zoom range',

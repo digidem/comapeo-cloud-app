@@ -94,23 +94,37 @@ export function BoundsEditor({
     };
   }, [draft]);
 
+  const westRangeError =
+    parsed.west === null || parsed.west < -180 || parsed.west > 180
+      ? intl.formatMessage(mapMessages.invalidLongitude)
+      : undefined;
+  const eastRangeError =
+    parsed.east === null || parsed.east < -180 || parsed.east > 180
+      ? intl.formatMessage(mapMessages.invalidLongitude)
+      : undefined;
+  const southRangeError =
+    parsed.south === null || parsed.south < -90 || parsed.south > 90
+      ? intl.formatMessage(mapMessages.invalidLatitude)
+      : undefined;
+  const northRangeError =
+    parsed.north === null || parsed.north < -90 || parsed.north > 90
+      ? intl.formatMessage(mapMessages.invalidLatitude)
+      : undefined;
+
+  const lngOrderError =
+    !westRangeError && !eastRangeError && parsed.west! >= parsed.east!
+      ? intl.formatMessage(mapMessages.invalidLngOrder)
+      : undefined;
+  const latOrderError =
+    !southRangeError && !northRangeError && parsed.south! >= parsed.north!
+      ? intl.formatMessage(mapMessages.invalidLatOrder)
+      : undefined;
+
   const errors = {
-    west:
-      parsed.west === null || parsed.west < -180 || parsed.west > 180
-        ? intl.formatMessage(mapMessages.invalidLongitude)
-        : undefined,
-    east:
-      parsed.east === null || parsed.east < -180 || parsed.east > 180
-        ? intl.formatMessage(mapMessages.invalidLongitude)
-        : undefined,
-    south:
-      parsed.south === null || parsed.south < -90 || parsed.south > 90
-        ? intl.formatMessage(mapMessages.invalidLatitude)
-        : undefined,
-    north:
-      parsed.north === null || parsed.north < -90 || parsed.north > 90
-        ? intl.formatMessage(mapMessages.invalidLatitude)
-        : undefined,
+    west: westRangeError,
+    east: eastRangeError ?? lngOrderError,
+    south: southRangeError,
+    north: northRangeError ?? latOrderError,
   };
 
   const hasValidDraft =

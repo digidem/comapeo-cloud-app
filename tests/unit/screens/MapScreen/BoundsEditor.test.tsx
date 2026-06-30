@@ -179,4 +179,62 @@ describe('BoundsEditor', () => {
     });
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('rejects inverted longitude bounds without emitting onChange', async () => {
+    const onChange = vi.fn();
+
+    render(
+      <BoundsEditor
+        bbox={[0, 1, 2, 3]}
+        onChange={onChange}
+        projectLocalId={null}
+        mapRef={createMapRef()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('West'), {
+      target: { value: '10' },
+    });
+    fireEvent.change(screen.getByLabelText('East'), {
+      target: { value: '0' },
+    });
+
+    expect(
+      await screen.findByText('East must be greater than west'),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('rejects inverted latitude bounds without emitting onChange', async () => {
+    const onChange = vi.fn();
+
+    render(
+      <BoundsEditor
+        bbox={[0, 1, 2, 3]}
+        onChange={onChange}
+        projectLocalId={null}
+        mapRef={createMapRef()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('South'), {
+      target: { value: '5' },
+    });
+    fireEvent.change(screen.getByLabelText('North'), {
+      target: { value: '-5' },
+    });
+
+    expect(
+      await screen.findByText('North must be greater than south'),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

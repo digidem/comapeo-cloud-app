@@ -965,8 +965,14 @@
   "map.bounds.east": {
     "defaultMessage": "East"
   },
+  "map.bounds.invalidLatOrder": {
+    "defaultMessage": "North must be greater than south"
+  },
   "map.bounds.invalidLatitude": {
     "defaultMessage": "Latitude must be between -90 and 90"
+  },
+  "map.bounds.invalidLngOrder": {
+    "defaultMessage": "East must be greater than west"
   },
   "map.bounds.invalidLongitude": {
     "defaultMessage": "Longitude must be between -180 and 180"
