@@ -1040,6 +1040,9 @@
   "map.saved.deleteDialog.description": {
     "defaultMessage": "Are you sure you want to delete “{name}”? This action cannot be undone."
   },
+  "map.saved.deleteDialog.error": {
+    "defaultMessage": "Could not delete map. Please try again."
+  },
   "map.saved.deleteDialog.title": {
     "defaultMessage": "Delete map"
   },

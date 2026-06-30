@@ -49,6 +49,7 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SavedMap | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const maps = mapsQuery.data ?? [];
 
@@ -68,6 +69,11 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
     setRenameTarget(map);
     setRenameName(map.name);
     setRenameError(null);
+  }
+
+  function openDeleteDialog(map: SavedMap) {
+    setDeleteTarget(map);
+    setDeleteError(null);
   }
 
   async function handleRenameSubmit() {
@@ -94,10 +100,17 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   async function handleDeleteConfirm() {
     if (!deleteTarget) return;
 
-    await runPendingAction({ type: 'delete', mapId: deleteTarget.id }, () =>
-      deleteMap.mutateAsync(deleteTarget.id),
-    );
-    setDeleteTarget(null);
+    setDeleteError(null);
+
+    try {
+      await runPendingAction({ type: 'delete', mapId: deleteTarget.id }, () =>
+        deleteMap.mutateAsync(deleteTarget.id),
+      );
+      setDeleteTarget(null);
+      setDeleteError(null);
+    } catch {
+      setDeleteError(intl.formatMessage(mapMessages.deleteError));
+    }
   }
 
   function isPending(type: PendingAction['type'], mapId: string) {
@@ -172,7 +185,7 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                 <Button
                   size="sm"
                   variant="danger"
-                  onClick={() => setDeleteTarget(map)}
+                  onClick={() => openDeleteDialog(map)}
                   loading={isPending('delete', map.id)}
                 >
                   {intl.formatMessage(mapMessages.delete)}
@@ -226,7 +239,10 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
       <Modal
         open={deleteTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
         }}
         title={intl.formatMessage(mapMessages.deleteDialogTitle)}
         description={
@@ -237,21 +253,34 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
             : undefined
         }
       >
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
-            {intl.formatMessage(mapMessages.cancel)}
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              void handleDeleteConfirm();
-            }}
-            loading={
-              deleteTarget ? isPending('delete', deleteTarget.id) : false
-            }
-          >
-            {intl.formatMessage(mapMessages.deleteConfirm)}
-          </Button>
+        <div className="flex flex-col gap-4">
+          {deleteError ? (
+            <p role="alert" className="text-sm text-error">
+              {deleteError}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+            >
+              {intl.formatMessage(mapMessages.cancel)}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                void handleDeleteConfirm();
+              }}
+              loading={
+                deleteTarget ? isPending('delete', deleteTarget.id) : false
+              }
+            >
+              {intl.formatMessage(mapMessages.deleteConfirm)}
+            </Button>
+          </div>
         </div>
       </Modal>
     </section>

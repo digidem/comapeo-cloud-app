@@ -315,6 +315,7 @@
   "map.saved.delete": "Excluir",
   "map.saved.deleteDialog.confirm": "Excluir mapa",
   "map.saved.deleteDialog.description": "Tem certeza de que deseja excluir “{name}”? Esta ação não pode ser desfeita.",
+  "map.saved.deleteDialog.error": "Não foi possível excluir o mapa. Tente novamente.",
   "map.saved.deleteDialog.title": "Excluir mapa",
   "map.saved.empty": "Ainda não há mapas salvos",
   "map.saved.noProject": "Selecione um projeto no Início para criar mapas",

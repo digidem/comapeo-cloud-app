@@ -106,6 +106,10 @@ export const mapMessages = defineMessages({
     id: 'map.saved.deleteDialog.confirm',
     defaultMessage: 'Delete map',
   },
+  deleteError: {
+    id: 'map.saved.deleteDialog.error',
+    defaultMessage: 'Could not delete map. Please try again.',
+  },
   stylePickerTitle: {
     id: 'map.stylePicker.title',
     defaultMessage: 'Base map',

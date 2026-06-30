@@ -199,4 +199,33 @@ describe('SavedMapsList', () => {
       expect((await getDb().projects.get('project-2'))?.activeMapId).toBeNull();
     });
   });
+
+  it('shows a delete error, keeps the dialog open, and leaves the map when deletion fails', async () => {
+    const user = userEvent.setup();
+    await getDb().maps.add(createMap());
+    vi.spyOn(getDb().maps, 'delete').mockRejectedValueOnce(
+      new Error('IndexedDB delete failed'),
+    );
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete map' });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Delete map' }),
+    );
+
+    expect(
+      await within(dialog).findByText(
+        'Could not delete map. Please try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Delete map' }),
+    ).toBeInTheDocument();
+    expect(await getDb().maps.get('map-1')).toMatchObject({
+      name: 'Territory draft',
+    });
+    expect(screen.getByText('Territory draft')).toBeInTheDocument();
+  });
 });
