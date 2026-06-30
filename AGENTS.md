@@ -19,6 +19,28 @@ CoMapeo Cloud App is a web dashboard for the [comapeo-cloud](https://github.com/
 - **Testing**: Vitest + Testing Library + MSW (unit), Playwright (E2E)
 - **Deployment**: Cloudflare Pages
 
+## AI Coding Workflow (Zenith Default)
+
+For long-running implementation, multi-agent missions, or work where premature completion is a risk, use Zenith as the default harness for both Claude Code and Codex.
+
+Claude Code:
+
+```text
+First read .claude/orchestrator_prompt.md and treat it as your primary role, then use Zenith to run this mission.
+
+<task>
+```
+
+Codex:
+
+```text
+First read .codex/orchestrator_prompt.md and treat it as your primary role, then use Zenith to run this mission.
+
+<task>
+```
+
+Use raw one-shot `claude` / `codex exec` only for small bounded jobs or read-only reviews where Zenith would be unnecessary overhead.
+
 ## TDD Workflow (MANDATORY)
 
 Every feature MUST follow this cycle:

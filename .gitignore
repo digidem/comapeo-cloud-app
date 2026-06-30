@@ -30,6 +30,8 @@ DESIGN.md
 _verify_translations.py
 
 # Agent / orchestrator scratch files
+.mcp.json
+.agents/
 .contrabass/
 .opencode/
 .sortie.db
