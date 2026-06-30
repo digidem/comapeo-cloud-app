@@ -79,12 +79,16 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
       return;
     }
 
-    await runPendingAction({ type: 'rename', mapId: renameTarget.id }, () =>
-      renameMap.mutateAsync({ mapId: renameTarget.id, name: trimmedName }),
-    );
-    setRenameTarget(null);
-    setRenameName('');
-    setRenameError(null);
+    try {
+      await runPendingAction({ type: 'rename', mapId: renameTarget.id }, () =>
+        renameMap.mutateAsync({ mapId: renameTarget.id, name: trimmedName }),
+      );
+      setRenameTarget(null);
+      setRenameName('');
+      setRenameError(null);
+    } catch {
+      setRenameError(intl.formatMessage(mapMessages.saveError));
+    }
   }
 
   async function handleDeleteConfirm() {

@@ -149,6 +149,31 @@ describe('SavedMapsList', () => {
     expect((await getDb().maps.get('map-1'))?.name).toBe('Renamed territory');
   });
 
+  it('shows a rename error and keeps the dialog open when renaming fails', async () => {
+    const user = userEvent.setup();
+    await getDb().maps.add(createMap());
+    vi.spyOn(getDb().maps, 'update').mockRejectedValueOnce(
+      new Error('IndexedDB write failed'),
+    );
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Rename' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rename map' });
+    const nameInput = within(dialog).getByLabelText('Map name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Renamed territory');
+    await user.click(within(dialog).getByRole('button', { name: 'Save name' }));
+
+    expect(
+      await within(dialog).findByText('Could not save map. Please try again.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Rename map' }),
+    ).toBeInTheDocument();
+    expect((await getDb().maps.get('map-1'))?.name).toBe('Territory draft');
+  });
+
   it('deletes a saved map and clears activeMapId on every referencing project', async () => {
     const user = userEvent.setup();
     await addProject('project-1', 'map-1');
