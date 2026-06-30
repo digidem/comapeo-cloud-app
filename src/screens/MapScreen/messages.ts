@@ -89,9 +89,9 @@ export const mapMessages = defineMessages({
     id: 'map.saved.delete',
     defaultMessage: 'Delete',
   },
-  confirmDelete: {
-    id: 'map.saved.confirmDelete',
-    defaultMessage: 'Delete this saved map?',
+  activeError: {
+    id: 'map.saved.activeError',
+    defaultMessage: 'Could not update active map. Please try again.',
   },
   deleteDialogTitle: {
     id: 'map.saved.deleteDialog.title',

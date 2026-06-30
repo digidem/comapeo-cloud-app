@@ -1022,14 +1022,14 @@
   "map.nameDialog.title": {
     "defaultMessage": "Save map"
   },
+  "map.saved.activeError": {
+    "defaultMessage": "Could not update active map. Please try again."
+  },
   "map.saved.canvasAria": {
     "defaultMessage": "Map authoring canvas"
   },
   "map.saved.closeSettings": {
     "defaultMessage": "Close map settings"
-  },
-  "map.saved.confirmDelete": {
-    "defaultMessage": "Delete this saved map?"
   },
   "map.saved.delete": {
     "defaultMessage": "Delete"

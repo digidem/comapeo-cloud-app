@@ -48,7 +48,10 @@ describe('SavedMapsList', () => {
   beforeEach(async () => {
     await resetDb();
     localStorage.clear();
-    useMapStore.setState({ activeMapId: null });
+    useMapStore.setState({
+      activeProjectLocalId: 'project-1',
+      activeMapId: null,
+    });
     vi.restoreAllMocks();
   });
 
@@ -96,7 +99,24 @@ describe('SavedMapsList', () => {
     expect(useMapStore.getState().activeMapId).toBe('map-1');
   });
 
-  it('only shows loading on the set-active button for the row being updated', async () => {
+  it('shows an error and rolls back when setting the active map fails', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1', null);
+    await getDb().maps.add(createMap());
+    vi.spyOn(getDb().projects, 'update').mockResolvedValueOnce(0);
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not update active map. Please try again.',
+    );
+    expect(useMapStore.getState().activeMapId).toBeNull();
+    expect((await getDb().projects.get('project-1'))?.activeMapId).toBeNull();
+  });
+
+  it('only shows loading on the set-active button for the row being updated and disables other actions', async () => {
     const user = userEvent.setup();
     let resolveUpdate: (value: number) => void = () => {};
     const projectsTable = getDb().projects;
@@ -125,7 +145,13 @@ describe('SavedMapsList', () => {
 
     expect(firstSetActive).toHaveAttribute('aria-busy', 'true');
     expect(secondSetActive).not.toHaveAttribute('aria-busy');
-    expect(secondSetActive).toBeEnabled();
+    expect(secondSetActive).toBeDisabled();
+    expect(
+      within(rows[1]!).getByRole('button', { name: 'Rename' }),
+    ).toBeDisabled();
+    expect(
+      within(rows[1]!).getByRole('button', { name: 'Delete' }),
+    ).toBeDisabled();
 
     await act(async () => {
       resolveUpdate(1);

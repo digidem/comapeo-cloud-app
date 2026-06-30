@@ -97,8 +97,7 @@ export function useSetActiveMapMutation(projectLocalId: string | null) {
     mutationFn: async (mapId: string | null) => {
       if (!projectLocalId) return;
 
-      await getDb().projects.update(projectLocalId, { activeMapId: mapId });
-      useMapStore.getState().hydrateActiveMap(projectLocalId, mapId);
+      await useMapStore.getState().setActiveMap(projectLocalId, mapId);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['projects'] });

@@ -61,6 +61,7 @@ export function StylePicker({ value, onChange }: StylePickerProps) {
         <div className="grid grid-cols-2 rounded-btn bg-surface p-1 text-xs font-semibold text-text-muted">
           <button
             type="button"
+            aria-pressed={mode === 'presets'}
             className={`rounded-btn px-3 py-1.5 ${
               mode === 'presets'
                 ? 'bg-surface-card text-primary shadow-card'
@@ -72,6 +73,7 @@ export function StylePicker({ value, onChange }: StylePickerProps) {
           </button>
           <button
             type="button"
+            aria-pressed={mode === 'custom'}
             className={`rounded-btn px-3 py-1.5 ${
               mode === 'custom'
                 ? 'bg-surface-card text-primary shadow-card'
@@ -93,6 +95,7 @@ export function StylePicker({ value, onChange }: StylePickerProps) {
                 key={basemap.id}
                 type="button"
                 aria-label={basemap.name}
+                aria-pressed={isSelected}
                 className={`rounded-btn px-3 py-2 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                   isSelected
                     ? 'bg-primary-soft text-primary'

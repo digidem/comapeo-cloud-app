@@ -5,6 +5,35 @@ import { BASEMAP_CATALOG } from '@/lib/map/basemaps';
 import { StylePicker } from '@/screens/MapScreen/StylePicker';
 
 describe('StylePicker', () => {
+  it('exposes selected mode and preset state with aria-pressed', async () => {
+    const user = userEvent.setup();
+
+    render(<StylePicker value={BASEMAP_CATALOG[0]!} onChange={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Presets' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Custom URL' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(
+      screen.getByRole('button', { name: 'CartoDB Positron' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(screen.getByRole('button', { name: 'Custom URL' }));
+
+    expect(screen.getByRole('button', { name: 'Presets' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'Custom URL' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
   it('selects a preset basemap from the catalog', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

@@ -1,11 +1,11 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ReactNode } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { useDeleteMap } from '@/hooks/useMaps';
+import { useDeleteMap, useSetActiveMapMutation } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import { getDb, resetDb } from '@/lib/db';
 import { useMapStore } from '@/stores/map-store';
@@ -123,5 +123,34 @@ describe('useDeleteMap', () => {
       expect((await getDb().projects.get('project-1'))?.activeMapId).toBeNull();
       expect((await getDb().projects.get('project-2'))?.activeMapId).toBeNull();
     });
+  });
+});
+
+describe('useSetActiveMapMutation', () => {
+  beforeEach(async () => {
+    await resetDb();
+    localStorage.clear();
+    useMapStore.setState({ activeProjectLocalId: null, activeMapId: null });
+  });
+
+  it('rejects and rolls back the store when the project update touches zero rows', async () => {
+    useMapStore.getState().hydrateActiveMap('missing-project', 'map-before');
+
+    const { result } = renderHook(
+      () => useSetActiveMapMutation('missing-project'),
+      {
+        wrapper,
+      },
+    );
+
+    await act(async () => {
+      await expect(result.current.mutateAsync('map-after')).rejects.toThrow(
+        'Project not found: missing-project',
+      );
+    });
+
+    expect(useMapStore.getState().activeProjectLocalId).toBe('missing-project');
+    expect(useMapStore.getState().activeMapId).toBe('map-before');
+    expect(await getDb().projects.get('missing-project')).toBeUndefined();
   });
 });

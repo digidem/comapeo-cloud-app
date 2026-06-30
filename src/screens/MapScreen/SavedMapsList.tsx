@@ -48,10 +48,12 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const [renameTarget, setRenameTarget] = useState<SavedMap | null>(null);
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [activeError, setActiveError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SavedMap | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const maps = mapsQuery.data ?? [];
+  const hasPendingAction = pendingAction !== null;
 
   async function runPendingAction(
     action: PendingAction,
@@ -74,6 +76,18 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   function openDeleteDialog(map: SavedMap) {
     setDeleteTarget(map);
     setDeleteError(null);
+  }
+
+  async function handleActiveToggle(mapId: string, isActive: boolean) {
+    setActiveError(null);
+
+    try {
+      await runPendingAction({ type: 'active', mapId }, () =>
+        setActiveMap.mutateAsync(isActive ? null : mapId),
+      );
+    } catch {
+      setActiveError(intl.formatMessage(mapMessages.activeError));
+    }
   }
 
   async function handleRenameSubmit() {
@@ -123,6 +137,12 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
         {intl.formatMessage(mapMessages.savedMaps)}
       </h2>
 
+      {activeError ? (
+        <p role="alert" className="text-sm text-error">
+          {activeError}
+        </p>
+      ) : null}
+
       {mapsQuery.isPending ? (
         <div className="flex flex-col gap-2">
           <Skeleton height={80} className="rounded-card" />
@@ -163,12 +183,10 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                   size="sm"
                   variant={isActive ? 'secondary' : 'primary'}
                   onClick={() => {
-                    void runPendingAction(
-                      { type: 'active', mapId: map.id },
-                      () => setActiveMap.mutateAsync(isActive ? null : map.id),
-                    );
+                    void handleActiveToggle(map.id, isActive);
                   }}
                   loading={isPending('active', map.id)}
+                  disabled={hasPendingAction && !isPending('active', map.id)}
                 >
                   {intl.formatMessage(
                     isActive ? mapMessages.removeActive : mapMessages.setActive,
@@ -179,6 +197,7 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                   variant="secondary"
                   onClick={() => openRenameDialog(map)}
                   loading={isPending('rename', map.id)}
+                  disabled={hasPendingAction && !isPending('rename', map.id)}
                 >
                   {intl.formatMessage(mapMessages.rename)}
                 </Button>
@@ -187,6 +206,7 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                   variant="danger"
                   onClick={() => openDeleteDialog(map)}
                   loading={isPending('delete', map.id)}
+                  disabled={hasPendingAction && !isPending('delete', map.id)}
                 >
                   {intl.formatMessage(mapMessages.delete)}
                 </Button>
