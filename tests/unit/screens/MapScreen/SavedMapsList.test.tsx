@@ -116,6 +116,52 @@ describe('SavedMapsList', () => {
     expect((await getDb().projects.get('project-1'))?.activeMapId).toBeNull();
   });
 
+  it('clears a stale active-map error when opening the rename dialog', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1', null);
+    await getDb().maps.add(createMap());
+    vi.spyOn(getDb().projects, 'update').mockResolvedValueOnce(0);
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not update active map. Please try again.',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Rename' }));
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Rename map' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Could not update active map. Please try again.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('clears a stale active-map error when opening the delete dialog', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1', null);
+    await getDb().maps.add(createMap());
+    vi.spyOn(getDb().projects, 'update').mockResolvedValueOnce(0);
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not update active map. Please try again.',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Delete map' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Could not update active map. Please try again.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('only shows loading on the set-active button for the row being updated and disables other actions', async () => {
     const user = userEvent.setup();
     let resolveUpdate: (value: number) => void = () => {};

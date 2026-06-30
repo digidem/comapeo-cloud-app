@@ -68,12 +68,14 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   }
 
   function openRenameDialog(map: SavedMap) {
+    setActiveError(null);
     setRenameTarget(map);
     setRenameName(map.name);
     setRenameError(null);
   }
 
   function openDeleteDialog(map: SavedMap) {
+    setActiveError(null);
     setDeleteTarget(map);
     setDeleteError(null);
   }
