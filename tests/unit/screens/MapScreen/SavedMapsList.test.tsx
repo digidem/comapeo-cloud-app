@@ -1,4 +1,11 @@
-import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
+import {
+  act,
+  render,
+  screen,
+  userEvent,
+  waitFor,
+  within,
+} from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
@@ -89,14 +96,54 @@ describe('SavedMapsList', () => {
     expect(useMapStore.getState().activeMapId).toBe('map-1');
   });
 
+  it('only shows loading on the set-active button for the row being updated', async () => {
+    const user = userEvent.setup();
+    let resolveUpdate: (value: number) => void = () => {};
+    const projectsTable = getDb().projects;
+    vi.spyOn(projectsTable, 'update').mockReturnValueOnce(
+      new Promise<number>((resolve) => {
+        resolveUpdate = resolve;
+      }) as unknown as ReturnType<typeof projectsTable.update>,
+    );
+    await addProject('project-1');
+    await getDb().maps.bulkAdd([
+      createMap({ id: 'map-1', name: 'First map' }),
+      createMap({ id: 'map-2', name: 'Second map' }),
+    ]);
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    const rows = await screen.findAllByTestId('saved-map-row');
+    const firstSetActive = within(rows[0]!).getByRole('button', {
+      name: 'Set active',
+    });
+    const secondSetActive = within(rows[1]!).getByRole('button', {
+      name: 'Set active',
+    });
+
+    await user.click(firstSetActive);
+
+    expect(firstSetActive).toHaveAttribute('aria-busy', 'true');
+    expect(secondSetActive).not.toHaveAttribute('aria-busy');
+    expect(secondSetActive).toBeEnabled();
+
+    await act(async () => {
+      resolveUpdate(1);
+    });
+  });
+
   it('renames a saved map', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'prompt').mockReturnValue('Renamed territory');
     await getDb().maps.add(createMap());
 
     render(<SavedMapsList projectLocalId="project-1" />);
 
     await user.click(await screen.findByRole('button', { name: 'Rename' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rename map' });
+    const nameInput = within(dialog).getByLabelText('Map name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Renamed territory');
+    await user.click(within(dialog).getByRole('button', { name: 'Save name' }));
 
     expect(await screen.findByText('Renamed territory')).toBeInTheDocument();
     expect((await getDb().maps.get('map-1'))?.name).toBe('Renamed territory');
@@ -104,7 +151,6 @@ describe('SavedMapsList', () => {
 
   it('deletes a saved map and clears activeMapId on every referencing project', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     await addProject('project-1', 'map-1');
     await addProject('project-2', 'map-1');
     await getDb().maps.add(createMap());
@@ -112,6 +158,15 @@ describe('SavedMapsList', () => {
     render(<SavedMapsList projectLocalId="project-1" />);
 
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete map' });
+    expect(
+      within(dialog).getByText(
+        'Are you sure you want to delete “Territory draft”? This action cannot be undone.',
+      ),
+    ).toBeInTheDocument();
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Delete map' }),
+    );
 
     await waitFor(async () => {
       expect(await getDb().maps.get('map-1')).toBeUndefined();

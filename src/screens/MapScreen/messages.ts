@@ -73,6 +73,18 @@ export const mapMessages = defineMessages({
     id: 'map.saved.renamePrompt',
     defaultMessage: 'Map name',
   },
+  renameDialogTitle: {
+    id: 'map.saved.renameDialog.title',
+    defaultMessage: 'Rename map',
+  },
+  renameDialogDescription: {
+    id: 'map.saved.renameDialog.description',
+    defaultMessage: 'Enter a new name for this saved map.',
+  },
+  renameSave: {
+    id: 'map.saved.renameDialog.save',
+    defaultMessage: 'Save name',
+  },
   delete: {
     id: 'map.saved.delete',
     defaultMessage: 'Delete',
@@ -80,6 +92,19 @@ export const mapMessages = defineMessages({
   confirmDelete: {
     id: 'map.saved.confirmDelete',
     defaultMessage: 'Delete this saved map?',
+  },
+  deleteDialogTitle: {
+    id: 'map.saved.deleteDialog.title',
+    defaultMessage: 'Delete map',
+  },
+  deleteDialogDescription: {
+    id: 'map.saved.deleteDialog.description',
+    defaultMessage:
+      'Are you sure you want to delete “{name}”? This action cannot be undone.',
+  },
+  deleteConfirm: {
+    id: 'map.saved.deleteDialog.confirm',
+    defaultMessage: 'Delete map',
   },
   stylePickerTitle: {
     id: 'map.stylePicker.title',
@@ -217,6 +242,10 @@ export const mapMessages = defineMessages({
   nameRequired: {
     id: 'map.nameDialog.nameRequired',
     defaultMessage: 'Enter a map name',
+  },
+  saveError: {
+    id: 'map.nameDialog.saveError',
+    defaultMessage: 'Could not save map. Please try again.',
   },
   cancel: {
     id: 'map.nameDialog.cancel',

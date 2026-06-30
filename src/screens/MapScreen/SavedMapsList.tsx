@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useDeleteMap,
@@ -16,6 +19,11 @@ import { mapMessages } from './messages';
 interface SavedMapsListProps {
   projectLocalId: string | null;
 }
+
+type PendingAction =
+  | { type: 'active'; mapId: string }
+  | { type: 'rename'; mapId: string }
+  | { type: 'delete'; mapId: string };
 
 const STATUS_MESSAGE_BY_STATUS: Record<
   SavedMap['status'],
@@ -34,23 +42,62 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const setActiveMap = useSetActiveMapMutation(projectLocalId);
   const renameMap = useRenameMap(projectLocalId);
   const deleteMap = useDeleteMap(projectLocalId);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(
+    null,
+  );
+  const [renameTarget, setRenameTarget] = useState<SavedMap | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SavedMap | null>(null);
 
   const maps = mapsQuery.data ?? [];
 
-  function handleRename(map: SavedMap) {
-    const nextName = window.prompt(
-      intl.formatMessage(mapMessages.renamePrompt),
-      map.name,
-    );
-    const trimmedName = nextName?.trim();
-    if (!trimmedName) return;
-
-    renameMap.mutate({ mapId: map.id, name: trimmedName });
+  async function runPendingAction(
+    action: PendingAction,
+    mutate: () => Promise<unknown>,
+  ) {
+    setPendingAction(action);
+    try {
+      await mutate();
+    } finally {
+      setPendingAction(null);
+    }
   }
 
-  function handleDelete(map: SavedMap) {
-    if (!window.confirm(intl.formatMessage(mapMessages.confirmDelete))) return;
-    deleteMap.mutate(map.id);
+  function openRenameDialog(map: SavedMap) {
+    setRenameTarget(map);
+    setRenameName(map.name);
+    setRenameError(null);
+  }
+
+  async function handleRenameSubmit() {
+    if (!renameTarget) return;
+
+    const trimmedName = renameName.trim();
+    if (!trimmedName) {
+      setRenameError(intl.formatMessage(mapMessages.nameRequired));
+      return;
+    }
+
+    await runPendingAction({ type: 'rename', mapId: renameTarget.id }, () =>
+      renameMap.mutateAsync({ mapId: renameTarget.id, name: trimmedName }),
+    );
+    setRenameTarget(null);
+    setRenameName('');
+    setRenameError(null);
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+
+    await runPendingAction({ type: 'delete', mapId: deleteTarget.id }, () =>
+      deleteMap.mutateAsync(deleteTarget.id),
+    );
+    setDeleteTarget(null);
+  }
+
+  function isPending(type: PendingAction['type'], mapId: string) {
+    return pendingAction?.type === type && pendingAction.mapId === mapId;
   }
 
   return (
@@ -98,8 +145,13 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                 <Button
                   size="sm"
                   variant={isActive ? 'secondary' : 'primary'}
-                  onClick={() => setActiveMap.mutate(isActive ? null : map.id)}
-                  loading={setActiveMap.isPending}
+                  onClick={() => {
+                    void runPendingAction(
+                      { type: 'active', mapId: map.id },
+                      () => setActiveMap.mutateAsync(isActive ? null : map.id),
+                    );
+                  }}
+                  loading={isPending('active', map.id)}
                 >
                   {intl.formatMessage(
                     isActive ? mapMessages.removeActive : mapMessages.setActive,
@@ -108,16 +160,16 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => handleRename(map)}
-                  loading={renameMap.isPending}
+                  onClick={() => openRenameDialog(map)}
+                  loading={isPending('rename', map.id)}
                 >
                   {intl.formatMessage(mapMessages.rename)}
                 </Button>
                 <Button
                   size="sm"
                   variant="danger"
-                  onClick={() => handleDelete(map)}
-                  loading={deleteMap.isPending}
+                  onClick={() => setDeleteTarget(map)}
+                  loading={isPending('delete', map.id)}
                 >
                   {intl.formatMessage(mapMessages.delete)}
                 </Button>
@@ -126,6 +178,78 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
           );
         })}
       </div>
+
+      <Modal
+        open={renameTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRenameTarget(null);
+        }}
+        title={intl.formatMessage(mapMessages.renameDialogTitle)}
+        description={intl.formatMessage(mapMessages.renameDialogDescription)}
+      >
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleRenameSubmit();
+          }}
+        >
+          <Input
+            label={intl.formatMessage(mapMessages.renamePrompt)}
+            value={renameName}
+            onChange={(event) => {
+              setRenameName(event.target.value);
+              setRenameError(null);
+            }}
+            error={renameError ?? undefined}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setRenameTarget(null)}>
+              {intl.formatMessage(mapMessages.cancel)}
+            </Button>
+            <Button
+              type="submit"
+              loading={
+                renameTarget ? isPending('rename', renameTarget.id) : false
+              }
+            >
+              {intl.formatMessage(mapMessages.renameSave)}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title={intl.formatMessage(mapMessages.deleteDialogTitle)}
+        description={
+          deleteTarget
+            ? intl.formatMessage(mapMessages.deleteDialogDescription, {
+                name: deleteTarget.name,
+              })
+            : undefined
+        }
+      >
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+            {intl.formatMessage(mapMessages.cancel)}
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              void handleDeleteConfirm();
+            }}
+            loading={
+              deleteTarget ? isPending('delete', deleteTarget.id) : false
+            }
+          >
+            {intl.formatMessage(mapMessages.deleteConfirm)}
+          </Button>
+        </div>
+      </Modal>
     </section>
   );
 }

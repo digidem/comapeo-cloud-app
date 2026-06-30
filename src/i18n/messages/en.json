@@ -1010,6 +1010,9 @@
   "map.nameDialog.saveDraft": {
     "defaultMessage": "Save draft"
   },
+  "map.nameDialog.saveError": {
+    "defaultMessage": "Could not save map. Please try again."
+  },
   "map.nameDialog.title": {
     "defaultMessage": "Save map"
   },
@@ -1025,6 +1028,15 @@
   "map.saved.delete": {
     "defaultMessage": "Delete"
   },
+  "map.saved.deleteDialog.confirm": {
+    "defaultMessage": "Delete map"
+  },
+  "map.saved.deleteDialog.description": {
+    "defaultMessage": "Are you sure you want to delete “{name}”? This action cannot be undone."
+  },
+  "map.saved.deleteDialog.title": {
+    "defaultMessage": "Delete map"
+  },
   "map.saved.empty": {
     "defaultMessage": "No saved maps yet"
   },
@@ -1039,6 +1051,15 @@
   },
   "map.saved.rename": {
     "defaultMessage": "Rename"
+  },
+  "map.saved.renameDialog.description": {
+    "defaultMessage": "Enter a new name for this saved map."
+  },
+  "map.saved.renameDialog.save": {
+    "defaultMessage": "Save name"
+  },
+  "map.saved.renameDialog.title": {
+    "defaultMessage": "Rename map"
   },
   "map.saved.renamePrompt": {
     "defaultMessage": "Map name"

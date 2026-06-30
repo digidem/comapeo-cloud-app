@@ -73,8 +73,12 @@ export function useDeleteMap(projectLocalId: string | null) {
           });
       });
 
-      if (useMapStore.getState().activeMapId === mapId) {
-        useMapStore.getState().hydrateActiveMap(projectLocalId, null);
+      const storeState = useMapStore.getState();
+      if (
+        storeState.activeMapId === mapId &&
+        storeState.activeProjectLocalId === projectLocalId
+      ) {
+        storeState.hydrateActiveMap(projectLocalId, null);
       }
     },
     onSuccess: () => {

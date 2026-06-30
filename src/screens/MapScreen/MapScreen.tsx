@@ -171,10 +171,14 @@ export function MapScreen() {
       updatedAt: now,
     };
 
-    await createMap.mutateAsync(map);
-    setNameDialogOpen(false);
-    setMapName('');
-    setNameError(null);
+    try {
+      await createMap.mutateAsync(map);
+      setNameDialogOpen(false);
+      setMapName('');
+      setNameError(null);
+    } catch {
+      setNameError(intl.formatMessage(mapMessages.saveError));
+    }
   }
 
   if (!selectedProjectId || !selectedProject) {

@@ -150,4 +150,27 @@ describe('MapScreen', () => {
       );
     });
   });
+
+  it('shows a save error and keeps the name dialog open when saving fails', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(getDb().maps, 'add').mockRejectedValueOnce(
+      new Error('IndexedDB write failed'),
+    );
+
+    render(<MapScreen />);
+
+    await user.click(
+      (await screen.findAllByRole('button', { name: 'Save Map' })).at(-1)!,
+    );
+    await user.type(await screen.findByLabelText('Map name'), 'Field map');
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    expect(
+      await screen.findByText('Could not save map. Please try again.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Save map' }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Map name')).toHaveValue('Field map');
+  });
 });

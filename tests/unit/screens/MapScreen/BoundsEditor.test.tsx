@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -144,5 +145,38 @@ describe('BoundsEditor', () => {
     expect(
       screen.getByText('No observations with coordinates in this project yet'),
     ).toBeInTheDocument();
+  });
+
+  it('syncs inputs from external bbox updates without emitting stale changes', async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <BoundsEditor
+        bbox={[0, 1, 2, 3]}
+        onChange={onChange}
+        projectLocalId={null}
+        mapRef={createMapRef()}
+      />,
+    );
+
+    rerender(
+      <BoundsEditor
+        bbox={[10, 11, 12, 13]}
+        onChange={onChange}
+        projectLocalId={null}
+        mapRef={createMapRef()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('West')).toHaveValue(10);
+      expect(screen.getByLabelText('South')).toHaveValue(11);
+      expect(screen.getByLabelText('East')).toHaveValue(12);
+      expect(screen.getByLabelText('North')).toHaveValue(13);
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    });
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

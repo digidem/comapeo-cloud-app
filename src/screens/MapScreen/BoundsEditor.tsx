@@ -1,6 +1,6 @@
 import bbox from '@turf/bbox';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { useIntl } from 'react-intl';
 import type { MapRef } from 'react-map-gl/maplibre';
@@ -63,6 +63,12 @@ export function BoundsEditor({
 }: BoundsEditorProps) {
   const intl = useIntl();
   const [draft, setDraft] = useState(() => draftFromBbox(value));
+  const valueKey = value.join(',');
+  const valueDraft = useMemo(() => {
+    const [west = '', south = '', east = '', north = ''] = valueKey.split(',');
+    return { west, south, east, north };
+  }, [valueKey]);
+  const latestPropValueKeyRef = useRef(valueKey);
 
   const projectPointsQuery = useQuery({
     queryKey: ['project-points', projectLocalId],
@@ -120,11 +126,22 @@ export function BoundsEditor({
     }
 
     const timeout = window.setTimeout(() => {
-      if (parsed.bbox) onChange(parsed.bbox);
+      if (latestPropValueKeyRef.current === valueKey && parsed.bbox) {
+        onChange(parsed.bbox);
+      }
     }, 150);
 
     return () => window.clearTimeout(timeout);
-  }, [hasValidDraft, onChange, parsed.bbox, value]);
+  }, [hasValidDraft, onChange, parsed.bbox, value, valueKey]);
+
+  useEffect(() => {
+    if (latestPropValueKeyRef.current === valueKey) {
+      return;
+    }
+
+    latestPropValueKeyRef.current = valueKey;
+    setDraft(valueDraft);
+  }, [valueDraft, valueKey]);
 
   function updateDraft(key: keyof BoundsDraft, nextValue: string) {
     setDraft((current) => ({ ...current, [key]: nextValue }));
