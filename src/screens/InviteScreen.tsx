@@ -140,6 +140,7 @@ export function InviteScreen() {
   const cancelledRef = useRef(false);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const intlRef = useRef(intl);
+  const effectGenerationRef = useRef(0);
 
   // Keep intlRef in sync so runFlow (which intentionally omits intl from deps)
   // always uses the latest intl without restarting the flow on locale changes.
@@ -293,18 +294,30 @@ export function InviteScreen() {
   }, [invite, navigate, queryClient]);
 
   useEffect(() => {
-    // Reset the cancellation flag at the top of the effect so React
-    // StrictMode double-invoke does not permanently disable the flow.
-    // StrictMode cleans up the first effect (setting cancelledRef = true)
-    // before re-running it, and runFlow checks cancelledRef before
-    // resetting it — so without this, both invocations bail out and the
-    // invite screen stays stuck on "Connecting to archive..." forever.
+    // Reset the cancellation flag so the \"Try Again\" button (which calls
+    // runFlow directly, bypassing this effect) can restart a failed flow.
     cancelledRef.current = false;
+
+    // Monotonically incrementing generation counter prevents React
+    // StrictMode double-invoke from executing the flow twice.  In
+    // StrictMode the cleanup runs between the two effect invocations and
+    // bumps the counter, invalidating the first invocation's microtask.
+    // Only the second (\"real\") invocation's microtask survives the check.
+    const generation = ++effectGenerationRef.current;
 
     // Defer via microtask to avoid synchronous setState in effect body
     // (required by react-hooks/set-state-in-effect; React 18+ batches the updates).
-    queueMicrotask(runFlow);
+    queueMicrotask(() => {
+      if (generation !== effectGenerationRef.current) return;
+      runFlow();
+    });
+
     return () => {
+      // Bump the generation so any microtask still pending from a
+      // previous invocation is silently dropped.
+      effectGenerationRef.current++;
+      // Signal in-flight async work (inside run()) that the component
+      // is unmounting so it can short-circuit early.
       cancelledRef.current = true;
       if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     };
