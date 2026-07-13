@@ -32,12 +32,14 @@ export async function setupMockServer(page: Page): Promise<void> {
   // handlers below because Playwright matches routes in order and
   // ** /projects/* is greedy — it would also match /projects/:id/observations.
   // Use route.fallback() so more specific handlers take priority.
+  //
+  // The pathname may be /projects/:id (direct, e.g. in vitest/Vitest mode)
+  // or /api/projects/:id (proxied via Cloudflare Pages Functions / Vite
+  // dev proxy).  The regex handles both so the handler never falls through
+  // for a legitimate project-detail request.
   await page.route('**/projects/*', (route) => {
     const url = new URL(route.request().url());
-    const segments = url.pathname.replace(/\/+$/, '').split('/');
-    // /projects/:id has exactly 3 segments: ['', 'projects', ':id']
-    const isDetailEndpoint =
-      segments.length === 3 || (segments.length === 4 && segments[3] === '');
+    const isDetailEndpoint = /\/projects\/[^/]+$/.test(url.pathname);
     if (!isDetailEndpoint) {
       // Fall through to more specific handlers (observations, alerts, etc.)
       return route.fallback();
@@ -62,6 +64,34 @@ export async function setupMockServer(page: Page): Promise<void> {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(alertsFixture),
+    }),
+  );
+
+  // Non-critical data types — empty responses so the sync doesn't waste
+  // time waiting for unmocked routes to time out against the preview server.
+  const EMPTY_ARRAY_RESPONSE = JSON.stringify({ data: [] });
+
+  await page.route('**/projects/*/presets', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: EMPTY_ARRAY_RESPONSE,
+    }),
+  );
+
+  await page.route('**/projects/*/tracks', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: EMPTY_ARRAY_RESPONSE,
+    }),
+  );
+
+  await page.route('**/projects/*/fields', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: EMPTY_ARRAY_RESPONSE,
     }),
   );
 
