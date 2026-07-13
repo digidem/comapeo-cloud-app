@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { alertsFixture } from '@tests/fixtures/alerts';
 import { observationsFixture } from '@tests/fixtures/observations';
+import { projectDetailFixture } from '@tests/fixtures/project-detail';
 import { projectsFixture } from '@tests/fixtures/projects';
 import { serverInfoFixture } from '@tests/fixtures/server-info';
 
@@ -26,6 +27,27 @@ export async function setupMockServer(page: Page): Promise<void> {
       body: JSON.stringify(projectsFixture),
     }),
   );
+
+  // Per-project detail handler. Must be registered BEFORE the sub-route
+  // handlers below because Playwright matches routes in order and
+  // ** /projects/* is greedy — it would also match /projects/:id/observations.
+  // Use route.fallback() so more specific handlers take priority.
+  await page.route('**/projects/*', (route) => {
+    const url = new URL(route.request().url());
+    const segments = url.pathname.replace(/\/+$/, '').split('/');
+    // /projects/:id has exactly 3 segments: ['', 'projects', ':id']
+    const isDetailEndpoint =
+      segments.length === 3 || (segments.length === 4 && segments[3] === '');
+    if (!isDetailEndpoint) {
+      // Fall through to more specific handlers (observations, alerts, etc.)
+      return route.fallback();
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(projectDetailFixture),
+    });
+  });
 
   await page.route('**/projects/*/observations', (route) =>
     route.fulfill({

@@ -325,4 +325,37 @@ test.describe('Critical User Flows', () => {
     // Expiry caption is rendered
     await expect(page.getByText('Expires in 24 hours.')).toBeVisible();
   });
+
+  // -------------------------------------------------------------------------
+  // Flow 7: Accept invite via encrypted URL — full connection flow (PR #124 regression)
+  // -------------------------------------------------------------------------
+  test('accepting an encrypted invite completes the full connection flow', async ({
+    page,
+  }) => {
+    const ARCHIVE_URL = 'https://archive.example.com';
+    const BEARER_TOKEN = 'super-secret-bearer-xyz-123';
+
+    // Generate a valid mock-encrypted code using the same encoding as the
+    // mock server's /api/invites/encrypt handler.
+    const payload = JSON.stringify({ url: ARCHIVE_URL, token: BEARER_TOKEN });
+    const code = `mock-encrypted-code-${btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+
+    // Navigate directly to the invite acceptance screen
+    await page.goto(`/invite?code=${encodeURIComponent(code)}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    // Verify the progress UI appears
+    await expect(page.getByText('Connecting to archive...')).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Wait for the flow to complete — on success the UI shows "Connected!"
+    // and "Redirecting..." before navigating to home.
+    await expect(page.getByText(/Connected!|redirecting/i)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Verify we end up on the home page after the redirect
+    await page.waitForURL('/', { timeout: 10_000 });
+  });
 });
