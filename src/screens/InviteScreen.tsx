@@ -293,6 +293,14 @@ export function InviteScreen() {
   }, [invite, navigate, queryClient]);
 
   useEffect(() => {
+    // Reset the cancellation flag at the top of the effect so React
+    // StrictMode double-invoke does not permanently disable the flow.
+    // StrictMode cleans up the first effect (setting cancelledRef = true)
+    // before re-running it, and runFlow checks cancelledRef before
+    // resetting it — so without this, both invocations bail out and the
+    // invite screen stays stuck on "Connecting to archive..." forever.
+    cancelledRef.current = false;
+
     // Defer via microtask to avoid synchronous setState in effect body
     // (required by react-hooks/set-state-in-effect; React 18+ batches the updates).
     queueMicrotask(runFlow);
