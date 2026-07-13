@@ -836,7 +836,7 @@ describe('AddArchiveServerDialog', () => {
     expect(mockCreateRemoteServer).not.toHaveBeenCalled();
   });
 
-  it('allows adding when /projects returns 500 (non-auth error) in advanced mode', async () => {
+  it('blocks adding when /projects returns 500 (non-auth error) in advanced mode', async () => {
     server.use(
       http.get('*/projects', () =>
         HttpResponse.json(
@@ -864,13 +864,10 @@ describe('AddArchiveServerDialog', () => {
     await user.type(screen.getByLabelText('Bearer Token'), 'some-token');
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
-    // Connection progress runs before onAdded is called
-    await waitFor(
-      () => {
-        expect(onAdded).toHaveBeenCalledWith('test-server-id');
-      },
-      { timeout: 5000 },
-    );
+    expect(
+      await screen.findByText('Could not connect to server'),
+    ).toBeInTheDocument();
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
   });
 
   it('shows connection error when validation times out (server hangs)', async () => {

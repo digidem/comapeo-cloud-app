@@ -255,25 +255,13 @@ async function validateConnection(
     try {
       await apiClient.getProjects(config);
     } catch (err) {
-      // Reject both 401 (unauthenticated) and 403 (authenticated but
-      // unauthorized / invalid bearer token) — many archive/auth stacks
-      // return 403 for an invalid token, and the UI should block adding an
-      // unusable server in either case.
       if (
         err instanceof ApiError &&
         (err.status === 401 || err.status === 403)
       ) {
         return { valid: false, messageKey: 'invalidToken' as const };
       }
-      // Non-auth errors (e.g. 500, schema validation, proxy failures) are
-      // intentionally allowed through. The server responded (unlike a network
-      // failure), so it's reachable — sync will surface real errors with
-      // proper context. Blocking here would prevent adding a temporarily
-      // erroring but otherwise valid server.
-      console.warn(
-        'validateConnection: non-auth error from /projects, allowing through',
-        err,
-      );
+      return { valid: false, messageKey: 'connectionFailed' as const };
     }
 
     return { valid: true } as const;

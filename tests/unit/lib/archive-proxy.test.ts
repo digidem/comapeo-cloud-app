@@ -95,6 +95,26 @@ describe('archive proxy helpers', () => {
       value: '/projects',
     });
     expect(
+      validateArchiveProxyRequest('GET', '/projects/some-project-id'),
+    ).toEqual({
+      ok: true,
+      value: '/projects/some-project-id',
+    });
+    expect(
+      validateArchiveProxyRequest('DELETE', '/projects/some-project-id'),
+    ).toEqual({
+      ok: false,
+      code: 'UNSUPPORTED_ARCHIVE_PROXY_METHOD',
+      message: 'Archive proxy only supports GET and POST requests',
+    });
+    expect(
+      validateArchiveProxyRequest('GET', '/projects/some-project-id/extra'),
+    ).toEqual({
+      ok: false,
+      code: 'UNSUPPORTED_ARCHIVE_PROXY_PATH',
+      message: 'Archive proxy path is not supported',
+    });
+    expect(
       validateArchiveProxyRequest('GET', '/projects/proj-1/observations'),
     ).toEqual({
       ok: true,
