@@ -267,4 +267,47 @@ export const mapMessages = defineMessages({
     id: 'map.nameDialog.saveDraft',
     defaultMessage: 'Save draft',
   },
+  // ── Download ───────────────────────────────────────────────────────────
+  downloadButton: {
+    id: 'map.download.button',
+    defaultMessage: 'Download Map',
+  },
+  downloadProgress: {
+    id: 'map.download.progress',
+    defaultMessage: 'Downloading… {downloaded} of {total} tiles ({bytes})',
+  },
+  downloadFailed: {
+    id: 'map.download.error',
+    defaultMessage: 'Download failed: {error}',
+  },
+  downloadCancel: {
+    id: 'map.download.cancel',
+    defaultMessage: 'Cancel',
+  },
+  downloadConfirmLarge: {
+    id: 'map.download.confirmLarge',
+    defaultMessage:
+      'This map is estimated at {size}. It may take a while. Continue?',
+  },
+  downloadStorageWarning: {
+    id: 'map.download.storageWarning',
+    defaultMessage:
+      'Not enough storage space. {available} available, {estimated} estimated.',
+  },
+  downloadEstimatedSize: {
+    id: 'map.download.estimatedSize',
+    defaultMessage: 'Estimated size: {size}',
+  },
+  downloadRetry: {
+    id: 'map.download.retry',
+    defaultMessage: 'Retry',
+  },
+  downloadMaxRetries: {
+    id: 'map.download.maxRetries',
+    defaultMessage: 'Max retries reached',
+  },
+  downloadTryAnyway: {
+    id: 'map.download.tryAnyway',
+    defaultMessage: 'Try anyway',
+  },
 });

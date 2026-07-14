@@ -998,6 +998,36 @@
   "map.bounds.west": {
     "defaultMessage": "West"
   },
+  "map.download.button": {
+    "defaultMessage": "Download Map"
+  },
+  "map.download.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "map.download.confirmLarge": {
+    "defaultMessage": "This map is estimated at {size}. It may take a while. Continue?"
+  },
+  "map.download.error": {
+    "defaultMessage": "Download failed: {error}"
+  },
+  "map.download.estimatedSize": {
+    "defaultMessage": "Estimated size: {size}"
+  },
+  "map.download.maxRetries": {
+    "defaultMessage": "Max retries reached"
+  },
+  "map.download.progress": {
+    "defaultMessage": "Downloading… {downloaded} of {total} tiles ({bytes})"
+  },
+  "map.download.retry": {
+    "defaultMessage": "Retry"
+  },
+  "map.download.storageWarning": {
+    "defaultMessage": "Not enough storage space. {available} available, {estimated} estimated."
+  },
+  "map.download.tryAnyway": {
+    "defaultMessage": "Try anyway"
+  },
   "map.nameDialog.cancel": {
     "defaultMessage": "Cancel"
   },
