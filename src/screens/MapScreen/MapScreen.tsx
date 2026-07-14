@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
-import { useCreateMap } from '@/hooks/useMaps';
+import { useCreateMap, useMaps } from '@/hooks/useMaps';
 import { useProjects } from '@/hooks/useProjects';
 import type { SavedMap } from '@/lib/db';
 import { DEFAULT_BASEMAP_ID, findBasemap } from '@/lib/map/basemaps';
@@ -22,6 +22,7 @@ import { uuid } from '@/lib/uuid';
 import { useProjectStore } from '@/stores/project-store';
 
 import { BoundsEditor } from './BoundsEditor';
+import { DownloadPanel } from './DownloadPanel';
 import { MapAuthoringCanvas } from './MapAuthoringCanvas';
 import { SavedMapsList } from './SavedMapsList';
 import { StylePicker } from './StylePicker';
@@ -111,6 +112,7 @@ export function MapScreen() {
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const projectsQuery = useProjects();
   const createMap = useCreateMap();
+  const mapsQuery = useMaps(selectedProjectId);
   const mapRef = useRef<MapRef | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<ImageryBasemap>(() =>
     findBasemap(DEFAULT_BASEMAP_ID),
@@ -218,6 +220,18 @@ export function MapScreen() {
         />
         <ZoomSelector value={zoomRange} onChange={setZoomRange} />
         <SavedMapsList projectLocalId={selectedProjectId} />
+        {(() => {
+          const maps = mapsQuery.data ?? [];
+          const downloadableMaps = maps.filter(
+            (m) =>
+              m.status === 'draft' ||
+              m.status === 'downloading' ||
+              m.status === 'error',
+          );
+          return downloadableMaps.map((m) => (
+            <DownloadPanel key={m.id} map={m} />
+          ));
+        })()}
         <Button onClick={openNameDialog} className="w-full">
           {intl.formatMessage(mapMessages.saveMap)}
         </Button>

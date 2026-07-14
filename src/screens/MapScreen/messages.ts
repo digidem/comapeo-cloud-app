@@ -241,7 +241,7 @@ export const mapMessages = defineMessages({
   nameDialogDescription: {
     id: 'map.nameDialog.description',
     defaultMessage:
-      'Save this map configuration as a draft. Download support comes later.',
+      'Save this map configuration as a draft. You can then download it as an .smp file.',
   },
   nameLabel: {
     id: 'map.nameDialog.nameLabel',

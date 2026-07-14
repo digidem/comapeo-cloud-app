@@ -1032,7 +1032,7 @@
     "defaultMessage": "Cancel"
   },
   "map.nameDialog.description": {
-    "defaultMessage": "Save this map configuration as a draft. Download support comes later."
+    "defaultMessage": "Save this map configuration as a draft. You can then download it as an .smp file."
   },
   "map.nameDialog.nameLabel": {
     "defaultMessage": "Map name"
