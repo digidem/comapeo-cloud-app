@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,21 @@ export function ZoomSelector({ value, onChange }: ZoomSelectorProps) {
     minZoom: String(value.minZoom),
     maxZoom: String(value.maxZoom),
   });
+  const valueKey = `${value.minZoom},${value.maxZoom}`;
+  const valueDraft = useMemo(() => {
+    const [minZoom = '', maxZoom = ''] = valueKey.split(',');
+    return { minZoom, maxZoom };
+  }, [valueKey]);
+  const latestPropValueKeyRef = useRef(valueKey);
+
+  useEffect(() => {
+    if (latestPropValueKeyRef.current === valueKey) {
+      return;
+    }
+
+    latestPropValueKeyRef.current = valueKey;
+    setDraft(valueDraft);
+  }, [valueDraft, valueKey]);
 
   const parsed = useMemo(
     () => ({
