@@ -138,8 +138,7 @@ export async function checkStorageQuota(
 }
 
 /**
- * Download an SMP file for a map configuration, storing the blob in Dexie and
- * triggering a browser download.
+ * Download an SMP file for a map configuration and store the blob in Dexie.
  *
  * Returns the mapId on success. Throws on failure; caller should update status
  * to 'error' and surface the message.
@@ -232,29 +231,6 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
         : 'Storage error: unable to save map';
     await db.maps.update(map.id, { status: 'error', errorMessage: message });
     throw storageError;
-  }
-
-  // --- Trigger browser download ---
-  const url = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement('a');
-    a.href = url;
-    const dateStr = new Date().toISOString().slice(0, 10);
-    a.download = `${map.name.replace(/[/\\?%*:|"<>]/g, '_')}-${dateStr}.smp`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  } catch (handoffError) {
-    // If the browser handoff fails, the blob is still stored but the user
-    // never got the save dialog. Revert to error so recovery UI is shown.
-    const message =
-      handoffError instanceof Error
-        ? `Download handoff failed: ${handoffError.message}`
-        : 'Download handoff failed';
-    await db.maps.update(map.id, { status: 'error', errorMessage: message });
-    throw handoffError;
-  } finally {
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
   }
 
   return map.id;
