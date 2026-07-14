@@ -1,4 +1,4 @@
-import { render, screen, userEvent } from '@tests/mocks/test-utils';
+import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ZoomSelector } from '@/screens/MapScreen/ZoomSelector';
@@ -15,12 +15,16 @@ describe('ZoomSelector', () => {
     await user.clear(screen.getByLabelText('Minimum zoom'));
     await user.type(screen.getByLabelText('Minimum zoom'), '3');
 
-    expect(onChange).toHaveBeenLastCalledWith({ minZoom: 3, maxZoom: 14 });
+    await waitFor(() => {
+      expect(onChange).toHaveBeenLastCalledWith({ minZoom: 3, maxZoom: 14 });
+    });
 
     await user.clear(screen.getByLabelText('Maximum zoom'));
     await user.type(screen.getByLabelText('Maximum zoom'), '16');
 
-    expect(onChange).toHaveBeenLastCalledWith({ minZoom: 3, maxZoom: 16 });
+    await waitFor(() => {
+      expect(onChange).toHaveBeenLastCalledWith({ minZoom: 3, maxZoom: 16 });
+    });
   });
 
   it('shows an inline error when max zoom is lower than min zoom', async () => {

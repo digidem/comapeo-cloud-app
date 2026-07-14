@@ -67,26 +67,40 @@ export function ZoomSelector({ value, onChange }: ZoomSelectorProps) {
       : undefined;
 
   function updateDraft(key: keyof ZoomRange, nextValue: string) {
-    const nextDraft = { ...draft, [key]: nextValue };
-    const minZoom = parseZoom(nextDraft.minZoom);
-    const maxZoom = parseZoom(nextDraft.maxZoom);
+    setDraft((prev) => ({ ...prev, [key]: nextValue }));
+  }
 
-    setDraft(nextDraft);
+  const hasValidDraft =
+    parsed.minZoom !== null &&
+    parsed.maxZoom !== null &&
+    !minError &&
+    !maxError &&
+    !rangeError;
 
-    if (
-      minZoom === null ||
-      maxZoom === null ||
-      minZoom < 0 ||
-      minZoom > 22 ||
-      maxZoom < 0 ||
-      maxZoom > 22 ||
-      maxZoom < minZoom
-    ) {
+  useEffect(() => {
+    if (!hasValidDraft || parsed.minZoom === null || parsed.maxZoom === null) {
       return;
     }
 
-    onChange({ minZoom, maxZoom });
-  }
+    if (parsed.minZoom === value.minZoom && parsed.maxZoom === value.maxZoom) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      if (latestPropValueKeyRef.current === valueKey) {
+        onChange({ minZoom: parsed.minZoom!, maxZoom: parsed.maxZoom! });
+      }
+    }, 150);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    hasValidDraft,
+    onChange,
+    parsed.minZoom,
+    parsed.maxZoom,
+    value,
+    valueKey,
+  ]);
 
   return (
     <section className="flex flex-col gap-3">

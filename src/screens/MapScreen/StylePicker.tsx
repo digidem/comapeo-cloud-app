@@ -119,7 +119,13 @@ export function StylePicker({ value, onChange }: StylePickerProps) {
           })}
         </div>
       ) : (
-        <div className="flex flex-col gap-3 rounded-card bg-surface p-3">
+        <form
+          className="flex flex-col gap-3 rounded-card bg-surface p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleUseCustomUrl();
+          }}
+        >
           <Input
             label={intl.formatMessage(mapMessages.customUrlLabel)}
             value={customUrl}
@@ -176,7 +182,7 @@ export function StylePicker({ value, onChange }: StylePickerProps) {
           <Button onClick={handleUseCustomUrl} className="w-full">
             {intl.formatMessage(mapMessages.useCustomUrl)}
           </Button>
-        </div>
+        </form>
       )}
     </section>
   );

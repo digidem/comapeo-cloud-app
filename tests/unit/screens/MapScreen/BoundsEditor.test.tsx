@@ -200,8 +200,8 @@ describe('BoundsEditor', () => {
     });
 
     expect(
-      await screen.findByText('East must be greater than west'),
-    ).toBeInTheDocument();
+      (await screen.findAllByText('East must be greater than west')).length,
+    ).toBeGreaterThan(0);
 
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 200));
@@ -229,8 +229,8 @@ describe('BoundsEditor', () => {
     });
 
     expect(
-      await screen.findByText('North must be greater than south'),
-    ).toBeInTheDocument();
+      (await screen.findAllByText('North must be greater than south')).length,
+    ).toBeGreaterThan(0);
 
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 200));

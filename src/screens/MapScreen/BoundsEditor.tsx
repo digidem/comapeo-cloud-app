@@ -112,18 +112,20 @@ export function BoundsEditor({
       : undefined;
 
   const lngOrderError =
-    !westRangeError && !eastRangeError && parsed.west! >= parsed.east!
+    parsed.west !== null && parsed.east !== null && parsed.west >= parsed.east
       ? intl.formatMessage(mapMessages.invalidLngOrder)
       : undefined;
   const latOrderError =
-    !southRangeError && !northRangeError && parsed.south! >= parsed.north!
+    parsed.south !== null &&
+    parsed.north !== null &&
+    parsed.south >= parsed.north
       ? intl.formatMessage(mapMessages.invalidLatOrder)
       : undefined;
 
   const errors = {
-    west: westRangeError,
+    west: westRangeError ?? lngOrderError,
     east: eastRangeError ?? lngOrderError,
-    south: southRangeError,
+    south: southRangeError ?? latOrderError,
     north: northRangeError ?? latOrderError,
   };
 
