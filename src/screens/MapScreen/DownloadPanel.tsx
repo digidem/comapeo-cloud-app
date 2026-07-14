@@ -1,0 +1,240 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useIntl } from 'react-intl';
+
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { useDownloadMap } from '@/hooks/useMaps';
+import type { SavedMap } from '@/lib/db';
+import {
+  checkStorageQuota,
+  estimateDownloadSize,
+  formatBytes,
+} from '@/lib/map/smp-download';
+
+import { mapMessages } from './messages';
+
+interface DownloadPanelProps {
+  map: SavedMap;
+  /** Mapbox access token for Mapbox styles (optional). */
+  mapboxAccessToken?: string;
+}
+
+const MAX_RETRIES = 3;
+
+export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
+  const intl = useIntl();
+  const downloadMap = useDownloadMap();
+  const abortRef = useRef<AbortController | null>(null);
+  const [progress, setProgress] = useState<{
+    downloaded: number;
+    total: number;
+    bytes: number;
+  } | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
+  const [storageBypassed, setStorageBypassed] = useState(false);
+
+  // --- Cancel on unmount ---
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  const estimatedBytes = estimateDownloadSize(
+    map.bbox,
+    0, // library always downloads from zoom 0 regardless of user minZoom setting
+    map.maxZoom,
+  );
+  const estimatedFormatted = formatBytes(estimatedBytes);
+  const isLarge = estimatedBytes > 100 * 1024 * 1024;
+
+  const isDownloading = downloadMap.isPending && progress !== null;
+
+  const handleDownload = useCallback(async () => {
+    if (downloadMap.isPending) return; // Double-click guard
+
+    // Storage quota check — gate unless user bypassed
+    if (!storageBypassed) {
+      const { sufficient, available } = await checkStorageQuota(estimatedBytes);
+      if (!sufficient && available >= 0) {
+        setStorageWarning(
+          intl.formatMessage(mapMessages.downloadStorageWarning, {
+            available: formatBytes(available),
+            estimated: estimatedFormatted,
+          }),
+        );
+        return;
+      }
+    }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      await downloadMap.mutateAsync({
+        map,
+        onProgress: setProgress,
+        signal: controller.signal,
+        mapboxAccessToken,
+      });
+    } catch {
+      // Error handled by mutation state
+    }
+    setProgress(null);
+    abortRef.current = null;
+  }, [
+    downloadMap,
+    map,
+    estimatedBytes,
+    estimatedFormatted,
+    intl,
+    storageBypassed,
+    mapboxAccessToken,
+  ]);
+
+  const handleCancel = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    if (retryCount >= MAX_RETRIES) return;
+    setRetryCount((n) => n + 1);
+    downloadMap.reset();
+    void handleDownload();
+  }, [downloadMap, handleDownload, retryCount]);
+
+  // ---- Downloading state ----
+  if (map.status === 'downloading' && isDownloading) {
+    const pct =
+      progress && progress.total > 0
+        ? Math.round((progress.downloaded / progress.total) * 100)
+        : 0;
+    return (
+      <div className="flex flex-col gap-3" data-testid="download-progress">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-text">
+            {intl.formatMessage(mapMessages.downloadProgress, {
+              downloaded: progress?.downloaded ?? 0,
+              total: progress?.total ?? 0,
+              bytes: formatBytes(progress?.bytes ?? 0),
+            })}
+          </span>
+          <span className="text-xs text-text-muted">{pct}%</span>
+        </div>
+        <Progress value={pct} className="w-full" />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleCancel}
+          className="w-full"
+        >
+          {intl.formatMessage(mapMessages.downloadCancel)}
+        </Button>
+      </div>
+    );
+  }
+
+  // ---- Error state ----
+  if (downloadMap.isError) {
+    const errorMessage =
+      downloadMap.error instanceof Error
+        ? downloadMap.error.message
+        : 'Unknown error';
+    return (
+      <div
+        className="flex flex-col gap-3 rounded-card border border-error/30 bg-error/5 p-3"
+        data-testid="download-error"
+      >
+        <p className="text-sm text-error">
+          {intl.formatMessage(mapMessages.downloadFailed, {
+            error: errorMessage,
+          })}
+        </p>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleRetry}
+          disabled={retryCount >= MAX_RETRIES}
+        >
+          {retryCount >= MAX_RETRIES
+            ? intl.formatMessage(mapMessages.downloadMaxRetries)
+            : intl.formatMessage(mapMessages.downloadRetry)}
+        </Button>
+      </div>
+    );
+  }
+
+  // ---- Storage warning ----
+  if (storageWarning) {
+    return (
+      <div
+        className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
+        data-testid="download-storage-warning"
+      >
+        <p className="text-sm text-warning">{storageWarning}</p>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setStorageWarning(null)}
+          >
+            {intl.formatMessage(mapMessages.downloadCancel)}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              setStorageBypassed(true);
+              void handleDownload();
+            }}
+          >
+            {intl.formatMessage(mapMessages.downloadTryAnyway)}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Main download button state ----
+  return (
+    <div className="flex flex-col gap-3" data-testid="download-panel">
+      {showConfirm ? (
+        <div className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3">
+          <p className="text-sm text-warning">
+            {intl.formatMessage(mapMessages.downloadConfirmLarge, {
+              size: estimatedFormatted,
+            })}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowConfirm(false)}
+            >
+              {intl.formatMessage(mapMessages.downloadCancel)}
+            </Button>
+            <Button size="sm" onClick={handleDownload}>
+              {intl.formatMessage(mapMessages.downloadButton)}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="text-xs text-text-muted">
+            {intl.formatMessage(mapMessages.downloadEstimatedSize, {
+              size: estimatedFormatted,
+            })}
+          </div>
+          <Button
+            onClick={isLarge ? () => setShowConfirm(true) : handleDownload}
+            loading={downloadMap.isPending}
+            className="w-full"
+          >
+            {intl.formatMessage(mapMessages.downloadButton)}
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
