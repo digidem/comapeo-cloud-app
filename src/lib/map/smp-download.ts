@@ -244,6 +244,15 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  } catch (handoffError) {
+    // If the browser handoff fails, the blob is still stored but the user
+    // never got the save dialog. Revert to error so recovery UI is shown.
+    const message =
+      handoffError instanceof Error
+        ? `Download handoff failed: ${handoffError.message}`
+        : 'Download handoff failed';
+    await db.maps.update(map.id, { status: 'error', errorMessage: message });
+    throw handoffError;
   } finally {
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
   }
