@@ -98,6 +98,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   }, []);
 
   const handleRetry = useCallback(() => {
+    if (downloadMap.isPending) return;
     if (retryCount >= MAX_RETRIES) return;
     setRetryCount((n) => n + 1);
     downloadMap.reset();
