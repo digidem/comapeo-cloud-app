@@ -33,7 +33,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
-  const [storageBypassed, setStorageBypassed] = useState(false);
+  const storageBypassedRef = useRef(false);
 
   // --- Cancel on unmount ---
   useEffect(() => {
@@ -56,7 +56,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     if (downloadMap.isPending) return; // Double-click guard
 
     // Storage quota check — gate unless user bypassed
-    if (!storageBypassed) {
+    if (!storageBypassedRef.current) {
       const { sufficient, available } = await checkStorageQuota(estimatedBytes);
       if (!sufficient && available >= 0) {
         setStorageWarning(
@@ -90,7 +90,6 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     estimatedBytes,
     estimatedFormatted,
     intl,
-    storageBypassed,
     mapboxAccessToken,
   ]);
 
@@ -104,6 +103,28 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     downloadMap.reset();
     void handleDownload();
   }, [downloadMap, handleDownload, retryCount]);
+
+  // ---- Stuck downloading state (recovery after refresh/crash) ----
+  if (map.status === 'downloading' && !isDownloading) {
+    return (
+      <div
+        className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
+        data-testid="download-stuck"
+      >
+        <p className="text-sm text-warning">
+          A previous download was interrupted. You can try again.
+        </p>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleDownload}
+          className="w-full"
+        >
+          {intl.formatMessage(mapMessages.downloadRetry)}
+        </Button>
+      </div>
+    );
+  }
 
   // ---- Downloading state ----
   if (map.status === 'downloading' && isDownloading) {
@@ -137,11 +158,11 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   }
 
   // ---- Error state ----
-  if (downloadMap.isError) {
+  if (downloadMap.isError || map.status === 'error') {
     const errorMessage =
       downloadMap.error instanceof Error
         ? downloadMap.error.message
-        : 'Unknown error';
+        : (map.errorMessage ?? 'Unknown error');
     return (
       <div
         className="flex flex-col gap-3 rounded-card border border-error/30 bg-error/5 p-3"
@@ -185,7 +206,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           <Button
             size="sm"
             onClick={() => {
-              setStorageBypassed(true);
+              storageBypassedRef.current = true;
               void handleDownload();
             }}
           >
