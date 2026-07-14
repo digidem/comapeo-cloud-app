@@ -29,7 +29,7 @@ interface MapState {
    * Callers must pass that project localId; this does not change
    * activeProjectLocalId.
    */
-  setActiveMap: (projectLocalId: string, mapId: string | null) => void;
+  setActiveMap: (projectLocalId: string, mapId: string | null) => Promise<void>;
   hydrateActiveMap: (
     projectLocalId: string | null,
     mapId: string | null,
@@ -51,7 +51,7 @@ export const useMapStore = create<MapState>()(
       // longer exists — the optimistic cache update is rolled back so the UI
       // matches the still-unchanged project row instead of showing a selection
       // that would silently revert on the next hydration.
-      setActiveMap: (projectLocalId, mapId) => {
+      setActiveMap: async (projectLocalId, mapId) => {
         // Guard: only act when the store is already representing this project.
         // A mismatch means the hydration effect has not yet run for this project
         // (or the user switched away), so writing would corrupt the wrong slot.
@@ -70,12 +70,20 @@ export const useMapStore = create<MapState>()(
           if (get().activeMapId !== mapId) return;
           set({ activeMapId: previousMapId });
         };
-        void getDb()
-          .projects.update(projectLocalId, { activeMapId: mapId })
-          .then((rowsUpdated) => {
-            if (rowsUpdated === 0) rollback();
-          })
-          .catch(() => rollback());
+        let rowsUpdated: number;
+        try {
+          rowsUpdated = await getDb().projects.update(projectLocalId, {
+            activeMapId: mapId,
+          });
+        } catch (error) {
+          rollback();
+          throw error;
+        }
+
+        if (rowsUpdated === 0) {
+          rollback();
+          throw new Error(`Project not found: ${projectLocalId}`);
+        }
       },
       // Cache-only setter used by the hydration effect to avoid writing back
       // the value it just read from Dexie. Also records which project the

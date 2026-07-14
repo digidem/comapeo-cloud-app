@@ -962,8 +962,203 @@
   "map.basemap.label": {
     "defaultMessage": "Basemap"
   },
+  "map.bounds.east": {
+    "defaultMessage": "East"
+  },
+  "map.bounds.invalidLatOrder": {
+    "defaultMessage": "North must be greater than south"
+  },
+  "map.bounds.invalidLatitude": {
+    "defaultMessage": "Latitude must be between -90 and 90"
+  },
+  "map.bounds.invalidLngOrder": {
+    "defaultMessage": "East must be greater than west"
+  },
+  "map.bounds.invalidLongitude": {
+    "defaultMessage": "Longitude must be between -180 and 180"
+  },
+  "map.bounds.noProjectPoints": {
+    "defaultMessage": "No observations with coordinates in this project yet"
+  },
+  "map.bounds.north": {
+    "defaultMessage": "North"
+  },
+  "map.bounds.south": {
+    "defaultMessage": "South"
+  },
+  "map.bounds.title": {
+    "defaultMessage": "Bounds"
+  },
+  "map.bounds.useCurrentView": {
+    "defaultMessage": "Use current view"
+  },
+  "map.bounds.useProjectArea": {
+    "defaultMessage": "Use project area"
+  },
+  "map.bounds.west": {
+    "defaultMessage": "West"
+  },
+  "map.nameDialog.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "map.nameDialog.description": {
+    "defaultMessage": "Save this map configuration as a draft. Download support comes later."
+  },
+  "map.nameDialog.nameLabel": {
+    "defaultMessage": "Map name"
+  },
+  "map.nameDialog.namePlaceholder": {
+    "defaultMessage": "Territory basemap"
+  },
+  "map.nameDialog.nameRequired": {
+    "defaultMessage": "Enter a map name"
+  },
+  "map.nameDialog.saveDraft": {
+    "defaultMessage": "Save draft"
+  },
+  "map.nameDialog.saveError": {
+    "defaultMessage": "Could not save map. Please try again."
+  },
+  "map.nameDialog.title": {
+    "defaultMessage": "Save map"
+  },
+  "map.saved.activeError": {
+    "defaultMessage": "Could not update active map. Please try again."
+  },
+  "map.saved.canvasAria": {
+    "defaultMessage": "Map authoring canvas"
+  },
+  "map.saved.closeSettings": {
+    "defaultMessage": "Close map settings"
+  },
+  "map.saved.delete": {
+    "defaultMessage": "Delete"
+  },
+  "map.saved.deleteDialog.confirm": {
+    "defaultMessage": "Delete map"
+  },
+  "map.saved.deleteDialog.description": {
+    "defaultMessage": "Are you sure you want to delete “{name}”? This action cannot be undone."
+  },
+  "map.saved.deleteDialog.error": {
+    "defaultMessage": "Could not delete map. Please try again."
+  },
+  "map.saved.deleteDialog.title": {
+    "defaultMessage": "Delete map"
+  },
+  "map.saved.empty": {
+    "defaultMessage": "No saved maps yet"
+  },
+  "map.saved.noProject": {
+    "defaultMessage": "Select a project from Home to author maps"
+  },
+  "map.saved.noProjectLink": {
+    "defaultMessage": "Go to Home"
+  },
+  "map.saved.removeActive": {
+    "defaultMessage": "Remove active"
+  },
+  "map.saved.rename": {
+    "defaultMessage": "Rename"
+  },
+  "map.saved.renameDialog.description": {
+    "defaultMessage": "Enter a new name for this saved map."
+  },
+  "map.saved.renameDialog.save": {
+    "defaultMessage": "Save name"
+  },
+  "map.saved.renameDialog.title": {
+    "defaultMessage": "Rename map"
+  },
+  "map.saved.renamePrompt": {
+    "defaultMessage": "Map name"
+  },
+  "map.saved.saveMap": {
+    "defaultMessage": "Save Map"
+  },
+  "map.saved.setActive": {
+    "defaultMessage": "Set active"
+  },
+  "map.saved.settings": {
+    "defaultMessage": "Map settings"
+  },
+  "map.saved.statusDownloading": {
+    "defaultMessage": "Downloading"
+  },
+  "map.saved.statusDraft": {
+    "defaultMessage": "Draft"
+  },
+  "map.saved.statusError": {
+    "defaultMessage": "Error"
+  },
+  "map.saved.statusReady": {
+    "defaultMessage": "Ready"
+  },
+  "map.saved.title": {
+    "defaultMessage": "Saved maps"
+  },
+  "map.saved.untitledProject": {
+    "defaultMessage": "Untitled Project"
+  },
+  "map.stylePicker.customMode": {
+    "defaultMessage": "Custom URL"
+  },
+  "map.stylePicker.customUrlLabel": {
+    "defaultMessage": "Custom URL"
+  },
+  "map.stylePicker.customUrlPlaceholder": {
+    "defaultMessage": "https://tiles.example.com/{z}/{x}/{y}.png"
+  },
+  "map.stylePicker.invalidUrl": {
+    "defaultMessage": "Enter an http:// or https:// URL"
+  },
+  "map.stylePicker.mapTypeLabel": {
+    "defaultMessage": "Map type"
+  },
+  "map.stylePicker.presetsMode": {
+    "defaultMessage": "Presets"
+  },
+  "map.stylePicker.schemeLabel": {
+    "defaultMessage": "Tile scheme"
+  },
+  "map.stylePicker.schemeTms": {
+    "defaultMessage": "TMS"
+  },
+  "map.stylePicker.schemeXyz": {
+    "defaultMessage": "XYZ"
+  },
+  "map.stylePicker.selectedStyle": {
+    "defaultMessage": "Selected"
+  },
+  "map.stylePicker.title": {
+    "defaultMessage": "Base map"
+  },
+  "map.stylePicker.typeRaster": {
+    "defaultMessage": "Raster tiles"
+  },
+  "map.stylePicker.typeStyle": {
+    "defaultMessage": "Style JSON"
+  },
+  "map.stylePicker.useCustomUrl": {
+    "defaultMessage": "Use custom URL"
+  },
   "map.title": {
     "defaultMessage": "Map"
+  },
+  "map.zoom.invalidRange": {
+    "defaultMessage": "Max zoom must be greater than or equal to min zoom"
+  },
+  "map.zoom.invalidZoom": {
+    "defaultMessage": "Zoom must be between 0 and 22"
+  },
+  "map.zoom.maxZoom": {
+    "defaultMessage": "Maximum zoom"
+  },
+  "map.zoom.minZoom": {
+    "defaultMessage": "Minimum zoom"
+  },
+  "map.zoom.title": {
+    "defaultMessage": "Zoom range"
   },
   "mapContainer.viewOnly": {
     "defaultMessage": "View only"
