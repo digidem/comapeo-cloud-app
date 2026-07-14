@@ -105,7 +105,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   }, [downloadMap, handleDownload, retryCount]);
 
   // ---- Stuck downloading state (recovery after refresh/crash) ----
-  if (map.status === 'downloading' && !isDownloading) {
+  if (map.status === 'downloading' && !isDownloading && !downloadMap.isError) {
     return (
       <div
         className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
@@ -158,7 +158,10 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   }
 
   // ---- Error state ----
-  if (downloadMap.isError || map.status === 'error') {
+  if (
+    (downloadMap.isError && !downloadMap.isPending) ||
+    (map.status === 'error' && !isDownloading)
+  ) {
     const errorMessage =
       downloadMap.error instanceof Error
         ? downloadMap.error.message

@@ -218,12 +218,21 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
   });
 
   // --- Store in Dexie ---
-  await db.maps.update(map.id, {
-    smpBlob: blob,
-    smpSize: totalSize,
-    status: 'ready',
-    errorMessage: undefined,
-  });
+  try {
+    await db.maps.update(map.id, {
+      smpBlob: blob,
+      smpSize: totalSize,
+      status: 'ready',
+      errorMessage: undefined,
+    });
+  } catch (storageError) {
+    const message =
+      storageError instanceof Error
+        ? `Storage error: ${storageError.message}`
+        : 'Storage error: unable to save map';
+    await db.maps.update(map.id, { status: 'error', errorMessage: message });
+    throw storageError;
+  }
 
   // --- Trigger browser download ---
   const url = URL.createObjectURL(blob);
