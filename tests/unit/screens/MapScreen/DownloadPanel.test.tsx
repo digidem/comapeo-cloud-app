@@ -43,13 +43,14 @@ describe('DownloadPanel', () => {
     });
   });
 
-  it('renders download UI when map status is error', () => {
+  it('renders error UI when map status is error', () => {
     const map = createMockMap({
       status: 'error',
       errorMessage: 'Network failure',
     });
     render(<DownloadPanel map={map} />);
-    expect(screen.getByTestId('download-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('download-error')).toBeInTheDocument();
+    expect(screen.getByText(/Network failure/)).toBeInTheDocument();
   });
 
   it('renders download button and estimated size for draft maps', () => {
