@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { downloadSmp } from '@/lib/map/smp-download';
 import { useMapStore } from '@/stores/map-store';
 
 export const mapsQueryKey = (projectLocalId: string | null) => [
@@ -103,6 +104,40 @@ export function useSetActiveMapMutation(projectLocalId: string | null) {
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
       void queryClient.invalidateQueries({
         queryKey: mapsQueryKey(projectLocalId),
+      });
+    },
+  });
+}
+
+export function useDownloadMap() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      map,
+      onProgress,
+      signal,
+      mapboxAccessToken,
+    }: {
+      map: SavedMap;
+      onProgress?: (progress: {
+        downloaded: number;
+        total: number;
+        bytes: number;
+      }) => void;
+      signal?: AbortSignal;
+      mapboxAccessToken?: string;
+    }): Promise<string> => {
+      return downloadSmp({ map, onProgress, signal, mapboxAccessToken });
+    },
+    onSuccess: (_mapId, { map }) => {
+      void queryClient.invalidateQueries({
+        queryKey: mapsQueryKey(map.projectLocalId),
+      });
+    },
+    onError: (_error, { map }) => {
+      void queryClient.invalidateQueries({
+        queryKey: mapsQueryKey(map.projectLocalId),
       });
     },
   });
