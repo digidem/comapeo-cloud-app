@@ -257,7 +257,12 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       storageError instanceof Error
         ? `Storage error: ${storageError.message}`
         : 'Storage error: unable to save map';
-    await db.maps.update(map.id, { status: 'error', errorMessage: message });
+    try {
+      await db.maps.update(map.id, { status: 'error', errorMessage: message });
+    } catch {
+      // The blob write may have exhausted quota, so recording the error is
+      // best-effort and must not replace the original storage failure.
+    }
     throw storageError;
   }
 

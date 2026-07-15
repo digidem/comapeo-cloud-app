@@ -68,6 +68,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
             estimated: estimatedFormatted,
           }),
         );
+        pendingRef.current = false;
         return;
       }
     }

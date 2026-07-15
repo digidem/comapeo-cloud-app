@@ -1,6 +1,37 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { estimateDownloadSize, formatBytes } from '@/lib/map/smp-download';
+import type { SavedMap } from '@/lib/db';
+import { getDb } from '@/lib/db';
+import {
+  downloadSmp,
+  estimateDownloadSize,
+  formatBytes,
+} from '@/lib/map/smp-download';
+
+const { mockDownload } = vi.hoisted(() => ({
+  mockDownload: vi.fn(),
+}));
+
+vi.mock('styled-map-package-api/download', () => ({
+  download: mockDownload,
+}));
+
+function createMockMap(overrides: Partial<SavedMap> = {}): SavedMap {
+  return {
+    id: 'map-1',
+    projectLocalId: 'project-1',
+    name: 'Test Map',
+    type: 'style',
+    styleUrl: 'https://tiles.example.com/style.json',
+    bbox: [-75, -12, -45, 8],
+    minZoom: 0,
+    maxZoom: 1,
+    status: 'draft',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
 
 describe('estimateDownloadSize', () => {
   it('returns 0 for degenerate bbox (east <= west)', () => {
@@ -46,5 +77,34 @@ describe('formatBytes', () => {
 
   it('formats GB', () => {
     expect(formatBytes(2.5 * 1024 * 1024 * 1024)).toBe('2.5 GB');
+  });
+});
+
+describe('downloadSmp', () => {
+  it('preserves the storage error when recording the error state also fails', async () => {
+    const storageError = new Error('Quota exceeded while saving blob');
+    const recoveryError = new Error('Quota exceeded while saving error state');
+    const updateSpy = vi
+      .spyOn(getDb().maps, 'update')
+      .mockResolvedValueOnce(1)
+      .mockRejectedValueOnce(storageError)
+      .mockRejectedValueOnce(recoveryError);
+    mockDownload.mockReturnValue(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2, 3]));
+          controller.close();
+        },
+      }),
+    );
+
+    await expect(downloadSmp({ map: createMockMap() })).rejects.toBe(
+      storageError,
+    );
+    expect(updateSpy).toHaveBeenCalledTimes(3);
+    expect(updateSpy).toHaveBeenLastCalledWith('map-1', {
+      errorMessage: 'Storage error: Quota exceeded while saving blob',
+      status: 'error',
+    });
   });
 });

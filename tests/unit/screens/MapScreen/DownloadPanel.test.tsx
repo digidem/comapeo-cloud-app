@@ -1,10 +1,19 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '@tests/mocks/test-utils';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useDownloadMap } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
+import * as smpDownload from '@/lib/map/smp-download';
 import { DownloadPanel } from '@/screens/MapScreen/DownloadPanel';
+
+vi.mock('@/hooks/useMaps', () => ({
+  useDownloadMap: vi.fn(),
+}));
+
+const mutateAsync = vi.fn().mockResolvedValue('map-1');
+const reset = vi.fn();
 
 function createMockMap(overrides: Partial<SavedMap> = {}): SavedMap {
   return {
@@ -24,6 +33,16 @@ function createMockMap(overrides: Partial<SavedMap> = {}): SavedMap {
 }
 
 describe('DownloadPanel', () => {
+  beforeEach(() => {
+    vi.mocked(useDownloadMap).mockReturnValue({
+      error: null,
+      isError: false,
+      isPending: false,
+      mutateAsync,
+      reset,
+    } as unknown as ReturnType<typeof useDownloadMap>);
+  });
+
   it('renders download button with estimated size', () => {
     const map = createMockMap();
     render(<DownloadPanel map={map} />);
@@ -66,5 +85,25 @@ describe('DownloadPanel', () => {
     const map = createMockMap();
     render(<DownloadPanel map={map} mapboxAccessToken="pk.test" />);
     expect(screen.getByTestId('download-panel')).toBeInTheDocument();
+  });
+
+  it('starts the download when the user bypasses a storage warning', async () => {
+    const user = userEvent.setup();
+    const map = createMockMap({ maxZoom: 0 });
+    vi.spyOn(smpDownload, 'checkStorageQuota').mockResolvedValue({
+      available: 0,
+      sufficient: false,
+    });
+
+    render(<DownloadPanel map={map} />);
+
+    await user.click(screen.getByRole('button', { name: /download map/i }));
+    await user.click(
+      await screen.findByRole('button', { name: /try anyway/i }),
+    );
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledOnce();
+    });
   });
 });
