@@ -254,6 +254,7 @@ export function MapScreen() {
             bbox={bbox}
             mapRef={mapRef}
             drawMode={drawMode}
+            onDrawCreate={setBbox}
             onDrawModeChange={setDrawMode}
           />
 

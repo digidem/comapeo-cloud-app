@@ -1,9 +1,8 @@
-import MapboxDraw from '@mapbox/mapbox-gl-draw';
-import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import type { Feature, Polygon } from 'geojson';
+import type { MapMouseEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { useIntl } from 'react-intl';
 import Map, { Layer, type MapRef, Source } from 'react-map-gl/maplibre';
@@ -17,12 +16,11 @@ interface MapAuthoringCanvasProps {
   basemap: ImageryBasemap;
   bbox: [number, number, number, number];
   mapRef: RefObject<MapRef | null>;
-  /** Draw control props */
+  /** Draw mode state */
   drawMode?: 'draw_rectangle' | 'simple_select' | null;
+  /** Called when a rectangle is drawn via map drag */
   onDrawCreate?: (bbox: [number, number, number, number]) => void;
-  onDrawUpdate?: (bbox: [number, number, number, number]) => void;
-  onDrawDelete?: () => void;
-  onDrawModeChange?: (mode: string | null) => void;
+  onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
 }
 
 const INITIAL_VIEW_STATE = {
@@ -42,6 +40,18 @@ const BBOX_FILL_PAINT = {
 const BBOX_OUTLINE_PAINT = {
   'line-color': '#04145C',
   'line-width': 2,
+};
+
+/** Paint for the drag‑to‑draw preview rectangle */
+const DRAW_FILL_PAINT = {
+  'fill-color': '#1F6FFF',
+  'fill-opacity': 0.3,
+};
+
+const DRAW_OUTLINE_PAINT = {
+  'line-color': '#04145C',
+  'line-width': 2,
+  'line-dasharray': [4, 4] as number[],
 };
 
 function bboxToFeature([west, south, east, north]: [
@@ -68,194 +78,147 @@ function bboxToFeature([west, south, east, north]: [
   };
 }
 
+/** Convert two corners to a normalised bbox */
+function cornersToBbox(
+  lng1: number,
+  lat1: number,
+  lng2: number,
+  lat2: number,
+): [number, number, number, number] {
+  return [
+    Math.min(lng1, lng2),
+    Math.min(lat1, lat2),
+    Math.max(lng1, lng2),
+    Math.max(lat1, lat2),
+  ];
+}
+
+/** Reject zero‑area bboxes */
+function isValidBbox(b: [number, number, number, number]): boolean {
+  return b[0] !== b[2] && b[1] !== b[3];
+}
+
+const EMPTY_FEATURE: Feature<Polygon> = {
+  type: 'Feature',
+  properties: {},
+  geometry: { type: 'Polygon', coordinates: [[]] },
+};
+
 export function MapAuthoringCanvas({
   basemap,
   bbox,
   mapRef,
   drawMode,
   onDrawCreate,
-  onDrawUpdate,
-  onDrawDelete,
   onDrawModeChange,
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();
   const mapStyle = useMemo(() => basemapToMapStyle(basemap), [basemap]);
   const bboxFeature = useMemo(() => bboxToFeature(bbox), [bbox]);
-  const drawRef = useRef<MapboxDraw | null>(null);
 
-  // Initialize Draw control
+  // Drag‑to‑draw state
+  const [dragStart, setDragStart] = useState<{
+    lng: number;
+    lat: number;
+  } | null>(null);
+  const [dragEnd, setDragEnd] = useState<{ lng: number; lat: number } | null>(
+    null,
+  );
+  const isDrawing = drawMode === 'draw_rectangle';
+
+  // Keep latest callback refs to avoid re‑binding the effect
+  const onDrawCreateRef = useRef(onDrawCreate);
+  const onDrawModeChangeRef = useRef(onDrawModeChange);
   useEffect(() => {
-    if (!mapRef.current?.getMap()) return;
+    onDrawCreateRef.current = onDrawCreate;
+    onDrawModeChangeRef.current = onDrawModeChange;
+  }, [onDrawCreate, onDrawModeChange]);
 
-    const map = mapRef.current.getMap();
+  /** Preview polygon from current drag state */
+  const previewFeature = useMemo<Feature<Polygon>>(() => {
+    if (!dragStart || !dragEnd) return EMPTY_FEATURE;
+    return bboxToFeature(
+      cornersToBbox(dragStart.lng, dragStart.lat, dragEnd.lng, dragEnd.lat),
+    );
+  }, [dragStart, dragEnd]);
 
-    const draw = new MapboxDraw({
-      displayControlsDefault: false,
-      controls: {
-        rectangle: true,
-        trash: true,
-      },
-      defaultMode: drawMode || 'simple_select',
-      styles: [
-        // Rectangle drawing style
-        {
-          id: 'gl-draw-polygon-fill-inactive',
-          type: 'fill',
-          filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-          paint: {
-            'fill-color': '#1F6FFF',
-            'fill-opacity': 0.3,
-          },
-        },
-        {
-          id: 'gl-draw-polygon-stroke-inactive',
-          type: 'line',
-          filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-          paint: {
-            'line-color': '#04145C',
-            'line-width': 2,
-          },
-        },
-        // Rectangle drawing (active)
-        {
-          id: 'gl-draw-polygon-fill-active',
-          type: 'fill',
-          filter: [
-            'all',
-            ['==', '$type', 'Polygon'],
-            ['==', 'mode', 'draw_rectangle'],
-          ],
-          paint: {
-            'fill-color': '#1F6FFF',
-            'fill-opacity': 0.4,
-          },
-        },
-        {
-          id: 'gl-draw-polygon-stroke-active',
-          type: 'line',
-          filter: [
-            'all',
-            ['==', '$type', 'Polygon'],
-            ['==', 'mode', 'draw_rectangle'],
-          ],
-          paint: {
-            'line-color': '#04145C',
-            'line-width': 3,
-            'line-dasharray': [4, 4],
-          },
-        },
-        // Vertex points
-        {
-          id: 'gl-draw-polygon-and-line-vertex-active',
-          type: 'circle',
-          filter: ['all', ['==', '$type', 'Point'], ['==', 'meta', 'vertex']],
-          paint: {
-            'circle-radius': 6,
-            'circle-color': '#1F6FFF',
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#FFFFFF',
-          },
-        },
-        // Selected rectangle
-        {
-          id: 'gl-draw-polygon-fill-selected',
-          type: 'fill',
-          filter: [
-            'all',
-            ['==', '$type', 'Polygon'],
-            ['==', 'mode', 'simple_select'],
-          ],
-          paint: {
-            'fill-color': '#0F9D58',
-            'fill-opacity': 0.3,
-          },
-        },
-        {
-          id: 'gl-draw-polygon-stroke-selected',
-          type: 'line',
-          filter: [
-            'all',
-            ['==', '$type', 'Polygon'],
-            ['==', 'mode', 'simple_select'],
-          ],
-          paint: {
-            'line-color': '#0F9D58',
-            'line-width': 3,
-          },
-        },
-      ],
+  // ---------- Mouse event handlers ----------
+  const handleMouseDown = useCallback((e: MapMouseEvent) => {
+    setDragStart({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+    setDragEnd({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+  }, []);
+
+  const handleMouseMove = useCallback((e: MapMouseEvent) => {
+    setDragStart((prev) => {
+      if (!prev) return null;
+      setDragEnd({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+      return prev;
     });
+  }, []);
 
-    map.addControl(draw, 'top-left');
-    drawRef.current = draw;
+  const handleMouseUp = useCallback(() => {
+    setDragStart((prevStart) => {
+      setDragEnd((prevEnd) => {
+        if (!prevStart || !prevEnd) return null;
 
-    // Event handlers
-    const handleDrawCreate = (e: MapboxDraw.DrawCreateEvent) => {
-      if (e.features.length > 0 && onDrawCreate) {
-        const coords = (e.features[0].geometry as Polygon).coordinates[0];
-        const west = Math.min(...coords.map((c) => c[0]));
-        const south = Math.min(...coords.map((c) => c[1]));
-        const east = Math.max(...coords.map((c) => c[0]));
-        const north = Math.max(...coords.map((c) => c[1]));
-        onDrawCreate([west, south, east, north]);
-      }
-      if (onDrawModeChange) onDrawModeChange('simple_select');
-    };
+        const result = cornersToBbox(
+          prevStart.lng,
+          prevStart.lat,
+          prevEnd.lng,
+          prevEnd.lat,
+        );
 
-    const handleDrawUpdate = (e: MapboxDraw.DrawUpdateEvent) => {
-      if (e.features.length > 0 && onDrawUpdate) {
-        const coords = (e.features[0].geometry as Polygon).coordinates[0];
-        const west = Math.min(...coords.map((c) => c[0]));
-        const south = Math.min(...coords.map((c) => c[1]));
-        const east = Math.max(...coords.map((c) => c[0]));
-        const north = Math.max(...coords.map((c) => c[1]));
-        onDrawUpdate([west, south, east, north]);
-      }
-    };
+        if (isValidBbox(result)) {
+          onDrawCreateRef.current?.(result);
+          onDrawModeChangeRef.current?.('simple_select');
+        }
+        return null;
+      });
+      return null;
+    });
+  }, []);
 
-    const handleDrawDelete = (_e: MapboxDraw.DrawDeleteEvent) => {
-      if (onDrawDelete) onDrawDelete();
-    };
-
-    const handleDrawModeChange = (e: MapboxDraw.DrawModeChangeEvent) => {
-      if (onDrawModeChange) onDrawModeChange(e.mode);
-    };
-
-    map.on('draw.create', handleDrawCreate);
-    map.on('draw.update', handleDrawUpdate);
-    map.on('draw.delete', handleDrawDelete);
-    map.on('draw.modechange', handleDrawModeChange);
-
-    // Sync draw mode from props
-    if (drawMode) {
-      draw.changeMode(drawMode);
+  // Attach / detach map event listeners when draw mode changes
+  // Also reset drag state when exiting draw mode
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map || !isDrawing) {
+      // Reset drag state when not drawing
+      setDragStart(null);
+      setDragEnd(null);
+      return;
     }
+
+    map.on('mousedown', handleMouseDown);
+    map.on('mousemove', handleMouseMove);
+    map.on('mouseup', handleMouseUp);
+
+    // Crosshair cursor while drawing
+    const canvas = map.getCanvas();
+    const prevCursor = canvas.style.cursor;
+    canvas.style.cursor = 'crosshair';
 
     return () => {
-      map.off('draw.create', handleDrawCreate);
-      map.off('draw.update', handleDrawUpdate);
-      map.off('draw.delete', handleDrawDelete);
-      map.off('draw.modechange', handleDrawModeChange);
-      if (drawRef.current) {
-        map.removeControl(drawRef.current);
-        drawRef.current = null;
-      }
+      map.off('mousedown', handleMouseDown);
+      map.off('mousemove', handleMouseMove);
+      map.off('mouseup', handleMouseUp);
+      canvas.style.cursor = prevCursor;
     };
-  }, [
-    mapRef,
-    drawMode,
-    onDrawCreate,
-    onDrawUpdate,
-    onDrawDelete,
-    onDrawModeChange,
-  ]);
+  }, [mapRef, isDrawing, handleMouseDown, handleMouseMove, handleMouseUp]);
 
-  // Update draw mode when prop changes
+  // Reset drag state when exiting draw mode — inline with the main effect
+  // to avoid calling setState in its own effect body.
+
+  // Disable default drag‑pan while drawing
   useEffect(() => {
-    if (drawRef.current && drawMode !== undefined) {
-      drawRef.current.changeMode(drawMode);
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    if (isDrawing) {
+      map.dragPan.disable();
+    } else {
+      map.dragPan.enable();
     }
-  }, [drawMode]);
+  }, [mapRef, isDrawing]);
 
   return (
     <section
@@ -278,6 +241,17 @@ export function MapAuthoringCanvas({
             paint={BBOX_OUTLINE_PAINT}
           />
         </Source>
+
+        {isDrawing && dragStart && dragEnd && (
+          <Source id="draw-preview" type="geojson" data={previewFeature}>
+            <Layer id="draw-preview-fill" type="fill" paint={DRAW_FILL_PAINT} />
+            <Layer
+              id="draw-preview-outline"
+              type="line"
+              paint={DRAW_OUTLINE_PAINT}
+            />
+          </Source>
+        )}
       </Map>
     </section>
   );

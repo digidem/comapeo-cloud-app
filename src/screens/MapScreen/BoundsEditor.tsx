@@ -283,7 +283,7 @@ export function BoundsEditor({
       </div>
 
       <Button
-        variant={isDrawing ? 'destructive' : 'primary'}
+        variant={isDrawing ? 'danger' : 'primary'}
         onClick={handleDrawToggle}
         className="w-full"
       >
