@@ -314,4 +314,12 @@ export const mapMessages = defineMessages({
     id: 'map.download.tryAnyway',
     defaultMessage: 'Try anyway',
   },
+  downloadReady: {
+    id: 'map.download.ready',
+    defaultMessage: 'Map downloaded successfully ({size})',
+  },
+  downloadExport: {
+    id: 'map.download.export',
+    defaultMessage: 'Download SMP File',
+  },
 });

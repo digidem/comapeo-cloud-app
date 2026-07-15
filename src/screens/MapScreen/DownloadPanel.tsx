@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useDownloadMap } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import {
   checkStorageQuota,
   estimateDownloadSize,
@@ -127,8 +128,30 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     );
   }
 
-  // ---- Downloading state ----
-  if (map.status === 'downloading' && isDownloading) {
+  // ---- Pending state (mutation started, awaiting first progress) ----
+  if (downloadMap.isPending && !isDownloading) {
+    return (
+      <div className="flex flex-col gap-3" data-testid="download-pending">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-text">
+            {intl.formatMessage(mapMessages.downloadStarting)}
+          </span>
+        </div>
+        <Progress value={0} className="w-full animate-pulse" />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleCancel}
+          className="w-full"
+        >
+          {intl.formatMessage(mapMessages.downloadCancel)}
+        </Button>
+      </div>
+    );
+  }
+
+  // ---- Downloading state (progress available) ----
+  if (isDownloading) {
     const pct =
       progress && progress.total > 0
         ? Math.round((progress.downloaded / progress.total) * 100)
@@ -158,23 +181,40 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     );
   }
 
-  // ---- Pending state (mutation started, awaiting first progress) ----
-  if (downloadMap.isPending && !isDownloading) {
+  // ---- Ready state (download complete, SMP stored in Dexie) ----
+  if (map.status === 'ready' && !downloadMap.isPending) {
     return (
-      <div className="flex flex-col gap-3" data-testid="download-pending">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-text">
-            {intl.formatMessage(mapMessages.downloadStarting)}
-          </span>
-        </div>
-        <Progress value={0} className="w-full animate-pulse" />
+      <div
+        className="flex flex-col gap-3 rounded-card border border-success/30 bg-success/5 p-3"
+        data-testid="download-ready"
+      >
+        <p className="text-sm text-success">
+          {intl.formatMessage(mapMessages.downloadReady, {
+            size: formatBytes(map.smpSize ?? 0),
+          })}
+        </p>
         <Button
-          variant="secondary"
           size="sm"
-          onClick={handleCancel}
           className="w-full"
+          onClick={() => {
+            // Read blob from Dexie and trigger browser save dialog
+            void (async () => {
+              const db = getDb();
+              const stored = await db.maps.get(map.id);
+              if (!stored?.smpBlob) return;
+              const url = URL.createObjectURL(stored.smpBlob);
+              const a = document.createElement('a');
+              a.href = url;
+              const dateStr = new Date().toISOString().slice(0, 10);
+              a.download = `${map.name.replace(/[^a-zA-Z0-9_ -]/g, '_')}-${dateStr}.smp`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(url), 30_000);
+            })();
+          }}
         >
-          {intl.formatMessage(mapMessages.downloadCancel)}
+          {intl.formatMessage(mapMessages.downloadExport)}
         </Button>
       </div>
     );

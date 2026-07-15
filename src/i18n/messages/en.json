@@ -1013,11 +1013,17 @@
   "map.download.estimatedSize": {
     "defaultMessage": "Estimated size: {size}"
   },
+  "map.download.export": {
+    "defaultMessage": "Download SMP File"
+  },
   "map.download.maxRetries": {
     "defaultMessage": "Max retries reached"
   },
   "map.download.progress": {
     "defaultMessage": "Downloading… {downloaded} of {total} tiles ({bytes})"
+  },
+  "map.download.ready": {
+    "defaultMessage": "Map downloaded successfully ({size})"
   },
   "map.download.retry": {
     "defaultMessage": "Retry"
