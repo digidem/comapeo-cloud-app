@@ -158,10 +158,32 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     );
   }
 
-  // ---- Error state ----
+  // ---- Pending state (mutation started, awaiting first progress) ----
+  if (downloadMap.isPending && !isDownloading) {
+    return (
+      <div className="flex flex-col gap-3" data-testid="download-pending">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-text">
+            {intl.formatMessage(mapMessages.downloadStarting)}
+          </span>
+        </div>
+        <Progress value={0} className="w-full animate-pulse" />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleCancel}
+          className="w-full"
+        >
+          {intl.formatMessage(mapMessages.downloadCancel)}
+        </Button>
+      </div>
+    );
+  }
+
+  // ---- Error state (hidden while mutation is in flight) ----
   if (
-    (downloadMap.isError && !downloadMap.isPending) ||
-    (map.status === 'error' && !isDownloading)
+    !downloadMap.isPending &&
+    (downloadMap.isError || map.status === 'error')
   ) {
     const errorMessage =
       downloadMap.error instanceof Error

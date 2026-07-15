@@ -1022,6 +1022,9 @@
   "map.download.retry": {
     "defaultMessage": "Retry"
   },
+  "map.download.starting": {
+    "defaultMessage": "Starting download…"
+  },
   "map.download.storageWarning": {
     "defaultMessage": "Not enough storage space. {available} available, {estimated} estimated."
   },

@@ -276,6 +276,10 @@ export const mapMessages = defineMessages({
     id: 'map.download.progress',
     defaultMessage: 'Downloading… {downloaded} of {total} tiles ({bytes})',
   },
+  downloadStarting: {
+    id: 'map.download.starting',
+    defaultMessage: 'Starting download…',
+  },
   downloadFailed: {
     id: 'map.download.error',
     defaultMessage: 'Download failed: {error}',
