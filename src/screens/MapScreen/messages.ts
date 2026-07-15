@@ -322,4 +322,17 @@ export const mapMessages = defineMessages({
     id: 'map.download.export',
     defaultMessage: 'Download SMP File',
   },
+  drawBounds: {
+    id: 'map.bounds.drawBounds',
+    defaultMessage: 'Draw bounds',
+  },
+  cancelDraw: {
+    id: 'map.bounds.cancelDraw',
+    defaultMessage: 'Cancel drawing',
+  },
+  drawingInstruction: {
+    id: 'map.bounds.drawingInstruction',
+    defaultMessage:
+      'Click and drag on the map to draw a rectangle for the bounds',
+  },
 });

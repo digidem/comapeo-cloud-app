@@ -124,6 +124,9 @@ export function MapScreen() {
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
   const [mapName, setMapName] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
+  const [drawMode, setDrawMode] = useState<
+    'draw_rectangle' | 'simple_select' | null
+  >(null);
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find(
@@ -217,6 +220,8 @@ export function MapScreen() {
           onChange={setBbox}
           projectLocalId={selectedProjectId}
           mapRef={mapRef}
+          drawMode={drawMode}
+          onDrawModeChange={setDrawMode}
         />
         <ZoomSelector value={zoomRange} onChange={setZoomRange} />
         <SavedMapsList projectLocalId={selectedProjectId} />
@@ -248,6 +253,8 @@ export function MapScreen() {
             basemap={selectedStyle}
             bbox={bbox}
             mapRef={mapRef}
+            drawMode={drawMode}
+            onDrawModeChange={setDrawMode}
           />
 
           <div className="absolute bottom-4 left-4 flex gap-2 lg:hidden">
