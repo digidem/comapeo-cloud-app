@@ -26,6 +26,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const intl = useIntl();
   const downloadMap = useDownloadMap();
   const abortRef = useRef<AbortController | null>(null);
+  const pendingRef = useRef(false); // Guards against React-batched double-clicks
   const [progress, setProgress] = useState<{
     downloaded: number;
     total: number;
@@ -54,7 +55,8 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const isDownloading = downloadMap.isPending && progress !== null;
 
   const handleDownload = useCallback(async () => {
-    if (downloadMap.isPending) return; // Double-click guard
+    if (downloadMap.isPending || pendingRef.current) return; // Double-click guard
+    pendingRef.current = true;
 
     // Storage quota check — gate unless user bypassed
     if (!storageBypassedRef.current) {
@@ -82,6 +84,8 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       });
     } catch {
       // Error handled by mutation state
+    } finally {
+      pendingRef.current = false;
     }
     setProgress(null);
     abortRef.current = null;
@@ -99,6 +103,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   }, []);
 
   const handleRetry = useCallback(() => {
+    if (pendingRef.current) return;
     if (downloadMap.isPending) return;
     if (retryCount >= MAX_RETRIES) return;
     setRetryCount((n) => n + 1);

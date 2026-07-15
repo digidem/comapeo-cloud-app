@@ -168,22 +168,35 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
 
   const styleUrl = getDownloadStyleUrl(map);
 
-  const stream = download({
-    bbox: map.bbox,
-    maxzoom: map.maxZoom,
-    styleUrl,
-    bufferTiles,
-    signal,
-    mapboxAccessToken,
-    onprogress: (progress) => {
-      onProgress?.({
-        downloaded: progress.tiles.downloaded,
-        total: progress.tiles.total,
-        bytes: progress.output.totalBytes,
-      });
-    },
-  });
-  const reader = stream.getReader();
+  let stream: ReadableStream<Uint8Array>;
+  let reader: ReadableStreamDefaultReader<Uint8Array>;
+  try {
+    stream = download({
+      bbox: map.bbox,
+      maxzoom: map.maxZoom,
+      styleUrl,
+      bufferTiles,
+      signal,
+      mapboxAccessToken,
+      onprogress: (progress) => {
+        onProgress?.({
+          downloaded: progress.tiles.downloaded,
+          total: progress.tiles.total,
+          bytes: progress.output.totalBytes,
+        });
+      },
+    });
+    reader = stream.getReader();
+  } catch (setupError) {
+    // download() or getReader() threw — e.g. bad style URL, missing token.
+    // Revert the 'downloading' status so the UI shows the real error.
+    const message =
+      setupError instanceof Error
+        ? setupError.message
+        : 'Download setup failed';
+    await db.maps.update(map.id, { status: 'error', errorMessage: message });
+    throw setupError;
+  }
 
   // Collect chunks (NO intermediate merge — build Blob directly from chunks)
   const chunks: Uint8Array[] = [];
