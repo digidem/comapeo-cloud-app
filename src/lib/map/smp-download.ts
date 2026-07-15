@@ -34,12 +34,15 @@ export function buildRasterStyleUrl(
   tileUrl: string,
   scheme: 'xyz' | 'tms',
 ): string {
+  // Route tile requests through our same-origin proxy to bypass CORS
+  // restrictions on CDNs that don't return Access-Control-Allow-Origin.
+  const proxyTileUrl = `/api/tiles?url=${encodeURIComponent(tileUrl)}`;
   const style = {
     version: 8,
     sources: {
       raster: {
         type: 'raster',
-        tiles: [tileUrl],
+        tiles: [proxyTileUrl],
         tileSize: 256,
         scheme,
       },
