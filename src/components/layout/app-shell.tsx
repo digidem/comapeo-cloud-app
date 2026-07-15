@@ -64,6 +64,7 @@ function AppShell({
 }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const prevNavPathRef = useRef(activeNavPath);
+  const isMapRoute = activeNavPath === '/map';
 
   // Close drawer on route change (handles browser back/forward)
   useEffect(() => {
@@ -83,7 +84,7 @@ function AppShell({
       >
         {topbarActions}
       </Topbar>
-      <div className="flex flex-1 pt-14">
+      <div className={`flex min-h-0 flex-1 ${isMapRoute ? '' : 'pt-14'}`}>
         <PrimaryNav items={navItems} activePath={activeNavPath} />
         {secondaryContent !== undefined && (
           <aside className="hidden w-[268px] flex-col border-r border-border bg-surface-card lg:flex">
@@ -95,7 +96,9 @@ function AppShell({
             {subnavContent}
           </ContextualSubnav>
         )}
-        <main className="flex-1 overflow-y-auto bg-surface p-3 sm:p-4 lg:p-6">
+        <main
+          className={`min-w-0 flex-1 bg-surface p-3 sm:p-4 lg:p-6 ${isMapRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        >
           {children}
         </main>
       </div>
