@@ -36,7 +36,9 @@ export function buildRasterStyleUrl(
 ): string {
   // Route tile requests through our same-origin proxy to bypass CORS
   // restrictions on CDNs that don't return Access-Control-Allow-Origin.
-  const proxyTileUrl = `/api/tiles?url=${encodeURIComponent(tileUrl)}`;
+  // encodeURIComponent would encode {z}/{x}/{y} placeholders, but the SMP
+  // library needs literal braces for its template substitution. Decode them.
+  const proxyTileUrl = `/api/tiles?url=${encodeURIComponent(tileUrl).replace(/%7B/g, '{').replace(/%7D/g, '}')}`;
   const style = {
     version: 8,
     sources: {

@@ -226,7 +226,8 @@ export function MapScreen() {
             (m) =>
               m.status === 'draft' ||
               m.status === 'downloading' ||
-              m.status === 'error',
+              m.status === 'error' ||
+              m.status === 'ready',
           );
           return downloadableMaps.map((m) => (
             <DownloadPanel key={m.id} map={m} />
