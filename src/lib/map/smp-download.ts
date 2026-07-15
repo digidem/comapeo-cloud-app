@@ -230,9 +230,19 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
   }
 
   // Build Blob directly from chunks — avoids redundant Uint8Array merge allocation
-  const blob = new Blob(chunks as unknown as BlobPart[], {
-    type: 'application/zip',
-  });
+  let blob: Blob;
+  try {
+    blob = new Blob(chunks as unknown as BlobPart[], {
+      type: 'application/zip',
+    });
+  } catch (blobError) {
+    const message =
+      blobError instanceof Error
+        ? `Failed to create download package: ${blobError.message}`
+        : 'Failed to create download package';
+    await db.maps.update(map.id, { status: 'error', errorMessage: message });
+    throw blobError;
+  }
 
   // --- Store in Dexie ---
   try {
