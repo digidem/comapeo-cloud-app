@@ -962,6 +962,15 @@
   "map.basemap.label": {
     "defaultMessage": "Basemap"
   },
+  "map.bounds.cancelDraw": {
+    "defaultMessage": "Cancel drawing"
+  },
+  "map.bounds.drawBounds": {
+    "defaultMessage": "Draw bounds"
+  },
+  "map.bounds.drawingInstruction": {
+    "defaultMessage": "Click and drag on the map to draw a rectangle for the bounds"
+  },
   "map.bounds.east": {
     "defaultMessage": "East"
   },
