@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useIntl } from 'react-intl';
 import type { MapRef } from 'react-map-gl/maplibre';
@@ -23,6 +23,7 @@ import { useProjectStore } from '@/stores/project-store';
 
 import { BoundsEditor } from './BoundsEditor';
 import { DownloadPanel } from './DownloadPanel';
+import { DrawBoundsControl } from './DrawBoundsControl';
 import { MapAuthoringCanvas } from './MapAuthoringCanvas';
 import { SavedMapsList } from './SavedMapsList';
 import { StylePicker } from './StylePicker';
@@ -38,6 +39,12 @@ interface SettingsSheetProps {
 
 const DEFAULT_BBOX: [number, number, number, number] = [-75, -12, -45, 8];
 const DEFAULT_ZOOM: ZoomRange = { minZoom: 0, maxZoom: 14 };
+
+// Frame overlay geometry for the mobile "pan-under-frame" draw pattern
+const FRAME_LEFT = 0.1; // 10% from left
+const FRAME_TOP = 0.2; // 20% from top
+const FRAME_WIDTH = 0.8; // 80% of viewport
+const FRAME_HEIGHT = 0.6; // 60% of viewport
 
 function SettingsSheet({ open, onOpenChange, children }: SettingsSheetProps) {
   const intl = useIntl();
@@ -127,6 +134,54 @@ export function MapScreen() {
   const [drawMode, setDrawMode] = useState<
     'draw_rectangle' | 'simple_select' | null
   >(null);
+  const previousBboxRef = useRef<[number, number, number, number] | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showUndo, setShowUndo] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+
+  function handleDrawCreate(next: [number, number, number, number]) {
+    previousBboxRef.current = bbox;
+    setBbox(next);
+    setShowUndo(true);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setShowUndo(false), 6000);
+  }
+
+  function handleUndoDraw() {
+    if (previousBboxRef.current) setBbox(previousBboxRef.current);
+    setShowUndo(false);
+  }
+
+  function handleConfirmFrame() {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const canvas = map.getCanvas();
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const corners = [
+      map.unproject([w * FRAME_LEFT, h * FRAME_TOP]),
+      map.unproject([w * (FRAME_LEFT + FRAME_WIDTH), h * FRAME_TOP]),
+      map.unproject([
+        w * (FRAME_LEFT + FRAME_WIDTH),
+        h * (FRAME_TOP + FRAME_HEIGHT),
+      ]),
+      map.unproject([w * FRAME_LEFT, h * (FRAME_TOP + FRAME_HEIGHT)]),
+    ];
+    const lngs = corners.map((c) => (((c.lng + 180) % 360 + 360) % 360) - 180);
+    const lats = corners.map((c) => c.lat);
+    handleDrawCreate([
+      Math.min(...lngs),
+      Math.min(...lats),
+      Math.max(...lngs),
+      Math.max(...lats),
+    ]);
+    setDrawMode('simple_select');
+  }
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find(
@@ -220,8 +275,6 @@ export function MapScreen() {
           onChange={setBbox}
           projectLocalId={selectedProjectId}
           mapRef={mapRef}
-          drawMode={drawMode}
-          onDrawModeChange={setDrawMode}
         />
         <ZoomSelector value={zoomRange} onChange={setZoomRange} />
         <SavedMapsList projectLocalId={selectedProjectId} />
@@ -253,8 +306,8 @@ export function MapScreen() {
             basemap={selectedStyle}
             bbox={bbox}
             mapRef={mapRef}
-            drawMode={drawMode}
-            onDrawCreate={setBbox}
+            drawMode={isDesktop ? drawMode : null}
+            onDrawCreate={handleDrawCreate}
             onDrawModeChange={setDrawMode}
           />
 
@@ -267,6 +320,70 @@ export function MapScreen() {
               {intl.formatMessage(mapMessages.settings)}
             </Button>
           </div>
+          <div className="absolute top-3 right-3 z-10">
+            <DrawBoundsControl
+              drawMode={drawMode}
+              onDrawModeChange={setDrawMode}
+            />
+          </div>
+          {drawMode === 'draw_rectangle' ? (
+            <div
+              className="pointer-events-none absolute left-3 right-16 top-3 z-10 flex items-center gap-2 rounded-btn bg-black/70 px-3 py-2 shadow-card"
+              style={{ touchAction: 'manipulation' }}
+            >
+              <p className="flex-1 text-sm text-white">
+                {intl.formatMessage(
+                  isDesktop
+                    ? mapMessages.drawingInstruction
+                    : mapMessages.frameInstruction,
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={() => setDrawMode('simple_select')}
+                className="pointer-events-auto min-h-[44px] shrink-0 px-2 text-sm font-medium text-white underline"
+                style={{ touchAction: 'manipulation' }}
+              >
+                {intl.formatMessage(mapMessages.drawingInstructionCancel)}
+              </button>
+            </div>
+          ) : null}
+          {drawMode === 'draw_rectangle' && !isDesktop ? (
+            <>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden"
+              >
+                <div
+                  data-testid="draw-frame"
+                  className="h-3/5 w-4/5 rounded-sm border-2 border-dashed border-primary shadow-[0_0_0_9999px_rgba(4,20,92,0.35)]"
+                />
+              </div>
+              <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+                <Button onClick={handleConfirmFrame}>
+                  {intl.formatMessage(mapMessages.setThisArea)}
+                </Button>
+              </div>
+            </>
+          ) : null}
+          {showUndo ? (
+            <div
+              role="status"
+              className="absolute bottom-16 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-btn bg-black/80 px-4 py-2 shadow-card"
+            >
+              <span className="text-sm text-white">
+                {intl.formatMessage(mapMessages.areaUpdated)}
+              </span>
+              <button
+                type="button"
+                onClick={handleUndoDraw}
+                className="min-h-[44px] text-sm font-semibold text-white underline"
+                style={{ touchAction: 'manipulation' }}
+              >
+                {intl.formatMessage(mapMessages.undo)}
+              </button>
+            </div>
+          ) : null}
           <div className="absolute bottom-4 right-4 lg:hidden">
             <Button size="sm" onClick={openNameDialog}>
               {intl.formatMessage(mapMessages.saveMap)}
@@ -275,7 +392,7 @@ export function MapScreen() {
         </div>
 
         {isDesktop ? (
-          <aside className="flex w-full max-w-[380px] shrink-0 flex-col overflow-y-auto rounded-card bg-surface-card p-4 shadow-card">
+          <aside className="flex w-full max-w-[380px] shrink-0 flex-col overflow-y-auto rounded-card bg-surface-card px-4 pb-4 pt-6 shadow-card">
             {renderControls()}
           </aside>
         ) : null}

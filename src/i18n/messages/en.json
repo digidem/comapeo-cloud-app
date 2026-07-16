@@ -962,6 +962,9 @@
   "map.basemap.label": {
     "defaultMessage": "Basemap"
   },
+  "map.bounds.areaUpdated": {
+    "defaultMessage": "Map area updated"
+  },
   "map.bounds.cancelDraw": {
     "defaultMessage": "Cancel drawing"
   },
@@ -969,10 +972,16 @@
     "defaultMessage": "Draw bounds"
   },
   "map.bounds.drawingInstruction": {
-    "defaultMessage": "Click and drag on the map to draw a rectangle for the bounds"
+    "defaultMessage": "Drag on the map to set the area"
+  },
+  "map.bounds.drawingInstructionCancel": {
+    "defaultMessage": "Cancel"
   },
   "map.bounds.east": {
     "defaultMessage": "East"
+  },
+  "map.bounds.frameInstruction": {
+    "defaultMessage": "Pan and zoom until the area fits inside the frame"
   },
   "map.bounds.invalidLatOrder": {
     "defaultMessage": "North must be greater than south"
@@ -992,11 +1001,17 @@
   "map.bounds.north": {
     "defaultMessage": "North"
   },
+  "map.bounds.setThisArea": {
+    "defaultMessage": "Set this area"
+  },
   "map.bounds.south": {
     "defaultMessage": "South"
   },
   "map.bounds.title": {
     "defaultMessage": "Bounds"
+  },
+  "map.bounds.undo": {
+    "defaultMessage": "Undo"
   },
   "map.bounds.useCurrentView": {
     "defaultMessage": "Use current view"

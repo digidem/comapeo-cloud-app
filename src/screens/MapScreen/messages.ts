@@ -332,7 +332,26 @@ export const mapMessages = defineMessages({
   },
   drawingInstruction: {
     id: 'map.bounds.drawingInstruction',
-    defaultMessage:
-      'Click and drag on the map to draw a rectangle for the bounds',
+    defaultMessage: 'Drag on the map to set the area',
+  },
+  drawingInstructionCancel: {
+    id: 'map.bounds.drawingInstructionCancel',
+    defaultMessage: 'Cancel',
+  },
+  setThisArea: {
+    id: 'map.bounds.setThisArea',
+    defaultMessage: 'Set this area',
+  },
+  areaUpdated: {
+    id: 'map.bounds.areaUpdated',
+    defaultMessage: 'Map area updated',
+  },
+  undo: {
+    id: 'map.bounds.undo',
+    defaultMessage: 'Undo',
+  },
+  frameInstruction: {
+    id: 'map.bounds.frameInstruction',
+    defaultMessage: 'Pan and zoom until the area fits inside the frame',
   },
 });

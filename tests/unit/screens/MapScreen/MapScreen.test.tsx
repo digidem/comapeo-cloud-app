@@ -83,6 +83,9 @@ describe('MapScreen', () => {
     expect(screen.getByText('Bounds')).toBeInTheDocument();
     expect(screen.getByText('Zoom range')).toBeInTheDocument();
     expect(screen.getByText('Saved maps')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Draw bounds' }),
+    ).toBeInTheDocument();
   });
 
   describe('mobile settings sheet', () => {
