@@ -126,6 +126,11 @@ export function MapAuthoringCanvas({
   );
   const isDrawing = drawMode === 'draw_rectangle';
   const isDraggingRef = useRef(false);
+  const dragStartRef = useRef<{ lng: number; lat: number } | null>(null);
+  const dragEndRef = useRef<{ lng: number; lat: number } | null>(null);
+  const startPointRef = useRef<{ x: number; y: number } | null>(null);
+  const endPointRef = useRef<{ x: number; y: number } | null>(null);
+  const MIN_DRAG_PX = 12;
 
   // Keep latest callback refs to avoid re‑binding the effect
   const onDrawCreateRef = useRef(onDrawCreate);
@@ -144,40 +149,54 @@ export function MapAuthoringCanvas({
   }, [dragStart, dragEnd]);
 
   // ---------- Mouse & touch event handlers ----------
-  const handleDragStart = useCallback((lng: number, lat: number) => {
-    isDraggingRef.current = true;
-    setDragStart({ lng, lat });
-    setDragEnd({ lng, lat });
-  }, []);
+  const handleDragStart = useCallback(
+    (lng: number, lat: number, point: { x: number; y: number }) => {
+      isDraggingRef.current = true;
+      dragStartRef.current = { lng, lat };
+      dragEndRef.current = { lng, lat };
+      startPointRef.current = point;
+      endPointRef.current = point;
+      setDragStart({ lng, lat });
+      setDragEnd({ lng, lat });
+    },
+    [],
+  );
 
-  const handleDragMove = useCallback((lng: number, lat: number) => {
-    if (!isDraggingRef.current) return;
-    setDragEnd({ lng, lat });
-  }, []);
+  const handleDragMove = useCallback(
+    (lng: number, lat: number, point: { x: number; y: number }) => {
+      if (!isDraggingRef.current) return;
+      dragEndRef.current = { lng, lat };
+      endPointRef.current = point;
+      setDragEnd({ lng, lat });
+    },
+    [],
+  );
 
   const handleDragEnd = useCallback(() => {
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
-
-    setDragStart((prevStart) => {
-      setDragEnd((prevEnd) => {
-        if (!prevStart || !prevEnd) return null;
-
-        const result = cornersToBbox(
-          prevStart.lng,
-          prevStart.lat,
-          prevEnd.lng,
-          prevEnd.lat,
-        );
-
-        if (isValidBbox(result)) {
-          onDrawCreateRef.current?.(result);
-          onDrawModeChangeRef.current?.('simple_select');
-        }
-        return null;
-      });
-      return null;
-    });
+    const start = dragStartRef.current;
+    const end = dragEndRef.current;
+    const sp = startPointRef.current;
+    const ep = endPointRef.current;
+    dragStartRef.current = null;
+    dragEndRef.current = null;
+    startPointRef.current = null;
+    endPointRef.current = null;
+    setDragStart(null);
+    setDragEnd(null);
+    if (!start || !end || !sp || !ep) return;
+    // Ignore taps and accidental micro-drags; stay in draw mode
+    if (
+      Math.abs(ep.x - sp.x) < MIN_DRAG_PX ||
+      Math.abs(ep.y - sp.y) < MIN_DRAG_PX
+    )
+      return;
+    const result = cornersToBbox(start.lng, start.lat, end.lng, end.lat);
+    if (isValidBbox(result)) {
+      onDrawCreateRef.current?.(result);
+      onDrawModeChangeRef.current?.('simple_select');
+    }
   }, []);
 
   // Attach / detach map event listeners when draw mode changes
@@ -186,21 +205,51 @@ export function MapAuthoringCanvas({
     const map = mapRef.current?.getMap();
     if (!map || !isDrawing) {
       // Reset drag state when not drawing
+      isDraggingRef.current = false;
+      dragStartRef.current = null;
+      dragEndRef.current = null;
+      startPointRef.current = null;
+      endPointRef.current = null;
       setDragStart(null);
       setDragEnd(null);
       return;
     }
 
     const onMouseDown = (e: MapMouseEvent) =>
-      handleDragStart(e.lngLat.lng, e.lngLat.lat);
+      handleDragStart(e.lngLat.lng, e.lngLat.lat, e.point);
     const onMouseMove = (e: MapMouseEvent) =>
-      handleDragMove(e.lngLat.lng, e.lngLat.lat);
+      handleDragMove(e.lngLat.lng, e.lngLat.lat, e.point);
     const onMouseUp = () => handleDragEnd();
-    const onTouchStart = (e: MapTouchEvent) =>
-      handleDragStart(e.lngLat.lng, e.lngLat.lat);
-    const onTouchMove = (e: MapTouchEvent) =>
-      handleDragMove(e.lngLat.lng, e.lngLat.lat);
+    const onTouchStart = (e: MapTouchEvent) => {
+      if (e.originalEvent.touches.length > 1) {
+        // Cancel draw on second finger; let pinch-zoom navigate
+        isDraggingRef.current = false;
+        setDragStart(null);
+        setDragEnd(null);
+        return;
+      }
+      handleDragStart(e.lngLat.lng, e.lngLat.lat, e.point);
+    };
+    const onTouchMove = (e: MapTouchEvent) => {
+      if (e.originalEvent.touches.length > 1) {
+        isDraggingRef.current = false;
+        setDragStart(null);
+        setDragEnd(null);
+        return;
+      }
+      if (!isDraggingRef.current) {
+        // Resume drawing when user drops back to one finger after a pinch
+        handleDragStart(e.lngLat.lng, e.lngLat.lat, e.point);
+        return;
+      }
+      handleDragMove(e.lngLat.lng, e.lngLat.lat, e.point);
+    };
     const onTouchEnd = () => handleDragEnd();
+    const onTouchCancel = () => {
+      isDraggingRef.current = false;
+      setDragStart(null);
+      setDragEnd(null);
+    };
 
     map.on('mousedown', onMouseDown);
     map.on('mousemove', onMouseMove);
@@ -208,11 +257,15 @@ export function MapAuthoringCanvas({
     map.on('touchstart', onTouchStart);
     map.on('touchmove', onTouchMove);
     map.on('touchend', onTouchEnd);
+    map.on('touchcancel', onTouchCancel);
 
-    // Crosshair cursor while drawing
+    // Crosshair cursor while drawing; pin touch-action to prevent
+    // browser from stealing one-finger drags as scroll/pan
     const canvas = map.getCanvas();
     const prevCursor = canvas.style.cursor;
+    const prevTouchAction = canvas.style.touchAction;
     canvas.style.cursor = 'crosshair';
+    canvas.style.touchAction = 'none';
 
     return () => {
       map.off('mousedown', onMouseDown);
@@ -221,21 +274,34 @@ export function MapAuthoringCanvas({
       map.off('touchstart', onTouchStart);
       map.off('touchmove', onTouchMove);
       map.off('touchend', onTouchEnd);
+      map.off('touchcancel', onTouchCancel);
       canvas.style.cursor = prevCursor;
+      canvas.style.touchAction = prevTouchAction;
     };
   }, [mapRef, isDrawing, handleDragStart, handleDragMove, handleDragEnd]);
 
-  // Reset drag state when exiting draw mode — inline with the main effect
-  // to avoid calling setState in its own effect body.
+  // Escape key cancels drawing
+  useEffect(() => {
+    if (!isDrawing) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onDrawModeChangeRef.current?.('simple_select');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDrawing]);
 
-  // Disable default drag‑pan while drawing
+  // Disable default drag‑pan and scroll‑zoom while drawing
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map) return;
     if (isDrawing) {
       map.dragPan.disable();
+      map.scrollZoom.disable();
     } else {
       map.dragPan.enable();
+      map.scrollZoom.enable();
     }
   }, [mapRef, isDrawing]);
 
