@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { useDownloadMap } from '@/hooks/useMaps';
+import { mapsQueryKey, useDownloadMap } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import {
@@ -24,6 +26,7 @@ const MAX_RETRIES = 3;
 
 export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const intl = useIntl();
+  const queryClient = useQueryClient();
   const downloadMap = useDownloadMap();
   const abortRef = useRef<AbortController | null>(null);
   const pendingRef = useRef(false); // Guards against React-batched double-clicks
@@ -206,17 +209,37 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
             // Read blob from Dexie and trigger browser save dialog
             void (async () => {
               const db = getDb();
-              const stored = await db.maps.get(map.id);
-              if (!stored?.smpBlob) return;
-              const url = URL.createObjectURL(stored.smpBlob);
-              const a = document.createElement('a');
-              a.href = url;
-              const dateStr = new Date().toISOString().slice(0, 10);
-              a.download = `${map.name.replace(/[^a-zA-Z0-9_ -]/g, '_')}-${dateStr}.smp`;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              setTimeout(() => URL.revokeObjectURL(url), 30_000);
+              try {
+                const stored = await db.maps.get(map.id);
+                if (!stored?.smpBlob) {
+                  throw new Error(
+                    'Saved map package is missing or unreadable.',
+                  );
+                }
+                const url = URL.createObjectURL(stored.smpBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                const dateStr = new Date().toISOString().slice(0, 10);
+                a.download = `${map.name.replace(/[^a-zA-Z0-9_ -]/g, '_')}-${dateStr}.smp`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 30_000);
+              } catch (exportError) {
+                // Surface the failure through the standard error/retry UI
+                // instead of leaving the ready card visible with no file.
+                const message =
+                  exportError instanceof Error
+                    ? exportError.message
+                    : 'Unable to export the saved map file.';
+                await db.maps.update(map.id, {
+                  status: 'error',
+                  errorMessage: message,
+                });
+                void queryClient.invalidateQueries({
+                  queryKey: mapsQueryKey(map.projectLocalId),
+                });
+              }
             })();
           }}
         >
