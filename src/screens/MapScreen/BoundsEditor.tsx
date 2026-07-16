@@ -19,10 +19,6 @@ interface BoundsEditorProps {
   onChange: (bbox: [number, number, number, number]) => void;
   projectLocalId: string | null;
   mapRef: RefObject<MapRef | null>;
-  /** Draw mode state — controlled by parent MapScreen */
-  drawMode?: 'draw_rectangle' | 'simple_select' | null;
-  /** Called when the user clicks the draw button or cancels drawing */
-  onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
 }
 
 type BoundsDraft = {
@@ -64,8 +60,6 @@ export function BoundsEditor({
   onChange,
   projectLocalId,
   mapRef,
-  drawMode,
-  onDrawModeChange,
 }: BoundsEditorProps) {
   const intl = useIntl();
   const [draft, setDraft] = useState(() => draftFromBbox(value));
@@ -200,16 +194,6 @@ export function BoundsEditor({
     projectLocalId !== null &&
     !hasProjectPoints;
 
-  const isDrawing = drawMode === 'draw_rectangle';
-
-  function handleDrawToggle() {
-    if (isDrawing) {
-      onDrawModeChange?.('simple_select');
-    } else {
-      onDrawModeChange?.('draw_rectangle');
-    }
-  }
-
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-base font-semibold text-text">
@@ -224,7 +208,6 @@ export function BoundsEditor({
           value={draft.west}
           onChange={(event) => updateDraft('west', event.target.value)}
           error={errors.west}
-          disabled={isDrawing}
         />
         <Input
           label={intl.formatMessage(mapMessages.south)}
@@ -233,7 +216,6 @@ export function BoundsEditor({
           value={draft.south}
           onChange={(event) => updateDraft('south', event.target.value)}
           error={errors.south}
-          disabled={isDrawing}
         />
         <Input
           label={intl.formatMessage(mapMessages.east)}
@@ -242,7 +224,6 @@ export function BoundsEditor({
           value={draft.east}
           onChange={(event) => updateDraft('east', event.target.value)}
           error={errors.east}
-          disabled={isDrawing}
         />
         <Input
           label={intl.formatMessage(mapMessages.north)}
@@ -251,16 +232,11 @@ export function BoundsEditor({
           value={draft.north}
           onChange={(event) => updateDraft('north', event.target.value)}
           error={errors.north}
-          disabled={isDrawing}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <Button
-          variant="secondary"
-          onClick={handleUseCurrentView}
-          disabled={isDrawing}
-        >
+        <Button variant="secondary" onClick={handleUseCurrentView}>
           {intl.formatMessage(mapMessages.useCurrentView)}
         </Button>
         {noProjectPoints ? (
@@ -278,29 +254,13 @@ export function BoundsEditor({
           <Button
             variant="secondary"
             onClick={handleUseProjectArea}
-            disabled={!hasProjectPoints || isDrawing}
+            disabled={!hasProjectPoints}
             className="w-full"
           >
             {intl.formatMessage(mapMessages.useProjectArea)}
           </Button>
         )}
       </div>
-
-      <Button
-        variant={isDrawing ? 'danger' : 'primary'}
-        onClick={handleDrawToggle}
-        className="w-full"
-      >
-        {isDrawing
-          ? intl.formatMessage(mapMessages.cancelDraw)
-          : intl.formatMessage(mapMessages.drawBounds)}
-      </Button>
-
-      {isDrawing && (
-        <p className="text-xs text-text-muted text-center">
-          {intl.formatMessage(mapMessages.drawingInstruction)}
-        </p>
-      )}
 
       {noProjectPoints ? (
         <p className="text-xs text-text-muted">
