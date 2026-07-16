@@ -1,5 +1,5 @@
 import type { Feature, Polygon } from 'geojson';
-import type { MapMouseEvent } from 'maplibre-gl';
+import type { MapMouseEvent, MapTouchEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -125,6 +125,7 @@ export function MapAuthoringCanvas({
     null,
   );
   const isDrawing = drawMode === 'draw_rectangle';
+  const isDraggingRef = useRef(false);
 
   // Keep latest callback refs to avoid re‑binding the effect
   const onDrawCreateRef = useRef(onDrawCreate);
@@ -142,21 +143,22 @@ export function MapAuthoringCanvas({
     );
   }, [dragStart, dragEnd]);
 
-  // ---------- Mouse event handlers ----------
-  const handleMouseDown = useCallback((e: MapMouseEvent) => {
-    setDragStart({ lng: e.lngLat.lng, lat: e.lngLat.lat });
-    setDragEnd({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+  // ---------- Mouse & touch event handlers ----------
+  const handleDragStart = useCallback((lng: number, lat: number) => {
+    isDraggingRef.current = true;
+    setDragStart({ lng, lat });
+    setDragEnd({ lng, lat });
   }, []);
 
-  const handleMouseMove = useCallback((e: MapMouseEvent) => {
-    setDragStart((prev) => {
-      if (!prev) return null;
-      setDragEnd({ lng: e.lngLat.lng, lat: e.lngLat.lat });
-      return prev;
-    });
+  const handleDragMove = useCallback((lng: number, lat: number) => {
+    if (!isDraggingRef.current) return;
+    setDragEnd({ lng, lat });
   }, []);
 
-  const handleMouseUp = useCallback(() => {
+  const handleDragEnd = useCallback(() => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+
     setDragStart((prevStart) => {
       setDragEnd((prevEnd) => {
         if (!prevStart || !prevEnd) return null;
@@ -189,9 +191,23 @@ export function MapAuthoringCanvas({
       return;
     }
 
-    map.on('mousedown', handleMouseDown);
-    map.on('mousemove', handleMouseMove);
-    map.on('mouseup', handleMouseUp);
+    const onMouseDown = (e: MapMouseEvent) =>
+      handleDragStart(e.lngLat.lng, e.lngLat.lat);
+    const onMouseMove = (e: MapMouseEvent) =>
+      handleDragMove(e.lngLat.lng, e.lngLat.lat);
+    const onMouseUp = () => handleDragEnd();
+    const onTouchStart = (e: MapTouchEvent) =>
+      handleDragStart(e.lngLat.lng, e.lngLat.lat);
+    const onTouchMove = (e: MapTouchEvent) =>
+      handleDragMove(e.lngLat.lng, e.lngLat.lat);
+    const onTouchEnd = () => handleDragEnd();
+
+    map.on('mousedown', onMouseDown);
+    map.on('mousemove', onMouseMove);
+    map.on('mouseup', onMouseUp);
+    map.on('touchstart', onTouchStart);
+    map.on('touchmove', onTouchMove);
+    map.on('touchend', onTouchEnd);
 
     // Crosshair cursor while drawing
     const canvas = map.getCanvas();
@@ -199,12 +215,15 @@ export function MapAuthoringCanvas({
     canvas.style.cursor = 'crosshair';
 
     return () => {
-      map.off('mousedown', handleMouseDown);
-      map.off('mousemove', handleMouseMove);
-      map.off('mouseup', handleMouseUp);
+      map.off('mousedown', onMouseDown);
+      map.off('mousemove', onMouseMove);
+      map.off('mouseup', onMouseUp);
+      map.off('touchstart', onTouchStart);
+      map.off('touchmove', onTouchMove);
+      map.off('touchend', onTouchEnd);
       canvas.style.cursor = prevCursor;
     };
-  }, [mapRef, isDrawing, handleMouseDown, handleMouseMove, handleMouseUp]);
+  }, [mapRef, isDrawing, handleDragStart, handleDragMove, handleDragEnd]);
 
   // Reset drag state when exiting draw mode — inline with the main effect
   // to avoid calling setState in its own effect body.

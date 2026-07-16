@@ -224,6 +224,7 @@ export function BoundsEditor({
           value={draft.west}
           onChange={(event) => updateDraft('west', event.target.value)}
           error={errors.west}
+          disabled={isDrawing}
         />
         <Input
           label={intl.formatMessage(mapMessages.south)}
@@ -232,6 +233,7 @@ export function BoundsEditor({
           value={draft.south}
           onChange={(event) => updateDraft('south', event.target.value)}
           error={errors.south}
+          disabled={isDrawing}
         />
         <Input
           label={intl.formatMessage(mapMessages.east)}
@@ -240,6 +242,7 @@ export function BoundsEditor({
           value={draft.east}
           onChange={(event) => updateDraft('east', event.target.value)}
           error={errors.east}
+          disabled={isDrawing}
         />
         <Input
           label={intl.formatMessage(mapMessages.north)}
@@ -248,6 +251,7 @@ export function BoundsEditor({
           value={draft.north}
           onChange={(event) => updateDraft('north', event.target.value)}
           error={errors.north}
+          disabled={isDrawing}
         />
       </div>
 
