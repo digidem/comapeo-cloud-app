@@ -196,7 +196,14 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       setupError instanceof Error
         ? setupError.message
         : 'Download setup failed';
-    await db.maps.update(map.id, { status: 'error', errorMessage: message });
+    try {
+      await db.maps.update(map.id, {
+        status: 'error',
+        errorMessage: message,
+      });
+    } catch {
+      // Best-effort — original error is authoritative.
+    }
     throw setupError;
   }
 
@@ -213,14 +220,25 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     }
   } catch (error) {
     if (signal?.aborted) {
-      await db.maps.update(map.id, {
-        status: 'draft',
-        errorMessage: undefined,
-      });
+      try {
+        await db.maps.update(map.id, {
+          status: 'draft',
+          errorMessage: undefined,
+        });
+      } catch {
+        // Best-effort — original error is authoritative.
+      }
       throw new DOMException('Download cancelled', 'AbortError');
     }
     const message = error instanceof Error ? error.message : 'Download failed';
-    await db.maps.update(map.id, { status: 'error', errorMessage: message });
+    try {
+      await db.maps.update(map.id, {
+        status: 'error',
+        errorMessage: message,
+      });
+    } catch {
+      // Best-effort — original error is authoritative.
+    }
     throw error;
   } finally {
     // Clean up synthetic style blob URL for raster maps (success OR error)
@@ -240,7 +258,14 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       blobError instanceof Error
         ? `Failed to create download package: ${blobError.message}`
         : 'Failed to create download package';
-    await db.maps.update(map.id, { status: 'error', errorMessage: message });
+    try {
+      await db.maps.update(map.id, {
+        status: 'error',
+        errorMessage: message,
+      });
+    } catch {
+      // Best-effort — original error is authoritative.
+    }
     throw blobError;
   }
 
@@ -257,11 +282,16 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       storageError instanceof Error
         ? `Storage error: ${storageError.message}`
         : 'Storage error: unable to save map';
+    // Best-effort recovery: this is a tiny key-value update and should
+    // succeed even when the blob write failed (IndexedDB quota tiers).
+    // If this also fails, the original storageError is still thrown.
     try {
-      await db.maps.update(map.id, { status: 'error', errorMessage: message });
+      await db.maps.update(map.id, {
+        status: 'error',
+        errorMessage: message,
+      });
     } catch {
-      // The blob write may have exhausted quota, so recording the error is
-      // best-effort and must not replace the original storage failure.
+      // Swallow — the original error is authoritative.
     }
     throw storageError;
   }
