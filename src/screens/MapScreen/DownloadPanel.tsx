@@ -76,6 +76,8 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       }
     }
 
+    setRetryCount((n) => n + 1);
+
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -110,13 +112,17 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     if (pendingRef.current) return;
     if (downloadMap.isPending) return;
     if (retryCount >= MAX_RETRIES) return;
-    setRetryCount((n) => n + 1);
     downloadMap.reset();
     void handleDownload();
   }, [downloadMap, handleDownload, retryCount]);
 
   // ---- Stuck downloading state (recovery after refresh/crash) ----
-  if (map.status === 'downloading' && !isDownloading && !downloadMap.isError) {
+  if (
+    map.status === 'downloading' &&
+    !downloadMap.isPending &&
+    !isDownloading &&
+    !downloadMap.isError
+  ) {
     return (
       <div
         className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
