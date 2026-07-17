@@ -84,7 +84,7 @@ function AppShell({
       >
         {topbarActions}
       </Topbar>
-      <div className={`flex min-h-0 flex-1 ${isMapRoute ? '' : 'pt-14'}`}>
+      <div className="flex min-h-0 flex-1 pt-14">
         <PrimaryNav items={navItems} activePath={activeNavPath} />
         {secondaryContent !== undefined && (
           <aside className="hidden w-[268px] flex-col border-r border-border bg-surface-card lg:flex">
