@@ -106,7 +106,7 @@ describe('AppShell', () => {
     );
 
     const main = screen.getByRole('main');
-    expect(main.parentElement).not.toHaveClass('pt-14');
+    expect(main.parentElement).toHaveClass('pt-14');
     expect(main).toHaveClass('overflow-hidden');
     expect(main).not.toHaveClass('overflow-y-auto');
   });
