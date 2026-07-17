@@ -59,23 +59,26 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
 
   const handleDownload = useCallback(async () => {
     if (downloadMap.isPending || pendingRef.current) return; // Double-click guard
-    pendingRef.current = true;
 
     // Storage quota check — gate unless user bypassed
     if (!storageBypassedRef.current) {
-      const { sufficient, available } = await checkStorageQuota(estimatedBytes);
-      if (!sufficient && available >= 0) {
-        setStorageWarning(
-          intl.formatMessage(mapMessages.downloadStorageWarning, {
-            available: formatBytes(available),
-            estimated: estimatedFormatted,
-          }),
-        );
-        pendingRef.current = false;
-        return;
+      try {
+        const { sufficient, available } = await checkStorageQuota(estimatedBytes);
+        if (!sufficient && available >= 0) {
+          setStorageWarning(
+            intl.formatMessage(mapMessages.downloadStorageWarning, {
+              available: formatBytes(available),
+              estimated: estimatedFormatted,
+            }),
+          );
+          return;
+        }
+      } catch {
+        // If quota check fails (e.g. storage API unavailable), let the user proceed
       }
     }
 
+    pendingRef.current = true;
     setRetryCount((n) => n + 1);
 
     const controller = new AbortController();
@@ -88,8 +91,13 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         signal: controller.signal,
         mapboxAccessToken,
       });
-    } catch {
-      // Error handled by mutation state
+    } catch (error) {
+      // Cancel produces an AbortError — reset mutation state so the
+      // error UI doesn't show "Download failed: Download cancelled".
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        downloadMap.reset();
+      }
+      // All other errors are surfaced via the mutation's isError state.
     } finally {
       pendingRef.current = false;
     }
