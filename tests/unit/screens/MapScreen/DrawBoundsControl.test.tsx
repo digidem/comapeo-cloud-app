@@ -5,12 +5,7 @@ import { DrawBoundsControl } from '@/screens/MapScreen/DrawBoundsControl';
 
 describe('DrawBoundsControl', () => {
   it('renders with inactive state and draw-bounds label when idle', () => {
-    render(
-      <DrawBoundsControl
-        drawMode={null}
-        onDrawModeChange={vi.fn()}
-      />,
-    );
+    render(<DrawBoundsControl drawMode={null} onDrawModeChange={vi.fn()} />);
 
     const button = screen.getByRole('button', { name: 'Draw bounds' });
     expect(button).toBeInTheDocument();
@@ -35,10 +30,7 @@ describe('DrawBoundsControl', () => {
     const onDrawModeChange = vi.fn();
 
     render(
-      <DrawBoundsControl
-        drawMode={null}
-        onDrawModeChange={onDrawModeChange}
-      />,
+      <DrawBoundsControl drawMode={null} onDrawModeChange={onDrawModeChange} />,
     );
 
     await user.click(screen.getByRole('button', { name: 'Draw bounds' }));
@@ -61,12 +53,7 @@ describe('DrawBoundsControl', () => {
   });
 
   it('has Tailwind touch-target sizing classes for 44x44px minimum', () => {
-    render(
-      <DrawBoundsControl
-        drawMode={null}
-        onDrawModeChange={vi.fn()}
-      />,
-    );
+    render(<DrawBoundsControl drawMode={null} onDrawModeChange={vi.fn()} />);
 
     const button = screen.getByRole('button', { name: 'Draw bounds' });
     expect(button.className).toMatch(/\bh-11\b/);

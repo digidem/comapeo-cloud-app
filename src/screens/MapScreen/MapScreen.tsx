@@ -172,7 +172,9 @@ export function MapScreen() {
       ]),
       map.unproject([w * FRAME_LEFT, h * (FRAME_TOP + FRAME_HEIGHT)]),
     ];
-    const lngs = corners.map((c) => (((c.lng + 180) % 360 + 360) % 360) - 180);
+    const lngs = corners.map(
+      (c) => ((((c.lng + 180) % 360) + 360) % 360) - 180,
+    );
     const lats = corners.map((c) => c.lat);
     handleDrawCreate([
       Math.min(...lngs),
