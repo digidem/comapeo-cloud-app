@@ -190,8 +190,9 @@ export function MapAuthoringCanvas({
     if (
       Math.abs(ep.x - sp.x) < MIN_DRAG_PX ||
       Math.abs(ep.y - sp.y) < MIN_DRAG_PX
-    )
+    ) {
       return;
+    }
     const result = cornersToBbox(start.lng, start.lat, end.lng, end.lat);
     if (isValidBbox(result)) {
       onDrawCreateRef.current?.(result);
