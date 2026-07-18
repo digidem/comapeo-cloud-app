@@ -322,7 +322,7 @@ export function MapScreen() {
               {intl.formatMessage(mapMessages.settings)}
             </Button>
           </div>
-          <div className="absolute top-3 right-3 z-10">
+          <div className="absolute top-4 right-3 z-10">
             <DrawBoundsControl
               drawMode={drawMode}
               onDrawModeChange={setDrawMode}
@@ -330,7 +330,7 @@ export function MapScreen() {
           </div>
           {drawMode === 'draw_rectangle' ? (
             <div
-              className="pointer-events-none absolute left-3 right-16 top-3 z-10 flex items-center gap-2 rounded-btn bg-black/70 px-3 py-2 shadow-card"
+              className="pointer-events-none absolute left-3 right-16 top-4 z-10 flex items-center gap-2 rounded-btn bg-black/70 px-3 py-2 shadow-card"
               style={{ touchAction: 'manipulation' }}
             >
               <p className="flex-1 text-sm text-white">
