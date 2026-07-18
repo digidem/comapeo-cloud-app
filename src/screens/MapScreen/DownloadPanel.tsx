@@ -266,7 +266,8 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
             // click — avoids browsers that ignore async download clicks.
             const url = exportUrlRef.current;
             if (!url) {
-              // Fallback: read from Dexie and surface error if unavailable
+              // Fallback: use window.open for the blob URL — more reliable
+              // than a.click() in async context across browsers.
               void (async () => {
                 const db = getDb();
                 try {
@@ -277,12 +278,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
                     );
                   }
                   const fallbackUrl = URL.createObjectURL(stored.smpBlob);
-                  const a = document.createElement('a');
-                  a.href = fallbackUrl;
-                  a.download = exportBlobNameRef.current;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
+                  window.open(fallbackUrl, '_blank');
                   setTimeout(() => URL.revokeObjectURL(fallbackUrl), 30_000);
                 } catch (exportError) {
                   const message =
