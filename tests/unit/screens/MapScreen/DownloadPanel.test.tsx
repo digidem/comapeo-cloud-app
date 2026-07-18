@@ -111,7 +111,9 @@ describe('DownloadPanel', () => {
     const map = createMockMap({ status: 'downloading' });
     render(<DownloadPanel map={map} />);
     expect(screen.getByTestId('download-stuck')).toBeInTheDocument();
-    expect(screen.getByText(/previous download was interrupted/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/previous download was interrupted/i),
+    ).toBeInTheDocument();
   });
 
   it('shows pending state when mutation is pending but no progress yet', () => {
