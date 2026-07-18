@@ -306,7 +306,7 @@ export function MapScreen() {
         <div className="relative flex-1 min-h-0 overflow-hidden rounded-card bg-surface-card shadow-card">
           <MapAuthoringCanvas
             basemap={selectedStyle}
-            bbox={bbox}
+            bbox={drawMode === 'draw_rectangle' ? null : bbox}
             mapRef={mapRef}
             drawMode={isDesktop ? drawMode : null}
             onDrawCreate={handleDrawCreate}

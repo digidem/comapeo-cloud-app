@@ -14,7 +14,7 @@ import { mapMessages } from './messages';
 
 interface MapAuthoringCanvasProps {
   basemap: ImageryBasemap;
-  bbox: [number, number, number, number];
+  bbox: [number, number, number, number] | null;
   mapRef: RefObject<MapRef | null>;
   /** Draw mode state */
   drawMode?: 'draw_rectangle' | 'simple_select' | null;
@@ -114,7 +114,7 @@ export function MapAuthoringCanvas({
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();
   const mapStyle = useMemo(() => basemapToMapStyle(basemap), [basemap]);
-  const bboxFeature = useMemo(() => bboxToFeature(bbox), [bbox]);
+  const bboxFeature = useMemo(() => (bbox ? bboxToFeature(bbox) : null), [bbox]);
 
   // Drag‑to‑draw state
   const [dragStart, setDragStart] = useState<{
@@ -319,14 +319,16 @@ export function MapAuthoringCanvas({
         mapStyle={mapStyle}
         style={MAP_STYLE}
       >
-        <Source id="authoring-bbox" type="geojson" data={bboxFeature}>
-          <Layer id="authoring-bbox-fill" type="fill" paint={BBOX_FILL_PAINT} />
-          <Layer
-            id="authoring-bbox-outline"
-            type="line"
-            paint={BBOX_OUTLINE_PAINT}
-          />
-        </Source>
+        {bboxFeature && (
+          <Source id="authoring-bbox" type="geojson" data={bboxFeature}>
+            <Layer id="authoring-bbox-fill" type="fill" paint={BBOX_FILL_PAINT} />
+            <Layer
+              id="authoring-bbox-outline"
+              type="line"
+              paint={BBOX_OUTLINE_PAINT}
+            />
+          </Source>
+        )}
 
         {isDrawing && dragStart && dragEnd && (
           <Source id="draw-preview" type="geojson" data={previewFeature}>
