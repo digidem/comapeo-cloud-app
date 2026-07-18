@@ -112,7 +112,7 @@ describe('downloadSmp', () => {
       .mockResolvedValueOnce(1)
       .mockRejectedValueOnce(storageError)
       .mockRejectedValueOnce(recoveryError)
-      .mockResolvedValueOnce(undefined); // retry succeeds on second attempt
+      .mockResolvedValueOnce(1); // retry succeeds on second attempt
     mockDownload.mockReturnValue(
       new ReadableStream<Uint8Array>({
         start(controller) {
