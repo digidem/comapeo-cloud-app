@@ -38,6 +38,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
+  const [isStartingRetry, setIsStartingRetry] = useState(false);
   const storageBypassedRef = useRef(false);
   const exportUrlRef = useRef<string | null>(null);
   const exportBlobNameRef = useRef<string>('');
@@ -88,6 +89,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
 
   const handleDownload = useCallback(async () => {
     if (downloadMap.isPending || pendingRef.current) return; // Double-click guard
+    setIsStartingRetry(false);
     pendingRef.current = true; // Set BEFORE async quota check to prevent duplicates
 
     // Storage quota check — gate unless user bypassed
@@ -150,6 +152,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     if (pendingRef.current) return;
     if (downloadMap.isPending) return;
     if (retryCount >= MAX_RETRIES) return;
+    setIsStartingRetry(true);
     downloadMap.reset();
     void handleDownload();
   }, [downloadMap, handleDownload, retryCount]);
@@ -160,7 +163,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     !downloadMap.isPending &&
     !isDownloading &&
     !downloadMap.isError &&
-    !pendingRef.current
+    !isStartingRetry
   ) {
     return (
       <div
@@ -306,7 +309,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   // ---- Error state (hidden while mutation is in flight or retry starting) ----
   if (
     !downloadMap.isPending &&
-    !pendingRef.current &&
+    !isStartingRetry &&
     (downloadMap.isError || map.status === 'error')
   ) {
     const errorMessage =
