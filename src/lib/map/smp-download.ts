@@ -220,13 +220,21 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     }
   } catch (error) {
     if (signal?.aborted) {
-      try {
-        await db.maps.update(map.id, {
-          status: 'draft',
-          errorMessage: undefined,
-        });
-      } catch {
-        // Best-effort — original error is authoritative.
+      // Best-effort: restore status to 'draft' with retry in case of transient storage error
+      let recoveryAttempts = 0;
+      while (recoveryAttempts < 2) {
+        try {
+          await db.maps.update(map.id, {
+            status: 'draft',
+            errorMessage: undefined,
+          });
+          break;
+        } catch {
+          recoveryAttempts++;
+          if (recoveryAttempts < 2) {
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
       }
       throw new DOMException('Download cancelled', 'AbortError');
     }
@@ -284,14 +292,21 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
         : 'Storage error: unable to save map';
     // Best-effort recovery: this is a tiny key-value update and should
     // succeed even when the blob write failed (IndexedDB quota tiers).
-    // If this also fails, the original storageError is still thrown.
-    try {
-      await db.maps.update(map.id, {
-        status: 'error',
-        errorMessage: message,
-      });
-    } catch {
-      // Swallow — the original error is authoritative.
+    // Retry once in case of transient storage pressure.
+    let recoveryAttempts = 0;
+    while (recoveryAttempts < 2) {
+      try {
+        await db.maps.update(map.id, {
+          status: 'error',
+          errorMessage: message,
+        });
+        break;
+      } catch {
+        recoveryAttempts++;
+        if (recoveryAttempts < 2) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
     }
     throw storageError;
   }

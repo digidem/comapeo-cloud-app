@@ -30,6 +30,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const downloadMap = useDownloadMap();
   const abortRef = useRef<AbortController | null>(null);
   const pendingRef = useRef(false); // Guards against React-batched double-clicks
+  const isRetryRef = useRef(false); // Marks handleDownload calls from handleRetry
   const [progress, setProgress] = useState<{
     downloaded: number;
     total: number;
@@ -112,6 +113,12 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       }
     }
 
+    // Download is actually starting — count retry if triggered via handleRetry
+    if (isRetryRef.current) {
+      setRetryCount((n) => n + 1);
+      isRetryRef.current = false;
+    }
+
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -152,7 +159,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     if (pendingRef.current) return;
     if (downloadMap.isPending) return;
     if (retryCount >= MAX_RETRIES) return;
-    setRetryCount((n) => n + 1);
+    isRetryRef.current = true;
     setIsStartingRetry(true);
     downloadMap.reset();
     void handleDownload();

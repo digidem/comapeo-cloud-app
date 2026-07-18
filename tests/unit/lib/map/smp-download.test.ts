@@ -81,6 +81,29 @@ describe('formatBytes', () => {
 });
 
 describe('downloadSmp', () => {
+  it('returns mapId on successful download', async () => {
+    const updateSpy = vi.spyOn(getDb().maps, 'update').mockResolvedValue(1);
+    mockDownload.mockReturnValue(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2, 3]));
+          controller.close();
+        },
+      }),
+    );
+
+    const result = await downloadSmp({ map: createMockMap() });
+
+    expect(result).toBe('map-1');
+    expect(updateSpy).toHaveBeenCalledTimes(2);
+    expect(updateSpy).toHaveBeenLastCalledWith('map-1', {
+      smpBlob: expect.any(Blob),
+      smpSize: 3,
+      status: 'ready',
+      errorMessage: undefined,
+    });
+  });
+
   it('preserves the storage error when recording the error state also fails', async () => {
     const storageError = new Error('Quota exceeded while saving blob');
     const recoveryError = new Error('Quota exceeded while saving error state');
@@ -88,7 +111,8 @@ describe('downloadSmp', () => {
       .spyOn(getDb().maps, 'update')
       .mockResolvedValueOnce(1)
       .mockRejectedValueOnce(storageError)
-      .mockRejectedValueOnce(recoveryError);
+      .mockRejectedValueOnce(recoveryError)
+      .mockResolvedValueOnce(undefined); // retry succeeds on second attempt
     mockDownload.mockReturnValue(
       new ReadableStream<Uint8Array>({
         start(controller) {
@@ -101,7 +125,7 @@ describe('downloadSmp', () => {
     await expect(downloadSmp({ map: createMockMap() })).rejects.toBe(
       storageError,
     );
-    expect(updateSpy).toHaveBeenCalledTimes(3);
+    expect(updateSpy).toHaveBeenCalledTimes(4);
     expect(updateSpy).toHaveBeenLastCalledWith('map-1', {
       errorMessage: 'Storage error: Quota exceeded while saving blob',
       status: 'error',
