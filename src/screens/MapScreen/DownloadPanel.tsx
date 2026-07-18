@@ -63,7 +63,8 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     // Storage quota check — gate unless user bypassed
     if (!storageBypassedRef.current) {
       try {
-        const { sufficient, available } = await checkStorageQuota(estimatedBytes);
+        const { sufficient, available } =
+          await checkStorageQuota(estimatedBytes);
         if (!sufficient && available >= 0) {
           setStorageWarning(
             intl.formatMessage(mapMessages.downloadStorageWarning, {

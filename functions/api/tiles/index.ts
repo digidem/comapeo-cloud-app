@@ -46,7 +46,8 @@ function isPrivateHostname(hostname: string): boolean {
   const lower = hostname.toLowerCase();
 
   // Strip brackets from IPv6 literals
-  const clean = lower.startsWith('[') && lower.endsWith(']') ? lower.slice(1, -1) : lower;
+  const clean =
+    lower.startsWith('[') && lower.endsWith(']') ? lower.slice(1, -1) : lower;
 
   // Check IPv4 patterns
   for (const pattern of PRIVATE_PATTERNS) {
@@ -59,7 +60,11 @@ function isPrivateHostname(hostname: string): boolean {
   }
 
   // localhost / .local / .internal (mDNS / split-DNS)
-  if (clean === 'localhost' || clean.endsWith('.local') || clean.endsWith('.internal')) {
+  if (
+    clean === 'localhost' ||
+    clean.endsWith('.local') ||
+    clean.endsWith('.internal')
+  ) {
     return true;
   }
 
@@ -107,10 +112,13 @@ export const onRequest: PagesFunction = async (context) => {
   // Require a dot-separated hostname (reject bare IPs unless they're public)
   // This prevents SSRF via raw IP addresses that might slip through pattern matching.
   const hostname = parsed.hostname.replace(/[[\]]/g, '');
-  const isBareIp = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+  const isBareIp =
+    /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
     /^[0-9a-f:]+$/.test(hostname);
   if (isBareIp) {
-    return new Response('Numeric IP hostnames are not allowed', { status: 403 });
+    return new Response('Numeric IP hostnames are not allowed', {
+      status: 403,
+    });
   }
 
   const controller = new AbortController();
@@ -126,10 +134,7 @@ export const onRequest: PagesFunction = async (context) => {
       redirect: 'manual', // Do NOT follow redirects — SSRF via bounce
     });
 
-    if (
-      upstreamResponse.status >= 300 &&
-      upstreamResponse.status < 400
-    ) {
+    if (upstreamResponse.status >= 300 && upstreamResponse.status < 400) {
       return new Response('Redirects are not supported', { status: 502 });
     }
 
@@ -176,7 +181,9 @@ export const onRequest: PagesFunction = async (context) => {
       status: upstreamResponse.status,
       statusText: upstreamResponse.statusText,
       headers: {
-        'Content-Type': upstreamResponse.headers.get('Content-Type') ?? 'application/octet-stream',
+        'Content-Type':
+          upstreamResponse.headers.get('Content-Type') ??
+          'application/octet-stream',
         'Cache-Control': 'public, max-age=86400, s-maxage=604800',
         'Access-Control-Allow-Origin': '*',
       },
