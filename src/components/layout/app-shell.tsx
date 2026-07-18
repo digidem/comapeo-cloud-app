@@ -97,7 +97,7 @@ function AppShell({
           </ContextualSubnav>
         )}
         <main
-          className={`min-w-0 flex-1 bg-surface p-3 sm:p-4 lg:p-6 ${isMapRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}
+          className={`min-w-0 flex-1 bg-surface p-3 sm:p-4 lg:p-6 ${isMapRoute ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}
         >
           {children}
         </main>

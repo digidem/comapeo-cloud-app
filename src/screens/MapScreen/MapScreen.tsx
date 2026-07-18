@@ -302,7 +302,7 @@ export function MapScreen() {
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden lg:flex-row">
+      <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-hidden lg:flex-row">
         <div className="relative flex-1 min-h-0 overflow-hidden rounded-card bg-surface-card shadow-card">
           <MapAuthoringCanvas
             basemap={selectedStyle}
