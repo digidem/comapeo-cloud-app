@@ -184,7 +184,7 @@ describe('DownloadPanel', () => {
     expect(screen.getByText(/Network timeout/)).toBeInTheDocument();
   });
 
-  it('disables retry button when max retries reached', () => {
+  it('disables retry button when max retries reached', async () => {
     vi.mocked(useDownloadMap).mockReturnValue({
       error: new Error('Fail'),
       isError: true,
