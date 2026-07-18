@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 
-import { useQueryClient } from '@tanstack/react-query';
-
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { mapsQueryKey, useDownloadMap } from '@/hooks/useMaps';
+import { useDownloadMap } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import {
@@ -26,7 +24,6 @@ const MAX_RETRIES = 3;
 
 export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const intl = useIntl();
-  const queryClient = useQueryClient();
   const downloadMap = useDownloadMap();
   const abortRef = useRef<AbortController | null>(null);
   const pendingRef = useRef(false); // Guards against React-batched double-clicks
@@ -40,34 +37,41 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const [retryCount, setRetryCount] = useState(0);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [isStartingRetry, setIsStartingRetry] = useState(false);
+  const [exportReady, setExportReady] = useState(false);
   const storageBypassedRef = useRef(false);
   const exportUrlRef = useRef<string | null>(null);
   const exportBlobNameRef = useRef<string>('');
 
   // Pre-load the blob URL for ready maps so the export click handler is synchronous
   useEffect(() => {
-    if (map.status === 'ready') {
-      const name = `${map.name.replace(/[^a-zA-Z0-9_ -]/g, '_')}-${new Date().toISOString().slice(0, 10)}.smp`;
-      exportBlobNameRef.current = name;
-      void (async () => {
-        const db = getDb();
-        try {
-          const stored = await db.maps.get(map.id);
-          if (stored?.smpBlob) {
-            // Revoke any previous URL to avoid leaks
-            if (exportUrlRef.current) URL.revokeObjectURL(exportUrlRef.current);
-            exportUrlRef.current = URL.createObjectURL(stored.smpBlob);
-          }
-        } catch {
-          // Blob unavailable — the export handler will surface the error
+    if (map.status !== 'ready') return;
+    let cancelled = false;
+    const name = `${map.name.replace(/[^a-zA-Z0-9_ -]/g, '_')}-${new Date().toISOString().slice(0, 10)}.smp`;
+    exportBlobNameRef.current = name;
+    void (async () => {
+      const db = getDb();
+      try {
+        const stored = await db.maps.get(map.id);
+        if (cancelled) return;
+        if (stored?.smpBlob) {
+          // Revoke any previous URL to avoid leaks
+          if (exportUrlRef.current) URL.revokeObjectURL(exportUrlRef.current);
+          exportUrlRef.current = URL.createObjectURL(stored.smpBlob);
+          setExportReady(true);
+        } else {
+          setExportReady(false);
         }
-      })();
-    }
+      } catch {
+        // Blob unavailable — the export handler will surface the error
+      }
+    })();
     return () => {
+      cancelled = true;
       if (exportUrlRef.current) {
         URL.revokeObjectURL(exportUrlRef.current);
         exportUrlRef.current = null;
       }
+      setExportReady(false);
     };
   }, [map.id, map.name, map.status]);
 
@@ -261,41 +265,12 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         <Button
           size="sm"
           className="w-full"
+          disabled={!exportReady}
+          loading={!exportReady}
           onClick={() => {
-            // Use cached blob URL (pre-loaded in effect) for synchronous
-            // click — avoids browsers that ignore async download clicks.
+            // Synchronous click using pre-loaded blob URL — no async handoff
             const url = exportUrlRef.current;
-            if (!url) {
-              // Fallback: use window.open for the blob URL — more reliable
-              // than a.click() in async context across browsers.
-              void (async () => {
-                const db = getDb();
-                try {
-                  const stored = await db.maps.get(map.id);
-                  if (!stored?.smpBlob) {
-                    throw new Error(
-                      'Saved map package is missing or unreadable.',
-                    );
-                  }
-                  const fallbackUrl = URL.createObjectURL(stored.smpBlob);
-                  window.open(fallbackUrl, '_blank');
-                  setTimeout(() => URL.revokeObjectURL(fallbackUrl), 30_000);
-                } catch (exportError) {
-                  const message =
-                    exportError instanceof Error
-                      ? exportError.message
-                      : 'Unable to export the saved map file.';
-                  await db.maps.update(map.id, {
-                    status: 'error',
-                    errorMessage: message,
-                  });
-                  void queryClient.invalidateQueries({
-                    queryKey: mapsQueryKey(map.projectLocalId),
-                  });
-                }
-              })();
-              return;
-            }
+            if (!url) return;
             const a = document.createElement('a');
             a.href = url;
             a.download = exportBlobNameRef.current;

@@ -196,13 +196,21 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       setupError instanceof Error
         ? setupError.message
         : 'Download setup failed';
-    try {
-      await db.maps.update(map.id, {
-        status: 'error',
-        errorMessage: message,
-      });
-    } catch {
-      // Best-effort — original error is authoritative.
+    // Best-effort recovery with retry in case of transient storage error
+    let recoveryAttempts = 0;
+    while (recoveryAttempts < 2) {
+      try {
+        await db.maps.update(map.id, {
+          status: 'error',
+          errorMessage: message,
+        });
+        break;
+      } catch {
+        recoveryAttempts++;
+        if (recoveryAttempts < 2) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
     }
     throw setupError;
   }
@@ -239,13 +247,21 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       throw new DOMException('Download cancelled', 'AbortError');
     }
     const message = error instanceof Error ? error.message : 'Download failed';
-    try {
-      await db.maps.update(map.id, {
-        status: 'error',
-        errorMessage: message,
-      });
-    } catch {
-      // Best-effort — original error is authoritative.
+    // Best-effort recovery with retry in case of transient storage error
+    let recoveryAttempts = 0;
+    while (recoveryAttempts < 2) {
+      try {
+        await db.maps.update(map.id, {
+          status: 'error',
+          errorMessage: message,
+        });
+        break;
+      } catch {
+        recoveryAttempts++;
+        if (recoveryAttempts < 2) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
     }
     throw error;
   } finally {
@@ -266,13 +282,21 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       blobError instanceof Error
         ? `Failed to create download package: ${blobError.message}`
         : 'Failed to create download package';
-    try {
-      await db.maps.update(map.id, {
-        status: 'error',
-        errorMessage: message,
-      });
-    } catch {
-      // Best-effort — original error is authoritative.
+    // Best-effort recovery with retry in case of transient storage error
+    let recoveryAttempts = 0;
+    while (recoveryAttempts < 2) {
+      try {
+        await db.maps.update(map.id, {
+          status: 'error',
+          errorMessage: message,
+        });
+        break;
+      } catch {
+        recoveryAttempts++;
+        if (recoveryAttempts < 2) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
     }
     throw blobError;
   }
