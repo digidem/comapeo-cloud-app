@@ -114,7 +114,10 @@ export function MapAuthoringCanvas({
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();
   const mapStyle = useMemo(() => basemapToMapStyle(basemap), [basemap]);
-  const bboxFeature = useMemo(() => (bbox ? bboxToFeature(bbox) : null), [bbox]);
+  const bboxFeature = useMemo(
+    () => (bbox ? bboxToFeature(bbox) : null),
+    [bbox],
+  );
 
   // Drag‑to‑draw state
   const [dragStart, setDragStart] = useState<{
@@ -321,7 +324,11 @@ export function MapAuthoringCanvas({
       >
         {bboxFeature && (
           <Source id="authoring-bbox" type="geojson" data={bboxFeature}>
-            <Layer id="authoring-bbox-fill" type="fill" paint={BBOX_FILL_PAINT} />
+            <Layer
+              id="authoring-bbox-fill"
+              type="fill"
+              paint={BBOX_FILL_PAINT}
+            />
             <Layer
               id="authoring-bbox-outline"
               type="line"
