@@ -123,13 +123,13 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         mapboxAccessToken,
       });
     } catch (error) {
-      setRetryCount((n) => n + 1);
       // Cancel produces an AbortError — reset mutation state so the
       // error UI doesn't show "Download failed: Download cancelled".
       if (error instanceof DOMException && error.name === 'AbortError') {
         downloadMap.reset();
       }
-      // All other errors are surfaced via the mutation's isError state.
+      // Retry budget is tracked in handleRetry only, so cancellations
+      // and the initial download never consume it.
     } finally {
       pendingRef.current = false;
     }
@@ -152,6 +152,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     if (pendingRef.current) return;
     if (downloadMap.isPending) return;
     if (retryCount >= MAX_RETRIES) return;
+    setRetryCount((n) => n + 1);
     setIsStartingRetry(true);
     downloadMap.reset();
     void handleDownload();
