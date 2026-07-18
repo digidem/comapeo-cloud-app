@@ -140,7 +140,7 @@ describe('DownloadPanel', () => {
     } as unknown as ReturnType<typeof useDownloadMap>);
 
     const map = createMockMap();
-    const { rerender } = render(<DownloadPanel map={map} />);
+    render(<DownloadPanel map={map} />);
 
     // Trigger progress via the mutation's onProgress callback
     const progressCallback = mutateAsync.mock.calls[0]?.[0]?.onProgress;
@@ -198,11 +198,11 @@ describe('DownloadPanel', () => {
     const retryButton = screen.getByRole('button', { name: /retry/i });
     // Click retry multiple times to exhaust retries
     const user = userEvent.setup();
-    void user.click(retryButton);
-    void user.click(retryButton);
-    void user.click(retryButton);
+    await user.click(retryButton);
+    await user.click(retryButton);
+    await user.click(retryButton);
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(
         screen.getByRole('button', { name: /max retries reached/i }),
       ).toBeDisabled();
@@ -275,7 +275,6 @@ describe('DownloadPanel', () => {
   });
 
   it('disables retry when pendingRef or isPending is true', async () => {
-    const user = userEvent.setup();
     vi.mocked(useDownloadMap).mockReturnValue({
       error: new Error('Fail'),
       isError: true,
