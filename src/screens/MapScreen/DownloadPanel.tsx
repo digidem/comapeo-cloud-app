@@ -38,6 +38,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [isStartingRetry, setIsStartingRetry] = useState(false);
   const [exportReady, setExportReady] = useState(false);
+  const [exportMissing, setExportMissing] = useState(false);
   const storageBypassedRef = useRef(false);
   const exportUrlRef = useRef<string | null>(null);
   const exportBlobNameRef = useRef<string>('');
@@ -58,8 +59,10 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           if (exportUrlRef.current) URL.revokeObjectURL(exportUrlRef.current);
           exportUrlRef.current = URL.createObjectURL(stored.smpBlob);
           setExportReady(true);
+          setExportMissing(false);
         } else {
           setExportReady(false);
+          setExportMissing(true);
         }
       } catch {
         // Blob unavailable — the export handler will surface the error
@@ -110,6 +113,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
             }),
           );
           pendingRef.current = false;
+          isRetryRef.current = false; // Don't latch retry flag on early return
           return;
         }
       } catch {
@@ -252,6 +256,27 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
 
   // ---- Ready state (download complete, SMP stored in Dexie) ----
   if (map.status === 'ready' && !downloadMap.isPending) {
+    // Blob missing after load — offer regenerate instead of stuck loading
+    if (exportMissing) {
+      return (
+        <div
+          className="flex flex-col gap-3 rounded-card border border-error/30 bg-error/5 p-3"
+          data-testid="download-ready-missing"
+        >
+          <p className="text-sm text-error">
+            The saved map package is missing or unreadable. You can regenerate
+            it.
+          </p>
+          <Button
+            size="sm"
+            className="w-full"
+            onClick={handleDownload}
+          >
+            {intl.formatMessage(mapMessages.downloadRetry)}
+          </Button>
+        </div>
+      );
+    }
     return (
       <div
         className="flex flex-col gap-3 rounded-card border border-success/30 bg-success/5 p-3"
