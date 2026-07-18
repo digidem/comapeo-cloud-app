@@ -185,11 +185,12 @@ describe('DownloadPanel', () => {
   });
 
   it('disables retry button when max retries reached', async () => {
+    const failMutateAsync = vi.fn().mockRejectedValue(new Error('Fail'));
     vi.mocked(useDownloadMap).mockReturnValue({
       error: new Error('Fail'),
       isError: true,
       isPending: false,
-      mutateAsync,
+      mutateAsync: failMutateAsync,
       reset,
     } as unknown as ReturnType<typeof useDownloadMap>);
     const map = createMockMap();

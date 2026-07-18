@@ -39,6 +39,35 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const [retryCount, setRetryCount] = useState(0);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const storageBypassedRef = useRef(false);
+  const exportUrlRef = useRef<string | null>(null);
+  const exportBlobNameRef = useRef<string>('');
+
+  // Pre-load the blob URL for ready maps so the export click handler is synchronous
+  useEffect(() => {
+    if (map.status === 'ready') {
+      const name = `${map.name.replace(/[^a-zA-Z0-9_ -]/g, '_')}-${new Date().toISOString().slice(0, 10)}.smp`;
+      exportBlobNameRef.current = name;
+      void (async () => {
+        const db = getDb();
+        try {
+          const stored = await db.maps.get(map.id);
+          if (stored?.smpBlob) {
+            // Revoke any previous URL to avoid leaks
+            if (exportUrlRef.current) URL.revokeObjectURL(exportUrlRef.current);
+            exportUrlRef.current = URL.createObjectURL(stored.smpBlob);
+          }
+        } catch {
+          // Blob unavailable — the export handler will surface the error
+        }
+      })();
+    }
+    return () => {
+      if (exportUrlRef.current) {
+        URL.revokeObjectURL(exportUrlRef.current);
+        exportUrlRef.current = null;
+      }
+    };
+  }, [map.id, map.name, map.status]);
 
   // --- Cancel on unmount ---
   useEffect(() => {
@@ -59,6 +88,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
 
   const handleDownload = useCallback(async () => {
     if (downloadMap.isPending || pendingRef.current) return; // Double-click guard
+    pendingRef.current = true; // Set BEFORE async quota check to prevent duplicates
 
     // Storage quota check — gate unless user bypassed
     if (!storageBypassedRef.current) {
@@ -72,15 +102,13 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
               estimated: estimatedFormatted,
             }),
           );
+          pendingRef.current = false;
           return;
         }
       } catch {
         // If quota check fails (e.g. storage API unavailable), let the user proceed
       }
     }
-
-    pendingRef.current = true;
-    setRetryCount((n) => n + 1);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -93,6 +121,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         mapboxAccessToken,
       });
     } catch (error) {
+      setRetryCount((n) => n + 1);
       // Cancel produces an AbortError — reset mutation state so the
       // error UI doesn't show "Download failed: Download cancelled".
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -130,7 +159,8 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     map.status === 'downloading' &&
     !downloadMap.isPending &&
     !isDownloading &&
-    !downloadMap.isError
+    !downloadMap.isError &&
+    !pendingRef.current
   ) {
     return (
       <div
@@ -221,41 +251,50 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           size="sm"
           className="w-full"
           onClick={() => {
-            // Read blob from Dexie and trigger browser save dialog
-            void (async () => {
-              const db = getDb();
-              try {
-                const stored = await db.maps.get(map.id);
-                if (!stored?.smpBlob) {
-                  throw new Error(
-                    'Saved map package is missing or unreadable.',
-                  );
+            // Use cached blob URL (pre-loaded in effect) for synchronous
+            // click — avoids browsers that ignore async download clicks.
+            const url = exportUrlRef.current;
+            if (!url) {
+              // Fallback: read from Dexie and surface error if unavailable
+              void (async () => {
+                const db = getDb();
+                try {
+                  const stored = await db.maps.get(map.id);
+                  if (!stored?.smpBlob) {
+                    throw new Error(
+                      'Saved map package is missing or unreadable.',
+                    );
+                  }
+                  const fallbackUrl = URL.createObjectURL(stored.smpBlob);
+                  const a = document.createElement('a');
+                  a.href = fallbackUrl;
+                  a.download = exportBlobNameRef.current;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  setTimeout(() => URL.revokeObjectURL(fallbackUrl), 30_000);
+                } catch (exportError) {
+                  const message =
+                    exportError instanceof Error
+                      ? exportError.message
+                      : 'Unable to export the saved map file.';
+                  await db.maps.update(map.id, {
+                    status: 'error',
+                    errorMessage: message,
+                  });
+                  void queryClient.invalidateQueries({
+                    queryKey: mapsQueryKey(map.projectLocalId),
+                  });
                 }
-                const url = URL.createObjectURL(stored.smpBlob);
-                const a = document.createElement('a');
-                a.href = url;
-                const dateStr = new Date().toISOString().slice(0, 10);
-                a.download = `${map.name.replace(/[^a-zA-Z0-9_ -]/g, '_')}-${dateStr}.smp`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(url), 30_000);
-              } catch (exportError) {
-                // Surface the failure through the standard error/retry UI
-                // instead of leaving the ready card visible with no file.
-                const message =
-                  exportError instanceof Error
-                    ? exportError.message
-                    : 'Unable to export the saved map file.';
-                await db.maps.update(map.id, {
-                  status: 'error',
-                  errorMessage: message,
-                });
-                void queryClient.invalidateQueries({
-                  queryKey: mapsQueryKey(map.projectLocalId),
-                });
-              }
-            })();
+              })();
+              return;
+            }
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = exportBlobNameRef.current;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
           }}
         >
           {intl.formatMessage(mapMessages.downloadExport)}
@@ -264,9 +303,10 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     );
   }
 
-  // ---- Error state (hidden while mutation is in flight) ----
+  // ---- Error state (hidden while mutation is in flight or retry starting) ----
   if (
     !downloadMap.isPending &&
+    !pendingRef.current &&
     (downloadMap.isError || map.status === 'error')
   ) {
     const errorMessage =
