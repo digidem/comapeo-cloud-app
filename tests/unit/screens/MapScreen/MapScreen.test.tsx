@@ -102,7 +102,7 @@ describe('MapScreen', () => {
     expect(mapProps.at(-1)).toMatchObject({ attributionControl: false });
     expect(attributionControlProps.at(-1)).toMatchObject({
       compact: true,
-      position: 'bottom-left',
+      position: 'top-left',
     });
   });
 

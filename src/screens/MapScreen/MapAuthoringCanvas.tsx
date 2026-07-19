@@ -328,7 +328,7 @@ export function MapAuthoringCanvas({
         style={MAP_STYLE}
         attributionControl={false}
       >
-        <AttributionControl position="bottom-left" compact />
+        <AttributionControl position="top-left" compact />
         {bboxFeature && (
           <Source id="authoring-bbox" type="geojson" data={bboxFeature}>
             <Layer
