@@ -390,6 +390,59 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     );
   }
 
+
+  // ---- Storage warning ----
+  if (storageWarning) {
+    return (
+      <div
+        className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
+        data-testid="download-storage-warning"
+      >
+        <p className="text-sm text-warning">{storageWarning}</p>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setStorageWarning(null)}
+          >
+            {intl.formatMessage(mapMessages.downloadCancel)}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              storageBypassedRef.current = true;
+              void handleDownload();
+            }}
+          >
+            {intl.formatMessage(mapMessages.downloadTryAnyway)}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Concurrency warning (another download in progress) ----
+  if (concurrencyWarning) {
+    return (
+      <div
+        className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
+        data-testid="download-concurrency-warning"
+      >
+        <p className="text-sm text-warning">
+          {intl.formatMessage(mapMessages.downloadConcurrencyWarning)}
+        </p>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setConcurrencyWarning(false)}
+          className="w-full"
+        >
+          {intl.formatMessage(mapMessages.downloadCancel)}
+        </Button>
+      </div>
+    );
+  }
+
   // ---- Main download button state ----
   return (
     <div className="flex flex-col gap-3" data-testid="download-panel">

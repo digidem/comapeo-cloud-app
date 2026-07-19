@@ -201,6 +201,7 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
   await db.maps.update(map.id, {
     status: 'downloading',
     errorMessage: undefined,
+    updatedAt: new Date().toISOString(),
   });
 
   const styleUrl = getDownloadStyleUrl(map);
@@ -313,30 +314,18 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       smpSize: totalSize,
       status: 'ready',
       errorMessage: undefined,
+      updatedAt: new Date().toISOString(),
     });
   } catch (storageError) {
     const message =
       storageError instanceof Error
         ? `Storage error: ${storageError.message}`
         : 'Storage error: unable to save map';
-    // Best-effort recovery: this is a tiny key-value update and should
-    // succeed even when the blob write failed (IndexedDB quota tiers).
-    // Retry once in case of transient storage pressure.
-    let recoveryAttempts = 0;
-    while (recoveryAttempts < 2) {
-      try {
-        await db.maps.update(map.id, {
-          status: 'error',
-          errorMessage: message,
-        });
-        break;
-      } catch {
-        recoveryAttempts++;
-        if (recoveryAttempts < 2) {
-          await new Promise((r) => setTimeout(r, 200));
-        }
-      }
-    }
+    await recoveryWrite(db, map.id, {
+      status: 'error',
+      errorMessage: message,
+      updatedAt: new Date().toISOString(),
+    });
     throw storageError;
   }
 
