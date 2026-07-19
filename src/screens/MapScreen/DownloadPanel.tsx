@@ -35,6 +35,8 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     downloaded: number;
     total: number;
     bytes: number;
+    skipped: number;
+    warning?: boolean;
   } | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -197,6 +199,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
         data-testid="download-stuck"
       >
+        <span className="text-sm text-text-muted">{map.name}</span>
         <p className="text-sm text-warning">
           {intl.formatMessage(mapMessages.downloadInterrupted)}
         </p>
@@ -242,6 +245,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         : 0;
     return (
       <div className="flex flex-col gap-3" data-testid="download-progress">
+        <span className="text-sm text-text-muted">{map.name}</span>
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-text">
             {intl.formatMessage(mapMessages.downloadProgress, {
@@ -253,6 +257,13 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           <span className="text-xs text-text-muted">{pct}%</span>
         </div>
         <Progress value={pct} className="w-full" />
+        {progress && (progress.skipped > 0 || progress.warning) && (
+          <p className="text-sm text-warning">
+            {intl.formatMessage(mapMessages.downloadSkippedWarning, {
+              n: progress.skipped,
+            })}
+          </p>
+        )}
         <Button
           variant="secondary"
           size="sm"
