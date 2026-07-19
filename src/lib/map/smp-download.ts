@@ -215,21 +215,13 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       signal,
       mapboxAccessToken,
       onprogress: (progress) => {
+        skippedTiles = progress.tiles.skipped;
         onProgress?.({
           downloaded: progress.tiles.downloaded,
           total: progress.tiles.total,
           bytes: progress.output.totalBytes,
-          skipped: progress.tiles.skipped,
+          skipped: skippedTiles,
         });
-        if (progress.tiles.skipped > 0) {
-          onProgress?.({
-            downloaded: progress.tiles.downloaded,
-            total: progress.tiles.total,
-            bytes: progress.output.totalBytes,
-            skipped: progress.tiles.skipped,
-            warning: true,
-          });
-        }
       },
     });
     reader = stream.getReader();
@@ -308,13 +300,23 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
 
   // --- Store in Dexie ---
   try {
-    await db.maps.update(map.id, {
-      smpBlob: blob,
-      smpSize: totalSize,
-      status: 'ready',
-      errorMessage: undefined,
-      updatedAt: new Date().toISOString(),
-    });
+    if (skippedTiles > 0) {
+      await db.maps.update(map.id, {
+        smpBlob: blob,
+        smpSize: totalSize,
+        status: 'error',
+        errorMessage: `${skippedTiles} tiles could not be downloaded. The package is incomplete.`,
+        updatedAt: new Date().toISOString(),
+      });
+    } else {
+      await db.maps.update(map.id, {
+        smpBlob: blob,
+        smpSize: totalSize,
+        status: 'ready',
+        errorMessage: undefined,
+        updatedAt: new Date().toISOString(),
+      });
+    }
   } catch (storageError) {
     const message =
       storageError instanceof Error
