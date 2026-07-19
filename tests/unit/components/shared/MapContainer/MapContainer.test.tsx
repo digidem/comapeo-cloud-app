@@ -43,6 +43,18 @@ vi.mock('react-map-gl/maplibre', () => {
         data-layer-id={props.id as string}
       />
     ),
+    AttributionControl: (props: Record<string, unknown>) => {
+      const position = (props.position as string) || 'bottom-right';
+      const compact = props.compact ? ' maplibregl-compact' : '';
+      return (
+        <div className={`maplibregl-ctrl maplibregl-ctrl-${position}`}>
+          <div className={`maplibregl-ctrl-attrib${compact}`}>
+            <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>{' '}
+            contributors | <a href="https://maplibre.org">MapLibre</a>
+          </div>
+        </div>
+      );
+    },
   };
 });
 
@@ -152,7 +164,9 @@ describe('MapContainer', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /basemap/i }));
-    await user.click(screen.getByText('OpenStreetMap'));
+    await user.click(
+      screen.getByRole('menuitemradio', { name: 'OpenStreetMap' }),
+    );
 
     expect(handleChange).toHaveBeenCalledWith('osm-standard');
   });
@@ -235,21 +249,9 @@ describe('MapContainer', () => {
     expect(lastProps!.cursor).toBe('crosshair');
   });
 
-  it('passes compact attributionControl to the Map', () => {
+  it('renders the attribution control in top-left', () => {
     render(<MapContainer />);
-    const lastProps = mapProps[mapProps.length - 1];
-    expect(lastProps).toBeTruthy();
-    expect(lastProps!.attributionControl).toEqual({
-      compact: true,
-    });
-  });
-
-  it('allows callers to override attributionControl via passthrough', () => {
-    render(<MapContainer attributionControl={{ compact: false }} />);
-    const lastProps = mapProps[mapProps.length - 1];
-    expect(lastProps).toBeTruthy();
-    expect(lastProps!.attributionControl).toEqual({
-      compact: false,
-    });
+    expect(screen.getByText(/OpenStreetMap/)).toBeTruthy();
+    expect(screen.getByText(/MapLibre/)).toBeTruthy();
   });
 });

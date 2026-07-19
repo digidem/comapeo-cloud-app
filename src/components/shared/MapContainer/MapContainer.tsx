@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import type { MapRef } from 'react-map-gl/maplibre';
-import Map from 'react-map-gl/maplibre';
+import Map, { AttributionControl } from 'react-map-gl/maplibre';
 
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { BASEMAP_CATALOG, findBasemap } from '@/lib/map/basemaps';
@@ -190,9 +190,10 @@ function MapContainer({
         mapStyle={mapStyle}
         interactive={interactive}
         onLoad={onLoad}
-        attributionControl={{ compact: true }}
+        attributionControl={false}
         {...mapPassthrough}
       >
+        <AttributionControl position="top-left" compact />
         {children}
       </Map>
 

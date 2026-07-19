@@ -370,29 +370,18 @@ html {
 }
 
 /* ---------------------------------------------------------------------------
-   MapLibre compact attribution — flatten to a small info button on all maps
+   MapLibre attribution — moved to top-left, compact info button on all maps
    --------------------------------------------------------------------------- */
 .maplibregl-ctrl-attrib {
+  margin: 8px 0 0 8px !important;
+}
+
+/* Match the semi-transparent look of the basemap switcher / view-only badge */
+.maplibregl-ctrl-attrib.maplibregl-compact {
   background: rgba(255, 255, 255, 0.7) !important;
-  border-radius: 6px 0 0 0 !important;
-  font-size: 10px;
-  padding: 0 4px;
+  backdrop-filter: blur(4px);
 }
 
-.maplibregl-ctrl-attrib.maplibre-compact {
-  min-height: 20px;
-}
-
-.maplibregl-ctrl-attrib.maplibre-compact::after {
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 50%;
-  width: 14px;
-  height: 14px;
-  line-height: 14px;
-  text-align: center;
-  color: #fff;
-}
-
-[data-theme='dark'] .maplibregl-ctrl-attrib {
+[data-theme='dark'] .maplibregl-ctrl-attrib.maplibregl-compact {
   background: rgba(19, 30, 53, 0.7) !important;
 }
