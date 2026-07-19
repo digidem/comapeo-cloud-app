@@ -53,6 +53,7 @@ vi.mock('react-map-gl/maplibre', () => ({
   Layer: (props: Record<string, unknown>) => (
     <div data-testid={`mock-layer-${props.id}`} />
   ),
+  AttributionControl: () => null,
 }));
 
 describe('MapScreen', () => {
