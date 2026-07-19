@@ -73,7 +73,7 @@ All source files must maintain 80% coverage across lines, functions, branches, a
 ```
 src/
   app/          # App entry, providers, router, global styles
-  screens/      # Route-level page components (one folder per screen)
+  screens/      # Route-level page components (flat files; a folder when a screen has sub-parts)
   components/
     ui/         # Base UI primitives (Button, Input, Card, etc.)
     layout/     # Layout components (AppShell, Topbar, PrimaryNav)
@@ -83,7 +83,6 @@ src/
     schemas/    # Valibot schemas for API validation
   stores/       # Zustand stores
   i18n/         # Internationalization setup
-  types/        # TypeScript type definitions
 tests/
   unit/         # Unit tests (mirrors src/ structure)
   e2e/          # Playwright E2E tests
@@ -146,7 +145,7 @@ Managed by Prettier via `@trivago/prettier-plugin-sort-imports`:
 
 ## Design System
 
-Follow `design/prototype/DESIGN.md` for all visual decisions:
+Follow `DESIGN_OVERVIEW.md` for all visual decisions:
 
 - Font: **Inter** (not Rubik)
 - Primary: Confident Bright Blue `#1F6FFF`
@@ -303,11 +302,12 @@ This ensures the user can always preview the current state of the codebase in re
 ### Commands
 
 ```bash
-# Start dev server (background)
-cd /home/coder/comapeo-cloud-app && npm run dev
+# Preferred: starts Vite, waits for it to be ready, then opens the tunnel
+npm run dev:tunnel        # optional port arg, e.g. npm run dev:tunnel 5174
 
-# Create quick tunnel (background)
-cloudflared tunnel --url http://localhost:5173
+# Manual equivalent, from the repo root
+npm run dev                                          # dev server on :5173
+cloudflared tunnel --url http://localhost:5173       # quick tunnel
 ```
 
 ### Notes
