@@ -314,8 +314,22 @@ export function MapAuthoringCanvas({
     }
   }, [mapRef, isDrawing]);
 
+  const sectionRef = useRef<HTMLElement>(null);
+
+  // Start compact attribution collapsed — MapLibre initializes with
+  // both `maplibregl-compact` and `maplibregl-compact-show`, which shows
+  // the full text. Remove `compact-show` after load so the info button
+  // starts collapsed and expands on click.
+  const handleMapLoad = useCallback(() => {
+    const el = sectionRef.current?.querySelector(
+      '.maplibregl-ctrl-attrib.maplibregl-compact',
+    );
+    el?.classList.remove('maplibregl-compact-show');
+  }, []);
+
   return (
     <section
+      ref={sectionRef}
       role="region"
       aria-label={intl.formatMessage(mapMessages.canvasAria)}
       data-testid="map-authoring-canvas"
@@ -327,6 +341,7 @@ export function MapAuthoringCanvas({
         mapStyle={mapStyle}
         style={MAP_STYLE}
         attributionControl={false}
+        onLoad={handleMapLoad}
       >
         <AttributionControl position="top-left" compact />
         {bboxFeature && (
