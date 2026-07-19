@@ -298,6 +298,11 @@ export const mapMessages = defineMessages({
     defaultMessage:
       'Not enough storage space. {available} available, {estimated} estimated.',
   },
+  downloadConcurrencyWarning: {
+    id: 'map.download.concurrencyWarning',
+    defaultMessage:
+      'Another map is currently downloading. Please wait for it to finish before starting a new download.',
+  },
   downloadEstimatedSize: {
     id: 'map.download.estimatedSize',
     defaultMessage: 'Estimated size: {size}',

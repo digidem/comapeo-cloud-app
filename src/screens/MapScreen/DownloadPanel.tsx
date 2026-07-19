@@ -42,6 +42,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const [isStartingRetry, setIsStartingRetry] = useState(false);
   const [exportReady, setExportReady] = useState(false);
   const [exportMissing, setExportMissing] = useState(false);
+  const [concurrencyWarning, setConcurrencyWarning] = useState(false);
   const storageBypassedRef = useRef(false);
   const exportUrlRef = useRef<string | null>(null);
   const exportBlobNameRef = useRef<string>('');
@@ -330,12 +331,13 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
               const db = getDb();
               const stored = await db.maps.get(map.id);
               if (!stored?.smpBlob) return;
-              url = URL.createObjectURL(stored.smpBlob);
-              exportUrlRef.current = url;
+              const newUrl = URL.createObjectURL(stored.smpBlob);
+              exportUrlRef.current = newUrl;
+              url = newUrl;
               // Auto-revoke after 5s to avoid leaking
               setTimeout(() => {
-                if (exportUrlRef.current === url) {
-                  URL.revokeObjectURL(url);
+                if (exportUrlRef.current === newUrl) {
+                  URL.revokeObjectURL(newUrl);
                   exportUrlRef.current = null;
                 }
               }, 5000);
