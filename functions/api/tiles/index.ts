@@ -30,8 +30,8 @@
  *   • Open proxy abuse — hostname allowlist prevents arbitrary fetches.
  *   • SSRF — private IP blocking + redirect suppression prevent probing
  *     internal networks or cloud metadata endpoints (e.g. 169.254.169.254).
- *   • Data exfiltration — same-origin response with CORS headers means
- *     only our domain can read tile data in the browser.
+ *   • Data exfiltration — same-origin response means tile data stays
+ *     scoped to our domain in the browser.
  *   • Resource exhaustion — 5 MB body + 10 s timeout cap upstream cost.
  *
  * Known limitations:
@@ -40,7 +40,9 @@
  *   • DNS rebinding could theoretically bypass the allowlist if a domain
  *     resolves to an internal IP after the hostname check. The hostname
  *     check runs before fetch, but DNS is resolved by the runtime at
- *     fetch time. Mitigated by the private-IP block on the resolved IP.
+ *     fetch time. Note: the private-IP check only inspects the hostname
+ *     string, not the resolved IP address, so DNS rebinding is not fully
+ *     mitigated by the current code.
  *   • Bare public IPs are blocked, but an attacker with a domain pointing
  *     to a public server hosting malicious tiles can still be proxied
  *     (as long as the hostname matches the allowlist).
@@ -54,7 +56,8 @@
  *   • *.arcgisonline.com              (ArcGIS / Esri basemaps)
  *   • *.openstreetmap.fr              (French OSM tile mirrors)
  *   • tiles-{s}.openstreetmap.fr      (French OSM subdomain sharding)
- *   • s3.amazonaws.com                (AWS-hosted tile buckets)
+ *   • tile.opentopomap.org            (OpenTopoMap tiles)
+ *   • basemap.nationalmap.gov         (USGS National Map basemaps)
  *   • tiles.maps.geoportail.gouv.fr   (IGN / Geoportail tiles)
  *   • api.mapbox.com                  (Mapbox API)
  *   • tiles.mapbox.com                (Mapbox tile CDN)
@@ -122,8 +125,10 @@ const ALLOWED_HOSTNAMES = new Set([
   'c.tile.openstreetmap.de',
   'gbs-{s}.openstreetmap.fr',
   'tiles.maps.geoportail.gouv.fr',
-  // AWS-hosted tile buckets
-  's3.amazonaws.com',
+  // OpenTopoMap
+  'tile.opentopomap.org',
+  // USGS National Map
+  'basemap.nationalmap.gov',
 ]);
 
 // Wildcard subdomain patterns (e.g. *.tile.openstreetmap.org).
@@ -293,6 +298,20 @@ export const onRequest: PagesFunction = async (context) => {
       return new Response('Response too large', { status: 502 });
     }
 
+    // MIME type enforcement — only allow known tile content types.
+    const ALLOWED_MIME_TYPES = new Set([
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'application/octet-stream',
+      'application/vnd.mapbox-vector-tile',
+    ]);
+    const upstreamContentType =
+      upstreamResponse.headers.get('Content-Type')?.split(';')[0]?.trim() ?? '';
+    if (upstreamContentType && !ALLOWED_MIME_TYPES.has(upstreamContentType)) {
+      return new Response('Unsupported content type', { status: 502 });
+    }
+
     // Stream with size limit
     const reader = upstreamResponse.body?.getReader();
     if (!reader) {
@@ -329,6 +348,7 @@ export const onRequest: PagesFunction = async (context) => {
           'application/octet-stream',
         'Cache-Control': 'public, max-age=86400, s-maxage=604800',
         'Access-Control-Allow-Origin': '*',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
 
