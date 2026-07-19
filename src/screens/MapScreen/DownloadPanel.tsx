@@ -267,11 +267,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
             The saved map package is missing or unreadable. You can regenerate
             it.
           </p>
-          <Button
-            size="sm"
-            className="w-full"
-            onClick={handleDownload}
-          >
+          <Button size="sm" className="w-full" onClick={handleDownload}>
             {intl.formatMessage(mapMessages.downloadRetry)}
           </Button>
         </div>
