@@ -234,4 +234,22 @@ describe('MapContainer', () => {
     expect(lastProps).toBeTruthy();
     expect(lastProps!.cursor).toBe('crosshair');
   });
+
+  it('passes compact attributionControl to the Map', () => {
+    render(<MapContainer />);
+    const lastProps = mapProps[mapProps.length - 1];
+    expect(lastProps).toBeTruthy();
+    expect(lastProps!.attributionControl).toEqual({
+      compact: true,
+    });
+  });
+
+  it('allows callers to override attributionControl via passthrough', () => {
+    render(<MapContainer attributionControl={{ compact: false }} />);
+    const lastProps = mapProps[mapProps.length - 1];
+    expect(lastProps).toBeTruthy();
+    expect(lastProps!.attributionControl).toEqual({
+      compact: false,
+    });
+  });
 });

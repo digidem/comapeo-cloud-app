@@ -190,6 +190,7 @@ function MapContainer({
         mapStyle={mapStyle}
         interactive={interactive}
         onLoad={onLoad}
+        attributionControl={{ compact: true }}
         {...mapPassthrough}
       >
         {children}
