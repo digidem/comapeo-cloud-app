@@ -2,6 +2,7 @@ import { download } from 'styled-map-package-api/download';
 
 import { getDb } from '@/lib/db';
 import type { SavedMap } from '@/lib/db';
+import { normalizeTileUrl } from '@/lib/map/basemap-utils';
 
 /** Progress snapshot emitted during an SMP download. */
 export interface DownloadProgress {
@@ -34,17 +35,24 @@ export function buildRasterStyleUrl(
   tileUrl: string,
   scheme: 'xyz' | 'tms',
 ): string {
+  // Normalize ELI-style placeholders ({zoom}, {-y}, {switch:a,b}) to
+  // MapLibre format ({z}, {y}) so the SMP library can consume them.
+  const normalizedUrls = normalizeTileUrl(tileUrl);
+
   // Route tile requests through our same-origin proxy to bypass CORS
   // restrictions on CDNs that don't return Access-Control-Allow-Origin.
   // encodeURIComponent would encode {z}/{x}/{y} placeholders, but the SMP
   // library needs literal braces for its template substitution. Decode them.
-  const proxyTileUrl = `/api/tiles?url=${encodeURIComponent(tileUrl).replace(/%7B/g, '{').replace(/%7D/g, '}')}`;
+  const tiles = normalizedUrls.map(
+    (url) =>
+      `/api/tiles?url=${encodeURIComponent(url).replace(/%7B/g, '{').replace(/%7D/g, '}')}`,
+  );
   const style = {
     version: 8,
     sources: {
       raster: {
         type: 'raster',
-        tiles: [proxyTileUrl],
+        tiles,
         tileSize: 256,
         scheme,
       },

@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import {
+  buildRasterStyleUrl,
   downloadSmp,
   estimateDownloadSize,
   formatBytes,
@@ -77,6 +78,68 @@ describe('formatBytes', () => {
 
   it('formats GB', () => {
     expect(formatBytes(2.5 * 1024 * 1024 * 1024)).toBe('2.5 GB');
+  });
+});
+
+describe('buildRasterStyleUrl', () => {
+  let originalCreateObjectURL: typeof URL.createObjectURL;
+  let capturedStyle: string;
+
+  beforeEach(() => {
+    capturedStyle = '';
+    originalCreateObjectURL = URL.createObjectURL;
+    URL.createObjectURL = (blob: Blob | MediaSource) => {
+      // Capture the blob text for assertions
+      void (blob as Blob).text().then((t: string) => {
+        capturedStyle = t;
+      });
+      return 'blob:test';
+    };
+  });
+
+  afterEach(() => {
+    URL.createObjectURL = originalCreateObjectURL;
+  });
+
+  it('produces a valid MapLibre style with {z}/{x}/{y} template', async () => {
+    buildRasterStyleUrl('https://tiles.example.com/{z}/{x}/{y}.png', 'xyz');
+    // Let the microtask resolve
+    await new Promise((r) => setTimeout(r, 0));
+    const style = JSON.parse(capturedStyle) as {
+      sources: { raster: { tiles: string[] } };
+    };
+    expect(style.sources.raster.tiles).toHaveLength(1);
+    expect(style.sources.raster.tiles[0]).toContain('{z}');
+    expect(style.sources.raster.tiles[0]).toContain('{x}');
+    expect(style.sources.raster.tiles[0]).toContain('{y}');
+  });
+
+  it('normalizes {zoom} to {z}', async () => {
+    buildRasterStyleUrl('https://tiles.example.com/{zoom}/{x}/{y}.png', 'xyz');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(capturedStyle).toContain('{z}');
+    expect(capturedStyle).not.toContain('{zoom}');
+  });
+
+  it('normalizes {-y} to {y}', async () => {
+    buildRasterStyleUrl('https://tiles.example.com/{z}/{x}/{-y}.png', 'tms');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(capturedStyle).toContain('{y}');
+    expect(capturedStyle).not.toContain('{-y}');
+  });
+
+  it('expands {switch:a,b} into multiple tile URLs', async () => {
+    buildRasterStyleUrl(
+      'https://{switch:a,b}.tiles.example.com/{z}/{x}/{y}.png',
+      'xyz',
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    const style = JSON.parse(capturedStyle) as {
+      sources: { raster: { tiles: string[] } };
+    };
+    expect(style.sources.raster.tiles).toHaveLength(2);
+    expect(style.sources.raster.tiles[0]).toContain('a.tiles');
+    expect(style.sources.raster.tiles[1]).toContain('b.tiles');
   });
 });
 
