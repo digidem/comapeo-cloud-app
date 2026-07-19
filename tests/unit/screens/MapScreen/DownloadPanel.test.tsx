@@ -105,6 +105,12 @@ describe('DownloadPanel', () => {
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledOnce();
     });
+
+    // storageWarning must be cleared so the stale warning doesn't block the
+    // ready/export card after the download finishes.
+    expect(
+      screen.queryByTestId('download-storage-warning'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows stuck downloading state when map status is downloading but mutation is not pending', () => {

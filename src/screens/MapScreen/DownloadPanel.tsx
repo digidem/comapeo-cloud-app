@@ -275,6 +275,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
             size="sm"
             onClick={() => {
               storageBypassedRef.current = true;
+              setStorageWarning(null);
               void handleDownload();
             }}
           >
