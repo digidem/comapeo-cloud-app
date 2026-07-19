@@ -315,10 +315,27 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           className="w-full"
           disabled={!exportReady}
           loading={!exportReady}
-          onClick={() => {
-            // Synchronous click using pre-loaded blob URL — no async handoff
-            const url = exportUrlRef.current;
-            if (!url) return;
+          onClick={async () => {
+            if (!exportReady) return;
+
+            // Reuse existing URL if available
+            let url = exportUrlRef.current;
+            if (!url) {
+              // Load blob from IndexedDB and create object URL on demand
+              const db = getDb();
+              const stored = await db.maps.get(map.id);
+              if (!stored?.smpBlob) return;
+              url = URL.createObjectURL(stored.smpBlob);
+              exportUrlRef.current = url;
+              // Auto-revoke after 5s to avoid leaking
+              setTimeout(() => {
+                if (exportUrlRef.current === url) {
+                  URL.revokeObjectURL(url);
+                  exportUrlRef.current = null;
+                }
+              }, 5000);
+            }
+
             const a = document.createElement('a');
             a.href = url;
             a.download = exportBlobNameRef.current;
