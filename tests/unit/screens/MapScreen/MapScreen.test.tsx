@@ -26,6 +26,7 @@ vi.mock('@tanstack/react-router', async () => {
 });
 
 const mapProps: Array<Record<string, unknown>> = [];
+const attributionControlProps: Array<Record<string, unknown>> = [];
 
 vi.mock('react-map-gl/maplibre', () => ({
   default: React.forwardRef<HTMLDivElement, Record<string, unknown>>(
@@ -53,7 +54,10 @@ vi.mock('react-map-gl/maplibre', () => ({
   Layer: (props: Record<string, unknown>) => (
     <div data-testid={`mock-layer-${props.id}`} />
   ),
-  AttributionControl: () => null,
+  AttributionControl: (props: Record<string, unknown>) => {
+    attributionControlProps.push(props);
+    return null;
+  },
 }));
 
 describe('MapScreen', () => {
@@ -61,6 +65,7 @@ describe('MapScreen', () => {
     await resetDb();
     localStorage.clear();
     mapProps.length = 0;
+    attributionControlProps.length = 0;
     useProjectStore.setState({ selectedProjectId: 'project-1' });
     await getDb().projects.add({
       localId: 'project-1',
@@ -87,6 +92,18 @@ describe('MapScreen', () => {
     expect(
       screen.getByRole('button', { name: 'Draw bounds' }),
     ).toBeInTheDocument();
+  });
+
+  it('moves compact map attribution to the bottom-left', async () => {
+    render(<MapScreen />);
+
+    await screen.findByTestId('mock-authoring-map');
+
+    expect(mapProps.at(-1)).toMatchObject({ attributionControl: false });
+    expect(attributionControlProps.at(-1)).toMatchObject({
+      compact: true,
+      position: 'bottom-left',
+    });
   });
 
   describe('mobile settings sheet', () => {

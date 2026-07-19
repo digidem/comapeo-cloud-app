@@ -5,7 +5,12 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { useIntl } from 'react-intl';
-import Map, { Layer, type MapRef, Source } from 'react-map-gl/maplibre';
+import Map, {
+  AttributionControl,
+  Layer,
+  type MapRef,
+  Source,
+} from 'react-map-gl/maplibre';
 
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
@@ -321,7 +326,9 @@ export function MapAuthoringCanvas({
         initialViewState={INITIAL_VIEW_STATE}
         mapStyle={mapStyle}
         style={MAP_STYLE}
+        attributionControl={false}
       >
+        <AttributionControl position="bottom-left" compact />
         {bboxFeature && (
           <Source id="authoring-bbox" type="geojson" data={bboxFeature}>
             <Layer
