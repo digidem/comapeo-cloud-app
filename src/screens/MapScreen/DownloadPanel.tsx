@@ -255,6 +255,36 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     );
   }
 
+  // ---- Storage warning (must come before ready/error states so it's visible when quota blocks retry) ----
+  if (storageWarning) {
+    return (
+      <div
+        className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
+        data-testid="download-storage-warning"
+      >
+        <p className="text-sm text-warning">{storageWarning}</p>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setStorageWarning(null)}
+          >
+            {intl.formatMessage(mapMessages.downloadCancel)}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              storageBypassedRef.current = true;
+              void handleDownload();
+            }}
+          >
+            {intl.formatMessage(mapMessages.downloadTryAnyway)}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // ---- Ready state (download complete, SMP stored in Dexie) ----
   if (map.status === 'ready' && !downloadMap.isPending) {
     // Blob missing after load — offer regenerate instead of stuck loading
@@ -337,36 +367,6 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
             ? intl.formatMessage(mapMessages.downloadMaxRetries)
             : intl.formatMessage(mapMessages.downloadRetry)}
         </Button>
-      </div>
-    );
-  }
-
-  // ---- Storage warning ----
-  if (storageWarning) {
-    return (
-      <div
-        className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
-        data-testid="download-storage-warning"
-      >
-        <p className="text-sm text-warning">{storageWarning}</p>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setStorageWarning(null)}
-          >
-            {intl.formatMessage(mapMessages.downloadCancel)}
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              storageBypassedRef.current = true;
-              void handleDownload();
-            }}
-          >
-            {intl.formatMessage(mapMessages.downloadTryAnyway)}
-          </Button>
-        </div>
       </div>
     );
   }

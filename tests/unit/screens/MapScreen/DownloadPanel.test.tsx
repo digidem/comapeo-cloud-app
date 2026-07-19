@@ -290,6 +290,29 @@ describe('DownloadPanel', () => {
     expect(screen.queryByTestId('download-error')).not.toBeInTheDocument();
   });
 
+  it('shows storage warning even when map status is error', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(smpDownload, 'checkStorageQuota').mockResolvedValue({
+      available: 0,
+      sufficient: false,
+    });
+    const map = createMockMap({
+      maxZoom: 2,
+      status: 'error',
+      errorMessage: 'Prior failure',
+    });
+    render(<DownloadPanel map={map} />);
+    // Initial render shows the error state (storageWarning is null)
+    expect(screen.getByTestId('download-error')).toBeInTheDocument();
+    // Clicking retry triggers handleDownload → quota check fails → storageWarning is set
+    // The storage warning should now appear, replacing the error state
+    await user.click(screen.getByRole('button', { name: /retry/i }));
+    expect(
+      await screen.findByTestId('download-storage-warning'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('download-error')).not.toBeInTheDocument();
+  });
+
   it('shows non-large download button that triggers download directly', async () => {
     const user = userEvent.setup();
     vi.spyOn(smpDownload, 'checkStorageQuota').mockResolvedValue({
