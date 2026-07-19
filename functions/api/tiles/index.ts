@@ -20,7 +20,7 @@
  *      redirect bounce (e.g. 302 → internal metadata endpoint).
  *   4. Size / timeout caps – 5 MB body limit and 10 s timeout bound
  *      resource consumption from upstream abuse.
- *   5. Rate limiting       – Per-IP sliding window (100 req / 60 s)
+ *   5. Rate limiting       – Per-IP sliding window (500 req / 60 s)
  *      with lazy cleanup to throttle abuse from any single client.
  *
  * THREAT MODEL
@@ -47,11 +47,16 @@
  *
  * SUPPORTED TILE PROVIDERS
  * ========================
- *   • basemaps.cartocdn.com        (CartoDB basemaps)
- *   • tile.openstreetmap.org       (OSM raster tiles)
- *   • a/b/c.tile.openstreetmap.org (OSM subdomain sharding)
- *   • api.mapbox.com               (Mapbox API)
- *   • tiles.mapbox.com             (Mapbox tile CDN)
+ *   • basemaps.cartocdn.com           (CartoDB basemaps)
+ *   • tile.openstreetmap.org          (OSM raster tiles)
+ *   • a/b/c.tile.openstreetmap.org    (OSM subdomain sharding)
+ *   • *.arcgisonline.com              (ArcGIS / Esri basemaps)
+ *   • *.openstreetmap.fr              (French OSM tile mirrors)
+ *   • tiles-{s}.openstreetmap.fr      (French OSM subdomain sharding)
+ *   • s3.amazonaws.com                (AWS-hosted tile buckets)
+ *   • tiles.maps.geoportail.gouv.fr   (IGN / Geoportail tiles)
+ *   • api.mapbox.com                  (Mapbox API)
+ *   • tiles.mapbox.com                (Mapbox tile CDN)
  *
  * CONFIGURATION
  * =============
@@ -106,11 +111,25 @@ const ALLOWED_HOSTNAMES = new Set([
   'a.tile.openstreetmap.org',
   'b.tile.openstreetmap.org',
   'c.tile.openstreetmap.org',
+  // ArcGIS / Esri basemaps
+  'server.arcgisonline.com',
+  'services.arcgisonline.com',
+  // French OSM tile mirrors
+  'tiles-{s}.openstreetmap.fr',
+  'a.tile.openstreetmap.de',
+  'b.tile.openstreetmap.de',
+  'c.tile.openstreetmap.de',
+  'gbs-{s}.openstreetmap.fr',
+  'tiles.maps.geoportail.gouv.fr',
+  // AWS-hosted tile buckets
+  's3.amazonaws.com',
 ]);
 
 // Wildcard subdomain patterns (e.g. *.tile.openstreetmap.org).
 const ALLOWED_HOSTNAME_PATTERNS: RegExp[] = [
   /^[a-z]\.tile\.openstreetmap\.org$/i,
+  /^[\w-]+\.arcgisonline\.com$/i,
+  /^[\w-]+\.openstreetmap\.fr$/i,
 ];
 
 function isHostnameAllowed(hostname: string): boolean {
@@ -120,11 +139,13 @@ function isHostnameAllowed(hostname: string): boolean {
 }
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
-// Simple in-memory sliding-window counter: max 100 requests per 60 s per IP.
+// Simple in-memory sliding-window counter: max 500 requests per 60 s per IP.
+// A single tile download at zoom 14 can produce 200+ requests, so the limit
+// is set high enough for legitimate use while still throttling abuse.
 // This runs on a single Cloudflare isolate per request; a shared-nothing
 // approach is acceptable for a best-effort throttle. Map entries are lazily
 // cleaned up when the window expires.
-const RATE_LIMIT_MAX = 100;
+const RATE_LIMIT_MAX = 500;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
