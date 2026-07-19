@@ -372,4 +372,9 @@ export const mapMessages = defineMessages({
     id: 'map.download.unknownError',
     defaultMessage: 'Unknown error',
   },
+  downloadSkippedWarning: {
+    id: 'map.download.skippedWarning',
+    defaultMessage:
+      '{n} tiles could not be downloaded. The package may be incomplete.',
+  },
 });

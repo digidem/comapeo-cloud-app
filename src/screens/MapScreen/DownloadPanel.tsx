@@ -219,6 +219,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   if (downloadMap.isPending && !isDownloading) {
     return (
       <div className="flex flex-col gap-3" data-testid="download-pending">
+        <span className="text-sm text-text-muted">{map.name}</span>
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-text">
             {intl.formatMessage(mapMessages.downloadStarting)}
@@ -316,6 +317,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           className="flex flex-col gap-3 rounded-card border border-error/30 bg-error/5 p-3"
           data-testid="download-ready-missing"
         >
+          <span className="text-sm text-text-muted">{map.name}</span>
           <p className="text-sm text-error">
             {intl.formatMessage(mapMessages.downloadMissing)}
           </p>
@@ -330,6 +332,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         className="flex flex-col gap-3 rounded-card border border-success/30 bg-success/5 p-3"
         data-testid="download-ready"
       >
+        <span className="text-sm text-text-muted">{map.name}</span>
         <p className="text-sm text-success">
           {intl.formatMessage(mapMessages.downloadReady, {
             size: formatBytes(map.smpSize ?? 0),
@@ -400,6 +403,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         className="flex flex-col gap-3 rounded-card border border-error/30 bg-error/5 p-3"
         data-testid="download-error"
       >
+        <span className="text-sm text-text-muted">{map.name}</span>
         <p className="text-sm text-error">
           {intl.formatMessage(mapMessages.downloadFailed, {
             error: errorMessage,
@@ -427,6 +431,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
         data-testid="download-storage-warning"
       >
+        <span className="text-sm text-text-muted">{map.name}</span>
         <p className="text-sm text-warning">{storageWarning}</p>
         <div className="flex gap-2">
           <Button
@@ -457,6 +462,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
         data-testid="download-concurrency-warning"
       >
+        <span className="text-sm text-text-muted">{map.name}</span>
         <p className="text-sm text-warning">
           {intl.formatMessage(mapMessages.downloadConcurrencyWarning)}
         </p>
