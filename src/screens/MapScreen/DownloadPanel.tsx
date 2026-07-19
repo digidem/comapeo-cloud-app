@@ -111,20 +111,27 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       return;
     }
 
+    // Acquire concurrency lock BEFORE any await to prevent two panels
+    // from both passing the size check and starting concurrently.
+    const controller = new AbortController();
+    abortRef.current = controller;
+    activeDownloads.set(map.id, controller);
+
     // Storage quota check — gate unless user bypassed
     if (!storageBypassedRef.current) {
       try {
         const { sufficient, available } =
           await checkStorageQuota(estimatedBytes);
         if (!sufficient && available >= 0) {
+          activeDownloads.delete(map.id);
+          pendingRef.current = false;
+          isRetryRef.current = false;
           setStorageWarning(
             intl.formatMessage(mapMessages.downloadStorageWarning, {
               available: formatBytes(available),
               estimated: estimatedFormatted,
             }),
           );
-          pendingRef.current = false;
-          isRetryRef.current = false; // Don't latch retry flag on early return
           return;
         }
       } catch {
@@ -137,10 +144,6 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       setRetryCount((n) => n + 1);
       isRetryRef.current = false;
     }
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-    activeDownloads.set(map.id, controller);
 
     try {
       await downloadMap.mutateAsync({
@@ -419,38 +422,6 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
             ? intl.formatMessage(mapMessages.downloadMaxRetries)
             : intl.formatMessage(mapMessages.downloadRetry)}
         </Button>
-      </div>
-    );
-  }
-
-
-  // ---- Storage warning ----
-  if (storageWarning) {
-    return (
-      <div
-        className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3"
-        data-testid="download-storage-warning"
-      >
-        <span className="text-sm text-text-muted">{map.name}</span>
-        <p className="text-sm text-warning">{storageWarning}</p>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setStorageWarning(null)}
-          >
-            {intl.formatMessage(mapMessages.downloadCancel)}
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              storageBypassedRef.current = true;
-              void handleDownload();
-            }}
-          >
-            {intl.formatMessage(mapMessages.downloadTryAnyway)}
-          </Button>
-        </div>
       </div>
     );
   }
