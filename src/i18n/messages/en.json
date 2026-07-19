@@ -1028,24 +1028,14 @@
   "map.download.cancel": {
     "defaultMessage": "Cancel"
   },
+  "map.download.concurrencyWarning": {
+    "defaultMessage": "Another map is currently downloading. Please wait for it to finish before starting a new download."
+  },
   "map.download.confirmLarge": {
     "defaultMessage": "This map is estimated at {size}. It may take a while. Continue?"
   },
   "map.download.error": {
     "defaultMessage": "Download failed: {error}"
-  },
-  "map.download.interrupted": {
-    "defaultMessage": "A previous download was interrupted. You can try again."
-  },
-  "map.download.missing": {
-    "defaultMessage": "The saved map package is missing or unreadable. You can regenerate it."
-  },
-  "map.download.unknownError": {
-    "defaultMessage": "Unknown error"
-  },
-
-  "map.download.concurrencyWarning": {
-    "defaultMessage": "Another map is currently downloading. Please wait for it to finish before starting a new download."
   },
   "map.download.estimatedSize": {
     "defaultMessage": "Estimated size: {size}"
@@ -1053,8 +1043,14 @@
   "map.download.export": {
     "defaultMessage": "Download SMP File"
   },
+  "map.download.interrupted": {
+    "defaultMessage": "A previous download was interrupted. You can try again."
+  },
   "map.download.maxRetries": {
     "defaultMessage": "Max retries reached"
+  },
+  "map.download.missing": {
+    "defaultMessage": "The saved map package is missing or unreadable. You can regenerate it."
   },
   "map.download.progress": {
     "defaultMessage": "Downloading… {downloaded} of {total} tiles ({bytes})"
@@ -1065,6 +1061,9 @@
   "map.download.retry": {
     "defaultMessage": "Retry"
   },
+  "map.download.skippedWarning": {
+    "defaultMessage": "{n} tiles could not be downloaded. The package may be incomplete."
+  },
   "map.download.starting": {
     "defaultMessage": "Starting download…"
   },
@@ -1073,6 +1072,9 @@
   },
   "map.download.tryAnyway": {
     "defaultMessage": "Try anyway"
+  },
+  "map.download.unknownError": {
+    "defaultMessage": "Unknown error"
   },
   "map.nameDialog.cancel": {
     "defaultMessage": "Cancel"
