@@ -65,7 +65,8 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           setExportMissing(true);
         }
       } catch {
-        // Blob unavailable — the export handler will surface the error
+        // Blob read failed — show regenerate option
+        setExportMissing(true);
       }
     })();
     return () => {
@@ -76,7 +77,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       }
       setExportReady(false);
     };
-  }, [map.id, map.name, map.status]);
+  }, [map.id, map.name, map.status, map.smpSize]);
 
   // --- Cancel on unmount ---
   useEffect(() => {
