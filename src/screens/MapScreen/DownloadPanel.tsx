@@ -101,6 +101,14 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     setIsStartingRetry(false);
     pendingRef.current = true; // Set BEFORE async quota check to prevent duplicates
 
+    // Concurrency policy: only one map download may run at a time
+    if (activeDownloads.size > 0 && !activeDownloads.has(map.id)) {
+      pendingRef.current = false;
+      isRetryRef.current = false;
+      setConcurrencyWarning(true);
+      return;
+    }
+
     // Storage quota check — gate unless user bypassed
     if (!storageBypassedRef.current) {
       try {
@@ -328,19 +336,27 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
             let url = exportUrlRef.current;
             if (!url) {
               // Load blob from IndexedDB and create object URL on demand
-              const db = getDb();
-              const stored = await db.maps.get(map.id);
-              if (!stored?.smpBlob) return;
-              const newUrl = URL.createObjectURL(stored.smpBlob);
-              exportUrlRef.current = newUrl;
-              url = newUrl;
-              // Auto-revoke after 5s to avoid leaking
-              setTimeout(() => {
-                if (exportUrlRef.current === newUrl) {
-                  URL.revokeObjectURL(newUrl);
-                  exportUrlRef.current = null;
+              try {
+                const db = getDb();
+                const stored = await db.maps.get(map.id);
+                if (!stored?.smpBlob) {
+                  setExportMissing(true);
+                  return;
                 }
-              }, 5000);
+                const newUrl = URL.createObjectURL(stored.smpBlob);
+                exportUrlRef.current = newUrl;
+                url = newUrl;
+                // Auto-revoke after 5s to avoid leaking
+                setTimeout(() => {
+                  if (exportUrlRef.current === newUrl) {
+                    URL.revokeObjectURL(newUrl);
+                    exportUrlRef.current = null;
+                  }
+                }, 5000);
+              } catch {
+                setExportMissing(true);
+                return;
+              }
             }
 
             const a = document.createElement('a');
