@@ -316,6 +316,7 @@
   "map.download.interrupted": "Um download anterior foi interrompido. Você pode tentar novamente.",
   "map.download.missing": "O pacote do mapa salvo está faltando ou é ilegível. Você pode regenerá-lo.",
   "map.download.unknownError": "Erro desconhecido",
+  "map.download.concurrencyWarning": "Outro mapa está sendo baixado. Por favor aguarde até que termine antes de iniciar um novo download.",
   "map.download.estimatedSize": "Tamanho estimado: {size}",
   "map.download.export": "Baixar arquivo SMP",
   "map.download.maxRetries": "Máximo de tentativas atingido",

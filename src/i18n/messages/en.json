@@ -1043,6 +1043,10 @@
   "map.download.unknownError": {
     "defaultMessage": "Unknown error"
   },
+
+  "map.download.concurrencyWarning": {
+    "defaultMessage": "Another map is currently downloading. Please wait for it to finish before starting a new download."
+  },
   "map.download.estimatedSize": {
     "defaultMessage": "Estimated size: {size}"
   },
