@@ -354,4 +354,17 @@ export const mapMessages = defineMessages({
     id: 'map.bounds.frameInstruction',
     defaultMessage: 'Pan and zoom until the area fits inside the frame',
   },
+  downloadInterrupted: {
+    id: 'map.download.interrupted',
+    defaultMessage: 'A previous download was interrupted. You can try again.',
+  },
+  downloadMissing: {
+    id: 'map.download.missing',
+    defaultMessage:
+      'The saved map package is missing or unreadable. You can regenerate it.',
+  },
+  downloadUnknownError: {
+    id: 'map.download.unknownError',
+    defaultMessage: 'Unknown error',
+  },
 });

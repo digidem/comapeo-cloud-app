@@ -1034,6 +1034,15 @@
   "map.download.error": {
     "defaultMessage": "Download failed: {error}"
   },
+  "map.download.interrupted": {
+    "defaultMessage": "A previous download was interrupted. You can try again."
+  },
+  "map.download.missing": {
+    "defaultMessage": "The saved map package is missing or unreadable. You can regenerate it."
+  },
+  "map.download.unknownError": {
+    "defaultMessage": "Unknown error"
+  },
   "map.download.estimatedSize": {
     "defaultMessage": "Estimated size: {size}"
   },

@@ -43,7 +43,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const exportUrlRef = useRef<string | null>(null);
   const exportBlobNameRef = useRef<string>('');
 
-  // Pre-load the blob URL for ready maps so the export click handler is synchronous
+  // Check blob availability in IndexedDB without creating an object URL
   useEffect(() => {
     if (map.status !== 'ready') return;
     let cancelled = false;
@@ -55,9 +55,6 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         const stored = await db.maps.get(map.id);
         if (cancelled) return;
         if (stored?.smpBlob) {
-          // Revoke any previous URL to avoid leaks
-          if (exportUrlRef.current) URL.revokeObjectURL(exportUrlRef.current);
-          exportUrlRef.current = URL.createObjectURL(stored.smpBlob);
           setExportReady(true);
           setExportMissing(false);
         } else {
@@ -65,7 +62,6 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           setExportMissing(true);
         }
       } catch {
-        // Blob read failed — show regenerate option
         setExportMissing(true);
       }
     })();
@@ -188,7 +184,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         data-testid="download-stuck"
       >
         <p className="text-sm text-warning">
-          A previous download was interrupted. You can try again.
+          {intl.formatMessage(mapMessages.downloadInterrupted)}
         </p>
         <Button
           variant="secondary"
@@ -296,8 +292,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           data-testid="download-ready-missing"
         >
           <p className="text-sm text-error">
-            The saved map package is missing or unreadable. You can regenerate
-            it.
+            {intl.formatMessage(mapMessages.downloadMissing)}
           </p>
           <Button size="sm" className="w-full" onClick={handleDownload}>
             {intl.formatMessage(mapMessages.downloadRetry)}
@@ -347,7 +342,8 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     const errorMessage =
       downloadMap.error instanceof Error
         ? downloadMap.error.message
-        : (map.errorMessage ?? 'Unknown error');
+        : (map.errorMessage ??
+          intl.formatMessage(mapMessages.downloadUnknownError));
     return (
       <div
         className="flex flex-col gap-3 rounded-card border border-error/30 bg-error/5 p-3"
@@ -375,6 +371,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   // ---- Main download button state ----
   return (
     <div className="flex flex-col gap-3" data-testid="download-panel">
+      <span className="text-sm text-text-muted">{map.name}</span>
       {showConfirm ? (
         <div className="flex flex-col gap-3 rounded-card border border-warning/30 bg-warning/5 p-3">
           <p className="text-sm text-warning">
