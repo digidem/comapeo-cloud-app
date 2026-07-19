@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
 import { useMapStore } from '@/stores/map-store';
 
@@ -120,11 +121,7 @@ export function useDownloadMap() {
       mapboxAccessToken,
     }: {
       map: SavedMap;
-      onProgress?: (progress: {
-        downloaded: number;
-        total: number;
-        bytes: number;
-      }) => void;
+      onProgress?: (progress: DownloadProgress) => void;
       signal?: AbortSignal;
       mapboxAccessToken?: string;
     }): Promise<string> => {

@@ -1,7 +1,5 @@
 import { download } from 'styled-map-package-api/download';
 
-import { download } from 'styled-map-package-api/download';
-
 import { getDb } from '@/lib/db';
 import type { SavedMap } from '@/lib/db';
 import { normalizeTileUrl } from '@/lib/map/basemap-utils';
@@ -257,6 +255,7 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
   // Collect chunks (NO intermediate merge — build Blob directly from chunks)
   const chunks: Uint8Array[] = [];
   let totalSize = 0;
+  let skippedTiles = 0;
 
   try {
     while (true) {

@@ -313,15 +313,17 @@ export function MapScreen() {
             onDrawModeChange={setDrawMode}
           />
 
-          <div className="absolute bottom-4 left-4 flex gap-2 lg:hidden">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setSettingsOpen(true)}
-            >
-              {intl.formatMessage(mapMessages.settings)}
-            </Button>
-          </div>
+          {drawMode !== 'draw_rectangle' && (
+            <div className="absolute bottom-4 left-4 flex gap-2 lg:hidden">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setSettingsOpen(true)}
+              >
+                {intl.formatMessage(mapMessages.settings)}
+              </Button>
+            </div>
+          )}
           <div className="absolute top-4 right-3 z-10">
             <DrawBoundsControl
               drawMode={drawMode}
@@ -386,11 +388,13 @@ export function MapScreen() {
               </button>
             </div>
           ) : null}
-          <div className="absolute bottom-4 right-4 lg:hidden">
-            <Button size="sm" onClick={openNameDialog}>
-              {intl.formatMessage(mapMessages.saveMap)}
-            </Button>
-          </div>
+          {drawMode !== 'draw_rectangle' && (
+            <div className="absolute bottom-4 right-4 lg:hidden">
+              <Button size="sm" onClick={openNameDialog}>
+                {intl.formatMessage(mapMessages.saveMap)}
+              </Button>
+            </div>
+          )}
         </div>
 
         {isDesktop ? (
