@@ -323,6 +323,7 @@
   "map.download.progress": "Baixando… {downloaded} de {total} tiles ({bytes})",
   "map.download.ready": "Mapa baixado com sucesso ({size})",
   "map.download.retry": "Tentar novamente",
+  "map.download.skippedWarning": "{n} tiles não puderam ser baixados. O pacote pode estar incompleto.",
   "map.download.starting": "Iniciando download…",
   "map.download.storageWarning": "Espaço de armazenamento insuficiente. {available} disponível, {estimated} estimado.",
   "map.download.tryAnyway": "Tentar mesmo assim",

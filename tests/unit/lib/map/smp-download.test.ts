@@ -164,6 +164,7 @@ describe('downloadSmp', () => {
       smpSize: 3,
       status: 'ready',
       errorMessage: undefined,
+      updatedAt: expect.any(String),
     });
   });
 
@@ -192,6 +193,7 @@ describe('downloadSmp', () => {
     expect(updateSpy).toHaveBeenLastCalledWith('map-1', {
       errorMessage: 'Storage error: Quota exceeded while saving blob',
       status: 'error',
+      updatedAt: expect.any(String),
     });
   });
 });

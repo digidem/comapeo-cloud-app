@@ -323,6 +323,7 @@
   "map.download.progress": "Descargando… {downloaded} de {total} teselas ({bytes})",
   "map.download.ready": "Mapa descargado exitosamente ({size})",
   "map.download.retry": "Reintentar",
+  "map.download.skippedWarning": "{n} teselas no se pudieron descargar. Es posible que el paquete esté incompleto.",
   "map.download.starting": "Iniciando descarga…",
   "map.download.storageWarning": "Espacio de almacenamiento insuficiente. {available} disponibles, {estimated} estimados.",
   "map.download.tryAnyway": "Intentar de todos modos",
