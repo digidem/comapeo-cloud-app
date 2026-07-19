@@ -14,6 +14,9 @@ import {
 
 import { mapMessages } from './messages';
 
+/** Module-level tracker: only one map download may run at a time. */
+const activeDownloads = new Map<string, AbortController>();
+
 interface DownloadPanelProps {
   map: SavedMap;
   /** Mapbox access token for Mapbox styles (optional). */
@@ -126,6 +129,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    activeDownloads.set(map.id, controller);
 
     try {
       await downloadMap.mutateAsync({
@@ -143,6 +147,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       // Retry budget is tracked in handleRetry only, so cancellations
       // and the initial download never consume it.
     } finally {
+      activeDownloads.delete(map.id);
       pendingRef.current = false;
     }
     setProgress(null);

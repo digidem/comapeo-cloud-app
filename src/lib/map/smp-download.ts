@@ -1,14 +1,41 @@
 import { download } from 'styled-map-package-api/download';
 
+import { download } from 'styled-map-package-api/download';
+
 import { getDb } from '@/lib/db';
 import type { SavedMap } from '@/lib/db';
 import { normalizeTileUrl } from '@/lib/map/basemap-utils';
+
+/**
+ * Best-effort write to IndexedDB with retry for transient storage errors.
+ * Used for status transitions (downloading -> error/draft/ready) where a
+ * failure to persist the status would leave the UI in a stale state.
+ */
+async function recoveryWrite(
+  db: ReturnType<typeof getDb>,
+  mapId: string,
+  updates: Partial<SavedMap>,
+  maxAttempts = 2,
+): Promise<void> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await db.maps.update(mapId, updates);
+      return;
+    } catch {
+      if (attempt < maxAttempts - 1) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+  }
+}
 
 /** Progress snapshot emitted during an SMP download. */
 export interface DownloadProgress {
   downloaded: number;
   total: number;
   bytes: number;
+  skipped: number;
+  warning?: boolean;
 }
 
 export interface DownloadConfig {
@@ -193,33 +220,36 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
           downloaded: progress.tiles.downloaded,
           total: progress.tiles.total,
           bytes: progress.output.totalBytes,
+          skipped: progress.tiles.skipped,
         });
+        if (progress.tiles.skipped > 0) {
+          onProgress?.({
+            downloaded: progress.tiles.downloaded,
+            total: progress.tiles.total,
+            bytes: progress.output.totalBytes,
+            skipped: progress.tiles.skipped,
+            warning: true,
+          });
+        }
       },
     });
     reader = stream.getReader();
   } catch (setupError) {
+    // Revoke synthetic blob URL for raster maps to prevent memory leak
+    if (map.type === 'raster') {
+      URL.revokeObjectURL(styleUrl);
+    }
     // download() or getReader() threw — e.g. bad style URL, missing token.
     // Revert the 'downloading' status so the UI shows the real error.
     const message =
       setupError instanceof Error
         ? setupError.message
         : 'Download setup failed';
-    // Best-effort recovery with retry in case of transient storage error
-    let recoveryAttempts = 0;
-    while (recoveryAttempts < 2) {
-      try {
-        await db.maps.update(map.id, {
-          status: 'error',
-          errorMessage: message,
-        });
-        break;
-      } catch {
-        recoveryAttempts++;
-        if (recoveryAttempts < 2) {
-          await new Promise((r) => setTimeout(r, 200));
-        }
-      }
-    }
+    await recoveryWrite(db, map.id, {
+      status: 'error',
+      errorMessage: message,
+      updatedAt: new Date().toISOString(),
+    });
     throw setupError;
   }
 
@@ -236,41 +266,19 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     }
   } catch (error) {
     if (signal?.aborted) {
-      // Best-effort: restore status to 'draft' with retry in case of transient storage error
-      let recoveryAttempts = 0;
-      while (recoveryAttempts < 2) {
-        try {
-          await db.maps.update(map.id, {
-            status: 'draft',
-            errorMessage: undefined,
-          });
-          break;
-        } catch {
-          recoveryAttempts++;
-          if (recoveryAttempts < 2) {
-            await new Promise((r) => setTimeout(r, 200));
-          }
-        }
-      }
+      await recoveryWrite(db, map.id, {
+        status: 'draft',
+        errorMessage: undefined,
+        updatedAt: new Date().toISOString(),
+      });
       throw new DOMException('Download cancelled', 'AbortError');
     }
     const message = error instanceof Error ? error.message : 'Download failed';
-    // Best-effort recovery with retry in case of transient storage error
-    let recoveryAttempts = 0;
-    while (recoveryAttempts < 2) {
-      try {
-        await db.maps.update(map.id, {
-          status: 'error',
-          errorMessage: message,
-        });
-        break;
-      } catch {
-        recoveryAttempts++;
-        if (recoveryAttempts < 2) {
-          await new Promise((r) => setTimeout(r, 200));
-        }
-      }
-    }
+    await recoveryWrite(db, map.id, {
+      status: 'error',
+      errorMessage: message,
+      updatedAt: new Date().toISOString(),
+    });
     throw error;
   } finally {
     // Clean up synthetic style blob URL for raster maps (success OR error)
@@ -290,22 +298,11 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       blobError instanceof Error
         ? `Failed to create download package: ${blobError.message}`
         : 'Failed to create download package';
-    // Best-effort recovery with retry in case of transient storage error
-    let recoveryAttempts = 0;
-    while (recoveryAttempts < 2) {
-      try {
-        await db.maps.update(map.id, {
-          status: 'error',
-          errorMessage: message,
-        });
-        break;
-      } catch {
-        recoveryAttempts++;
-        if (recoveryAttempts < 2) {
-          await new Promise((r) => setTimeout(r, 200));
-        }
-      }
-    }
+    await recoveryWrite(db, map.id, {
+      status: 'error',
+      errorMessage: message,
+      updatedAt: new Date().toISOString(),
+    });
     throw blobError;
   }
 
