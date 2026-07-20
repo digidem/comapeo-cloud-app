@@ -55,7 +55,7 @@ export function registerSmpProtocol(): void {
   maplibregl.addProtocol('smp', async (request) => {
     try {
       const url = new URL(request.url);
-      // smp://mapId/path → pathname is /mapId/path, split into [_, mapId, ...rest]
+      // smp:///mapId/path → pathname is /mapId/path (triple-slash puts mapId in pathname)
       const segments = url.pathname.split('/').filter(Boolean);
       const mapId = segments[0] ?? '';
       const path = segments.slice(1).join('/');
@@ -82,7 +82,7 @@ export async function resolveSmpStyle(
   mapId: string,
 ): Promise<StyleSpecification | null> {
   try {
-    return (await reader.getStyle(`smp://${mapId}/`)) as StyleSpecification;
+    return (await reader.getStyle(`smp:///${mapId}/`)) as StyleSpecification;
   } catch {
     return null;
   }
