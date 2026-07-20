@@ -60,6 +60,7 @@ const ESTIMATED_TILE_SIZE = 32_000; // 32 KB avg per raster tile
 export function buildRasterStyleUrl(
   tileUrl: string,
   scheme: 'xyz' | 'tms',
+  attribution?: string,
 ): string {
   // Normalize ELI-style placeholders ({zoom}, {-y}, {switch:a,b}) to
   // MapLibre format ({z}, {y}) so the SMP library can consume them.
@@ -88,6 +89,7 @@ export function buildRasterStyleUrl(
         id: 'raster',
         type: 'raster',
         source: 'raster',
+        ...(attribution ? { attribution } : {}),
       },
     ],
   };
@@ -102,7 +104,11 @@ export function buildRasterStyleUrl(
  */
 function getDownloadStyleUrl(map: SavedMap): string {
   if (map.type === 'style') return map.styleUrl;
-  return buildRasterStyleUrl(map.styleUrl, map.scheme ?? 'xyz');
+  return buildRasterStyleUrl(
+    map.styleUrl,
+    map.scheme ?? 'xyz',
+    map.attribution,
+  );
 }
 
 /**
