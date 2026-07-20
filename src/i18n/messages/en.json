@@ -962,6 +962,9 @@
   "map.basemap.label": {
     "defaultMessage": "Basemap"
   },
+  "map.bounds.antimeridianCrossing": {
+    "defaultMessage": "Selection cannot cross the 180° meridian."
+  },
   "map.bounds.areaUpdated": {
     "defaultMessage": "Map area updated"
   },
@@ -987,7 +990,7 @@
     "defaultMessage": "North must be greater than south"
   },
   "map.bounds.invalidLatitude": {
-    "defaultMessage": "Latitude must be between -90 and 90"
+    "defaultMessage": "Latitude must be between -85.0511 and 85.0511"
   },
   "map.bounds.invalidLngOrder": {
     "defaultMessage": "East must be greater than west"
@@ -1021,6 +1024,9 @@
   },
   "map.bounds.west": {
     "defaultMessage": "West"
+  },
+  "map.bounds.zeroAreaBounds": {
+    "defaultMessage": "Selected area has no size. Add more observations first."
   },
   "map.download.button": {
     "defaultMessage": "Download Map"
@@ -1180,6 +1186,9 @@
   },
   "map.stylePicker.customMode": {
     "defaultMessage": "Custom URL"
+  },
+  "map.stylePicker.customUrlHostnameWarning": {
+    "defaultMessage": "This tile provider may not be available for offline downloads. Only supported providers work with map package generation."
   },
   "map.stylePicker.customUrlLabel": {
     "defaultMessage": "Custom URL"

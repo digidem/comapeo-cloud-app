@@ -17,6 +17,7 @@ import { useCreateMap, useMaps } from '@/hooks/useMaps';
 import { useProjects } from '@/hooks/useProjects';
 import type { SavedMap } from '@/lib/db';
 import { DEFAULT_BASEMAP_ID, findBasemap } from '@/lib/map/basemaps';
+import { crossesAntimeridian } from '@/lib/map/bbox-utils';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { uuid } from '@/lib/uuid';
 import { useProjectStore } from '@/stores/project-store';
@@ -137,6 +138,7 @@ export function MapScreen() {
   const previousBboxRef = useRef<[number, number, number, number] | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showUndo, setShowUndo] = useState(false);
+  const [frameError, setFrameError] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -144,10 +146,18 @@ export function MapScreen() {
     };
   }, []);
 
+  function handleDrawModeChange(
+    mode: 'draw_rectangle' | 'simple_select' | null,
+  ) {
+    if (mode === 'draw_rectangle') setFrameError(null);
+    setDrawMode(mode);
+  }
+
   function handleDrawCreate(next: [number, number, number, number]) {
     previousBboxRef.current = bbox;
     setBbox(next);
     setShowUndo(true);
+    setFrameError(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     undoTimerRef.current = setTimeout(() => setShowUndo(false), 6000);
   }
@@ -172,6 +182,11 @@ export function MapScreen() {
       ]),
       map.unproject([w * FRAME_LEFT, h * (FRAME_TOP + FRAME_HEIGHT)]),
     ];
+    const rawLngs = corners.map((c) => c.lng);
+    if (crossesAntimeridian(rawLngs)) {
+      setFrameError(intl.formatMessage(mapMessages.antimeridianCrossing));
+      return;
+    }
     const lngs = corners.map(
       (c) => ((((c.lng + 180) % 360) + 360) % 360) - 180,
     );
@@ -310,7 +325,7 @@ export function MapScreen() {
             mapRef={mapRef}
             drawMode={isDesktop ? drawMode : null}
             onDrawCreate={handleDrawCreate}
-            onDrawModeChange={setDrawMode}
+            onDrawModeChange={handleDrawModeChange}
           />
 
           {drawMode !== 'draw_rectangle' && (
@@ -327,7 +342,7 @@ export function MapScreen() {
           <div className="absolute top-4 right-3 z-10">
             <DrawBoundsControl
               drawMode={drawMode}
-              onDrawModeChange={setDrawMode}
+              onDrawModeChange={handleDrawModeChange}
             />
           </div>
           {drawMode === 'draw_rectangle' ? (
@@ -344,13 +359,21 @@ export function MapScreen() {
               </p>
               <button
                 type="button"
-                onClick={() => setDrawMode('simple_select')}
+                onClick={() => handleDrawModeChange('simple_select')}
                 className="pointer-events-auto min-h-[44px] shrink-0 px-2 text-sm font-medium text-white underline"
                 style={{ touchAction: 'manipulation' }}
               >
                 {intl.formatMessage(mapMessages.drawingInstructionCancel)}
               </button>
             </div>
+          ) : null}
+          {frameError ? (
+            <p
+              role="alert"
+              className="pointer-events-none absolute left-3 right-16 top-16 z-10 rounded-btn bg-error px-3 py-2 text-sm text-white shadow-card"
+            >
+              {frameError}
+            </p>
           ) : null}
           {drawMode === 'draw_rectangle' && !isDesktop ? (
             <>
