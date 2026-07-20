@@ -19,6 +19,8 @@ export interface BasemapSwitcherProps {
   className?: string;
   /** Force the popover open (useful for Storybook static screenshots). */
   defaultOpen?: boolean;
+  /** Tooltip hint shown on the trigger button (e.g. when basemap is overridden by SMP). */
+  title?: string;
 }
 
 /** Layer icon — stacked map layers */
@@ -54,6 +56,7 @@ function BasemapSwitcher({
   basemaps,
   className,
   defaultOpen = false,
+  title,
 }: BasemapSwitcherProps) {
   const intl = useIntl();
   const [open, setOpen] = useState(defaultOpen);
@@ -70,6 +73,7 @@ function BasemapSwitcher({
             type="button"
             className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-card/90 text-text-muted shadow-card backdrop-blur-sm hover:bg-surface-card hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label={intl.formatMessage(messages.basemapLabel)}
+            title={title}
             data-testid="basemap-switcher-trigger"
           >
             <LayerIcon />
