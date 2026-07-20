@@ -209,7 +209,7 @@ export const mapMessages = defineMessages({
   },
   invalidLatitude: {
     id: 'map.bounds.invalidLatitude',
-    defaultMessage: 'Latitude must be between -90 and 90',
+    defaultMessage: 'Latitude must be between -85.0511 and 85.0511',
   },
   invalidLngOrder: {
     id: 'map.bounds.invalidLngOrder',
@@ -218,6 +218,14 @@ export const mapMessages = defineMessages({
   invalidLatOrder: {
     id: 'map.bounds.invalidLatOrder',
     defaultMessage: 'North must be greater than south',
+  },
+  zeroAreaBounds: {
+    id: 'map.bounds.zeroAreaBounds',
+    defaultMessage: 'Selected area has no size. Add more observations first.',
+  },
+  antimeridianCrossing: {
+    id: 'map.bounds.antimeridianCrossing',
+    defaultMessage: 'Selection cannot cross the 180° meridian.',
   },
   zoomTitle: {
     id: 'map.zoom.title',

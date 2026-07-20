@@ -13,6 +13,7 @@ import Map, {
 } from 'react-map-gl/maplibre';
 
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
+import { crossesAntimeridian } from '@/lib/map/bbox-utils';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 
 import { mapMessages } from './messages';
@@ -132,6 +133,7 @@ export function MapAuthoringCanvas({
   const [dragEnd, setDragEnd] = useState<{ lng: number; lat: number } | null>(
     null,
   );
+  const [drawError, setDrawError] = useState<string | null>(null);
   const isDrawing = drawMode === 'draw_rectangle';
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef<{ lng: number; lat: number } | null>(null);
@@ -166,6 +168,7 @@ export function MapAuthoringCanvas({
       endPointRef.current = point;
       setDragStart({ lng, lat });
       setDragEnd({ lng, lat });
+      setDrawError(null);
     },
     [],
   );
@@ -201,12 +204,16 @@ export function MapAuthoringCanvas({
     ) {
       return;
     }
+    if (crossesAntimeridian([start.lng, end.lng])) {
+      setDrawError(intl.formatMessage(mapMessages.antimeridianCrossing));
+      return;
+    }
     const result = cornersToBbox(start.lng, start.lat, end.lng, end.lat);
     if (isValidBbox(result)) {
       onDrawCreateRef.current?.(result);
       onDrawModeChangeRef.current?.('simple_select');
     }
-  }, []);
+  }, [intl]);
 
   // Attach / detach map event listeners when draw mode changes
   // Also reset drag state when exiting draw mode
@@ -221,6 +228,7 @@ export function MapAuthoringCanvas({
       endPointRef.current = null;
       setDragStart(null);
       setDragEnd(null);
+      setDrawError(null);
       return;
     }
 
@@ -370,6 +378,14 @@ export function MapAuthoringCanvas({
           </Source>
         )}
       </Map>
+      {drawError && (
+        <p
+          role="alert"
+          className="pointer-events-none absolute left-3 right-16 top-4 z-10 rounded-btn bg-error px-3 py-2 text-sm text-white shadow-card"
+        >
+          {drawError}
+        </p>
+      )}
     </section>
   );
 }

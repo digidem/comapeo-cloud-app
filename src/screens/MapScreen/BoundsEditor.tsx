@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip } from '@/components/ui/tooltip';
 import { getProjectPoints } from '@/lib/data-layer';
+import { WEB_MERCATOR_LAT_LIMIT } from '@/lib/map/bbox-utils';
 
 import { mapMessages } from './messages';
 
@@ -63,6 +64,7 @@ export function BoundsEditor({
 }: BoundsEditorProps) {
   const intl = useIntl();
   const [draft, setDraft] = useState(() => draftFromBbox(value));
+  const [areaError, setAreaError] = useState<string | null>(null);
   const valueKey = value.join(',');
   const valueDraft = useMemo(() => {
     const [west = '', south = '', east = '', north = ''] = valueKey.split(',');
@@ -103,11 +105,15 @@ export function BoundsEditor({
       ? intl.formatMessage(mapMessages.invalidLongitude)
       : undefined;
   const southRangeError =
-    parsed.south === null || parsed.south < -90 || parsed.south > 90
+    parsed.south === null ||
+    parsed.south < -WEB_MERCATOR_LAT_LIMIT ||
+    parsed.south > WEB_MERCATOR_LAT_LIMIT
       ? intl.formatMessage(mapMessages.invalidLatitude)
       : undefined;
   const northRangeError =
-    parsed.north === null || parsed.north < -90 || parsed.north > 90
+    parsed.north === null ||
+    parsed.north < -WEB_MERCATOR_LAT_LIMIT ||
+    parsed.north > WEB_MERCATOR_LAT_LIMIT
       ? intl.formatMessage(mapMessages.invalidLatitude)
       : undefined;
 
@@ -161,6 +167,7 @@ export function BoundsEditor({
 
   function updateDraft(key: keyof BoundsDraft, nextValue: string) {
     setDraft((current) => ({ ...current, [key]: nextValue }));
+    setAreaError(null);
   }
 
   function setBounds(nextBbox: [number, number, number, number]) {
@@ -185,6 +192,12 @@ export function BoundsEditor({
     if (!points || points.features.length === 0) return;
 
     const nextBbox = bbox(points) as [number, number, number, number];
+    const [west, south, east, north] = nextBbox;
+    if (west === east || south === north) {
+      setAreaError(intl.formatMessage(mapMessages.zeroAreaBounds));
+      return;
+    }
+    setAreaError(null);
     setBounds(nextBbox);
   }
 
@@ -265,6 +278,12 @@ export function BoundsEditor({
       {noProjectPoints ? (
         <p className="text-xs text-text-muted">
           {intl.formatMessage(mapMessages.noProjectPoints)}
+        </p>
+      ) : null}
+
+      {areaError ? (
+        <p role="alert" className="text-sm text-error">
+          {areaError}
         </p>
       ) : null}
     </section>

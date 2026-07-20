@@ -147,6 +147,34 @@ describe('BoundsEditor', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows an area error instead of updating bounds when project points collapse to zero area', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    mockGetProjectPoints.mockResolvedValue(pointCollection([[-70, -5]]));
+
+    render(
+      <BoundsEditor
+        bbox={[0, 0, 1, 1]}
+        onChange={onChange}
+        projectLocalId="project-1"
+        mapRef={createMapRef()}
+      />,
+    );
+
+    const projectButton = await screen.findByRole('button', {
+      name: 'Use project area',
+    });
+    await waitFor(() => expect(projectButton).toBeEnabled());
+    await user.click(projectButton);
+
+    expect(
+      await screen.findByText(
+        'Selected area has no size. Add more observations first.',
+      ),
+    ).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('syncs inputs from external bbox updates without emitting stale changes', async () => {
     const onChange = vi.fn();
     const { rerender } = render(

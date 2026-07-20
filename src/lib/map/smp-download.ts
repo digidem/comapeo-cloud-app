@@ -3,6 +3,7 @@ import { download } from 'styled-map-package-api/download';
 import { getDb } from '@/lib/db';
 import type { SavedMap } from '@/lib/db';
 import { normalizeTileUrl } from '@/lib/map/basemap-utils';
+import { clampLatitude } from '@/lib/map/bbox-utils';
 
 /**
  * Best-effort write to IndexedDB with retry for transient storage errors.
@@ -115,7 +116,9 @@ export function estimateDownloadSize(
   maxZoom: number,
 ): number {
   if (minZoom > maxZoom) return 0;
-  const [west, south, east, north] = bbox;
+  const [west, rawSouth, east, rawNorth] = bbox;
+  const south = clampLatitude(rawSouth);
+  const north = clampLatitude(rawNorth);
   if (east <= west || north <= south) return 0;
 
   let totalTiles = 0;
