@@ -13,6 +13,7 @@ interface ZoomRange {
 interface ZoomSelectorProps {
   value: ZoomRange;
   onChange: (value: ZoomRange) => void;
+  showMinZoom?: boolean;
 }
 
 function parseZoom(value: string): number | null {
@@ -21,7 +22,11 @@ function parseZoom(value: string): number | null {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
-export function ZoomSelector({ value, onChange }: ZoomSelectorProps) {
+export function ZoomSelector({
+  value,
+  onChange,
+  showMinZoom = false,
+}: ZoomSelectorProps) {
   const intl = useIntl();
   const [draft, setDraft] = useState({
     minZoom: String(value.minZoom),
@@ -107,17 +112,19 @@ export function ZoomSelector({ value, onChange }: ZoomSelectorProps) {
       <h2 className="text-base font-semibold text-text">
         {intl.formatMessage(mapMessages.zoomTitle)}
       </h2>
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          label={intl.formatMessage(mapMessages.minZoom)}
-          type="number"
-          min={0}
-          max={22}
-          step={1}
-          value={draft.minZoom}
-          onChange={(event) => updateDraft('minZoom', event.target.value)}
-          error={minError}
-        />
+      <div className={showMinZoom ? 'grid grid-cols-2 gap-3' : ''}>
+        {showMinZoom && (
+          <Input
+            label={intl.formatMessage(mapMessages.minZoom)}
+            type="number"
+            min={0}
+            max={22}
+            step={1}
+            value={draft.minZoom}
+            onChange={(event) => updateDraft('minZoom', event.target.value)}
+            error={minError}
+          />
+        )}
         <Input
           label={intl.formatMessage(mapMessages.maxZoom)}
           type="number"

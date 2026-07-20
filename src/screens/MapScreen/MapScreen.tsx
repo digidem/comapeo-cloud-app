@@ -294,6 +294,9 @@ export function MapScreen() {
           mapRef={mapRef}
         />
         <ZoomSelector value={zoomRange} onChange={setZoomRange} />
+        <p className="text-xs text-text-muted">
+          {intl.formatMessage(mapMessages.zoomDownloadNote)}
+        </p>
         <SavedMapsList projectLocalId={selectedProjectId} />
         {(() => {
           const maps = mapsQuery.data ?? [];

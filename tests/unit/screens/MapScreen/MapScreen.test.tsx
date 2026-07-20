@@ -27,11 +27,36 @@ vi.mock('@tanstack/react-router', async () => {
 
 const mapProps: Array<Record<string, unknown>> = [];
 const attributionControlProps: Array<Record<string, unknown>> = [];
+const unprojectMock = vi.fn((point: [number, number]) => ({
+  lng: point[0],
+  lat: point[1],
+}));
+
+interface MockMapHandle {
+  getMap: () => {
+    getCanvas: () => { clientWidth: number; clientHeight: number };
+    unproject: typeof unprojectMock;
+    dragPan: { enable: () => void; disable: () => void };
+    scrollZoom: { enable: () => void; disable: () => void };
+    on: () => void;
+    off: () => void;
+  };
+}
 
 vi.mock('react-map-gl/maplibre', () => ({
-  default: React.forwardRef<HTMLDivElement, Record<string, unknown>>(
-    function MockMap(props, _ref) {
+  default: React.forwardRef<MockMapHandle, Record<string, unknown>>(
+    function MockMap(props, ref) {
       mapProps.push(props);
+      React.useImperativeHandle(ref, () => ({
+        getMap: () => ({
+          getCanvas: () => ({ clientWidth: 800, clientHeight: 600 }),
+          unproject: unprojectMock,
+          dragPan: { enable: vi.fn(), disable: vi.fn() },
+          scrollZoom: { enable: vi.fn(), disable: vi.fn() },
+          on: vi.fn(),
+          off: vi.fn(),
+        }),
+      }));
       return (
         <div
           data-testid="mock-authoring-map"
@@ -66,6 +91,11 @@ describe('MapScreen', () => {
     localStorage.clear();
     mapProps.length = 0;
     attributionControlProps.length = 0;
+    unprojectMock.mockReset();
+    unprojectMock.mockImplementation((point: [number, number]) => ({
+      lng: point[0],
+      lat: point[1],
+    }));
     useProjectStore.setState({ selectedProjectId: 'project-1' });
     await getDb().projects.add({
       localId: 'project-1',
@@ -147,6 +177,30 @@ describe('MapScreen', () => {
       expect(
         screen.getAllByRole('heading', { name: 'Bounds', level: 2 }),
       ).toHaveLength(1);
+    });
+
+    it('rejects a frame confirm that crosses the antimeridian instead of drawing an inverted bbox', async () => {
+      const user = userEvent.setup();
+      unprojectMock
+        .mockImplementationOnce(() => ({ lng: 175, lat: 10 }))
+        .mockImplementationOnce(() => ({ lng: 185, lat: 10 }))
+        .mockImplementationOnce(() => ({ lng: 185, lat: -10 }))
+        .mockImplementationOnce(() => ({ lng: 175, lat: -10 }));
+
+      render(<MapScreen />);
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Draw bounds' }),
+      );
+      await user.click(
+        await screen.findByRole('button', { name: 'Set this area' }),
+      );
+
+      expect(
+        await screen.findByText('Selection cannot cross the 180° meridian.'),
+      ).toBeInTheDocument();
+      // Frame stays in draw mode instead of confirming an inverted bbox
+      expect(screen.queryByText('Map area updated')).not.toBeInTheDocument();
     });
   });
 

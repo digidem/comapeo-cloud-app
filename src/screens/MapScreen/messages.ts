@@ -227,6 +227,10 @@ export const mapMessages = defineMessages({
     id: 'map.bounds.antimeridianCrossing',
     defaultMessage: 'Selection cannot cross the 180° meridian.',
   },
+  invalidCoordinates: {
+    id: 'map.bounds.invalidCoordinates',
+    defaultMessage: 'Coordinates must be valid numbers',
+  },
   zoomTitle: {
     id: 'map.zoom.title',
     defaultMessage: 'Zoom range',
@@ -246,6 +250,10 @@ export const mapMessages = defineMessages({
   invalidZoomRange: {
     id: 'map.zoom.invalidRange',
     defaultMessage: 'Max zoom must be greater than or equal to min zoom',
+  },
+  zoomDownloadNote: {
+    id: 'map.zoom.downloadNote',
+    defaultMessage: 'Downloads include all zoom levels from 0 to the maximum.',
   },
   nameDialogTitle: {
     id: 'map.nameDialog.title',

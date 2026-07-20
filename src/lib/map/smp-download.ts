@@ -230,6 +230,22 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     });
     reader = stream.getReader();
   } catch (setupError) {
+    // Check for cancellation — treat AbortError from setup as cancellation
+    if (
+      signal?.aborted ||
+      (setupError instanceof DOMException && setupError.name === 'AbortError')
+    ) {
+      // Revoke synthetic blob URL before restoring draft status
+      if (map.type === 'raster') {
+        URL.revokeObjectURL(styleUrl);
+      }
+      await recoveryWrite(db, map.id, {
+        status: 'draft',
+        errorMessage: undefined,
+        updatedAt: new Date().toISOString(),
+      });
+      throw new DOMException('Download cancelled', 'AbortError');
+    }
     // Revoke synthetic blob URL for raster maps to prevent memory leak
     if (map.type === 'raster') {
       URL.revokeObjectURL(styleUrl);

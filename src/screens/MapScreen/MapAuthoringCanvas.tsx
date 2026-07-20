@@ -135,6 +135,7 @@ export function MapAuthoringCanvas({
   );
   const [drawError, setDrawError] = useState<string | null>(null);
   const isDrawing = drawMode === 'draw_rectangle';
+  const [mapReady, setMapReady] = useState(false);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef<{ lng: number; lat: number } | null>(null);
   const dragEndRef = useRef<{ lng: number; lat: number } | null>(null);
@@ -295,7 +296,14 @@ export function MapAuthoringCanvas({
       canvas.style.cursor = prevCursor;
       canvas.style.touchAction = prevTouchAction;
     };
-  }, [mapRef, isDrawing, handleDragStart, handleDragMove, handleDragEnd]);
+  }, [
+    mapRef,
+    isDrawing,
+    mapReady,
+    handleDragStart,
+    handleDragMove,
+    handleDragEnd,
+  ]);
 
   // Escape key cancels drawing
   useEffect(() => {
@@ -320,7 +328,7 @@ export function MapAuthoringCanvas({
       map.dragPan.enable();
       map.scrollZoom.enable();
     }
-  }, [mapRef, isDrawing]);
+  }, [mapRef, isDrawing, mapReady]);
 
   const sectionRef = useRef<HTMLElement>(null);
 
@@ -329,6 +337,7 @@ export function MapAuthoringCanvas({
   // the full text. Remove `compact-show` after load so the info button
   // starts collapsed and expands on click.
   const handleMapLoad = useCallback(() => {
+    setMapReady(true);
     const el = sectionRef.current?.querySelector(
       '.maplibregl-ctrl-attrib.maplibregl-compact',
     );

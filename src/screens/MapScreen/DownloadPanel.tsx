@@ -14,7 +14,14 @@ import {
 
 import { mapMessages } from './messages';
 
-/** Module-level tracker: only one map download may run at a time. */
+/**
+ * Per-tab download concurrency lock. Prevents multiple concurrent downloads
+ * within the same browser tab. Cross-tab isolation is NOT enforced — two
+ * tabs can still race on the same map's IDB status. This is acceptable
+ * because: (a) multi-tab usage is uncommon for this app, (b) the IDB
+ * status writes use recoveryWrite() with retry, and (c) the user would
+ * need to manually start two downloads simultaneously.
+ */
 const activeDownloads = new Map<string, AbortController>();
 
 interface DownloadPanelProps {
