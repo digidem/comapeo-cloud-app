@@ -205,12 +205,12 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     updatedAt: new Date().toISOString(),
   });
 
-  const styleUrl = getDownloadStyleUrl(map);
-
   let stream: ReadableStream<Uint8Array>;
   let reader: ReadableStreamDefaultReader<Uint8Array>;
   let skippedTiles = 0;
+  let styleUrl = '';
   try {
+    styleUrl = getDownloadStyleUrl(map);
     stream = download({
       bbox: map.bbox,
       maxzoom: map.maxZoom,

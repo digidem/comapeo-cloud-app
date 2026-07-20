@@ -21,7 +21,7 @@
  *      redirect bounce (e.g. 302 → internal metadata endpoint).
  *   4. Size / timeout caps – 5 MB body limit and 10 s timeout bound
  *      resource consumption from upstream abuse.
- *   5. Rate limiting       – Per-IP sliding window (2000 req / 60 s)
+ *   5. Rate limiting       – Per-IP sliding window (5000 req / 60 s)
  *      with lazy cleanup to throttle abuse from any single client.
  *
  * THREAT MODEL
@@ -106,13 +106,13 @@ const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB
 const FETCH_TIMEOUT_MS = 10_000;
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
-// Simple in-memory sliding-window counter: max 2000 requests per 60 s per IP.
+// Simple in-memory sliding-window counter: max 5000 requests per 60 s per IP.
 // A single SMP map download at zoom 14 can produce 800+ requests, so the limit
 // is set high enough for legitimate use while still throttling abuse.
 // This runs on a single Cloudflare isolate per request; a shared-nothing
 // approach is acceptable for a best-effort throttle. Map entries are lazily
 // cleaned up when the window expires.
-const RATE_LIMIT_MAX = 2000;
+const RATE_LIMIT_MAX = 5000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();

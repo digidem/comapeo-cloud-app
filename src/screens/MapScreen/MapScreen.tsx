@@ -17,7 +17,7 @@ import { useCreateMap, useMaps } from '@/hooks/useMaps';
 import { useProjects } from '@/hooks/useProjects';
 import type { SavedMap } from '@/lib/db';
 import { DEFAULT_BASEMAP_ID, findBasemap } from '@/lib/map/basemaps';
-import { crossesAntimeridian } from '@/lib/map/bbox-utils';
+import { clampBboxLatitude, crossesAntimeridian } from '@/lib/map/bbox-utils';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { uuid } from '@/lib/uuid';
 import { useProjectStore } from '@/stores/project-store';
@@ -191,12 +191,20 @@ export function MapScreen() {
       (c) => ((((c.lng + 180) % 360) + 360) % 360) - 180,
     );
     const lats = corners.map((c) => c.lat);
-    handleDrawCreate([
+    const candidate: [number, number, number, number] = [
       Math.min(...lngs),
       Math.min(...lats),
       Math.max(...lngs),
       Math.max(...lats),
-    ]);
+    ];
+    // Clamp to Web Mercator latitude limits and reject zero-area
+    const clamped = clampBboxLatitude(candidate);
+    if (clamped[1] >= clamped[3] || clamped[0] >= clamped[2]) {
+      setFrameError(intl.formatMessage(mapMessages.zeroAreaBounds));
+      return;
+    }
+    setFrameError(null);
+    handleDrawCreate(clamped);
     setDrawMode('simple_select');
   }
 
