@@ -10,6 +10,30 @@ vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}));
 // Track props passed to Map for passthrough assertions
 const mapProps: Array<Record<string, unknown>> = [];
 
+// --- SMP mocks ---
+const mockResolveSmpStyle = vi.fn().mockResolvedValue({
+  version: 8,
+  sources: {},
+  layers: [],
+});
+const mockGetSmpReader = vi.fn().mockResolvedValue({});
+const mockRegisterSmpProtocol = vi.fn();
+
+vi.mock('@/lib/map/smp-serve', () => ({
+  resolveSmpStyle: (...args: unknown[]) => mockResolveSmpStyle(...args),
+  getSmpReader: (...args: unknown[]) => mockGetSmpReader(...args),
+  registerSmpProtocol: (...args: unknown[]) => mockRegisterSmpProtocol(...args),
+  closeSmpReader: vi.fn().mockResolvedValue(undefined),
+}));
+
+const mockDbGet = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('@/lib/db', () => ({
+  getDb: () => ({
+    maps: { get: (...args: unknown[]) => mockDbGet(...args) },
+  }),
+}));
+
 // Mock react-map-gl/maplibre
 vi.mock('react-map-gl/maplibre', () => {
   return {
@@ -253,5 +277,94 @@ describe('MapContainer', () => {
     render(<MapContainer />);
     expect(screen.getByText(/OpenStreetMap/)).toBeTruthy();
     expect(screen.getByText(/MapLibre/)).toBeTruthy();
+  });
+
+  // -------------------------------------------------------------------
+  // SMP (Saved Map Package) offline-map tests
+  // -------------------------------------------------------------------
+
+  it('renders active offline map badge when SMP is active', async () => {
+    useMapStore.setState({ activeMapId: 'map-1' });
+    mockDbGet.mockResolvedValue({
+      id: 'map-1',
+      projectLocalId: 'proj-1',
+      name: 'My Offline Map',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+    render(<MapContainer />);
+    await waitFor(() => {
+      expect(screen.getByTestId('map-active-map-badge')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Active offline map/)).toBeInTheDocument();
+  });
+
+  it('does not render active offline map badge when no active map', () => {
+    useMapStore.setState({ activeMapId: null });
+    render(<MapContainer />);
+    expect(
+      screen.queryByTestId('map-active-map-badge'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('falls back to basemap when activeSavedMap has no smpBlob', async () => {
+    useMapStore.setState({ activeMapId: 'map-2' });
+    mockDbGet.mockResolvedValue({
+      id: 'map-2',
+      projectLocalId: 'proj-1',
+      name: 'Incomplete Map',
+      status: 'ready',
+      // no smpBlob
+    });
+    render(<MapContainer />);
+    const mapEl = screen.getByTestId('mock-map');
+    expect(mapEl.dataset.mapStyle).toContain('cartocdn.com');
+    expect(
+      screen.queryByTestId('map-active-map-badge'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('falls back to basemap when activeSavedMap has error status', async () => {
+    useMapStore.setState({ activeMapId: 'map-3' });
+    mockDbGet.mockResolvedValue({
+      id: 'map-3',
+      projectLocalId: 'proj-1',
+      name: 'Failed Map',
+      status: 'error',
+      smpBlob: new Blob(),
+    });
+    render(<MapContainer />);
+    const mapEl = screen.getByTestId('mock-map');
+    expect(mapEl.dataset.mapStyle).toContain('cartocdn.com');
+    expect(
+      screen.queryByTestId('map-active-map-badge'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows basemap switcher tooltip when SMP is active', async () => {
+    useMapStore.setState({ activeMapId: 'map-4' });
+    mockDbGet.mockResolvedValue({
+      id: 'map-4',
+      projectLocalId: 'proj-1',
+      name: 'Offline Map',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+    render(<MapContainer />);
+    await waitFor(() => {
+      const trigger = screen.getByTestId('basemap-switcher-trigger');
+      expect(trigger).toHaveAttribute('title');
+      expect(trigger.getAttribute('title')).toBeTruthy();
+    });
+    expect(
+      screen.getByTestId('basemap-switcher-trigger').getAttribute('title'),
+    ).not.toBe('');
+  });
+
+  it('does not show basemap switcher tooltip when no SMP', () => {
+    useMapStore.setState({ activeMapId: null });
+    render(<MapContainer />);
+    const trigger = screen.getByTestId('basemap-switcher-trigger');
+    expect(trigger.getAttribute('title')).toBeFalsy();
   });
 });
