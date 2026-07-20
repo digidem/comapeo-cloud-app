@@ -153,4 +153,65 @@ describe('tile proxy', () => {
     expect(res.status).toBe(502);
     expect(await res.text()).toBe('Response too large');
   });
+
+  it('returns 403 for hostname not in allowlist', async () => {
+    const req = createRequest(
+      'GET',
+      `http://localhost/api/tiles?url=${encodeURIComponent('https://evil.example.com/tile.png')}`,
+    );
+    const res = await onRequest(createContext(req));
+
+    expect(res.status).toBe(403);
+    expect(await res.text()).toBe('Hostname not allowed');
+  });
+
+  it('returns 502 when upstream Content-Type is not allowed', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    );
+
+    const req = createRequest(
+      'GET',
+      `http://localhost/api/tiles?url=${encodeURIComponent(ALLOWED_TILE_URL)}`,
+    );
+    const res = await onRequest(createContext(req));
+
+    expect(res.status).toBe(502);
+    expect(await res.text()).toBe('Unsupported or missing content type');
+  });
+
+  it('returns 502 when upstream Content-Type is missing', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(mockTileBody, { status: 200 }),
+    );
+
+    const req = createRequest(
+      'GET',
+      `http://localhost/api/tiles?url=${encodeURIComponent(ALLOWED_TILE_URL)}`,
+    );
+    const res = await onRequest(createContext(req));
+
+    expect(res.status).toBe(502);
+    expect(await res.text()).toContain('content type');
+  });
+
+  // Rate-limit state is module-scoped and persists across tests in the same file;
+  // this test must be last.
+  it('returns 429 after exceeding rate limit', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockTileResponse);
+    const url = `http://localhost/api/tiles?url=${encodeURIComponent(ALLOWED_TILE_URL)}`;
+
+    let lastRes: Response;
+    for (let i = 0; i <= 2000; i++) {
+      const req = createRequest('GET', url);
+      lastRes = await onRequest(createContext(req));
+    }
+
+    expect(lastRes!).toBeInstanceOf(Response);
+    expect(lastRes!.status).toBe(429);
+    expect(await lastRes!.text()).toBe('Rate limit exceeded');
+  });
 });

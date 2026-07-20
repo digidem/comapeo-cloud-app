@@ -55,7 +55,6 @@
  *   • a/b/c.tile.openstreetmap.org    (OSM subdomain sharding)
  *   • *.arcgisonline.com              (ArcGIS / Esri basemaps)
  *   • *.openstreetmap.fr              (French OSM tile mirrors)
- *   • tiles-{s}.openstreetmap.fr      (French OSM subdomain sharding)
  *   • tile.opentopomap.org            (OpenTopoMap tiles)
  *   • basemap.nationalmap.gov         (USGS National Map basemaps)
  *   • tiles.maps.geoportail.gouv.fr   (IGN / Geoportail tiles)
@@ -119,11 +118,9 @@ const ALLOWED_HOSTNAMES = new Set([
   'server.arcgisonline.com',
   'services.arcgisonline.com',
   // French OSM tile mirrors
-  'tiles-{s}.openstreetmap.fr',
   'a.tile.openstreetmap.de',
   'b.tile.openstreetmap.de',
   'c.tile.openstreetmap.de',
-  'gbs-{s}.openstreetmap.fr',
   'tiles.maps.geoportail.gouv.fr',
   // OpenTopoMap
   'tile.opentopomap.org',
@@ -308,8 +305,10 @@ export const onRequest: PagesFunction = async (context) => {
     ]);
     const upstreamContentType =
       upstreamResponse.headers.get('Content-Type')?.split(';')[0]?.trim() ?? '';
-    if (upstreamContentType && !ALLOWED_MIME_TYPES.has(upstreamContentType)) {
-      return new Response('Unsupported content type', { status: 502 });
+    if (!upstreamContentType || !ALLOWED_MIME_TYPES.has(upstreamContentType)) {
+      return new Response('Unsupported or missing content type', {
+        status: 502,
+      });
     }
 
     // Stream with size limit

@@ -206,6 +206,7 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
 
   let stream: ReadableStream<Uint8Array>;
   let reader: ReadableStreamDefaultReader<Uint8Array>;
+  let skippedTiles = 0;
   try {
     stream = download({
       bbox: map.bbox,
@@ -247,7 +248,6 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
   // Collect chunks (NO intermediate merge — build Blob directly from chunks)
   const chunks: Uint8Array[] = [];
   let totalSize = 0;
-  let skippedTiles = 0;
 
   try {
     while (true) {
