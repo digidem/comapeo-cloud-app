@@ -198,20 +198,41 @@ describe('tile proxy', () => {
     expect(await res.text()).toContain('content type');
   });
 
-  // Rate-limit state is module-scoped and persists across tests in the same file;
-  // this test must be last.
-  it('returns 429 after exceeding rate limit', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockTileResponse);
-    const url = `http://localhost/api/tiles?url=${encodeURIComponent(ALLOWED_TILE_URL)}`;
+  it('returns 429 after exceeding rate limit (2000/60s)', async () => {
+    // Reset module state so rateLimitMap starts fresh
+    vi.resetModules();
+    const { onRequest: freshOnRequest } =
+      await import('../../../functions/api/tiles/index');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(
+        new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+          status: 200,
+          headers: { 'Content-Type': 'image/png', 'Content-Length': '4' },
+        }),
+      ),
+    );
 
-    let lastRes: Response;
-    for (let i = 0; i <= 2000; i++) {
-      const req = createRequest('GET', url);
-      lastRes = await onRequest(createContext(req));
+    const url = `http://localhost/api/tiles?url=${encodeURIComponent(ALLOWED_TILE_URL)}`;
+    const headers = { 'x-forwarded-for': '10.0.0.1' };
+
+    // First 2000 requests should succeed
+    for (let i = 0; i < 2000; i++) {
+      const req = new Request(url, { method: 'GET', headers });
+      const res = await freshOnRequest({
+        request: req,
+      } as Parameters<typeof freshOnRequest>[0]);
+      if (res.status !== 200) {
+        expect(res.status).toBe(200); // fail with context at first non-200
+        return;
+      }
     }
 
-    expect(lastRes!).toBeInstanceOf(Response);
-    expect(lastRes!.status).toBe(429);
-    expect(await lastRes!.text()).toBe('Rate limit exceeded');
+    // 2001st request should be rate-limited
+    const req = new Request(url, { method: 'GET', headers });
+    const res = await freshOnRequest({
+      request: req,
+    } as Parameters<typeof freshOnRequest>[0]);
+    expect(res.status).toBe(429);
+    expect(await res.text()).toBe('Rate limit exceeded');
   });
 });
