@@ -1,0 +1,28 @@
+{
+  "url": "http://localhost:5173/",
+  "colorScheme": "light",
+  "mediaType": "screen",
+  "test": {
+    "id": "75ecf403a3d88f323244-7426168247634fb6daf1",
+    "title": "language-selector-open",
+    "titlePath": [
+      "feature.screenshots.ts",
+      "Feature screenshots",
+      "language-selector-open"
+    ],
+    "retry": 0,
+    "retries": 0,
+    "repeat": 0,
+    "location": {
+      "file": "tests/e2e/feature.screenshots.ts",
+      "line": 157,
+      "column": 3
+    },
+    "annotations": []
+  },
+  "browser": { "name": "chromium", "version": "148.0.7778.96" },
+  "automationLibrary": { "version": "1.60.0", "name": "@playwright/test" },
+  "sdk": { "name": "@argos-ci/playwright", "version": "7.0.5" },
+  "viewport": { "width": 1440, "height": 900 },
+  "transient": {}
+}

@@ -319,6 +319,38 @@ describe('DownloadPanel', () => {
     expect(screen.queryByTestId('download-error')).not.toBeInTheDocument();
   });
 
+  it('does not consume retry budget when a retry is cancelled', async () => {
+    const user = userEvent.setup();
+    const abortError = new DOMException('Download cancelled', 'AbortError');
+    const retryMutateAsync = vi.fn().mockRejectedValue(abortError);
+    vi.mocked(useDownloadMap).mockReturnValue({
+      error: new Error('Fail'),
+      isError: true,
+      isPending: false,
+      mutateAsync: retryMutateAsync,
+      reset,
+    } as unknown as ReturnType<typeof useDownloadMap>);
+    const map = createMockMap();
+    render(<DownloadPanel map={map} />);
+
+    const retryButton = screen.getByRole('button', { name: /retry/i });
+    // Retry-and-cancel three times — each cycle rejects with AbortError,
+    // simulating the user cancelling a retry before it can fail.
+    await user.click(retryButton);
+    await user.click(retryButton);
+    await user.click(retryButton);
+
+    await waitFor(() => {
+      expect(retryMutateAsync).toHaveBeenCalledTimes(3);
+    });
+
+    // Retry budget must remain intact — none of these were genuine failures.
+    expect(
+      screen.queryByRole('button', { name: /max retries reached/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^retry$/i })).not.toBeDisabled();
+  });
+
   it('shows non-large download button that triggers download directly', async () => {
     const user = userEvent.setup();
     vi.spyOn(smpDownload, 'checkStorageQuota').mockResolvedValue({

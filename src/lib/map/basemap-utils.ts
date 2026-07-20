@@ -2,6 +2,21 @@ import type { StyleSpecification } from 'maplibre-gl';
 
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 
+import { isHostnameAllowed } from './tile-hostname-allowlist';
+
+/**
+ * Checks whether a tile URL's hostname is in the `/api/tiles` proxy
+ * allowlist. Custom URLs that fail this check will 403 from the proxy at
+ * SMP download time, even though they render fine in the live map preview.
+ */
+export function isKnownTileHost(url: string): boolean {
+  try {
+    return isHostnameAllowed(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Convert an ImageryBasemap into a value usable by react-map-gl's `mapStyle` prop.
  * - 'style' type: returns the style URL string as-is (vector GL style).

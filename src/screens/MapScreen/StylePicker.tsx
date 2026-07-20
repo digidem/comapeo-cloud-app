@@ -3,6 +3,7 @@ import { useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { isKnownTileHost } from '@/lib/map/basemap-utils';
 import { BASEMAP_CATALOG } from '@/lib/map/basemaps';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 
@@ -33,6 +34,7 @@ export function StylePicker({ value, onChange }: StylePickerProps) {
   const [customType, setCustomType] = useState<CustomType>('style');
   const [scheme, setScheme] = useState<RasterScheme>('xyz');
   const [error, setError] = useState<string | null>(null);
+  const [hostnameWarning, setHostnameWarning] = useState(false);
 
   function handleUseCustomUrl() {
     const trimmedUrl = customUrl.trim();
@@ -42,6 +44,7 @@ export function StylePicker({ value, onChange }: StylePickerProps) {
     }
 
     setError(null);
+    setHostnameWarning(!isKnownTileHost(trimmedUrl));
     onChange({
       id: 'custom',
       name: intl.formatMessage(mapMessages.customMode),
@@ -132,6 +135,7 @@ export function StylePicker({ value, onChange }: StylePickerProps) {
             onChange={(event) => {
               setCustomUrl(event.target.value);
               setError(null);
+              setHostnameWarning(false);
             }}
             placeholder={intl.formatMessage(mapMessages.customUrlPlaceholder, {
               z: '{z}',
@@ -140,6 +144,12 @@ export function StylePicker({ value, onChange }: StylePickerProps) {
             })}
             error={error ?? undefined}
           />
+
+          {hostnameWarning ? (
+            <p className="text-sm text-warning" role="alert">
+              {intl.formatMessage(mapMessages.customUrlHostnameWarning)}
+            </p>
+          ) : null}
 
           <label className="flex flex-col gap-1 text-sm font-medium text-text">
             {intl.formatMessage(mapMessages.mapTypeLabel)}

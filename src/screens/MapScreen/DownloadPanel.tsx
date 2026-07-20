@@ -139,11 +139,10 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       }
     }
 
-    // Download is actually starting — count retry if triggered via handleRetry
-    if (isRetryRef.current) {
-      setRetryCount((n) => n + 1);
-      isRetryRef.current = false;
-    }
+    // Only charge the retry budget for outcomes that actually resolve
+    // (success or a genuine failure) — a cancelled retry must not count.
+    const isRetryAttempt = isRetryRef.current;
+    isRetryRef.current = false;
 
     try {
       await downloadMap.mutateAsync({
@@ -152,14 +151,19 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         signal: controller.signal,
         mapboxAccessToken,
       });
+      if (isRetryAttempt) {
+        setRetryCount((n) => n + 1);
+      }
     } catch (error) {
       // Cancel produces an AbortError — reset mutation state so the
       // error UI doesn't show "Download failed: Download cancelled".
       if (error instanceof DOMException && error.name === 'AbortError') {
         downloadMap.reset();
+        // Cancelled before it could fail — refund the attempt so
+        // retry-and-cancel cycles never exhaust the retry budget.
+      } else if (isRetryAttempt) {
+        setRetryCount((n) => n + 1);
       }
-      // Retry budget is tracked in handleRetry only, so cancellations
-      // and the initial download never consume it.
     } finally {
       activeDownloads.delete(map.id);
       pendingRef.current = false;

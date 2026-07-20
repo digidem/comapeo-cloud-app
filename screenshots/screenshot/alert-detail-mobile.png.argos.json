@@ -1,0 +1,28 @@
+{
+  "url": "http://localhost:5173/alerts/alert-1",
+  "colorScheme": "light",
+  "mediaType": "screen",
+  "test": {
+    "id": "63485462c0f75fc0f618-d0cb658f4e91c7329eb9",
+    "title": "alert detail mobile theme at mobile viewport",
+    "titlePath": [
+      "alerts.screenshots.ts",
+      "Alerts - visual screenshots",
+      "alert detail mobile theme at mobile viewport"
+    ],
+    "retry": 0,
+    "retries": 0,
+    "repeat": 0,
+    "location": {
+      "file": "tests/e2e/alerts.screenshots.ts",
+      "line": 71,
+      "column": 7
+    },
+    "annotations": []
+  },
+  "browser": { "name": "chromium", "version": "148.0.7778.96" },
+  "automationLibrary": { "version": "1.60.0", "name": "@playwright/test" },
+  "sdk": { "name": "@argos-ci/playwright", "version": "7.0.5" },
+  "viewport": { "width": 375, "height": 812 },
+  "transient": {}
+}

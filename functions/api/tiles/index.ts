@@ -63,9 +63,12 @@
  *
  * CONFIGURATION
  * =============
- * To add a new tile provider, add its hostname to ALLOWED_HOSTNAMES (exact
- * match) or add a regex to ALLOWED_HOSTNAME_PATTERNS (wildcard subdomains).
- * Keep the allowlist tight — every entry widens the proxy's trust surface.
+ * The allowlist lives in src/lib/map/tile-hostname-allowlist.ts (shared with
+ * the client so StylePicker can warn about unsupported custom URLs before a
+ * download attempt hits this function's 403). To add a new tile provider,
+ * add its hostname to ALLOWED_HOSTNAMES (exact match) or add a regex to
+ * ALLOWED_HOSTNAME_PATTERNS (wildcard subdomains) there. Keep the allowlist
+ * tight — every entry widens the proxy's trust surface.
  *
  * CACHING
  * =======
@@ -74,6 +77,7 @@
  * content hash in practice, so aggressive caching is safe. No ETag or
  * Last-Modified forwarding — Cloudflare's edge cache handles revalidation.
  */
+import { isHostnameAllowed } from '../../../src/lib/map/tile-hostname-allowlist';
 
 // Private and reserved IPv4 CIDR patterns to block.
 const PRIVATE_PATTERNS = [
@@ -100,46 +104,6 @@ const PRIVATE_IPV6_PATTERNS = [
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB
 const FETCH_TIMEOUT_MS = 10_000;
-
-// ── Hostname allowlist ───────────────────────────────────────────────────────
-// Only hostnames in this set or matching the patterns below will be proxied.
-// Keeping this deny-by-default prevents the function from being abused as an
-// open proxy or SSRF vector.
-const ALLOWED_HOSTNAMES = new Set([
-  'basemaps.cartocdn.com',
-  'tile.openstreetmap.org',
-  'api.mapbox.com',
-  'tiles.mapbox.com',
-  // Single-letter OSM subdomains: a.tile.openstreetmap.org, b…, c…
-  'a.tile.openstreetmap.org',
-  'b.tile.openstreetmap.org',
-  'c.tile.openstreetmap.org',
-  // ArcGIS / Esri basemaps
-  'server.arcgisonline.com',
-  'services.arcgisonline.com',
-  // French OSM tile mirrors
-  'a.tile.openstreetmap.de',
-  'b.tile.openstreetmap.de',
-  'c.tile.openstreetmap.de',
-  'tiles.maps.geoportail.gouv.fr',
-  // OpenTopoMap
-  'tile.opentopomap.org',
-  // USGS National Map
-  'basemap.nationalmap.gov',
-]);
-
-// Wildcard subdomain patterns (e.g. *.tile.openstreetmap.org).
-const ALLOWED_HOSTNAME_PATTERNS: RegExp[] = [
-  /^[a-z]\.tile\.openstreetmap\.org$/i,
-  /^[\w-]+\.arcgisonline\.com$/i,
-  /^[\w-]+\.openstreetmap\.fr$/i,
-];
-
-function isHostnameAllowed(hostname: string): boolean {
-  const lower = hostname.toLowerCase();
-  if (ALLOWED_HOSTNAMES.has(lower)) return true;
-  return ALLOWED_HOSTNAME_PATTERNS.some((re) => re.test(lower));
-}
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
 // Simple in-memory sliding-window counter: max 2000 requests per 60 s per IP.

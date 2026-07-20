@@ -162,6 +162,11 @@ export const mapMessages = defineMessages({
     id: 'map.stylePicker.invalidUrl',
     defaultMessage: 'Enter an http:// or https:// URL',
   },
+  customUrlHostnameWarning: {
+    id: 'map.stylePicker.customUrlHostnameWarning',
+    defaultMessage:
+      'This tile provider may not be available for offline downloads. Only supported providers work with map package generation.',
+  },
   selectedStyle: {
     id: 'map.stylePicker.selectedStyle',
     defaultMessage: 'Selected',

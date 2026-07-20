@@ -1,0 +1,28 @@
+{
+  "url": "http://localhost:5173/login",
+  "colorScheme": "light",
+  "mediaType": "screen",
+  "test": {
+    "id": "99fb1864c5a05941a39e-93b72fcc684ee640ae9c",
+    "title": "mobile-login light",
+    "titlePath": [
+      "mobile-audit.screenshots.ts",
+      "Mobile audit screenshots",
+      "mobile-login light"
+    ],
+    "retry": 0,
+    "retries": 0,
+    "repeat": 0,
+    "location": {
+      "file": "tests/e2e/mobile-audit.screenshots.ts",
+      "line": 52,
+      "column": 3
+    },
+    "annotations": []
+  },
+  "browser": { "name": "chromium", "version": "148.0.7778.96" },
+  "automationLibrary": { "version": "1.60.0", "name": "@playwright/test" },
+  "sdk": { "name": "@argos-ci/playwright", "version": "7.0.5" },
+  "viewport": { "width": 375, "height": 812 },
+  "transient": {}
+}
