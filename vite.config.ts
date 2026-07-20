@@ -205,6 +205,58 @@ function archiveApiProxy(): Plugin {
   return {
     name: 'archive-api-proxy',
     configureServer(server) {
+      // Tile proxy middleware.
+      // Runs the Cloudflare Pages Function handler in-process so
+      // `GET /api/tiles?url=...` doesn't fall through to the SPA's
+      // index.html (which would return text/html and break SMP downloads).
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url) {
+          next();
+          return;
+        }
+        const { pathname } = new URL(req.url, 'http://localhost');
+
+        if (pathname === '/api/tiles') {
+          try {
+            const mod = (await server.ssrLoadModule(
+              '/functions/api/tiles/index.ts',
+            )) as {
+              onRequest: (context: { request: Request }) => Promise<Response>;
+            };
+
+            const protocol = getRequestProtocol(req);
+            const webReq = new Request(
+              `${protocol}://${req.headers.host ?? 'localhost'}${req.url}`,
+              { method: req.method },
+            );
+
+            const webRes = await mod.onRequest({ request: webReq });
+
+            res.statusCode = webRes.status;
+            webRes.headers.forEach((value, key) => {
+              res.setHeader(key, value);
+            });
+            const resBody = Buffer.from(await webRes.arrayBuffer());
+            res.end(resBody);
+          } catch (err) {
+            console.error('[tile proxy] error:', (err as Error).message);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(
+              JSON.stringify({
+                error: {
+                  code: 'TILE_PROXY_DEV_HANDLER_FAILED',
+                  message: 'Tile proxy handler error',
+                },
+              }),
+            );
+          }
+          return;
+        }
+
+        next();
+      });
+
       // Invite handler middleware.
       // Runs before the archive proxy so /api/invites/* is handled first.
       server.middlewares.use(async (req, res, next) => {

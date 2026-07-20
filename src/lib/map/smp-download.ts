@@ -273,7 +273,10 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     });
     throw error;
   } finally {
-    // Clean up synthetic style blob URL for raster maps (success OR error)
+    // Blob URL lifecycle: revoked in (1) the setup-error catch above (when
+    // download() or getReader() throws) and (2) this read-loop finally
+    // (success or error while reading chunks). No path between blob
+    // creation and the end of the read loop leaks the URL.
     if (map.type === 'raster') {
       setTimeout(() => URL.revokeObjectURL(styleUrl), 5_000);
     }
