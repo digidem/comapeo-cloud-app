@@ -4,6 +4,7 @@ import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
+import { closeSmpReader } from '@/lib/map/smp-serve';
 import { useMapStore } from '@/stores/map-store';
 
 export const mapsQueryKey = (projectLocalId: string | null) => [
@@ -63,6 +64,7 @@ export function useDeleteMap(projectLocalId: string | null) {
 
   return useMutation({
     mutationFn: async (mapId: string) => {
+      await closeSmpReader(mapId);
       const db = getDb();
       const updatedAt = new Date().toISOString();
       await db.transaction('rw', [db.maps, db.projects], async () => {
@@ -83,10 +85,11 @@ export function useDeleteMap(projectLocalId: string | null) {
         storeState.hydrateActiveMap(projectLocalId, null);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, mapId) => {
       void queryClient.invalidateQueries({
         queryKey: mapsQueryKey(projectLocalId),
       });
+      void queryClient.invalidateQueries({ queryKey: ['map', mapId] });
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
@@ -99,7 +102,14 @@ export function useSetActiveMapMutation(projectLocalId: string | null) {
     mutationFn: async (mapId: string | null) => {
       if (!projectLocalId) return;
 
+      const previousMapId =
+        mapId === null ? useMapStore.getState().activeMapId : null;
+
       await useMapStore.getState().setActiveMap(projectLocalId, mapId);
+
+      if (previousMapId !== null) {
+        await closeSmpReader(previousMapId);
+      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -131,6 +141,7 @@ export function useDownloadMap() {
       void queryClient.invalidateQueries({
         queryKey: mapsQueryKey(map.projectLocalId),
       });
+      void queryClient.invalidateQueries({ queryKey: ['map', map.id] });
     },
     onError: (_error, { map }) => {
       void queryClient.invalidateQueries({
