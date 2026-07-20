@@ -475,5 +475,11 @@
   "theme.ariaSetSystem": "Usar tema do sistema",
   "theme.dark": "Escuro",
   "theme.light": "Claro",
-  "theme.system": "Sistema"
+  "theme.system": "Sistema",
+  "map.activeMap.badge": {
+    "defaultMessage": "Mapa offline ativo: {name}"
+  },
+  "map.basemapSwitcher.disabledHint": {
+    "defaultMessage": "Mapa base usado quando o mapa offline está desativado"
+  }
 }

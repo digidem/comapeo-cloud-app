@@ -959,8 +959,14 @@
   "login.urlRequired": {
     "defaultMessage": "Server URL is required"
   },
+  "map.activeMap.badge": {
+    "defaultMessage": "Active offline map: {name}"
+  },
   "map.basemap.label": {
     "defaultMessage": "Basemap"
+  },
+  "map.basemapSwitcher.disabledHint": {
+    "defaultMessage": "Basemap used when offline map is turned off"
   },
   "map.bounds.antimeridianCrossing": {
     "defaultMessage": "Selection cannot cross the 180° meridian."
