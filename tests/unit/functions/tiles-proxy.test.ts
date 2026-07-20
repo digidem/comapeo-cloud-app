@@ -198,7 +198,7 @@ describe('tile proxy', () => {
     expect(await res.text()).toContain('content type');
   });
 
-  it('returns 429 after exceeding rate limit (2000/60s)', async () => {
+  it('returns 429 after exceeding rate limit (5000/60s)', async () => {
     // Reset module state so rateLimitMap starts fresh
     vi.resetModules();
     const { onRequest: freshOnRequest } =
@@ -215,8 +215,8 @@ describe('tile proxy', () => {
     const url = `http://localhost/api/tiles?url=${encodeURIComponent(ALLOWED_TILE_URL)}`;
     const headers = { 'x-forwarded-for': '10.0.0.1' };
 
-    // First 2000 requests should succeed
-    for (let i = 0; i < 2000; i++) {
+    // First 5000 requests should succeed
+    for (let i = 0; i < 5000; i++) {
       const req = new Request(url, { method: 'GET', headers });
       const res = await freshOnRequest({
         request: req,
@@ -227,7 +227,7 @@ describe('tile proxy', () => {
       }
     }
 
-    // 2001st request should be rate-limited
+    // 5001st request should be rate-limited
     const req = new Request(url, { method: 'GET', headers });
     const res = await freshOnRequest({
       request: req,
