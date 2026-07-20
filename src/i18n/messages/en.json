@@ -962,14 +962,38 @@
   "map.basemap.label": {
     "defaultMessage": "Basemap"
   },
+  "map.bounds.antimeridianCrossing": {
+    "defaultMessage": "Selection cannot cross the 180° meridian."
+  },
+  "map.bounds.areaUpdated": {
+    "defaultMessage": "Map area updated"
+  },
+  "map.bounds.cancelDraw": {
+    "defaultMessage": "Cancel drawing"
+  },
+  "map.bounds.drawBounds": {
+    "defaultMessage": "Draw bounds"
+  },
+  "map.bounds.drawingInstruction": {
+    "defaultMessage": "Drag on the map to set the area"
+  },
+  "map.bounds.drawingInstructionCancel": {
+    "defaultMessage": "Cancel"
+  },
   "map.bounds.east": {
     "defaultMessage": "East"
+  },
+  "map.bounds.frameInstruction": {
+    "defaultMessage": "Pan and zoom until the area fits inside the frame"
+  },
+  "map.bounds.invalidCoordinates": {
+    "defaultMessage": "Coordinates must be valid numbers"
   },
   "map.bounds.invalidLatOrder": {
     "defaultMessage": "North must be greater than south"
   },
   "map.bounds.invalidLatitude": {
-    "defaultMessage": "Latitude must be between -90 and 90"
+    "defaultMessage": "Latitude must be between -85.0511 and 85.0511"
   },
   "map.bounds.invalidLngOrder": {
     "defaultMessage": "East must be greater than west"
@@ -983,11 +1007,17 @@
   "map.bounds.north": {
     "defaultMessage": "North"
   },
+  "map.bounds.setThisArea": {
+    "defaultMessage": "Set this area"
+  },
   "map.bounds.south": {
     "defaultMessage": "South"
   },
   "map.bounds.title": {
     "defaultMessage": "Bounds"
+  },
+  "map.bounds.undo": {
+    "defaultMessage": "Undo"
   },
   "map.bounds.useCurrentView": {
     "defaultMessage": "Use current view"
@@ -998,11 +1028,68 @@
   "map.bounds.west": {
     "defaultMessage": "West"
   },
+  "map.bounds.zeroAreaBounds": {
+    "defaultMessage": "Selected area has no size. Add more observations first."
+  },
+  "map.download.button": {
+    "defaultMessage": "Download Map"
+  },
+  "map.download.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "map.download.concurrencyWarning": {
+    "defaultMessage": "Another map is currently downloading. Please wait for it to finish before starting a new download."
+  },
+  "map.download.confirmLarge": {
+    "defaultMessage": "This map is estimated at {size}. It may take a while. Continue?"
+  },
+  "map.download.error": {
+    "defaultMessage": "Download failed: {error}"
+  },
+  "map.download.estimatedSize": {
+    "defaultMessage": "Estimated size: {size}"
+  },
+  "map.download.export": {
+    "defaultMessage": "Download SMP File"
+  },
+  "map.download.interrupted": {
+    "defaultMessage": "A previous download was interrupted. You can try again."
+  },
+  "map.download.maxRetries": {
+    "defaultMessage": "Max retries reached"
+  },
+  "map.download.missing": {
+    "defaultMessage": "The saved map package is missing or unreadable. You can regenerate it."
+  },
+  "map.download.progress": {
+    "defaultMessage": "Downloading… {downloaded} of {total} tiles ({bytes})"
+  },
+  "map.download.ready": {
+    "defaultMessage": "Map downloaded successfully ({size})"
+  },
+  "map.download.retry": {
+    "defaultMessage": "Retry"
+  },
+  "map.download.skippedWarning": {
+    "defaultMessage": "{n} tiles could not be downloaded. The package may be incomplete."
+  },
+  "map.download.starting": {
+    "defaultMessage": "Starting download…"
+  },
+  "map.download.storageWarning": {
+    "defaultMessage": "Not enough storage space. {available} available, {estimated} estimated."
+  },
+  "map.download.tryAnyway": {
+    "defaultMessage": "Try anyway"
+  },
+  "map.download.unknownError": {
+    "defaultMessage": "Unknown error"
+  },
   "map.nameDialog.cancel": {
     "defaultMessage": "Cancel"
   },
   "map.nameDialog.description": {
-    "defaultMessage": "Save this map configuration as a draft. Download support comes later."
+    "defaultMessage": "Save this map configuration as a draft. You can then download it as an .smp file."
   },
   "map.nameDialog.nameLabel": {
     "defaultMessage": "Map name"
@@ -1103,6 +1190,9 @@
   "map.stylePicker.customMode": {
     "defaultMessage": "Custom URL"
   },
+  "map.stylePicker.customUrlHostnameWarning": {
+    "defaultMessage": "This tile provider may not be available for offline downloads. Only supported providers work with map package generation."
+  },
   "map.stylePicker.customUrlLabel": {
     "defaultMessage": "Custom URL"
   },
@@ -1144,6 +1234,9 @@
   },
   "map.title": {
     "defaultMessage": "Map"
+  },
+  "map.zoom.downloadNote": {
+    "defaultMessage": "Downloads include all zoom levels from 0 to the maximum."
   },
   "map.zoom.invalidRange": {
     "defaultMessage": "Max zoom must be greater than or equal to min zoom"

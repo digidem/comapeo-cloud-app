@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { basemapToMapStyle, normalizeTileUrl } from '@/lib/map/basemap-utils';
+import {
+  basemapToMapStyle,
+  isKnownTileHost,
+  normalizeTileUrl,
+} from '@/lib/map/basemap-utils';
 import { BASEMAP_CATALOG, findBasemap } from '@/lib/map/basemaps';
 
 describe('normalizeTileUrl', () => {
@@ -163,5 +167,32 @@ describe('basemapToMapStyle', () => {
         expect(style.version).toBe(8);
       }
     }
+  });
+});
+
+describe('isKnownTileHost', () => {
+  it('returns true for hostnames in the tile proxy allowlist', () => {
+    expect(isKnownTileHost('https://tile.openstreetmap.org/0/0/0.png')).toBe(
+      true,
+    );
+    expect(
+      isKnownTileHost('https://basemaps.cartocdn.com/light_all/0/0/0.png'),
+    ).toBe(true);
+  });
+
+  it('returns true for allowlisted wildcard subdomain patterns', () => {
+    expect(isKnownTileHost('https://server.arcgisonline.com/tile/0/0/0')).toBe(
+      true,
+    );
+  });
+
+  it('returns false for hostnames not in the allowlist', () => {
+    expect(isKnownTileHost('https://tiles.example.com/{z}/{x}/{y}.png')).toBe(
+      false,
+    );
+  });
+
+  it('returns false for an unparseable URL', () => {
+    expect(isKnownTileHost('not a url')).toBe(false);
   });
 });

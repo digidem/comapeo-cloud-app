@@ -4,13 +4,14 @@ import {
   type CSSProperties,
   type ComponentProps,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
 } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import type { MapRef } from 'react-map-gl/maplibre';
-import Map from 'react-map-gl/maplibre';
+import Map, { AttributionControl } from 'react-map-gl/maplibre';
 
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { BASEMAP_CATALOG, findBasemap } from '@/lib/map/basemaps';
@@ -172,8 +173,23 @@ function MapContainer({
     ? `relative overflow-hidden ${className}`
     : 'relative overflow-hidden';
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Start compact attribution collapsed — MapLibre initializes with
+  // both `maplibregl-compact` and `maplibregl-compact-show`, which shows
+  // the full text. Remove `compact-show` on mount so the info button
+  // starts collapsed and expands on click.
+  const handleMapLoad = useCallback(() => {
+    const el = containerRef.current?.querySelector(
+      '.maplibregl-ctrl-attrib.maplibregl-compact',
+    );
+    el?.classList.remove('maplibregl-compact-show');
+    onLoad?.();
+  }, [onLoad]);
+
   return (
     <div
+      ref={containerRef}
       data-testid="map-container"
       className={containerClassName}
       style={containerStyle}
@@ -189,9 +205,11 @@ function MapContainer({
         }}
         mapStyle={mapStyle}
         interactive={interactive}
-        onLoad={onLoad}
+        onLoad={handleMapLoad}
+        attributionControl={false}
         {...mapPassthrough}
       >
+        <AttributionControl position="top-left" compact />
         {children}
       </Map>
 

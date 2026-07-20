@@ -110,10 +110,10 @@ describe('installGlobalErrorHandlers', () => {
 
     // Should only add 2 handlers (error + unhandledrejection), not 4
     const errorCalls = addEventListenerSpy.mock.calls.filter(
-      (c) => c[0] === 'error',
+      (c) => (c[0] as string) === 'error',
     ).length;
     const rejectionCalls = addEventListenerSpy.mock.calls.filter(
-      (c) => c[0] === 'unhandledrejection',
+      (c) => (c[0] as string) === 'unhandledrejection',
     ).length;
 
     expect(errorCalls).toBe(1);

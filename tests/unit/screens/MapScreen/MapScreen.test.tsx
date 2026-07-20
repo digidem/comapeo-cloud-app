@@ -26,11 +26,37 @@ vi.mock('@tanstack/react-router', async () => {
 });
 
 const mapProps: Array<Record<string, unknown>> = [];
+const attributionControlProps: Array<Record<string, unknown>> = [];
+const unprojectMock = vi.fn((point: [number, number]) => ({
+  lng: point[0],
+  lat: point[1],
+}));
+
+interface MockMapHandle {
+  getMap: () => {
+    getCanvas: () => { clientWidth: number; clientHeight: number };
+    unproject: typeof unprojectMock;
+    dragPan: { enable: () => void; disable: () => void };
+    scrollZoom: { enable: () => void; disable: () => void };
+    on: () => void;
+    off: () => void;
+  };
+}
 
 vi.mock('react-map-gl/maplibre', () => ({
-  default: React.forwardRef<HTMLDivElement, Record<string, unknown>>(
-    function MockMap(props, _ref) {
+  default: React.forwardRef<MockMapHandle, Record<string, unknown>>(
+    function MockMap(props, ref) {
       mapProps.push(props);
+      React.useImperativeHandle(ref, () => ({
+        getMap: () => ({
+          getCanvas: () => ({ clientWidth: 800, clientHeight: 600 }),
+          unproject: unprojectMock,
+          dragPan: { enable: vi.fn(), disable: vi.fn() },
+          scrollZoom: { enable: vi.fn(), disable: vi.fn() },
+          on: vi.fn(),
+          off: vi.fn(),
+        }),
+      }));
       return (
         <div
           data-testid="mock-authoring-map"
@@ -53,6 +79,10 @@ vi.mock('react-map-gl/maplibre', () => ({
   Layer: (props: Record<string, unknown>) => (
     <div data-testid={`mock-layer-${props.id}`} />
   ),
+  AttributionControl: (props: Record<string, unknown>) => {
+    attributionControlProps.push(props);
+    return null;
+  },
 }));
 
 describe('MapScreen', () => {
@@ -60,6 +90,12 @@ describe('MapScreen', () => {
     await resetDb();
     localStorage.clear();
     mapProps.length = 0;
+    attributionControlProps.length = 0;
+    unprojectMock.mockReset();
+    unprojectMock.mockImplementation((point: [number, number]) => ({
+      lng: point[0],
+      lat: point[1],
+    }));
     useProjectStore.setState({ selectedProjectId: 'project-1' });
     await getDb().projects.add({
       localId: 'project-1',
@@ -83,6 +119,21 @@ describe('MapScreen', () => {
     expect(screen.getByText('Bounds')).toBeInTheDocument();
     expect(screen.getByText('Zoom range')).toBeInTheDocument();
     expect(screen.getByText('Saved maps')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Draw bounds' }),
+    ).toBeInTheDocument();
+  });
+
+  it('moves compact map attribution to the bottom-left', async () => {
+    render(<MapScreen />);
+
+    await screen.findByTestId('mock-authoring-map');
+
+    expect(mapProps.at(-1)).toMatchObject({ attributionControl: false });
+    expect(attributionControlProps.at(-1)).toMatchObject({
+      compact: true,
+      position: 'top-left',
+    });
   });
 
   describe('mobile settings sheet', () => {
@@ -126,6 +177,30 @@ describe('MapScreen', () => {
       expect(
         screen.getAllByRole('heading', { name: 'Bounds', level: 2 }),
       ).toHaveLength(1);
+    });
+
+    it('rejects a frame confirm that crosses the antimeridian instead of drawing an inverted bbox', async () => {
+      const user = userEvent.setup();
+      unprojectMock
+        .mockImplementationOnce(() => ({ lng: 175, lat: 10 }))
+        .mockImplementationOnce(() => ({ lng: 185, lat: 10 }))
+        .mockImplementationOnce(() => ({ lng: 185, lat: -10 }))
+        .mockImplementationOnce(() => ({ lng: 175, lat: -10 }));
+
+      render(<MapScreen />);
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Draw bounds' }),
+      );
+      await user.click(
+        await screen.findByRole('button', { name: 'Set this area' }),
+      );
+
+      expect(
+        await screen.findByText('Selection cannot cross the 180° meridian.'),
+      ).toBeInTheDocument();
+      // Frame stays in draw mode instead of confirming an inverted bbox
+      expect(screen.queryByText('Map area updated')).not.toBeInTheDocument();
     });
   });
 

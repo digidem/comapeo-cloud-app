@@ -1,0 +1,28 @@
+{
+  "url": "http://localhost:5173/settings",
+  "colorScheme": "light",
+  "mediaType": "screen",
+  "test": {
+    "id": "75ecf403a3d88f323244-a9f527c5b923f7b2b1e4",
+    "title": "settings-invite-form",
+    "titlePath": [
+      "feature.screenshots.ts",
+      "Feature screenshots",
+      "settings-invite-form"
+    ],
+    "retry": 0,
+    "retries": 0,
+    "repeat": 0,
+    "location": {
+      "file": "tests/e2e/feature.screenshots.ts",
+      "line": 44,
+      "column": 3
+    },
+    "annotations": []
+  },
+  "browser": { "name": "chromium", "version": "148.0.7778.96" },
+  "automationLibrary": { "version": "1.60.0", "name": "@playwright/test" },
+  "sdk": { "name": "@argos-ci/playwright", "version": "7.0.5" },
+  "viewport": { "width": 1440, "height": 900 },
+  "transient": {}
+}

@@ -162,6 +162,11 @@ export const mapMessages = defineMessages({
     id: 'map.stylePicker.invalidUrl',
     defaultMessage: 'Enter an http:// or https:// URL',
   },
+  customUrlHostnameWarning: {
+    id: 'map.stylePicker.customUrlHostnameWarning',
+    defaultMessage:
+      'This tile provider may not be available for offline downloads. Only supported providers work with map package generation.',
+  },
   selectedStyle: {
     id: 'map.stylePicker.selectedStyle',
     defaultMessage: 'Selected',
@@ -204,7 +209,7 @@ export const mapMessages = defineMessages({
   },
   invalidLatitude: {
     id: 'map.bounds.invalidLatitude',
-    defaultMessage: 'Latitude must be between -90 and 90',
+    defaultMessage: 'Latitude must be between -85.0511 and 85.0511',
   },
   invalidLngOrder: {
     id: 'map.bounds.invalidLngOrder',
@@ -213,6 +218,18 @@ export const mapMessages = defineMessages({
   invalidLatOrder: {
     id: 'map.bounds.invalidLatOrder',
     defaultMessage: 'North must be greater than south',
+  },
+  zeroAreaBounds: {
+    id: 'map.bounds.zeroAreaBounds',
+    defaultMessage: 'Selected area has no size. Add more observations first.',
+  },
+  antimeridianCrossing: {
+    id: 'map.bounds.antimeridianCrossing',
+    defaultMessage: 'Selection cannot cross the 180° meridian.',
+  },
+  invalidCoordinates: {
+    id: 'map.bounds.invalidCoordinates',
+    defaultMessage: 'Coordinates must be valid numbers',
   },
   zoomTitle: {
     id: 'map.zoom.title',
@@ -234,6 +251,10 @@ export const mapMessages = defineMessages({
     id: 'map.zoom.invalidRange',
     defaultMessage: 'Max zoom must be greater than or equal to min zoom',
   },
+  zoomDownloadNote: {
+    id: 'map.zoom.downloadNote',
+    defaultMessage: 'Downloads include all zoom levels from 0 to the maximum.',
+  },
   nameDialogTitle: {
     id: 'map.nameDialog.title',
     defaultMessage: 'Save map',
@@ -241,7 +262,7 @@ export const mapMessages = defineMessages({
   nameDialogDescription: {
     id: 'map.nameDialog.description',
     defaultMessage:
-      'Save this map configuration as a draft. Download support comes later.',
+      'Save this map configuration as a draft. You can then download it as an .smp file.',
   },
   nameLabel: {
     id: 'map.nameDialog.nameLabel',
@@ -266,5 +287,115 @@ export const mapMessages = defineMessages({
   saveDraft: {
     id: 'map.nameDialog.saveDraft',
     defaultMessage: 'Save draft',
+  },
+  // ── Download ───────────────────────────────────────────────────────────
+  downloadButton: {
+    id: 'map.download.button',
+    defaultMessage: 'Download Map',
+  },
+  downloadProgress: {
+    id: 'map.download.progress',
+    defaultMessage: 'Downloading… {downloaded} of {total} tiles ({bytes})',
+  },
+  downloadStarting: {
+    id: 'map.download.starting',
+    defaultMessage: 'Starting download…',
+  },
+  downloadFailed: {
+    id: 'map.download.error',
+    defaultMessage: 'Download failed: {error}',
+  },
+  downloadCancel: {
+    id: 'map.download.cancel',
+    defaultMessage: 'Cancel',
+  },
+  downloadConfirmLarge: {
+    id: 'map.download.confirmLarge',
+    defaultMessage:
+      'This map is estimated at {size}. It may take a while. Continue?',
+  },
+  downloadStorageWarning: {
+    id: 'map.download.storageWarning',
+    defaultMessage:
+      'Not enough storage space. {available} available, {estimated} estimated.',
+  },
+  downloadConcurrencyWarning: {
+    id: 'map.download.concurrencyWarning',
+    defaultMessage:
+      'Another map is currently downloading. Please wait for it to finish before starting a new download.',
+  },
+  downloadEstimatedSize: {
+    id: 'map.download.estimatedSize',
+    defaultMessage: 'Estimated size: {size}',
+  },
+  downloadRetry: {
+    id: 'map.download.retry',
+    defaultMessage: 'Retry',
+  },
+  downloadMaxRetries: {
+    id: 'map.download.maxRetries',
+    defaultMessage: 'Max retries reached',
+  },
+  downloadTryAnyway: {
+    id: 'map.download.tryAnyway',
+    defaultMessage: 'Try anyway',
+  },
+  downloadReady: {
+    id: 'map.download.ready',
+    defaultMessage: 'Map downloaded successfully ({size})',
+  },
+  downloadExport: {
+    id: 'map.download.export',
+    defaultMessage: 'Download SMP File',
+  },
+  drawBounds: {
+    id: 'map.bounds.drawBounds',
+    defaultMessage: 'Draw bounds',
+  },
+  cancelDraw: {
+    id: 'map.bounds.cancelDraw',
+    defaultMessage: 'Cancel drawing',
+  },
+  drawingInstruction: {
+    id: 'map.bounds.drawingInstruction',
+    defaultMessage: 'Drag on the map to set the area',
+  },
+  drawingInstructionCancel: {
+    id: 'map.bounds.drawingInstructionCancel',
+    defaultMessage: 'Cancel',
+  },
+  setThisArea: {
+    id: 'map.bounds.setThisArea',
+    defaultMessage: 'Set this area',
+  },
+  areaUpdated: {
+    id: 'map.bounds.areaUpdated',
+    defaultMessage: 'Map area updated',
+  },
+  undo: {
+    id: 'map.bounds.undo',
+    defaultMessage: 'Undo',
+  },
+  frameInstruction: {
+    id: 'map.bounds.frameInstruction',
+    defaultMessage: 'Pan and zoom until the area fits inside the frame',
+  },
+  downloadInterrupted: {
+    id: 'map.download.interrupted',
+    defaultMessage: 'A previous download was interrupted. You can try again.',
+  },
+  downloadMissing: {
+    id: 'map.download.missing',
+    defaultMessage:
+      'The saved map package is missing or unreadable. You can regenerate it.',
+  },
+  downloadUnknownError: {
+    id: 'map.download.unknownError',
+    defaultMessage: 'Unknown error',
+  },
+  downloadSkippedWarning: {
+    id: 'map.download.skippedWarning',
+    defaultMessage:
+      '{n} tiles could not be downloaded. The package may be incomplete.',
   },
 });

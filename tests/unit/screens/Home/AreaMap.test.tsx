@@ -67,6 +67,7 @@ vi.mock('react-map-gl/maplibre', () => {
         />
       );
     },
+    AttributionControl: () => null,
   };
 });
 

@@ -98,6 +98,32 @@ describe('AppShell', () => {
     expect(topbar.className).toContain('h-14');
   });
 
+  it('lets the map route own the topbar height without shell scrolling', () => {
+    render(
+      <AppShell navItems={navItems} activeNavPath="/map">
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    const main = screen.getByRole('main');
+    expect(main.parentElement).toHaveClass('pt-14');
+    expect(main).toHaveClass('overflow-hidden');
+    expect(main).not.toHaveClass('overflow-y-auto');
+  });
+
+  it('keeps the standard shell offset and scrolling on non-map routes', () => {
+    render(
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    const main = screen.getByRole('main');
+    expect(main.parentElement).toHaveClass('pt-14');
+    expect(main).toHaveClass('overflow-y-auto');
+    expect(main).not.toHaveClass('overflow-hidden');
+  });
+
   it('renders secondaryContent when provided', () => {
     render(
       <AppShell

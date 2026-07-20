@@ -368,3 +368,20 @@ html {
   stroke-dashoffset: 40;
   animation: drawCheckmarkLarge 0.4s ease-out forwards;
 }
+
+/* ---------------------------------------------------------------------------
+   MapLibre attribution — moved to top-left, compact info button on all maps
+   --------------------------------------------------------------------------- */
+.maplibregl-ctrl-attrib {
+  margin: 8px 0 0 8px !important;
+}
+
+/* Match the semi-transparent look of the basemap switcher / view-only badge */
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(4px);
+}
+
+[data-theme='dark'] .maplibregl-ctrl-attrib.maplibregl-compact {
+  background: rgba(19, 30, 53, 0.7) !important;
+}

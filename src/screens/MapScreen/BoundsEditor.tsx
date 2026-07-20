@@ -11,6 +11,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip } from '@/components/ui/tooltip';
 import { getProjectPoints } from '@/lib/data-layer';
+import {
+  WEB_MERCATOR_LAT_LIMIT,
+  crossesAntimeridian,
+} from '@/lib/map/bbox-utils';
 
 import { mapMessages } from './messages';
 
@@ -63,6 +67,7 @@ export function BoundsEditor({
 }: BoundsEditorProps) {
   const intl = useIntl();
   const [draft, setDraft] = useState(() => draftFromBbox(value));
+  const [areaError, setAreaError] = useState<string | null>(null);
   const valueKey = value.join(',');
   const valueDraft = useMemo(() => {
     const [west = '', south = '', east = '', north = ''] = valueKey.split(',');
@@ -103,11 +108,15 @@ export function BoundsEditor({
       ? intl.formatMessage(mapMessages.invalidLongitude)
       : undefined;
   const southRangeError =
-    parsed.south === null || parsed.south < -90 || parsed.south > 90
+    parsed.south === null ||
+    parsed.south < -WEB_MERCATOR_LAT_LIMIT ||
+    parsed.south > WEB_MERCATOR_LAT_LIMIT
       ? intl.formatMessage(mapMessages.invalidLatitude)
       : undefined;
   const northRangeError =
-    parsed.north === null || parsed.north < -90 || parsed.north > 90
+    parsed.north === null ||
+    parsed.north < -WEB_MERCATOR_LAT_LIMIT ||
+    parsed.north > WEB_MERCATOR_LAT_LIMIT
       ? intl.formatMessage(mapMessages.invalidLatitude)
       : undefined;
 
@@ -161,6 +170,7 @@ export function BoundsEditor({
 
   function updateDraft(key: keyof BoundsDraft, nextValue: string) {
     setDraft((current) => ({ ...current, [key]: nextValue }));
+    setAreaError(null);
   }
 
   function setBounds(nextBbox: [number, number, number, number]) {
@@ -168,16 +178,52 @@ export function BoundsEditor({
     onChange(nextBbox);
   }
 
+  function validateBbox(b: [number, number, number, number]): string | null {
+    const [west, south, east, north] = b;
+    if (
+      !Number.isFinite(west) ||
+      !Number.isFinite(south) ||
+      !Number.isFinite(east) ||
+      !Number.isFinite(north)
+    ) {
+      return intl.formatMessage(mapMessages.invalidCoordinates);
+    }
+    if (
+      south < -WEB_MERCATOR_LAT_LIMIT ||
+      south > WEB_MERCATOR_LAT_LIMIT ||
+      north < -WEB_MERCATOR_LAT_LIMIT ||
+      north > WEB_MERCATOR_LAT_LIMIT
+    ) {
+      return intl.formatMessage(mapMessages.invalidLatitude);
+    }
+    if (west === east || south === north) {
+      return intl.formatMessage(mapMessages.zeroAreaBounds);
+    }
+    if (west >= east) return intl.formatMessage(mapMessages.invalidLngOrder);
+    if (south >= north) return intl.formatMessage(mapMessages.invalidLatOrder);
+    if (crossesAntimeridian([west, east])) {
+      return intl.formatMessage(mapMessages.antimeridianCrossing);
+    }
+    return null;
+  }
+
   function handleUseCurrentView() {
     const bounds = mapRef.current?.getBounds();
     if (!bounds) return;
 
-    setBounds([
+    const nextBbox: [number, number, number, number] = [
       bounds.getWest(),
       bounds.getSouth(),
       bounds.getEast(),
       bounds.getNorth(),
-    ]);
+    ];
+    const error = validateBbox(nextBbox);
+    if (error) {
+      setAreaError(error);
+      return;
+    }
+    setAreaError(null);
+    setBounds(nextBbox);
   }
 
   function handleUseProjectArea() {
@@ -185,6 +231,12 @@ export function BoundsEditor({
     if (!points || points.features.length === 0) return;
 
     const nextBbox = bbox(points) as [number, number, number, number];
+    const error = validateBbox(nextBbox);
+    if (error) {
+      setAreaError(error);
+      return;
+    }
+    setAreaError(null);
     setBounds(nextBbox);
   }
 
@@ -265,6 +317,12 @@ export function BoundsEditor({
       {noProjectPoints ? (
         <p className="text-xs text-text-muted">
           {intl.formatMessage(mapMessages.noProjectPoints)}
+        </p>
+      ) : null}
+
+      {areaError ? (
+        <p role="alert" className="text-sm text-error">
+          {areaError}
         </p>
       ) : null}
     </section>

@@ -1,0 +1,28 @@
+{
+  "url": "http://localhost:5173/",
+  "colorScheme": "light",
+  "mediaType": "screen",
+  "test": {
+    "id": "69583cefdee5152ccb60-f001a1addd8234541585",
+    "title": "home-project-empty cloud at desktop",
+    "titlePath": [
+      "home.screenshots.ts",
+      "Home screen — visual screenshots",
+      "home-project-empty cloud at desktop"
+    ],
+    "retry": 0,
+    "retries": 0,
+    "repeat": 0,
+    "location": {
+      "file": "tests/e2e/home.screenshots.ts",
+      "line": 54,
+      "column": 7
+    },
+    "annotations": []
+  },
+  "browser": { "name": "chromium", "version": "148.0.7778.96" },
+  "automationLibrary": { "version": "1.60.0", "name": "@playwright/test" },
+  "sdk": { "name": "@argos-ci/playwright", "version": "7.0.5" },
+  "viewport": { "width": 1440, "height": 900 },
+  "transient": {}
+}

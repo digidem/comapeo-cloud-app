@@ -28,6 +28,7 @@ vi.mock('react-map-gl/maplibre', () => ({
   Marker: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="mock-marker">{children}</div>
   ),
+  AttributionControl: () => null,
 }));
 
 vi.mock('@/components/layout/shell-slot', () => ({

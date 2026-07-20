@@ -1,0 +1,28 @@
+{
+  "url": "http://localhost:5173/alerts/new",
+  "colorScheme": "light",
+  "mediaType": "screen",
+  "test": {
+    "id": "63485462c0f75fc0f618-5f9b7993a35af668fa3e",
+    "title": "create alert sentinel theme at mobile viewport",
+    "titlePath": [
+      "alerts.screenshots.ts",
+      "Alerts - visual screenshots",
+      "create alert sentinel theme at mobile viewport"
+    ],
+    "retry": 0,
+    "retries": 0,
+    "repeat": 0,
+    "location": {
+      "file": "tests/e2e/alerts.screenshots.ts",
+      "line": 43,
+      "column": 7
+    },
+    "annotations": []
+  },
+  "browser": { "name": "chromium", "version": "148.0.7778.96" },
+  "automationLibrary": { "version": "1.60.0", "name": "@playwright/test" },
+  "sdk": { "name": "@argos-ci/playwright", "version": "7.0.5" },
+  "viewport": { "width": 375, "height": 812 },
+  "transient": {}
+}

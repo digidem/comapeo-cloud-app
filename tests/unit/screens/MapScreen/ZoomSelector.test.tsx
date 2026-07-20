@@ -9,7 +9,11 @@ describe('ZoomSelector', () => {
     const onChange = vi.fn();
 
     render(
-      <ZoomSelector value={{ minZoom: 0, maxZoom: 14 }} onChange={onChange} />,
+      <ZoomSelector
+        value={{ minZoom: 0, maxZoom: 14 }}
+        onChange={onChange}
+        showMinZoom
+      />,
     );
 
     await user.clear(screen.getByLabelText('Minimum zoom'));
@@ -32,7 +36,11 @@ describe('ZoomSelector', () => {
     const onChange = vi.fn();
 
     render(
-      <ZoomSelector value={{ minZoom: 10, maxZoom: 14 }} onChange={onChange} />,
+      <ZoomSelector
+        value={{ minZoom: 10, maxZoom: 14 }}
+        onChange={onChange}
+        showMinZoom
+      />,
     );
 
     await user.clear(screen.getByLabelText('Maximum zoom'));

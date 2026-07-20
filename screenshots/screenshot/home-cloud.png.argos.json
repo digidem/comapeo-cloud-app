@@ -1,0 +1,28 @@
+{
+  "url": "http://localhost:5173/",
+  "colorScheme": "light",
+  "mediaType": "screen",
+  "test": {
+    "id": "ae72acf7982dd24d21aa-8b4fc9a0bc73074e982a",
+    "title": "home page cloud theme at mobile viewport",
+    "titlePath": [
+      "app.screenshots.ts",
+      "App - visual screenshots",
+      "home page cloud theme at mobile viewport"
+    ],
+    "retry": 0,
+    "retries": 0,
+    "repeat": 0,
+    "location": {
+      "file": "tests/e2e/app.screenshots.ts",
+      "line": 15,
+      "column": 7
+    },
+    "annotations": []
+  },
+  "browser": { "name": "chromium", "version": "148.0.7778.96" },
+  "automationLibrary": { "version": "1.60.0", "name": "@playwright/test" },
+  "sdk": { "name": "@argos-ci/playwright", "version": "7.0.5" },
+  "viewport": { "width": 375, "height": 812 },
+  "transient": {}
+}
