@@ -196,12 +196,14 @@ export function BoundsEditor({
     ) {
       return intl.formatMessage(mapMessages.invalidLatitude);
     }
-    if (west === east || south === north)
-      {return intl.formatMessage(mapMessages.zeroAreaBounds);}
+    if (west === east || south === north) {
+      return intl.formatMessage(mapMessages.zeroAreaBounds);
+    }
     if (west >= east) return intl.formatMessage(mapMessages.invalidLngOrder);
     if (south >= north) return intl.formatMessage(mapMessages.invalidLatOrder);
-    if (crossesAntimeridian([west, east]))
-      {return intl.formatMessage(mapMessages.antimeridianCrossing);}
+    if (crossesAntimeridian([west, east])) {
+      return intl.formatMessage(mapMessages.antimeridianCrossing);
+    }
     return null;
   }
 
