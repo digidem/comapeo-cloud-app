@@ -40,6 +40,15 @@ async function seedMapDownloadTest(
       return new Promise<void>((resolve, reject) => {
         const req = indexedDB.open('comapeo-cloud-app');
         req.onerror = () => reject(new Error('Failed to open IndexedDB'));
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains('remoteServers'))
+            db.createObjectStore('remoteServers', { keyPath: 'id' });
+          if (!db.objectStoreNames.contains('projects'))
+            db.createObjectStore('projects', { keyPath: 'localId' });
+          if (!db.objectStoreNames.contains('maps'))
+            db.createObjectStore('maps', { keyPath: 'id' });
+        };
         req.onsuccess = () => {
           const db = req.result;
           try {
