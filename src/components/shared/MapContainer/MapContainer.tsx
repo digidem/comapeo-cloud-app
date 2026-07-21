@@ -40,6 +40,10 @@ const messages = defineMessages({
     id: 'map.activeMap.badge',
     defaultMessage: 'Active offline map: {name}',
   },
+  activeMapOnlineBadge: {
+    id: 'map.activeMap.onlineBadge',
+    defaultMessage: 'Active map (online): {name}',
+  },
   basemapDisabledHint: {
     id: 'map.basemapSwitcher.disabledHint',
     defaultMessage: 'Basemap used when offline map is turned off',
@@ -403,7 +407,7 @@ function MapContainer({
                 strokeLinecap="round"
               />
             </svg>
-            {intl.formatMessage(messages.activeMapBadge, {
+            {intl.formatMessage(messages.activeMapOnlineBadge, {
               name: activeSavedMap?.name ?? '',
             })}
           </span>
