@@ -234,8 +234,13 @@ describe('MapScreen', () => {
 
     render(<MapScreen />);
 
+    // Change something from defaults so the settings sheet Save Map button is enabled
     await user.click(
-      (await screen.findAllByRole('button', { name: 'Save Map' })).at(-1)!,
+      await screen.findByRole('button', { name: 'OpenStreetMap' }),
+    );
+
+    await user.click(
+      (await screen.findAllByRole('button', { name: 'Save Map' })).slice(-1)[0]!,
     );
     await user.type(await screen.findByLabelText('Map name'), 'Field map');
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
@@ -249,7 +254,27 @@ describe('MapScreen', () => {
     expect(screen.getByLabelText('Map name')).toHaveValue('Field map');
   });
 
-  it('disables both Save Map trigger buttons while a save mutation is pending', async () => {
+  it('disables the settings sheet Save Map button when nothing has been configured', async () => {
+    const user = userEvent.setup();
+
+    render(<MapScreen />);
+
+    // With default bbox, zoom, and basemap, the settings sheet button
+    // (last Save Map button in DOM order) should be disabled.
+    const saveButtons = await screen.findAllByRole('button', {
+      name: 'Save Map',
+    });
+    const settingsSheetButton = saveButtons[saveButtons.length - 1]!;
+    expect(settingsSheetButton).toBeDisabled();
+
+    // After changing the basemap, the button should become enabled
+    await user.click(
+      screen.getByRole('button', { name: 'OpenStreetMap' }),
+    );
+    expect(settingsSheetButton).toBeEnabled();
+  });
+
+  it('disables the settings sheet Save Map button while a save mutation is pending', async () => {
     const user = userEvent.setup();
 
     // Never-resolving promise keeps the mutation permanently pending
@@ -262,26 +287,29 @@ describe('MapScreen', () => {
 
     render(<MapScreen />);
 
-    // Open the name dialog and submit — the mutation stays pending
+    // Change basemap so the settings sheet Save Map button is enabled
     await user.click(
-      (await screen.findAllByRole('button', { name: 'Save Map' })).at(-1)!,
+      await screen.findByRole('button', { name: 'OpenStreetMap' }),
     );
+
+    // Click the settings sheet Save Map button (last in DOM order)
+    const saveButtons = await screen.findAllByRole('button', {
+      name: 'Save Map',
+    });
+    await user.click(saveButtons[saveButtons.length - 1]!);
     await user.type(await screen.findByLabelText('Map name'), 'Field map');
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
 
-    // Dismiss the dialog (ESC) so the trigger buttons are visible again.
+    // Dismiss the dialog (Cancel) so the trigger buttons are visible again.
     // The mutation is still pending — handleSaveMap awaits mutateAsync
     // before closing, so the dialog stays open until we force-close.
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    // Both Save Map trigger buttons should be disabled while pending
-    const saveButtons = screen.getAllByRole('button', {
+    // The settings sheet Save Map button should be disabled while pending
+    const refreshedButtons = screen.getAllByRole('button', {
       name: 'Save Map',
     });
-    expect(saveButtons).toHaveLength(2);
-    for (const btn of saveButtons) {
-      expect(btn).toBeDisabled();
-    }
+    expect(refreshedButtons[refreshedButtons.length - 1]).toBeDisabled();
 
     // Cleanup: resolve the promise so the test can finish
     resolveAdd!('done');

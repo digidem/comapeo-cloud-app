@@ -224,6 +224,18 @@ export function MapScreen() {
   );
   useShellSlot(shellSlot);
 
+  const hasConfigChanges = useMemo(
+    () =>
+      bbox[0] !== DEFAULT_BBOX[0] ||
+      bbox[1] !== DEFAULT_BBOX[1] ||
+      bbox[2] !== DEFAULT_BBOX[2] ||
+      bbox[3] !== DEFAULT_BBOX[3] ||
+      zoomRange.minZoom !== DEFAULT_ZOOM.minZoom ||
+      zoomRange.maxZoom !== DEFAULT_ZOOM.maxZoom ||
+      selectedStyle.id !== DEFAULT_BASEMAP_ID,
+    [bbox, zoomRange, selectedStyle],
+  );
+
   function openNameDialog() {
     setNameError(null);
     setNameDialogOpen(true);
@@ -322,7 +334,7 @@ export function MapScreen() {
         <Button
           onClick={openNameDialog}
           className="w-full"
-          disabled={createMap.isPending}
+          disabled={createMap.isPending || !hasConfigChanges}
         >
           {intl.formatMessage(mapMessages.saveMap)}
         </Button>
