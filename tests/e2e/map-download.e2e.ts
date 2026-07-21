@@ -40,6 +40,14 @@ async function seedMapDownloadTest(
       return new Promise<void>((resolve, reject) => {
         const req = indexedDB.open('comapeo-cloud-app');
         req.onerror = () => reject(new Error('Failed to open IndexedDB'));
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          for (const name of ['remoteServers', 'projects', 'maps']) {
+            if (!db.objectStoreNames.contains(name)) {
+              db.createObjectStore(name, { keyPath: 'id' });
+            }
+          }
+        };
         req.onsuccess = () => {
           const db = req.result;
           try {
@@ -195,11 +203,17 @@ test.describe('SMP Download (E2E)', () => {
 
     // Mock storage quota to allow any download size
     await page.evaluate(() => {
-      navigator.storage.estimate = () =>
-        Promise.resolve({
-          quota: 10 * 1024 * 1024 * 1024, // 10 GB
-          usage: 0,
+      if (navigator.storage) {
+        Object.defineProperty(navigator.storage, 'estimate', {
+          value: () =>
+            Promise.resolve({
+              quota: 10 * 1024 * 1024 * 1024, // 10 GB
+              usage: 0,
+            }),
+          writable: true,
+          configurable: true,
         });
+      }
     });
 
     // Intercept tile proxy requests — return synthetic tiles with a delay
