@@ -248,4 +248,36 @@ describe('MapScreen', () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Map name')).toHaveValue('Field map');
   });
+
+  it('disables both Save Map trigger buttons while a save mutation is pending', async () => {
+    const user = userEvent.setup();
+
+    // Never-resolving promise keeps the mutation permanently pending
+    let resolveAdd: (value: string) => void;
+    const pendingPromise = new Promise<string>((resolve) => {
+      resolveAdd = resolve;
+    });
+    vi.spyOn(getDb().maps, 'add').mockReturnValueOnce(pendingPromise as any);
+
+    render(<MapScreen />);
+
+    // Open the name dialog via one of the trigger buttons
+    await user.click(
+      (await screen.findAllByRole('button', { name: 'Save Map' })).at(-1)!,
+    );
+    await user.type(await screen.findByLabelText('Map name'), 'Field map');
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    // The dialog closes on submit, so the trigger buttons are visible again.
+    // While the mutation is pending, both Save Map buttons should be disabled.
+    const saveButtons = await screen.findAllByRole('button', {
+      name: 'Save Map',
+    });
+    for (const btn of saveButtons) {
+      expect(btn).toBeDisabled();
+    }
+
+    // Cleanup: resolve the promise so the test can finish
+    resolveAdd!('done');
+  });
 });
