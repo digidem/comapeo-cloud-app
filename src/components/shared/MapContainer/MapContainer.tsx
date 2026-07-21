@@ -1,3 +1,4 @@
+import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import {
@@ -8,13 +9,23 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import type { MapRef } from 'react-map-gl/maplibre';
 import Map, { AttributionControl } from 'react-map-gl/maplibre';
 
+import { useQuery } from '@tanstack/react-query';
+
+import { type SavedMap, getDb } from '@/lib/db';
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { BASEMAP_CATALOG, findBasemap } from '@/lib/map/basemaps';
+import {
+  closeSmpReader,
+  getSmpReader,
+  registerSmpProtocol,
+  resolveSmpStyle,
+} from '@/lib/map/smp-serve';
 import type { BasemapId, ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { useMapStore } from '@/stores/map-store';
 
@@ -24,6 +35,14 @@ const messages = defineMessages({
   viewOnly: {
     id: 'mapContainer.viewOnly',
     defaultMessage: 'View only',
+  },
+  activeMapBadge: {
+    id: 'map.activeMap.badge',
+    defaultMessage: 'Active offline map: {name}',
+  },
+  basemapDisabledHint: {
+    id: 'map.basemapSwitcher.disabledHint',
+    defaultMessage: 'Basemap used when offline map is turned off',
   },
 });
 
@@ -132,6 +151,41 @@ function MapContainer({
   const intl = useIntl();
   const storeBasemapId = useMapStore((s) => s.basemapId);
   const storeSetBasemap = useMapStore((s) => s.setBasemap);
+  const activeMapId = useMapStore((s) => s.activeMapId);
+
+  const { data: activeSavedMap } = useQuery<SavedMap | undefined>({
+    queryKey: ['map', activeMapId],
+    queryFn: () =>
+      activeMapId ? getDb().maps.get(activeMapId) : Promise.resolve(undefined),
+    enabled: !!activeMapId,
+  });
+
+  const [smpStyle, setSmpStyle] = useState<StyleSpecification | null>(null);
+
+  // Build an ImageryBasemap from the active map's saved style settings
+  // so the user sees the same layer/settings across the app immediately
+  // when they set a map active, even before the SMP blob downloads.
+  const activeMapStyle = useMemo(() => {
+    if (!activeSavedMap?.styleUrl) return undefined;
+    return {
+      id: `active:${activeSavedMap.id}` as BasemapId,
+      name: activeSavedMap.name,
+      category: 'street' as const,
+      type: activeSavedMap.type as 'raster' | 'style',
+      url: activeSavedMap.styleUrl,
+      attribution: activeSavedMap.attribution,
+      ...(activeSavedMap.type === 'raster'
+        ? {
+            scheme:
+              (
+                activeSavedMap as typeof activeSavedMap & {
+                  scheme?: 'xyz' | 'tms';
+                }
+              ).scheme ?? 'xyz',
+          }
+        : {}),
+    } satisfies ImageryBasemap;
+  }, [activeSavedMap]);
 
   // Seed the store with defaultBasemapId once on mount (uncontrolled only)
   const hasSeededRef = useRef(false);
@@ -142,6 +196,31 @@ function MapContainer({
     }
   }, [defaultBasemapId, controlledBasemapId, storeSetBasemap]);
 
+  // SMP reader lifecycle — register protocol, open reader, resolve style.
+  // Only activates when the blob is downloaded (status === 'ready').
+  useEffect(() => {
+    const mapId = activeSavedMap?.id;
+    const smpBlob = activeSavedMap?.smpBlob;
+    const status = activeSavedMap?.status;
+
+    if (!mapId || !smpBlob || status !== 'ready') return;
+
+    let cancelled = false;
+    registerSmpProtocol();
+    getSmpReader(mapId, smpBlob).then((reader) => {
+      if (cancelled) return;
+      resolveSmpStyle(reader, mapId).then((style) => {
+        if (cancelled) return;
+        setSmpStyle(style);
+      });
+    });
+    return () => {
+      cancelled = true;
+      closeSmpReader(mapId);
+      setSmpStyle(null);
+    };
+  }, [activeSavedMap?.id, activeSavedMap?.smpBlob, activeSavedMap?.status]);
+
   // Controlled basemapId takes priority; uncontrolled uses the store
   const activeBasemapId = controlledBasemapId ?? storeBasemapId;
 
@@ -150,7 +229,18 @@ function MapContainer({
     [activeBasemapId, basemaps],
   );
 
-  const mapStyle = useMemo(() => basemapToMapStyle(basemap), [basemap]);
+  // Basemap resolution: SMP style > active map style > store/controlled basemap
+  const effectiveBasemap = useMemo(() => {
+    if (activeMapStyle) return activeMapStyle;
+    return basemap;
+  }, [activeMapStyle, basemap]);
+
+  const mapStyle = useMemo(
+    () => smpStyle ?? basemapToMapStyle(effectiveBasemap),
+    [smpStyle, effectiveBasemap],
+  );
+
+  const isOnlineActive = activeMapStyle !== undefined && !smpStyle;
 
   const handleBasemapChange = (id: BasemapId) => {
     if (onBasemapChange) {
@@ -250,6 +340,76 @@ function MapContainer({
         </div>
       )}
 
+      {/* Active offline map badge — bottom-left, visible when SMP tiles are active */}
+      {smpStyle && (
+        <div className="absolute bottom-3 left-3 z-20">
+          <span
+            data-testid="map-active-map-badge"
+            className="inline-flex items-center gap-1 rounded-full bg-[#04145C]/85 px-2.5 py-1 text-xs font-medium text-white shadow-[0_8px_24px_rgba(9,30,66,0.08)] backdrop-blur-sm"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-3.5 w-3.5"
+            >
+              <path
+                d="M9 2L3 5v17l6-3 6 3 6-3V2l-6 3-6-3z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M9 2v17M15 5v17"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {intl.formatMessage(messages.activeMapBadge, {
+              name: activeSavedMap?.name ?? '',
+            })}
+          </span>
+        </div>
+      )}
+
+      {/* Online active map badge — visible when using active map style but SMP not yet ready */}
+      {isOnlineActive && (
+        <div className="absolute bottom-3 left-3 z-20">
+          <span
+            data-testid="map-online-active-badge"
+            className="inline-flex items-center gap-1 rounded-full bg-[#04145C]/85 px-2.5 py-1 text-xs font-medium text-white shadow-[0_8px_24px_rgba(9,30,66,0.08)] backdrop-blur-sm"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-3.5 w-3.5"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <circle cx="12" cy="12" r="4" fill="currentColor" />
+              <path
+                d="M12 2v4M12 18v4M2 12h4M18 12h4"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+            {intl.formatMessage(messages.activeMapBadge, {
+              name: activeSavedMap?.name ?? '',
+            })}
+          </span>
+        </div>
+      )}
+
       {/* Basemap switcher overlay */}
       {showBasemapSwitcher && (
         <div className={`absolute z-10 ${positionClass}`}>
@@ -258,6 +418,11 @@ function MapContainer({
               value={basemap.id as BasemapId}
               onChange={handleBasemapChange}
               basemaps={basemaps}
+              title={
+                isOnlineActive || smpStyle
+                  ? intl.formatMessage(messages.basemapDisabledHint)
+                  : undefined
+              }
             />
           )}
         </div>
