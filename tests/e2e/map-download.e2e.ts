@@ -42,9 +42,14 @@ async function seedMapDownloadTest(
         req.onerror = () => reject(new Error('Failed to open IndexedDB'));
         req.onupgradeneeded = () => {
           const db = req.result;
-          for (const name of ['remoteServers', 'projects', 'maps']) {
+          const stores = {
+            remoteServers: 'id',
+            projects: 'localId',
+            maps: 'id',
+          } as const;
+          for (const [name, keyPath] of Object.entries(stores)) {
             if (!db.objectStoreNames.contains(name)) {
-              db.createObjectStore(name, { keyPath: 'id' });
+              db.createObjectStore(name, { keyPath });
             }
           }
         };
