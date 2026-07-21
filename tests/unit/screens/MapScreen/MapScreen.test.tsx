@@ -202,6 +202,35 @@ describe('MapScreen', () => {
       // Frame stays in draw mode instead of confirming an inverted bbox
       expect(screen.queryByText('Map area updated')).not.toBeInTheDocument();
     });
+    it('closes the settings sheet when opening the name dialog on mobile', async () => {
+      const user = userEvent.setup();
+
+      render(<MapScreen />);
+
+      // Open settings sheet via the mobile Settings button
+      await user.click(
+        await screen.findByRole('button', { name: 'Map settings' }),
+      );
+
+      // Change basemap so the Save Map button is enabled
+      await user.click(
+        await screen.findByRole('button', { name: 'OpenStreetMap' }),
+      );
+
+      // Click the settings sheet Save Map button (last in DOM order)
+      const saveButtons = await screen.findAllByRole('button', {
+        name: 'Save Map',
+      });
+      await user.click(saveButtons[saveButtons.length - 1]!);
+
+      // The name dialog should be open
+      expect(
+        await screen.findByRole('dialog', { name: 'Save map' }),
+      ).toBeInTheDocument();
+
+      // The settings sheet should be closed — only one dialog should exist
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    });
   });
 
   it('updates the canvas map style when the selected style changes', async () => {

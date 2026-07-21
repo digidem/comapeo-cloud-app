@@ -238,6 +238,7 @@ export function MapScreen() {
 
   function openNameDialog() {
     setNameError(null);
+    setSettingsOpen(false);
     setNameDialogOpen(true);
   }
 
