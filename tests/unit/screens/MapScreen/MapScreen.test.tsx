@@ -261,18 +261,23 @@ describe('MapScreen', () => {
 
     render(<MapScreen />);
 
-    // Open the name dialog via one of the trigger buttons
+    // Open the name dialog and submit — the mutation stays pending
     await user.click(
       (await screen.findAllByRole('button', { name: 'Save Map' })).at(-1)!,
     );
     await user.type(await screen.findByLabelText('Map name'), 'Field map');
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
 
-    // The dialog closes on submit, so the trigger buttons are visible again.
-    // While the mutation is pending, both Save Map buttons should be disabled.
-    const saveButtons = await screen.findAllByRole('button', {
+    // Dismiss the dialog (ESC) so the trigger buttons are visible again.
+    // The mutation is still pending — handleSaveMap awaits mutateAsync
+    // before closing, so the dialog stays open until we force-close.
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    // Both Save Map trigger buttons should be disabled while pending
+    const saveButtons = screen.getAllByRole('button', {
       name: 'Save Map',
     });
+    expect(saveButtons).toHaveLength(2);
     for (const btn of saveButtons) {
       expect(btn).toBeDisabled();
     }
