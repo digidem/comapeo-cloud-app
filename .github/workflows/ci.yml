@@ -489,7 +489,22 @@ jobs:
         # GHSA-vmh5-mc38-953g, GHSA-vxpw-j846-p89q, GHSA-hm92-r4w5-c3mj:
         # undici vulns in @sentry/cli@3.5.0 transitive dep (undici ^6.22.0).
         # Tracked in issue #126. Remove ignores when @sentry/cli updates undici.
-        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj
+        #
+        # GHSA-3jxr-9vmj-r5cp: brace-expansion DoS (transitive dep via
+        # @storybook/react-vite → glob → minimatch → brace-expansion). Dev
+        # dependency only, not exploitable in production.
+        #
+        # GHSA-52cp-r559-cp3m: js-yaml quadratic CPU on YAML merge keys
+        # (transitive dep via @storybook/test-runner → nyc →
+        # @istanbuljs/load-nyc-config → js-yaml). Dev dependency only.
+        #
+        # GHSA-395f-4hp3-45gv: shell-quote DoS via quadratic parse()
+        # (transitive dep via npm-run-all → shell-quote). Dev dependency only.
+        #
+        # GHSA-gcfj-64vw-6mp9: axios Node HTTP proxy leak after interceptor
+        # cloning (transitive dep via @storybook/test-runner →
+        # jest-process-manager → wait-on → axios). Dev dependency only.
+        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9
 
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request
