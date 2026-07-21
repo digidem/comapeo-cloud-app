@@ -319,7 +319,11 @@ export function MapScreen() {
             <DownloadPanel key={m.id} map={m} />
           ));
         })()}
-        <Button onClick={openNameDialog} className="w-full">
+        <Button
+          onClick={openNameDialog}
+          className="w-full"
+          disabled={createMap.isPending}
+        >
           {intl.formatMessage(mapMessages.saveMap)}
         </Button>
       </div>
@@ -424,7 +428,11 @@ export function MapScreen() {
           ) : null}
           {drawMode !== 'draw_rectangle' && (
             <div className="absolute bottom-4 right-4 lg:hidden">
-              <Button size="sm" onClick={openNameDialog}>
+              <Button
+                size="sm"
+                onClick={openNameDialog}
+                disabled={createMap.isPending}
+              >
                 {intl.formatMessage(mapMessages.saveMap)}
               </Button>
             </div>
