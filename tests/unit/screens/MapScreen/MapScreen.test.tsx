@@ -257,6 +257,7 @@ describe('MapScreen', () => {
     const pendingPromise = new Promise<string>((resolve) => {
       resolveAdd = resolve;
     });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dexie's PromiseExtended vs standard Promise
     vi.spyOn(getDb().maps, 'add').mockReturnValueOnce(pendingPromise as any);
 
     render(<MapScreen />);
