@@ -962,6 +962,9 @@
   "map.activeMap.badge": {
     "defaultMessage": "Active offline map: {name}"
   },
+  "map.activeMap.onlineBadge": {
+    "defaultMessage": "Active map (online): {name}"
+  },
   "map.basemap.label": {
     "defaultMessage": "Basemap"
   },
