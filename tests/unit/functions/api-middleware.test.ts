@@ -41,6 +41,17 @@ describe('api/_middleware', () => {
       expect(await res.text()).toBe('tile-data');
     });
 
+    it('forwards bare /api/tiles (no query params) to next()', async () => {
+      const next = vi
+        .fn()
+        .mockResolvedValue(new Response('tiles-index', { status: 200 }));
+      const req = createRequest('GET', 'http://localhost/api/tiles');
+      const res = await onRequest(createContext(req, next));
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(await res.text()).toBe('tiles-index');
+    });
+
     it('forwards /api/tiles/sub/path to next()', async () => {
       const next = vi
         .fn()
@@ -52,7 +63,7 @@ describe('api/_middleware', () => {
       expect(await res.text()).toBe('deep-tile');
     });
 
-    it('forwards /api/invites/encrypt to next()', async () => {
+    it('forwards POST /api/invites/encrypt to next()', async () => {
       const next = vi
         .fn()
         .mockResolvedValue(new Response('encrypted', { status: 200 }));
@@ -63,7 +74,7 @@ describe('api/_middleware', () => {
       expect(await res.text()).toBe('encrypted');
     });
 
-    it('forwards /api/invites/decrypt to next()', async () => {
+    it('forwards POST /api/invites/decrypt to next()', async () => {
       const next = vi
         .fn()
         .mockResolvedValue(new Response('decrypted', { status: 200 }));
@@ -72,6 +83,28 @@ describe('api/_middleware', () => {
 
       expect(next).toHaveBeenCalledTimes(1);
       expect(await res.text()).toBe('decrypted');
+    });
+
+    it('forwards GET /api/invites/encrypt to next() (handler returns 405)', async () => {
+      const next = vi
+        .fn()
+        .mockResolvedValue(new Response('method-not-allowed', { status: 405 }));
+      const req = createRequest('GET', 'http://localhost/api/invites/encrypt');
+      const res = await onRequest(createContext(req, next));
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).toBe(405);
+    });
+
+    it('forwards GET /api/invites/decrypt to next() (handler returns 405)', async () => {
+      const next = vi
+        .fn()
+        .mockResolvedValue(new Response('method-not-allowed', { status: 405 }));
+      const req = createRequest('GET', 'http://localhost/api/invites/decrypt');
+      const res = await onRequest(createContext(req, next));
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).toBe(405);
     });
   });
 
@@ -85,15 +118,18 @@ describe('api/_middleware', () => {
     });
 
     it('rejects /api/info without x-target-url with 400', async () => {
+      const next = vi.fn();
       const req = createRequest('GET', 'http://localhost/api/info');
-      const res = await onRequest(createContext(req));
+      const res = await onRequest(createContext(req, next));
 
       expect(res.status).toBe(400);
+      expect(next).not.toHaveBeenCalled();
       const body = (await res.json()) as { error: { code: string } };
       expect(body.error.code).toBe('ARCHIVE_PROXY_BAD_TARGET');
     });
 
     it('proxies /api/projects with x-target-url to upstream', async () => {
+      const next = vi.fn();
       const fetchSpy = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ data: [] }), {
           status: 200,
@@ -105,9 +141,10 @@ describe('api/_middleware', () => {
       const req = createRequest('GET', 'http://localhost/api/projects', {
         'x-target-url': 'https://archive.example.com',
       });
-      const res = await onRequest(createContext(req));
+      const res = await onRequest(createContext(req, next));
 
       expect(res.status).toBe(200);
+      expect(next).not.toHaveBeenCalled();
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       // fetch() receives a Request object — extract its URL
       const calledUrl =
@@ -116,6 +153,7 @@ describe('api/_middleware', () => {
     });
 
     it('proxies /api/info with x-target-url to upstream', async () => {
+      const next = vi.fn();
       const fetchSpy = vi.fn().mockResolvedValue(
         new Response(
           JSON.stringify({ data: { deviceId: 'abc', name: 'Test' } }),
@@ -130,9 +168,10 @@ describe('api/_middleware', () => {
       const req = createRequest('GET', 'http://localhost/api/info', {
         'x-target-url': 'https://archive.example.com',
       });
-      const res = await onRequest(createContext(req));
+      const res = await onRequest(createContext(req, next));
 
       expect(res.status).toBe(200);
+      expect(next).not.toHaveBeenCalled();
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       // fetch() receives a Request object — extract its URL
       const calledUrl =
@@ -141,15 +180,18 @@ describe('api/_middleware', () => {
     });
 
     it('rejects POST /api/projects with 405 (not a write endpoint)', async () => {
+      const next = vi.fn();
       const req = createRequest('POST', 'http://localhost/api/projects', {
         'x-target-url': 'https://archive.example.com',
       });
-      const res = await onRequest(createContext(req));
+      const res = await onRequest(createContext(req, next));
 
       expect(res.status).toBe(405);
+      expect(next).not.toHaveBeenCalled();
     });
 
     it('allows POST to /api/projects/:id/remoteDetectionAlerts', async () => {
+      const next = vi.fn();
       const fetchSpy = vi
         .fn()
         .mockResolvedValue(new Response('', { status: 201 }));
@@ -163,31 +205,36 @@ describe('api/_middleware', () => {
           'Content-Type': 'application/json',
         },
       );
-      const res = await onRequest(createContext(req));
+      const res = await onRequest(createContext(req, next));
 
       expect(res.status).toBe(201);
+      expect(next).not.toHaveBeenCalled();
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
 
     it('rejects invalid upstream URL with 400', async () => {
+      const next = vi.fn();
       const req = createRequest('GET', 'http://localhost/api/info', {
         'x-target-url': 'not-a-valid-url',
       });
-      const res = await onRequest(createContext(req));
+      const res = await onRequest(createContext(req, next));
 
       expect(res.status).toBe(400);
+      expect(next).not.toHaveBeenCalled();
     });
 
     it('returns 502 when upstream fetch fails', async () => {
+      const next = vi.fn();
       const fetchSpy = vi.fn().mockRejectedValue(new Error('fetch failed'));
       globalThis.fetch = fetchSpy as unknown as typeof fetch;
 
       const req = createRequest('GET', 'http://localhost/api/projects', {
         'x-target-url': 'https://archive.example.com',
       });
-      const res = await onRequest(createContext(req));
+      const res = await onRequest(createContext(req, next));
 
       expect(res.status).toBe(502);
+      expect(next).not.toHaveBeenCalled();
       const body = (await res.json()) as { error: { code: string } };
       expect(body.error.code).toBe('ARCHIVE_PROXY_UPSTREAM_FAILED');
     });
