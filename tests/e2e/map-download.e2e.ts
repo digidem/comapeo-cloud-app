@@ -202,13 +202,18 @@ test.describe('SMP Download (E2E)', () => {
       maxZoom: 0,
     });
 
-    // Mock storage quota to allow any download size
+    // Mock storage quota to allow any download size.
+    // navigator.storage may not exist in all browsers (e.g. older WebKit builds);
+    // when absent the app's quota check will use its own fallback, so skipping
+    // the mock here is safe — the 1×1px tile payload is tiny regardless.
     await page.evaluate(() => {
-      navigator.storage.estimate = () =>
-        Promise.resolve({
-          quota: 10 * 1024 * 1024 * 1024, // 10 GB
-          usage: 0,
-        });
+      if (navigator.storage) {
+        navigator.storage.estimate = () =>
+          Promise.resolve({
+            quota: 10 * 1024 * 1024 * 1024, // 10 GB
+            usage: 0,
+          });
+      }
     });
 
     // Intercept tile proxy requests — return synthetic tiles with a delay
