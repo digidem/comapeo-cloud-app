@@ -476,10 +476,6 @@
   "theme.dark": "Oscuro",
   "theme.light": "Claro",
   "theme.system": "Sistema",
-  "map.activeMap.badge": {
-    "defaultMessage": "Mapa sin conexión activo: {name}"
-  },
-  "map.basemapSwitcher.disabledHint": {
-    "defaultMessage": "Mapa base usado cuando el mapa sin conexión está desactivado"
-  }
+  "map.activeMap.badge": "Mapa sin conexión activo: {name}",
+  "map.basemapSwitcher.disabledHint": "Mapa base usado cuando el mapa sin conexión está desactivado"
 }

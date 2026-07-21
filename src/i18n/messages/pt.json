@@ -476,10 +476,6 @@
   "theme.dark": "Escuro",
   "theme.light": "Claro",
   "theme.system": "Sistema",
-  "map.activeMap.badge": {
-    "defaultMessage": "Mapa offline ativo: {name}"
-  },
-  "map.basemapSwitcher.disabledHint": {
-    "defaultMessage": "Mapa base usado quando o mapa offline está desativado"
-  }
+  "map.activeMap.badge": "Mapa offline ativo: {name}",
+  "map.basemapSwitcher.disabledHint": "Mapa base usado quando o mapa offline está desativado"
 }
