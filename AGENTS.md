@@ -10,7 +10,7 @@ CoMapeo Cloud App is a web dashboard for the [comapeo-cloud](https://github.com/
 - **Build**: Vite
 - **Routing**: TanStack Router (code-based, NOT file-based)
 - **Data Fetching**: TanStack Query
-- **State**: Zustand (auth, theme, locale)
+- **State**: Zustand (archive, auth, locale, map, project, theme, view-mode)
 - **Validation**: Valibot (runtime schema validation for API responses and form inputs)
 - **Forms**: React Hook Form + @hookform/resolvers (Valibot resolver)
 - **Styling**: Tailwind CSS v4 (CSS-first config via `@tailwindcss/vite`)
