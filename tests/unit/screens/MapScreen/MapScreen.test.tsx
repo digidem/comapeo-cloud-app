@@ -240,7 +240,9 @@ describe('MapScreen', () => {
     );
 
     await user.click(
-      (await screen.findAllByRole('button', { name: 'Save Map' })).slice(-1)[0]!,
+      (await screen.findAllByRole('button', { name: 'Save Map' })).slice(
+        -1,
+      )[0]!,
     );
     await user.type(await screen.findByLabelText('Map name'), 'Field map');
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
@@ -268,9 +270,7 @@ describe('MapScreen', () => {
     expect(settingsSheetButton).toBeDisabled();
 
     // After changing the basemap, the button should become enabled
-    await user.click(
-      screen.getByRole('button', { name: 'OpenStreetMap' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'OpenStreetMap' }));
     expect(settingsSheetButton).toBeEnabled();
   });
 
