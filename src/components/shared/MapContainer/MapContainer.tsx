@@ -162,6 +162,31 @@ function MapContainer({
 
   const [smpStyle, setSmpStyle] = useState<StyleSpecification | null>(null);
 
+  // Build an ImageryBasemap from the active map's saved style settings
+  // so the user sees the same layer/settings across the app immediately
+  // when they set a map active, even before the SMP blob downloads.
+  const activeMapStyle = useMemo(() => {
+    if (!activeSavedMap?.styleUrl) return undefined;
+    return {
+      id: `active:${activeSavedMap.id}` as BasemapId,
+      name: activeSavedMap.name,
+      category: 'street' as const,
+      type: activeSavedMap.type as 'raster' | 'style',
+      url: activeSavedMap.styleUrl,
+      attribution: activeSavedMap.attribution,
+      ...(activeSavedMap.type === 'raster'
+        ? {
+            scheme:
+              (
+                activeSavedMap as typeof activeSavedMap & {
+                  scheme?: 'xyz' | 'tms';
+                }
+              ).scheme ?? 'xyz',
+          }
+        : {}),
+    } satisfies ImageryBasemap;
+  }, [activeSavedMap]);
+
   // Seed the store with defaultBasemapId once on mount (uncontrolled only)
   const hasSeededRef = useRef(false);
   useEffect(() => {
@@ -172,7 +197,7 @@ function MapContainer({
   }, [defaultBasemapId, controlledBasemapId, storeSetBasemap]);
 
   // SMP reader lifecycle — register protocol, open reader, resolve style.
-  // Cleanup sets smpStyle to null (allowed in cleanup, not in effect body).
+  // Only activates when the blob is downloaded (status === 'ready').
   useEffect(() => {
     const mapId = activeSavedMap?.id;
     const smpBlob = activeSavedMap?.smpBlob;
@@ -204,10 +229,18 @@ function MapContainer({
     [activeBasemapId, basemaps],
   );
 
+  // Basemap resolution: SMP style > active map style > store/controlled basemap
+  const effectiveBasemap = useMemo(() => {
+    if (activeMapStyle) return activeMapStyle;
+    return basemap;
+  }, [activeMapStyle, basemap]);
+
   const mapStyle = useMemo(
-    () => smpStyle ?? basemapToMapStyle(basemap),
-    [smpStyle, basemap],
+    () => smpStyle ?? basemapToMapStyle(effectiveBasemap),
+    [smpStyle, effectiveBasemap],
   );
+
+  const isOnlineActive = activeMapStyle !== undefined && !smpStyle;
 
   const handleBasemapChange = (id: BasemapId) => {
     if (onBasemapChange) {
@@ -342,6 +375,41 @@ function MapContainer({
         </div>
       )}
 
+      {/* Online active map badge — visible when using active map style but SMP not yet ready */}
+      {isOnlineActive && (
+        <div className="absolute bottom-3 left-3 z-20">
+          <span
+            data-testid="map-online-active-badge"
+            className="inline-flex items-center gap-1 rounded-full bg-[#04145C]/85 px-2.5 py-1 text-xs font-medium text-white shadow-[0_8px_24px_rgba(9,30,66,0.08)] backdrop-blur-sm"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-3.5 w-3.5"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <circle cx="12" cy="12" r="4" fill="currentColor" />
+              <path
+                d="M12 2v4M12 18v4M2 12h4M18 12h4"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+            {intl.formatMessage(messages.activeMapBadge, {
+              name: activeSavedMap?.name ?? '',
+            })}
+          </span>
+        </div>
+      )}
+
       {/* Basemap switcher overlay */}
       {showBasemapSwitcher && (
         <div className={`absolute z-10 ${positionClass}`}>
@@ -351,7 +419,7 @@ function MapContainer({
               onChange={handleBasemapChange}
               basemaps={basemaps}
               title={
-                smpStyle
+                isOnlineActive || smpStyle
                   ? intl.formatMessage(messages.basemapDisabledHint)
                   : undefined
               }

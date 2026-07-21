@@ -367,4 +367,47 @@ describe('MapContainer', () => {
     const trigger = screen.getByTestId('basemap-switcher-trigger');
     expect(trigger.getAttribute('title')).toBeFalsy();
   });
+
+  // -------------------------------------------------------------------
+  // Online active map style fallback (before SMP download completes)
+  // -------------------------------------------------------------------
+
+  it('uses active map style as network basemap when SMP not yet ready', async () => {
+    useMapStore.setState({ activeMapId: 'map-draft' });
+    mockDbGet.mockResolvedValue({
+      id: 'map-draft',
+      projectLocalId: 'proj-1',
+      name: 'Draft Map',
+      type: 'raster',
+      styleUrl: 'https://tiles.example.com/{z}/{x}/{y}.png',
+      status: 'draft',
+    });
+    render(<MapContainer />);
+    await waitFor(() => {
+      const mapEl = screen.getByTestId('mock-map');
+      expect(mapEl.dataset.mapStyle).toBe('StyleSpecification');
+    });
+    // Should show online active badge
+    expect(screen.getByTestId('map-online-active-badge')).toBeInTheDocument();
+    // Should show tooltip on basemap switcher
+    const trigger = screen.getByTestId('basemap-switcher-trigger');
+    expect(trigger.getAttribute('title')).toBeTruthy();
+  });
+
+  it('falls through to store basemap when active map has no styleUrl', async () => {
+    useMapStore.setState({ activeMapId: 'map-nostyle' });
+    mockDbGet.mockResolvedValue({
+      id: 'map-nostyle',
+      projectLocalId: 'proj-1',
+      name: 'No Style Map',
+      status: 'draft',
+      // intentionally no styleUrl
+    });
+    render(<MapContainer />);
+    const mapEl = screen.getByTestId('mock-map');
+    expect(mapEl.dataset.mapStyle).toContain('cartocdn.com');
+    expect(
+      screen.queryByTestId('map-online-active-badge'),
+    ).not.toBeInTheDocument();
+  });
 });

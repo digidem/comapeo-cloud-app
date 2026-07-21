@@ -51,10 +51,11 @@ export function useRenameMap(projectLocalId: string | null) {
       const updatedAt = new Date().toISOString();
       await getDb().maps.update(mapId, { name, updatedAt });
     },
-    onSuccess: () => {
+    onSuccess: (_data, { mapId }) => {
       void queryClient.invalidateQueries({
         queryKey: mapsQueryKey(projectLocalId),
       });
+      void queryClient.invalidateQueries({ queryKey: ['map', mapId] });
     },
   });
 }
