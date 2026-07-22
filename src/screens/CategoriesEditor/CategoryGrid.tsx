@@ -12,9 +12,15 @@ const messages = defineMessages({
 
 interface CategoryGridProps {
   groups: CategoryGroup[];
+  selectedCategoryId?: string | null;
+  onCategorySelect?: (docId: string) => void;
 }
 
-function CategoryGrid({ groups }: CategoryGridProps) {
+function CategoryGrid({
+  groups,
+  selectedCategoryId,
+  onCategorySelect,
+}: CategoryGridProps) {
   const intl = useIntl();
 
   if (groups.length === 0) {
@@ -43,6 +49,8 @@ function CategoryGrid({ groups }: CategoryGridProps) {
                 fieldRefs={category.fieldRefs}
                 color={category.color}
                 iconRef={category.iconRef}
+                selected={category.docId === selectedCategoryId}
+                onClick={onCategorySelect}
               />
             ))}
           </div>

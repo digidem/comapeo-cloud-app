@@ -6,12 +6,17 @@ interface CategoryCardProps {
   fieldRefs: Array<{ docId: string; label?: string }>;
   color?: string;
   iconRef?: { docId: string };
+  selected?: boolean;
+  onClick?: (docId: string) => void;
 }
 
 function CategoryCard({
+  docId,
   label,
   fieldRefs,
   color,
+  selected,
+  onClick,
 }: CategoryCardProps) {
   const fieldCount = fieldRefs.length;
   const initial = label.charAt(0).toUpperCase();
@@ -20,7 +25,18 @@ function CategoryCard({
     <article
       data-testid="category-card"
       tabIndex={0}
-      className="group relative overflow-hidden rounded-card outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      role="button"
+      aria-pressed={selected}
+      onClick={() => onClick?.(docId)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.(docId);
+        }
+      }}
+      className={`group relative overflow-hidden rounded-card outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer ${
+        selected ? 'ring-2 ring-primary' : ''
+      }`}
       style={{
         backgroundColor: 'var(--color-surface-card, #fff)',
         boxShadow: '0 8px 24px rgba(9,30,66,0.08)',

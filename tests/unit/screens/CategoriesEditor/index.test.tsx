@@ -53,6 +53,13 @@ vi.mock('@/hooks/usePresets', () => ({
   usePresets: vi.fn(() => mockPresetsQuery),
 }));
 
+vi.mock('@/hooks/useFields', () => ({
+  useFields: vi.fn(() => ({
+    data: [],
+    isPending: false,
+  })),
+}));
+
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
     <a href={to}>{children}</a>

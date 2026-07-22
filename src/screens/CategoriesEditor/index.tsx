@@ -4,8 +4,10 @@ import { defineMessages, useIntl } from 'react-intl';
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Skeleton } from '@/components/ui/skeleton';
 import { normalizeCategories } from '@/hooks/useCategories';
+import { useFields } from '@/hooks/useFields';
 import { usePresets } from '@/hooks/usePresets';
 import { useProjects } from '@/hooks/useProjects';
+import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -62,6 +64,21 @@ export function CategoriesEditorScreen() {
   useShellSlot(shellSlot);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    null,
+  );
+
+  const fieldsQuery = useFields(selectedProjectId);
+
+  const fieldLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const field of fieldsQuery.data ?? []) {
+      if (field.remoteId) {
+        map.set(field.remoteId, field.label);
+      }
+    }
+    return map;
+  }, [fieldsQuery.data]);
 
   const categoryGroups = useMemo(
     () =>
@@ -69,8 +86,9 @@ export function CategoriesEditorScreen() {
         presetsQuery.data ?? [],
         intl.locale,
         searchQuery,
+        fieldLabels,
       ),
-    [presetsQuery.data, intl.locale, searchQuery],
+    [presetsQuery.data, intl.locale, searchQuery, fieldLabels],
   );
 
   // Loading skeleton
@@ -105,6 +123,17 @@ export function CategoriesEditorScreen() {
   const hasPresets = (presetsQuery.data ?? []).length > 0;
   const hasResults = categoryGroups.length > 0;
 
+  const selectedCategory = useMemo(() => {
+    if (!selectedCategoryId) return null;
+    for (const group of categoryGroups) {
+      const found = group.categories.find(
+        (c) => c.docId === selectedCategoryId,
+      );
+      if (found) return found;
+    }
+    return null;
+  }, [selectedCategoryId, categoryGroups]);
+
   return (
     <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
       <h1 className="text-2xl font-bold text-text">
@@ -136,7 +165,21 @@ export function CategoriesEditorScreen() {
       )}
 
       {hasPresets && hasResults && (
-        <CategoryGrid groups={categoryGroups} />
+        <div className="flex flex-col gap-6 lg:flex-row">
+          <div className="flex-1 min-w-0">
+            <CategoryGrid
+              groups={categoryGroups}
+              selectedCategoryId={selectedCategoryId}
+              onCategorySelect={setSelectedCategoryId}
+            />
+          </div>
+          <aside className="w-full lg:w-80 shrink-0 rounded-card bg-surface-card p-4">
+            <CategoryDetail
+              category={selectedCategory}
+              fieldLabels={fieldLabels}
+            />
+          </aside>
+        </div>
       )}
     </div>
   );
