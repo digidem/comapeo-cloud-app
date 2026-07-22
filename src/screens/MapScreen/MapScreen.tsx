@@ -441,6 +441,9 @@ export function MapScreen() {
           ) : null}
           {drawMode !== 'draw_rectangle' && (
             <div className="absolute bottom-4 right-4 lg:hidden">
+              {/* Intentionally no !hasConfigChanges guard: this quick action
+                  may save the current/default map view at any time.
+                  Only pending-disable is needed here. */}
               <Button
                 size="sm"
                 onClick={openNameDialog}

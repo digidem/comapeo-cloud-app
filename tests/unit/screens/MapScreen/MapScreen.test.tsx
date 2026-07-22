@@ -237,6 +237,97 @@ describe('MapScreen', () => {
       // The settings sheet should be closed — only one dialog should exist
       expect(screen.getAllByRole('dialog')).toHaveLength(1);
     });
+
+    it('disables both Save Map triggers (floating + settings-sheet) while a save mutation is pending', async () => {
+      const user = userEvent.setup();
+
+      // Deferred promise keeps the mutation pending until we resolve it
+      let resolveAdd: (value: string) => void;
+      const pendingPromise = new Promise<string>((resolve) => {
+        resolveAdd = resolve;
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dexie's PromiseExtended vs standard Promise
+      vi.spyOn(getDb().maps, 'add').mockReturnValueOnce(pendingPromise as any);
+
+      render(<MapScreen />);
+
+      // Open the Map settings sheet so both floating and sheet Save Map
+      // triggers exist in the DOM at the same time (mobile viewport).
+      // Use { hidden: true } because Radix Dialog sets aria-hidden on
+      // the main content when the sheet is open.
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'Map settings',
+          hidden: true,
+        }),
+      );
+
+      // Change basemap so both Save Map buttons are enabled
+      await user.click(
+        await screen.findByRole('button', { name: 'OpenStreetMap' }),
+      );
+
+      // Confirm both triggers exist before starting the save flow
+      // (floating quick-action + settings-sheet trigger)
+      const allSaveButtons = await screen.findAllByRole('button', {
+        name: 'Save Map',
+        hidden: true,
+      });
+      expect(allSaveButtons.length).toBeGreaterThanOrEqual(2);
+
+      // Close the settings sheet — both triggers are proven; now exercise
+      // the floating quick-action path through the name dialog.
+      await user.click(
+        screen.getByRole('button', { name: 'Close map settings' }),
+      );
+
+      // Trigger save via the floating quick-action button (bottom-right, mobile)
+      await user.click(await screen.findByRole('button', { name: 'Save Map' }));
+      await user.type(await screen.findByLabelText('Map name'), 'Field map');
+      await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+      // Dismiss the dialog (Cancel) so the trigger buttons are visible again.
+      // The mutation is still pending — handleSaveMap awaits mutateAsync
+      // before closing, so the dialog stays open until we force-close.
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      // Reopen the settings sheet while the mutation is still pending so
+      // both triggers are present in the DOM again.
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'Map settings',
+          hidden: true,
+        }),
+      );
+
+      // BOTH Save Map triggers disabled while createMap is pending:
+      // query with { hidden: true } because Radix aria-hides the sheet
+      // content behind the floating quick-action trigger.
+      const pendingButtons = await screen.findAllByRole('button', {
+        name: 'Save Map',
+        hidden: true,
+      });
+      expect(pendingButtons.length).toBeGreaterThanOrEqual(2);
+      for (const btn of pendingButtons) {
+        expect(btn).toBeDisabled();
+      }
+
+      // Resolve the mutation inside act() so React state updates are flushed
+      await act(async () => {
+        resolveAdd!('done');
+      });
+
+      // BOTH buttons re-enable after the mutation settles
+      await waitFor(() => {
+        const resolvedButtons = screen.getAllByRole('button', {
+          name: 'Save Map',
+          hidden: true,
+        });
+        for (const btn of resolvedButtons) {
+          expect(btn).toBeEnabled();
+        }
+      });
+    });
   });
 
   it('updates the canvas map style when the selected style changes', async () => {
@@ -307,64 +398,5 @@ describe('MapScreen', () => {
     // After changing the basemap, the button should become enabled
     await user.click(screen.getByRole('button', { name: 'OpenStreetMap' }));
     expect(settingsSheetButton).toBeEnabled();
-  });
-
-  it('disables both Save Map triggers (floating + settings-sheet) while a save mutation is pending', async () => {
-    const user = userEvent.setup();
-
-    // Deferred promise keeps the mutation pending until we resolve it
-    let resolveAdd: (value: string) => void;
-    const pendingPromise = new Promise<string>((resolve) => {
-      resolveAdd = resolve;
-    });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dexie's PromiseExtended vs standard Promise
-    vi.spyOn(getDb().maps, 'add').mockReturnValueOnce(pendingPromise as any);
-
-    render(<MapScreen />);
-
-    // Change basemap so both Save Map buttons are enabled
-    await user.click(
-      await screen.findByRole('button', { name: 'OpenStreetMap' }),
-    );
-
-    // Confirm both triggers exist before starting the save flow
-    const allSaveButtons = await screen.findAllByRole('button', {
-      name: 'Save Map',
-    });
-    expect(allSaveButtons.length).toBeGreaterThanOrEqual(2);
-
-    // Trigger save via the settings-sheet button (last in DOM order)
-    await user.click(allSaveButtons[allSaveButtons.length - 1]!);
-    await user.type(await screen.findByLabelText('Map name'), 'Field map');
-    await user.click(screen.getByRole('button', { name: 'Save draft' }));
-
-    // Dismiss the dialog (Cancel) so the trigger buttons are visible again.
-    // The mutation is still pending — handleSaveMap awaits mutateAsync
-    // before closing, so the dialog stays open until we force-close.
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
-
-    // BOTH Save Map buttons should be disabled while createMap is pending:
-    // 1) floating quick action (bottom-right, mobile)
-    // 2) settings-sheet trigger (inside aside / sheet)
-    const pendingButtons = screen.getAllByRole('button', { name: 'Save Map' });
-    expect(pendingButtons.length).toBeGreaterThanOrEqual(2);
-    for (const btn of pendingButtons) {
-      expect(btn).toBeDisabled();
-    }
-
-    // Resolve the mutation inside act() so React state updates are flushed
-    await act(async () => {
-      resolveAdd!('done');
-    });
-
-    // BOTH buttons re-enable after the mutation settles
-    await waitFor(() => {
-      const resolvedButtons = screen.getAllByRole('button', {
-        name: 'Save Map',
-      });
-      for (const btn of resolvedButtons) {
-        expect(btn).toBeEnabled();
-      }
-    });
   });
 });
