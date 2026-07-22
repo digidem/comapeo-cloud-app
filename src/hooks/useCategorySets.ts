@@ -22,19 +22,27 @@ export function useCategorySets() {
   const [sets, setSets] = useState<CategorySetSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const records = await categoriesDb.categorySets.toArray();
-      setSets(records.map(toSummary));
-    } finally {
-      setIsLoading(false);
-    }
+  useEffect(() => {
+    let cancelled = false;
+    categoriesDb.categorySets
+      .toArray()
+      .then((records) => {
+        if (!cancelled) setSets(records.map(toSummary));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    const records = await categoriesDb.categorySets.toArray();
+    setSets(records.map(toSummary));
+    setIsLoading(false);
+  }, []);
 
   return { sets, isLoading, error: undefined, refresh };
 }
