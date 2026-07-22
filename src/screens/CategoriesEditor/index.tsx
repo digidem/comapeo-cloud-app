@@ -114,18 +114,55 @@ export function CategoriesEditorScreen() {
     return (
       <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
         <p className="text-text-muted">
-          {intl.formatMessage({
-            id: 'categories.selectProject',
-            defaultMessage: 'Select a project to view categories',
-          })}
+          {intl.formatMessage(messages.selectProject)}
         </p>
+      </div>
+    );
+  }
+
+  // Projects still loading
+  if (projectsQuery.isPending) {
+    return (
+      <div className="flex flex-col gap-4 p-6">
+        <Skeleton height={40} width={200} />
+        <Skeleton height={48} width="100%" />
+        <Skeleton height={100} className="rounded-card" />
+        <Skeleton height={100} className="rounded-card" />
+      </div>
+    );
+  }
+
+  // Projects failed to load
+  if (projectsQuery.isError) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+        <p className="text-error text-sm">
+          {intl.formatMessage(messages.error)}
+        </p>
+        <button
+          onClick={() => projectsQuery.refetch()}
+          className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark transition-colors"
+        >
+          {intl.formatMessage(messages.retry)}
+        </button>
+      </div>
+    );
+  }
+
+  // Selected project not found in the loaded list
+  if (!selectedProject) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <span className="text-text-muted text-sm">
+          {intl.formatMessage(messages.empty)}
+        </span>
       </div>
     );
   }
 
   // Project selected but no remoteId — presets not available via API.
   // Local-only projects don't have a server projectPublicId.
-  if (selectedProjectId && !selectedProject?.remoteId) {
+  if (!selectedProject.remoteId) {
     return (
       <div className="flex items-center justify-center p-8">
         <span className="text-text-muted text-sm">
