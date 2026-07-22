@@ -120,6 +120,15 @@ async function handleResponse<T>(
     useAuthStore.getState().clearAuth();
   }
 
+  // 304 Not Modified: the browser sent conditional headers (ETag /
+  // If-Modified-Since) but doesn't have a cached body.  The server
+  // confirms nothing changed.  Return an empty data envelope — this is
+  // safe for all list endpoints ({ data: [] }) and the affected callers
+  // (getPresets, getFields) handle empty arrays gracefully.
+  if (response.status === 304) {
+    return { data: [] } as unknown as T;
+  }
+
   if (!response.ok) {
     let code = 'UNKNOWN';
     let message = `Request failed with status ${response.status}`;
@@ -302,7 +311,10 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/preset`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          cache: 'no-store',
+        },
       );
       return await handleResponse(response, presetsResponseSchema, config);
     } catch (error) {
@@ -322,7 +334,10 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/field`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          cache: 'no-store',
+        },
       );
       return await handleResponse(response, fieldsResponseSchema, config);
     } catch (error) {
