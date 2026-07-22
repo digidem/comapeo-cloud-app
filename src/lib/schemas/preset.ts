@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 
-import { presetRefSchema } from '@/lib/schemas/observation';
+import { docRefSchema } from '@/lib/schemas/refs';
 
 // ---------------------------------------------------------------------------
 // Server wire-type schemas (preset response from comapeo-cloud)
@@ -35,8 +35,8 @@ export const presetSchema = v.object({
   tags: tagsSchema,
   addTags: tagsSchema,
   removeTags: tagsSchema,
-  fieldRefs: v.array(presetRefSchema),
-  iconRef: v.optional(presetRefSchema),
+  fieldRefs: v.array(docRefSchema),
+  iconRef: v.optional(docRefSchema),
   color: v.optional(v.pipe(v.string(), v.regex(/^#[0-9A-Fa-f]{6}$/))),
   terms: v.array(v.string()),
 });
