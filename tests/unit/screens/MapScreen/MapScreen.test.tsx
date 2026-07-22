@@ -1,4 +1,10 @@
-import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
+import {
+  act,
+  render,
+  screen,
+  userEvent,
+  waitFor,
+} from '@tests/mocks/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
@@ -306,7 +312,7 @@ describe('MapScreen', () => {
   it('disables the settings sheet Save Map button while a save mutation is pending', async () => {
     const user = userEvent.setup();
 
-    // Never-resolving promise keeps the mutation permanently pending
+    // Deferred promise keeps the mutation pending until we resolve it
     let resolveAdd: (value: string) => void;
     const pendingPromise = new Promise<string>((resolve) => {
       resolveAdd = resolve;
@@ -340,7 +346,15 @@ describe('MapScreen', () => {
     });
     expect(refreshedButtons[refreshedButtons.length - 1]).toBeDisabled();
 
-    // Cleanup: resolve the promise so the test can finish
-    resolveAdd!('done');
+    // Resolve the mutation inside act() so React state updates are flushed
+    await act(async () => {
+      resolveAdd!('done');
+    });
+
+    // Button re-enables after the mutation settles
+    await waitFor(() => {
+      const buttons = screen.getAllByRole('button', { name: 'Save Map' });
+      expect(buttons[buttons.length - 1]).toBeEnabled();
+    });
   });
 });
