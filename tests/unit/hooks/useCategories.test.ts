@@ -238,4 +238,59 @@ describe('normalizeCategories', () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.type).toBe('action');
   });
+
+  it('passes tags.color through to category.color', () => {
+    const presets = [
+      {
+        docId: 'c1',
+        name: 'Colored',
+        tags: { type: 'test', color: '#123456' },
+        fieldRefs: [],
+      },
+    ];
+    const result = normalizeCategories(presets as never, 'en', '');
+    expect(result[0]!.categories[0]!.color).toBe('#123456');
+  });
+
+  it('passes iconRef object through to category.iconRef', () => {
+    const presets = [
+      {
+        docId: 'i1',
+        name: 'With Icon',
+        tags: { type: 'test' },
+        fieldRefs: [],
+        iconRef: { docId: 'icon-1' },
+      },
+    ];
+    const result = normalizeCategories(presets as never, 'en', '');
+    expect(result[0]!.categories[0]!.iconRef).toEqual({ docId: 'icon-1' });
+  });
+
+  it('yields undefined iconRef for non-object iconRef (string)', () => {
+    const presets = [
+      {
+        docId: 'i2',
+        name: 'Bad Icon',
+        tags: { type: 'test' },
+        fieldRefs: [],
+        iconRef: 'not-an-object',
+      },
+    ];
+    const result = normalizeCategories(presets as never, 'en', '');
+    expect(result[0]!.categories[0]!.iconRef).toBeUndefined();
+  });
+
+  it('yields undefined iconRef for null iconRef', () => {
+    const presets = [
+      {
+        docId: 'i3',
+        name: 'Null Icon',
+        tags: { type: 'test' },
+        fieldRefs: [],
+        iconRef: null,
+      },
+    ];
+    const result = normalizeCategories(presets as never, 'en', '');
+    expect(result[0]!.categories[0]!.iconRef).toBeUndefined();
+  });
 });

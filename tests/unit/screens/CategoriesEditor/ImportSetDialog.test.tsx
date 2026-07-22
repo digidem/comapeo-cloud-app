@@ -142,4 +142,51 @@ describe('ImportSetDialog', () => {
       { timeout: 3000 },
     );
   });
+
+  it('executes replace when user confirms replacement of existing set', async () => {
+    // Pre-populate an existing set
+    const { importCategorySet } = await import('@/lib/categories-db');
+    await importCategorySet('test-replace', 'Original', {
+      categories: {},
+      fields: {},
+    });
+
+    render(<ImportSetDialog open onClose={vi.fn()} />);
+
+    simulateFileSelect(makeValidFileContent(), 'test-replace.comapeocat');
+
+    // Wait for Replace button to appear
+    const replaceBtn = await screen.findByRole('button', { name: /replace/i });
+    fireEvent.click(replaceBtn);
+
+    // Should show success message
+    await waitFor(() => {
+      expect(screen.getByText(/imported/i)).toBeInTheDocument();
+    });
+
+    // Verify the set was actually replaced
+    const sets = await categoriesDb.categorySets.toArray();
+    expect(sets).toHaveLength(1);
+    expect(sets[0]!.name).toBe('Test Import');
+  });
+
+  it('shows file read error when file.text() rejects', async () => {
+    render(<ImportSetDialog open onClose={vi.fn()} />);
+
+    const input = screen.getByLabelText(/file/i) as HTMLInputElement;
+    // Create a File whose .text() method rejects
+    const badFile = new File([''], 'bad.comapeocat', {
+      type: 'application/json',
+    });
+    vi.spyOn(badFile, 'text').mockRejectedValue(new Error('Disk error'));
+    Object.defineProperty(input, 'files', {
+      value: [badFile],
+      configurable: true,
+    });
+    fireEvent.change(input);
+
+    await waitFor(() => {
+      expect(screen.getByText(/failed to read file/i)).toBeInTheDocument();
+    });
+  });
 });
