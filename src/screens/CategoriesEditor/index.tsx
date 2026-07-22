@@ -40,6 +40,10 @@ const messages = defineMessages({
     id: 'categories.untitledProject',
     defaultMessage: 'Untitled Project',
   },
+  selectProject: {
+    id: 'categories.selectProject',
+    defaultMessage: 'Select a project to view categories',
+  },
 });
 
 export function CategoriesEditorScreen() {

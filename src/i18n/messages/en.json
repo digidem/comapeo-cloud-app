@@ -170,6 +170,18 @@
   "categories.error": {
     "defaultMessage": "Failed to load categories. Please try again."
   },
+  "categories.fieldCount": {
+    "defaultMessage": "{count, plural, one {# field} other {# fields}}"
+  },
+  "categories.fieldType.date": {
+    "defaultMessage": "Date"
+  },
+  "categories.fieldType.number": {
+    "defaultMessage": "Number"
+  },
+  "categories.fieldType.unknown": {
+    "defaultMessage": "Unknown type"
+  },
   "categories.importSet.cancel": {
     "defaultMessage": "Cancel"
   },
@@ -182,11 +194,17 @@
   "categories.importSet.errorAnnouncement": {
     "defaultMessage": "Import failed"
   },
+  "categories.importSet.failedToRead": {
+    "defaultMessage": "Failed to read file"
+  },
   "categories.importSet.fileLabel": {
     "defaultMessage": "Choose .comapeocat file"
   },
   "categories.importSet.importButton": {
     "defaultMessage": "Import"
+  },
+  "categories.importSet.importError": {
+    "defaultMessage": "Failed to import: {error}"
   },
   "categories.importSet.imported": {
     "defaultMessage": "Category set \"{name}\" imported successfully."
@@ -217,6 +235,9 @@
   },
   "categories.search": {
     "defaultMessage": "Search categories..."
+  },
+  "categories.selectProject": {
+    "defaultMessage": "Select a project to view categories"
   },
   "categories.title": {
     "defaultMessage": "Categories"

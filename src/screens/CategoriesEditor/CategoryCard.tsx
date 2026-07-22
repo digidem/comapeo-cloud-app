@@ -1,3 +1,12 @@
+import { defineMessages, useIntl } from 'react-intl';
+
+const messages = defineMessages({
+  fieldCount: {
+    id: 'categories.fieldCount',
+    defaultMessage: '{count, plural, one {# field} other {# fields}}',
+  },
+});
+
 interface CategoryCardProps {
   docId: string;
   label: string;
@@ -16,6 +25,7 @@ function CategoryCard({
   selected,
   onClick,
 }: CategoryCardProps) {
+  const intl = useIntl();
   const fieldCount = fieldRefs.length;
   const initial = label.charAt(0).toUpperCase();
 
@@ -60,7 +70,7 @@ function CategoryCard({
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-text">{label}</h3>
           <span className="mt-1 inline-flex items-center rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
-            {fieldCount === 1 ? '1 field' : `${fieldCount} fields`}
+            {intl.formatMessage(messages.fieldCount, { count: fieldCount })}
           </span>
         </div>
       </div>

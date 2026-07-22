@@ -58,6 +58,14 @@ const messages = defineMessages({
     id: 'categories.importSet.errorAnnouncement',
     defaultMessage: 'Import failed',
   },
+  failedToRead: {
+    id: 'categories.importSet.failedToRead',
+    defaultMessage: 'Failed to read file',
+  },
+  importError: {
+    id: 'categories.importSet.importError',
+    defaultMessage: 'Failed to import: {error}',
+  },
   successAnnouncement: {
     id: 'categories.importSet.successAnnouncement',
     defaultMessage: 'Import succeeded',
@@ -108,7 +116,10 @@ function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
       try {
         text = await file.text();
       } catch {
-        setDialogState({ status: 'error', message: 'Failed to read file' });
+        setDialogState({
+          status: 'error',
+          message: intl.formatMessage(messages.failedToRead),
+        });
         return;
       }
 
@@ -153,8 +164,16 @@ function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
         return;
       }
 
-      await importCategorySet(setId, name, parsed);
-      setDialogState({ status: 'success', name });
+      try {
+        await importCategorySet(setId, name, parsed);
+        setDialogState({ status: 'success', name });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setDialogState({
+          status: 'error',
+          message: intl.formatMessage(messages.importError, { error: msg }),
+        });
+      }
     },
     [intl, handleClose],
   );

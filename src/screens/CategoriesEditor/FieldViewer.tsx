@@ -1,3 +1,20 @@
+import { defineMessages, useIntl } from 'react-intl';
+
+const messages = defineMessages({
+  date: {
+    id: 'categories.fieldType.date',
+    defaultMessage: 'Date',
+  },
+  number: {
+    id: 'categories.fieldType.number',
+    defaultMessage: 'Number',
+  },
+  unknown: {
+    id: 'categories.fieldType.unknown',
+    defaultMessage: 'Unknown type',
+  },
+});
+
 export interface FieldInput {
   docId: string;
   tagKey: string;
@@ -20,34 +37,43 @@ function FieldBadge({ children }: { children: React.ReactNode }) {
 }
 
 function FieldItem({ field }: { field: FieldInput }) {
+  const intl = useIntl();
   return (
     <li aria-label={field.label} className="flex flex-col gap-1.5">
       <span className="text-sm font-medium text-text">{field.label}</span>
       <span className="text-xs text-text-muted font-mono">{field.tagKey}</span>
-      {field.type === 'select_one' && field.options && (
+      {field.type === 'selectOne' && field.options && (
         <div className="flex flex-wrap gap-1">
           {field.options.map((opt) => (
             <FieldBadge key={opt.value}>{opt.label}</FieldBadge>
           ))}
         </div>
       )}
-      {field.type === 'select_multiple' && field.options && (
+      {field.type === 'selectMultiple' && field.options && (
         <div className="flex flex-wrap gap-1">
           {field.options.map((opt) => (
             <FieldBadge key={opt.value}>{opt.label}</FieldBadge>
           ))}
         </div>
       )}
-      {field.type === 'date' && <FieldBadge>Date</FieldBadge>}
-      {field.type === 'datetime' && <FieldBadge>Date</FieldBadge>}
-      {field.type === 'number' && <FieldBadge>Number</FieldBadge>}
-      {field.type !== 'select_one' &&
-        field.type !== 'select_multiple' &&
+      {field.type === 'date' && (
+        <FieldBadge>{intl.formatMessage(messages.date)}</FieldBadge>
+      )}
+      {field.type === 'datetime' && (
+        <FieldBadge>{intl.formatMessage(messages.date)}</FieldBadge>
+      )}
+      {field.type === 'number' && (
+        <FieldBadge>{intl.formatMessage(messages.number)}</FieldBadge>
+      )}
+      {field.type !== 'selectOne' &&
+        field.type !== 'selectMultiple' &&
         field.type !== 'date' &&
         field.type !== 'datetime' &&
         field.type !== 'number' &&
         field.type !== 'text' &&
-        field.type !== 'textarea' && <FieldBadge>Unknown type</FieldBadge>}
+        field.type !== 'textarea' && (
+          <FieldBadge>{intl.formatMessage(messages.unknown)}</FieldBadge>
+        )}
     </li>
   );
 }
