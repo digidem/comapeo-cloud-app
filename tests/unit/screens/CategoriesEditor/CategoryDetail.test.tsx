@@ -1,12 +1,18 @@
 import { render, screen } from '@tests/mocks/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { Category } from '@/hooks/useCategories';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 
-import type { Category } from '@/hooks/useCategories';
-
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to, ...props }: { children: React.ReactNode; to: string }) => (
+  Link: ({
+    children,
+    to,
+    ...props
+  }: {
+    children: React.ReactNode;
+    to: string;
+  }) => (
     <a href={to} {...props}>
       {children}
     </a>
@@ -31,18 +37,26 @@ describe('CategoryDetail', () => {
   });
 
   it('renders category name', () => {
-    render(<CategoryDetail category={sampleCategory} fieldLabels={new Map()} />);
-    expect(screen.getByRole('heading', { name: 'Deforestation' })).toBeInTheDocument();
+    render(
+      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+    );
+    expect(
+      screen.getByRole('heading', { name: 'Deforestation' }),
+    ).toBeInTheDocument();
   });
 
   it('renders category icon with first letter', () => {
-    render(<CategoryDetail category={sampleCategory} fieldLabels={new Map()} />);
+    render(
+      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+    );
     const icon = screen.getByTestId('category-detail-icon');
     expect(icon).toHaveTextContent('D');
   });
 
   it('renders category color swatch with hex value', () => {
-    render(<CategoryDetail category={sampleCategory} fieldLabels={new Map()} />);
+    render(
+      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+    );
     expect(screen.getByText('#22c55e')).toBeInTheDocument();
     const swatch = screen.getByTestId('color-swatch');
     expect(swatch).toHaveStyle({ backgroundColor: '#22c55e' });
@@ -66,23 +80,31 @@ describe('CategoryDetail', () => {
   });
 
   it('shows docId for field refs without a label in fieldLabels map', () => {
-    render(<CategoryDetail category={sampleCategory} fieldLabels={new Map()} />);
+    render(
+      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+    );
     expect(screen.getByText('field-3')).toBeInTheDocument();
   });
 
   it('renders back navigation link to /categories', () => {
-    render(<CategoryDetail category={sampleCategory} fieldLabels={new Map()} />);
+    render(
+      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+    );
     const backLink = screen.getByRole('link', { name: /Categories/ });
     expect(backLink).toHaveAttribute('href', '/categories');
   });
 
   it('renders appliesTo badges from fieldRefs', () => {
-    render(<CategoryDetail category={sampleCategory} fieldLabels={new Map()} />);
+    render(
+      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+    );
     expect(screen.getByText(/fields/)).toBeInTheDocument();
   });
 
   it('renders color swatch with background color matching category color', () => {
-    render(<CategoryDetail category={sampleCategory} fieldLabels={new Map()} />);
+    render(
+      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+    );
     const swatch = screen.getByTestId('color-swatch');
     expect(swatch).toHaveStyle({ backgroundColor: '#22c55e' });
   });
@@ -94,7 +116,9 @@ describe('CategoryDetail', () => {
       fieldRefs: [],
       color: '#f59e0b',
     };
-    render(<CategoryDetail category={emptyFieldsCategory} fieldLabels={new Map()} />);
+    render(
+      <CategoryDetail category={emptyFieldsCategory} fieldLabels={new Map()} />,
+    );
     expect(screen.getByText(/0 fields/)).toBeInTheDocument();
   });
 });

@@ -2,7 +2,6 @@ import { render, screen } from '@tests/mocks/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import { FieldViewer } from '@/screens/CategoriesEditor/FieldViewer';
-
 import type { FieldInput } from '@/screens/CategoriesEditor/FieldViewer';
 
 const textField: FieldInput = {
@@ -97,9 +96,7 @@ describe('FieldViewer', () => {
   });
 
   it('renders multiple fields', () => {
-    render(
-      <FieldViewer fields={[textField, selectOneField, dateField]} />,
-    );
+    render(<FieldViewer fields={[textField, selectOneField, dateField]} />);
     expect(screen.getByText('Species Name')).toBeInTheDocument();
     expect(screen.getByText('Threat Level')).toBeInTheDocument();
     expect(screen.getByText('Observation Date')).toBeInTheDocument();

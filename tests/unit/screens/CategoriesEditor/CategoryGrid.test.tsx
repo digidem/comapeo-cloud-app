@@ -92,7 +92,9 @@ describe('CategoryGrid', () => {
 
   it('renders empty state when no groups', () => {
     render(<CategoryGrid groups={[]} />);
-    expect(screen.getByText('No categories match your search')).toBeInTheDocument();
+    expect(
+      screen.getByText('No categories match your search'),
+    ).toBeInTheDocument();
   });
 
   it('category cards are keyboard focusable', () => {
@@ -105,7 +107,9 @@ describe('CategoryGrid', () => {
 
   it('category cards use semantic article element', () => {
     render(<CategoryGrid groups={sampleGroups} />);
-    const articles = document.querySelectorAll('article[data-testid="category-card"]');
+    const articles = document.querySelectorAll(
+      'article[data-testid="category-card"]',
+    );
     expect(articles.length).toBe(3);
   });
 });

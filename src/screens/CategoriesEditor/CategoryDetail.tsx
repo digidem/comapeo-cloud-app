@@ -1,4 +1,5 @@
 import { defineMessages, useIntl } from 'react-intl';
+
 import { Link } from '@tanstack/react-router';
 
 import type { Category } from '@/hooks/useCategories';

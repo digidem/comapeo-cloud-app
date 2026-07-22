@@ -42,7 +42,11 @@ const PRESETS_WITH_LOCALE = [
   {
     docId: 'p6',
     name: 'Deforestation',
-    tags: { type: 'env', 'name:en': 'Deforestation', 'name:pt': 'Desmatamento' },
+    tags: {
+      type: 'env',
+      'name:en': 'Deforestation',
+      'name:pt': 'Desmatamento',
+    },
     fieldRefs: [],
   },
   {
@@ -73,9 +77,7 @@ describe('normalizeCategories', () => {
     const envGroup = result.find((g) => g.type === 'env');
     expect(envGroup).toBeDefined();
 
-    const deforestation = envGroup!.categories.find(
-      (c) => c.docId === 'p6',
-    );
+    const deforestation = envGroup!.categories.find((c) => c.docId === 'p6');
     expect(deforestation!.label).toBe('Desmatamento');
 
     const water = envGroup!.categories.find((c) => c.docId === 'p7');
@@ -88,14 +90,16 @@ describe('normalizeCategories', () => {
     const envGroup = result.find((g) => g.type === 'env');
     expect(envGroup).toBeDefined();
 
-    const deforestation = envGroup!.categories.find(
-      (c) => c.docId === 'p6',
-    );
+    const deforestation = envGroup!.categories.find((c) => c.docId === 'p6');
     expect(deforestation!.label).toBe('Deforestation');
   });
 
   it('filters by search query (case insensitive)', () => {
-    const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', 'deforestation');
+    const result = normalizeCategories(
+      PRESETS_WITH_TYPES,
+      'en',
+      'deforestation',
+    );
 
     expect(result).toHaveLength(1);
     expect(result[0]!.type).toBe('environment');
@@ -104,7 +108,11 @@ describe('normalizeCategories', () => {
   });
 
   it('filters by search query (diacritic insensitive)', () => {
-    const result = normalizeCategories(PRESETS_WITH_LOCALE, 'pt', 'desmatamento');
+    const result = normalizeCategories(
+      PRESETS_WITH_LOCALE,
+      'pt',
+      'desmatamento',
+    );
 
     expect(result).toHaveLength(1);
     expect(result[0]!.categories[0]!.label).toBe('Desmatamento');
@@ -112,7 +120,12 @@ describe('normalizeCategories', () => {
 
   it('searches across field labels via fieldLabels map', () => {
     const fieldLabels = new Map([['f1', 'Severity']]);
-    const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', 'severity', fieldLabels);
+    const result = normalizeCategories(
+      PRESETS_WITH_TYPES,
+      'en',
+      'severity',
+      fieldLabels,
+    );
 
     expect(result).toHaveLength(1);
     expect(result[0]!.type).toBe('environment');
@@ -155,8 +168,16 @@ describe('normalizeCategories', () => {
   });
 
   it('resolves field ref labels from fieldLabels map', () => {
-    const fieldLabels = new Map([['f1', 'Severity'], ['f2', 'Area (ha)']]);
-    const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', '', fieldLabels);
+    const fieldLabels = new Map([
+      ['f1', 'Severity'],
+      ['f2', 'Area (ha)'],
+    ]);
+    const result = normalizeCategories(
+      PRESETS_WITH_TYPES,
+      'en',
+      '',
+      fieldLabels,
+    );
 
     const envGroup = result.find((g) => g.type === 'environment');
     const deforestation = envGroup!.categories.find((c) => c.docId === 'p1');

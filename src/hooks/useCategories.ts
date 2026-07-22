@@ -56,7 +56,10 @@ function matchesSearch(
 
   for (const ref of preset.fieldRefs) {
     const resolvedLabel = fieldLabels?.get(ref.docId);
-    if (resolvedLabel && normalizeSearch(resolvedLabel).includes(searchNormalized)) {
+    if (
+      resolvedLabel &&
+      normalizeSearch(resolvedLabel).includes(searchNormalized)
+    ) {
       return true;
     }
   }
@@ -77,7 +80,10 @@ export function normalizeCategories(
   const groups = new Map<string, Category[]>();
 
   for (const preset of data) {
-    if (searchNormalized && !matchesSearch(preset, searchNormalized, locale, fieldLabels)) {
+    if (
+      searchNormalized &&
+      !matchesSearch(preset, searchNormalized, locale, fieldLabels)
+    ) {
       continue;
     }
 
@@ -99,10 +105,14 @@ export function normalizeCategories(
         docId: ref.docId,
         label: fieldLabels?.get(ref.docId),
       })),
-      color: typeof preset.tags.color === 'string' ? preset.tags.color : undefined,
-      iconRef: typeof preset.iconRef === 'object' && preset.iconRef !== null && 'docId' in preset.iconRef
-        ? { docId: (preset.iconRef as { docId: string }).docId }
-        : undefined,
+      color:
+        typeof preset.tags.color === 'string' ? preset.tags.color : undefined,
+      iconRef:
+        typeof preset.iconRef === 'object' &&
+        preset.iconRef !== null &&
+        'docId' in preset.iconRef
+          ? { docId: (preset.iconRef as { docId: string }).docId }
+          : undefined,
     });
   }
 

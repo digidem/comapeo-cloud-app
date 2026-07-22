@@ -1,11 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import * as v from 'valibot';
+
 import { useCallback, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
 import { importCategorySet } from '@/lib/categories-db';
 import { comapeoCatSchema } from '@/lib/schemas/preset';
-import * as v from 'valibot';
 
 const messages = defineMessages({
   title: {
@@ -77,7 +78,9 @@ type DialogState =
 function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
   const intl = useIntl();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dialogState, setDialogState] = useState<DialogState>({ status: 'idle' });
+  const [dialogState, setDialogState] = useState<DialogState>({
+    status: 'idle',
+  });
 
   const reset = useCallback(() => {
     setDialogState({ status: 'idle' });
