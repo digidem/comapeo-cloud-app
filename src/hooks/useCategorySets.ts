@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { categoriesDb, type CategorySetRecord } from '@/lib/categories-db';
+import { type CategorySetRecord, categoriesDb } from '@/lib/categories-db';
 
 export interface CategorySetSummary {
   setId: string;

@@ -3,9 +3,9 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useApiPresets } from '@/hooks/useApiPresets';
 import { normalizeCategories } from '@/hooks/useCategories';
 import { useFields } from '@/hooks/useFields';
-import { useApiPresets } from '@/hooks/useApiPresets';
 import { useProjects } from '@/hooks/useProjects';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';

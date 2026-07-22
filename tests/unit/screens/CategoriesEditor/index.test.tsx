@@ -120,6 +120,8 @@ describe('CategoriesEditorScreen', () => {
 
   it('renders search input', () => {
     render(<CategoriesEditorScreen />);
-    expect(screen.getByPlaceholderText('Search categories...')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('Search categories...'),
+    ).toBeInTheDocument();
   });
 });

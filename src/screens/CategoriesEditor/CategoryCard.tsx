@@ -58,9 +58,7 @@ function CategoryCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold text-text">
-            {label}
-          </h3>
+          <h3 className="truncate text-sm font-semibold text-text">{label}</h3>
           <span className="mt-1 inline-flex items-center rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
             {fieldCount === 1 ? '1 field' : `${fieldCount} fields`}
           </span>
