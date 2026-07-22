@@ -477,5 +477,6 @@
   "theme.light": "Claro",
   "theme.system": "Sistema",
   "map.activeMap.badge": "Mapa sin conexión activo: {name}",
+  "map.activeMap.onlineBadge": "Mapa activo (en línea): {name}",
   "map.basemapSwitcher.disabledHint": "Mapa base usado cuando el mapa sin conexión está desactivado"
 }

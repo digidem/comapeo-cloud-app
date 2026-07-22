@@ -224,8 +224,21 @@ export function MapScreen() {
   );
   useShellSlot(shellSlot);
 
+  const hasConfigChanges = useMemo(
+    () =>
+      bbox[0] !== DEFAULT_BBOX[0] ||
+      bbox[1] !== DEFAULT_BBOX[1] ||
+      bbox[2] !== DEFAULT_BBOX[2] ||
+      bbox[3] !== DEFAULT_BBOX[3] ||
+      zoomRange.minZoom !== DEFAULT_ZOOM.minZoom ||
+      zoomRange.maxZoom !== DEFAULT_ZOOM.maxZoom ||
+      selectedStyle.id !== DEFAULT_BASEMAP_ID,
+    [bbox, zoomRange, selectedStyle],
+  );
+
   function openNameDialog() {
     setNameError(null);
+    setSettingsOpen(false);
     setNameDialogOpen(true);
   }
 
@@ -319,7 +332,11 @@ export function MapScreen() {
             <DownloadPanel key={m.id} map={m} />
           ));
         })()}
-        <Button onClick={openNameDialog} className="w-full">
+        <Button
+          onClick={openNameDialog}
+          className="w-full"
+          disabled={createMap.isPending || !hasConfigChanges}
+        >
           {intl.formatMessage(mapMessages.saveMap)}
         </Button>
       </div>
@@ -424,7 +441,14 @@ export function MapScreen() {
           ) : null}
           {drawMode !== 'draw_rectangle' && (
             <div className="absolute bottom-4 right-4 lg:hidden">
-              <Button size="sm" onClick={openNameDialog}>
+              {/* Intentionally no !hasConfigChanges guard: this quick action
+                  may save the current/default map view at any time.
+                  Only pending-disable is needed here. */}
+              <Button
+                size="sm"
+                onClick={openNameDialog}
+                disabled={createMap.isPending}
+              >
                 {intl.formatMessage(mapMessages.saveMap)}
               </Button>
             </div>
