@@ -504,7 +504,11 @@ jobs:
         # GHSA-gcfj-64vw-6mp9: axios Node HTTP proxy leak after interceptor
         # cloning (transitive dep via @storybook/test-runner →
         # jest-process-manager → wait-on → axios). Dev dependency only.
-        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9
+        #
+        # GHSA-p63j-vcc4-9vmv: @vitest/browser Browser Mode file-access
+        # bypass. Fixed in 4.1.10 (we have 4.1.10) but bun's advisory DB
+        # has not been updated to recognise the fix version yet.
+        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv
 
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request
