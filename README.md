@@ -108,7 +108,7 @@ npm run deploy:preview   # build + deploy to preview channel
 ```
 src/
   app/          # Entry point, providers, router, global styles
-  screens/      # Route-level page components (one folder per screen)
+  screens/      # Route-level page components (flat files; a folder when a screen has sub-parts)
   components/
     ui/         # Base primitives (Button, Input, Card …)
     layout/     # AppShell, Topbar, PrimaryNav
@@ -116,9 +116,8 @@ src/
   hooks/        # Custom React hooks
   lib/
     schemas/    # Valibot schemas for API validation
-  stores/       # Zustand stores (auth, theme, locale)
+  stores/       # Zustand stores (archive, auth, locale, map, project, theme, view-mode)
   i18n/         # Internationalisation setup + message files
-  types/        # Shared TypeScript types
 tests/
   unit/         # Vitest unit tests (mirrors src/ structure)
   e2e/          # Playwright E2E tests + screenshot utilities
