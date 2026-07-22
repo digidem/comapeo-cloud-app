@@ -31,21 +31,6 @@ class CategoriesDB extends Dexie {
   }
 }
 
-export { CategoriesDB };
-
-// ---------------------------------------------------------------------------
-// Singleton
-// ---------------------------------------------------------------------------
-
-let _db: CategoriesDB | null = null;
-
-export function getCategoriesDb(): CategoriesDB {
-  if (!_db) {
-    _db = new CategoriesDB();
-  }
-  return _db;
-}
-
 export const categoriesDb = new CategoriesDB();
 
 // ---------------------------------------------------------------------------

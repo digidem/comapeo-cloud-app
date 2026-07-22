@@ -142,6 +142,7 @@ export function CategoriesEditorScreen() {
 
       <input
         type="text"
+        aria-label={intl.formatMessage(messages.search)}
         placeholder={intl.formatMessage(messages.search)}
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}

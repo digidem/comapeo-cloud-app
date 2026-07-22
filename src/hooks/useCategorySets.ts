@@ -21,13 +21,22 @@ function toSummary(record: CategorySetRecord): CategorySetSummary {
 export function useCategorySets() {
   const [sets, setSets] = useState<CategorySetSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     categoriesDb.categorySets
       .toArray()
       .then((records) => {
-        if (!cancelled) setSets(records.map(toSummary));
+        if (!cancelled) {
+          setSets(records.map(toSummary));
+          setError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load sets');
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -39,10 +48,16 @@ export function useCategorySets() {
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
-    const records = await categoriesDb.categorySets.toArray();
-    setSets(records.map(toSummary));
-    setIsLoading(false);
+    setError(null);
+    try {
+      const records = await categoriesDb.categorySets.toArray();
+      setSets(records.map(toSummary));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to refresh sets');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  return { sets, isLoading, error: undefined, refresh };
+  return { sets, isLoading, error, refresh };
 }

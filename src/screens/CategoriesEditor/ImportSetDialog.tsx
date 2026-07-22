@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as v from 'valibot';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
@@ -155,7 +155,6 @@ function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
 
       await importCategorySet(setId, name, parsed);
       setDialogState({ status: 'success', name });
-      setTimeout(() => handleClose(false), 1500);
     },
     [intl, handleClose],
   );
@@ -163,10 +162,25 @@ function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
   const handleConfirmReplace = useCallback(async () => {
     if (dialogState.status !== 'confirming-replace') return;
     const { setId, name, data } = dialogState;
-    await importCategorySet(setId, name, data);
-    setDialogState({ status: 'success', name });
-    setTimeout(() => handleClose(false), 1500);
-  }, [dialogState, handleClose]);
+    try {
+      await importCategorySet(setId, name, data);
+      setDialogState({ status: 'success', name });
+    } catch {
+      setDialogState({
+        status: 'error',
+        message: intl.formatMessage(messages.validationError, {
+          error: 'Failed to store imported set',
+        }),
+      });
+    }
+  }, [dialogState, handleClose, intl]);
+
+  // Auto-close on success with cleanup on unmount
+  useEffect(() => {
+    if (dialogState.status !== 'success') return;
+    const timer = setTimeout(() => handleClose(false), 1500);
+    return () => clearTimeout(timer);
+  }, [dialogState.status, handleClose]);
 
   return (
     <Dialog.Root open={open} onOpenChange={handleClose}>
