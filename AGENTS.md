@@ -303,7 +303,7 @@ This ensures the user can always preview the current state of the codebase in re
 
 ```bash
 # Preferred: starts Vite, waits for it to be ready, then opens the tunnel
-npm run dev:tunnel        # optional port arg, e.g. npm run dev:tunnel 5174
+npm run dev:tunnel        # optional port arg, e.g. npm run dev:tunnel -- 5174
 
 # Manual equivalent, from the repo root
 npm run dev                                          # dev server on :5173
