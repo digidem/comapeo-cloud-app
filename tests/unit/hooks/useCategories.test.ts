@@ -7,7 +7,7 @@ const PRESETS_WITH_TYPES = [
     docId: 'p1',
     name: 'Deforestation',
     tags: { type: 'environment', category: 'forest' },
-    fieldRefs: [{ docId: 'f1', label: 'Severity' }],
+    fieldRefs: [{ docId: 'f1' }],
   },
   {
     docId: 'p2',
@@ -19,7 +19,7 @@ const PRESETS_WITH_TYPES = [
     docId: 'p3',
     name: 'Illegal Logging',
     tags: { type: 'environment', category: 'forest' },
-    fieldRefs: [{ docId: 'f2', label: 'Area' }],
+    fieldRefs: [{ docId: 'f2' }],
   },
 ];
 
@@ -110,8 +110,9 @@ describe('normalizeCategories', () => {
     expect(result[0]!.categories[0]!.label).toBe('Desmatamento');
   });
 
-  it('searches across field labels', () => {
-    const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', 'severity');
+  it('searches across field labels via fieldLabels map', () => {
+    const fieldLabels = new Map([['f1', 'Severity']]);
+    const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', 'severity', fieldLabels);
 
     expect(result).toHaveLength(1);
     expect(result[0]!.type).toBe('environment');
@@ -151,6 +152,15 @@ describe('normalizeCategories', () => {
 
     expect(result[0]!.type).toBe('environment');
     expect(result[1]!.type).toBe('water');
+  });
+
+  it('resolves field ref labels from fieldLabels map', () => {
+    const fieldLabels = new Map([['f1', 'Severity'], ['f2', 'Area (ha)']]);
+    const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', '', fieldLabels);
+
+    const envGroup = result.find((g) => g.type === 'environment');
+    const deforestation = envGroup!.categories.find((c) => c.docId === 'p1');
+    expect(deforestation!.fieldRefs[0]!.label).toBe('Severity');
   });
 
   it('returns empty array for empty input', () => {

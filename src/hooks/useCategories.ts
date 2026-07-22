@@ -2,7 +2,7 @@ interface PresetInput {
   docId: string;
   name: string;
   tags: Record<string, unknown>;
-  fieldRefs: Array<{ docId: string; label?: string }>;
+  fieldRefs: Array<{ docId: string }>;
   iconRef?: { docId: string };
 }
 
@@ -49,12 +49,14 @@ function matchesSearch(
   preset: PresetInput,
   searchNormalized: string,
   locale: string,
+  fieldLabels?: Map<string, string>,
 ): boolean {
   const label = resolveLocaleName(preset.tags, locale, preset.name);
   if (normalizeSearch(label).includes(searchNormalized)) return true;
 
   for (const ref of preset.fieldRefs) {
-    if (ref.label && normalizeSearch(ref.label).includes(searchNormalized)) {
+    const resolvedLabel = fieldLabels?.get(ref.docId);
+    if (resolvedLabel && normalizeSearch(resolvedLabel).includes(searchNormalized)) {
       return true;
     }
   }
@@ -66,6 +68,7 @@ export function normalizeCategories(
   data: PresetInput[],
   locale: string,
   searchQuery: string,
+  fieldLabels?: Map<string, string>,
 ): CategoryGroup[] {
   if (data.length === 0) return [];
 
@@ -74,7 +77,7 @@ export function normalizeCategories(
   const groups = new Map<string, Category[]>();
 
   for (const preset of data) {
-    if (searchNormalized && !matchesSearch(preset, searchNormalized, locale)) {
+    if (searchNormalized && !matchesSearch(preset, searchNormalized, locale, fieldLabels)) {
       continue;
     }
 
@@ -92,7 +95,10 @@ export function normalizeCategories(
     groups.get(type)!.push({
       docId: preset.docId,
       label,
-      fieldRefs: preset.fieldRefs,
+      fieldRefs: preset.fieldRefs.map((ref) => ({
+        docId: ref.docId,
+        label: fieldLabels?.get(ref.docId),
+      })),
       color: typeof preset.tags.color === 'string' ? preset.tags.color : undefined,
       iconRef: typeof preset.iconRef === 'object' && preset.iconRef !== null && 'docId' in preset.iconRef
         ? { docId: (preset.iconRef as { docId: string }).docId }
