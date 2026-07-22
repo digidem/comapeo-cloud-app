@@ -59,8 +59,14 @@
     "pipeline:review": "npm run storybook:screenshots && npm run review:all"
   },
   "overrides": {
+    "axios": "^1.18.1",
     "esbuild": "^0.28.1",
+    "fast-uri": "^3.1.4",
     "form-data": "^4.0.6",
+    "joi": "^17.13.4",
+    "js-yaml": "^3.15.0",
+    "sharp": "^0.35.3",
+    "shell-quote": "^1.10.0",
     "ws": "^8.21.0"
   },
   "dependencies": {
@@ -125,9 +131,9 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
-    "@vitest/browser-playwright": "^4.1.8",
-    "@vitest/coverage-v8": "^4.1.8",
-    "@vitest/ui": "^4.1.8",
+    "@vitest/browser-playwright": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/ui": "^4.1.10",
     "axe-playwright": "^2.2.2",
     "eslint": "^10.4.1",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -151,7 +157,7 @@
     "typescript-eslint": "^8.60.0",
     "vite": "^8.0.16",
     "vite-plugin-pwa": "^1.3.0",
-    "vitest": "^4.1.8",
+    "vitest": "^4.1.10",
     "wrangler": "^4.95.0"
   }
 }
