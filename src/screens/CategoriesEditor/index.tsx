@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
-import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { normalizeCategories } from '@/hooks/useCategories';
 import { usePresets } from '@/hooks/usePresets';
 import { useProjects } from '@/hooks/useProjects';
+import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';
 import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
@@ -135,20 +135,9 @@ export function CategoriesEditorScreen() {
         </div>
       )}
 
-      {categoryGroups.map((group) => (
-        <div key={group.type}>
-          <h2 className="text-lg font-semibold text-text mb-3">{group.type}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {group.categories.map((category) => (
-              <Card key={category.docId} className="p-4">
-                <span className="text-sm font-medium text-text">
-                  {category.label}
-                </span>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ))}
+      {hasPresets && hasResults && (
+        <CategoryGrid groups={categoryGroups} />
+      )}
     </div>
   );
 }

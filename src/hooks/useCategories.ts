@@ -9,6 +9,8 @@ export interface Category {
   docId: string;
   label: string;
   fieldRefs: Array<{ docId: string; label?: string }>;
+  color?: string;
+  iconRef?: { docId: string };
 }
 
 export interface CategoryGroup {
@@ -90,6 +92,10 @@ export function normalizeCategories(
       docId: preset.docId,
       label,
       fieldRefs: preset.fieldRefs,
+      color: typeof preset.tags.color === 'string' ? preset.tags.color : undefined,
+      iconRef: typeof preset.iconRef === 'object' && preset.iconRef !== null && 'docId' in preset.iconRef
+        ? { docId: (preset.iconRef as { docId: string }).docId }
+        : undefined,
     });
   }
 
