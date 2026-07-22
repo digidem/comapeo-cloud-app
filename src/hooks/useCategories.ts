@@ -89,9 +89,7 @@ export function normalizeCategories(
 
     const rawType = preset.tags.type;
     const type =
-      typeof rawType === 'string' && rawType.trim() !== ''
-        ? rawType
-        : 'Uncategorized';
+      typeof rawType === 'string' && rawType.trim() !== '' ? rawType : ''; // sentinel — translated at render (CategoryGrid)
 
     const label = resolveLocaleName(preset.tags, locale, preset.name);
 

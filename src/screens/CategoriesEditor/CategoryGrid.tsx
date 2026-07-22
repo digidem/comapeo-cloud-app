@@ -8,6 +8,10 @@ const messages = defineMessages({
     id: 'categories.noResults',
     defaultMessage: 'No categories match your search',
   },
+  uncategorized: {
+    id: 'categories.uncategorized',
+    defaultMessage: 'Uncategorized',
+  },
 });
 
 interface CategoryGridProps {
@@ -38,7 +42,7 @@ function CategoryGrid({
       {groups.map((group) => (
         <section key={group.type}>
           <h2 className="mb-3 rounded-card bg-bg px-3 py-1.5 text-lg font-semibold text-text">
-            {group.type}
+            {group.type || intl.formatMessage(messages.uncategorized)}
           </h2>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
             {group.categories.map((category) => (

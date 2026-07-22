@@ -133,15 +133,15 @@ describe('normalizeCategories', () => {
     expect(result[0]!.categories[0]!.label).toBe('Deforestation');
   });
 
-  it('assigns "Uncategorized" group for missing tags.type', () => {
+  it('assigns empty string sentinel for missing tags.type', () => {
     const result = normalizeCategories(PRESETS_WITHOUT_TYPES, 'en', '');
 
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('Uncategorized');
+    expect(result[0]!.type).toBe('');
     expect(result[0]!.categories).toHaveLength(2);
   });
 
-  it('assigns "Uncategorized" group for blank tags.type', () => {
+  it('assigns empty string sentinel for blank tags.type', () => {
     const result = normalizeCategories(
       [{ docId: 'p8', name: 'Test', tags: { type: '' }, fieldRefs: [] }],
       'en',
@@ -149,7 +149,7 @@ describe('normalizeCategories', () => {
     );
 
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('Uncategorized');
+    expect(result[0]!.type).toBe('');
   });
 
   it('returns stable alphabetical ordering within groups', () => {

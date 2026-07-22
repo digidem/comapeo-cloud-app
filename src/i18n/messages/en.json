@@ -242,6 +242,9 @@
   "categories.title": {
     "defaultMessage": "Categories"
   },
+  "categories.uncategorized": {
+    "defaultMessage": "Uncategorized"
+  },
   "categories.untitledProject": {
     "defaultMessage": "Untitled Project"
   },

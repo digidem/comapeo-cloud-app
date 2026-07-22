@@ -70,6 +70,7 @@
   "categories.search": "Buscar categorías...",
   "categories.selectProject": "Seleccione un proyecto para ver categorías",
   "categories.title": "Categorías",
+  "categories.uncategorized": "Sin categoría",
   "categories.untitledProject": "Proyecto sin título",
   "dashboard.banner.active": "Activo",
   "dashboard.banner.defaultDescription": "Un entorno controlado para la integración de nuevos guardabosques y pruebas de protocolos de recopilación de datos de campo.",

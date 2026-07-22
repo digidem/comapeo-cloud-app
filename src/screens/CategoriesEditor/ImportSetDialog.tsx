@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
-import { importCategorySet } from '@/lib/categories-db';
+import { getCategorySet, importCategorySet } from '@/lib/categories-db';
 import { comapeoCatSchema } from '@/lib/schemas/preset';
 
 const messages = defineMessages({
@@ -152,14 +152,22 @@ function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
       const name = result.output.metadata?.name ?? setId;
 
       // Check for existing set
-      const { getCategorySet } = await import('@/lib/categories-db');
-      const existing = await getCategorySet(setId);
-      if (existing) {
+      try {
+        const existing = await getCategorySet(setId);
+        if (existing) {
+          setDialogState({
+            status: 'confirming-replace',
+            setId,
+            name,
+            data: parsed,
+          });
+          return;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         setDialogState({
-          status: 'confirming-replace',
-          setId,
-          name,
-          data: parsed,
+          status: 'error',
+          message: intl.formatMessage(messages.importError, { error: msg }),
         });
         return;
       }
@@ -184,12 +192,11 @@ function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
     try {
       await importCategorySet(setId, name, data);
       setDialogState({ status: 'success', name });
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       setDialogState({
         status: 'error',
-        message: intl.formatMessage(messages.validationError, {
-          error: 'Failed to store imported set',
-        }),
+        message: intl.formatMessage(messages.importError, { error: msg }),
       });
     }
   }, [dialogState, handleClose, intl]);
