@@ -155,6 +155,24 @@
   "audioPlayer.play": {
     "defaultMessage": "Play"
   },
+  "categories.empty": {
+    "defaultMessage": "No categories found"
+  },
+  "categories.error": {
+    "defaultMessage": "Failed to load categories. Please try again."
+  },
+  "categories.noResults": {
+    "defaultMessage": "No categories match your search"
+  },
+  "categories.retry": {
+    "defaultMessage": "Retry"
+  },
+  "categories.search": {
+    "defaultMessage": "Search categories..."
+  },
+  "categories.title": {
+    "defaultMessage": "Categories"
+  },
   "common.refreshAria": {
     "defaultMessage": "Refresh data"
   },
