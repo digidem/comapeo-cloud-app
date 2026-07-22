@@ -57,6 +57,27 @@ const PRESETS_WITH_LOCALE = [
   },
 ];
 
+const PRESETS_WITH_DIACRITICS = [
+  {
+    docId: 'p8',
+    name: 'Água',
+    tags: { type: 'water', 'name:pt': 'Água' },
+    fieldRefs: [],
+  },
+  {
+    docId: 'p9',
+    name: 'São Paulo',
+    tags: { type: 'city', 'name:pt': 'São Paulo' },
+    fieldRefs: [],
+  },
+  {
+    docId: 'p10',
+    name: 'Ação',
+    tags: { type: 'action' },
+    fieldRefs: [],
+  },
+];
+
 describe('normalizeCategories', () => {
   it('groups presets by tags.type', () => {
     const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', '');
@@ -192,5 +213,29 @@ describe('normalizeCategories', () => {
   it('returns empty groups when search matches nothing', () => {
     const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', 'nonexistent');
     expect(result).toEqual([]);
+  });
+
+  it('matches accented names with unaccented search (real diacritics)', () => {
+    const result = normalizeCategories(PRESETS_WITH_DIACRITICS, 'pt', 'agua');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.type).toBe('water');
+    expect(result[0]!.categories[0]!.label).toBe('Água');
+  });
+
+  it('matches multi-word accented names without accents', () => {
+    const result = normalizeCategories(
+      PRESETS_WITH_DIACRITICS,
+      'pt',
+      'sao paulo',
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]!.type).toBe('city');
+    expect(result[0]!.categories[0]!.label).toBe('São Paulo');
+  });
+
+  it('matches plain name with accented search query', () => {
+    const result = normalizeCategories(PRESETS_WITH_DIACRITICS, 'en', 'ação');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.type).toBe('action');
   });
 });
