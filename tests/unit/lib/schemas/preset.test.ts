@@ -89,6 +89,23 @@ describe('presetSchema', () => {
     };
     expect(v.safeParse(presetSchema, invalid).success).toBe(false);
   });
+
+  // Regression: presetRefSchema required 'url' but server omits it
+  it('accepts fieldRefs without url (server omits url per comapeo-schema v1)', () => {
+    const withoutUrl = {
+      ...validPreset,
+      fieldRefs: [{ docId: 'field-001', versionId: 'field-001/0' }],
+    };
+    expect(v.safeParse(presetSchema, withoutUrl).success).toBe(true);
+  });
+
+  it('accepts iconRef without url (server omits url per comapeo-schema v1)', () => {
+    const withoutUrl = {
+      ...validPreset,
+      iconRef: { docId: 'icon-001', versionId: 'icon-001/0' },
+    };
+    expect(v.safeParse(presetSchema, withoutUrl).success).toBe(true);
+  });
 });
 
 describe('presetsResponseSchema', () => {
