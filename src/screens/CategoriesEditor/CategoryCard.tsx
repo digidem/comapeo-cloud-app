@@ -1,5 +1,3 @@
-import type { Category } from '@/hooks/useCategories';
-
 interface CategoryCardProps {
   docId: string;
   label: string;

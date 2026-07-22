@@ -5,7 +5,7 @@ import { useShellSlot } from '@/components/layout/shell-slot';
 import { Skeleton } from '@/components/ui/skeleton';
 import { normalizeCategories } from '@/hooks/useCategories';
 import { useFields } from '@/hooks/useFields';
-import { usePresets } from '@/hooks/usePresets';
+import { useApiPresets } from '@/hooks/useApiPresets';
 import { useProjects } from '@/hooks/useProjects';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';
@@ -46,7 +46,7 @@ export function CategoriesEditorScreen() {
   const intl = useIntl();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projectsQuery = useProjects();
-  const presetsQuery = usePresets(selectedProjectId);
+  const presetsQuery = useApiPresets(selectedProjectId);
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
@@ -91,6 +91,17 @@ export function CategoriesEditorScreen() {
     [presetsQuery.data, intl.locale, searchQuery, fieldLabels],
   );
 
+  const selectedCategory = useMemo(() => {
+    if (!selectedCategoryId) return null;
+    for (const group of categoryGroups) {
+      const found = group.categories.find(
+        (c) => c.docId === selectedCategoryId,
+      );
+      if (found) return found;
+    }
+    return null;
+  }, [selectedCategoryId, categoryGroups]);
+
   // Loading skeleton
   if (presetsQuery.isPending) {
     return (
@@ -122,17 +133,6 @@ export function CategoriesEditorScreen() {
 
   const hasPresets = (presetsQuery.data ?? []).length > 0;
   const hasResults = categoryGroups.length > 0;
-
-  const selectedCategory = useMemo(() => {
-    if (!selectedCategoryId) return null;
-    for (const group of categoryGroups) {
-      const found = group.categories.find(
-        (c) => c.docId === selectedCategoryId,
-      );
-      if (found) return found;
-    }
-    return null;
-  }, [selectedCategoryId, categoryGroups]);
 
   return (
     <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">

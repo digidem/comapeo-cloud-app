@@ -49,8 +49,8 @@ vi.mock('@/hooks/useProjects', () => ({
   })),
 }));
 
-vi.mock('@/hooks/usePresets', () => ({
-  usePresets: vi.fn(() => mockPresetsQuery),
+vi.mock('@/hooks/useApiPresets', () => ({
+  useApiPresets: vi.fn(() => mockPresetsQuery),
 }));
 
 vi.mock('@/hooks/useFields', () => ({
