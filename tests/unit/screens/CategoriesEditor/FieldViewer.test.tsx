@@ -14,7 +14,7 @@ const textField: FieldInput = {
 const selectOneField: FieldInput = {
   docId: 'field-2',
   tagKey: 'threat_level',
-  type: 'select_one',
+  type: 'selectOne',
   label: 'Threat Level',
   options: [
     { label: 'Low', value: 'low' },
@@ -26,7 +26,7 @@ const selectOneField: FieldInput = {
 const selectMultipleField: FieldInput = {
   docId: 'field-3',
   tagKey: 'observed_species',
-  type: 'select_multiple',
+  type: 'selectMultiple',
   label: 'Observed Species',
   options: [
     { label: 'Eagle', value: 'eagle' },
