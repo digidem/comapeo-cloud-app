@@ -50,10 +50,13 @@ export function CategoriesEditorScreen() {
   const intl = useIntl();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projectsQuery = useProjects();
-  const presetsQuery = useApiPresets(selectedProjectId);
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
+  // Server expects projectPublicId (base32) — use remoteId which is
+  // populated by pullProjects for remote archive projects, and falls
+  // back to null (query disabled) for local-only projects.
+  const presetsQuery = useApiPresets(selectedProject?.remoteId ?? null);
 
   const topbarWorkspaceName =
     selectedProject?.name ?? intl.formatMessage(messages.untitledProject);
@@ -116,6 +119,18 @@ export function CategoriesEditorScreen() {
             defaultMessage: 'Select a project to view categories',
           })}
         </p>
+      </div>
+    );
+  }
+
+  // Project selected but no remoteId — presets not available via API.
+  // Local-only projects don't have a server projectPublicId.
+  if (selectedProjectId && !selectedProject?.remoteId) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <span className="text-text-muted text-sm">
+          {intl.formatMessage(messages.empty)}
+        </span>
       </div>
     );
   }

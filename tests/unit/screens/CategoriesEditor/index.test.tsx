@@ -1,6 +1,7 @@
 import { render, screen } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useProjects } from '@/hooks/useProjects';
 import { CategoriesEditorScreen } from '@/screens/CategoriesEditor';
 
 const defaultPresets: Array<{
@@ -44,7 +45,9 @@ vi.mock('@/stores/project-store', () => ({
 
 vi.mock('@/hooks/useProjects', () => ({
   useProjects: vi.fn(() => ({
-    data: [{ localId: 'proj-1', name: 'Test Project' }],
+    data: [
+      { localId: 'proj-1', name: 'Test Project', remoteId: 'base32proj1' },
+    ],
     isPending: false,
   })),
 }));
@@ -137,6 +140,16 @@ describe('CategoriesEditorScreen', () => {
     expect(
       screen.getByText('Select a project to view categories'),
     ).toBeInTheDocument();
+  });
+
+  it('shows empty state for local project without remoteId', () => {
+    mockSelectedProjectId = 'proj-1';
+    vi.mocked(useProjects).mockReturnValue({
+      data: [{ localId: 'proj-1', name: 'Local Project' }],
+      isPending: false,
+    } as never);
+    render(<CategoriesEditorScreen />);
+    expect(screen.getByText('No categories found')).toBeInTheDocument();
   });
 
   it('shows no-results message when search filters everything out', () => {
