@@ -102,6 +102,20 @@ export function CategoriesEditorScreen() {
     return null;
   }, [selectedCategoryId, categoryGroups]);
 
+  // No project selected — prompt to select one
+  if (!selectedProjectId) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+        <p className="text-text-muted">
+          {intl.formatMessage({
+            id: 'categories.selectProject',
+            defaultMessage: 'Select a project to view categories',
+          })}
+        </p>
+      </div>
+    );
+  }
+
   // Loading skeleton
   if (presetsQuery.isPending) {
     return (
