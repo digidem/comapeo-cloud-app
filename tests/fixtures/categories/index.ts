@@ -1,20 +1,19 @@
-import animalCategory from './animal.json';
-import bodyOfWaterCategory from './body-of-water.json';
-import communityCategory from './community.json';
-import culturalSiteCategory from './cultural-site.json';
-import plantCategory from './plant.json';
-import metadata from './metadata.json';
-
 import accessField from './access.json';
 import animalTypeField from './animal-type.json';
+import animalCategory from './animal.json';
 import bodyOfWaterTypeField from './body-of-water-type.json';
+import bodyOfWaterCategory from './body-of-water.json';
+import communityCategory from './community.json';
 import conditionsField from './conditions.json';
 import culturalCategoryField from './cultural-category.json';
 import culturalDetailsField from './cultural-details.json';
 import culturalNameField from './cultural-name.json';
+import culturalSiteCategory from './cultural-site.json';
 import ecologicalStatusField from './ecological-status.json';
+import metadata from './metadata.json';
 import nameField from './name.json';
 import naturalResourceTypeField from './natural-resource-type.json';
+import plantCategory from './plant.json';
 
 export type CategoryFixture = {
   name: string;

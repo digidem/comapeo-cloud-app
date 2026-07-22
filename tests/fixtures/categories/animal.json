@@ -2,7 +2,13 @@
   "name": "Animal",
   "icon": "animal",
   "color": "#9E2C54",
-  "fields": ["name", "animal-type", "ecological-status", "conditions", "natural-resource-type"],
+  "fields": [
+    "name",
+    "animal-type",
+    "ecological-status",
+    "conditions",
+    "natural-resource-type"
+  ],
   "appliesTo": ["observation"],
   "tags": {
     "type": "nature",

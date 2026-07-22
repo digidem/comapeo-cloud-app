@@ -1,15 +1,15 @@
+import { loadDefaultCategoryFixtures } from '@tests/fixtures/categories';
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 
 import {
-  presetSchema,
-  presetsResponseSchema,
-  comapeoCatSchema,
   categorySchema,
+  comapeoCatSchema,
   fieldSchema,
   metadataSchema,
+  presetSchema,
+  presetsResponseSchema,
 } from '@/lib/schemas/preset';
-import { loadDefaultCategoryFixtures } from '@tests/fixtures/categories';
 
 // --- Server wire-type schemas (existing) ---
 
@@ -394,9 +394,7 @@ describe('upstream default category fixtures', () => {
   });
 
   it('field types cover all supported variants', () => {
-    const types = new Set(
-      Object.values(fixtures.fields).map((f) => f.type),
-    );
+    const types = new Set(Object.values(fixtures.fields).map((f) => f.type));
     expect(types.has('text')).toBe(true);
     expect(types.has('selectOne')).toBe(true);
     expect(types.has('selectMultiple')).toBe(true);

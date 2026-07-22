@@ -59,8 +59,6 @@ vi.mock('@tanstack/react-router', () => ({
   ),
   useNavigate: () => vi.fn(),
   useSearch: () => ({}),
-  useNavigate: () => vi.fn(),
-  useNavigate: () => vi.fn(),
 }));
 
 vi.mock('react-router-dom', async () => {

@@ -2,7 +2,13 @@
   "name": "Body of water",
   "icon": "body-of-water",
   "color": "#3399ff",
-  "fields": ["name", "body-of-water-type", "conditions", "natural-resource-type", "cultural-name"],
+  "fields": [
+    "name",
+    "body-of-water-type",
+    "conditions",
+    "natural-resource-type",
+    "cultural-name"
+  ],
   "appliesTo": ["observation"],
   "tags": {
     "type": "nature",

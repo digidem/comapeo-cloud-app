@@ -75,13 +75,7 @@ export const importFieldOptionSchema = v.object({
  */
 export const fieldSchema = v.looseObject({
   tagKey: v.string(),
-  type: v.picklist([
-    'text',
-    'selectOne',
-    'selectMultiple',
-    'date',
-    'number',
-  ]),
+  type: v.picklist(['text', 'selectOne', 'selectMultiple', 'date', 'number']),
   label: v.string(),
   helperText: v.optional(v.string()),
   options: v.optional(v.array(importFieldOptionSchema)),

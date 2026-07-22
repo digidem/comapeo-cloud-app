@@ -7,5 +7,6 @@ export function usePresets(projectLocalId: string | null) {
     queryKey: ['presets', projectLocalId],
     queryFn: () => apiClient.getPresets(projectLocalId!),
     enabled: projectLocalId !== null,
+    select: (data) => data.data,
   });
 }

@@ -67,9 +67,9 @@ describe('usePresets', () => {
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual(VALID_PRESETS);
-    expect(result.current.data!.data).toHaveLength(2);
-    expect(result.current.data!.data[0]!.name).toBe('Deforestation');
+    expect(result.current.data).toEqual(VALID_PRESETS.data);
+    expect(result.current.data).toHaveLength(2);
+    expect(result.current.data[0]!.name).toBe('Deforestation');
   });
 
   it('surfaces HTTP 500 errors in error state', async () => {

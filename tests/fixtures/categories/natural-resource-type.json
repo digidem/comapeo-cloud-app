@@ -5,7 +5,10 @@
   "helperText": "What type of natural resource?",
   "options": [
     { "label": "Timber", "value": "timber" },
-    { "label": "Non-timber forest product", "value": "non-timber-forest-product" },
+    {
+      "label": "Non-timber forest product",
+      "value": "non-timber-forest-product"
+    },
     { "label": "Water", "value": "water" },
     { "label": "Mineral", "value": "mineral" },
     { "label": "Other", "value": "other" }

@@ -3,6 +3,7 @@ interface PresetInput {
   name: string;
   tags: Record<string, unknown>;
   fieldRefs: Array<{ docId: string; label?: string }>;
+  iconRef?: { docId: string };
 }
 
 export interface Category {
