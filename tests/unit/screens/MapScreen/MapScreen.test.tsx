@@ -4,6 +4,7 @@ import {
   screen,
   userEvent,
   waitFor,
+  within,
 } from '@tests/mocks/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -328,6 +329,136 @@ describe('MapScreen', () => {
         }
       });
     });
+
+    it('floating Save Map is enabled at default config while settings-sheet Save Map is disabled', async () => {
+      const user = userEvent.setup();
+      render(<MapScreen />);
+
+      // Floating quick-action Save Map (always visible on mobile when not
+      // in draw mode) is ENABLED at defaults — intentional, see the
+      // "Intentionally no !hasConfigChanges guard" comment in MapScreen.tsx.
+      const floatingSave = await screen.findByRole('button', {
+        name: 'Save Map',
+      });
+      expect(floatingSave).toBeEnabled();
+
+      // Open the settings sheet
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'Map settings',
+          hidden: true,
+        }),
+      );
+
+      // Settings-sheet Save Map is DISABLED at defaults
+      const allSaves = screen.getAllByRole('button', {
+        name: 'Save Map',
+        hidden: true,
+      });
+      const settingsSheetSave = allSaves.find((btn) => btn !== floatingSave);
+      expect(settingsSheetSave).toBeDisabled();
+
+      // Change basemap — the settings-sheet trigger becomes enabled
+      await user.click(
+        await screen.findByRole('button', { name: 'OpenStreetMap' }),
+      );
+      await waitFor(() => {
+        expect(settingsSheetSave!).toBeEnabled();
+      });
+    });
+
+    it('resets draw mode when clicking the cancel button during draw_rectangle', async () => {
+      const user = userEvent.setup();
+      render(<MapScreen />);
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Draw bounds' }),
+      );
+
+      // Confirm draw mode is active
+      expect(
+        await screen.findByRole('button', { name: 'Set this area' }),
+      ).toBeInTheDocument();
+
+      // Click the frame instruction bar's cancel button
+      await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+      // Draw mode exits
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('button', { name: 'Set this area' }),
+        ).not.toBeInTheDocument();
+      });
+    });
+
+    it('renders DownloadPanel for maps with downloadable status', async () => {
+      const user = userEvent.setup();
+
+      // Seed a draft map so the DownloadPanel IIFE renders
+      await getDb().maps.add({
+        id: 'draft-map-1',
+        projectLocalId: 'project-1',
+        name: 'Offline Forest',
+        type: 'raster',
+        styleUrl: 'https://tiles.example.com/{z}/{x}/{y}.png',
+        bbox: [-75, -12, -45, 8],
+        minZoom: 0,
+        maxZoom: 14,
+        status: 'draft',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+      });
+
+      render(<MapScreen />);
+
+      // Open the mobile settings sheet so renderControls() runs (controls
+      // are only rendered inside the sheet on mobile).
+      await user.click(
+        await screen.findByRole('button', { name: 'Map settings' }),
+      );
+
+      // DownloadPanel renders with the map name
+      const downloadPanel = await screen.findByTestId('download-panel');
+      expect(
+        within(downloadPanel).getByText('Offline Forest'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows a name-required error and keeps the dialog open when submitting an empty name', async () => {
+      const user = userEvent.setup();
+
+      render(<MapScreen />);
+
+      // Open settings sheet and change basemap so Save Map is enabled
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'Map settings',
+          hidden: true,
+        }),
+      );
+      await user.click(
+        await screen.findByRole('button', { name: 'OpenStreetMap' }),
+      );
+
+      // Click the settings-sheet Save Map button
+      const allSaves = await screen.findAllByRole('button', {
+        name: 'Save Map',
+        hidden: true,
+      });
+      await user.click(allSaves[allSaves.length - 1]!);
+
+      // Dialog opens with empty name field
+      const nameInput = await screen.findByLabelText('Map name');
+      expect(nameInput).toHaveValue('');
+
+      // Click "Save draft" with empty name — should show error, keep dialog open
+      await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+      expect(await screen.findByText('Enter a map name')).toBeInTheDocument();
+      expect(
+        screen.getByRole('dialog', { name: 'Save map' }),
+      ).toBeInTheDocument();
+    });
   });
 
   it('updates the canvas map style when the selected style changes', async () => {
@@ -398,5 +529,94 @@ describe('MapScreen', () => {
     // After changing the basemap, the button should become enabled
     await user.click(screen.getByRole('button', { name: 'OpenStreetMap' }));
     expect(settingsSheetButton).toBeEnabled();
+  });
+
+  it('shows the no-project empty state when the selected project does not exist', async () => {
+    // Point at a project ID that isn't in the DB
+    useProjectStore.setState({ selectedProjectId: 'nonexistent-project' });
+
+    render(<MapScreen />);
+
+    // The empty-state message appears with a link back to home
+    expect(
+      await screen.findByText('Select a project from Home to author maps'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Go to Home' }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('MapScreen frame drawing (mobile)', () => {
+  let originalWidth: number;
+
+  beforeEach(async () => {
+    await resetDb();
+    localStorage.clear();
+    mapProps.length = 0;
+    unprojectMock.mockReset();
+    unprojectMock.mockImplementation((point: [number, number]) => ({
+      lng: point[0],
+      lat: point[1],
+    }));
+    useProjectStore.setState({ selectedProjectId: 'project-1' });
+    await getDb().projects.add({
+      localId: 'project-1',
+      sourceType: 'local',
+      sourceId: 'local',
+      name: 'Forest Watch',
+      createdAt: '2026-06-29T00:00:00.000Z',
+      updatedAt: '2026-06-29T00:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: 375,
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: originalWidth,
+    });
+  });
+
+  it('confirms a valid frame and shows the undo banner with the previous bbox', async () => {
+    const user = userEvent.setup();
+
+    // Mock unproject to return a valid frame that does NOT cross the antimeridian
+    // and is NOT zero-area. The default bbox is [-75, -12, -45, 8], so the
+    // new bbox should be different (otherwise undo has nothing to revert to).
+    unprojectMock
+      .mockImplementationOnce(() => ({ lng: -80, lat: 10 }))
+      .mockImplementationOnce(() => ({ lng: -50, lat: 10 }))
+      .mockImplementationOnce(() => ({ lng: -50, lat: -10 }))
+      .mockImplementationOnce(() => ({ lng: -80, lat: -10 }));
+
+    render(<MapScreen />);
+
+    // Enter draw_rectangle mode
+    await user.click(
+      await screen.findByRole('button', { name: 'Draw bounds' }),
+    );
+
+    // Confirm the frame — this triggers handleConfirmFrame's happy path
+    await user.click(
+      await screen.findByRole('button', { name: 'Set this area' }),
+    );
+
+    // Draw mode resets and the undo banner appears
+    expect(await screen.findByText('Map area updated')).toBeInTheDocument();
+
+    // Clicking Undo reverts to the previous bbox
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Map area updated')).not.toBeInTheDocument();
+    });
   });
 });
