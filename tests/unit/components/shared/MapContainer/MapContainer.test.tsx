@@ -387,8 +387,10 @@ describe('MapContainer', () => {
       const mapEl = screen.getByTestId('mock-map');
       expect(mapEl.dataset.mapStyle).toBe('StyleSpecification');
     });
-    // Should show online active badge
-    expect(screen.getByTestId('map-online-active-badge')).toBeInTheDocument();
+    // Should show online active badge with map name
+    const badge = screen.getByTestId('map-online-active-badge');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent(/Active map.*online.*Draft Map/);
     // Should show tooltip on basemap switcher
     const trigger = screen.getByTestId('basemap-switcher-trigger');
     expect(trigger.getAttribute('title')).toBeTruthy();

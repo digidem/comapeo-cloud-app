@@ -309,7 +309,7 @@ describe('MapScreen', () => {
     expect(settingsSheetButton).toBeEnabled();
   });
 
-  it('disables the settings sheet Save Map button while a save mutation is pending', async () => {
+  it('disables both Save Map triggers (floating + settings-sheet) while a save mutation is pending', async () => {
     const user = userEvent.setup();
 
     // Deferred promise keeps the mutation pending until we resolve it
@@ -322,16 +322,19 @@ describe('MapScreen', () => {
 
     render(<MapScreen />);
 
-    // Change basemap so the settings sheet Save Map button is enabled
+    // Change basemap so both Save Map buttons are enabled
     await user.click(
       await screen.findByRole('button', { name: 'OpenStreetMap' }),
     );
 
-    // Click the settings sheet Save Map button (last in DOM order)
-    const saveButtons = await screen.findAllByRole('button', {
+    // Confirm both triggers exist before starting the save flow
+    const allSaveButtons = await screen.findAllByRole('button', {
       name: 'Save Map',
     });
-    await user.click(saveButtons[saveButtons.length - 1]!);
+    expect(allSaveButtons.length).toBeGreaterThanOrEqual(2);
+
+    // Trigger save via the settings-sheet button (last in DOM order)
+    await user.click(allSaveButtons[allSaveButtons.length - 1]!);
     await user.type(await screen.findByLabelText('Map name'), 'Field map');
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
 
@@ -340,21 +343,28 @@ describe('MapScreen', () => {
     // before closing, so the dialog stays open until we force-close.
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    // The settings sheet Save Map button should be disabled while pending
-    const refreshedButtons = screen.getAllByRole('button', {
-      name: 'Save Map',
-    });
-    expect(refreshedButtons[refreshedButtons.length - 1]).toBeDisabled();
+    // BOTH Save Map buttons should be disabled while createMap is pending:
+    // 1) floating quick action (bottom-right, mobile)
+    // 2) settings-sheet trigger (inside aside / sheet)
+    const pendingButtons = screen.getAllByRole('button', { name: 'Save Map' });
+    expect(pendingButtons.length).toBeGreaterThanOrEqual(2);
+    for (const btn of pendingButtons) {
+      expect(btn).toBeDisabled();
+    }
 
     // Resolve the mutation inside act() so React state updates are flushed
     await act(async () => {
       resolveAdd!('done');
     });
 
-    // Button re-enables after the mutation settles
+    // BOTH buttons re-enable after the mutation settles
     await waitFor(() => {
-      const buttons = screen.getAllByRole('button', { name: 'Save Map' });
-      expect(buttons[buttons.length - 1]).toBeEnabled();
+      const resolvedButtons = screen.getAllByRole('button', {
+        name: 'Save Map',
+      });
+      for (const btn of resolvedButtons) {
+        expect(btn).toBeEnabled();
+      }
     });
   });
 });
