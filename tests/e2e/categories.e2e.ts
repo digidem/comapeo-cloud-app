@@ -35,8 +35,6 @@ const NOW = new Date().toISOString();
 function registerSeedScript(page: Page) {
   return page.addInitScript(
     ({ authSeed, projectSeed, now, projectRemoteId }) => {
-      // Seed localStorage before React hydrates so auth and project
-      // stores initialize with the correct state.
       localStorage.setItem(
         'comapeo-auth',
         JSON.stringify({ state: authSeed, version: 0 }),
@@ -46,9 +44,6 @@ function registerSeedScript(page: Page) {
         JSON.stringify({ state: projectSeed, version: 0 }),
       );
 
-      // Expose a promise-based seed so page.evaluate can populate
-      // IndexedDB after the page context is stable but BEFORE any
-      // data-fetching hooks run on the categories route.
       (
         window as unknown as { __seedCategoriesDb?: () => Promise<void> }
       ).__seedCategoriesDb = () =>
@@ -117,13 +112,13 @@ async function seedDb(page: Page) {
 async function setupCategoriesPage(page: Page) {
   await setupMockServer(page);
   await registerSeedScript(page);
-  // Load the app so addInitScript runs — seeds localStorage before
-  // React hydrates.  Then seed IndexedDB while we're on the home
-  // page (before any /categories data hooks fire).
-  await page.goto('/', { waitUntil: 'networkidle' });
+  // Use domcontentloaded (not networkidle) for the home page —
+  // archive.example.com requests hang in CI because the domain
+  // doesn't resolve.  addInitScript already seeded localStorage so
+  // the app won't redirect on auth state.
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await seedDb(page);
-  // Now navigate to /categories — stores are hydrated from
-  // localStorage, IndexedDB is populated, mock routes are active.
+  // Categories page has mock routes active, so networkidle is safe.
   await page.goto('/categories', { waitUntil: 'networkidle' });
 }
 
@@ -133,7 +128,11 @@ async function setupCategoriesPage(page: Page) {
 
 test('renders categories from server data', async ({ page }) => {
   await setupCategoriesPage(page);
-  await expect(page.getByText('Categories')).toBeVisible({ timeout: 10_000 });
+  // Use role-based locator to avoid strict-mode violation from
+  // duplicate "Categories" text (heading + sidebar nav).
+  await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
+    timeout: 10_000,
+  });
   const presetNames = presetsFixture.data.map((p) => p.name);
   for (const name of presetNames) {
     await expect(page.getByText(name, { exact: false }).first()).toBeVisible({
@@ -144,7 +143,9 @@ test('renders categories from server data', async ({ page }) => {
 
 test('search filters categories', async ({ page }) => {
   await setupCategoriesPage(page);
-  await expect(page.getByText('Categories')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(
     page.getByText(presetsFixture.data[0]!.name, { exact: false }).first(),
   ).toBeVisible({ timeout: 10_000 });
@@ -160,7 +161,9 @@ test('search filters categories', async ({ page }) => {
 
 test('selecting a category shows detail', async ({ page }) => {
   await setupCategoriesPage(page);
-  await expect(page.getByText('Categories')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(
     page.getByText(presetsFixture.data[0]!.name, { exact: false }).first(),
   ).toBeVisible({ timeout: 10_000 });
@@ -179,7 +182,7 @@ test('empty state when no presets', async ({ page }) => {
     }),
   );
   await registerSeedScript(page);
-  await page.goto('/', { waitUntil: 'networkidle' });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await seedDb(page);
   await page.goto('/categories', { waitUntil: 'networkidle' });
   await expect(page.getByText('No categories found')).toBeVisible({
