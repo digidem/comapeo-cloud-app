@@ -44,51 +44,56 @@ function registerSeedScript(page: Page) {
         JSON.stringify({ state: projectSeed, version: 0 }),
       );
 
-      (
-        window as unknown as { __seedCategoriesDb?: () => Promise<void> }
-      ).__seedCategoriesDb = () =>
-        new Promise<void>((resolve, reject) => {
-          const req = indexedDB.open('comapeo-cloud-app');
-          req.onsuccess = () => {
-            const db = req.result;
-            const tx = db.transaction(['projects', 'fields'], 'readwrite');
-            tx.objectStore('projects').put({
-              localId: 'test-project-local-1',
-              sourceType: 'remoteArchive',
-              sourceId: 'server-1',
-              remoteId: projectRemoteId,
-              name: 'Test Project',
-              createdAt: now,
-              updatedAt: now,
-              dirtyLocal: false,
-              deleted: false,
-            });
-            tx.objectStore('fields').put({
-              localId: 'field-local-001',
-              projectLocalId: 'test-project-local-1',
-              sourceType: 'remoteArchive',
-              sourceId: 'server-1',
-              remoteId: 'field-001',
-              type: 'text',
-              key: 'notes',
-              label: 'Notes',
-              universal: false,
-              createdAt: now,
-              updatedAt: now,
-              dirtyLocal: false,
-              deleted: false,
-            });
-            tx.oncomplete = () => {
-              db.close();
-              resolve();
-            };
-            tx.onerror = () => {
-              db.close();
-              reject(tx.error);
-            };
-          };
-          req.onerror = () => reject(req.error);
+      // Immediately seed IndexedDB — addInitScript runs before React
+      // bundles load, so the IndexedDB data is ready before any hook
+      // queries fire.
+      let resolveSeed: () => void;
+      const seedComplete = new Promise<void>((resolve) => {
+        resolveSeed = resolve;
+      });
+      (window as unknown as { __seedComplete?: Promise<void> }).__seedComplete =
+        seedComplete;
+
+      const req = indexedDB.open('comapeo-cloud-app');
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(['projects', 'fields'], 'readwrite');
+        tx.objectStore('projects').put({
+          localId: 'test-project-local-1',
+          sourceType: 'remoteArchive',
+          sourceId: 'server-1',
+          remoteId: projectRemoteId,
+          name: 'Test Project',
+          createdAt: now,
+          updatedAt: now,
+          dirtyLocal: false,
+          deleted: false,
         });
+        tx.objectStore('fields').put({
+          localId: 'field-local-001',
+          projectLocalId: 'test-project-local-1',
+          sourceType: 'remoteArchive',
+          sourceId: 'server-1',
+          remoteId: 'field-001',
+          type: 'text',
+          key: 'notes',
+          label: 'Notes',
+          universal: false,
+          createdAt: now,
+          updatedAt: now,
+          dirtyLocal: false,
+          deleted: false,
+        });
+        tx.oncomplete = () => {
+          db.close();
+          resolveSeed();
+        };
+        tx.onerror = () => {
+          db.close();
+          resolveSeed(); // still resolve — don't hang the test
+        };
+      };
+      req.onerror = () => resolveSeed();
     },
     {
       authSeed: AUTH_SEED,
@@ -99,27 +104,24 @@ function registerSeedScript(page: Page) {
   );
 }
 
-async function seedDb(page: Page) {
-  await page.evaluate(() =>
-    (
-      window as unknown as {
-        __seedCategoriesDb?: () => Promise<void>;
-      }
-    ).__seedCategoriesDb!(),
+async function awaitSeedComplete(page: Page) {
+  await page.evaluate(
+    () =>
+      (window as unknown as { __seedComplete?: Promise<void> }).__seedComplete!,
   );
 }
 
 async function setupCategoriesPage(page: Page) {
   await setupMockServer(page);
   await registerSeedScript(page);
-  // Use domcontentloaded (not networkidle) for the home page —
-  // archive.example.com requests hang in CI because the domain
-  // doesn't resolve.  addInitScript already seeded localStorage so
-  // the app won't redirect on auth state.
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await seedDb(page);
-  // Categories page has mock routes active, so networkidle is safe.
-  await page.goto('/categories', { waitUntil: 'networkidle' });
+  await page.goto('/categories', { waitUntil: 'domcontentloaded' });
+  // Ensure IndexedDB seeding finished before checking for content.
+  await awaitSeedComplete(page);
+  // Give React a moment to hydrate and render.
+  await page.waitForTimeout(500);
+  await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
+    timeout: 10_000,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -128,11 +130,6 @@ async function setupCategoriesPage(page: Page) {
 
 test('renders categories from server data', async ({ page }) => {
   await setupCategoriesPage(page);
-  // Use role-based locator to avoid strict-mode violation from
-  // duplicate "Categories" text (heading + sidebar nav).
-  await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
-    timeout: 10_000,
-  });
   const presetNames = presetsFixture.data.map((p) => p.name);
   for (const name of presetNames) {
     await expect(page.getByText(name, { exact: false }).first()).toBeVisible({
@@ -143,9 +140,6 @@ test('renders categories from server data', async ({ page }) => {
 
 test('search filters categories', async ({ page }) => {
   await setupCategoriesPage(page);
-  await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
-    timeout: 10_000,
-  });
   await expect(
     page.getByText(presetsFixture.data[0]!.name, { exact: false }).first(),
   ).toBeVisible({ timeout: 10_000 });
@@ -161,9 +155,6 @@ test('search filters categories', async ({ page }) => {
 
 test('selecting a category shows detail', async ({ page }) => {
   await setupCategoriesPage(page);
-  await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
-    timeout: 10_000,
-  });
   await expect(
     page.getByText(presetsFixture.data[0]!.name, { exact: false }).first(),
   ).toBeVisible({ timeout: 10_000 });
@@ -182,9 +173,9 @@ test('empty state when no presets', async ({ page }) => {
     }),
   );
   await registerSeedScript(page);
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await seedDb(page);
-  await page.goto('/categories', { waitUntil: 'networkidle' });
+  await page.goto('/categories', { waitUntil: 'domcontentloaded' });
+  await awaitSeedComplete(page);
+  await page.waitForTimeout(500);
   await expect(page.getByText('No categories found')).toBeVisible({
     timeout: 10_000,
   });
