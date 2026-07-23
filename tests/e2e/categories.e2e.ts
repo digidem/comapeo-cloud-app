@@ -121,7 +121,8 @@ async function seedDbAndHydrate(page: Page) {
   // us call its getState() from the page context.
   await page.evaluate(async () => {
     try {
-      const mod = await import('/src/stores/auth-store.ts');
+      // Dynamic import via Vite dev server — uses the @ alias.
+      const mod = await import('@/stores/auth-store');
       await mod.useAuthStore.getState().hydrateServers();
     } catch {
       // Module might not be accessible — fall through.
