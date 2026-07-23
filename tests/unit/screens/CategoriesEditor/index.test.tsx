@@ -2,7 +2,6 @@ import { render, screen } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useApiPresets } from '@/hooks/useApiPresets';
-import { useProjects } from '@/hooks/useProjects';
 import { CategoriesEditorScreen } from '@/screens/CategoriesEditor';
 
 const defaultPresets: Array<{
@@ -62,11 +61,15 @@ vi.mock('@/hooks/useApiPresets', () => ({
   useApiPresets: vi.fn(() => mockPresetsQuery),
 }));
 
+let mockFieldsQuery: {
+  data?: Array<{ remoteId: string; label: string }>;
+  isPending: boolean;
+  isError?: boolean;
+  refetch?: () => void;
+} = { data: [], isPending: false };
+
 vi.mock('@/hooks/useFields', () => ({
-  useFields: vi.fn(() => ({
-    data: [],
-    isPending: false,
-  })),
+  useFields: vi.fn(() => mockFieldsQuery),
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -94,6 +97,7 @@ function resetMocks() {
     ],
     isPending: false,
   };
+  mockFieldsQuery = { data: [], isPending: false };
   vi.clearAllMocks();
 }
 
@@ -210,10 +214,10 @@ describe('CategoriesEditorScreen', () => {
 
   it('shows empty state for local project without remoteId and passes null to useApiPresets', () => {
     mockSelectedProjectId = 'proj-1';
-    vi.mocked(useProjects).mockReturnValue({
+    mockProjectsQuery = {
       data: [{ localId: 'proj-1', name: 'Local Project' }],
       isPending: false,
-    } as ReturnType<typeof useProjects>);
+    };
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('No categories found')).toBeInTheDocument();
     // Verify the hook was called with null — no wasted API call
@@ -224,5 +228,45 @@ describe('CategoriesEditorScreen', () => {
     mockPresetsQuery = { data: [], isPending: false };
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('No categories found')).toBeInTheDocument();
+  });
+
+  // --- fields query error state ---
+
+  it('shows field labels warning banner when fields query fails', () => {
+    const refetch = vi.fn();
+    mockFieldsQuery = {
+      data: undefined,
+      isPending: false,
+      isError: true,
+      refetch,
+    };
+    render(<CategoriesEditorScreen />);
+    expect(screen.getByText('Field labels unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Retry')).toBeInTheDocument();
+  });
+
+  it('calls fieldsQuery.refetch when retry button is clicked', () => {
+    const refetch = vi.fn();
+    mockFieldsQuery = {
+      data: undefined,
+      isPending: false,
+      isError: true,
+      refetch,
+    };
+    render(<CategoriesEditorScreen />);
+    screen.getByText('Retry').click();
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('categories still render when fields query fails', () => {
+    mockFieldsQuery = {
+      data: undefined,
+      isPending: false,
+      isError: true,
+      refetch: vi.fn(),
+    };
+    render(<CategoriesEditorScreen />);
+    expect(screen.getByText('Deforestation')).toBeInTheDocument();
+    expect(screen.getByText('Mining')).toBeInTheDocument();
   });
 });

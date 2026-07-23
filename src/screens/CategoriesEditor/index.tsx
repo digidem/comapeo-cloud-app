@@ -44,6 +44,14 @@ const messages = defineMessages({
     id: 'categories.selectProject',
     defaultMessage: 'Select a project to view categories',
   },
+  fieldsError: {
+    id: 'categories.fieldsError',
+    defaultMessage: 'Field labels unavailable',
+  },
+  fieldsRetry: {
+    id: 'categories.fieldsRetry',
+    defaultMessage: 'Retry',
+  },
 });
 
 export function CategoriesEditorScreen() {
@@ -245,6 +253,17 @@ export function CategoriesEditorScreen() {
             />
           </div>
           <aside className="w-full lg:w-80 shrink-0 rounded-card bg-surface-card p-4">
+            {fieldsQuery.isError && (
+              <div className="mb-4 flex items-center justify-between rounded-button border border-warning bg-warning-light px-3 py-2 text-sm text-warning-text">
+                <span>{intl.formatMessage(messages.fieldsError)}</span>
+                <button
+                  onClick={() => fieldsQuery.refetch()}
+                  className="rounded-button bg-warning px-3 py-1 text-xs font-medium text-white hover:opacity-80 transition-opacity"
+                >
+                  {intl.formatMessage(messages.fieldsRetry)}
+                </button>
+              </div>
+            )}
             <CategoryDetail
               category={selectedCategory}
               fieldLabels={fieldLabels}
