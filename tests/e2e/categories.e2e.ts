@@ -35,8 +35,8 @@ const NOW = new Date().toISOString();
 function registerSeedScript(page: Page) {
   return page.addInitScript(
     ({ authSeed, projectSeed, now, projectRemoteId }) => {
-      // Seed localStorage before React hydrates — prevents redirect
-      // races that destroy the execution context during page.evaluate.
+      // Seed localStorage before React hydrates so auth and project
+      // stores initialize with the correct state.
       localStorage.setItem(
         'comapeo-auth',
         JSON.stringify({ state: authSeed, version: 0 }),
@@ -46,8 +46,9 @@ function registerSeedScript(page: Page) {
         JSON.stringify({ state: projectSeed, version: 0 }),
       );
 
-      // Expose a promise-based seed that page.evaluate can call after
-      // the page context is stable.
+      // Expose a promise-based seed so page.evaluate can populate
+      // IndexedDB after the page context is stable but BEFORE any
+      // data-fetching hooks run on the categories route.
       (
         window as unknown as { __seedCategoriesDb?: () => Promise<void> }
       ).__seedCategoriesDb = () =>
@@ -105,21 +106,25 @@ function registerSeedScript(page: Page) {
 
 async function seedDb(page: Page) {
   await page.evaluate(() =>
-    (window as unknown as { __seedCategoriesDb?: () => Promise<void> })
-      .__seedCategoriesDb!(),
+    (
+      window as unknown as {
+        __seedCategoriesDb?: () => Promise<void>;
+      }
+    ).__seedCategoriesDb!(),
   );
 }
 
 async function setupCategoriesPage(page: Page) {
   await setupMockServer(page);
   await registerSeedScript(page);
-  // Navigate and wait for the app to fully settle before seeding
-  // IndexedDB — addInitScript already populated localStorage so the
-  // app won't redirect due to missing auth state.
-  await page.goto('/categories', { waitUntil: 'networkidle' });
+  // Load the app so addInitScript runs — seeds localStorage before
+  // React hydrates.  Then seed IndexedDB while we're on the home
+  // page (before any /categories data hooks fire).
+  await page.goto('/', { waitUntil: 'networkidle' });
   await seedDb(page);
-  // Reload so the app picks up the now-seeded IndexedDB data.
-  await page.reload({ waitUntil: 'networkidle' });
+  // Now navigate to /categories — stores are hydrated from
+  // localStorage, IndexedDB is populated, mock routes are active.
+  await page.goto('/categories', { waitUntil: 'networkidle' });
 }
 
 // ---------------------------------------------------------------------------
@@ -174,9 +179,9 @@ test('empty state when no presets', async ({ page }) => {
     }),
   );
   await registerSeedScript(page);
-  await page.goto('/categories', { waitUntil: 'networkidle' });
+  await page.goto('/', { waitUntil: 'networkidle' });
   await seedDb(page);
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.goto('/categories', { waitUntil: 'networkidle' });
   await expect(page.getByText('No categories found')).toBeVisible({
     timeout: 10_000,
   });
