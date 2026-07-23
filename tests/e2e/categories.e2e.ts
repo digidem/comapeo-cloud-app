@@ -34,7 +34,7 @@ const NOW = new Date().toISOString();
 
 function registerSeedScript(page: Page) {
   return page.addInitScript(
-    ({ authSeed, projectSeed, now, projectRemoteId }) => {
+    ({ authSeed, projectSeed }) => {
       localStorage.setItem(
         'comapeo-auth',
         JSON.stringify({ state: authSeed, version: 0 }),
@@ -43,81 +43,73 @@ function registerSeedScript(page: Page) {
         'comapeo-project',
         JSON.stringify({ state: projectSeed, version: 0 }),
       );
-
-      // Immediately seed IndexedDB — addInitScript runs before React
-      // bundles load, so the IndexedDB data is ready before any hook
-      // queries fire.
-      let resolveSeed: () => void;
-      const seedComplete = new Promise<void>((resolve) => {
-        resolveSeed = resolve;
-      });
-      (window as unknown as { __seedComplete?: Promise<void> }).__seedComplete =
-        seedComplete;
-
-      const req = indexedDB.open('comapeo-cloud-app');
-      req.onsuccess = () => {
-        const db = req.result;
-        const tx = db.transaction(['projects', 'fields'], 'readwrite');
-        tx.objectStore('projects').put({
-          localId: 'test-project-local-1',
-          sourceType: 'remoteArchive',
-          sourceId: 'server-1',
-          remoteId: projectRemoteId,
-          name: 'Test Project',
-          createdAt: now,
-          updatedAt: now,
-          dirtyLocal: false,
-          deleted: false,
-        });
-        tx.objectStore('fields').put({
-          localId: 'field-local-001',
-          projectLocalId: 'test-project-local-1',
-          sourceType: 'remoteArchive',
-          sourceId: 'server-1',
-          remoteId: 'field-001',
-          type: 'text',
-          key: 'notes',
-          label: 'Notes',
-          universal: false,
-          createdAt: now,
-          updatedAt: now,
-          dirtyLocal: false,
-          deleted: false,
-        });
-        tx.oncomplete = () => {
-          db.close();
-          resolveSeed();
-        };
-        tx.onerror = () => {
-          db.close();
-          resolveSeed(); // still resolve — don't hang the test
-        };
-      };
-      req.onerror = () => resolveSeed();
     },
-    {
-      authSeed: AUTH_SEED,
-      projectSeed: PROJECT_SEED,
-      now: NOW,
-      projectRemoteId: TEST_PROJECT_REMOTE_ID,
-    },
+    { authSeed: AUTH_SEED, projectSeed: PROJECT_SEED },
   );
 }
 
-async function awaitSeedComplete(page: Page) {
+async function seedDb(page: Page) {
   await page.evaluate(
-    () =>
-      (window as unknown as { __seedComplete?: Promise<void> }).__seedComplete!,
+    ({ now, remoteId }) =>
+      new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open('comapeo-cloud-app');
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction(['projects', 'fields'], 'readwrite');
+          tx.objectStore('projects').put({
+            localId: 'test-project-local-1',
+            sourceType: 'remoteArchive',
+            sourceId: 'server-1',
+            remoteId,
+            name: 'Test Project',
+            createdAt: now,
+            updatedAt: now,
+            dirtyLocal: false,
+            deleted: false,
+          });
+          tx.objectStore('fields').put({
+            localId: 'field-local-001',
+            projectLocalId: 'test-project-local-1',
+            sourceType: 'remoteArchive',
+            sourceId: 'server-1',
+            remoteId: 'field-001',
+            type: 'text',
+            key: 'notes',
+            label: 'Notes',
+            universal: false,
+            createdAt: now,
+            updatedAt: now,
+            dirtyLocal: false,
+            deleted: false,
+          });
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+          };
+        };
+        req.onerror = () => reject(req.error);
+      }),
+    { now: NOW, remoteId: TEST_PROJECT_REMOTE_ID },
   );
 }
 
 async function setupCategoriesPage(page: Page) {
   await setupMockServer(page);
   await registerSeedScript(page);
+  // First load — React reads empty IndexedDB, shows "No categories" or
+  // loading state.  That's fine — we just need the page context alive
+  // for page.evaluate.
   await page.goto('/categories', { waitUntil: 'domcontentloaded' });
-  // Ensure IndexedDB seeding finished before checking for content.
-  await awaitSeedComplete(page);
-  // Give React a moment to hydrate and render.
+  // Seed IndexedDB with project + field data.
+  await seedDb(page);
+  // Reload — addInitScript re-fires (re-seeds localStorage), and now
+  // IndexedDB has our data, so React hooks will pick it up.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  // Wait for React to hydrate and render.
   await page.waitForTimeout(500);
   await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
     timeout: 10_000,
@@ -174,7 +166,8 @@ test('empty state when no presets', async ({ page }) => {
   );
   await registerSeedScript(page);
   await page.goto('/categories', { waitUntil: 'domcontentloaded' });
-  await awaitSeedComplete(page);
+  await seedDb(page);
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(500);
   await expect(page.getByText('No categories found')).toBeVisible({
     timeout: 10_000,
