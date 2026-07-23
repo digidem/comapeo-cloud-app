@@ -33,12 +33,13 @@ const PROJECT_SEED = {
 const NOW = new Date().toISOString();
 
 /**
- * Run BEFORE page loads — sets localStorage so Zustand persist middleware
- * reads it on initialization.
+ * Run BEFORE page loads.
+ * - localStorage: Zustand persist stores read this on init.
+ * - DON'T seed IndexedDB here — use page.evaluate after page load and reload.
  */
 function registerSeedScript(page: Page) {
   return page.addInitScript(
-    ({ authSeed, projectSeed }) => {
+    ({ authSeed, projectSeed, now, remoteId }) => {
       localStorage.setItem(
         'comapeo-auth',
         JSON.stringify({ state: authSeed, version: 0 }),
@@ -47,23 +48,51 @@ function registerSeedScript(page: Page) {
         'comapeo-project',
         JSON.stringify({ state: projectSeed, version: 0 }),
       );
-    },
-    { authSeed: AUTH_SEED, projectSeed: PROJECT_SEED },
-  );
-}
 
-/**
- * Run AFTER page loads and Dexie has created IndexedDB stores.
- * Seeds project + field records.
- */
-async function seedDb(page: Page) {
-  await page.evaluate(
-    ({ now, remoteId }) =>
-      new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open('comapeo-cloud-app');
-        req.onsuccess = () => {
-          const db = req.result;
-          const tx = db.transaction(['projects', 'fields'], 'readwrite');
+      // Seed IndexedDB ONLY if stores don't exist yet (first load).
+      // After reload, stores exist from Dexie and we skip creation.
+      const req = indexedDB.open('comapeo-cloud-app');
+      let created = false;
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('remoteServers')) {
+          const srv = db.createObjectStore('remoteServers', { keyPath: 'id' });
+          srv.createIndex('baseUrl', 'baseUrl', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('projects')) {
+          const p = db.createObjectStore('projects', { keyPath: 'localId' });
+          p.createIndex(
+            'sourceType+sourceId+remoteId',
+            ['sourceType', 'sourceId', 'remoteId'],
+            { unique: true },
+          );
+        }
+        if (!db.objectStoreNames.contains('fields')) {
+          const f = db.createObjectStore('fields', { keyPath: 'localId' });
+          f.createIndex(
+            'projectLocalId+remoteId',
+            ['projectLocalId', 'remoteId'],
+            { unique: true },
+          );
+        }
+        created = true;
+      };
+      req.onsuccess = () => {
+        // Only seed on first creation — after reload, Dexie owns the schema.
+        if (!created) return;
+        const db = req.result;
+        try {
+          const tx = db.transaction(
+            ['remoteServers', 'projects', 'fields'],
+            'readwrite',
+          );
+          tx.objectStore('remoteServers').put({
+            id: 'server-1',
+            baseUrl: 'http://archive.test',
+            token: 'test-bearer-token',
+            status: 'connected',
+            lastSyncedAt: now,
+          });
           tx.objectStore('projects').put({
             localId: 'test-project-local-1',
             sourceType: 'remoteArchive',
@@ -90,32 +119,31 @@ async function seedDb(page: Page) {
             dirtyLocal: false,
             deleted: false,
           });
-          tx.oncomplete = () => {
-            db.close();
-            resolve();
-          };
-          tx.onerror = () => {
-            db.close();
-            reject(tx.error);
-          };
-        };
-        req.onerror = () => reject(req.error);
-      }),
-    { now: NOW, remoteId: TEST_PROJECT_REMOTE_ID },
+          tx.oncomplete = () => db.close();
+          tx.onerror = () => db.close();
+        } catch {
+          db.close();
+        }
+      };
+    },
+    {
+      authSeed: AUTH_SEED,
+      projectSeed: PROJECT_SEED,
+      now: NOW,
+      remoteId: TEST_PROJECT_REMOTE_ID,
+    },
   );
 }
 
 async function setupCategoriesPage(page: Page) {
   await setupMockServer(page);
-  // addInitScript fires BEFORE page load → Zustand reads seeded localStorage.
   await registerSeedScript(page);
-  // Load / first so Dexie creates all IndexedDB stores.
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
-  // Now seed IndexedDB — stores already created by Dexie.
-  await seedDb(page);
-  // Navigate to categories. React mounts fresh → useProjects reads seeded DB
-  // → finds project → useApiPresets fetches from mock server.
+  // First load — addInitScript creates IndexedDB stores + seeds data.
+  // But Dexie will upgrade the schema, so our data may be in an old-version DB.
+  // Reload so Dexie opens at its correct version and hydrateServers picks up
+  // the seeded remoteServers.
   await page.goto('/categories', { waitUntil: 'domcontentloaded' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(500);
   await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
     timeout: 10_000,
@@ -171,11 +199,9 @@ test('empty state when no presets', async ({ page }) => {
     }),
   );
   await registerSeedScript(page);
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await seedDb(page);
   await page.goto('/categories', { waitUntil: 'domcontentloaded' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(500);
-  // "No categories found" renders inside the CategoriesEditor after heading
   await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
     timeout: 10_000,
   });
