@@ -222,6 +222,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         lastSyncedAt: record.lastSyncedAt || undefined,
       }));
       set({ servers: hydrated });
+      // Auto-select the first server if none is active yet (page refresh
+      // restoration). setActiveServer reads the just-set server list to
+      // populate baseUrl / token.
+      if (hydrated.length > 0 && get().activeServerId === null) {
+        get().setActiveServer(hydrated[0]!.id);
+      }
     } catch {
       // IndexedDB not available — leave servers empty
     }
