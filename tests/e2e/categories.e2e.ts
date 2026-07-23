@@ -1,6 +1,5 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
-
 import { presetsFixture } from '@tests/fixtures/presets';
 
 import { setupMockServer } from './mock-server';
@@ -35,7 +34,10 @@ async function seedStores(page: Page) {
     localStorage.setItem(
       'comapeo-project',
       JSON.stringify({
-        state: { selectedProjectId: 'test-project-local-1', selectedServerId: null },
+        state: {
+          selectedProjectId: 'test-project-local-1',
+          selectedServerId: null,
+        },
         version: 0,
       }),
     );
@@ -76,8 +78,14 @@ async function seedDb(page: Page) {
             dirtyLocal: false,
             deleted: false,
           });
-          tx.oncomplete = () => { db.close(); resolve(); };
-          tx.onerror = () => { db.close(); reject(tx.error); };
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+          };
         };
         req.onerror = () => reject(req.error);
       });

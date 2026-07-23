@@ -182,6 +182,12 @@
   "categories.fieldType.unknown": {
     "defaultMessage": "Unknown type"
   },
+  "categories.fieldsError": {
+    "defaultMessage": "Field labels unavailable"
+  },
+  "categories.fieldsRetry": {
+    "defaultMessage": "Retry"
+  },
   "categories.importSet.cancel": {
     "defaultMessage": "Cancel"
   },
@@ -229,6 +235,9 @@
   },
   "categories.noResults": {
     "defaultMessage": "No categories match your search"
+  },
+  "categories.noServer": {
+    "defaultMessage": "Connect to an archive server to view categories"
   },
   "categories.retry": {
     "defaultMessage": "Retry"
