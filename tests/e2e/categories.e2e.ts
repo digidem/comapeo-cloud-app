@@ -32,26 +32,22 @@ const PROJECT_SEED = {
 
 const NOW = new Date().toISOString();
 
-function registerSeedScript(page: Page) {
-  return page.addInitScript(
-    ({ authSeed, projectSeed }) => {
-      localStorage.setItem(
-        'comapeo-auth',
-        JSON.stringify({ state: authSeed, version: 0 }),
-      );
-      localStorage.setItem(
-        'comapeo-project',
-        JSON.stringify({ state: projectSeed, version: 0 }),
-      );
-    },
-    { authSeed: AUTH_SEED, projectSeed: PROJECT_SEED },
-  );
-}
-
-async function seedDb(page: Page) {
+/** Seed localStorage AND IndexedDB while the app is loaded on the page. */
+async function seedAll(page: Page) {
   await page.evaluate(
-    ({ now, remoteId }) =>
+    ({ authSeed, projectSeed, now, remoteId }) =>
       new Promise<void>((resolve, reject) => {
+        // Seed localStorage
+        localStorage.setItem(
+          'comapeo-auth',
+          JSON.stringify({ state: authSeed, version: 0 }),
+        );
+        localStorage.setItem(
+          'comapeo-project',
+          JSON.stringify({ state: projectSeed, version: 0 }),
+        );
+
+        // Seed IndexedDB — stores created by Dexie on page load
         const req = indexedDB.open('comapeo-cloud-app');
         req.onsuccess = () => {
           const db = req.result;
@@ -93,19 +89,22 @@ async function seedDb(page: Page) {
         };
         req.onerror = () => reject(req.error);
       }),
-    { now: NOW, remoteId: TEST_PROJECT_REMOTE_ID },
+    {
+      authSeed: AUTH_SEED,
+      projectSeed: PROJECT_SEED,
+      now: NOW,
+      remoteId: TEST_PROJECT_REMOTE_ID,
+    },
   );
 }
 
 async function setupCategoriesPage(page: Page) {
   await setupMockServer(page);
-  await registerSeedScript(page);
-  // Navigate to / first so Dexie creates the IndexedDB schema.
+  // Load the app first so Dexie creates all IndexedDB stores.
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  // Now that IndexedDB stores exist, seed them.
-  await seedDb(page);
-  // Navigate to /categories — addInitScript re-fires (localStorage),
-  // and IndexedDB already has our project/field data.
+  // Seed localStorage + IndexedDB while app is alive.
+  await seedAll(page);
+  // Navigate to categories — React reads from seeded stores.
   await page.goto('/categories', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(500);
   await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
@@ -161,9 +160,8 @@ test('empty state when no presets', async ({ page }) => {
       body: JSON.stringify({ data: [] }),
     }),
   );
-  await registerSeedScript(page);
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await seedDb(page);
+  await seedAll(page);
   await page.goto('/categories', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(500);
   await expect(page.getByText('No categories found')).toBeVisible({
