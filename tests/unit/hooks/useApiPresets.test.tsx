@@ -91,4 +91,42 @@ describe('useApiPresets', () => {
       { docId: 'p1', name: 'Forest', tags: {}, fieldRefs: [] },
     ]);
   });
+
+  it('exposes error state when getPresets rejects', async () => {
+    useAuthStore.setState({
+      baseUrl: 'https://archive.example.org',
+      token: 'secret-token',
+    });
+    getPresets.mockRejectedValue(new Error('Network Error'));
+
+    const { result } = renderHook(() => useApiPresets(REMOTE_ID), { wrapper });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(result.current.error).toBeDefined();
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current.error!.message).toBe('Network Error');
+  });
+
+  it('transitions through loading state', async () => {
+    useAuthStore.setState({
+      baseUrl: 'https://archive.example.org',
+      token: 'secret-token',
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let resolvePromise!: (value: any) => void;
+    getPresets.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePromise = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() => useApiPresets(REMOTE_ID), { wrapper });
+
+    expect(result.current.isPending || result.current.isLoading).toBe(true);
+
+    resolvePromise({ data: [] });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
 });

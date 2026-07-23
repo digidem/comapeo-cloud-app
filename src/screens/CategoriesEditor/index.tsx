@@ -293,6 +293,7 @@ export function CategoriesEditorScreen() {
             <CategoryDetail
               category={selectedCategory}
               fieldLabels={fieldLabels}
+              onBack={() => setSelectedCategoryId(null)}
             />
           </aside>
         </div>

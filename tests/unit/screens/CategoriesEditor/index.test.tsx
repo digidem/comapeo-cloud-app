@@ -1,4 +1,4 @@
-import { render, screen } from '@tests/mocks/test-utils';
+import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useApiPresets } from '@/hooks/useApiPresets';
@@ -247,10 +247,22 @@ describe('CategoriesEditorScreen', () => {
     expect(skeletons.length).toBe(0);
   });
 
-  it('shows no-results message when search filters everything out', () => {
+  it('shows empty-state message when no categories exist', () => {
     mockPresetsQuery = { data: [], isPending: false };
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('No categories found')).toBeInTheDocument();
+  });
+
+  it('shows no-results message when search filters everything out', async () => {
+    render(<CategoriesEditorScreen />);
+    expect(screen.getByText('Deforestation')).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText('Search categories...');
+    await userEvent.type(searchInput, 'zzz_nonexistent');
+
+    expect(
+      screen.getByText('No categories match your search'),
+    ).toBeInTheDocument();
   });
 
   // --- fields query error state ---

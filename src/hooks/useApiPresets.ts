@@ -19,12 +19,19 @@ export function useApiPresets(projectRemoteId: string | null) {
   const token = useAuthStore((s) => s.token);
 
   return useQuery({
+    // token in queryKey is intentional — ensures refetch on token rotation
     queryKey: ['api-presets', projectRemoteId, baseUrl, token],
     queryFn: () => {
+      // Read from store to avoid stale-closure risk
+      const { baseUrl, token } = useAuthStore.getState();
       const config: RequestConfig = { baseUrl: baseUrl!, token: token ?? '' };
       return apiClient.getPresets(projectRemoteId!, config);
     },
-    enabled: projectRemoteId !== null && baseUrl !== null,
+    enabled:
+      projectRemoteId !== null &&
+      baseUrl !== null &&
+      token !== null &&
+      token !== '',
     select: (data) => data.data,
   });
 }

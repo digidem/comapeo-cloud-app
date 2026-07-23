@@ -114,9 +114,9 @@ function throwNetworkError(): never {
 async function handleResponse<T>(
   response: Response,
   schema: v.GenericSchema<T>,
-  config?: RequestConfig,
+  _config?: RequestConfig,
 ): Promise<T> {
-  if (response.status === 401 && !config) {
+  if (response.status === 401) {
     useAuthStore.getState().clearAuth();
   }
 
@@ -281,7 +281,7 @@ export const apiClient = {
         },
       );
 
-      if (response.status === 401 && !config) {
+      if (response.status === 401) {
         useAuthStore.getState().clearAuth();
       }
 
@@ -369,7 +369,7 @@ export const apiClient = {
         { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
       );
 
-      if (response.status === 401 && !config) {
+      if (response.status === 401) {
         useAuthStore.getState().clearAuth();
       }
 

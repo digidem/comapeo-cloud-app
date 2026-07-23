@@ -1,7 +1,5 @@
 import { defineMessages, useIntl } from 'react-intl';
 
-import { Link } from '@tanstack/react-router';
-
 import type { Category } from '@/hooks/useCategories';
 
 const messages = defineMessages({
@@ -22,9 +20,14 @@ const messages = defineMessages({
 interface CategoryDetailProps {
   category: Category | null;
   fieldLabels: Map<string, string>;
+  onBack: () => void;
 }
 
-function CategoryDetail({ category, fieldLabels }: CategoryDetailProps) {
+function CategoryDetail({
+  category,
+  fieldLabels,
+  onBack,
+}: CategoryDetailProps) {
   const intl = useIntl();
 
   if (!category) {
@@ -41,12 +44,13 @@ function CategoryDetail({ category, fieldLabels }: CategoryDetailProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link
-        to="/categories"
+      <button
+        type="button"
+        onClick={onBack}
         className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-dark min-h-[44px]"
       >
         {intl.formatMessage(messages.backToCategories)}
-      </Link>
+      </button>
 
       <div
         data-testid="category-detail-icon"

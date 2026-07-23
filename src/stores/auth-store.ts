@@ -145,6 +145,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set((state) => {
       const remaining = state.servers.filter((s) => s.id !== id);
       const wasActive = state.activeServerId === id;
+      if (wasActive) {
+        localStorage.removeItem('comapeo:activeServerId');
+      }
       return {
         servers: remaining,
         ...(wasActive
@@ -157,13 +160,19 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   setActiveServer: (id) => {
     set((state) => {
       if (id === null) {
+        localStorage.removeItem('comapeo:activeServerId');
         return { activeServerId: null, token: null, baseUrl: null };
       }
       const server = state.servers.find((s) => s.id === id);
+      if (!server) {
+        console.warn(`setActiveServer: unknown server id "${id}" — ignoring`);
+        return {};
+      }
+      localStorage.setItem('comapeo:activeServerId', id);
       return {
         activeServerId: id,
-        token: server?.token ?? null,
-        baseUrl: server?.baseUrl ?? null,
+        token: server.token,
+        baseUrl: server.baseUrl,
       };
     });
   },
@@ -222,18 +231,23 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         lastSyncedAt: record.lastSyncedAt || undefined,
       }));
       set({ servers: hydrated });
-      // Auto-select the first server if none is active yet (page refresh
-      // restoration). setActiveServer reads the just-set server list to
-      // populate baseUrl / token.
+      // Restore previously selected server from localStorage, falling back
+      // to auto-selecting the first server.
       if (hydrated.length > 0 && get().activeServerId === null) {
-        get().setActiveServer(hydrated[0]!.id);
+        const savedId = localStorage.getItem('comapeo:activeServerId');
+        const savedServer = savedId
+          ? hydrated.find((s) => s.id === savedId)
+          : undefined;
+        get().setActiveServer(savedServer?.id ?? hydrated[0]!.id);
       }
-    } catch {
+    } catch (error) {
+      console.warn('Failed to hydrate servers from database:', error);
       // IndexedDB not available — leave servers empty
     }
   },
 
-  clearAll: () =>
+  clearAll: () => {
+    localStorage.removeItem('comapeo:activeServerId');
     set({
       tier: 'local',
       servers: [],
@@ -241,7 +255,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       token: null,
       baseUrl: null,
       isAuthenticated: false,
-    }),
+    });
+  },
 
   // Backward-compat aliases — these preserve the old sessionStorage behavior
   // for api-client consumers until they fully migrate.

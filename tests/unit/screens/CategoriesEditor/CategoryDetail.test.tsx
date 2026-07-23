@@ -4,20 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Category } from '@/hooks/useCategories';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 
-vi.mock('@tanstack/react-router', () => ({
-  Link: ({
-    children,
-    to,
-    ...props
-  }: {
-    children: React.ReactNode;
-    to: string;
-  }) => (
-    <a href={to} {...props}>
-      {children}
-    </a>
-  ),
-}));
+const onBack = vi.fn();
 
 const sampleCategory: Category = {
   docId: 'cat-1',
@@ -32,13 +19,23 @@ const sampleCategory: Category = {
 
 describe('CategoryDetail', () => {
   it('shows placeholder when category is null', () => {
-    render(<CategoryDetail category={null} fieldLabels={new Map()} />);
+    render(
+      <CategoryDetail
+        category={null}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
+    );
     expect(screen.getByText('Select a category')).toBeInTheDocument();
   });
 
   it('renders category name', () => {
     render(
-      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
     );
     expect(
       screen.getByRole('heading', { name: 'Deforestation' }),
@@ -47,7 +44,11 @@ describe('CategoryDetail', () => {
 
   it('renders category icon with first letter', () => {
     render(
-      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
     );
     const icon = screen.getByTestId('category-detail-icon');
     expect(icon).toHaveTextContent('D');
@@ -55,7 +56,11 @@ describe('CategoryDetail', () => {
 
   it('renders category color swatch with hex value', () => {
     render(
-      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
     );
     expect(screen.getByText('#22c55e')).toBeInTheDocument();
     const swatch = screen.getByTestId('color-swatch');
@@ -72,6 +77,7 @@ describe('CategoryDetail', () => {
             ['field-2', 'Area (ha)'],
           ])
         }
+        onBack={onBack}
       />,
     );
     expect(screen.getByText(/3 fields/)).toBeInTheDocument();
@@ -81,29 +87,46 @@ describe('CategoryDetail', () => {
 
   it('shows docId for field refs without a label in fieldLabels map', () => {
     render(
-      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
     );
     expect(screen.getByText('field-3')).toBeInTheDocument();
   });
 
-  it('renders back navigation link to /categories', () => {
+  it('calls onBack when back button is clicked', () => {
     render(
-      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
     );
-    const backLink = screen.getByRole('link', { name: /Categories/ });
-    expect(backLink).toHaveAttribute('href', '/categories');
+    const backButton = screen.getByRole('button', { name: /Categories/ });
+    backButton.click();
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 
   it('renders appliesTo badges from fieldRefs', () => {
     render(
-      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
     );
     expect(screen.getByText(/fields/)).toBeInTheDocument();
   });
 
   it('renders color swatch with background color matching category color', () => {
     render(
-      <CategoryDetail category={sampleCategory} fieldLabels={new Map()} />,
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
     );
     const swatch = screen.getByTestId('color-swatch');
     expect(swatch).toHaveStyle({ backgroundColor: '#22c55e' });
@@ -117,7 +140,11 @@ describe('CategoryDetail', () => {
       color: '#f59e0b',
     };
     render(
-      <CategoryDetail category={emptyFieldsCategory} fieldLabels={new Map()} />,
+      <CategoryDetail
+        category={emptyFieldsCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
     );
     expect(screen.getByText(/0 fields/)).toBeInTheDocument();
   });
