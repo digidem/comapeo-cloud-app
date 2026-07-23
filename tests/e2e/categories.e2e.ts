@@ -100,16 +100,13 @@ async function seedDb(page: Page) {
 async function setupCategoriesPage(page: Page) {
   await setupMockServer(page);
   await registerSeedScript(page);
-  // First load — React reads empty IndexedDB, shows "No categories" or
-  // loading state.  That's fine — we just need the page context alive
-  // for page.evaluate.
-  await page.goto('/categories', { waitUntil: 'domcontentloaded' });
-  // Seed IndexedDB with project + field data.
+  // Navigate to / first so Dexie creates the IndexedDB schema.
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  // Now that IndexedDB stores exist, seed them.
   await seedDb(page);
-  // Reload — addInitScript re-fires (re-seeds localStorage), and now
-  // IndexedDB has our data, so React hooks will pick it up.
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  // Wait for React to hydrate and render.
+  // Navigate to /categories — addInitScript re-fires (localStorage),
+  // and IndexedDB already has our project/field data.
+  await page.goto('/categories', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(500);
   await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
     timeout: 10_000,
@@ -165,9 +162,9 @@ test('empty state when no presets', async ({ page }) => {
     }),
   );
   await registerSeedScript(page);
-  await page.goto('/categories', { waitUntil: 'domcontentloaded' });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await seedDb(page);
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.goto('/categories', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(500);
   await expect(page.getByText('No categories found')).toBeVisible({
     timeout: 10_000,
