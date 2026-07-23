@@ -21,24 +21,24 @@ const tagsSchema = v.record(
   ]),
 );
 
-export const presetSchema = v.object({
+export const presetSchema = v.looseObject({
   docId: v.string(),
-  versionId: v.string(),
-  originalVersionId: v.string(),
+  versionId: v.optional(v.string()),
+  originalVersionId: v.optional(v.string()),
   schemaName: v.literal('preset'),
   createdAt: v.string(),
   updatedAt: v.string(),
-  links: v.array(v.string()),
+  links: v.optional(v.array(v.string())),
   deleted: v.boolean(),
   name: v.string(),
-  geometry: geometryTypesSchema,
+  geometry: v.optional(geometryTypesSchema),
   tags: tagsSchema,
-  addTags: tagsSchema,
-  removeTags: tagsSchema,
+  addTags: v.optional(tagsSchema),
+  removeTags: v.optional(tagsSchema),
   fieldRefs: v.array(docRefSchema),
   iconRef: v.optional(docRefSchema),
   color: v.optional(v.pipe(v.string(), v.regex(/^#[0-9A-Fa-f]{6}$/))),
-  terms: v.array(v.string()),
+  terms: v.optional(v.array(v.string())),
 });
 
 export const presetsResponseSchema = v.object({

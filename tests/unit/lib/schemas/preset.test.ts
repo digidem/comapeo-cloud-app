@@ -139,6 +139,61 @@ describe('presetsResponseSchema', () => {
       false,
     );
   });
+
+  // Regression: real comapeo-cloud server omits optional fields like
+  // addTags, removeTags, terms, links, geometry, versionId, originalVersionId.
+  // The schema must accept these omissions without failing.
+  it('validates a real server response with optional fields omitted', () => {
+    const realServerResponse = {
+      data: [
+        {
+          docId: 'preset-abc123',
+          schemaName: 'preset',
+          createdAt: '2024-03-15T10:00:00Z',
+          updatedAt: '2024-03-15T10:00:00Z',
+          deleted: false,
+          name: 'Deforestation',
+          tags: { category: 'forest-risk' },
+          fieldRefs: [],
+        },
+        {
+          docId: 'preset-def456',
+          schemaName: 'preset',
+          createdAt: '2024-03-14T14:00:00Z',
+          updatedAt: '2024-03-14T14:00:00Z',
+          deleted: false,
+          name: 'Water Contamination',
+          tags: {},
+          fieldRefs: [{ docId: 'field-001' }],
+          color: '#3357FF',
+        },
+      ],
+    };
+    const result = v.safeParse(presetsResponseSchema, realServerResponse);
+    expect(result.success).toBe(true);
+  });
+
+  it('validates server response with extra unknown fields', () => {
+    const responseWithExtras = {
+      data: [
+        {
+          docId: 'preset-xyz',
+          schemaName: 'preset',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          deleted: false,
+          name: 'Test',
+          tags: {},
+          fieldRefs: [],
+          futureField: 'ignored',
+          anotherNewField: 42,
+        },
+      ],
+    };
+    expect(v.safeParse(presetsResponseSchema, responseWithExtras).success).toBe(
+      true,
+    );
+  });
 });
 
 // --- Import-file schemas (new for #143) ---
