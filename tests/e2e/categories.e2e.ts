@@ -32,22 +32,34 @@ const PROJECT_SEED = {
 
 const NOW = new Date().toISOString();
 
-/** Seed localStorage AND IndexedDB while the app is loaded on the page. */
-async function seedAll(page: Page) {
-  await page.evaluate(
-    ({ authSeed, projectSeed, now, remoteId }) =>
-      new Promise<void>((resolve, reject) => {
-        // Seed localStorage
-        localStorage.setItem(
-          'comapeo-auth',
-          JSON.stringify({ state: authSeed, version: 0 }),
-        );
-        localStorage.setItem(
-          'comapeo-project',
-          JSON.stringify({ state: projectSeed, version: 0 }),
-        );
+/**
+ * Run BEFORE page loads — sets localStorage so Zustand persist middleware
+ * reads it on initialization.
+ */
+function registerSeedScript(page: Page) {
+  return page.addInitScript(
+    ({ authSeed, projectSeed }) => {
+      localStorage.setItem(
+        'comapeo-auth',
+        JSON.stringify({ state: authSeed, version: 0 }),
+      );
+      localStorage.setItem(
+        'comapeo-project',
+        JSON.stringify({ state: projectSeed, version: 0 }),
+      );
+    },
+    { authSeed: AUTH_SEED, projectSeed: PROJECT_SEED },
+  );
+}
 
-        // Seed IndexedDB — stores created by Dexie on page load
+/**
+ * Run AFTER page loads and Dexie has created IndexedDB stores.
+ * Seeds project + field records.
+ */
+async function seedDb(page: Page) {
+  await page.evaluate(
+    ({ now, remoteId }) =>
+      new Promise<void>((resolve, reject) => {
         const req = indexedDB.open('comapeo-cloud-app');
         req.onsuccess = () => {
           const db = req.result;
@@ -89,22 +101,20 @@ async function seedAll(page: Page) {
         };
         req.onerror = () => reject(req.error);
       }),
-    {
-      authSeed: AUTH_SEED,
-      projectSeed: PROJECT_SEED,
-      now: NOW,
-      remoteId: TEST_PROJECT_REMOTE_ID,
-    },
+    { now: NOW, remoteId: TEST_PROJECT_REMOTE_ID },
   );
 }
 
 async function setupCategoriesPage(page: Page) {
   await setupMockServer(page);
-  // Load the app first so Dexie creates all IndexedDB stores.
+  // addInitScript fires BEFORE page load → Zustand reads seeded localStorage.
+  await registerSeedScript(page);
+  // Load / first so Dexie creates all IndexedDB stores.
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  // Seed localStorage + IndexedDB while app is alive.
-  await seedAll(page);
-  // Navigate to categories — React reads from seeded stores.
+  // Now seed IndexedDB — stores already created by Dexie.
+  await seedDb(page);
+  // Navigate to categories. React mounts fresh → useProjects reads seeded DB
+  // → finds project → useApiPresets fetches from mock server.
   await page.goto('/categories', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(500);
   await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
@@ -160,11 +170,16 @@ test('empty state when no presets', async ({ page }) => {
       body: JSON.stringify({ data: [] }),
     }),
   );
+  await registerSeedScript(page);
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await seedAll(page);
+  await seedDb(page);
   await page.goto('/categories', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(500);
-  await expect(page.getByText('No categories found')).toBeVisible({
+  // "No categories found" renders inside the CategoriesEditor after heading
+  await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
     timeout: 10_000,
+  });
+  await expect(page.getByText('No categories found')).toBeVisible({
+    timeout: 5_000,
   });
 });
