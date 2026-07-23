@@ -25,84 +25,101 @@ const AUTH_SEED = {
   isAuthenticated: true,
 };
 
-async function seedStores(page: Page) {
-  await page.evaluate((authSeed) => {
-    localStorage.setItem(
-      'comapeo-auth',
-      JSON.stringify({ state: authSeed, version: 0 }),
-    );
-    localStorage.setItem(
-      'comapeo-project',
-      JSON.stringify({
-        state: {
-          selectedProjectId: 'test-project-local-1',
-          selectedServerId: null,
-        },
-        version: 0,
-      }),
-    );
-  }, AUTH_SEED);
+const PROJECT_SEED = {
+  selectedProjectId: 'test-project-local-1',
+  selectedServerId: null,
+};
+
+const NOW = new Date().toISOString();
+
+function registerSeedScript(page: Page) {
+  return page.addInitScript(
+    ({ authSeed, projectSeed, now, projectRemoteId }) => {
+      // Seed localStorage before React hydrates — prevents redirect
+      // races that destroy the execution context during page.evaluate.
+      localStorage.setItem(
+        'comapeo-auth',
+        JSON.stringify({ state: authSeed, version: 0 }),
+      );
+      localStorage.setItem(
+        'comapeo-project',
+        JSON.stringify({ state: projectSeed, version: 0 }),
+      );
+
+      // Expose a promise-based seed that page.evaluate can call after
+      // the page context is stable.
+      (
+        window as unknown as { __seedCategoriesDb?: () => Promise<void> }
+      ).__seedCategoriesDb = () =>
+        new Promise<void>((resolve, reject) => {
+          const req = indexedDB.open('comapeo-cloud-app');
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction(['projects', 'fields'], 'readwrite');
+            tx.objectStore('projects').put({
+              localId: 'test-project-local-1',
+              sourceType: 'remoteArchive',
+              sourceId: 'server-1',
+              remoteId: projectRemoteId,
+              name: 'Test Project',
+              createdAt: now,
+              updatedAt: now,
+              dirtyLocal: false,
+              deleted: false,
+            });
+            tx.objectStore('fields').put({
+              localId: 'field-local-001',
+              projectLocalId: 'test-project-local-1',
+              sourceType: 'remoteArchive',
+              sourceId: 'server-1',
+              remoteId: 'field-001',
+              type: 'text',
+              key: 'notes',
+              label: 'Notes',
+              universal: false,
+              createdAt: now,
+              updatedAt: now,
+              dirtyLocal: false,
+              deleted: false,
+            });
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onerror = () => {
+              db.close();
+              reject(tx.error);
+            };
+          };
+          req.onerror = () => reject(req.error);
+        });
+    },
+    {
+      authSeed: AUTH_SEED,
+      projectSeed: PROJECT_SEED,
+      now: NOW,
+      projectRemoteId: TEST_PROJECT_REMOTE_ID,
+    },
+  );
 }
 
 async function seedDb(page: Page) {
-  await page.evaluate(
-    ({ now }) => {
-      const openDb = new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open('comapeo-cloud-app');
-        req.onsuccess = () => {
-          const db = req.result;
-          const tx = db.transaction(['projects', 'fields'], 'readwrite');
-          tx.objectStore('projects').put({
-            localId: 'test-project-local-1',
-            sourceType: 'remoteArchive',
-            sourceId: 'server-1',
-            remoteId: TEST_PROJECT_REMOTE_ID,
-            name: 'Test Project',
-            createdAt: now,
-            updatedAt: now,
-            dirtyLocal: false,
-            deleted: false,
-          });
-          tx.objectStore('fields').put({
-            localId: 'field-local-001',
-            projectLocalId: 'test-project-local-1',
-            sourceType: 'remoteArchive',
-            sourceId: 'server-1',
-            remoteId: 'field-001',
-            type: 'text',
-            key: 'notes',
-            label: 'Notes',
-            universal: false,
-            createdAt: now,
-            updatedAt: now,
-            dirtyLocal: false,
-            deleted: false,
-          });
-          tx.oncomplete = () => {
-            db.close();
-            resolve();
-          };
-          tx.onerror = () => {
-            db.close();
-            reject(tx.error);
-          };
-        };
-        req.onerror = () => reject(req.error);
-      });
-      return openDb;
-    },
-    { now: new Date().toISOString() },
+  await page.evaluate(() =>
+    (window as unknown as { __seedCategoriesDb?: () => Promise<void> })
+      .__seedCategoriesDb!(),
   );
 }
 
 async function setupCategoriesPage(page: Page) {
   await setupMockServer(page);
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  await seedStores(page);
+  await registerSeedScript(page);
+  // Navigate and wait for the app to fully settle before seeding
+  // IndexedDB — addInitScript already populated localStorage so the
+  // app won't redirect due to missing auth state.
+  await page.goto('/categories', { waitUntil: 'networkidle' });
   await seedDb(page);
-  await page.goto('/categories');
-  await page.waitForLoadState('domcontentloaded');
+  // Reload so the app picks up the now-seeded IndexedDB data.
+  await page.reload({ waitUntil: 'networkidle' });
 }
 
 // ---------------------------------------------------------------------------
@@ -156,12 +173,10 @@ test('empty state when no presets', async ({ page }) => {
       body: JSON.stringify({ data: [] }),
     }),
   );
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  await seedStores(page);
+  await registerSeedScript(page);
+  await page.goto('/categories', { waitUntil: 'networkidle' });
   await seedDb(page);
-  await page.goto('/categories');
-  await page.waitForLoadState('domcontentloaded');
+  await page.reload({ waitUntil: 'networkidle' });
   await expect(page.getByText('No categories found')).toBeVisible({
     timeout: 10_000,
   });
