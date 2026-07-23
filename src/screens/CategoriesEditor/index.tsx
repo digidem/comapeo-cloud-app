@@ -254,10 +254,18 @@ export function CategoriesEditorScreen() {
       )}
 
       {hasPresets && !hasResults && (
-        <div className="flex items-center justify-center p-8">
+        <div className="flex flex-col items-center justify-center gap-3 p-8">
           <span className="text-text-muted text-sm">
             {intl.formatMessage(messages.noResults)}
           </span>
+          {fieldsQuery.isError && (
+            <button
+              onClick={() => fieldsQuery.refetch()}
+              className="rounded-button bg-warning px-3 py-1 text-xs font-medium text-white hover:opacity-80 transition-opacity"
+            >
+              {intl.formatMessage(messages.fieldsRetry)}
+            </button>
+          )}
         </div>
       )}
 
