@@ -9,6 +9,7 @@ import { useFields } from '@/hooks/useFields';
 import { useProjects } from '@/hooks/useProjects';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
@@ -52,11 +53,16 @@ const messages = defineMessages({
     id: 'categories.fieldsRetry',
     defaultMessage: 'Retry',
   },
+  noServer: {
+    id: 'categories.noServer',
+    defaultMessage: 'Connect to an archive server to view categories',
+  },
 });
 
 export function CategoriesEditorScreen() {
   const intl = useIntl();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const baseUrl = useAuthStore((s) => s.baseUrl);
   const projectsQuery = useProjects();
 
   const projects = projectsQuery.data ?? [];
@@ -176,6 +182,18 @@ export function CategoriesEditorScreen() {
         <span className="text-text-muted text-sm">
           {intl.formatMessage(messages.empty)}
         </span>
+      </div>
+    );
+  }
+
+  // No archive server configured — presets query is disabled and isPending
+  // would stay true forever. Show an actionable message instead.
+  if (baseUrl === null) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+        <p className="text-text-muted">
+          {intl.formatMessage(messages.noServer)}
+        </p>
       </div>
     );
   }

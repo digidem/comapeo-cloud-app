@@ -72,6 +72,15 @@ vi.mock('@/hooks/useFields', () => ({
   useFields: vi.fn(() => mockFieldsQuery),
 }));
 
+let mockBaseUrl: string | null = 'https://archive.example.com';
+
+vi.mock('@/stores/auth-store', () => ({
+  useAuthStore: vi.fn(
+    (selector: (s: { baseUrl: string | null }) => string | null) =>
+      selector({ baseUrl: mockBaseUrl }),
+  ),
+}));
+
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
     <a href={to}>{children}</a>
@@ -90,6 +99,7 @@ vi.mock('react-router-dom', async () => {
 
 function resetMocks() {
   mockSelectedProjectId = 'proj-1';
+  mockBaseUrl = 'https://archive.example.com';
   mockPresetsQuery = { data: defaultPresets, isPending: false };
   mockProjectsQuery = {
     data: [
@@ -222,6 +232,19 @@ describe('CategoriesEditorScreen', () => {
     expect(screen.getByText('No categories found')).toBeInTheDocument();
     // Verify the hook was called with null — no wasted API call
     expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith(null);
+  });
+
+  it('shows no-server message when archive server is not configured', () => {
+    mockBaseUrl = null;
+    render(<CategoriesEditorScreen />);
+    expect(
+      screen.getByText('Connect to an archive server to view categories'),
+    ).toBeInTheDocument();
+    // Should NOT show skeleton (presets query is disabled, isPending stays true)
+    const skeletons = document.querySelectorAll(
+      '[class*="animate-pulse"], [class*="bg-muted"]',
+    );
+    expect(skeletons.length).toBe(0);
   });
 
   it('shows no-results message when search filters everything out', () => {
