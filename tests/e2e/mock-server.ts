@@ -89,6 +89,16 @@ export async function setupMockServer(page: Page): Promise<void> {
     }),
   );
 
+  // Icon route — returns SVG for category icon images fetched by AuthImg.
+  // This must be registered before the empty-array routes below.
+  await page.route('**/projects/*/icon/*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="red"/></svg>',
+    }),
+  );
+
   // Non-critical data types — empty responses so the sync doesn't waste
   // time waiting for unmocked routes to time out against the preview server.
   const EMPTY_ARRAY_RESPONSE = JSON.stringify({ data: [] });

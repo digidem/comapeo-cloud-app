@@ -3,6 +3,17 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CategoryCard } from '@/screens/CategoriesEditor/CategoryCard';
 
+vi.mock('@/screens/CategoriesEditor/CategoryIcon', () => ({
+  CategoryIcon: ({ iconRef, color, size }: Record<string, unknown>) => (
+    <div
+      data-testid="category-icon"
+      data-icon-ref={iconRef ? 'present' : 'absent'}
+      data-color={color as string}
+      data-size={String(size)}
+    />
+  ),
+}));
+
 const defaultProps = {
   docId: 'cat-1',
   label: 'Deforestation',
@@ -87,9 +98,26 @@ describe('CategoryCard', () => {
     expect(accent).toHaveStyle({ backgroundColor: '#FF0000' });
   });
 
-  it('renders initial avatar with first letter uppercase', () => {
+  it('renders CategoryIcon component with correct props', () => {
+    render(
+      <CategoryCard
+        {...defaultProps}
+        iconRef={{ docId: 'icon-1' }}
+        projectRemoteId="proj-123"
+      />,
+    );
+
+    const icon = screen.getByTestId('category-icon');
+    expect(icon).toBeInTheDocument();
+    expect(icon.getAttribute('data-icon-ref')).toBe('present');
+    expect(icon.getAttribute('data-color')).toBe(null); // default props has no color
+  });
+
+  it('renders CategoryIcon even when iconRef is undefined (letter fallback)', () => {
     render(<CategoryCard {...defaultProps} label="mining" />);
 
-    expect(screen.getByText('M')).toBeInTheDocument();
+    const icon = screen.getByTestId('category-icon');
+    expect(icon).toBeInTheDocument();
+    expect(icon.getAttribute('data-icon-ref')).toBe('absent');
   });
 });

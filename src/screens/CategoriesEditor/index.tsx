@@ -276,6 +276,7 @@ export function CategoriesEditorScreen() {
               groups={categoryGroups}
               selectedCategoryId={selectedCategoryId}
               onCategorySelect={setSelectedCategoryId}
+              projectRemoteId={selectedProject?.remoteId ?? null}
             />
           </div>
           <aside className="w-full lg:w-80 shrink-0 rounded-card bg-surface-card p-4">
@@ -294,6 +295,7 @@ export function CategoriesEditorScreen() {
               category={selectedCategory}
               fieldLabels={fieldLabels}
               onBack={() => setSelectedCategoryId(null)}
+              projectRemoteId={selectedProject?.remoteId ?? null}
             />
           </aside>
         </div>

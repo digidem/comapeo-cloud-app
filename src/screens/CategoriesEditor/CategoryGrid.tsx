@@ -18,12 +18,14 @@ interface CategoryGridProps {
   groups: CategoryGroup[];
   selectedCategoryId?: string | null;
   onCategorySelect?: (docId: string) => void;
+  projectRemoteId?: string | null;
 }
 
 function CategoryGrid({
   groups,
   selectedCategoryId,
   onCategorySelect,
+  projectRemoteId,
 }: CategoryGridProps) {
   const intl = useIntl();
 
@@ -55,6 +57,7 @@ function CategoryGrid({
                 iconRef={category.iconRef}
                 selected={category.docId === selectedCategoryId}
                 onClick={onCategorySelect}
+                projectRemoteId={projectRemoteId ?? null}
               />
             ))}
           </div>

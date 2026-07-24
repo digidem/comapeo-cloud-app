@@ -1,8 +1,19 @@
 import { render, screen } from '@tests/mocks/test-utils';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { CategoryGroup } from '@/hooks/useCategories';
 import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';
+
+vi.mock('@/screens/CategoriesEditor/CategoryIcon', () => ({
+  CategoryIcon: ({ iconRef, color, size }: Record<string, unknown>) => (
+    <div
+      data-testid="category-icon"
+      data-icon-ref={iconRef ? 'present' : 'absent'}
+      data-color={color as string}
+      data-size={String(size)}
+    />
+  ),
+}));
 
 const sampleGroups: CategoryGroup[] = [
   {
@@ -68,15 +79,14 @@ describe('CategoryGrid', () => {
     expect(accent).toHaveStyle({ backgroundColor: '#22c55e' });
   });
 
-  it('renders first letter of name as icon fallback', () => {
+  it('renders CategoryIcon with iconRef when available', () => {
     render(<CategoryGrid groups={sampleGroups} />);
-    const cards = document.querySelectorAll('[data-testid="category-card"]');
-    const deforestationCard = cards[0] as HTMLElement;
-    const icon = deforestationCard.querySelector(
-      '[data-testid="category-icon"]',
-    );
-    expect(icon).toBeInTheDocument();
-    expect(icon).toHaveTextContent('D');
+    const icons = document.querySelectorAll('[data-testid="category-icon"]');
+    expect(icons.length).toBe(3);
+    // Mining (index 1) has iconRef
+    expect(icons[1]!.getAttribute('data-icon-ref')).toBe('present');
+    // Deforestation (index 0) has no iconRef
+    expect(icons[0]!.getAttribute('data-icon-ref')).toBe('absent');
   });
 
   it('renders field count badge', () => {

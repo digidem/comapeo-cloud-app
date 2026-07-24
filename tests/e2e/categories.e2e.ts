@@ -206,3 +206,20 @@ test('empty state when no presets', async ({ page }) => {
     timeout: 5_000,
   });
 });
+
+test('category cards render SVG icons from server', async ({ page }) => {
+  await setupCategoriesPage(page);
+  await expect(
+    page.getByText('Deforestation', { exact: false }).first(),
+  ).toBeVisible({ timeout: 10_000 });
+
+  // Select the Deforestation category to see its detail view with icon
+  await page.getByText('Deforestation', { exact: false }).first().click();
+
+  // The detail view should show a category icon img (rendered by AuthImg
+  // after fetching the SVG blob from our mock route)
+  const iconImg = page.locator(
+    '[data-testid="category-icon"] img[alt="Deforestation icon"]',
+  );
+  await expect(iconImg.first()).toBeVisible({ timeout: 10_000 });
+});

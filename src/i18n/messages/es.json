@@ -50,6 +50,7 @@
   "categories.fieldType.date": "Fecha",
   "categories.fieldType.number": "Número",
   "categories.fieldType.unknown": "Tipo desconocido",
+  "categories.iconAlt": "icono de {category}",
   "categories.importSet.cancel": "Cancelar",
   "categories.importSet.confirmReplace": "Reemplazar",
   "categories.importSet.description": "Cargue un archivo .comapeocat para importar un conjunto de categorías.",

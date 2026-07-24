@@ -1,6 +1,7 @@
 import { defineMessages, useIntl } from 'react-intl';
 
 import type { Category } from '@/hooks/useCategories';
+import { CategoryIcon } from '@/screens/CategoriesEditor/CategoryIcon';
 
 const messages = defineMessages({
   selectCategory: {
@@ -21,12 +22,14 @@ interface CategoryDetailProps {
   category: Category | null;
   fieldLabels: Map<string, string>;
   onBack: () => void;
+  projectRemoteId?: string | null;
 }
 
 function CategoryDetail({
   category,
   fieldLabels,
   onBack,
+  projectRemoteId,
 }: CategoryDetailProps) {
   const intl = useIntl();
 
@@ -40,8 +43,6 @@ function CategoryDetail({
     );
   }
 
-  const initial = category.label.charAt(0).toUpperCase();
-
   return (
     <div className="flex flex-col gap-6">
       <button
@@ -52,13 +53,13 @@ function CategoryDetail({
         {intl.formatMessage(messages.backToCategories)}
       </button>
 
-      <div
-        data-testid="category-detail-icon"
-        className="flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold text-white"
-        style={{ backgroundColor: category.color ?? '#1F6FFF' }}
-      >
-        {initial}
-      </div>
+      <CategoryIcon
+        projectRemoteId={projectRemoteId ?? null}
+        iconRef={category.iconRef}
+        label={category.label}
+        color={category.color}
+        size={64}
+      />
 
       <h2 className="text-xl font-bold text-text">{category.label}</h2>
 

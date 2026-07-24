@@ -4,6 +4,17 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Category } from '@/hooks/useCategories';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 
+vi.mock('@/screens/CategoriesEditor/CategoryIcon', () => ({
+  CategoryIcon: ({ iconRef, color, size }: Record<string, unknown>) => (
+    <div
+      data-testid="category-detail-icon"
+      data-icon-ref={iconRef ? 'present' : 'absent'}
+      data-color={color as string}
+      data-size={String(size)}
+    />
+  ),
+}));
+
 const onBack = vi.fn();
 
 const sampleCategory: Category = {
@@ -42,7 +53,7 @@ describe('CategoryDetail', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders category icon with first letter', () => {
+  it('renders CategoryIcon with size=64 and color', () => {
     render(
       <CategoryDetail
         category={sampleCategory}
@@ -51,7 +62,27 @@ describe('CategoryDetail', () => {
       />,
     );
     const icon = screen.getByTestId('category-detail-icon');
-    expect(icon).toHaveTextContent('D');
+    expect(icon).toBeInTheDocument();
+    expect(icon.getAttribute('data-size')).toBe('64');
+    expect(icon.getAttribute('data-color')).toBe('#22c55e');
+  });
+
+  it('renders CategoryIcon with iconRef data when provided', () => {
+    const categoryWithIcon: Category = {
+      ...sampleCategory,
+      iconRef: { docId: 'icon-42' },
+    };
+    render(
+      <CategoryDetail
+        category={categoryWithIcon}
+        fieldLabels={new Map()}
+        onBack={onBack}
+        projectRemoteId="proj-789"
+      />,
+    );
+    const icon = screen.getByTestId('category-detail-icon');
+    expect(icon).toBeInTheDocument();
+    expect(icon.getAttribute('data-icon-ref')).toBe('present');
   });
 
   it('renders category color swatch with hex value', () => {

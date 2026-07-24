@@ -1,5 +1,7 @@
 import { defineMessages, useIntl } from 'react-intl';
 
+import { CategoryIcon } from '@/screens/CategoriesEditor/CategoryIcon';
+
 const messages = defineMessages({
   fieldCount: {
     id: 'categories.fieldCount',
@@ -15,6 +17,7 @@ interface CategoryCardProps {
   iconRef?: { docId: string };
   selected?: boolean;
   onClick?: (docId: string) => void;
+  projectRemoteId?: string | null;
 }
 
 function CategoryCard({
@@ -22,12 +25,13 @@ function CategoryCard({
   label,
   fieldRefs,
   color,
+  iconRef,
   selected,
   onClick,
+  projectRemoteId,
 }: CategoryCardProps) {
   const intl = useIntl();
   const fieldCount = fieldRefs.length;
-  const initial = label.charAt(0).toUpperCase();
 
   return (
     <article
@@ -59,13 +63,13 @@ function CategoryCard({
       )}
 
       <div className="flex items-start gap-3 p-4">
-        <div
-          data-testid="category-icon"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
-          style={{ backgroundColor: color ?? '#1F6FFF' }}
-        >
-          {initial}
-        </div>
+        <CategoryIcon
+          projectRemoteId={projectRemoteId ?? null}
+          iconRef={iconRef}
+          label={label}
+          color={color}
+          size={40}
+        />
 
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-text">{label}</h3>
