@@ -114,12 +114,11 @@ export function buildObservationCategoryMetadata(
     if (tagCategoryValue) {
       const category = categoryByTagValue.get(
         normalizeCategoryValue(tagCategoryValue),
-      ) ?? {
-        id: `tag:${normalizeCategoryValue(tagCategoryValue)}`,
-        name: tagCategoryValue,
-      };
-      categoryByObservationId.set(observation.localId, category);
-      displayNamesByObservationId.set(observation.localId, category.name);
+      );
+      if (category) {
+        categoryByObservationId.set(observation.localId, category);
+        displayNamesByObservationId.set(observation.localId, category.name);
+      }
       continue;
     }
 

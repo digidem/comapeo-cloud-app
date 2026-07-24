@@ -359,14 +359,6 @@ const messages = defineMessages({
 
 // ---- Component ----
 
-/** Internal metadata tags that should be filtered from the tags display */
-const INTERNAL_TAGS = new Set([
-  'photoUrls',
-  'photoCount',
-  'audioCount',
-  'trackCount',
-]);
-
 function HomeScreen() {
   const [state, dispatch] = useReducer(homeReducer, INITIAL_STATE);
   const persistedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -429,13 +421,8 @@ function HomeScreen() {
   const categoryCount = useMemo(() => {
     const tagKeys = new Set<string>();
     for (const obs of observations) {
-      if (obs.tags) {
-        for (const key of Object.keys(obs.tags)) {
-          if (!INTERNAL_TAGS.has(key)) {
-            tagKeys.add(key);
-          }
-        }
-      }
+      const cat = obs.tags?.category;
+      if (typeof cat === 'string') tagKeys.add(cat.trim());
     }
     return tagKeys.size;
   }, [observations]);

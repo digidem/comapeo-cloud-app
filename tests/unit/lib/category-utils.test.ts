@@ -129,7 +129,7 @@ describe('buildObservationCategoryMetadata', () => {
     );
   });
 
-  it('adds fallback category metadata from tags.category without a matching preset', () => {
+  it('skips unmatched tags.category values without creating synthetic categories', () => {
     const observation = makeObservation({
       localId: 'obs-tag-category',
       tags: { category: 'custom forest' },
@@ -137,15 +137,12 @@ describe('buildObservationCategoryMetadata', () => {
 
     const metadata = buildObservationCategoryMetadata([observation], [], {});
 
-    expect(
-      metadata.categoryByObservationId.get('obs-tag-category'),
-    ).toMatchObject({
-      id: 'tag:custom forest',
-      name: 'custom forest',
-    });
-    expect(metadata.displayNamesByObservationId.get('obs-tag-category')).toBe(
-      'custom forest',
+    expect(metadata.categoryByObservationId.has('obs-tag-category')).toBe(
+      false,
     );
+    expect(
+      metadata.displayNamesByObservationId.has('obs-tag-category'),
+    ).toBe(false);
   });
 
   it('maps category tag values to preset category icons when direct refs are absent', () => {
