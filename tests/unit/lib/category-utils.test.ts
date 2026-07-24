@@ -140,9 +140,9 @@ describe('buildObservationCategoryMetadata', () => {
     expect(metadata.categoryByObservationId.has('obs-tag-category')).toBe(
       false,
     );
-    expect(
-      metadata.displayNamesByObservationId.has('obs-tag-category'),
-    ).toBe(false);
+    expect(metadata.displayNamesByObservationId.has('obs-tag-category')).toBe(
+      false,
+    );
   });
 
   it('maps category tag values to preset category icons when direct refs are absent', () => {
