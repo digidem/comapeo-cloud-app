@@ -36,7 +36,10 @@ describe('CategoryIcon', () => {
   it('renders letter fallback when iconRef is undefined', () => {
     render(<CategoryIcon projectRemoteId="proj-123" label="Deforestation" />);
 
-    expect(screen.getByTestId('category-icon')).toBeInTheDocument();
+    // ObservationCategoryIcon uses category-icon-fallback-only when no iconUrl
+    expect(
+      screen.getByTestId('category-icon-fallback-only'),
+    ).toBeInTheDocument();
     expect(screen.getByText('D')).toBeInTheDocument();
     expect(screen.queryByTestId('category-auth-img')).not.toBeInTheDocument();
   });
@@ -50,7 +53,9 @@ describe('CategoryIcon', () => {
       />,
     );
 
-    expect(screen.getByTestId('category-icon')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('category-icon-fallback-only'),
+    ).toBeInTheDocument();
     expect(screen.getByText('M')).toBeInTheDocument();
     expect(screen.queryByTestId('category-auth-img')).not.toBeInTheDocument();
   });
