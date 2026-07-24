@@ -1,0 +1,182 @@
+import { render, screen } from '@tests/mocks/test-utils';
+import { describe, expect, it, vi } from 'vitest';
+
+import type { Category } from '@/hooks/useCategories';
+import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
+
+vi.mock('@/screens/CategoriesEditor/CategoryIcon', () => ({
+  CategoryIcon: ({ iconRef, color, size }: Record<string, unknown>) => (
+    <div
+      data-testid="category-detail-icon"
+      data-icon-ref={iconRef ? 'present' : 'absent'}
+      data-color={color as string}
+      data-size={String(size)}
+    />
+  ),
+}));
+
+const onBack = vi.fn();
+
+const sampleCategory: Category = {
+  docId: 'cat-1',
+  label: 'Deforestation',
+  fieldRefs: [
+    { docId: 'field-1', label: 'Severity' },
+    { docId: 'field-2', label: 'Area' },
+    { docId: 'field-3' },
+  ],
+  color: '#22c55e',
+};
+
+describe('CategoryDetail', () => {
+  it('shows placeholder when category is null', () => {
+    render(
+      <CategoryDetail
+        category={null}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
+    );
+    expect(screen.getByText('Select a category')).toBeInTheDocument();
+  });
+
+  it('renders category name', () => {
+    render(
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
+    );
+    expect(
+      screen.getByRole('heading', { name: 'Deforestation' }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders CategoryIcon with size=64 and color', () => {
+    render(
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
+    );
+    const icon = screen.getByTestId('category-detail-icon');
+    expect(icon).toBeInTheDocument();
+    expect(icon.getAttribute('data-size')).toBe('64');
+    expect(icon.getAttribute('data-color')).toBe('#22c55e');
+  });
+
+  it('renders CategoryIcon with iconRef data when provided', () => {
+    const categoryWithIcon: Category = {
+      ...sampleCategory,
+      iconRef: { docId: 'icon-42' },
+    };
+    render(
+      <CategoryDetail
+        category={categoryWithIcon}
+        fieldLabels={new Map()}
+        onBack={onBack}
+        projectRemoteId="proj-789"
+      />,
+    );
+    const icon = screen.getByTestId('category-detail-icon');
+    expect(icon).toBeInTheDocument();
+    expect(icon.getAttribute('data-icon-ref')).toBe('present');
+  });
+
+  it('renders category color swatch with hex value', () => {
+    render(
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
+    );
+    expect(screen.getByText('#22c55e')).toBeInTheDocument();
+    const swatch = screen.getByTestId('color-swatch');
+    expect(swatch).toHaveStyle({ backgroundColor: '#22c55e' });
+  });
+
+  it('renders field count and field refs with resolved labels', () => {
+    render(
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={
+          new Map([
+            ['field-1', 'Severity'],
+            ['field-2', 'Area (ha)'],
+          ])
+        }
+        onBack={onBack}
+      />,
+    );
+    expect(screen.getByText(/3 fields/)).toBeInTheDocument();
+    expect(screen.getByText('Severity')).toBeInTheDocument();
+    expect(screen.getByText('Area (ha)')).toBeInTheDocument();
+  });
+
+  it('shows docId for field refs without a label in fieldLabels map', () => {
+    render(
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
+    );
+    expect(screen.getByText('field-3')).toBeInTheDocument();
+  });
+
+  it('calls onBack when back button is clicked', () => {
+    render(
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
+    );
+    const backButton = screen.getByRole('button', { name: /Categories/ });
+    backButton.click();
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders appliesTo badges from fieldRefs', () => {
+    render(
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
+    );
+    expect(screen.getByText(/fields/)).toBeInTheDocument();
+  });
+
+  it('renders color swatch with background color matching category color', () => {
+    render(
+      <CategoryDetail
+        category={sampleCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
+    );
+    const swatch = screen.getByTestId('color-swatch');
+    expect(swatch).toHaveStyle({ backgroundColor: '#22c55e' });
+  });
+
+  it('renders empty fieldRefs gracefully', () => {
+    const emptyFieldsCategory: Category = {
+      docId: 'cat-2',
+      label: 'Mining',
+      fieldRefs: [],
+      color: '#f59e0b',
+    };
+    render(
+      <CategoryDetail
+        category={emptyFieldsCategory}
+        fieldLabels={new Map()}
+        onBack={onBack}
+      />,
+    );
+    expect(screen.getByText(/0 fields/)).toBeInTheDocument();
+  });
+});

@@ -500,6 +500,61 @@ describe('hydrateServers', () => {
     await useAuthStore.getState().hydrateServers();
     expect(useAuthStore.getState().servers).toEqual([]);
   });
+
+  it('auto-selects the first server when none is active', async () => {
+    const db = (await import('@/lib/db')).getDb();
+    await db.remoteServers.add({
+      id: 'auto-select-1',
+      baseUrl: 'https://auto.example.com',
+      label: 'Auto Server',
+      token: 'auto-token',
+      status: 'idle',
+      lastSyncedAt: '',
+    });
+
+    await useAuthStore.getState().hydrateServers();
+
+    const state = useAuthStore.getState();
+    expect(state.activeServerId).toBe('auto-select-1');
+    expect(state.baseUrl).toBe('https://auto.example.com');
+    expect(state.token).toBe('auto-token');
+  });
+
+  it('does not override an already-active server on hydrate', async () => {
+    const db = (await import('@/lib/db')).getDb();
+    await db.remoteServers.add({
+      id: 'existing-active',
+      baseUrl: 'https://existing.example.com',
+      label: 'Existing',
+      token: 'existing-token',
+      status: 'idle',
+      lastSyncedAt: '',
+    });
+    await db.remoteServers.add({
+      id: 'second-server',
+      baseUrl: 'https://second.example.com',
+      label: 'Second',
+      token: 'second-token',
+      status: 'idle',
+      lastSyncedAt: '',
+    });
+
+    // Pre-set active server before hydration using the proper action
+    // (which also sets derived baseUrl/token from the server list)
+    await useAuthStore.getState().hydrateServers();
+
+    // Now we have both servers. Set the second as active.
+    useAuthStore.getState().setActiveServer('second-server');
+    expect(useAuthStore.getState().baseUrl).toBe('https://second.example.com');
+
+    // Hydrate again — should NOT override the active selection
+    await useAuthStore.getState().hydrateServers();
+
+    const state = useAuthStore.getState();
+    expect(state.activeServerId).toBe('second-server');
+    expect(state.baseUrl).toBe('https://second.example.com');
+    expect(state.token).toBe('second-token');
+  });
 });
 
 // ---------------------------------------------------------------------------

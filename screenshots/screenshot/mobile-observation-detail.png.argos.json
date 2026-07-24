@@ -1,28 +1,28 @@
 {
-  "url": "http://localhost:5173/",
+  "url": "http://localhost:5173/data/observations/nonexistent-id",
   "colorScheme": "light",
   "mediaType": "screen",
   "test": {
-    "id": "69583cefdee5152ccb60-b316422e095cff7171db",
-    "title": "home-project-empty mobile at desktop",
+    "id": "99fb1864c5a05941a39e-a72832ff12247d95f3c8",
+    "title": "mobile-observation-detail light",
     "titlePath": [
-      "home.screenshots.ts",
-      "Home screen — visual screenshots",
-      "home-project-empty mobile at desktop"
+      "mobile-audit.screenshots.ts",
+      "Mobile audit screenshots",
+      "mobile-observation-detail light"
     ],
     "retry": 0,
     "retries": 0,
     "repeat": 0,
     "location": {
-      "file": "tests/e2e/home.screenshots.ts",
-      "line": 54,
-      "column": 7
+      "file": "tests/e2e/mobile-audit.screenshots.ts",
+      "line": 146,
+      "column": 3
     },
     "annotations": []
   },
   "browser": { "name": "chromium", "version": "148.0.7778.96" },
   "automationLibrary": { "version": "1.60.0", "name": "@playwright/test" },
   "sdk": { "name": "@argos-ci/playwright", "version": "7.0.5" },
-  "viewport": { "width": 1440, "height": 900 },
+  "viewport": { "width": 375, "height": 812 },
   "transient": {}
 }

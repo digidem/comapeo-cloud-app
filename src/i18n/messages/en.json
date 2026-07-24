@@ -155,6 +155,108 @@
   "audioPlayer.play": {
     "defaultMessage": "Play"
   },
+  "categories.detail.backToCategories": {
+    "defaultMessage": "← Categories"
+  },
+  "categories.detail.fields": {
+    "defaultMessage": "{count, plural, one {# field} other {# fields}}"
+  },
+  "categories.detail.selectCategory": {
+    "defaultMessage": "Select a category"
+  },
+  "categories.empty": {
+    "defaultMessage": "No categories found"
+  },
+  "categories.error": {
+    "defaultMessage": "Failed to load categories. Please try again."
+  },
+  "categories.fieldCount": {
+    "defaultMessage": "{count, plural, one {# field} other {# fields}}"
+  },
+  "categories.fieldType.date": {
+    "defaultMessage": "Date"
+  },
+  "categories.fieldType.number": {
+    "defaultMessage": "Number"
+  },
+  "categories.fieldType.unknown": {
+    "defaultMessage": "Unknown type"
+  },
+  "categories.fieldsError": {
+    "defaultMessage": "Field labels unavailable"
+  },
+  "categories.fieldsRetry": {
+    "defaultMessage": "Retry"
+  },
+  "categories.importSet.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "categories.importSet.confirmReplace": {
+    "defaultMessage": "Replace"
+  },
+  "categories.importSet.description": {
+    "defaultMessage": "Upload a .comapeocat file to import a category set."
+  },
+  "categories.importSet.errorAnnouncement": {
+    "defaultMessage": "Import failed"
+  },
+  "categories.importSet.failedToRead": {
+    "defaultMessage": "Failed to read file"
+  },
+  "categories.importSet.fileLabel": {
+    "defaultMessage": "Choose .comapeocat file"
+  },
+  "categories.importSet.importButton": {
+    "defaultMessage": "Import"
+  },
+  "categories.importSet.importError": {
+    "defaultMessage": "Failed to import: {error}"
+  },
+  "categories.importSet.imported": {
+    "defaultMessage": "Category set \"{name}\" imported successfully."
+  },
+  "categories.importSet.invalidJson": {
+    "defaultMessage": "Invalid JSON: {error}"
+  },
+  "categories.importSet.replaceDescription": {
+    "defaultMessage": "A set with ID \"{setId}\" already exists. Importing will replace it."
+  },
+  "categories.importSet.replaceTitle": {
+    "defaultMessage": "Replace existing set?"
+  },
+  "categories.importSet.successAnnouncement": {
+    "defaultMessage": "Import succeeded"
+  },
+  "categories.importSet.title": {
+    "defaultMessage": "Import Category Set"
+  },
+  "categories.importSet.validationError": {
+    "defaultMessage": "Validation error: {error}"
+  },
+  "categories.noResults": {
+    "defaultMessage": "No categories match your search"
+  },
+  "categories.noServer": {
+    "defaultMessage": "Connect to an archive server to view categories"
+  },
+  "categories.retry": {
+    "defaultMessage": "Retry"
+  },
+  "categories.search": {
+    "defaultMessage": "Search categories..."
+  },
+  "categories.selectProject": {
+    "defaultMessage": "Select a project to view categories"
+  },
+  "categories.title": {
+    "defaultMessage": "Categories"
+  },
+  "categories.uncategorized": {
+    "defaultMessage": "Uncategorized"
+  },
+  "categories.untitledProject": {
+    "defaultMessage": "Untitled Project"
+  },
   "common.refreshAria": {
     "defaultMessage": "Refresh data"
   },

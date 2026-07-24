@@ -8,6 +8,7 @@ import {
 import { AuthenticatedLayout } from '@/components/layout/authenticated-layout';
 import { AlertDetailScreen } from '@/screens/AlertDetailScreen';
 import { AlertsScreen } from '@/screens/AlertsScreen';
+import { CategoriesEditorScreen } from '@/screens/CategoriesEditor';
 import { CreateAlertScreen } from '@/screens/CreateAlertScreen';
 import { DataScreen } from '@/screens/DataScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
@@ -93,6 +94,18 @@ const settingsRoute = createRoute({
   component: SettingsScreen,
 });
 
+const categoriesRoute = createRoute({
+  getParentRoute: () => _authenticatedRoute,
+  path: '/categories',
+  component: CategoriesEditorScreen,
+});
+
+const categoryDetailRoute = createRoute({
+  getParentRoute: () => _authenticatedRoute,
+  path: '/categories/$categoryId',
+  component: CategoriesEditorScreen,
+});
+
 const inviteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/invite',
@@ -112,6 +125,8 @@ const routeTree = rootRoute.addChildren([
     createAlertRoute,
     alertDetailRoute,
     settingsRoute,
+    categoriesRoute,
+    categoryDetailRoute,
   ]),
 ]);
 
@@ -136,6 +151,8 @@ export {
   createAlertRoute,
   alertDetailRoute,
   settingsRoute,
+  categoriesRoute,
+  categoryDetailRoute,
 };
 
 // Export route tree for testing

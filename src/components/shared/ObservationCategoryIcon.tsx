@@ -28,7 +28,8 @@ export function ObservationCategoryIcon({
 
   // When an icon image is available, render it on a white circle with a
   // colored border so the icon remains legible regardless of the category
-  // color. The letter fallback is hidden behind the image via z-index.
+  // color. The letter is hidden (opacity-0) — it only shows in the no-icon
+  // fallback branch below.
   if (category.iconUrl) {
     return (
       <div
@@ -42,7 +43,7 @@ export function ObservationCategoryIcon({
       >
         <span
           data-testid="category-icon-fallback"
-          className="text-[0.65rem] font-semibold leading-none"
+          className="text-[0.65rem] font-semibold leading-none opacity-0"
           style={{ color: category.color ?? undefined }}
           aria-hidden="true"
         >

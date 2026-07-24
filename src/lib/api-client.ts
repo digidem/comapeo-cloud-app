@@ -114,9 +114,9 @@ function throwNetworkError(): never {
 async function handleResponse<T>(
   response: Response,
   schema: v.GenericSchema<T>,
-  config?: RequestConfig,
+  _config?: RequestConfig,
 ): Promise<T> {
-  if (response.status === 401 && !config) {
+  if (response.status === 401) {
     useAuthStore.getState().clearAuth();
   }
 
@@ -152,6 +152,7 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(`${request.baseUrl}/info`, {
         headers: { ...request.extraHeaders },
+        cache: 'no-store',
       });
       return handleResponse(response, serverInfoResponseSchema, config);
     } catch (error) {
@@ -177,6 +178,7 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(`${request.baseUrl}/projects`, {
         headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+        cache: 'no-store',
       });
       return handleResponse(response, projectsResponseSchema, config);
     } catch (error) {
@@ -190,7 +192,10 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          cache: 'no-store',
+        },
       );
       return handleResponse(response, projectDetailResponseSchema, config);
     } catch (error) {
@@ -204,7 +209,10 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/observations`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          cache: 'no-store',
+        },
       );
       return handleResponse(response, observationsResponseSchema, config);
     } catch (error) {
@@ -218,7 +226,10 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/track`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          cache: 'no-store',
+        },
       );
       return await handleResponse(response, tracksResponseSchema, config);
     } catch (error) {
@@ -238,7 +249,10 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          cache: 'no-store',
+        },
       );
       return handleResponse(response, alertsResponseSchema, config);
     } catch (error) {
@@ -267,7 +281,7 @@ export const apiClient = {
         },
       );
 
-      if (response.status === 401 && !config) {
+      if (response.status === 401) {
         useAuthStore.getState().clearAuth();
       }
 
@@ -302,7 +316,10 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/preset`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          cache: 'no-store',
+        },
       );
       return await handleResponse(response, presetsResponseSchema, config);
     } catch (error) {
@@ -322,7 +339,10 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/field`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          cache: 'no-store',
+        },
       );
       return await handleResponse(response, fieldsResponseSchema, config);
     } catch (error) {
@@ -349,7 +369,7 @@ export const apiClient = {
         { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
       );
 
-      if (response.status === 401 && !config) {
+      if (response.status === 401) {
         useAuthStore.getState().clearAuth();
       }
 
