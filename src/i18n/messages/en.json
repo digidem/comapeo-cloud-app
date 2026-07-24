@@ -188,9 +188,6 @@
   "categories.fieldsRetry": {
     "defaultMessage": "Retry"
   },
-  "categories.iconAlt": {
-    "defaultMessage": "{category} icon"
-  },
   "categories.importSet.cancel": {
     "defaultMessage": "Cancel"
   },
