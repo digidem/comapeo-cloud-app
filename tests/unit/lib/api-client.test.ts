@@ -3,9 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiClient } from '@/lib/api-client';
 
 // Mock the stores used by api-client internals
+const authStoreMock = vi.hoisted(() => ({
+  state: {
+    baseUrl: 'https://active.example.com' as string | null,
+    token: 'active-token',
+  },
+  clearAuth: vi.fn(),
+}));
+
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: {
-    getState: vi.fn(() => ({ baseUrl: null, token: null })),
+    getState: () => ({
+      baseUrl: authStoreMock.state.baseUrl,
+      token: authStoreMock.state.token,
+      clearAuth: authStoreMock.clearAuth,
+    }),
   },
 }));
 
@@ -14,6 +26,7 @@ describe('apiClient', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    authStoreMock.clearAuth.mockClear();
   });
 
   afterEach(() => {
@@ -127,6 +140,67 @@ describe('apiClient', () => {
 
       const result = await apiClient.getProject('base32proj1');
       expect(result).toEqual(projectPayload);
+    });
+  });
+
+  describe('401 auth clearing', () => {
+    const error401 = {
+      error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' },
+    };
+    const alertBody = {
+      geometry: { type: 'Point' as const, coordinates: [0, 0] },
+    };
+    const otherConfig = {
+      baseUrl: 'https://other.example.com',
+      token: 'other-token',
+    };
+
+    // --- handleResponse path (via getPresets) ---
+
+    it('calls clearAuth when 401 comes from the active server (no config)', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(makeFetchResponse(401, error401));
+
+      await expect(apiClient.getPresets('project-id')).rejects.toThrow(
+        ApiError,
+      );
+      expect(authStoreMock.clearAuth).toHaveBeenCalled();
+    });
+
+    it('does NOT call clearAuth when 401 comes from a non-active server (explicit config)', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(makeFetchResponse(401, error401));
+
+      await expect(
+        apiClient.getPresets('project-id', otherConfig),
+      ).rejects.toThrow(ApiError);
+      expect(authStoreMock.clearAuth).not.toHaveBeenCalled();
+    });
+
+    // --- createAlert path ---
+
+    it('calls clearAuth when createAlert 401 comes from the active server (no config)', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(makeFetchResponse(401, error401));
+
+      await expect(
+        apiClient.createAlert('project-id', alertBody),
+      ).rejects.toThrow(ApiError);
+      expect(authStoreMock.clearAuth).toHaveBeenCalled();
+    });
+
+    it('does NOT call clearAuth when createAlert 401 comes from a non-active server (explicit config)', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(makeFetchResponse(401, error401));
+
+      await expect(
+        apiClient.createAlert('project-id', alertBody, otherConfig),
+      ).rejects.toThrow(ApiError);
+      expect(authStoreMock.clearAuth).not.toHaveBeenCalled();
     });
   });
 });

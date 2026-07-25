@@ -188,6 +188,9 @@
   "categories.fieldsRetry": {
     "defaultMessage": "Retry"
   },
+  "categories.hiddenBanner": {
+    "defaultMessage": "Showing the latest category set. {count, plural, one {# older category hidden} other {# older categories hidden}}."
+  },
   "categories.importSet.cancel": {
     "defaultMessage": "Cancel"
   },
@@ -247,6 +250,12 @@
   },
   "categories.selectProject": {
     "defaultMessage": "Select a project to view categories"
+  },
+  "categories.showAll": {
+    "defaultMessage": "All"
+  },
+  "categories.showLatest": {
+    "defaultMessage": "Latest"
   },
   "categories.title": {
     "defaultMessage": "Categories"

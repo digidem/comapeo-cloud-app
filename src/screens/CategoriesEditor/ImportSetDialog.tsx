@@ -1,3 +1,4 @@
+// TODO: Wire into CategoriesEditor toolbar in follow-up PR
 import * as Dialog from '@radix-ui/react-dialog';
 import * as v from 'valibot';
 
@@ -183,7 +184,7 @@ function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
         });
       }
     },
-    [intl, handleClose],
+    [intl],
   );
 
   const handleConfirmReplace = useCallback(async () => {
@@ -199,7 +200,7 @@ function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
         message: intl.formatMessage(messages.importError, { error: msg }),
       });
     }
-  }, [dialogState, handleClose, intl]);
+  }, [dialogState, intl]);
 
   // Auto-close on success with cleanup on unmount
   useEffect(() => {

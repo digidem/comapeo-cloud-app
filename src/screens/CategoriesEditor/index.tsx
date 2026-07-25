@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { useNavigate, useParams } from '@tanstack/react-router';
+
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useApiPresets } from '@/hooks/useApiPresets';
 import { normalizeCategories } from '@/hooks/useCategories';
 import { useFields } from '@/hooks/useFields';
 import { useProjects } from '@/hooks/useProjects';
+import { selectLatestCategorySet } from '@/lib/categories/latest-set';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';
 import { useAuthStore } from '@/stores/auth-store';
@@ -57,11 +60,25 @@ const messages = defineMessages({
     id: 'categories.noServer',
     defaultMessage: 'Connect to an archive server to view categories',
   },
+  showLatest: {
+    id: 'categories.showLatest',
+    defaultMessage: 'Latest',
+  },
+  showAll: {
+    id: 'categories.showAll',
+    defaultMessage: 'All',
+  },
+  hiddenBanner: {
+    id: 'categories.hiddenBanner',
+    defaultMessage:
+      'Showing the latest category set. {count, plural, one {# older category hidden} other {# older categories hidden}}.',
+  },
 });
 
 export function CategoriesEditorScreen() {
   const intl = useIntl();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const servers = useAuthStore((s) => s.servers);
   const baseUrl = useAuthStore((s) => s.baseUrl);
   const projectsQuery = useProjects();
 
@@ -70,7 +87,19 @@ export function CategoriesEditorScreen() {
   // Server expects projectPublicId (base32) — use remoteId which is
   // populated by pullProjects for remote archive projects, and falls
   // back to null (query disabled) for local-only projects.
-  const presetsQuery = useApiPresets(selectedProject?.remoteId ?? null);
+  //
+  // Route request through the selected project's owning server config
+  // rather than assuming the active server. Falls back to active server
+  // when no owning server is resolved (e.g. project has no sourceId).
+  const owningServer = selectedProject
+    ? (servers.find((s) => s.id === selectedProject.sourceId) ?? null)
+    : null;
+  const presetsQuery = useApiPresets(
+    selectedProject?.remoteId ?? null,
+    owningServer
+      ? { baseUrl: owningServer.baseUrl, token: owningServer.token }
+      : null,
+  );
 
   const topbarWorkspaceName =
     selectedProject?.name ?? intl.formatMessage(messages.untitledProject);
@@ -79,15 +108,16 @@ export function CategoriesEditorScreen() {
       topbarWorkspaceName: selectedProjectId ? topbarWorkspaceName : undefined,
       topbarModeLabel: intl.formatMessage(messages.title),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedProjectId, topbarWorkspaceName],
+    [selectedProjectId, topbarWorkspaceName, intl],
   );
   useShellSlot(shellSlot);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
-    null,
-  );
+  const navigate = useNavigate();
+  const { categoryId } = useParams({ strict: false }) as {
+    categoryId?: string;
+  };
+  const [showAllSets, setShowAllSets] = useState(false);
 
   const fieldsQuery = useFields(selectedProjectId);
 
@@ -101,27 +131,57 @@ export function CategoriesEditorScreen() {
     return map;
   }, [fieldsQuery.data]);
 
+  const nonDeletedPresets = useMemo(
+    () => (presetsQuery.data ?? []).filter((p) => !p.deleted),
+    [presetsQuery.data],
+  );
+
+  // Compute the latest cluster once so we derive hasMultipleClusters
+  // and visiblePresets from a single sort + cluster pass.
+  const latestCluster = useMemo(
+    () => selectLatestCategorySet(nonDeletedPresets),
+    [nonDeletedPresets],
+  );
+
+  const hasMultipleClusters = useMemo(
+    () => latestCluster.length < nonDeletedPresets.length,
+    [latestCluster, nonDeletedPresets],
+  );
+
+  const visiblePresets = useMemo(
+    () => (showAllSets ? nonDeletedPresets : latestCluster),
+    [nonDeletedPresets, showAllSets, latestCluster],
+  );
+
+  const hiddenCount = nonDeletedPresets.length - visiblePresets.length;
+
   const categoryGroups = useMemo(
     () =>
       normalizeCategories(
-        presetsQuery.data ?? [],
+        visiblePresets,
         intl.locale,
         searchQuery,
         fieldLabels,
       ),
-    [presetsQuery.data, intl.locale, searchQuery, fieldLabels],
+    [visiblePresets, intl.locale, searchQuery, fieldLabels],
+  );
+
+  // Search ALL non-deleted presets for detail route resolution — this
+  // ensures direct navigation to /categories/<older-category-id> still
+  // resolves even when the grid is filtered to the latest cluster.
+  const allCategoryGroupsForDetail = useMemo(
+    () => normalizeCategories(nonDeletedPresets, intl.locale, '', fieldLabels),
+    [nonDeletedPresets, intl.locale, fieldLabels],
   );
 
   const selectedCategory = useMemo(() => {
-    if (!selectedCategoryId) return null;
-    for (const group of categoryGroups) {
-      const found = group.categories.find(
-        (c) => c.docId === selectedCategoryId,
-      );
+    if (!categoryId) return null;
+    for (const group of allCategoryGroupsForDetail) {
+      const found = group.categories.find((c) => c.docId === categoryId);
       if (found) return found;
     }
     return null;
-  }, [selectedCategoryId, categoryGroups]);
+  }, [categoryId, allCategoryGroupsForDetail]);
 
   // No project selected — prompt to select one
   if (!selectedProjectId) {
@@ -186,9 +246,11 @@ export function CategoriesEditorScreen() {
     );
   }
 
-  // No archive server configured — presets query is disabled and isPending
-  // would stay true forever. Show an actionable message instead.
-  if (baseUrl === null) {
+  // No archive server configured for the selected project — presets query
+  // is disabled and isPending would stay true forever. Show an actionable
+  // message instead. Uses the owning server's baseUrl when available;
+  // falls back to the active server's baseUrl.
+  if (!owningServer && baseUrl === null) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
         <p className="text-text-muted">
@@ -227,7 +289,7 @@ export function CategoriesEditorScreen() {
     );
   }
 
-  const hasPresets = (presetsQuery.data ?? []).length > 0;
+  const hasPresets = nonDeletedPresets.length > 0;
   const hasResults = categoryGroups.length > 0;
 
   return (
@@ -244,6 +306,44 @@ export function CategoriesEditorScreen() {
         onChange={(e) => setSearchQuery(e.target.value)}
         className="w-full rounded-button border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary"
       />
+
+      {hasMultipleClusters && (
+        <div className="flex flex-col gap-2">
+          {!showAllSets && (
+            <p className="text-text-muted text-sm">
+              {intl.formatMessage(messages.hiddenBanner, {
+                count: hiddenCount,
+              })}
+            </p>
+          )}
+          <div className="inline-flex rounded-button border border-border bg-surface-card p-0.5">
+            <button
+              type="button"
+              aria-pressed={!showAllSets}
+              onClick={() => setShowAllSets(false)}
+              className={`rounded-button px-3 py-1 text-xs font-medium transition-colors ${
+                !showAllSets
+                  ? 'bg-primary text-white'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {intl.formatMessage(messages.showLatest)}
+            </button>
+            <button
+              type="button"
+              aria-pressed={showAllSets}
+              onClick={() => setShowAllSets(true)}
+              className={`rounded-button px-3 py-1 text-xs font-medium transition-colors ${
+                showAllSets
+                  ? 'bg-primary text-white'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {intl.formatMessage(messages.showAll)}
+            </button>
+          </div>
+        </div>
+      )}
 
       {!hasPresets && (
         <div className="flex items-center justify-center p-8">
@@ -274,8 +374,13 @@ export function CategoriesEditorScreen() {
           <div className="flex-1 min-w-0">
             <CategoryGrid
               groups={categoryGroups}
-              selectedCategoryId={selectedCategoryId}
-              onCategorySelect={setSelectedCategoryId}
+              selectedCategoryId={categoryId}
+              onCategorySelect={(docId) =>
+                navigate({
+                  to: '/categories/$categoryId',
+                  params: { categoryId: docId },
+                })
+              }
               projectRemoteId={selectedProject?.remoteId ?? null}
             />
           </div>
@@ -294,7 +399,7 @@ export function CategoriesEditorScreen() {
             <CategoryDetail
               category={selectedCategory}
               fieldLabels={fieldLabels}
-              onBack={() => setSelectedCategoryId(null)}
+              onBack={() => navigate({ to: '/categories' })}
               projectRemoteId={selectedProject?.remoteId ?? null}
             />
           </aside>

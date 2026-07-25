@@ -9,18 +9,24 @@ const defaultPresets: Array<{
   name: string;
   tags: Record<string, unknown>;
   fieldRefs: Array<{ docId: string; label?: string }>;
+  createdAt: string;
+  deleted: boolean;
 }> = [
   {
     docId: 'preset-1',
     name: 'Deforestation',
     tags: { type: 'environment' },
     fieldRefs: [{ docId: 'field-1', label: 'Severity' }],
+    createdAt: '2025-01-01T00:00:00Z',
+    deleted: false,
   },
   {
     docId: 'preset-2',
     name: 'Mining',
     tags: { type: 'environment' },
     fieldRefs: [],
+    createdAt: '2025-01-01T00:01:00Z',
+    deleted: false,
   },
 ];
 
@@ -33,12 +39,24 @@ let mockPresetsQuery: {
 } = { data: defaultPresets, isPending: false };
 
 let mockProjectsQuery: {
-  data: Array<{ localId: string; name: string; remoteId?: string }>;
+  data: Array<{
+    localId: string;
+    name: string;
+    sourceId: string;
+    remoteId?: string;
+  }>;
   isPending: boolean;
   isError?: boolean;
   refetch?: () => void;
 } = {
-  data: [{ localId: 'proj-1', name: 'Test Project', remoteId: 'base32proj1' }],
+  data: [
+    {
+      localId: 'proj-1',
+      name: 'Test Project',
+      sourceId: 'server-1',
+      remoteId: 'base32proj1',
+    },
+  ],
   isPending: false,
 };
 
@@ -72,12 +90,25 @@ vi.mock('@/hooks/useFields', () => ({
   useFields: vi.fn(() => mockFieldsQuery),
 }));
 
-let mockBaseUrl: string | null = 'https://archive.example.com';
+const { mockBaseUrl, mockServers } = vi.hoisted(() => ({
+  mockBaseUrl: { current: 'https://archive.example.com' as string | null },
+  mockServers: {
+    current: [] as Array<{ id: string; baseUrl: string; token: string }>,
+  },
+}));
 
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: vi.fn(
-    (selector: (s: { baseUrl: string | null }) => string | null) =>
-      selector({ baseUrl: mockBaseUrl }),
+    (
+      selector: (s: {
+        baseUrl: string | null;
+        servers: Array<{ id: string; baseUrl: string; token: string }>;
+      }) => unknown,
+    ) =>
+      selector({
+        baseUrl: mockBaseUrl.current,
+        servers: mockServers.current,
+      }),
   ),
 }));
 
@@ -86,6 +117,7 @@ vi.mock('@tanstack/react-router', () => ({
     <a href={to}>{children}</a>
   ),
   useNavigate: () => vi.fn(),
+  useParams: () => ({}),
   useSearch: () => ({}),
 }));
 
@@ -99,11 +131,17 @@ vi.mock('react-router-dom', async () => {
 
 function resetMocks() {
   mockSelectedProjectId = 'proj-1';
-  mockBaseUrl = 'https://archive.example.com';
+  mockBaseUrl.current = 'https://archive.example.com';
+  mockServers.current = [];
   mockPresetsQuery = { data: defaultPresets, isPending: false };
   mockProjectsQuery = {
     data: [
-      { localId: 'proj-1', name: 'Test Project', remoteId: 'base32proj1' },
+      {
+        localId: 'proj-1',
+        name: 'Test Project',
+        sourceId: 'server-1',
+        remoteId: 'base32proj1',
+      },
     ],
     isPending: false,
   };
@@ -153,7 +191,14 @@ describe('CategoriesEditorScreen', () => {
   it('shows empty state when selected project not found in loaded list', () => {
     mockSelectedProjectId = 'proj-1';
     mockProjectsQuery = {
-      data: [{ localId: 'proj-2', name: 'Other', remoteId: 'base32other' }],
+      data: [
+        {
+          localId: 'proj-2',
+          name: 'Other',
+          sourceId: 'server-2',
+          remoteId: 'base32other',
+        },
+      ],
       isPending: false,
     };
     render(<CategoriesEditorScreen />);
@@ -205,7 +250,7 @@ describe('CategoriesEditorScreen', () => {
 
   it('calls useApiPresets with project remoteId when project has one', () => {
     render(<CategoriesEditorScreen />);
-    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1');
+    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1', null);
   });
 
   it('renders category cards when presets are loaded via remoteId', () => {
@@ -225,17 +270,19 @@ describe('CategoriesEditorScreen', () => {
   it('shows empty state for local project without remoteId and passes null to useApiPresets', () => {
     mockSelectedProjectId = 'proj-1';
     mockProjectsQuery = {
-      data: [{ localId: 'proj-1', name: 'Local Project' }],
+      data: [
+        { localId: 'proj-1', name: 'Local Project', sourceId: 'server-1' },
+      ],
       isPending: false,
     };
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('No categories found')).toBeInTheDocument();
     // Verify the hook was called with null — no wasted API call
-    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith(null);
+    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith(null, null);
   });
 
   it('shows no-server message when archive server is not configured', () => {
-    mockBaseUrl = null;
+    mockBaseUrl.current = null;
     render(<CategoriesEditorScreen />);
     expect(
       screen.getByText('Connect to an archive server to view categories'),
@@ -303,5 +350,214 @@ describe('CategoriesEditorScreen', () => {
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('Deforestation')).toBeInTheDocument();
     expect(screen.getByText('Mining')).toBeInTheDocument();
+  });
+
+  it('shows latest/all toggle when presets span time clusters', () => {
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'new-preset',
+          name: 'Deforestation',
+          tags: { natural: 'yes' },
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'old-preset',
+          name: 'Mining',
+          tags: { natural: 'no' },
+          fieldRefs: [],
+          createdAt: '2024-01-01T00:00:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    };
+    render(<CategoriesEditorScreen />);
+    expect(screen.getByText('Latest')).toBeInTheDocument();
+    expect(screen.getByText('All')).toBeInTheDocument();
+  });
+
+  it('toggle switches between latest and all views', async () => {
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'new-1',
+          name: 'Recent Category',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'old-1',
+          name: 'Old Category',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2024-01-01T00:00:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    };
+    render(<CategoriesEditorScreen />);
+
+    // Initially shows only latest cluster
+    expect(screen.getByText('Recent Category')).toBeInTheDocument();
+    expect(screen.queryByText('Old Category')).not.toBeInTheDocument();
+
+    // Click "All" to show everything
+    await userEvent.click(screen.getByText('All'));
+    expect(screen.getByText('Recent Category')).toBeInTheDocument();
+    expect(screen.getByText('Old Category')).toBeInTheDocument();
+
+    // Click "Latest" to go back
+    await userEvent.click(screen.getByText('Latest'));
+    expect(screen.getByText('Recent Category')).toBeInTheDocument();
+    expect(screen.queryByText('Old Category')).not.toBeInTheDocument();
+  });
+
+  it('does not show toggle when all presets are in one cluster', () => {
+    // All presets have similar timestamps — single cluster
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'p1',
+          name: 'Deforestation',
+          tags: { natural: 'yes' },
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'p2',
+          name: 'Mining',
+          tags: { natural: 'no' },
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:30:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    };
+    render(<CategoriesEditorScreen />);
+    expect(screen.queryByText('Latest')).not.toBeInTheDocument();
+    expect(screen.queryByText('All')).not.toBeInTheDocument();
+  });
+
+  // --- server routing via sourceId ---
+
+  it('calls useApiPresets with owning server config when project sourceId matches a server', () => {
+    // Set up servers including one that matches the project's sourceId
+    mockServers.current = [
+      {
+        id: 'server-1',
+        baseUrl: 'https://test-server.com',
+        token: 'test-token',
+      },
+    ];
+    // Project has sourceId === 'server-1' (default mock)
+    render(<CategoriesEditorScreen />);
+    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1', {
+      baseUrl: 'https://test-server.com',
+      token: 'test-token',
+    });
+  });
+
+  it('calls useApiPresets with null serverConfig when project sourceId does not match any server', () => {
+    mockServers.current = [
+      {
+        id: 'server-other',
+        baseUrl: 'https://other-server.com',
+        token: 'other-token',
+      },
+    ];
+    // Default project sourceId is 'server-1', which does NOT match 'server-other'
+    render(<CategoriesEditorScreen />);
+    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1', null);
+  });
+
+  // --- hidden banner (latest/all toggle) ---
+
+  it('shows hidden banner with singular form when 1 older category is hidden', () => {
+    // Cluster 1 (newest): preset within the last day
+    // Cluster 2 (older): preset from >60 min before cluster 1 — exactly 1 preset
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'new-1',
+          name: 'Recent Category',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'old-1',
+          name: 'Old Category',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T10:00:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    };
+    render(<CategoriesEditorScreen />);
+
+    // The banner should appear and use singular form (1 hidden)
+    expect(screen.getByText(/1 older category hidden/)).toBeInTheDocument();
+    // Should also show the prefix text
+    expect(
+      screen.getByText(/Showing the latest category set/),
+    ).toBeInTheDocument();
+  });
+
+  it('shows hidden banner with plural form when 2+ older categories are hidden', () => {
+    // Cluster 1 (newest): 1 preset at 12:00
+    // Cluster 2 (older): 2 presets from >60 min earlier — 2 hidden
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'new-1',
+          name: 'Recent Category',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'old-1',
+          name: 'Older Category A',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T10:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'old-2',
+          name: 'Older Category B',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T09:00:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    };
+    render(<CategoriesEditorScreen />);
+
+    // The banner should appear and use plural form (2 hidden)
+    expect(screen.getByText(/2 older categories hidden/)).toBeInTheDocument();
+    // Should also show the prefix text
+    expect(
+      screen.getByText(/Showing the latest category set/),
+    ).toBeInTheDocument();
   });
 });
