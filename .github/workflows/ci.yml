@@ -508,7 +508,13 @@ jobs:
         # GHSA-p63j-vcc4-9vmv: @vitest/browser Browser Mode file-access
         # bypass. Fixed in 4.1.10 (we have 4.1.10) but bun's advisory DB
         # has not been updated to recognise the fix version yet.
-        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv
+        #
+        # GHSA-mh99-v99m-4gvg: brace-expansion DoS via unbounded expansion
+        # length causing OOM (transitive dev dep via storybook).
+        #
+        # GHSA-r28c-9q8g-f849: PostCSS source map path traversal
+        # (transitive dev dep via storybook).
+        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv --ignore=GHSA-mh99-v99m-4gvg --ignore=GHSA-r28c-9q8g-f849
 
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request

@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { useParams } from '@tanstack/react-router';
+
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useApiPresets } from '@/hooks/useApiPresets';
@@ -99,8 +101,11 @@ export function CategoriesEditorScreen() {
   useShellSlot(shellSlot);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const { categoryId } = useParams({ strict: false }) as {
+    categoryId?: string;
+  };
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
-    null,
+    categoryId ?? null,
   );
   const [showAllSets, setShowAllSets] = useState(false);
 
