@@ -152,12 +152,16 @@ async function setupCategoriesPage(page: Page) {
 
 test('renders categories from server data', async ({ page }) => {
   await setupCategoriesPage(page);
-  const presetNames = presetsFixture.data.map((p) => p.name);
-  for (const name of presetNames) {
-    await expect(page.getByText(name, { exact: false }).first()).toBeVisible({
-      timeout: 10_000,
-    });
-  }
+  // With Latest filter (default), only the most recent cluster shows.
+  // Preset-001 (Deforestation, 2024-03-15) is in the latest cluster;
+  // Preset-002 (Water Contamination, 2024-03-14) is in an older cluster.
+  await expect(
+    page.getByText(presetsFixture.data[0]!.name, { exact: false }).first(),
+  ).toBeVisible({ timeout: 10_000 });
+  // Older cluster preset should be hidden by default
+  await expect(
+    page.getByText(presetsFixture.data[1]!.name, { exact: false }).first(),
+  ).not.toBeVisible({ timeout: 3_000 });
 });
 
 test('search filters categories', async ({ page }) => {
@@ -166,13 +170,17 @@ test('search filters categories', async ({ page }) => {
     page.getByText(presetsFixture.data[0]!.name, { exact: false }).first(),
   ).toBeVisible({ timeout: 10_000 });
 
-  await page.getByPlaceholder('Search categories...').fill('Water');
-  await expect(page.getByText('Water Contamination').first()).toBeVisible({
+  // Search within the latest cluster — "Deforestation" is visible
+  await page.getByPlaceholder('Search categories...').fill('Defor');
+  await expect(page.getByText('Deforestation').first()).toBeVisible({
     timeout: 5_000,
   });
-  await expect(
-    page.getByText('Deforestation', { exact: false }).first(),
-  ).not.toBeVisible({ timeout: 3_000 });
+
+  // Search for something not in the latest cluster shows empty
+  await page.getByPlaceholder('Search categories...').fill('Water');
+  await expect(page.getByText('No categories found')).toBeVisible({
+    timeout: 5_000,
+  });
 });
 
 test('selecting a category shows detail', async ({ page }) => {

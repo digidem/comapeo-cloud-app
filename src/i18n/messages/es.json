@@ -51,15 +51,12 @@
   "categories.fieldType.number": "Número",
   "categories.fieldType.unknown": "Tipo desconocido",
   "categories.fieldsError": {
-    "id": "categories.fieldsError",
     "defaultMessage": "Etiquetas de campos no disponibles"
   },
   "categories.fieldsRetry": {
-    "id": "categories.fieldsRetry",
     "defaultMessage": "Reintentar"
   },
   "categories.hiddenBanner": {
-    "id": "categories.hiddenBanner",
     "defaultMessage": "Mostrando el conjunto de categorías más reciente. {count, plural, one {# categoría antigua oculta} other {# categorías antiguas ocultas}}."
   },
   "categories.importSet.cancel": "Cancelar",
@@ -79,18 +76,15 @@
   "categories.importSet.validationError": "Error de validación: {error}",
   "categories.noResults": "Ninguna categoría coincide con su búsqueda",
   "categories.noServer": {
-    "id": "categories.noServer",
     "defaultMessage": "Conéctese a un servidor de archivo para ver las categorías"
   },
   "categories.retry": "Reintentar",
   "categories.search": "Buscar categorías...",
   "categories.selectProject": "Seleccione un proyecto para ver categorías",
   "categories.showAll": {
-    "id": "categories.showAll",
     "defaultMessage": "Todos"
   },
   "categories.showLatest": {
-    "id": "categories.showLatest",
     "defaultMessage": "Reciente"
   },
   "categories.title": "Categorías",
