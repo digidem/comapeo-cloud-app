@@ -239,12 +239,13 @@ describe('normalizeCategories', () => {
     expect(result[0]!.type).toBe('action');
   });
 
-  it('passes tags.color through to category.color', () => {
+  it('passes top-level color through to category.color', () => {
     const presets = [
       {
         docId: 'c1',
         name: 'Colored',
-        tags: { type: 'test', color: '#123456' },
+        color: '#123456',
+        tags: { type: 'test' },
         fieldRefs: [],
       },
     ];
