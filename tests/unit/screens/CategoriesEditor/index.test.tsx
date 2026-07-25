@@ -9,18 +9,24 @@ const defaultPresets: Array<{
   name: string;
   tags: Record<string, unknown>;
   fieldRefs: Array<{ docId: string; label?: string }>;
+  createdAt: string;
+  deleted: boolean;
 }> = [
   {
     docId: 'preset-1',
     name: 'Deforestation',
     tags: { type: 'environment' },
     fieldRefs: [{ docId: 'field-1', label: 'Severity' }],
+    createdAt: '2025-01-01T00:00:00Z',
+    deleted: false,
   },
   {
     docId: 'preset-2',
     name: 'Mining',
     tags: { type: 'environment' },
     fieldRefs: [],
+    createdAt: '2025-01-01T00:01:00Z',
+    deleted: false,
   },
 ];
 
@@ -303,5 +309,102 @@ describe('CategoriesEditorScreen', () => {
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('Deforestation')).toBeInTheDocument();
     expect(screen.getByText('Mining')).toBeInTheDocument();
+  });
+
+  it('shows latest/all toggle when presets span time clusters', () => {
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'new-preset',
+          name: 'Deforestation',
+          tags: { natural: 'yes' },
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'old-preset',
+          name: 'Mining',
+          tags: { natural: 'no' },
+          fieldRefs: [],
+          createdAt: '2024-01-01T00:00:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    };
+    render(<CategoriesEditorScreen />);
+    expect(screen.getByText('Latest')).toBeInTheDocument();
+    expect(screen.getByText('All')).toBeInTheDocument();
+  });
+
+  it('toggle switches between latest and all views', async () => {
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'new-1',
+          name: 'Recent Category',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'old-1',
+          name: 'Old Category',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2024-01-01T00:00:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    };
+    render(<CategoriesEditorScreen />);
+
+    // Initially shows only latest cluster
+    expect(screen.getByText('Recent Category')).toBeInTheDocument();
+    expect(screen.queryByText('Old Category')).not.toBeInTheDocument();
+
+    // Click "All" to show everything
+    await userEvent.click(screen.getByText('All'));
+    expect(screen.getByText('Recent Category')).toBeInTheDocument();
+    expect(screen.getByText('Old Category')).toBeInTheDocument();
+
+    // Click "Latest" to go back
+    await userEvent.click(screen.getByText('Latest'));
+    expect(screen.getByText('Recent Category')).toBeInTheDocument();
+    expect(screen.queryByText('Old Category')).not.toBeInTheDocument();
+  });
+
+  it('does not show toggle when all presets are in one cluster', () => {
+    // All presets have similar timestamps — single cluster
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'p1',
+          name: 'Deforestation',
+          tags: { natural: 'yes' },
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'p2',
+          name: 'Mining',
+          tags: { natural: 'no' },
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:30:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    };
+    render(<CategoriesEditorScreen />);
+    expect(screen.queryByText('Latest')).not.toBeInTheDocument();
+    expect(screen.queryByText('All')).not.toBeInTheDocument();
   });
 });

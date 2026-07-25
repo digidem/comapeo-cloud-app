@@ -7,6 +7,7 @@ import { useApiPresets } from '@/hooks/useApiPresets';
 import { normalizeCategories } from '@/hooks/useCategories';
 import { useFields } from '@/hooks/useFields';
 import { useProjects } from '@/hooks/useProjects';
+import { selectLatestCategorySet } from '@/lib/categories/latest-set';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';
 import { useAuthStore } from '@/stores/auth-store';
@@ -57,6 +58,19 @@ const messages = defineMessages({
     id: 'categories.noServer',
     defaultMessage: 'Connect to an archive server to view categories',
   },
+  showLatest: {
+    id: 'categories.showLatest',
+    defaultMessage: 'Latest',
+  },
+  showAll: {
+    id: 'categories.showAll',
+    defaultMessage: 'All',
+  },
+  hiddenBanner: {
+    id: 'categories.hiddenBanner',
+    defaultMessage:
+      'Showing the latest category set. {count, plural, one {# older category hidden} other {# older categories hidden}}.',
+  },
 });
 
 export function CategoriesEditorScreen() {
@@ -88,6 +102,7 @@ export function CategoriesEditorScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
+  const [showAllSets, setShowAllSets] = useState(false);
 
   const fieldsQuery = useFields(selectedProjectId);
 
@@ -101,15 +116,33 @@ export function CategoriesEditorScreen() {
     return map;
   }, [fieldsQuery.data]);
 
+  const nonDeletedPresets = useMemo(
+    () => (presetsQuery.data ?? []).filter((p) => !p.deleted),
+    [presetsQuery.data],
+  );
+
+  const hasMultipleClusters = useMemo(() => {
+    if (nonDeletedPresets.length < 2) return false;
+    const latestCluster = selectLatestCategorySet(nonDeletedPresets);
+    return latestCluster.length < nonDeletedPresets.length;
+  }, [nonDeletedPresets]);
+
+  const visiblePresets = useMemo(() => {
+    if (showAllSets) return nonDeletedPresets;
+    return selectLatestCategorySet(nonDeletedPresets);
+  }, [nonDeletedPresets, showAllSets]);
+
+  const hiddenCount = nonDeletedPresets.length - visiblePresets.length;
+
   const categoryGroups = useMemo(
     () =>
       normalizeCategories(
-        presetsQuery.data ?? [],
+        visiblePresets,
         intl.locale,
         searchQuery,
         fieldLabels,
       ),
-    [presetsQuery.data, intl.locale, searchQuery, fieldLabels],
+    [visiblePresets, intl.locale, searchQuery, fieldLabels],
   );
 
   const selectedCategory = useMemo(() => {
@@ -244,6 +277,40 @@ export function CategoriesEditorScreen() {
         onChange={(e) => setSearchQuery(e.target.value)}
         className="w-full rounded-button border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary"
       />
+
+      {hasMultipleClusters && (
+        <div className="flex flex-col gap-2">
+          {!showAllSets && (
+            <p className="text-text-muted text-sm">
+              {intl.formatMessage(messages.hiddenBanner, {
+                count: hiddenCount,
+              })}
+            </p>
+          )}
+          <div className="inline-flex rounded-button border border-border bg-surface-card p-0.5">
+            <button
+              onClick={() => setShowAllSets(false)}
+              className={`rounded-button px-3 py-1 text-xs font-medium transition-colors ${
+                !showAllSets
+                  ? 'bg-primary text-white'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {intl.formatMessage(messages.showLatest)}
+            </button>
+            <button
+              onClick={() => setShowAllSets(true)}
+              className={`rounded-button px-3 py-1 text-xs font-medium transition-colors ${
+                showAllSets
+                  ? 'bg-primary text-white'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {intl.formatMessage(messages.showAll)}
+            </button>
+          </div>
+        </div>
+      )}
 
       {!hasPresets && (
         <div className="flex items-center justify-center p-8">
