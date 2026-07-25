@@ -104,9 +104,10 @@ export function CategoriesEditorScreen() {
   const { categoryId } = useParams({ strict: false }) as {
     categoryId?: string;
   };
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
-    categoryId ?? null,
+  const [clickedCategoryId, setClickedCategoryId] = useState<string | null>(
+    null,
   );
+  const selectedCategoryId = categoryId ?? clickedCategoryId;
   const [showAllSets, setShowAllSets] = useState(false);
 
   const fieldsQuery = useFields(selectedProjectId);
@@ -133,9 +134,9 @@ export function CategoriesEditorScreen() {
   }, [nonDeletedPresets]);
 
   const visiblePresets = useMemo(() => {
-    if (showAllSets) return nonDeletedPresets;
+    if (showAllSets || categoryId) return nonDeletedPresets;
     return selectLatestCategorySet(nonDeletedPresets);
-  }, [nonDeletedPresets, showAllSets]);
+  }, [nonDeletedPresets, showAllSets, categoryId]);
 
   const hiddenCount = nonDeletedPresets.length - visiblePresets.length;
 
@@ -347,7 +348,7 @@ export function CategoriesEditorScreen() {
             <CategoryGrid
               groups={categoryGroups}
               selectedCategoryId={selectedCategoryId}
-              onCategorySelect={setSelectedCategoryId}
+              onCategorySelect={setClickedCategoryId}
               projectRemoteId={selectedProject?.remoteId ?? null}
             />
           </div>
@@ -366,7 +367,7 @@ export function CategoriesEditorScreen() {
             <CategoryDetail
               category={selectedCategory}
               fieldLabels={fieldLabels}
-              onBack={() => setSelectedCategoryId(null)}
+              onBack={() => setClickedCategoryId(null)}
               projectRemoteId={selectedProject?.remoteId ?? null}
             />
           </aside>
