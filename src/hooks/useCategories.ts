@@ -4,6 +4,7 @@ interface PresetInput {
   tags: Record<string, unknown>;
   fieldRefs: Array<{ docId: string }>;
   iconRef?: { docId: string };
+  color?: string;
 }
 
 export interface Category {
@@ -103,8 +104,7 @@ export function normalizeCategories(
         docId: ref.docId,
         label: fieldLabels?.get(ref.docId),
       })),
-      color:
-        typeof preset.tags.color === 'string' ? preset.tags.color : undefined,
+      color: preset.color,
       iconRef:
         typeof preset.iconRef === 'object' &&
         preset.iconRef !== null &&

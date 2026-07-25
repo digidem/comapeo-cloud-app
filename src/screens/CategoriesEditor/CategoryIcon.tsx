@@ -27,27 +27,18 @@ function CategoryIcon({
     iconDocId: iconRef?.docId,
   });
 
-  // ObservationCategoryIcon defaults to h-8 w-8 (32px). Override via
-  // className with explicit size classes when size differs from default.
-  let sizeClass: string;
-  if (size === 64) {
-    sizeClass = 'h-16 w-16';
-  } else if (size === 40) {
-    sizeClass = 'h-10 w-10';
-  } else {
-    sizeClass = `h-${size / 4} w-${size / 4}`;
-  }
-
   return (
-    <ObservationCategoryIcon
-      category={{
-        id: iconRef?.docId ?? label,
-        name: label,
-        color,
-        iconUrl,
-      }}
-      className={className ?? sizeClass}
-    />
+    <span style={{ display: 'inline-block', width: size, height: size }}>
+      <ObservationCategoryIcon
+        category={{
+          id: iconRef?.docId ?? label,
+          name: label,
+          color,
+          iconUrl,
+        }}
+        className={className}
+      />
+    </span>
   );
 }
 

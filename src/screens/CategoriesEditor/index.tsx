@@ -79,7 +79,6 @@ export function CategoriesEditorScreen() {
   const intl = useIntl();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const servers = useAuthStore((s) => s.servers);
-  const baseUrl = useAuthStore((s) => s.baseUrl);
   const projectsQuery = useProjects();
 
   const projects = projectsQuery.data ?? [];
@@ -246,11 +245,9 @@ export function CategoriesEditorScreen() {
     );
   }
 
-  // No archive server configured for the selected project — presets query
-  // is disabled and isPending would stay true forever. Show an actionable
-  // message instead. Uses the owning server's baseUrl when available;
-  // falls back to the active server's baseUrl.
-  if (!owningServer && baseUrl === null) {
+  // Presets query not enabled (no server or missing credentials) —
+  // isPending would stay true forever. Show an actionable message.
+  if (!presetsQuery.isEnabled) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
         <p className="text-text-muted">
