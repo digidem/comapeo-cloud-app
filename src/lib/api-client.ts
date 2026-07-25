@@ -111,16 +111,34 @@ function throwNetworkError(): never {
   throw new NetworkError();
 }
 
+/**
+ * Handle 401 responses: clear the active session only when the failing
+ * request matches the active credentials exactly. Prevents a stale
+ * configured token (e.g. from a different archive server) from clearing
+ * a valid active session.
+ */
+function handle401(config?: RequestConfig): void {
+  const { baseUrl: activeBaseUrl, token: activeToken } =
+    useAuthStore.getState();
+  if (!config) {
+    // Ambient request (no explicit config) — clear active session
+    useAuthStore.getState().clearAuth();
+  } else if (config.baseUrl === activeBaseUrl && config.token === activeToken) {
+    // Configured request matches active session exactly — clear auth
+    useAuthStore.getState().clearAuth();
+  }
+  // else: configured request to same URL but different token — don't clear
+  // the active session (the configured token may be stale but the active
+  // session could still be valid)
+}
+
 async function handleResponse<T>(
   response: Response,
   schema: v.GenericSchema<T>,
   config?: RequestConfig,
 ): Promise<T> {
   if (response.status === 401) {
-    const activeBaseUrl = useAuthStore.getState().baseUrl;
-    if (!config || config.baseUrl === activeBaseUrl) {
-      useAuthStore.getState().clearAuth();
-    }
+    handle401(config);
   }
 
   if (!response.ok) {
@@ -285,10 +303,7 @@ export const apiClient = {
       );
 
       if (response.status === 401) {
-        const activeBaseUrl = useAuthStore.getState().baseUrl;
-        if (!config || config.baseUrl === activeBaseUrl) {
-          useAuthStore.getState().clearAuth();
-        }
+        handle401(config);
       }
 
       if (response.status === 201) {
@@ -376,10 +391,7 @@ export const apiClient = {
       );
 
       if (response.status === 401) {
-        const activeBaseUrl = useAuthStore.getState().baseUrl;
-        if (!config || config.baseUrl === activeBaseUrl) {
-          useAuthStore.getState().clearAuth();
-        }
+        handle401(config);
       }
 
       if (!response.ok) {
