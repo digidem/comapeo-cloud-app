@@ -422,7 +422,7 @@ function HomeScreen() {
     const tagKeys = new Set<string>();
     for (const obs of observations) {
       const cat = obs.tags?.category;
-      if (typeof cat === 'string') tagKeys.add(cat.trim());
+      if (typeof cat === 'string' && cat.trim()) tagKeys.add(cat.trim());
     }
     return tagKeys.size;
   }, [observations]);

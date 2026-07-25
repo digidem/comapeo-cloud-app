@@ -281,7 +281,7 @@ export const apiClient = {
         },
       );
 
-      if (response.status === 401) {
+      if (response.status === 401 && !config) {
         useAuthStore.getState().clearAuth();
       }
 
@@ -369,7 +369,7 @@ export const apiClient = {
         { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
       );
 
-      if (response.status === 401) {
+      if (response.status === 401 && !config) {
         useAuthStore.getState().clearAuth();
       }
 
