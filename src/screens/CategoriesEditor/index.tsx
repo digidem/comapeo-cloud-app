@@ -289,7 +289,7 @@ export function CategoriesEditorScreen() {
     );
   }
 
-  const hasPresets = (presetsQuery.data ?? []).length > 0;
+  const hasPresets = nonDeletedPresets.length > 0;
   const hasResults = categoryGroups.length > 0;
 
   return (

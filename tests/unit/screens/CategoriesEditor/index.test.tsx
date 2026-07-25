@@ -39,12 +39,24 @@ let mockPresetsQuery: {
 } = { data: defaultPresets, isPending: false };
 
 let mockProjectsQuery: {
-  data: Array<{ localId: string; name: string; remoteId?: string }>;
+  data: Array<{
+    localId: string;
+    name: string;
+    sourceId: string;
+    remoteId?: string;
+  }>;
   isPending: boolean;
   isError?: boolean;
   refetch?: () => void;
 } = {
-  data: [{ localId: 'proj-1', name: 'Test Project', remoteId: 'base32proj1' }],
+  data: [
+    {
+      localId: 'proj-1',
+      name: 'Test Project',
+      sourceId: 'server-1',
+      remoteId: 'base32proj1',
+    },
+  ],
   isPending: false,
 };
 
@@ -120,10 +132,16 @@ vi.mock('react-router-dom', async () => {
 function resetMocks() {
   mockSelectedProjectId = 'proj-1';
   mockBaseUrl.current = 'https://archive.example.com';
+  mockServers.current = [];
   mockPresetsQuery = { data: defaultPresets, isPending: false };
   mockProjectsQuery = {
     data: [
-      { localId: 'proj-1', name: 'Test Project', remoteId: 'base32proj1' },
+      {
+        localId: 'proj-1',
+        name: 'Test Project',
+        sourceId: 'server-1',
+        remoteId: 'base32proj1',
+      },
     ],
     isPending: false,
   };
@@ -173,7 +191,14 @@ describe('CategoriesEditorScreen', () => {
   it('shows empty state when selected project not found in loaded list', () => {
     mockSelectedProjectId = 'proj-1';
     mockProjectsQuery = {
-      data: [{ localId: 'proj-2', name: 'Other', remoteId: 'base32other' }],
+      data: [
+        {
+          localId: 'proj-2',
+          name: 'Other',
+          sourceId: 'server-2',
+          remoteId: 'base32other',
+        },
+      ],
       isPending: false,
     };
     render(<CategoriesEditorScreen />);
@@ -245,7 +270,9 @@ describe('CategoriesEditorScreen', () => {
   it('shows empty state for local project without remoteId and passes null to useApiPresets', () => {
     mockSelectedProjectId = 'proj-1';
     mockProjectsQuery = {
-      data: [{ localId: 'proj-1', name: 'Local Project' }],
+      data: [
+        { localId: 'proj-1', name: 'Local Project', sourceId: 'server-1' },
+      ],
       isPending: false,
     };
     render(<CategoriesEditorScreen />);
@@ -420,5 +447,117 @@ describe('CategoriesEditorScreen', () => {
     render(<CategoriesEditorScreen />);
     expect(screen.queryByText('Latest')).not.toBeInTheDocument();
     expect(screen.queryByText('All')).not.toBeInTheDocument();
+  });
+
+  // --- server routing via sourceId ---
+
+  it('calls useApiPresets with owning server config when project sourceId matches a server', () => {
+    // Set up servers including one that matches the project's sourceId
+    mockServers.current = [
+      {
+        id: 'server-1',
+        baseUrl: 'https://test-server.com',
+        token: 'test-token',
+      },
+    ];
+    // Project has sourceId === 'server-1' (default mock)
+    render(<CategoriesEditorScreen />);
+    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1', {
+      baseUrl: 'https://test-server.com',
+      token: 'test-token',
+    });
+  });
+
+  it('calls useApiPresets with null serverConfig when project sourceId does not match any server', () => {
+    mockServers.current = [
+      {
+        id: 'server-other',
+        baseUrl: 'https://other-server.com',
+        token: 'other-token',
+      },
+    ];
+    // Default project sourceId is 'server-1', which does NOT match 'server-other'
+    render(<CategoriesEditorScreen />);
+    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1', null);
+  });
+
+  // --- hidden banner (latest/all toggle) ---
+
+  it('shows hidden banner with singular form when 1 older category is hidden', () => {
+    // Cluster 1 (newest): preset within the last day
+    // Cluster 2 (older): preset from >60 min before cluster 1 — exactly 1 preset
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'new-1',
+          name: 'Recent Category',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'old-1',
+          name: 'Old Category',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T10:00:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    };
+    render(<CategoriesEditorScreen />);
+
+    // The banner should appear and use singular form (1 hidden)
+    expect(screen.getByText(/1 older category hidden/)).toBeInTheDocument();
+    // Should also show the prefix text
+    expect(
+      screen.getByText(/Showing the latest category set/),
+    ).toBeInTheDocument();
+  });
+
+  it('shows hidden banner with plural form when 2+ older categories are hidden', () => {
+    // Cluster 1 (newest): 1 preset at 12:00
+    // Cluster 2 (older): 2 presets from >60 min earlier — 2 hidden
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'new-1',
+          name: 'Recent Category',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T12:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'old-1',
+          name: 'Older Category A',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T10:00:00Z',
+          deleted: false,
+        },
+        {
+          docId: 'old-2',
+          name: 'Older Category B',
+          tags: {},
+          fieldRefs: [],
+          createdAt: '2025-06-15T09:00:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    };
+    render(<CategoriesEditorScreen />);
+
+    // The banner should appear and use plural form (2 hidden)
+    expect(screen.getByText(/2 older categories hidden/)).toBeInTheDocument();
+    // Should also show the prefix text
+    expect(
+      screen.getByText(/Showing the latest category set/),
+    ).toBeInTheDocument();
   });
 });
