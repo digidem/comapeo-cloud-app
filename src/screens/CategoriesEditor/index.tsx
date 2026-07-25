@@ -130,9 +130,9 @@ export function CategoriesEditorScreen() {
   }, [nonDeletedPresets]);
 
   const visiblePresets = useMemo(() => {
-    if (showAllSets || categoryId) return nonDeletedPresets;
+    if (showAllSets) return nonDeletedPresets;
     return selectLatestCategorySet(nonDeletedPresets);
-  }, [nonDeletedPresets, showAllSets, categoryId]);
+  }, [nonDeletedPresets, showAllSets]);
 
   const hiddenCount = nonDeletedPresets.length - visiblePresets.length;
 
