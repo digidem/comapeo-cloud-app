@@ -183,7 +183,7 @@ function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
         });
       }
     },
-    [intl, handleClose],
+    [intl],
   );
 
   const handleConfirmReplace = useCallback(async () => {
@@ -199,7 +199,7 @@ function ImportSetDialog({ open, onClose }: ImportSetDialogProps) {
         message: intl.formatMessage(messages.importError, { error: msg }),
       });
     }
-  }, [dialogState, handleClose, intl]);
+  }, [dialogState, intl]);
 
   // Auto-close on success with cleanup on unmount
   useEffect(() => {

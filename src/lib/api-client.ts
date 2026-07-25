@@ -114,9 +114,9 @@ function throwNetworkError(): never {
 async function handleResponse<T>(
   response: Response,
   schema: v.GenericSchema<T>,
-  _config?: RequestConfig,
+  config?: RequestConfig,
 ): Promise<T> {
-  if (response.status === 401) {
+  if (response.status === 401 && !config) {
     useAuthStore.getState().clearAuth();
   }
 

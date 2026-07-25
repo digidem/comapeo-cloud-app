@@ -95,8 +95,7 @@ export function CategoriesEditorScreen() {
       topbarWorkspaceName: selectedProjectId ? topbarWorkspaceName : undefined,
       topbarModeLabel: intl.formatMessage(messages.title),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedProjectId, topbarWorkspaceName],
+    [selectedProjectId, topbarWorkspaceName, intl],
   );
   useShellSlot(shellSlot);
 
