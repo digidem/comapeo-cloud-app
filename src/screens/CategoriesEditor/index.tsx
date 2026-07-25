@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { useParams } from '@tanstack/react-router';
+import { useNavigate, useParams } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -100,13 +100,10 @@ export function CategoriesEditorScreen() {
   useShellSlot(shellSlot);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
   const { categoryId } = useParams({ strict: false }) as {
     categoryId?: string;
   };
-  const [clickedCategoryId, setClickedCategoryId] = useState<string | null>(
-    null,
-  );
-  const selectedCategoryId = categoryId ?? clickedCategoryId;
   const [showAllSets, setShowAllSets] = useState(false);
 
   const fieldsQuery = useFields(selectedProjectId);
@@ -151,15 +148,13 @@ export function CategoriesEditorScreen() {
   );
 
   const selectedCategory = useMemo(() => {
-    if (!selectedCategoryId) return null;
+    if (!categoryId) return null;
     for (const group of categoryGroups) {
-      const found = group.categories.find(
-        (c) => c.docId === selectedCategoryId,
-      );
+      const found = group.categories.find((c) => c.docId === categoryId);
       if (found) return found;
     }
     return null;
-  }, [selectedCategoryId, categoryGroups]);
+  }, [categoryId, categoryGroups]);
 
   // No project selected — prompt to select one
   if (!selectedProjectId) {
@@ -346,8 +341,13 @@ export function CategoriesEditorScreen() {
           <div className="flex-1 min-w-0">
             <CategoryGrid
               groups={categoryGroups}
-              selectedCategoryId={selectedCategoryId}
-              onCategorySelect={setClickedCategoryId}
+              selectedCategoryId={categoryId}
+              onCategorySelect={(docId) =>
+                navigate({
+                  to: '/categories/$categoryId',
+                  params: { categoryId: docId },
+                })
+              }
               projectRemoteId={selectedProject?.remoteId ?? null}
             />
           </div>
@@ -366,7 +366,7 @@ export function CategoriesEditorScreen() {
             <CategoryDetail
               category={selectedCategory}
               fieldLabels={fieldLabels}
-              onBack={() => setClickedCategoryId(null)}
+              onBack={() => navigate({ to: '/categories' })}
               projectRemoteId={selectedProject?.remoteId ?? null}
             />
           </aside>
