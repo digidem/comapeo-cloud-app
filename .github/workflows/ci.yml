@@ -509,10 +509,13 @@ jobs:
         # bypass. Fixed in 4.1.10 (we have 4.1.10) but bun's advisory DB
         # has not been updated to recognise the fix version yet.
         #
-        # GHSA-mh99-v99m-4gvg and GHSA-r28c-9q8g-f849 were previously
-        # ignored here; both are now resolved via package.json overrides
-        # (brace-expansion ^5.0.8, postcss ^8.5.23).
-        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv
+        # GHSA-mh99-v99m-4gvg: brace-expansion DoS via unbounded expansion
+        # length causing OOM (transitive dev dep via eslint/glob).
+        # Cannot override to v5 — breaks minimatch's default import.
+        #
+        # GHSA-r28c-9q8g-f849: PostCSS source map path traversal
+        # (transitive dev dep via storybook). Resolved via override.
+        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv --ignore=GHSA-mh99-v99m-4gvg
 
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request
