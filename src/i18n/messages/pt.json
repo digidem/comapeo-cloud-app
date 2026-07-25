@@ -50,15 +50,9 @@
   "categories.fieldType.date": "Data",
   "categories.fieldType.number": "Número",
   "categories.fieldType.unknown": "Tipo desconhecido",
-  "categories.fieldsError": {
-    "defaultMessage": "Etiquetas de campos indisponíveis"
-  },
-  "categories.fieldsRetry": {
-    "defaultMessage": "Tentar novamente"
-  },
-  "categories.hiddenBanner": {
-    "defaultMessage": "Mostrando o conjunto de categorias mais recente. {count, plural, one {# categoria antiga oculta} other {# categorias antigas ocultas}}."
-  },
+  "categories.fieldsError": "Etiquetas de campos indisponíveis",
+  "categories.fieldsRetry": "Tentar novamente",
+  "categories.hiddenBanner": "Mostrando o conjunto de categorias mais recente. {count, plural, one {# categoria antiga oculta} other {# categorias antigas ocultas}}.",
   "categories.importSet.cancel": "Cancelar",
   "categories.importSet.confirmReplace": "Substituir",
   "categories.importSet.description": "Carregue um arquivo .comapeocat para importar um conjunto de categorias.",
@@ -75,18 +69,12 @@
   "categories.importSet.title": "Importar Conjunto de Categorias",
   "categories.importSet.validationError": "Erro de validação: {error}",
   "categories.noResults": "Nenhuma categoria corresponde à sua pesquisa",
-  "categories.noServer": {
-    "defaultMessage": "Conecte-se a um servidor de arquivo para ver as categorias"
-  },
+  "categories.noServer": "Conecte-se a um servidor de arquivo para ver as categorias",
   "categories.retry": "Tentar novamente",
   "categories.search": "Pesquisar categorias...",
   "categories.selectProject": "Selecione um projeto para ver categorias",
-  "categories.showAll": {
-    "defaultMessage": "Todos"
-  },
-  "categories.showLatest": {
-    "defaultMessage": "Mais recente"
-  },
+  "categories.showAll": "Todos",
+  "categories.showLatest": "Mais recente",
   "categories.title": "Categorias",
   "categories.uncategorized": "Sem categoria",
   "categories.untitledProject": "Projeto sem título",

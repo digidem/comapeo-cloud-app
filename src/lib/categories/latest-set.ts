@@ -15,10 +15,10 @@ function parseTimestamp(iso: string): number | null {
 /**
  * Selects only the newest time-clustered set of presets.
  *
- * Presets are grouped into clusters by temporal proximity: adjacent presets
- * (sorted by createdAt descending) belong to the same cluster when the gap
- * between their creation timestamps is ≤ `gapMs`. Only the newest cluster is
- * returned.
+ * Presets are grouped into clusters by temporal proximity using a rolling
+ * 60-minute adjacency rule: adjacent presets (sorted by createdAt descending)
+ * belong to the same cluster when the gap between their creation timestamps
+ * is ≤ `gapMs` (default: 60 minutes). Only the newest cluster is returned.
  *
  * Presets with `deleted === true` are always excluded. Presets whose
  * `createdAt` cannot be parsed are excluded from the latest set but remain
@@ -26,6 +26,9 @@ function parseTimestamp(iso: string): number | null {
  *
  * When all non-deleted presets fall into a single cluster (or there are zero /
  * one valid presets), the result is equivalent to all non-deleted presets.
+ *
+ * Returns an empty array when all presets are deleted or have unparseable
+ * timestamps.
  */
 export function selectLatestCategorySet<T extends PresetLike>(
   presets: T[],

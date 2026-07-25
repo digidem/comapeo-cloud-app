@@ -78,6 +78,7 @@ const messages = defineMessages({
 export function CategoriesEditorScreen() {
   const intl = useIntl();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const servers = useAuthStore((s) => s.servers);
   const baseUrl = useAuthStore((s) => s.baseUrl);
   const projectsQuery = useProjects();
 
@@ -86,7 +87,19 @@ export function CategoriesEditorScreen() {
   // Server expects projectPublicId (base32) — use remoteId which is
   // populated by pullProjects for remote archive projects, and falls
   // back to null (query disabled) for local-only projects.
-  const presetsQuery = useApiPresets(selectedProject?.remoteId ?? null);
+  //
+  // Route request through the selected project's owning server config
+  // rather than assuming the active server. Falls back to active server
+  // when no owning server is resolved (e.g. project has no sourceId).
+  const owningServer = selectedProject
+    ? (servers.find((s) => s.id === selectedProject.sourceId) ?? null)
+    : null;
+  const presetsQuery = useApiPresets(
+    selectedProject?.remoteId ?? null,
+    owningServer
+      ? { baseUrl: owningServer.baseUrl, token: owningServer.token }
+      : null,
+  );
 
   const topbarWorkspaceName =
     selectedProject?.name ?? intl.formatMessage(messages.untitledProject);
@@ -123,16 +136,22 @@ export function CategoriesEditorScreen() {
     [presetsQuery.data],
   );
 
-  const hasMultipleClusters = useMemo(() => {
-    if (nonDeletedPresets.length < 2) return false;
-    const latestCluster = selectLatestCategorySet(nonDeletedPresets);
-    return latestCluster.length < nonDeletedPresets.length;
-  }, [nonDeletedPresets]);
+  // Compute the latest cluster once so we derive hasMultipleClusters
+  // and visiblePresets from a single sort + cluster pass.
+  const latestCluster = useMemo(
+    () => selectLatestCategorySet(nonDeletedPresets),
+    [nonDeletedPresets],
+  );
 
-  const visiblePresets = useMemo(() => {
-    if (showAllSets) return nonDeletedPresets;
-    return selectLatestCategorySet(nonDeletedPresets);
-  }, [nonDeletedPresets, showAllSets]);
+  const hasMultipleClusters = useMemo(
+    () => latestCluster.length < nonDeletedPresets.length,
+    [latestCluster, nonDeletedPresets],
+  );
+
+  const visiblePresets = useMemo(
+    () => (showAllSets ? nonDeletedPresets : latestCluster),
+    [nonDeletedPresets, showAllSets, latestCluster],
+  );
 
   const hiddenCount = nonDeletedPresets.length - visiblePresets.length;
 
@@ -147,19 +166,22 @@ export function CategoriesEditorScreen() {
     [visiblePresets, intl.locale, searchQuery, fieldLabels],
   );
 
-  const allCategoryGroups = useMemo(
-    () => normalizeCategories(visiblePresets, intl.locale, '', fieldLabels),
-    [visiblePresets, intl.locale, fieldLabels],
+  // Search ALL non-deleted presets for detail route resolution — this
+  // ensures direct navigation to /categories/<older-category-id> still
+  // resolves even when the grid is filtered to the latest cluster.
+  const allCategoryGroupsForDetail = useMemo(
+    () => normalizeCategories(nonDeletedPresets, intl.locale, '', fieldLabels),
+    [nonDeletedPresets, intl.locale, fieldLabels],
   );
 
   const selectedCategory = useMemo(() => {
     if (!categoryId) return null;
-    for (const group of allCategoryGroups) {
+    for (const group of allCategoryGroupsForDetail) {
       const found = group.categories.find((c) => c.docId === categoryId);
       if (found) return found;
     }
     return null;
-  }, [categoryId, allCategoryGroups]);
+  }, [categoryId, allCategoryGroupsForDetail]);
 
   // No project selected — prompt to select one
   if (!selectedProjectId) {
@@ -224,9 +246,11 @@ export function CategoriesEditorScreen() {
     );
   }
 
-  // No archive server configured — presets query is disabled and isPending
-  // would stay true forever. Show an actionable message instead.
-  if (baseUrl === null) {
+  // No archive server configured for the selected project — presets query
+  // is disabled and isPending would stay true forever. Show an actionable
+  // message instead. Uses the owning server's baseUrl when available;
+  // falls back to the active server's baseUrl.
+  if (!owningServer && baseUrl === null) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
         <p className="text-text-muted">
@@ -294,6 +318,8 @@ export function CategoriesEditorScreen() {
           )}
           <div className="inline-flex rounded-button border border-border bg-surface-card p-0.5">
             <button
+              type="button"
+              aria-pressed={!showAllSets}
               onClick={() => setShowAllSets(false)}
               className={`rounded-button px-3 py-1 text-xs font-medium transition-colors ${
                 !showAllSets
@@ -304,6 +330,8 @@ export function CategoriesEditorScreen() {
               {intl.formatMessage(messages.showLatest)}
             </button>
             <button
+              type="button"
+              aria-pressed={showAllSets}
               onClick={() => setShowAllSets(true)}
               className={`rounded-button px-3 py-1 text-xs font-medium transition-colors ${
                 showAllSets

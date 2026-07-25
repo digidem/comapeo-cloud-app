@@ -78,12 +78,25 @@ vi.mock('@/hooks/useFields', () => ({
   useFields: vi.fn(() => mockFieldsQuery),
 }));
 
-let mockBaseUrl: string | null = 'https://archive.example.com';
+const { mockBaseUrl, mockServers } = vi.hoisted(() => ({
+  mockBaseUrl: { current: 'https://archive.example.com' as string | null },
+  mockServers: {
+    current: [] as Array<{ id: string; baseUrl: string; token: string }>,
+  },
+}));
 
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: vi.fn(
-    (selector: (s: { baseUrl: string | null }) => string | null) =>
-      selector({ baseUrl: mockBaseUrl }),
+    (
+      selector: (s: {
+        baseUrl: string | null;
+        servers: Array<{ id: string; baseUrl: string; token: string }>;
+      }) => unknown,
+    ) =>
+      selector({
+        baseUrl: mockBaseUrl.current,
+        servers: mockServers.current,
+      }),
   ),
 }));
 
@@ -106,7 +119,7 @@ vi.mock('react-router-dom', async () => {
 
 function resetMocks() {
   mockSelectedProjectId = 'proj-1';
-  mockBaseUrl = 'https://archive.example.com';
+  mockBaseUrl.current = 'https://archive.example.com';
   mockPresetsQuery = { data: defaultPresets, isPending: false };
   mockProjectsQuery = {
     data: [
@@ -212,7 +225,7 @@ describe('CategoriesEditorScreen', () => {
 
   it('calls useApiPresets with project remoteId when project has one', () => {
     render(<CategoriesEditorScreen />);
-    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1');
+    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1', null);
   });
 
   it('renders category cards when presets are loaded via remoteId', () => {
@@ -238,11 +251,11 @@ describe('CategoriesEditorScreen', () => {
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('No categories found')).toBeInTheDocument();
     // Verify the hook was called with null — no wasted API call
-    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith(null);
+    expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith(null, null);
   });
 
   it('shows no-server message when archive server is not configured', () => {
-    mockBaseUrl = null;
+    mockBaseUrl.current = null;
     render(<CategoriesEditorScreen />);
     expect(
       screen.getByText('Connect to an archive server to view categories'),
