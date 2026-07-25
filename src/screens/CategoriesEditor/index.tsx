@@ -147,14 +147,19 @@ export function CategoriesEditorScreen() {
     [visiblePresets, intl.locale, searchQuery, fieldLabels],
   );
 
+  const allCategoryGroups = useMemo(
+    () => normalizeCategories(visiblePresets, intl.locale, '', fieldLabels),
+    [visiblePresets, intl.locale, fieldLabels],
+  );
+
   const selectedCategory = useMemo(() => {
     if (!categoryId) return null;
-    for (const group of categoryGroups) {
+    for (const group of allCategoryGroups) {
       const found = group.categories.find((c) => c.docId === categoryId);
       if (found) return found;
     }
     return null;
-  }, [categoryId, categoryGroups]);
+  }, [categoryId, allCategoryGroups]);
 
   // No project selected — prompt to select one
   if (!selectedProjectId) {

@@ -116,8 +116,11 @@ async function handleResponse<T>(
   schema: v.GenericSchema<T>,
   config?: RequestConfig,
 ): Promise<T> {
-  if (response.status === 401 && !config) {
-    useAuthStore.getState().clearAuth();
+  if (response.status === 401) {
+    const activeBaseUrl = useAuthStore.getState().baseUrl;
+    if (!config || config.baseUrl === activeBaseUrl) {
+      useAuthStore.getState().clearAuth();
+    }
   }
 
   if (!response.ok) {
@@ -281,8 +284,11 @@ export const apiClient = {
         },
       );
 
-      if (response.status === 401 && !config) {
-        useAuthStore.getState().clearAuth();
+      if (response.status === 401) {
+        const activeBaseUrl = useAuthStore.getState().baseUrl;
+        if (!config || config.baseUrl === activeBaseUrl) {
+          useAuthStore.getState().clearAuth();
+        }
       }
 
       if (response.status === 201) {
@@ -369,8 +375,11 @@ export const apiClient = {
         { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
       );
 
-      if (response.status === 401 && !config) {
-        useAuthStore.getState().clearAuth();
+      if (response.status === 401) {
+        const activeBaseUrl = useAuthStore.getState().baseUrl;
+        if (!config || config.baseUrl === activeBaseUrl) {
+          useAuthStore.getState().clearAuth();
+        }
       }
 
       if (!response.ok) {
