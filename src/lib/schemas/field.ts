@@ -28,7 +28,12 @@ export const fieldSchema = v.object({
   key: v.string(),
   label: v.string(),
   placeholder: v.optional(v.string()),
-  universal: v.boolean(),
+  // Tolerant of real server responses: `universal` may be omitted (the
+  // archive server does not always send it). `v.fallback` makes a missing
+  // key fall back to `false` AND narrows the output type to `boolean`, so
+  // downstream consumers (e.g. `Field.universal: boolean`) are unaffected.
+  // Extra server keys (e.g. `geometry`) are stripped by `v.object`.
+  universal: v.fallback(v.boolean(), false),
   options: v.optional(v.array(optionSchema)),
 });
 

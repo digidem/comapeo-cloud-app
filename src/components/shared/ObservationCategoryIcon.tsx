@@ -51,7 +51,7 @@ export function ObservationCategoryIcon({
       >
         <span
           data-testid="category-icon-fallback"
-          className="text-[0.65rem] font-semibold leading-none opacity-0"
+          className="m-auto text-[0.65rem] font-semibold leading-none opacity-0"
           style={{
             color: category.color ?? undefined,
             fontSize: size * 0.4,
@@ -65,7 +65,7 @@ export function ObservationCategoryIcon({
           alt={intl.formatMessage(messages.iconAlt, {
             category: category.name,
           })}
-          className="absolute inset-0 z-10 object-contain p-1"
+          className="m-auto absolute inset-0 z-10 object-contain p-1"
           style={{ width: iconSize, height: iconSize }}
           cache
         />
