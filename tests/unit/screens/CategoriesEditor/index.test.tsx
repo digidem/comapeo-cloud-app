@@ -36,7 +36,8 @@ let mockPresetsQuery: {
   isPending: boolean;
   isError?: boolean;
   refetch?: () => void;
-} = { data: defaultPresets, isPending: false };
+  isEnabled: boolean;
+} = { data: defaultPresets, isPending: false, isEnabled: true };
 
 let mockProjectsQuery: {
   data: Array<{
@@ -133,7 +134,11 @@ function resetMocks() {
   mockSelectedProjectId = 'proj-1';
   mockBaseUrl.current = 'https://archive.example.com';
   mockServers.current = [];
-  mockPresetsQuery = { data: defaultPresets, isPending: false };
+  mockPresetsQuery = {
+    data: defaultPresets,
+    isPending: false,
+    isEnabled: true,
+  };
   mockProjectsQuery = {
     data: [
       {
@@ -208,7 +213,7 @@ describe('CategoriesEditorScreen', () => {
   // --- presets loading / error ---
 
   it('renders loading skeleton while presets load', () => {
-    mockPresetsQuery = { data: undefined, isPending: true };
+    mockPresetsQuery = { data: undefined, isPending: true, isEnabled: true };
 
     render(<CategoriesEditorScreen />);
     const skeletons = document.querySelectorAll(
@@ -223,6 +228,7 @@ describe('CategoriesEditorScreen', () => {
       isPending: false,
       isError: true,
       refetch: vi.fn(),
+      isEnabled: true,
     };
 
     render(<CategoriesEditorScreen />);
@@ -233,7 +239,7 @@ describe('CategoriesEditorScreen', () => {
   });
 
   it('renders empty state when no categories exist', () => {
-    mockPresetsQuery = { data: [], isPending: false };
+    mockPresetsQuery = { data: [], isPending: false, isEnabled: true };
 
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('No categories found')).toBeInTheDocument();
@@ -283,6 +289,7 @@ describe('CategoriesEditorScreen', () => {
 
   it('shows no-server message when archive server is not configured', () => {
     mockBaseUrl.current = null;
+    mockPresetsQuery = { data: undefined, isPending: true, isEnabled: false };
     render(<CategoriesEditorScreen />);
     expect(
       screen.getByText('Connect to an archive server to view categories'),
@@ -295,7 +302,7 @@ describe('CategoriesEditorScreen', () => {
   });
 
   it('shows empty-state message when no categories exist', () => {
-    mockPresetsQuery = { data: [], isPending: false };
+    mockPresetsQuery = { data: [], isPending: false, isEnabled: true };
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('No categories found')).toBeInTheDocument();
   });
@@ -374,6 +381,7 @@ describe('CategoriesEditorScreen', () => {
       ],
       isPending: false,
       isError: false,
+      isEnabled: true,
     };
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('Latest')).toBeInTheDocument();
@@ -402,6 +410,7 @@ describe('CategoriesEditorScreen', () => {
       ],
       isPending: false,
       isError: false,
+      isEnabled: true,
     };
     render(<CategoriesEditorScreen />);
 
@@ -443,6 +452,7 @@ describe('CategoriesEditorScreen', () => {
       ],
       isPending: false,
       isError: false,
+      isEnabled: true,
     };
     render(<CategoriesEditorScreen />);
     expect(screen.queryByText('Latest')).not.toBeInTheDocument();
@@ -507,6 +517,7 @@ describe('CategoriesEditorScreen', () => {
       ],
       isPending: false,
       isError: false,
+      isEnabled: true,
     };
     render(<CategoriesEditorScreen />);
 
@@ -550,6 +561,7 @@ describe('CategoriesEditorScreen', () => {
       ],
       isPending: false,
       isError: false,
+      isEnabled: true,
     };
     render(<CategoriesEditorScreen />);
 
