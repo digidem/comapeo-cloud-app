@@ -1,17 +1,26 @@
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useApiPresets } from '@/hooks/useApiPresets';
+import {
+  deduplicatePresetVersions,
+  useApiPresets,
+} from '@/hooks/useApiPresets';
 import { CategoriesEditorScreen } from '@/screens/CategoriesEditor';
 
-const defaultPresets: Array<{
+interface ScreenPreset {
   docId: string;
   name: string;
   tags: Record<string, unknown>;
   fieldRefs: Array<{ docId: string; label?: string }>;
   createdAt: string;
   deleted: boolean;
-}> = [
+  versionId?: string;
+  originalVersionId?: string;
+  color?: string;
+  iconRef?: { docId: string };
+}
+
+const defaultPresets: ScreenPreset[] = [
   {
     docId: 'preset-1',
     name: 'Deforestation',
@@ -31,6 +40,7 @@ const defaultPresets: Array<{
 ];
 
 let mockSelectedProjectId: string | null = 'proj-1';
+let mockRouteParams: { categoryId?: string } = {};
 let mockPresetsQuery: {
   data?: typeof defaultPresets;
   isPending: boolean;
@@ -76,9 +86,15 @@ vi.mock('@/hooks/useProjects', () => ({
   useProjects: vi.fn(() => mockProjectsQuery),
 }));
 
-vi.mock('@/hooks/useApiPresets', () => ({
-  useApiPresets: vi.fn(() => mockPresetsQuery),
-}));
+vi.mock('@/hooks/useApiPresets', async () => {
+  const actual = await vi.importActual<typeof import('@/hooks/useApiPresets')>(
+    '@/hooks/useApiPresets',
+  );
+  return {
+    ...actual,
+    useApiPresets: vi.fn(() => mockPresetsQuery),
+  };
+});
 
 let mockFieldsQuery: {
   data?: Array<{ remoteId: string; label: string }>;
@@ -118,7 +134,7 @@ vi.mock('@tanstack/react-router', () => ({
     <a href={to}>{children}</a>
   ),
   useNavigate: () => vi.fn(),
-  useParams: () => ({}),
+  useParams: () => mockRouteParams,
   useSearch: () => ({}),
 }));
 
@@ -132,6 +148,7 @@ vi.mock('react-router-dom', async () => {
 
 function resetMocks() {
   mockSelectedProjectId = 'proj-1';
+  mockRouteParams = {};
   mockBaseUrl.current = 'https://archive.example.com';
   mockServers.current = [];
   mockPresetsQuery = {
@@ -263,6 +280,49 @@ describe('CategoriesEditorScreen', () => {
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('Deforestation')).toBeInTheDocument();
     expect(screen.getByText('Mining')).toBeInTheDocument();
+  });
+
+  it('resolves the surviving deduplicated preset docId in the detail route', () => {
+    mockRouteParams = { categoryId: 'category-v2' };
+    mockFieldsQuery = {
+      data: [{ remoteId: 'field-1', label: 'Severity' }],
+      isPending: false,
+    };
+    mockPresetsQuery = {
+      data: deduplicatePresetVersions([
+        {
+          docId: 'category-v1',
+          originalVersionId: 'category-original',
+          versionId: 'category-original/1',
+          createdAt: '2025-01-01T00:00:00.000Z',
+          deleted: false,
+          name: 'Forest',
+          tags: { type: 'environment' },
+          fieldRefs: [{ docId: 'field-1' }],
+        },
+        {
+          docId: 'category-v2',
+          originalVersionId: 'category-original',
+          versionId: 'category-original/2',
+          createdAt: '2025-01-01T00:05:00.000Z',
+          deleted: false,
+          name: 'Forest updated',
+          tags: { type: 'environment' },
+          fieldRefs: [{ docId: 'field-1' }],
+        },
+      ]),
+      isPending: false,
+      isError: false,
+      isEnabled: true,
+    };
+
+    render(<CategoriesEditorScreen />);
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Forest updated' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Severity')).toBeInTheDocument();
+    expect(screen.queryByText('Select a category')).not.toBeInTheDocument();
   });
 
   it('shows no-project prompt when no project is selected', () => {

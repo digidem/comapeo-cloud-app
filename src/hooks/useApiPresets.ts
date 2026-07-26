@@ -4,6 +4,62 @@ import type { RequestConfig } from '@/lib/api-client';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 
+interface PresetVersionLike {
+  docId: string;
+  createdAt: string;
+  versionId?: string;
+  originalVersionId?: string;
+}
+
+function parseCreatedAt(createdAt: string): number | null {
+  const timestamp = Date.parse(createdAt);
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function shouldReplacePresetVersion<T extends PresetVersionLike>(
+  candidate: T,
+  incumbent: T,
+): boolean {
+  const candidateTimestamp = parseCreatedAt(candidate.createdAt);
+  const incumbentTimestamp = parseCreatedAt(incumbent.createdAt);
+
+  if (candidateTimestamp !== null && incumbentTimestamp !== null) {
+    if (candidateTimestamp !== incumbentTimestamp) {
+      return candidateTimestamp > incumbentTimestamp;
+    }
+  } else if (candidateTimestamp !== null) {
+    return true;
+  } else if (incumbentTimestamp !== null) {
+    return false;
+  }
+
+  const candidateVersionId = candidate.versionId ?? '';
+  const incumbentVersionId = incumbent.versionId ?? '';
+
+  if (candidateVersionId !== incumbentVersionId) {
+    return candidateVersionId > incumbentVersionId;
+  }
+
+  return false;
+}
+
+export function deduplicatePresetVersions<T extends PresetVersionLike>(
+  presets: readonly T[],
+): T[] {
+  const presetsByLogicalId = new Map<string, T>();
+
+  for (const preset of presets) {
+    const logicalId = preset.originalVersionId ?? preset.docId;
+    const incumbent = presetsByLogicalId.get(logicalId);
+
+    if (!incumbent || shouldReplacePresetVersion(preset, incumbent)) {
+      presetsByLogicalId.set(logicalId, preset);
+    }
+  }
+
+  return [...presetsByLogicalId.values()];
+}
+
 /** Fetches presets directly from the archive server API (wire format).
  * Uses the project's remoteId (server projectPublicId, base32) — NOT the
  * local DB id (hex). Required because the server route parameter is validated
@@ -49,7 +105,7 @@ export function useApiPresets(
       return apiClient.getPresets(projectRemoteId!, config);
     },
     enabled,
-    select: (data) => data.data,
+    select: (data) => deduplicatePresetVersions(data.data),
   });
 
   // eslint-disable-next-line @tanstack/query/no-rest-destructuring
