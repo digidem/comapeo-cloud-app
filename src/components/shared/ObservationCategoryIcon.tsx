@@ -15,16 +15,28 @@ interface ObservationCategoryIconProps {
     ObservationCategory,
     'id' | 'name' | 'color' | 'iconDocId' | 'iconUrl'
   >;
+  size?: number; // circle diameter in pixels (default 32)
+  iconSize?: number; // image diameter in pixels (default size * 0.7)
   className?: string;
 }
 
 export function ObservationCategoryIcon({
   category,
-  className = 'h-8 w-8',
+  size = 32,
+  iconSize = size * 0.7,
+  className,
 }: ObservationCategoryIconProps) {
   const intl = useIntl();
 
   const fallbackLetter = category.name.trim().slice(0, 1).toUpperCase() || '?';
+
+  const circleStyle = {
+    width: size,
+    height: size,
+    border: category.color
+      ? `2px solid ${category.color}`
+      : '2px solid var(--color-primary, #1F6FFF)',
+  };
 
   // When an icon image is available, render it on a white circle with a
   // colored border so the icon remains legible regardless of the category
@@ -33,18 +45,17 @@ export function ObservationCategoryIcon({
   if (category.iconUrl) {
     return (
       <div
-        className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className}`}
+        className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className ?? ''}`}
         data-testid="category-icon"
-        style={{
-          border: category.color
-            ? `2px solid ${category.color}`
-            : '2px solid var(--color-primary, #1F6FFF)',
-        }}
+        style={circleStyle}
       >
         <span
           data-testid="category-icon-fallback"
           className="text-[0.65rem] font-semibold leading-none opacity-0"
-          style={{ color: category.color ?? undefined }}
+          style={{
+            color: category.color ?? undefined,
+            fontSize: size * 0.4,
+          }}
           aria-hidden="true"
         >
           {fallbackLetter}
@@ -54,7 +65,8 @@ export function ObservationCategoryIcon({
           alt={intl.formatMessage(messages.iconAlt, {
             category: category.name,
           })}
-          className="absolute inset-0 z-10 h-full w-full object-contain p-1"
+          className="absolute inset-0 z-10 object-contain p-1"
+          style={{ width: iconSize, height: iconSize }}
           cache
         />
       </div>
@@ -66,18 +78,22 @@ export function ObservationCategoryIcon({
   // design review.
   return (
     <div
-      className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className}`}
+      className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className ?? ''}`}
       data-testid="category-icon-fallback-only"
       style={{
-        border: category.color
-          ? `2px solid ${category.color}`
-          : '2px solid var(--color-primary, #1F6FFF)',
+        ...circleStyle,
         color: category.color ?? undefined,
       }}
       aria-label={category.name}
       role="img"
     >
-      <span className="text-[0.65rem] font-semibold leading-none">
+      <span
+        className="font-semibold leading-none"
+        style={{
+          fontSize: size * 0.4,
+          color: category.color ?? undefined,
+        }}
+      >
         {fallbackLetter}
       </span>
     </div>

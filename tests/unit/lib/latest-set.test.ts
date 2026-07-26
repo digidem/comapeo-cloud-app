@@ -173,4 +173,36 @@ describe('selectLatestCategorySet', () => {
     const ids = result.map((r) => r.docId).sort();
     expect(ids).toEqual(['c3-a', 'c3-b']);
   });
+
+  // ---- Order preservation ----
+
+  it('preserves original input order within the latest cluster', () => {
+    const presets = [
+      p({ docId: 'a', createdAt: '2025-06-15T12:00:00Z' }),
+      p({ docId: 'b', createdAt: '2025-06-15T12:30:00Z' }),
+      p({ docId: 'c', createdAt: '2025-06-15T12:15:00Z' }),
+      p({ docId: 'old', createdAt: '2025-01-01T00:00:00Z' }),
+    ];
+
+    const result = selectLatestCategorySet(presets);
+
+    // The latest cluster contains a, b, c (all within 60 min of each other).
+    // The result should preserve the original input order: a, b, c — NOT the
+    // sorted (newest-first) order: b, c, a.
+    expect(result.map((r) => r.docId)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('preserves original input order when all presets form a single cluster', () => {
+    const presets = [
+      p({ docId: 'd', createdAt: '2025-01-01T00:00:00Z' }),
+      p({ docId: 'a', createdAt: '2025-01-01T00:05:00Z' }),
+      p({ docId: 'c', createdAt: '2025-01-01T00:01:00Z' }),
+      p({ docId: 'b', createdAt: '2025-01-01T00:03:00Z' }),
+    ];
+
+    const result = selectLatestCategorySet(presets);
+
+    // All within 60 min — single cluster. Order should match input: d, a, c, b.
+    expect(result.map((r) => r.docId)).toEqual(['d', 'a', 'c', 'b']);
+  });
 });

@@ -1,7 +1,9 @@
 import { defineMessages, useIntl } from 'react-intl';
 
 import type { Category } from '@/hooks/useCategories';
+import type { NormalizedField } from '@/lib/fields/normalize';
 import { CategoryIcon } from '@/screens/CategoriesEditor/CategoryIcon';
+import { FieldViewer } from '@/screens/CategoriesEditor/FieldViewer';
 
 const messages = defineMessages({
   selectCategory: {
@@ -10,7 +12,7 @@ const messages = defineMessages({
   },
   backToCategories: {
     id: 'categories.detail.backToCategories',
-    defaultMessage: '← Categories',
+    defaultMessage: 'Categories',
   },
   fields: {
     id: 'categories.detail.fields',
@@ -20,16 +22,18 @@ const messages = defineMessages({
 
 interface CategoryDetailProps {
   category: Category | null;
-  fieldLabels: Map<string, string>;
+  fields: NormalizedField[]; // resolved fields in preset order
   onBack: () => void;
   projectRemoteId?: string | null;
+  serverBaseUrl?: string | null;
 }
 
 function CategoryDetail({
   category,
-  fieldLabels,
+  fields,
   onBack,
   projectRemoteId,
+  serverBaseUrl,
 }: CategoryDetailProps) {
   const intl = useIntl();
 
@@ -50,50 +54,44 @@ function CategoryDetail({
         onClick={onBack}
         className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-dark min-h-[44px]"
       >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </svg>
         {intl.formatMessage(messages.backToCategories)}
       </button>
 
-      <CategoryIcon
-        projectRemoteId={projectRemoteId ?? null}
-        iconRef={category.iconRef}
-        label={category.label}
-        color={category.color}
-        size={64}
-      />
+      <div className="flex flex-col items-center gap-3">
+        <CategoryIcon
+          projectRemoteId={projectRemoteId ?? null}
+          iconRef={category.iconRef}
+          label={category.label}
+          color={category.color}
+          size={64}
+          iconSize={45}
+          serverBaseUrl={serverBaseUrl}
+        />
 
-      <h2 className="text-xl font-bold text-text">{category.label}</h2>
+        <h2 className="text-xl font-bold text-text">{category.label}</h2>
 
-      {category.color && (
-        <div className="flex items-center gap-2">
-          <div
-            data-testid="color-swatch"
-            className="h-6 w-6 rounded"
-            style={{ backgroundColor: category.color }}
-          />
-          <span className="text-sm font-mono text-text-muted">
-            {category.color}
-          </span>
-        </div>
-      )}
-
-      <div>
-        <span className="text-sm font-medium text-text">
-          {intl.formatMessage(messages.fields, {
-            count: category.fieldRefs.length,
-          })}
+        <span className="text-sm text-text-muted">
+          {intl.formatMessage(messages.fields, { count: fields.length })}
         </span>
-        {category.fieldRefs.length > 0 && (
-          <ul className="mt-2 flex flex-col gap-1">
-            {category.fieldRefs.map((ref) => (
-              <li key={ref.docId} className="text-sm text-text-muted">
-                {fieldLabels.get(ref.docId) ?? ref.docId}
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
+
+      <FieldViewer fields={fields} />
     </div>
   );
 }
 
 export { CategoryDetail };
+export type { CategoryDetailProps };

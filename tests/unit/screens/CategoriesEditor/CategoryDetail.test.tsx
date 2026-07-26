@@ -2,16 +2,35 @@ import { render, screen } from '@tests/mocks/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Category } from '@/hooks/useCategories';
+import type { NormalizedField } from '@/lib/fields/normalize';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 
 vi.mock('@/screens/CategoriesEditor/CategoryIcon', () => ({
-  CategoryIcon: ({ iconRef, color, size }: Record<string, unknown>) => (
+  CategoryIcon: ({
+    iconRef,
+    color,
+    size,
+    iconSize,
+  }: Record<string, unknown>) => (
     <div
       data-testid="category-detail-icon"
       data-icon-ref={iconRef ? 'present' : 'absent'}
       data-color={color as string}
       data-size={String(size)}
+      data-icon-size={String(iconSize)}
     />
+  ),
+}));
+
+vi.mock('@/screens/CategoriesEditor/FieldViewer', () => ({
+  FieldViewer: ({ fields }: { fields: NormalizedField[] }) => (
+    <div data-testid="field-viewer" data-field-count={String(fields.length)}>
+      {fields.map((f) => (
+        <span key={f.docId} data-testid={`field-${f.docId}`}>
+          {f.label}
+        </span>
+      ))}
+    </div>
   ),
 }));
 
@@ -20,31 +39,42 @@ const onBack = vi.fn();
 const sampleCategory: Category = {
   docId: 'cat-1',
   label: 'Deforestation',
-  fieldRefs: [
-    { docId: 'field-1', label: 'Severity' },
-    { docId: 'field-2', label: 'Area' },
-    { docId: 'field-3' },
-  ],
+  fieldRefs: [{ docId: 'field-1' }, { docId: 'field-2' }, { docId: 'field-3' }],
   color: '#22c55e',
 };
 
+const sampleFields: NormalizedField[] = [
+  {
+    docId: 'field-1',
+    tagKey: 'severity',
+    type: 'text',
+    label: 'Severity',
+  },
+  {
+    docId: 'field-2',
+    tagKey: 'area',
+    type: 'number',
+    label: 'Area (ha)',
+  },
+  {
+    docId: 'field-3',
+    tagKey: 'notes',
+    type: 'textarea',
+    label: 'Notes',
+  },
+];
+
 describe('CategoryDetail', () => {
   it('shows placeholder when category is null', () => {
-    render(
-      <CategoryDetail
-        category={null}
-        fieldLabels={new Map()}
-        onBack={onBack}
-      />,
-    );
+    render(<CategoryDetail category={null} fields={[]} onBack={onBack} />);
     expect(screen.getByText('Select a category')).toBeInTheDocument();
   });
 
-  it('renders category name', () => {
+  it('renders category name as heading', () => {
     render(
       <CategoryDetail
         category={sampleCategory}
-        fieldLabels={new Map()}
+        fields={sampleFields}
         onBack={onBack}
       />,
     );
@@ -53,17 +83,18 @@ describe('CategoryDetail', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders CategoryIcon with size=64 and color', () => {
+  it('renders CategoryIcon with size=64 and iconSize=45', () => {
     render(
       <CategoryDetail
         category={sampleCategory}
-        fieldLabels={new Map()}
+        fields={sampleFields}
         onBack={onBack}
       />,
     );
     const icon = screen.getByTestId('category-detail-icon');
     expect(icon).toBeInTheDocument();
     expect(icon.getAttribute('data-size')).toBe('64');
+    expect(icon.getAttribute('data-icon-size')).toBe('45');
     expect(icon.getAttribute('data-color')).toBe('#22c55e');
   });
 
@@ -75,7 +106,7 @@ describe('CategoryDetail', () => {
     render(
       <CategoryDetail
         category={categoryWithIcon}
-        fieldLabels={new Map()}
+        fields={sampleFields}
         onBack={onBack}
         projectRemoteId="proj-789"
       />,
@@ -85,85 +116,75 @@ describe('CategoryDetail', () => {
     expect(icon.getAttribute('data-icon-ref')).toBe('present');
   });
 
-  it('renders category color swatch with hex value', () => {
+  it('does not render color swatch or raw hex value', () => {
     render(
       <CategoryDetail
         category={sampleCategory}
-        fieldLabels={new Map()}
+        fields={sampleFields}
         onBack={onBack}
       />,
     );
-    expect(screen.getByText('#22c55e')).toBeInTheDocument();
-    const swatch = screen.getByTestId('color-swatch');
-    expect(swatch).toHaveStyle({ backgroundColor: '#22c55e' });
+    expect(screen.queryByTestId('color-swatch')).not.toBeInTheDocument();
+    expect(screen.queryByText('#22c55e')).not.toBeInTheDocument();
   });
 
-  it('renders field count and field refs with resolved labels', () => {
+  it('renders field count and passes resolved fields to FieldViewer', () => {
     render(
       <CategoryDetail
         category={sampleCategory}
-        fieldLabels={
-          new Map([
-            ['field-1', 'Severity'],
-            ['field-2', 'Area (ha)'],
-          ])
-        }
+        fields={sampleFields}
         onBack={onBack}
       />,
     );
     expect(screen.getByText(/3 fields/)).toBeInTheDocument();
+    const viewer = screen.getByTestId('field-viewer');
+    expect(viewer.getAttribute('data-field-count')).toBe('3');
     expect(screen.getByText('Severity')).toBeInTheDocument();
     expect(screen.getByText('Area (ha)')).toBeInTheDocument();
+    expect(screen.getByText('Notes')).toBeInTheDocument();
   });
 
-  it('shows docId for field refs without a label in fieldLabels map', () => {
+  it('does not show raw docIds for unresolved fields', () => {
     render(
       <CategoryDetail
         category={sampleCategory}
-        fieldLabels={new Map()}
+        fields={sampleFields}
         onBack={onBack}
       />,
     );
-    expect(screen.getByText('field-3')).toBeInTheDocument();
+    expect(screen.queryByText('field-1')).not.toBeInTheDocument();
+    expect(screen.queryByText('field-2')).not.toBeInTheDocument();
+    expect(screen.queryByText('field-3')).not.toBeInTheDocument();
   });
 
   it('calls onBack when back button is clicked', () => {
     render(
       <CategoryDetail
         category={sampleCategory}
-        fieldLabels={new Map()}
+        fields={sampleFields}
         onBack={onBack}
       />,
     );
-    const backButton = screen.getByRole('button', { name: /Categories/ });
+    const backButton = screen.getByRole('button', { name: 'Categories' });
     backButton.click();
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it('renders appliesTo badges from fieldRefs', () => {
+  it('renders back button with arrow icon and Categories text', () => {
     render(
       <CategoryDetail
         category={sampleCategory}
-        fieldLabels={new Map()}
+        fields={sampleFields}
         onBack={onBack}
       />,
     );
-    expect(screen.getByText(/fields/)).toBeInTheDocument();
+    const backButton = screen.getByRole('button', { name: 'Categories' });
+    expect(backButton).toBeInTheDocument();
+    // Should have an SVG chevron
+    expect(backButton.querySelector('svg')).toBeInTheDocument();
   });
 
-  it('renders color swatch with background color matching category color', () => {
-    render(
-      <CategoryDetail
-        category={sampleCategory}
-        fieldLabels={new Map()}
-        onBack={onBack}
-      />,
-    );
-    const swatch = screen.getByTestId('color-swatch');
-    expect(swatch).toHaveStyle({ backgroundColor: '#22c55e' });
-  });
-
-  it('renders empty fieldRefs gracefully', () => {
+  it('renders empty fields gracefully', () => {
     const emptyFieldsCategory: Category = {
       docId: 'cat-2',
       label: 'Mining',
@@ -173,10 +194,22 @@ describe('CategoryDetail', () => {
     render(
       <CategoryDetail
         category={emptyFieldsCategory}
-        fieldLabels={new Map()}
+        fields={[]}
         onBack={onBack}
       />,
     );
     expect(screen.getByText(/0 fields/)).toBeInTheDocument();
+  });
+
+  it('passes serverBaseUrl to CategoryIcon', () => {
+    render(
+      <CategoryDetail
+        category={sampleCategory}
+        fields={sampleFields}
+        onBack={onBack}
+        serverBaseUrl="https://test.com"
+      />,
+    );
+    expect(screen.getByTestId('category-detail-icon')).toBeInTheDocument();
   });
 });

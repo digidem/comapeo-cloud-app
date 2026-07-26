@@ -4,7 +4,7 @@ import type { RequestConfig } from '@/lib/api-client';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 
-interface PresetVersionLike {
+export interface PresetVersionLike {
   docId: string;
   createdAt: string;
   versionId?: string;

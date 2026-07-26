@@ -36,7 +36,6 @@ describe('CategoryIcon', () => {
   it('renders letter fallback when iconRef is undefined', () => {
     render(<CategoryIcon projectRemoteId="proj-123" label="Deforestation" />);
 
-    // ObservationCategoryIcon uses category-icon-fallback-only when no iconUrl
     expect(
       screen.getByTestId('category-icon-fallback-only'),
     ).toBeInTheDocument();
@@ -72,5 +71,65 @@ describe('CategoryIcon', () => {
     const img = screen.getByTestId('category-auth-img');
     expect(img).toBeInTheDocument();
     expect(img.getAttribute('alt')).toBe('Water Testing icon');
+  });
+
+  it('passes size and iconSize to ObservationCategoryIcon via inline styles', () => {
+    render(
+      <CategoryIcon
+        projectRemoteId="proj-123"
+        iconRef={{ docId: 'icon-abc' }}
+        label="Deforestation"
+        size={64}
+        iconSize={45}
+      />,
+    );
+
+    const icon = screen.getByTestId('category-icon');
+    expect(icon).toHaveStyle({ width: '64px', height: '64px' });
+  });
+
+  it('uses default size=50 when no size is provided', () => {
+    render(
+      <CategoryIcon
+        projectRemoteId="proj-123"
+        iconRef={{ docId: 'icon-abc' }}
+        label="Deforestation"
+      />,
+    );
+
+    const icon = screen.getByTestId('category-icon');
+    expect(icon).toHaveStyle({ width: '50px', height: '50px' });
+  });
+
+  it('uses serverBaseUrl when provided instead of authStore baseUrl', () => {
+    render(
+      <CategoryIcon
+        projectRemoteId="proj-123"
+        iconRef={{ docId: 'icon-abc' }}
+        label="Deforestation"
+        serverBaseUrl="https://owning-server.com"
+      />,
+    );
+
+    const img = screen.getByTestId('category-auth-img');
+    expect(img.getAttribute('src')).toContain(
+      'https://owning-server.com/projects/proj-123/icon/icon-abc',
+    );
+  });
+
+  it('falls back to authStore baseUrl when serverBaseUrl is null', () => {
+    render(
+      <CategoryIcon
+        projectRemoteId="proj-123"
+        iconRef={{ docId: 'icon-abc' }}
+        label="Deforestation"
+        serverBaseUrl={null}
+      />,
+    );
+
+    const img = screen.getByTestId('category-auth-img');
+    expect(img.getAttribute('src')).toContain(
+      'https://archive.example.com/projects/proj-123/icon/icon-abc',
+    );
   });
 });

@@ -156,7 +156,7 @@
     "defaultMessage": "Play"
   },
   "categories.detail.backToCategories": {
-    "defaultMessage": "← Categories"
+    "defaultMessage": "Categories"
   },
   "categories.detail.fields": {
     "defaultMessage": "{count, plural, one {# field} other {# fields}}"
@@ -170,17 +170,29 @@
   "categories.error": {
     "defaultMessage": "Failed to load categories. Please try again."
   },
-  "categories.fieldCount": {
-    "defaultMessage": "{count, plural, one {# field} other {# fields}}"
-  },
   "categories.fieldType.date": {
     "defaultMessage": "Date"
+  },
+  "categories.fieldType.datetime": {
+    "defaultMessage": "Date and time"
   },
   "categories.fieldType.number": {
     "defaultMessage": "Number"
   },
-  "categories.fieldType.unknown": {
-    "defaultMessage": "Unknown type"
+  "categories.fieldType.selectMultiple": {
+    "defaultMessage": "Select multiple"
+  },
+  "categories.fieldType.selectOne": {
+    "defaultMessage": "Select one"
+  },
+  "categories.fieldType.text": {
+    "defaultMessage": "Text"
+  },
+  "categories.fieldType.textarea": {
+    "defaultMessage": "Long text"
+  },
+  "categories.fieldUnavailable": {
+    "defaultMessage": "Field unavailable"
   },
   "categories.fieldsError": {
     "defaultMessage": "Field labels unavailable"
@@ -259,9 +271,6 @@
   },
   "categories.title": {
     "defaultMessage": "Categories"
-  },
-  "categories.uncategorized": {
-    "defaultMessage": "Uncategorized"
   },
   "categories.untitledProject": {
     "defaultMessage": "Untitled Project"

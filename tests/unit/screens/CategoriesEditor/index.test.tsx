@@ -1,6 +1,7 @@
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useApiFields } from '@/hooks/useApiFields';
 import {
   deduplicatePresetVersions,
   useApiPresets,
@@ -20,6 +21,19 @@ interface ScreenPreset {
   iconRef?: { docId: string };
 }
 
+interface ScreenField {
+  docId: string;
+  type: string;
+  key: string;
+  label: string;
+  deleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+  universal: boolean;
+  options?: Array<{ label: string; value: string }>;
+  placeholder?: string;
+}
+
 const defaultPresets: ScreenPreset[] = [
   {
     docId: 'preset-1',
@@ -36,6 +50,19 @@ const defaultPresets: ScreenPreset[] = [
     fieldRefs: [],
     createdAt: '2025-01-01T00:01:00Z',
     deleted: false,
+  },
+];
+
+const defaultFields: ScreenField[] = [
+  {
+    docId: 'field-1',
+    type: 'text',
+    key: 'severity',
+    label: 'Severity',
+    deleted: false,
+    createdAt: '2025-01-01T00:00:00Z',
+    updatedAt: '2025-01-01T00:00:00Z',
+    universal: false,
   },
 ];
 
@@ -97,14 +124,15 @@ vi.mock('@/hooks/useApiPresets', async () => {
 });
 
 let mockFieldsQuery: {
-  data?: Array<{ remoteId: string; label: string }>;
+  data?: ScreenField[];
   isPending: boolean;
   isError?: boolean;
   refetch?: () => void;
-} = { data: [], isPending: false };
+  isEnabled: boolean;
+} = { data: defaultFields, isPending: false, isEnabled: true };
 
-vi.mock('@/hooks/useFields', () => ({
-  useFields: vi.fn(() => mockFieldsQuery),
+vi.mock('@/hooks/useApiFields', () => ({
+  useApiFields: vi.fn(() => mockFieldsQuery),
 }));
 
 const { mockBaseUrl, mockServers } = vi.hoisted(() => ({
@@ -167,7 +195,7 @@ function resetMocks() {
     ],
     isPending: false,
   };
-  mockFieldsQuery = { data: [], isPending: false };
+  mockFieldsQuery = { data: defaultFields, isPending: false, isEnabled: true };
   vi.clearAllMocks();
 }
 
@@ -276,6 +304,11 @@ describe('CategoriesEditorScreen', () => {
     expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1', null);
   });
 
+  it('calls useApiFields with project remoteId when project has one', () => {
+    render(<CategoriesEditorScreen />);
+    expect(vi.mocked(useApiFields)).toHaveBeenCalledWith('base32proj1', null);
+  });
+
   it('renders category cards when presets are loaded via remoteId', () => {
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('Deforestation')).toBeInTheDocument();
@@ -285,8 +318,20 @@ describe('CategoriesEditorScreen', () => {
   it('resolves the surviving deduplicated preset docId in the detail route', () => {
     mockRouteParams = { categoryId: 'category-v2' };
     mockFieldsQuery = {
-      data: [{ remoteId: 'field-1', label: 'Severity' }],
+      data: [
+        {
+          docId: 'field-1',
+          type: 'text',
+          key: 'severity',
+          label: 'Severity',
+          deleted: false,
+          createdAt: '2025-01-01T00:00:00Z',
+          updatedAt: '2025-01-01T00:00:00Z',
+          universal: false,
+        },
+      ],
       isPending: false,
+      isEnabled: true,
     };
     mockPresetsQuery = {
       data: deduplicatePresetVersions([
@@ -325,6 +370,62 @@ describe('CategoriesEditorScreen', () => {
     expect(screen.queryByText('Select a category')).not.toBeInTheDocument();
   });
 
+  it('shows "Field unavailable" and no raw docId for unresolved field refs', () => {
+    // Category references a field absent from the fields list
+    mockRouteParams = { categoryId: 'category-orphan' };
+    mockPresetsQuery = {
+      data: [
+        {
+          docId: 'category-orphan',
+          name: 'Orphan Category',
+          tags: { type: 'environment' },
+          fieldRefs: [{ docId: 'field-missing' }],
+          createdAt: '2025-01-01T00:00:00Z',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+      isEnabled: true,
+    };
+    // Fields query resolves successfully but does NOT contain field-missing
+    mockFieldsQuery = {
+      data: defaultFields,
+      isPending: false,
+      isEnabled: true,
+    };
+
+    render(<CategoriesEditorScreen />);
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Orphan Category' }),
+    ).toBeInTheDocument();
+    // Unresolved ref renders the placeholder, NOT the raw docId
+    expect(screen.getByText('Field unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('field-missing')).not.toBeInTheDocument();
+  });
+
+  it('renders no fields (held) while fields query is still pending', () => {
+    mockRouteParams = { categoryId: 'preset-1' };
+    mockPresetsQuery = {
+      data: defaultPresets,
+      isPending: false,
+      isError: false,
+      isEnabled: true,
+    };
+    // Fields still loading — resolution should hold, not flash placeholders
+    mockFieldsQuery = { data: undefined, isPending: true, isEnabled: true };
+
+    render(<CategoriesEditorScreen />);
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Deforestation' }),
+    ).toBeInTheDocument();
+    // The category has field-1 in fieldRefs; while fields pending it must
+    // NOT show "Field unavailable" (that would be a false error flash)
+    expect(screen.queryByText('Field unavailable')).not.toBeInTheDocument();
+  });
+
   it('shows no-project prompt when no project is selected', () => {
     mockSelectedProjectId = null;
     render(<CategoriesEditorScreen />);
@@ -345,6 +446,7 @@ describe('CategoriesEditorScreen', () => {
     expect(screen.getByText('No categories found')).toBeInTheDocument();
     // Verify the hook was called with null — no wasted API call
     expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith(null, null);
+    expect(vi.mocked(useApiFields)).toHaveBeenCalledWith(null, null);
   });
 
   it('shows no-server message when archive server is not configured', () => {
@@ -388,6 +490,7 @@ describe('CategoriesEditorScreen', () => {
       isPending: false,
       isError: true,
       refetch,
+      isEnabled: true,
     };
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('Field labels unavailable')).toBeInTheDocument();
@@ -401,6 +504,7 @@ describe('CategoriesEditorScreen', () => {
       isPending: false,
       isError: true,
       refetch,
+      isEnabled: true,
     };
     render(<CategoriesEditorScreen />);
     screen.getByText('Retry').click();
@@ -413,6 +517,7 @@ describe('CategoriesEditorScreen', () => {
       isPending: false,
       isError: true,
       refetch: vi.fn(),
+      isEnabled: true,
     };
     render(<CategoriesEditorScreen />);
     expect(screen.getByText('Deforestation')).toBeInTheDocument();
@@ -538,6 +643,21 @@ describe('CategoriesEditorScreen', () => {
     });
   });
 
+  it('calls useApiFields with owning server config when project sourceId matches a server', () => {
+    mockServers.current = [
+      {
+        id: 'server-1',
+        baseUrl: 'https://test-server.com',
+        token: 'test-token',
+      },
+    ];
+    render(<CategoriesEditorScreen />);
+    expect(vi.mocked(useApiFields)).toHaveBeenCalledWith('base32proj1', {
+      baseUrl: 'https://test-server.com',
+      token: 'test-token',
+    });
+  });
+
   it('calls useApiPresets with null serverConfig when project sourceId does not match any server', () => {
     mockServers.current = [
       {
@@ -549,6 +669,18 @@ describe('CategoriesEditorScreen', () => {
     // Default project sourceId is 'server-1', which does NOT match 'server-other'
     render(<CategoriesEditorScreen />);
     expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1', null);
+  });
+
+  it('calls useApiFields with null serverConfig when project sourceId does not match any server', () => {
+    mockServers.current = [
+      {
+        id: 'server-other',
+        baseUrl: 'https://other-server.com',
+        token: 'other-token',
+      },
+    ];
+    render(<CategoriesEditorScreen />);
+    expect(vi.mocked(useApiFields)).toHaveBeenCalledWith('base32proj1', null);
   });
 
   // --- hidden banner (latest/all toggle) ---

@@ -5,19 +5,16 @@ interface PresetInput {
   fieldRefs: Array<{ docId: string }>;
   iconRef?: { docId: string };
   color?: string;
+  geometry?: string[];
 }
 
 export interface Category {
   docId: string;
   label: string;
-  fieldRefs: Array<{ docId: string; label?: string }>;
+  geometry?: string[];
+  fieldRefs: Array<{ docId: string }>;
   color?: string;
   iconRef?: { docId: string };
-}
-
-export interface CategoryGroup {
-  type: string;
-  categories: Category[];
 }
 
 const ACCENT_RE = /[\u0300-\u036f]/g;
@@ -73,14 +70,20 @@ export function normalizeCategories(
   locale: string,
   searchQuery: string,
   fieldLabels?: Map<string, string>,
-): CategoryGroup[] {
+): Category[] {
   if (data.length === 0) return [];
 
   const searchNormalized = normalizeSearch(searchQuery);
 
-  const groups = new Map<string, Category[]>();
+  const result: Category[] = [];
 
   for (const preset of data) {
+    // Geometry filtering: include point presets and legacy presets (no
+    // geometry). Exclude presets whose geometry does not include 'point'.
+    if (preset.geometry && !preset.geometry.includes('point')) {
+      continue;
+    }
+
     if (
       searchNormalized &&
       !matchesSearch(preset, searchNormalized, locale, fieldLabels)
@@ -88,22 +91,13 @@ export function normalizeCategories(
       continue;
     }
 
-    const rawType = preset.tags.type;
-    const type =
-      typeof rawType === 'string' && rawType.trim() !== '' ? rawType : ''; // sentinel — translated at render (CategoryGrid)
-
     const label = resolveLocaleName(preset.tags, locale, preset.name);
 
-    if (!groups.has(type)) {
-      groups.set(type, []);
-    }
-    groups.get(type)!.push({
+    result.push({
       docId: preset.docId,
       label,
-      fieldRefs: preset.fieldRefs.map((ref) => ({
-        docId: ref.docId,
-        label: fieldLabels?.get(ref.docId),
-      })),
+      geometry: preset.geometry,
+      fieldRefs: preset.fieldRefs.map((ref) => ({ docId: ref.docId })),
       color: preset.color,
       iconRef:
         typeof preset.iconRef === 'object' &&
@@ -112,15 +106,6 @@ export function normalizeCategories(
           ? { docId: (preset.iconRef as { docId: string }).docId }
           : undefined,
     });
-  }
-
-  const result: CategoryGroup[] = [];
-  const sortedTypes = [...groups.keys()].sort();
-
-  for (const type of sortedTypes) {
-    const categories = groups.get(type)!;
-    categories.sort((a, b) => a.label.localeCompare(b.label));
-    result.push({ type, categories });
   }
 
   return result;

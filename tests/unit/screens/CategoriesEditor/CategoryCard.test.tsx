@@ -4,12 +4,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { CategoryCard } from '@/screens/CategoriesEditor/CategoryCard';
 
 vi.mock('@/screens/CategoriesEditor/CategoryIcon', () => ({
-  CategoryIcon: ({ iconRef, color, size }: Record<string, unknown>) => (
+  CategoryIcon: ({
+    iconRef,
+    color,
+    size,
+    iconSize,
+  }: Record<string, unknown>) => (
     <div
       data-testid="category-icon"
       data-icon-ref={iconRef ? 'present' : 'absent'}
       data-color={color as string}
       data-size={String(size)}
+      data-icon-size={String(iconSize)}
     />
   ),
 }));
@@ -17,7 +23,6 @@ vi.mock('@/screens/CategoriesEditor/CategoryIcon', () => ({
 const defaultProps = {
   docId: 'cat-1',
   label: 'Deforestation',
-  fieldRefs: [{ docId: 'field-1', label: 'Severity' }],
 };
 
 describe('CategoryCard', () => {
@@ -29,24 +34,6 @@ describe('CategoryCard', () => {
 
     expect(onClick).toHaveBeenCalledWith('cat-1');
     expect(onClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onClick when Enter is pressed on the card', () => {
-    const onClick = vi.fn();
-    render(<CategoryCard {...defaultProps} onClick={onClick} />);
-
-    fireEvent.keyDown(screen.getByTestId('category-card'), { key: 'Enter' });
-
-    expect(onClick).toHaveBeenCalledWith('cat-1');
-  });
-
-  it('calls onClick when Space is pressed on the card', () => {
-    const onClick = vi.fn();
-    render(<CategoryCard {...defaultProps} onClick={onClick} />);
-
-    fireEvent.keyDown(screen.getByTestId('category-card'), { key: ' ' });
-
-    expect(onClick).toHaveBeenCalledWith('cat-1');
   });
 
   it('sets aria-pressed to true when selected', () => {
@@ -67,38 +54,13 @@ describe('CategoryCard', () => {
     );
   });
 
-  it('renders the label as heading', () => {
+  it('renders the label as text', () => {
     render(<CategoryCard {...defaultProps} />);
 
     expect(screen.getByText('Deforestation')).toBeInTheDocument();
   });
 
-  it('renders field count using i18n plural', () => {
-    render(<CategoryCard {...defaultProps} />);
-
-    expect(screen.getByText('1 field')).toBeInTheDocument();
-  });
-
-  it('renders plural field count for multiple fieldRefs', () => {
-    render(
-      <CategoryCard
-        {...defaultProps}
-        fieldRefs={[{ docId: 'f1' }, { docId: 'f2' }, { docId: 'f3' }]}
-      />,
-    );
-
-    expect(screen.getByText('3 fields')).toBeInTheDocument();
-  });
-
-  it('renders color accent bar when color is provided', () => {
-    render(<CategoryCard {...defaultProps} color="#FF0000" />);
-
-    const accent = screen.getByTestId('color-accent');
-    expect(accent).toBeInTheDocument();
-    expect(accent).toHaveStyle({ backgroundColor: '#FF0000' });
-  });
-
-  it('renders CategoryIcon component with correct props', () => {
+  it('renders CategoryIcon with size=50 and iconSize=35', () => {
     render(
       <CategoryCard
         {...defaultProps}
@@ -108,9 +70,8 @@ describe('CategoryCard', () => {
     );
 
     const icon = screen.getByTestId('category-icon');
-    expect(icon).toBeInTheDocument();
-    expect(icon.getAttribute('data-icon-ref')).toBe('present');
-    expect(icon.getAttribute('data-color')).toBe(null); // default props has no color
+    expect(icon.getAttribute('data-size')).toBe('50');
+    expect(icon.getAttribute('data-icon-size')).toBe('35');
   });
 
   it('renders CategoryIcon even when iconRef is undefined (letter fallback)', () => {
@@ -119,5 +80,30 @@ describe('CategoryCard', () => {
     const icon = screen.getByTestId('category-icon');
     expect(icon).toBeInTheDocument();
     expect(icon.getAttribute('data-icon-ref')).toBe('absent');
+  });
+
+  it('renders as a button element (semantic)', () => {
+    render(<CategoryCard {...defaultProps} />);
+
+    expect(screen.getByTestId('category-card').tagName).toBe('BUTTON');
+  });
+
+  it('does not render color accent strip', () => {
+    render(<CategoryCard {...defaultProps} color="#FF0000" />);
+
+    expect(screen.queryByTestId('color-accent')).not.toBeInTheDocument();
+  });
+
+  it('does not render field count badge', () => {
+    render(<CategoryCard {...defaultProps} />);
+
+    expect(screen.queryByText(/fields/)).not.toBeInTheDocument();
+  });
+
+  it('has min-height class for touch target', () => {
+    render(<CategoryCard {...defaultProps} />);
+
+    const card = screen.getByTestId('category-card');
+    expect(card.className).toContain('min-h-[120px]');
   });
 });

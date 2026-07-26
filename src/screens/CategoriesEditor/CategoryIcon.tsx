@@ -7,8 +7,9 @@ interface CategoryIconProps {
   iconRef?: { docId: string };
   label: string;
   color?: string;
-  size?: number;
-  className?: string;
+  size?: number; // circle diameter (default 50)
+  iconSize?: number; // image diameter (default size * 0.7)
+  serverBaseUrl?: string | null;
 }
 
 function CategoryIcon({
@@ -16,29 +17,29 @@ function CategoryIcon({
   iconRef,
   label,
   color,
-  size = 40,
-  className,
+  size = 50,
+  iconSize = size * 0.7,
+  serverBaseUrl,
 }: CategoryIconProps) {
   const baseUrl = useAuthStore((s) => s.baseUrl);
 
   const iconUrl = buildIconUrl({
     projectRemoteId: projectRemoteId ?? undefined,
-    serverUrl: baseUrl ?? undefined,
+    serverUrl: serverBaseUrl ?? baseUrl ?? undefined,
     iconDocId: iconRef?.docId,
   });
 
   return (
-    <span style={{ display: 'inline-block', width: size, height: size }}>
-      <ObservationCategoryIcon
-        category={{
-          id: iconRef?.docId ?? label,
-          name: label,
-          color,
-          iconUrl,
-        }}
-        className={className}
-      />
-    </span>
+    <ObservationCategoryIcon
+      category={{
+        id: iconRef?.docId ?? label,
+        name: label,
+        color,
+        iconUrl,
+      }}
+      size={size}
+      iconSize={iconSize}
+    />
   );
 }
 

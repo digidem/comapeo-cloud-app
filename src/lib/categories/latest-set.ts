@@ -37,7 +37,8 @@ export function selectLatestCategorySet<T extends PresetLike>(
   // Drop deleted presets
   const active = presets.filter((p) => !p.deleted);
 
-  // Parse createdAt; drop unparseable timestamps
+  // Parse createdAt; drop unparseable timestamps.
+  // `withTimestamps` preserves the original input order (from `active`).
   const withTimestamps = active
     .map((preset) => {
       const ts = parseTimestamp(preset.createdAt);
@@ -48,20 +49,21 @@ export function selectLatestCategorySet<T extends PresetLike>(
         entry !== null,
     );
 
-  // Sort newest first
-  withTimestamps.sort((a, b) => b.ts - a.ts);
-
   if (withTimestamps.length <= 1) {
     return withTimestamps.map((e) => e.preset);
   }
 
+  // Sort newest first — used ONLY for cluster identification, not for the
+  // return order.
+  const sorted = [...withTimestamps].sort((a, b) => b.ts - a.ts);
+
   // Walk from newest to oldest; split on gaps > gapMs
   const clusters: T[][] = [];
-  let current: T[] = [withTimestamps[0]!.preset];
+  let current: T[] = [sorted[0]!.preset];
 
-  for (let i = 1; i < withTimestamps.length; i++) {
-    const prev = withTimestamps[i - 1]!;
-    const curr = withTimestamps[i]!;
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1]!;
+    const curr = sorted[i]!;
     const gap = prev.ts - curr.ts; // prev is newer
 
     if (gap <= gapMs) {
@@ -73,6 +75,13 @@ export function selectLatestCategorySet<T extends PresetLike>(
   }
   clusters.push(current);
 
-  // Return the newest cluster (first one)
-  return clusters[0]!;
+  // Identify the newest cluster's members, then return them filtered from
+  // the original input order (preserving the order of `withTimestamps`
+  // rather than the sorted order).
+  const newestCluster = clusters[0]!;
+  const newestClusterIds = new Set(newestCluster.map((p) => p.docId));
+
+  return withTimestamps
+    .filter((entry) => newestClusterIds.has(entry.preset.docId))
+    .map((entry) => entry.preset);
 }

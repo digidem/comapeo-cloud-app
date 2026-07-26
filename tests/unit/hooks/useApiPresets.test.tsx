@@ -418,12 +418,11 @@ describe('useApiPresets', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    const groups = normalizeCategories(result.current.data ?? [], 'en', '');
+    const categories = normalizeCategories(result.current.data ?? [], 'en', '');
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.categories).toHaveLength(1);
-    expect(groups[0]?.categories[0]?.docId).toBe('category-v2');
-    expect(groups[0]?.categories[0]?.label).toBe('Forest updated');
+    expect(categories).toHaveLength(1);
+    expect(categories[0]?.docId).toBe('category-v2');
+    expect(categories[0]?.label).toBe('Forest updated');
   });
 
   it('exposes error state when getPresets rejects', async () => {

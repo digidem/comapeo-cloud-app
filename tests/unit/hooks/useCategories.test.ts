@@ -78,40 +78,77 @@ const PRESETS_WITH_DIACRITICS = [
   },
 ];
 
+const PRESETS_WITH_GEOMETRY = [
+  {
+    docId: 'g1',
+    name: 'Point Category',
+    tags: { type: 'test' },
+    fieldRefs: [],
+    geometry: ['point'],
+  },
+  {
+    docId: 'g2',
+    name: 'Line Category',
+    tags: { type: 'test' },
+    fieldRefs: [],
+    geometry: ['line'],
+  },
+  {
+    docId: 'g3',
+    name: 'Point + Line Category',
+    tags: { type: 'test' },
+    fieldRefs: [],
+    geometry: ['point', 'line'],
+  },
+  {
+    docId: 'g4',
+    name: 'Legacy Category',
+    tags: { type: 'test' },
+    fieldRefs: [],
+    // no geometry — legacy preset
+  },
+  {
+    docId: 'g5',
+    name: 'Empty Geometry Category',
+    tags: { type: 'test' },
+    fieldRefs: [],
+    geometry: [], // empty array — distinct from legacy (undefined)
+  },
+];
+
 describe('normalizeCategories', () => {
-  it('groups presets by tags.type', () => {
+  it('returns a flat list (no grouping) in original input order', () => {
     const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', '');
 
-    expect(result).toHaveLength(2);
-    const envGroup = result.find((g) => g.type === 'environment');
-    const waterGroup = result.find((g) => g.type === 'water');
+    expect(result).toHaveLength(3);
+    expect(result.map((c) => c.docId)).toEqual(['p1', 'p2', 'p3']);
+  });
 
-    expect(envGroup).toBeDefined();
-    expect(envGroup!.categories).toHaveLength(2);
-    expect(waterGroup).toBeDefined();
-    expect(waterGroup!.categories).toHaveLength(1);
+  it('preserves original input order (no alphabetical sort)', () => {
+    const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', '');
+
+    expect(result.map((c) => c.label)).toEqual([
+      'Deforestation',
+      'Water Pollution',
+      'Illegal Logging',
+    ]);
   });
 
   it('resolves locale fallback (current locale → English → source value)', () => {
     const result = normalizeCategories(PRESETS_WITH_LOCALE, 'pt', '');
 
-    const envGroup = result.find((g) => g.type === 'env');
-    expect(envGroup).toBeDefined();
-
-    const deforestation = envGroup!.categories.find((c) => c.docId === 'p6');
+    expect(result).toHaveLength(2);
+    const deforestation = result.find((c) => c.docId === 'p6');
     expect(deforestation!.label).toBe('Desmatamento');
 
-    const water = envGroup!.categories.find((c) => c.docId === 'p7');
+    const water = result.find((c) => c.docId === 'p7');
     expect(water!.label).toBe('Water');
   });
 
   it('falls back to English when current locale not available', () => {
     const result = normalizeCategories(PRESETS_WITH_LOCALE, 'fr', '');
 
-    const envGroup = result.find((g) => g.type === 'env');
-    expect(envGroup).toBeDefined();
-
-    const deforestation = envGroup!.categories.find((c) => c.docId === 'p6');
+    const deforestation = result.find((c) => c.docId === 'p6');
     expect(deforestation!.label).toBe('Deforestation');
   });
 
@@ -123,9 +160,7 @@ describe('normalizeCategories', () => {
     );
 
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('environment');
-    expect(result[0]!.categories).toHaveLength(1);
-    expect(result[0]!.categories[0]!.label).toBe('Deforestation');
+    expect(result[0]!.label).toBe('Deforestation');
   });
 
   it('filters by search query (diacritic insensitive)', () => {
@@ -136,7 +171,7 @@ describe('normalizeCategories', () => {
     );
 
     expect(result).toHaveLength(1);
-    expect(result[0]!.categories[0]!.label).toBe('Desmatamento');
+    expect(result[0]!.label).toBe('Desmatamento');
   });
 
   it('searches across field labels via fieldLabels map', () => {
@@ -149,60 +184,23 @@ describe('normalizeCategories', () => {
     );
 
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('environment');
-    expect(result[0]!.categories).toHaveLength(1);
-    expect(result[0]!.categories[0]!.label).toBe('Deforestation');
+    expect(result[0]!.label).toBe('Deforestation');
   });
 
-  it('assigns empty string sentinel for missing tags.type', () => {
+  it('includes presets without tags.type (no sentinel grouping)', () => {
     const result = normalizeCategories(PRESETS_WITHOUT_TYPES, 'en', '');
 
-    expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('');
-    expect(result[0]!.categories).toHaveLength(2);
+    expect(result).toHaveLength(2);
+    expect(result.map((c) => c.docId)).toEqual(['p4', 'p5']);
   });
 
-  it('assigns empty string sentinel for blank tags.type', () => {
-    const result = normalizeCategories(
-      [{ docId: 'p8', name: 'Test', tags: { type: '' }, fieldRefs: [] }],
-      'en',
-      '',
-    );
-
-    expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('');
-  });
-
-  it('returns stable alphabetical ordering within groups', () => {
+  it('resolves field ref docIds without label (flat fieldRefs)', () => {
     const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', '');
 
-    const envGroup = result.find((g) => g.type === 'environment');
-    expect(envGroup!.categories[0]!.label).toBe('Deforestation');
-    expect(envGroup!.categories[1]!.label).toBe('Illegal Logging');
-  });
-
-  it('returns stable alphabetical ordering of groups', () => {
-    const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', '');
-
-    expect(result[0]!.type).toBe('environment');
-    expect(result[1]!.type).toBe('water');
-  });
-
-  it('resolves field ref labels from fieldLabels map', () => {
-    const fieldLabels = new Map([
-      ['f1', 'Severity'],
-      ['f2', 'Area (ha)'],
-    ]);
-    const result = normalizeCategories(
-      PRESETS_WITH_TYPES,
-      'en',
-      '',
-      fieldLabels,
-    );
-
-    const envGroup = result.find((g) => g.type === 'environment');
-    const deforestation = envGroup!.categories.find((c) => c.docId === 'p1');
-    expect(deforestation!.fieldRefs[0]!.label).toBe('Severity');
+    const deforestation = result.find((c) => c.docId === 'p1');
+    expect(deforestation!.fieldRefs).toEqual([{ docId: 'f1' }]);
+    // fieldRefs entries have only docId, no label property
+    expect(deforestation!.fieldRefs[0]).not.toHaveProperty('label');
   });
 
   it('returns empty array for empty input', () => {
@@ -210,7 +208,7 @@ describe('normalizeCategories', () => {
     expect(result).toEqual([]);
   });
 
-  it('returns empty groups when search matches nothing', () => {
+  it('returns empty array when search matches nothing', () => {
     const result = normalizeCategories(PRESETS_WITH_TYPES, 'en', 'nonexistent');
     expect(result).toEqual([]);
   });
@@ -218,8 +216,7 @@ describe('normalizeCategories', () => {
   it('matches accented names with unaccented search (real diacritics)', () => {
     const result = normalizeCategories(PRESETS_WITH_DIACRITICS, 'pt', 'agua');
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('water');
-    expect(result[0]!.categories[0]!.label).toBe('Água');
+    expect(result[0]!.label).toBe('Água');
   });
 
   it('matches multi-word accented names without accents', () => {
@@ -229,14 +226,13 @@ describe('normalizeCategories', () => {
       'sao paulo',
     );
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('city');
-    expect(result[0]!.categories[0]!.label).toBe('São Paulo');
+    expect(result[0]!.label).toBe('São Paulo');
   });
 
   it('matches plain name with accented search query', () => {
     const result = normalizeCategories(PRESETS_WITH_DIACRITICS, 'en', 'ação');
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('action');
+    expect(result[0]!.label).toBe('Ação');
   });
 
   it('passes top-level color through to category.color', () => {
@@ -250,7 +246,7 @@ describe('normalizeCategories', () => {
       },
     ];
     const result = normalizeCategories(presets as never, 'en', '');
-    expect(result[0]!.categories[0]!.color).toBe('#123456');
+    expect(result[0]!.color).toBe('#123456');
   });
 
   it('passes iconRef object through to category.iconRef', () => {
@@ -264,7 +260,7 @@ describe('normalizeCategories', () => {
       },
     ];
     const result = normalizeCategories(presets as never, 'en', '');
-    expect(result[0]!.categories[0]!.iconRef).toEqual({ docId: 'icon-1' });
+    expect(result[0]!.iconRef).toEqual({ docId: 'icon-1' });
   });
 
   it('yields undefined iconRef for non-object iconRef (string)', () => {
@@ -278,7 +274,7 @@ describe('normalizeCategories', () => {
       },
     ];
     const result = normalizeCategories(presets as never, 'en', '');
-    expect(result[0]!.categories[0]!.iconRef).toBeUndefined();
+    expect(result[0]!.iconRef).toBeUndefined();
   });
 
   it('yields undefined iconRef for null iconRef', () => {
@@ -292,6 +288,36 @@ describe('normalizeCategories', () => {
       },
     ];
     const result = normalizeCategories(presets as never, 'en', '');
-    expect(result[0]!.categories[0]!.iconRef).toBeUndefined();
+    expect(result[0]!.iconRef).toBeUndefined();
+  });
+
+  // ---- Geometry filtering ----
+
+  it('includes presets whose geometry includes "point"', () => {
+    const result = normalizeCategories(PRESETS_WITH_GEOMETRY, 'en', '');
+    const docIds = result.map((c) => c.docId);
+    expect(docIds).toContain('g1');
+    expect(docIds).toContain('g3');
+  });
+
+  it('includes legacy presets with no geometry field', () => {
+    const result = normalizeCategories(PRESETS_WITH_GEOMETRY, 'en', '');
+    expect(result.map((c) => c.docId)).toContain('g4');
+  });
+
+  it('excludes presets whose geometry does not include "point"', () => {
+    const result = normalizeCategories(PRESETS_WITH_GEOMETRY, 'en', '');
+    expect(result.map((c) => c.docId)).not.toContain('g2');
+  });
+
+  it('sets geometry undefined for legacy presets (no geometry field)', () => {
+    const result = normalizeCategories(PRESETS_WITH_GEOMETRY, 'en', '');
+    const legacyCategory = result.find((c) => c.docId === 'g4');
+    expect(legacyCategory!.geometry).toBeUndefined();
+  });
+
+  it('excludes presets with empty geometry array (not point-bearing)', () => {
+    const result = normalizeCategories(PRESETS_WITH_GEOMETRY, 'en', '');
+    expect(result.map((c) => c.docId)).not.toContain('g5');
   });
 });

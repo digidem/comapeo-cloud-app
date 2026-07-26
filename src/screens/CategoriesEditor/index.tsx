@@ -5,11 +5,12 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useApiFields } from '@/hooks/useApiFields';
 import { useApiPresets } from '@/hooks/useApiPresets';
 import { normalizeCategories } from '@/hooks/useCategories';
-import { useFields } from '@/hooks/useFields';
 import { useProjects } from '@/hooks/useProjects';
 import { selectLatestCategorySet } from '@/lib/categories/latest-set';
+import { buildFieldLookup } from '@/lib/fields/normalize';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';
 import { useAuthStore } from '@/stores/auth-store';
@@ -93,12 +94,35 @@ export function CategoriesEditorScreen() {
   const owningServer = selectedProject
     ? (servers.find((s) => s.id === selectedProject.sourceId) ?? null)
     : null;
+  const serverConfig = owningServer
+    ? { baseUrl: owningServer.baseUrl, token: owningServer.token }
+    : null;
+
   const presetsQuery = useApiPresets(
     selectedProject?.remoteId ?? null,
-    owningServer
-      ? { baseUrl: owningServer.baseUrl, token: owningServer.token }
-      : null,
+    serverConfig,
   );
+
+  const fieldsQuery = useApiFields(
+    selectedProject?.remoteId ?? null,
+    serverConfig,
+  );
+
+  // Build field lookup from API fields — used both for search label
+  // resolution and for rendering resolved NormalizedField[] in the detail.
+  const fieldLookup = useMemo(
+    () => buildFieldLookup(fieldsQuery.data ?? []),
+    [fieldsQuery.data],
+  );
+
+  // Build a docId → label map for search matching in normalizeCategories.
+  const fieldLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [docId, field] of fieldLookup) {
+      map.set(docId, field.label);
+    }
+    return map;
+  }, [fieldLookup]);
 
   const topbarWorkspaceName =
     selectedProject?.name ?? intl.formatMessage(messages.untitledProject);
@@ -117,18 +141,6 @@ export function CategoriesEditorScreen() {
     categoryId?: string;
   };
   const [showAllSets, setShowAllSets] = useState(false);
-
-  const fieldsQuery = useFields(selectedProjectId);
-
-  const fieldLabels = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const field of fieldsQuery.data ?? []) {
-      if (field.remoteId) {
-        map.set(field.remoteId, field.label);
-      }
-    }
-    return map;
-  }, [fieldsQuery.data]);
 
   const nonDeletedPresets = useMemo(
     () => (presetsQuery.data ?? []).filter((p) => !p.deleted),
@@ -154,7 +166,7 @@ export function CategoriesEditorScreen() {
 
   const hiddenCount = nonDeletedPresets.length - visiblePresets.length;
 
-  const categoryGroups = useMemo(
+  const categories = useMemo(
     () =>
       normalizeCategories(
         visiblePresets,
@@ -168,19 +180,36 @@ export function CategoriesEditorScreen() {
   // Search ALL non-deleted presets for detail route resolution — this
   // ensures direct navigation to /categories/<older-category-id> still
   // resolves even when the grid is filtered to the latest cluster.
-  const allCategoryGroupsForDetail = useMemo(
+  const allCategoriesForDetail = useMemo(
     () => normalizeCategories(nonDeletedPresets, intl.locale, '', fieldLabels),
     [nonDeletedPresets, intl.locale, fieldLabels],
   );
 
   const selectedCategory = useMemo(() => {
     if (!categoryId) return null;
-    for (const group of allCategoryGroupsForDetail) {
-      const found = group.categories.find((c) => c.docId === categoryId);
-      if (found) return found;
-    }
-    return null;
-  }, [categoryId, allCategoryGroupsForDetail]);
+    return allCategoriesForDetail.find((c) => c.docId === categoryId) ?? null;
+  }, [categoryId, allCategoriesForDetail]);
+
+  // Resolve NormalizedField[] for the selected category from the field
+  // lookup, preserving the order of category.fieldRefs. Unresolved refs
+  // are represented as "Field unavailable" placeholders (no raw docIds).
+  const resolvedFields = useMemo(() => {
+    if (!selectedCategory) return [];
+    // While fields are still loading, hold off resolution so we don't
+    // flash "Field unavailable" placeholders for refs that will resolve.
+    if (fieldsQuery.isPending) return [];
+    return selectedCategory.fieldRefs.map((ref) => {
+      const field = fieldLookup.get(ref.docId);
+      if (field) return field;
+      // Unresolved field — show "Field unavailable" instead of raw docId
+      return {
+        docId: ref.docId,
+        tagKey: ref.docId,
+        type: 'text' as const,
+        label: '',
+      };
+    });
+  }, [selectedCategory, fieldLookup, fieldsQuery.isPending]);
 
   // No project selected — prompt to select one
   if (!selectedProjectId) {
@@ -287,7 +316,7 @@ export function CategoriesEditorScreen() {
   }
 
   const hasPresets = nonDeletedPresets.length > 0;
-  const hasResults = categoryGroups.length > 0;
+  const hasResults = categories.length > 0;
 
   return (
     <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
@@ -368,9 +397,13 @@ export function CategoriesEditorScreen() {
 
       {hasPresets && hasResults && (
         <div className="flex flex-col gap-6 lg:flex-row">
-          <div className="flex-1 min-w-0">
+          {/* Grid — hidden on mobile when a category is selected (detail
+              takes over the viewport, matching mobile navigation pattern). */}
+          <div
+            className={`flex-1 min-w-0 ${categoryId ? 'hidden lg:block' : ''}`}
+          >
             <CategoryGrid
-              groups={categoryGroups}
+              categories={categories}
               selectedCategoryId={categoryId}
               onCategorySelect={(docId) =>
                 navigate({
@@ -379,9 +412,16 @@ export function CategoriesEditorScreen() {
                 })
               }
               projectRemoteId={selectedProject?.remoteId ?? null}
+              serverBaseUrl={serverConfig?.baseUrl ?? null}
             />
           </div>
-          <aside className="w-full lg:w-80 shrink-0 rounded-card bg-surface-card p-4">
+          {/* Detail — shown on mobile only when a category is selected;
+              always visible on desktop alongside the grid. */}
+          <aside
+            className={`w-full lg:w-80 shrink-0 rounded-card bg-surface-card p-4 ${
+              !categoryId ? 'hidden lg:block' : ''
+            }`}
+          >
             {fieldsQuery.isError && (
               <div className="mb-4 flex items-center justify-between rounded-button border border-warning bg-warning-light px-3 py-2 text-sm text-warning-text">
                 <span>{intl.formatMessage(messages.fieldsError)}</span>
@@ -395,9 +435,10 @@ export function CategoriesEditorScreen() {
             )}
             <CategoryDetail
               category={selectedCategory}
-              fieldLabels={fieldLabels}
+              fields={resolvedFields}
               onBack={() => navigate({ to: '/categories' })}
               projectRemoteId={selectedProject?.remoteId ?? null}
+              serverBaseUrl={serverConfig?.baseUrl ?? null}
             />
           </aside>
         </div>

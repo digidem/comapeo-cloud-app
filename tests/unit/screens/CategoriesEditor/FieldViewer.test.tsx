@@ -1,18 +1,25 @@
 import { render, screen } from '@tests/mocks/test-utils';
 import { describe, expect, it } from 'vitest';
 
+import type { NormalizedField } from '@/lib/fields/normalize';
 import { FieldViewer } from '@/screens/CategoriesEditor/FieldViewer';
-import type { FieldInput } from '@/screens/CategoriesEditor/FieldViewer';
 
-const textField: FieldInput = {
+const textField: NormalizedField = {
   docId: 'field-1',
   tagKey: 'species',
   type: 'text',
   label: 'Species Name',
 };
 
-const selectOneField: FieldInput = {
+const textareaField: NormalizedField = {
   docId: 'field-2',
+  tagKey: 'description',
+  type: 'textarea',
+  label: 'Description',
+};
+
+const selectOneField: NormalizedField = {
+  docId: 'field-3',
   tagKey: 'threat_level',
   type: 'selectOne',
   label: 'Threat Level',
@@ -23,8 +30,8 @@ const selectOneField: FieldInput = {
   ],
 };
 
-const selectMultipleField: FieldInput = {
-  docId: 'field-3',
+const selectMultipleField: NormalizedField = {
+  docId: 'field-4',
   tagKey: 'observed_species',
   type: 'selectMultiple',
   label: 'Observed Species',
@@ -34,35 +41,57 @@ const selectMultipleField: FieldInput = {
   ],
 };
 
-const dateField: FieldInput = {
-  docId: 'field-4',
+const dateField: NormalizedField = {
+  docId: 'field-5',
   tagKey: 'observation_date',
   type: 'date',
   label: 'Observation Date',
 };
 
-const numberField: FieldInput = {
-  docId: 'field-5',
+const datetimeField: NormalizedField = {
+  docId: 'field-6',
+  tagKey: 'observation_datetime',
+  type: 'datetime',
+  label: 'Observation DateTime',
+};
+
+const numberField: NormalizedField = {
+  docId: 'field-7',
   tagKey: 'tree_count',
   type: 'number',
   label: 'Tree Count',
 };
 
-const unknownField: FieldInput = {
-  docId: 'field-6',
-  tagKey: 'weird',
-  type: 'custom_type',
-  label: 'Custom Field',
+const fieldWithHelperText: NormalizedField = {
+  docId: 'field-8',
+  tagKey: 'notes',
+  type: 'text',
+  label: 'Notes',
+  helperText: 'Enter any additional notes here',
+};
+
+const fieldWithPlaceholder: NormalizedField = {
+  docId: 'field-9',
+  tagKey: 'location',
+  type: 'text',
+  label: 'Location',
+  placeholder: 'e.g. Near the river',
 };
 
 describe('FieldViewer', () => {
-  it('renders text field preview with label and tag key', () => {
+  it('renders text field with label and type badge', () => {
     render(<FieldViewer fields={[textField]} />);
     expect(screen.getByText('Species Name')).toBeInTheDocument();
-    expect(screen.getByText('species')).toBeInTheDocument();
+    expect(screen.getByText('Text')).toBeInTheDocument();
   });
 
-  it('renders select_one field with options as badges', () => {
+  it('renders textarea field with label and type badge', () => {
+    render(<FieldViewer fields={[textareaField]} />);
+    expect(screen.getByText('Description')).toBeInTheDocument();
+    expect(screen.getByText('Long text')).toBeInTheDocument();
+  });
+
+  it('renders selectOne field with options as badges', () => {
     render(<FieldViewer fields={[selectOneField]} />);
     expect(screen.getByText('Threat Level')).toBeInTheDocument();
     expect(screen.getByText('Low')).toBeInTheDocument();
@@ -70,7 +99,7 @@ describe('FieldViewer', () => {
     expect(screen.getByText('High')).toBeInTheDocument();
   });
 
-  it('renders select_multiple field with options as badges', () => {
+  it('renders selectMultiple field with options as badges', () => {
     render(<FieldViewer fields={[selectMultipleField]} />);
     expect(screen.getByText('Observed Species')).toBeInTheDocument();
     expect(screen.getByText('Eagle')).toBeInTheDocument();
@@ -83,16 +112,35 @@ describe('FieldViewer', () => {
     expect(screen.getByText('Date')).toBeInTheDocument();
   });
 
+  it('renders datetime field with datetime indicator', () => {
+    render(<FieldViewer fields={[datetimeField]} />);
+    expect(screen.getByText('Observation DateTime')).toBeInTheDocument();
+    expect(screen.getByText('Date and time')).toBeInTheDocument();
+  });
+
   it('renders number field with number indicator', () => {
     render(<FieldViewer fields={[numberField]} />);
     expect(screen.getByText('Tree Count')).toBeInTheDocument();
     expect(screen.getByText('Number')).toBeInTheDocument();
   });
 
-  it('renders unknown type with fallback label', () => {
-    render(<FieldViewer fields={[unknownField]} />);
-    expect(screen.getByText('Custom Field')).toBeInTheDocument();
-    expect(screen.getByText('Unknown type')).toBeInTheDocument();
+  it('renders helperText below label when present', () => {
+    render(<FieldViewer fields={[fieldWithHelperText]} />);
+    expect(screen.getByText('Notes')).toBeInTheDocument();
+    expect(
+      screen.getByText('Enter any additional notes here'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders placeholder as subtle hint when present', () => {
+    render(<FieldViewer fields={[fieldWithPlaceholder]} />);
+    expect(screen.getByText('Location')).toBeInTheDocument();
+    expect(screen.getByText('e.g. Near the river')).toBeInTheDocument();
+  });
+
+  it('does not render raw tagKey', () => {
+    render(<FieldViewer fields={[textField]} />);
+    expect(screen.queryByText('species')).not.toBeInTheDocument();
   });
 
   it('renders multiple fields', () => {
@@ -115,5 +163,21 @@ describe('FieldViewer', () => {
     const items = screen.getAllByRole('listitem');
     expect(items[0]).toHaveAccessibleName('Species Name');
     expect(items[1]).toHaveAccessibleName('Threat Level');
+  });
+
+  it('renders nothing when fields array is empty', () => {
+    const { container } = render(<FieldViewer fields={[]} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('shows Field unavailable for empty label', () => {
+    const unavailableField: NormalizedField = {
+      docId: 'field-10',
+      tagKey: 'missing',
+      type: 'text',
+      label: '',
+    };
+    render(<FieldViewer fields={[unavailableField]} />);
+    expect(screen.getByText('Field unavailable')).toBeInTheDocument();
   });
 });
