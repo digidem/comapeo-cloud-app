@@ -54,7 +54,13 @@ export interface ImportField {
 // Type mapping
 // ---------------------------------------------------------------------------
 
-/** Maps API wire-format type values to the canonical camelCase type. */
+/**
+ * Maps API wire-format type values to the canonical camelCase type.
+ *
+ * The real archive server sends camelCase values (`selectOne`,
+ * `selectMultiple`) directly; older/import-format payloads may use
+ * snake_case (`select_one`, `select_multiple`). Both forms are accepted.
+ */
 const API_TYPE_MAP: Record<string, NormalizedFieldType> = {
   text: 'text',
   textarea: 'textarea',
@@ -63,6 +69,8 @@ const API_TYPE_MAP: Record<string, NormalizedFieldType> = {
   select_one: 'selectOne',
   // eslint-disable-next-line @typescript-eslint/naming-convention
   select_multiple: 'selectMultiple',
+  selectOne: 'selectOne',
+  selectMultiple: 'selectMultiple',
   date: 'date',
   datetime: 'datetime',
 };
@@ -75,8 +83,10 @@ const API_TYPE_MAP: Record<string, NormalizedFieldType> = {
  * Normalize an archive API wire-format field into the internal
  * {@link NormalizedField} shape.
  *
- * - `key` → `tagKey`
- * - `type` is mapped via {@link API_TYPE_MAP} (e.g. `select_one` → `selectOne`)
+ * - `tagKey` is used directly; `key` is a fallback for older payloads that
+ *   predate the real server's `tagKey` field.
+ * - `type` is mapped via {@link API_TYPE_MAP} (accepts both snake_case and
+ *   camelCase wire values, e.g. `select_one` / `selectOne` → `selectOne`)
  * - Unknown types default to `'text'`
  * - `placeholder` is passed through; `helperText` is left undefined (API
  *   format does not carry it)
@@ -84,7 +94,7 @@ const API_TYPE_MAP: Record<string, NormalizedFieldType> = {
 export function normalizeApiField(apiField: ApiField): NormalizedField {
   return {
     docId: apiField.docId,
-    tagKey: apiField.key,
+    tagKey: apiField.tagKey ?? apiField.key ?? '',
     type: API_TYPE_MAP[apiField.type] ?? 'text',
     label: apiField.label,
     placeholder: apiField.placeholder,

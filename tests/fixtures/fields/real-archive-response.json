@@ -1,0 +1,91 @@
+{
+  "data": [
+    {
+      "docId": "field-deleted-text",
+      "versionId": "version-002",
+      "originalVersionId": "version-001",
+      "schemaName": "field",
+      "createdAt": "2024-01-01T10:00:00.000Z",
+      "updatedAt": "2024-01-02T10:00:00.000Z",
+      "links": ["version-001"],
+      "deleted": true,
+      "tagKey": "name",
+      "type": "text",
+      "label": "Name",
+      "appearance": "multiline",
+      "snakeCase": false,
+      "universal": true,
+      "helperText": "Common name of this place",
+      "createdBy": "user-001",
+      "updatedBy": "user-002"
+    },
+    {
+      "docId": "field-text",
+      "versionId": "version-003",
+      "originalVersionId": "version-003",
+      "schemaName": "field",
+      "createdAt": "2024-01-03T10:00:00.000Z",
+      "updatedAt": "2024-01-03T10:00:00.000Z",
+      "links": [],
+      "deleted": false,
+      "tagKey": "espcie",
+      "type": "text",
+      "label": "Espécie",
+      "appearance": "multiline",
+      "snakeCase": false,
+      "universal": false,
+      "helperText": "Qual espécie está envolvida?",
+      "createdBy": "user-001",
+      "updatedBy": "user-001"
+    },
+    {
+      "docId": "field-select-one",
+      "versionId": "version-004",
+      "originalVersionId": "version-004",
+      "schemaName": "field",
+      "createdAt": "2024-01-03T10:01:00.000Z",
+      "updatedAt": "2024-01-03T10:01:00.000Z",
+      "links": [],
+      "deleted": false,
+      "tagKey": "autoridade-comunicada",
+      "type": "selectOne",
+      "label": "Autoridade comunicada",
+      "appearance": "multiline",
+      "snakeCase": false,
+      "options": [
+        { "label": "Sim", "value": "sim" },
+        { "label": "Não", "value": "no" },
+        { "label": "Desconhecido", "value": "desconhecido" }
+      ],
+      "universal": false,
+      "helperText": "Autoridade foi comunicada?",
+      "createdBy": "user-001",
+      "updatedBy": "user-001"
+    },
+    {
+      "docId": "field-select-multiple",
+      "versionId": "version-005",
+      "originalVersionId": "version-005",
+      "schemaName": "field",
+      "createdAt": "2024-01-03T10:02:00.000Z",
+      "updatedAt": "2024-01-03T10:02:00.000Z",
+      "links": [],
+      "deleted": false,
+      "tagKey": "causa-do-risco",
+      "type": "selectMultiple",
+      "label": "Causa do risco",
+      "appearance": "multiline",
+      "snakeCase": false,
+      "options": [
+        { "label": "Desmatamento", "value": "desmatamento" },
+        { "label": "Poluição", "value": "poluio" },
+        { "label": "Incêndio", "value": "incndio" },
+        { "label": "Outro", "value": "outro" }
+      ],
+      "universal": false,
+      "helperText": "Qual a causa do risco à nascente?",
+      "createdBy": "user-001",
+      "updatedBy": "user-001"
+    }
+  ]
+}

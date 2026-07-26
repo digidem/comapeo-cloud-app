@@ -40,7 +40,7 @@ function createField(
     updatedAt: createdAt,
     deleted: false,
     type: 'text',
-    key: 'test_key',
+    tagKey: 'test_key',
     label: 'Test Field',
     universal: false,
     ...overrides,

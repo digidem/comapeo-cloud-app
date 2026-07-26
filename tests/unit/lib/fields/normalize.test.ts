@@ -1,3 +1,4 @@
+import realArchiveResponse from '@tests/fixtures/fields/real-archive-response.json';
 import { describe, expect, it } from 'vitest';
 
 import type {
@@ -21,7 +22,7 @@ function createApiField(
     links: [],
     deleted: false,
     type: 'text',
-    key: 'test_key',
+    tagKey: 'test_key',
     label: 'Test Field',
     universal: false,
     ...overrides,
@@ -29,10 +30,19 @@ function createApiField(
 }
 
 describe('normalizeApiField', () => {
-  it('maps key to tagKey', () => {
+  it('maps tagKey to tagKey', () => {
     const result = normalizeApiField(
-      createApiField({ docId: 'f1', key: 'severity' }),
+      createApiField({ docId: 'f1', tagKey: 'severity' }),
     );
+    expect(result.tagKey).toBe('severity');
+  });
+
+  it('falls back to legacy key when tagKey is absent (back-compat)', () => {
+    const result = normalizeApiField({
+      ...createApiField({ docId: 'f1' }),
+      tagKey: undefined as unknown as string,
+      key: 'severity',
+    });
     expect(result.tagKey).toBe('severity');
   });
 
@@ -99,6 +109,42 @@ describe('normalizeApiField', () => {
     );
     expect(result.docId).toBe('abc123');
     expect(result.label).toBe('Severity');
+  });
+
+  describe('real archive server response (tagKey + camelCase type)', () => {
+    const realFields = realArchiveResponse.data as unknown as ApiField[];
+
+    it('maps tagKey to tagKey (not the legacy key property)', () => {
+      const selectOneField = realFields.find(
+        (f) => f.docId === 'field-select-one',
+      )!;
+      const result = normalizeApiField(selectOneField);
+      expect(result.tagKey).toBe('autoridade-comunicada');
+    });
+
+    it('maps camelCase selectOne type unchanged', () => {
+      const selectOneField = realFields.find(
+        (f) => f.docId === 'field-select-one',
+      )!;
+      const result = normalizeApiField(selectOneField);
+      expect(result.type).toBe('selectOne');
+    });
+
+    it('maps camelCase selectMultiple type unchanged', () => {
+      const selectMultipleField = realFields.find(
+        (f) => f.docId === 'field-select-multiple',
+      )!;
+      const result = normalizeApiField(selectMultipleField);
+      expect(result.type).toBe('selectMultiple');
+    });
+
+    it('preserves the real label for a text field', () => {
+      const textField = realFields.find((f) => f.docId === 'field-text')!;
+      const result = normalizeApiField(textField);
+      expect(result.tagKey).toBe('espcie');
+      expect(result.type).toBe('text');
+      expect(result.label).toBe('Espécie');
+    });
   });
 });
 
@@ -167,8 +213,8 @@ describe('normalizeImportField', () => {
 describe('buildFieldLookup', () => {
   it('creates a map keyed by docId', () => {
     const fields = [
-      createApiField({ docId: 'f1', key: 'severity' }),
-      createApiField({ docId: 'f2', key: 'area' }),
+      createApiField({ docId: 'f1', tagKey: 'severity' }),
+      createApiField({ docId: 'f2', tagKey: 'area' }),
     ];
 
     const lookup = buildFieldLookup(fields);
@@ -183,7 +229,7 @@ describe('buildFieldLookup', () => {
       createApiField({
         docId: 'field-v2',
         originalVersionId: 'field-original',
-        key: 'severity',
+        tagKey: 'severity',
       }),
     ];
 
@@ -201,7 +247,7 @@ describe('buildFieldLookup', () => {
   });
 
   it('does not create an alias entry when originalVersionId is absent', () => {
-    const fields = [createApiField({ docId: 'standalone', key: 'notes' })];
+    const fields = [createApiField({ docId: 'standalone', tagKey: 'notes' })];
 
     const lookup = buildFieldLookup(fields);
 
@@ -213,7 +259,7 @@ describe('buildFieldLookup', () => {
     const fields = [
       createApiField({
         docId: 'f1',
-        key: 'category_type',
+        tagKey: 'category_type',
         type: 'select_one',
         label: 'Category',
       }),
@@ -237,7 +283,7 @@ describe('buildFieldLookup', () => {
     const fields = [
       createApiField({
         docId: 'f1',
-        key: 'notes',
+        tagKey: 'notes',
         placeholder: 'Enter notes',
       }),
     ];
@@ -247,5 +293,16 @@ describe('buildFieldLookup', () => {
     const field: NormalizedField | undefined = lookup.get('f1');
     expect(field?.placeholder).toBe('Enter notes');
     expect(field?.helperText).toBeUndefined();
+  });
+
+  it('resolves real archive server fields (tagKey + camelCase type) to correct labels', () => {
+    const realFields = realArchiveResponse.data as unknown as ApiField[];
+    const lookup = buildFieldLookup(realFields);
+
+    expect(lookup.get('field-text')?.label).toBe('Espécie');
+    expect(lookup.get('field-select-one')?.label).toBe('Autoridade comunicada');
+    expect(lookup.get('field-select-one')?.type).toBe('selectOne');
+    expect(lookup.get('field-select-multiple')?.label).toBe('Causa do risco');
+    expect(lookup.get('field-select-multiple')?.type).toBe('selectMultiple');
   });
 });

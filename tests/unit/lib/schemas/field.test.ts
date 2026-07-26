@@ -1,3 +1,4 @@
+import realArchiveResponse from '@tests/fixtures/fields/real-archive-response.json';
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 
@@ -26,7 +27,7 @@ describe('fieldsResponseSchema — real server contract', () => {
           links: [],
           deleted: false,
           type: 'select_one',
-          key: 'severity',
+          tagKey: 'severity',
           label: 'Severity',
           options: [
             { label: 'Low', value: 'low' },
@@ -55,7 +56,7 @@ describe('fieldsResponseSchema — real server contract', () => {
           links: [],
           deleted: false,
           type: 'text',
-          key: 'notes',
+          tagKey: 'notes',
           label: 'Notes',
           universal: false,
           geometry: [],
@@ -65,5 +66,35 @@ describe('fieldsResponseSchema — real server contract', () => {
     };
 
     expect(() => v.parse(fieldsResponseSchema, payload)).not.toThrow();
+  });
+
+  it('parses the real archive server /field response without throwing', () => {
+    expect(() =>
+      v.parse(fieldsResponseSchema, realArchiveResponse),
+    ).not.toThrow();
+  });
+
+  it('preserves tagKey and camelCase type from the real server response', () => {
+    const result = v.parse(fieldsResponseSchema, realArchiveResponse);
+
+    const selectOneField = result.data.find(
+      (f) => f.docId === 'field-select-one',
+    );
+    expect(selectOneField?.tagKey).toBe('autoridade-comunicada');
+    expect(selectOneField?.type).toBe('selectOne');
+
+    const selectMultipleField = result.data.find(
+      (f) => f.docId === 'field-select-multiple',
+    );
+    expect(selectMultipleField?.tagKey).toBe('causa-do-risco');
+    expect(selectMultipleField?.type).toBe('selectMultiple');
+  });
+
+  it('tolerates deleted fields in the real server response', () => {
+    const result = v.parse(fieldsResponseSchema, realArchiveResponse);
+    const deletedField = result.data.find(
+      (f) => f.docId === 'field-deleted-text',
+    );
+    expect(deletedField?.deleted).toBe(true);
   });
 });
