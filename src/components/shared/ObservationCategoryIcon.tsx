@@ -44,7 +44,7 @@ export function ObservationCategoryIcon({
   // fallback branch below.
   if (category.iconUrl) {
     return (
-      <div
+      <span
         className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className ?? ''}`}
         data-testid="category-icon"
         style={circleStyle}
@@ -69,7 +69,7 @@ export function ObservationCategoryIcon({
           style={{ width: iconSize, height: iconSize }}
           cache
         />
-      </div>
+      </span>
     );
   }
 
@@ -77,7 +77,7 @@ export function ObservationCategoryIcon({
   // colored letter — matches the "white bg, color as border" spec from PR 65
   // design review.
   return (
-    <div
+    <span
       className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className ?? ''}`}
       data-testid="category-icon-fallback-only"
       style={{
@@ -96,6 +96,6 @@ export function ObservationCategoryIcon({
       >
         {fallbackLetter}
       </span>
-    </div>
+    </span>
   );
 }
