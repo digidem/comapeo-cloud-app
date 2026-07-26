@@ -178,7 +178,7 @@ test('search filters categories', async ({ page }) => {
 
   // Search for something not in the latest cluster shows empty
   await page.getByPlaceholder('Search categories...').fill('Water');
-  await expect(page.getByText('No categories found')).toBeVisible({
+  await expect(page.getByText('No categories match your search')).toBeVisible({
     timeout: 5_000,
   });
 });
