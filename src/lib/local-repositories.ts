@@ -177,7 +177,11 @@ export async function getObservation(
 ): Promise<Observation | undefined> {
   return wrapDb(async () => {
     const db = getDb();
-    return db.observations.get(localId);
+    const observation = await db.observations.get(localId);
+    if (observation && observation.lat === 0 && observation.lon === 0) {
+      return undefined;
+    }
+    return observation;
   });
 }
 

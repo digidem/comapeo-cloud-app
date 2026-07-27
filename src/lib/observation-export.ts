@@ -47,32 +47,34 @@ export function observationsToGeoJson(
   observations: Observation[],
   context: ObservationExportContext = {},
 ): FeatureCollection {
-  const features: Array<Feature<Point | null>> = observations.map((obs) => {
-    const hasValidCoords =
-      obs.lat !== undefined &&
-      obs.lon !== undefined &&
-      isValidCoord(obs.lat, obs.lon);
+  const features: Array<Feature<Point | null>> = observations
+    .filter((o) => !(o.lat === 0 && o.lon === 0))
+    .map((obs) => {
+      const hasValidCoords =
+        obs.lat !== undefined &&
+        obs.lon !== undefined &&
+        isValidCoord(obs.lat, obs.lon);
 
-    const tags = buildExportTags(obs, context);
+      const tags = buildExportTags(obs, context);
 
-    return {
-      type: 'Feature' as const,
-      geometry: hasValidCoords
-        ? { type: 'Point' as const, coordinates: [obs.lon!, obs.lat!] }
-        : null,
-      properties: {
-        ...tags,
-        docId: obs.localId,
-        remoteId: obs.remoteId,
-        category:
-          context.displayNamesByObservationId?.get(obs.localId) ??
-          tags.category,
-        presetRefDocId: obs.presetRefDocId ?? tags.presetRefDocId,
-        createdAt: obs.createdAt,
-        updatedAt: obs.updatedAt,
-      },
-    };
-  });
+      return {
+        type: 'Feature' as const,
+        geometry: hasValidCoords
+          ? { type: 'Point' as const, coordinates: [obs.lon!, obs.lat!] }
+          : null,
+        properties: {
+          ...tags,
+          docId: obs.localId,
+          remoteId: obs.remoteId,
+          category:
+            context.displayNamesByObservationId?.get(obs.localId) ??
+            tags.category,
+          presetRefDocId: obs.presetRefDocId ?? tags.presetRefDocId,
+          createdAt: obs.createdAt,
+          updatedAt: obs.updatedAt,
+        },
+      };
+    });
 
   return {
     type: 'FeatureCollection',
@@ -119,32 +121,34 @@ export function observationsToCsv(
   const header = CSV_COLUMNS.join(',');
   if (observations.length === 0) return header;
 
-  const rows = observations.map((obs) => {
-    const tags = buildExportTags(obs, context);
-    const photoUrls = tags.photoUrls ?? '';
-    const category =
-      context.displayNamesByObservationId?.get(obs.localId) ??
-      tags.category ??
-      '';
+  const rows = observations
+    .filter((o) => !(o.lat === 0 && o.lon === 0))
+    .map((obs) => {
+      const tags = buildExportTags(obs, context);
+      const photoUrls = tags.photoUrls ?? '';
+      const category =
+        context.displayNamesByObservationId?.get(obs.localId) ??
+        tags.category ??
+        '';
 
-    const hasValidCoords =
-      obs.lat !== undefined &&
-      obs.lon !== undefined &&
-      isValidCoord(obs.lat, obs.lon);
+      const hasValidCoords =
+        obs.lat !== undefined &&
+        obs.lon !== undefined &&
+        isValidCoord(obs.lat, obs.lon);
 
-    const values: string[] = [
-      csvEscape(obs.localId),
-      csvEscape(category),
-      hasValidCoords ? String(obs.lat) : '',
-      hasValidCoords ? String(obs.lon) : '',
-      csvEscape(obs.createdAt),
-      csvEscape(obs.updatedAt),
-      csvEscape(JSON.stringify(tags)),
-      csvEscape(photoUrls),
-    ];
+      const values: string[] = [
+        csvEscape(obs.localId),
+        csvEscape(category),
+        hasValidCoords ? String(obs.lat) : '',
+        hasValidCoords ? String(obs.lon) : '',
+        csvEscape(obs.createdAt),
+        csvEscape(obs.updatedAt),
+        csvEscape(JSON.stringify(tags)),
+        csvEscape(photoUrls),
+      ];
 
-    return values.join(',');
-  });
+      return values.join(',');
+    });
 
   return [header, ...rows].join('\n');
 }

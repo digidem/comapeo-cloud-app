@@ -195,7 +195,7 @@ describe('observationsToGeoJson', () => {
   });
 
   it('handles empty tags by using empty object', () => {
-    const obs = makeObservation({ lat: 0, lon: 0 });
+    const obs = makeObservation({ lat: -8.35, lon: -55.45 });
     const fc = observationsToGeoJson([obs]);
     const props = fc.features[0]!.properties;
 
@@ -222,8 +222,8 @@ describe('observationsToGeoJson', () => {
 
   it('canonical keys win over tag collisions', () => {
     const obs = makeObservation({
-      lat: 0,
-      lon: 0,
+      lat: -8.35,
+      lon: -55.45,
       tags: { docId: 'should-be-overridden' },
     });
     const fc = observationsToGeoJson([obs]);
@@ -240,6 +240,26 @@ describe('observationsToGeoJson', () => {
     const fc = observationsToGeoJson(observations);
 
     expect(fc.features).toHaveLength(2);
+  });
+
+  it('drops observations at lat/long 0,0 from the feature collection', () => {
+    const obsZero = makeObservation({
+      localId: 'obs-zero',
+      lat: 0,
+      lon: 0,
+    });
+    const obsValid = makeObservation({
+      localId: 'obs-valid',
+      lat: -8.35,
+      lon: -55.45,
+    });
+    const fc = observationsToGeoJson([obsZero, obsValid]);
+
+    expect(fc.features).toHaveLength(1);
+    expect(fc.features[0]!.geometry).toEqual({
+      type: 'Point',
+      coordinates: [-55.45, -8.35],
+    });
   });
 });
 
@@ -532,5 +552,23 @@ describe('observationsToCsv', () => {
     const csv = observationsToCsv([obs]);
     // Category field starting with whitespace then '=' should still be prefixed
     expect(csv).toContain("' =IMPORTXML");
+  });
+
+  it('drops observations at lat/long 0,0 from data rows', () => {
+    const obsZero = makeObservation({
+      localId: 'obs-zero',
+      lat: 0,
+      lon: 0,
+    });
+    const obsValid = makeObservation({
+      localId: 'obs-valid',
+      lat: -8.35,
+      lon: -55.45,
+    });
+    const csv = observationsToCsv([obsZero, obsValid]);
+
+    expect(csv.split('\n').length).toBe(2); // header + 1 data row
+    expect(csv).toContain('obs-valid');
+    expect(csv).not.toContain('obs-zero');
   });
 });
