@@ -249,7 +249,7 @@ export function CategoriesEditorScreen() {
         </p>
         <button
           onClick={() => projectsQuery.refetch()}
-          className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark transition-colors"
+          className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-hover transition-colors"
         >
           {intl.formatMessage(messages.retry)}
         </button>
@@ -313,7 +313,7 @@ export function CategoriesEditorScreen() {
         </p>
         <button
           onClick={() => presetsQuery.refetch()}
-          className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark transition-colors"
+          className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-hover transition-colors"
         >
           {intl.formatMessage(messages.retry)}
         </button>
@@ -333,7 +333,7 @@ export function CategoriesEditorScreen() {
         <button
           type="button"
           onClick={() => setIsImportOpen(true)}
-          className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark transition-colors"
+          className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-hover transition-colors min-h-[44px]"
         >
           {intl.formatMessage(messages.importButton)}
         </button>
