@@ -1,3 +1,4 @@
+import { isZeroZeroCoord } from '@/lib/coords';
 import { getDb } from '@/lib/db';
 import type {
   Alert,
@@ -167,7 +168,7 @@ export async function getObservations(
       .where('projectLocalId')
       .equals(projectLocalId)
       .filter((o) => !o.deleted)
-      .filter((o) => !(o.lat === 0 && o.lon === 0))
+      .filter((o) => !isZeroZeroCoord(o.lat, o.lon))
       .toArray();
   });
 }
@@ -178,7 +179,7 @@ export async function getObservation(
   return wrapDb(async () => {
     const db = getDb();
     const observation = await db.observations.get(localId);
-    if (observation && observation.lat === 0 && observation.lon === 0) {
+    if (observation && isZeroZeroCoord(observation.lat, observation.lon)) {
       return undefined;
     }
     return observation;

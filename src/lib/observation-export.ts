@@ -1,6 +1,6 @@
 import type { Feature, FeatureCollection, Point } from 'geojson';
 
-import { isValidCoord } from '@/lib/coords';
+import { isValidCoord, isZeroZeroCoord } from '@/lib/coords';
 import type { Attachment, Field, FieldOption, Observation } from '@/lib/db';
 
 export type ExportFormat = 'geojson' | 'csv';
@@ -48,7 +48,7 @@ export function observationsToGeoJson(
   context: ObservationExportContext = {},
 ): FeatureCollection {
   const features: Array<Feature<Point | null>> = observations
-    .filter((o) => !(o.lat === 0 && o.lon === 0))
+    .filter((o) => !isZeroZeroCoord(o.lat, o.lon))
     .map((obs) => {
       const hasValidCoords =
         obs.lat !== undefined &&
@@ -122,7 +122,7 @@ export function observationsToCsv(
   if (observations.length === 0) return header;
 
   const rows = observations
-    .filter((o) => !(o.lat === 0 && o.lon === 0))
+    .filter((o) => !isZeroZeroCoord(o.lat, o.lon))
     .map((obs) => {
       const tags = buildExportTags(obs, context);
       const photoUrls = tags.photoUrls ?? '';

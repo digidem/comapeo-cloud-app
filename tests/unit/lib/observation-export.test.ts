@@ -261,6 +261,32 @@ describe('observationsToGeoJson', () => {
       coordinates: [-55.45, -8.35],
     });
   });
+
+  it('keeps observations with a single zero coordinate (equator/prime meridian)', () => {
+    const obsEquator = makeObservation({
+      localId: 'obs-equator',
+      lat: 0,
+      lon: -60,
+    });
+    const obsNormal = makeObservation({
+      localId: 'obs-normal',
+      lat: -8.35,
+      lon: -55.45,
+    });
+    const fc = observationsToGeoJson([obsEquator, obsNormal]);
+
+    // Both are kept — only an exact 0,0 is dropped
+    expect(fc.features).toHaveLength(2);
+
+    const equatorFeature = fc.features.find(
+      (f) => f.properties?.docId === 'obs-equator',
+    );
+    expect(equatorFeature).toBeDefined();
+    expect(equatorFeature!.geometry).toEqual({
+      type: 'Point',
+      coordinates: [-60, 0],
+    });
+  });
 });
 
 // --- observationsToCsv ---
@@ -570,5 +596,18 @@ describe('observationsToCsv', () => {
     expect(csv.split('\n').length).toBe(2); // header + 1 data row
     expect(csv).toContain('obs-valid');
     expect(csv).not.toContain('obs-zero');
+  });
+
+  it('keeps observations with a single zero coordinate (prime meridian) in CSV', () => {
+    const obsMeridian = makeObservation({
+      localId: 'obs-meridian',
+      lat: 45,
+      lon: 0,
+    });
+    const csv = observationsToCsv([obsMeridian]);
+
+    // header + 1 data row — the single-zero observation is NOT dropped
+    expect(csv.split('\n').length).toBe(2);
+    expect(csv).toContain('obs-meridian');
   });
 });

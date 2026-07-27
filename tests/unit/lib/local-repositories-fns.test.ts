@@ -303,6 +303,32 @@ describe('local-repositories functions — observations', () => {
     );
     expect(hasNoCoords).toBe(true);
   });
+
+  it('getObservations — keeps observations with a single zero coordinate (equator)', async () => {
+    const project = await createProject({ name: 'SingleZero' });
+
+    // A real observation on the equator (lat: 0, lon: -60) — must be KEPT
+    await createObservation({
+      projectLocalId: project.localId,
+      lat: 0,
+      lon: -60,
+    });
+
+    // A normal observation
+    await createObservation({
+      projectLocalId: project.localId,
+      lat: -3.1,
+      lon: -60.5,
+    });
+
+    const observations = await getObservations(project.localId);
+
+    // Both observations are returned — only an exact 0,0 is excluded
+    expect(observations).toHaveLength(2);
+
+    const hasEquator = observations.some((o) => o.lat === 0 && o.lon === -60);
+    expect(hasEquator).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
