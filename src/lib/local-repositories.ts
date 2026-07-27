@@ -179,9 +179,6 @@ export async function getObservation(
   return wrapDb(async () => {
     const db = getDb();
     const observation = await db.observations.get(localId);
-    if (observation && isZeroZeroCoord(observation.lat, observation.lon)) {
-      return undefined;
-    }
     return observation;
   });
 }
