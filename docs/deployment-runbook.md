@@ -124,7 +124,7 @@ The Content Security Policy is defined in `public/_headers`. If a new dependency
 
 ### API proxy not working
 
-1. Verify `functions/api/[[path]].ts` is included in the deployment
+1. Verify `functions/api/_middleware.ts` is included in the deployment
 2. Check `_routes.json` includes `/api` and `/api/*`
 3. Test: `curl -i https://<deploy-url>/api/info` should return 400
 4. Test: `curl -i -H "x-target-url: <archive-origin>" https://<deploy-url>/api/info` should return 200
