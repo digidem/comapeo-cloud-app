@@ -259,6 +259,76 @@ describe('local-repositories functions — observations', () => {
       expect((err as DbError).code).toBe('FK_VIOLATION');
     }
   });
+
+  it('getObservations — filters out observations at lat/lon 0,0', async () => {
+    const project = await createProject({ name: 'FilterZeroZero' });
+
+    // Create valid observation
+    await createObservation({
+      projectLocalId: project.localId,
+      lat: -3.1,
+      lon: -60.5,
+    });
+
+    // Create 0,0 observation (should be filtered)
+    await createObservation({
+      projectLocalId: project.localId,
+      lat: 0,
+      lon: 0,
+    });
+
+    // Create observation with no coords (should be kept)
+    await createObservation({
+      projectLocalId: project.localId,
+    });
+
+    const observations = await getObservations(project.localId);
+
+    // Should only get the valid observation and the one without coords
+    expect(observations).toHaveLength(2);
+
+    // Verify the 0,0 observation is not in the results
+    const hasZeroZero = observations.some((o) => o.lat === 0 && o.lon === 0);
+    expect(hasZeroZero).toBe(false);
+
+    // Verify we have the valid observation
+    const hasValid = observations.some(
+      (o) => o.lat === -3.1 && o.lon === -60.5,
+    );
+    expect(hasValid).toBe(true);
+
+    // Verify we have the observation without coords
+    const hasNoCoords = observations.some(
+      (o) => o.lat === undefined && o.lon === undefined,
+    );
+    expect(hasNoCoords).toBe(true);
+  });
+
+  it('getObservations — keeps observations with a single zero coordinate (equator)', async () => {
+    const project = await createProject({ name: 'SingleZero' });
+
+    // A real observation on the equator (lat: 0, lon: -60) — must be KEPT
+    await createObservation({
+      projectLocalId: project.localId,
+      lat: 0,
+      lon: -60,
+    });
+
+    // A normal observation
+    await createObservation({
+      projectLocalId: project.localId,
+      lat: -3.1,
+      lon: -60.5,
+    });
+
+    const observations = await getObservations(project.localId);
+
+    // Both observations are returned — only an exact 0,0 is excluded
+    expect(observations).toHaveLength(2);
+
+    const hasEquator = observations.some((o) => o.lat === 0 && o.lon === -60);
+    expect(hasEquator).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

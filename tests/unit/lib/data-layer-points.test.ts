@@ -116,6 +116,32 @@ describe('getProjectPoints', () => {
     const featureCollection = await getProjectPoints(project.localId);
     expect(featureCollection.features).toHaveLength(0);
   });
+
+  it('filters out observations at lat/lon 0,0', async () => {
+    const project = await createProject({ name: 'Test' });
+
+    await createObservation({
+      projectLocalId: project.localId,
+      lat: -3.1,
+      lon: -60.5,
+    });
+    await createObservation({
+      projectLocalId: project.localId,
+      lat: 0,
+      lon: 0,
+    });
+    await createObservation({
+      projectLocalId: project.localId,
+    });
+
+    const featureCollection = await getProjectPoints(project.localId);
+
+    // Should only include the valid observation, not the 0,0 or the one without coords
+    expect(featureCollection.features).toHaveLength(1);
+    expect(featureCollection.features[0]!.geometry.coordinates).toEqual([
+      -60.5, -3.1,
+    ]);
+  });
 });
 
 describe('importGeoJsonPoints', () => {

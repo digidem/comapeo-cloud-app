@@ -1,3 +1,4 @@
+import { isZeroZeroCoord } from '@/lib/coords';
 import { getDb } from '@/lib/db';
 
 // ---------------------------------------------------------------------------
@@ -67,7 +68,7 @@ export async function getStorageStats(): Promise<StorageStats> {
     syncMetadata,
   ] = await Promise.all([
     db.projects.count(),
-    db.observations.count(),
+    db.observations.filter((o) => !isZeroZeroCoord(o.lat, o.lon)).count(),
     db.alerts.count(),
     db.presets.count(),
     db.attachments.count(),
