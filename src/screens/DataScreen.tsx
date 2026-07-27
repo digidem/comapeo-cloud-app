@@ -248,7 +248,7 @@ export function DataScreen() {
                   {categoryByObservationId.get(obs.localId) ? (
                     <ObservationCategoryIcon
                       category={categoryByObservationId.get(obs.localId)!}
-                      className="h-12 w-12"
+                      size={48}
                     />
                   ) : (
                     <div className="h-12 w-12" aria-hidden="true" />

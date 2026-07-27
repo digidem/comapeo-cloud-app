@@ -1,4 +1,3 @@
-// TODO: Wire into CategoriesEditor toolbar in follow-up PR
 import * as Dialog from '@radix-ui/react-dialog';
 import * as v from 'valibot';
 

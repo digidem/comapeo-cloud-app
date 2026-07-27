@@ -167,7 +167,7 @@ export function ObservationsMap({
                 <div className="rounded-full border-2 border-white bg-surface-card shadow-md">
                   <ObservationCategoryIcon
                     category={categoryByObservationId.get(o.localId)!}
-                    className="h-7 w-7"
+                    size={28}
                   />
                 </div>
               ) : (

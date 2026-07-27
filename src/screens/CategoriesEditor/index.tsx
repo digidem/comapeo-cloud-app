@@ -13,6 +13,7 @@ import { selectLatestCategorySet } from '@/lib/categories/latest-set';
 import { buildFieldLookup } from '@/lib/fields/normalize';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';
+import { ImportSetDialog } from '@/screens/CategoriesEditor/ImportSetDialog';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -73,6 +74,10 @@ const messages = defineMessages({
     id: 'categories.hiddenBanner',
     defaultMessage:
       'Showing the latest category set. {count, plural, one {# older category hidden} other {# older categories hidden}}.',
+  },
+  importButton: {
+    id: 'categories.importButton',
+    defaultMessage: 'Import Category Set',
   },
 });
 
@@ -141,6 +146,7 @@ export function CategoriesEditorScreen() {
     categoryId?: string;
   };
   const [showAllSets, setShowAllSets] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const nonDeletedPresets = useMemo(
     () => (presetsQuery.data ?? []).filter((p) => !p.deleted),
@@ -320,9 +326,18 @@ export function CategoriesEditorScreen() {
 
   return (
     <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
-      <h1 className="text-2xl font-bold text-text">
-        {intl.formatMessage(messages.title)}
-      </h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-text">
+          {intl.formatMessage(messages.title)}
+        </h1>
+        <button
+          type="button"
+          onClick={() => setIsImportOpen(true)}
+          className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark transition-colors"
+        >
+          {intl.formatMessage(messages.importButton)}
+        </button>
+      </div>
 
       <input
         type="text"
@@ -443,6 +458,11 @@ export function CategoriesEditorScreen() {
           </aside>
         </div>
       )}
+
+      <ImportSetDialog
+        open={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+      />
     </div>
   );
 }

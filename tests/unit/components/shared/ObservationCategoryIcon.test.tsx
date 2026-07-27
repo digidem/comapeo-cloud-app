@@ -73,6 +73,18 @@ describe('ObservationCategoryIcon', () => {
     expect(screen.getByText('F')).toBeInTheDocument();
   });
 
+  it('sizes the circle to the explicit size prop (guards className-sizing regression)', () => {
+    render(
+      <ObservationCategoryIcon
+        category={{ id: 'forest', name: 'Forest', color: '#117733' }}
+        size={48}
+      />,
+    );
+
+    const icon = screen.getByRole('img', { name: 'Forest' });
+    expect(icon).toHaveStyle({ width: '48px', height: '48px' });
+  });
+
   it('centers the SVG icon within its circular container (m-auto)', () => {
     render(
       <ObservationCategoryIcon

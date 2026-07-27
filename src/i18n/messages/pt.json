@@ -57,6 +57,7 @@
   "categories.fieldsError": "Etiquetas de campos indisponíveis",
   "categories.fieldsRetry": "Tentar novamente",
   "categories.hiddenBanner": "Mostrando o conjunto de categorias mais recente. {count, plural, one {# categoria antiga oculta} other {# categorias antigas ocultas}}.",
+  "categories.importButton": "Importar conjunto de categorias",
   "categories.importSet.cancel": "Cancelar",
   "categories.importSet.confirmReplace": "Substituir",
   "categories.importSet.description": "Carregue um arquivo .comapeocat para importar um conjunto de categorias.",

@@ -203,6 +203,9 @@
   "categories.hiddenBanner": {
     "defaultMessage": "Showing the latest category set. {count, plural, one {# older category hidden} other {# older categories hidden}}."
   },
+  "categories.importButton": {
+    "defaultMessage": "Import Category Set"
+  },
   "categories.importSet.cancel": {
     "defaultMessage": "Cancel"
   },

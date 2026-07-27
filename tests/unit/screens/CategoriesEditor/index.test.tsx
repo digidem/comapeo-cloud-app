@@ -1,4 +1,4 @@
-import { render, screen, userEvent } from '@tests/mocks/test-utils';
+import { render, screen, userEvent, within } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useApiFields } from '@/hooks/useApiFields';
@@ -762,6 +762,34 @@ describe('CategoriesEditorScreen', () => {
     // Should also show the prefix text
     expect(
       screen.getByText(/Showing the latest category set/),
+    ).toBeInTheDocument();
+  });
+
+  // --- import dialog wiring ---
+
+  it('renders the Import Category Set button in the toolbar', () => {
+    render(<CategoriesEditorScreen />);
+    expect(
+      screen.getByRole('button', { name: 'Import Category Set' }),
+    ).toBeInTheDocument();
+  });
+
+  it('opens the import dialog when the Import button is clicked', async () => {
+    const user = userEvent.setup();
+    render(<CategoriesEditorScreen />);
+
+    // Dialog is closed initially — its title is not in the document
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Import Category Set' }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    // The dialog's file-upload label confirms the import UI is rendered
+    expect(
+      within(dialog).getByText('Choose .comapeocat file'),
     ).toBeInTheDocument();
   });
 });
