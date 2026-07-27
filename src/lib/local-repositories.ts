@@ -167,6 +167,7 @@ export async function getObservations(
       .where('projectLocalId')
       .equals(projectLocalId)
       .filter((o) => !o.deleted)
+      .filter((o) => !(o.lat === 0 && o.lon === 0))
       .toArray();
   });
 }
