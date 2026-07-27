@@ -128,6 +128,11 @@ export function normalizeImportField(
 // Lookup
 // ---------------------------------------------------------------------------
 
+interface BuildFieldLookupOptions {
+  /** Include deleted fields in the lookup. Defaults to false. */
+  includeDeleted?: boolean;
+}
+
 /**
  * Build a `docId` → {@link NormalizedField} lookup map from raw API fields.
  *
@@ -136,13 +141,18 @@ export function normalizeImportField(
  * alias entry is created under that key pointing to the same normalized
  * field — this allows preset `fieldRefs` (which may reference either the
  * latest version `docId` or the `originalVersionId`) to resolve correctly.
+ * Fields marked deleted are excluded by default, including aliases; pass
+ * `{ includeDeleted: true }` to preserve them.
  */
 export function buildFieldLookup(
   apiFields: ReadonlyArray<Omit<ApiField, 'links'> & { links?: string[] }>,
+  { includeDeleted = false }: BuildFieldLookupOptions = {},
 ): Map<string, NormalizedField> {
   const lookup = new Map<string, NormalizedField>();
 
   for (const apiField of apiFields) {
+    if (!includeDeleted && apiField.deleted) continue;
+
     const normalized = normalizeApiField({
       ...apiField,
       links: apiField.links ?? [],

@@ -246,6 +246,45 @@ describe('buildFieldLookup', () => {
     expect(byDocId?.tagKey).toBe('severity');
   });
 
+  it('omits deleted fields and originalVersionId aliases by default while resolving active fields', () => {
+    const fields = [
+      createApiField({ docId: 'active-field', tagKey: 'active_key' }),
+      createApiField({
+        docId: 'deleted-field-v2',
+        originalVersionId: 'deleted-field-original',
+        deleted: true,
+        tagKey: 'deleted_key',
+      }),
+    ];
+
+    const lookup = buildFieldLookup(fields);
+
+    expect(lookup.get('active-field')?.tagKey).toBe('active_key');
+    expect(lookup.has('deleted-field-v2')).toBe(false);
+    expect(lookup.has('deleted-field-original')).toBe(false);
+  });
+
+  it('includes deleted fields and originalVersionId aliases when includeDeleted is true', () => {
+    const fields = [
+      createApiField({
+        docId: 'deleted-field-v2',
+        originalVersionId: 'deleted-field-original',
+        deleted: true,
+        tagKey: 'deleted_key',
+      }),
+    ];
+
+    const lookup = buildFieldLookup(fields, { includeDeleted: true });
+
+    const byDocId = lookup.get('deleted-field-v2');
+    const byOriginalId = lookup.get('deleted-field-original');
+    expect(byDocId).toBeDefined();
+    expect(byOriginalId).toBeDefined();
+    expect(byDocId).toBe(byOriginalId);
+    expect(byDocId?.docId).toBe('deleted-field-v2');
+    expect(byDocId?.tagKey).toBe('deleted_key');
+  });
+
   it('does not create an alias entry when originalVersionId is absent', () => {
     const fields = [createApiField({ docId: 'standalone', tagKey: 'notes' })];
 

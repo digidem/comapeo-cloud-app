@@ -2,7 +2,7 @@ import realArchiveResponse from '@tests/fixtures/fields/real-archive-response.js
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 
-import { fieldsResponseSchema } from '@/lib/schemas/field';
+import { fieldSchema, fieldsResponseSchema } from '@/lib/schemas/field';
 
 /**
  * These tests pin the REAL server wire contract for the `/field` endpoint.
@@ -14,6 +14,31 @@ import { fieldsResponseSchema } from '@/lib/schemas/field';
  * the field schema is tolerant, and must stay GREEN afterwards.
  */
 describe('fieldsResponseSchema — real server contract', () => {
+  it('defaults omitted timestamps to empty strings when parsing a field directly and in a fields response', () => {
+    const timestampOmittingField = {
+      docId: 'field-no-timestamps',
+      versionId: 'field-no-timestamps/1',
+      originalVersionId: 'field-no-timestamps-original',
+      schemaName: 'field',
+      links: [],
+      deleted: false,
+      type: 'text',
+      tagKey: 'notes',
+      label: 'Notes',
+      universal: false,
+    };
+
+    const parsedField = v.parse(fieldSchema, timestampOmittingField);
+    expect(parsedField.createdAt).toBe('');
+    expect(parsedField.updatedAt).toBe('');
+
+    const parsedResponse = v.parse(fieldsResponseSchema, {
+      data: [timestampOmittingField],
+    });
+    expect(parsedResponse.data[0]?.createdAt).toBe('');
+    expect(parsedResponse.data[0]?.updatedAt).toBe('');
+  });
+
   it('parses a server field that omits optional keys (universal, placeholder, geometry)', () => {
     const payload = {
       data: [

@@ -43,13 +43,11 @@ export const fieldSchema = v.object({
   // key fall back to `false` AND narrows the output type to `boolean`, so
   // downstream consumers (e.g. `Field.universal: boolean`) are unaffected.
   // Extra server keys (e.g. `geometry`) are stripped by `v.object`.
-  // `createdAt`/`updatedAt` are required — the real archive server response
-  // (see tests/fixtures/fields/real-archive-response.json) always includes
-  // them; `deduplicatePresetVersions` also tolerates a missing/invalid
-  // `createdAt` at runtime via `parseCreatedAt`.
   universal: v.fallback(v.boolean(), false),
-  createdAt: v.string(),
-  updatedAt: v.string(),
+  // Defense-in-depth: tolerate timestamp-omitting field payloads while keeping
+  // `ApiField` output properties typed as strings for downstream consumers.
+  createdAt: v.fallback(v.string(), ''),
+  updatedAt: v.fallback(v.string(), ''),
   options: v.optional(v.array(optionSchema)),
 });
 

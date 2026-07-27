@@ -655,7 +655,7 @@ export async function pullFields(
     originalVersionId: item.originalVersionId,
     schemaName: item.schemaName,
     links: item.links ?? [],
-    type: item.type,
+    type: item.type, // NOTE: stored un-normalized (camelCase, e.g. selectOne) — callers must not assume snake_case.
     key: item.tagKey ?? item.key ?? '',
     label: item.label,
     placeholder: item.placeholder,

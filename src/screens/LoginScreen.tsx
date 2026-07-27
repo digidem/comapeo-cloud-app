@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { useNavigate } from '@tanstack/react-router';
@@ -86,6 +86,21 @@ export function LoginScreen() {
   const [submitState, setSubmitState] = useState<SubmitState>({
     status: 'idle',
   });
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  function setSubmitStateSafe(nextState: SubmitState) {
+    if (mountedRef.current) {
+      setSubmitState(nextState);
+    }
+  }
 
   const [url, setUrl] = useState('');
   const [token, setToken] = useState('');
@@ -121,7 +136,7 @@ export function LoginScreen() {
       return;
     }
 
-    setSubmitState({ status: 'loading' });
+    setSubmitStateSafe({ status: 'loading' });
 
     try {
       // Verify credentials by fetching /projects with auth via the api-client,
@@ -158,7 +173,7 @@ export function LoginScreen() {
               .getState()
               .updateServer(err.serverId, { token: trimmedToken });
           } catch {
-            setSubmitState({
+            setSubmitStateSafe({
               status: 'error',
               message: intl.formatMessage(messages.serverUpdateFailed),
             });
@@ -177,14 +192,14 @@ export function LoginScreen() {
       await navigate({ to: '/' });
     } catch (err) {
       if (err instanceof ApiError) {
-        setSubmitState({ status: 'error', message: err.message });
+        setSubmitStateSafe({ status: 'error', message: err.message });
       } else if (err instanceof NetworkError) {
-        setSubmitState({
+        setSubmitStateSafe({
           status: 'error',
           message: intl.formatMessage(messages.unableToConnect),
         });
       } else {
-        setSubmitState({
+        setSubmitStateSafe({
           status: 'error',
           message: intl.formatMessage(messages.connectFailed),
         });
