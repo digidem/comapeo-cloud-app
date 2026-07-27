@@ -1,6 +1,8 @@
 import type { Page } from '@playwright/test';
 import { alertsFixture } from '@tests/fixtures/alerts';
 import { observationsFixture } from '@tests/fixtures/observations';
+import { presetsFixture } from '@tests/fixtures/presets';
+import { fieldsFixture } from '@tests/fixtures/presets';
 import { projectDetailFixture } from '@tests/fixtures/project-detail';
 import { projectsFixture } from '@tests/fixtures/projects';
 import { serverInfoFixture } from '@tests/fixtures/server-info';
@@ -67,27 +69,41 @@ export async function setupMockServer(page: Page): Promise<void> {
     }),
   );
 
+  // Preset and field routes — registered BEFORE the catch-all projects/*
+  // handler below so Playwright matches them first (route precedence is
+  // registration order). Patterns use singular forms matching the actual
+  // apiClient endpoints (/preset, /field).
+  await page.route('**/projects/*/preset', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(presetsFixture),
+    }),
+  );
+
+  await page.route('**/projects/*/field', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(fieldsFixture),
+    }),
+  );
+
+  // Icon route — returns SVG for category icon images fetched by AuthImg.
+  // This must be registered before the empty-array routes below.
+  await page.route('**/projects/*/icon/*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="red"/></svg>',
+    }),
+  );
+
   // Non-critical data types — empty responses so the sync doesn't waste
   // time waiting for unmocked routes to time out against the preview server.
   const EMPTY_ARRAY_RESPONSE = JSON.stringify({ data: [] });
 
-  await page.route('**/projects/*/presets', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: EMPTY_ARRAY_RESPONSE,
-    }),
-  );
-
   await page.route('**/projects/*/tracks', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: EMPTY_ARRAY_RESPONSE,
-    }),
-  );
-
-  await page.route('**/projects/*/fields', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

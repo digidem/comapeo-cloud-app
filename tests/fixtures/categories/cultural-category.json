@@ -1,0 +1,14 @@
+{
+  "tagKey": "cultural-category",
+  "type": "selectMultiple",
+  "label": "Cultural activity",
+  "helperText": "What type of cultural activity?",
+  "options": [
+    { "label": "Archeology", "value": "archeology" },
+    { "label": "History", "value": "history" },
+    { "label": "Mythology", "value": "mythology" },
+    { "label": "Sacred site", "value": "sacred-site" },
+    { "label": "Gathering site", "value": "gathering-site" },
+    { "label": "Story", "value": "story" }
+  ]
+}

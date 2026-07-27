@@ -1,0 +1,11 @@
+{
+  "tagKey": "access",
+  "type": "selectOne",
+  "label": "Access",
+  "helperText": "How accessible is this location?",
+  "options": [
+    { "label": "Open access", "value": "open-access" },
+    { "label": "Restricted access", "value": "restricted-access" },
+    { "label": "No access", "value": "no-access" }
+  ]
+}
