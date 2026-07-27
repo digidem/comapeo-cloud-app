@@ -13,7 +13,7 @@ import { selectLatestCategorySet } from '@/lib/categories/latest-set';
 import { buildFieldLookup } from '@/lib/fields/normalize';
 import { CategoryDetail } from '@/screens/CategoriesEditor/CategoryDetail';
 import { CategoryGrid } from '@/screens/CategoriesEditor/CategoryGrid';
-import { ImportSetDialog } from '@/screens/CategoriesEditor/ImportSetDialog';
+// import { ImportSetDialog } from '@/screens/CategoriesEditor/ImportSetDialog';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -146,7 +146,7 @@ export function CategoriesEditorScreen() {
     categoryId?: string;
   };
   const [showAllSets, setShowAllSets] = useState(false);
-  const [isImportOpen, setIsImportOpen] = useState(false);
+  // const [isImportOpen, setIsImportOpen] = useState(false);
 
   const nonDeletedPresets = useMemo(
     () => (presetsQuery.data ?? []).filter((p) => !p.deleted),
@@ -330,13 +330,13 @@ export function CategoriesEditorScreen() {
         <h1 className="text-2xl font-bold text-text">
           {intl.formatMessage(messages.title)}
         </h1>
-        <button
+        {/* <button
           type="button"
           onClick={() => setIsImportOpen(true)}
           className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-hover transition-colors min-h-[44px]"
         >
           {intl.formatMessage(messages.importButton)}
-        </button>
+        </button> */}
       </div>
 
       <input
@@ -459,10 +459,10 @@ export function CategoriesEditorScreen() {
         </div>
       )}
 
-      <ImportSetDialog
+      {/* <ImportSetDialog
         open={isImportOpen}
         onClose={() => setIsImportOpen(false)}
-      />
+      /> */}
     </div>
   );
 }
