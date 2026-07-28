@@ -97,3 +97,57 @@ export const ClearDataDialogOpen: Story = {
     ).toBeInTheDocument();
   },
 };
+
+/** Generated invite results visible with long invite code (issue #155 wrapping verification) */
+export const InviteGenerated: Story = {
+  play: async () => {
+    const canvas = getCanvas();
+    const urlInput = await canvas.findByLabelText(
+      'Remote Archive URL',
+      undefined,
+      { timeout: PLAY_TIMEOUT },
+    );
+    const tokenInput = await canvas.findByLabelText('Bearer Token', undefined, {
+      timeout: PLAY_TIMEOUT,
+    });
+
+    await userEvent.type(
+      urlInput,
+      'https://archive.example-very-long-subdomain-name-that-takes-many-chars.com',
+    );
+    await userEvent.type(
+      tokenInput,
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkphbmUgRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
+    );
+
+    const submitButton = await canvas.findByRole(
+      'button',
+      { name: 'Generate Invite' },
+      { timeout: PLAY_TIMEOUT },
+    );
+    await userEvent.click(submitButton);
+
+    // Verify the results section renders with generated invite data
+    await canvas.findByText('Results', undefined, { timeout: PLAY_TIMEOUT });
+    await canvas.findByText('Invite URL', undefined, {
+      timeout: PLAY_TIMEOUT,
+    });
+    await canvas.findByText('Invite Code', undefined, {
+      timeout: PLAY_TIMEOUT,
+    });
+
+    // Verify the generated invite URL contains the code in the <code> element
+    const inviteUrlCode = await canvas.findByText(/invite\?code=/, undefined, {
+      timeout: PLAY_TIMEOUT,
+    });
+    await expect(inviteUrlCode).toBeVisible();
+
+    // Verify the generated invite code is displayed (long value wraps)
+    const inviteCodeEl = await canvas.findByText(
+      /v1\.mock-encrypted-invite-code-/,
+      undefined,
+      { timeout: PLAY_TIMEOUT },
+    );
+    await expect(inviteCodeEl).toBeVisible();
+  },
+};
