@@ -393,7 +393,6 @@
   "map.overlay.drop": "Solte um arquivo .geojson para mostrá-lo como camada de referência",
   "map.overlay.dropActive": "Solte o arquivo para adicionar a camada",
   "map.overlay.empty": "Nenhuma camada de referência adicionada",
-  "map.overlay.hidden": "Oculto",
   "map.overlay.invalid": "Não foi possível ler “{name}”. GeoJSON inválido.",
   "map.overlay.remove": "Remover camada",
   "map.overlay.title": "Camadas de referência",

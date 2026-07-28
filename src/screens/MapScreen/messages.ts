@@ -435,10 +435,6 @@ export const mapMessages = defineMessages({
     id: 'map.overlay.empty',
     defaultMessage: 'No reference layers added',
   },
-  overlayHidden: {
-    id: 'map.overlay.hidden',
-    defaultMessage: 'Hidden',
-  },
   // ── Cross-project map scope (#16) ────────────────────────────────────
   scopeThisProject: {
     id: 'map.scope.thisProject',

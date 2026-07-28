@@ -1274,9 +1274,6 @@
   "map.overlay.empty": {
     "defaultMessage": "No reference layers added"
   },
-  "map.overlay.hidden": {
-    "defaultMessage": "Hidden"
-  },
   "map.overlay.invalid": {
     "defaultMessage": "Could not read “{name}”. Not valid GeoJSON."
   },

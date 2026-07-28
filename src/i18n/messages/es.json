@@ -393,7 +393,6 @@
   "map.overlay.drop": "Suelte un archivo .geojson para mostrarlo como capa de referencia",
   "map.overlay.dropActive": "Suelte el archivo para añadir la capa",
   "map.overlay.empty": "No hay capas de referencia añadidas",
-  "map.overlay.hidden": "Oculto",
   "map.overlay.invalid": "No se pudo leer “{name}”. GeoJSON no válido.",
   "map.overlay.remove": "Quitar capa",
   "map.overlay.title": "Capas de referencia",

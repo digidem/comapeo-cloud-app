@@ -97,11 +97,7 @@ export function GeoJsonOverlay({ onOverlaysChange }: GeoJsonOverlayProps) {
   const dragDepthRef = useRef(0);
 
   // Sync overlay state up to the parent for map-layer rendering.
-  // Keep a ref of the latest value so the cleanup effect can notify
-  // the parent of the final empty state on unmount.
-  const overlaysRef = useRef(overlays);
   useEffect(() => {
-    overlaysRef.current = overlays;
     onOverlaysChange(overlays);
   }, [overlays, onOverlaysChange]);
 
@@ -223,8 +219,8 @@ export function GeoJsonOverlay({ onOverlaysChange }: GeoJsonOverlayProps) {
         onDrop={handleDrop}
         className={
           isDragActive
-            ? 'absolute inset-0 z-20 flex items-center justify-center border-4 border-dashed border-primary bg-primary/10'
-            : 'absolute inset-0 z-20'
+            ? 'absolute inset-0 z-20 pointer-events-auto flex items-center justify-center border-4 border-dashed border-primary bg-primary/10'
+            : 'absolute inset-0 z-20 pointer-events-none'
         }
         aria-label={intl.formatMessage(mapMessages.overlayDrop)}
       >
@@ -373,4 +369,3 @@ export function GeoJsonOverlay({ onOverlaysChange }: GeoJsonOverlayProps) {
 }
 
 export type { GeoJsonOverlayProps };
-export type { GeoJSON as GeoJsonData } from 'geojson';
