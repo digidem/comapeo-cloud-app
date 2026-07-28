@@ -143,11 +143,15 @@ export const InviteGenerated: Story = {
     await expect(inviteUrlCode).toBeVisible();
 
     // Verify the generated invite code is displayed (long value wraps)
-    const inviteCodeEl = await canvas.findByText(
-      /v1\.mock-encrypted-invite-code-/,
-      undefined,
-      { timeout: PLAY_TIMEOUT },
-    );
+    // Scoped to the invite-code row to avoid matching the URL code element
+    const inviteCodeLabel = await canvas.findByText('Invite Code', undefined, {
+      timeout: PLAY_TIMEOUT,
+    });
+    const inviteCodeRow = inviteCodeLabel.closest('div')!;
+    const inviteCodeEl = inviteCodeRow.querySelector('code')!;
     await expect(inviteCodeEl).toBeVisible();
+    await expect(inviteCodeEl.textContent).toMatch(
+      /v1\.mock-encrypted-invite-code-/,
+    );
   },
 };

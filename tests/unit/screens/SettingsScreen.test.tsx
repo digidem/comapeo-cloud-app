@@ -211,7 +211,7 @@ describe('SettingsScreen', () => {
       expect(inviteUrlCode).not.toHaveClass('truncate');
       // Must wrap long unbreakable tokens (base64url, URLs)
       expect(inviteUrlCode).toHaveClass('break-words');
-      expect(inviteUrlCode).toHaveClass('overflow-wrap-anywhere');
+      expect(inviteUrlCode).toHaveClass('wrap-anywhere');
       // Flex child must be able to shrink below content size
       expect(inviteUrlCode).toHaveClass('min-w-0');
       // Full value remains visible and selectable (not hidden)
@@ -230,7 +230,7 @@ describe('SettingsScreen', () => {
       });
 
       expect(inviteCode).toHaveClass('break-words');
-      expect(inviteCode).toHaveClass('overflow-wrap-anywhere');
+      expect(inviteCode).toHaveClass('wrap-anywhere');
       expect(inviteCode).toHaveClass('min-w-0');
       // Full value remains visible (not hidden by truncation)
       expect(inviteCode.textContent).toMatch(/^mock-encrypted-code-/);
