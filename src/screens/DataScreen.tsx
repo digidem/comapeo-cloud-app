@@ -6,6 +6,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { FilterSheet } from '@/components/shared/FilterSheet';
+import { MapScreenLayout } from '@/components/shared/MapScreenLayout';
 import { MediaPreview } from '@/components/shared/MediaPreview';
 import { ObservationCategoryIcon } from '@/components/shared/ObservationCategoryIcon';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
@@ -217,22 +218,6 @@ export function DataScreen() {
         </div>
       );
     }
-    if (viewMode === 'map') {
-      return (
-        <div className="mt-4">
-          <ObservationsMap
-            observations={filteredObs}
-            categoryByObservationId={categoryByObservationId}
-            onMarkerClick={(observationId) =>
-              navigate({
-                to: '/data/observations/$observationId',
-                params: { observationId },
-              })
-            }
-          />
-        </div>
-      );
-    }
     return (
       <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
@@ -283,15 +268,12 @@ export function DataScreen() {
       </>
     );
   }, [
-    filteredObs,
     paginatedObservations,
     showingStart,
     showingEnd,
     totalCount,
     hasMore,
     loadMore,
-    viewMode,
-    navigate,
     intl,
     resetFilters,
     displayNames,
@@ -327,52 +309,36 @@ export function DataScreen() {
 
   const observations = observationsQuery.data ?? [];
 
-  return (
-    <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
-      {/* Title */}
-      <h1 className="text-2xl font-bold text-text">
-        {intl.formatMessage(messages.title)}
-      </h1>
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-2">
-        <ExportObservationsButton
-          observations={observations}
-          projectName={selectedProject?.name}
-          disabled={observations.length === 0}
-          attachmentsByObservationId={attachmentsByObservationId}
-          displayNamesByObservationId={displayNames}
-          fieldsByKey={fieldsByKey}
-        />
-        {viewMode === 'grid' ? (
-          <button
-            type="button"
-            onClick={() => setViewMode('map')}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-button bg-surface-card text-text-muted hover:bg-surface-container-low hover:text-text transition-colors min-h-[44px]"
-            aria-label={intl.formatMessage(messages.switchToMapView)}
-            title={intl.formatMessage(messages.viewMap)}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
-              <line x1="8" y1="2" x2="8" y2="18" />
-              <line x1="16" y1="6" x2="16" y2="22" />
-            </svg>
-          </button>
-        ) : (
+  // Full-screen map view — returns early so the grid layout below only
+  // handles the grid case. Uses the shared MapScreenLayout (fills the
+  // AppShell <main> via h-full). Renders even when observations are empty
+  // or pending so the map shows its own empty/loading overlay (no grid
+  // flash on cold load).
+  if (viewMode === 'map') {
+    return (
+      <MapScreenLayout
+        topLeft={
+          <div className="hidden md:block">
+            <ObservationFilterBar
+              filters={obsFilters.filters}
+              availableCategories={obsFilters.availableCategories}
+              resultCount={filteredObs.length}
+              isFiltering={obsFilters.isFiltering}
+              onSearchChange={obsFilters.setSearch}
+              onStartDateChange={obsFilters.setStartDate}
+              onEndDateChange={obsFilters.setEndDate}
+              onCategoryToggle={obsFilters.toggleCategory}
+              onCategoriesClear={() => obsFilters.setCategories([])}
+              onSortChange={obsFilters.setSort}
+              onClear={obsFilters.reset}
+            />
+          </div>
+        }
+        topRight={
           <button
             type="button"
             onClick={() => setViewMode('grid')}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-button bg-surface-card text-text-muted hover:bg-surface-container-low hover:text-text transition-colors min-h-[44px]"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-button bg-surface-card text-text-muted hover:bg-surface-container-low hover:text-text transition-colors min-h-[44px] shadow-card"
             aria-label={intl.formatMessage(messages.switchToGridView)}
             title={intl.formatMessage(messages.viewGrid)}
           >
@@ -393,7 +359,120 @@ export function DataScreen() {
               <rect x="3" y="14" width="7" height="7" />
             </svg>
           </button>
-        )}
+        }
+        bottomLeft={
+          <div className="md:hidden">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setFilterDrawerOpen(true)}
+              className="relative shadow-card"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="mr-1.5"
+              >
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              </svg>
+              {intl.formatMessage(messages.filterButton)}
+              {obsFilters.isFiltering && (
+                <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                  {filteredObs.length}
+                </span>
+              )}
+            </Button>
+
+            <FilterSheet
+              open={filterDrawerOpen}
+              onOpenChange={setFilterDrawerOpen}
+              filters={obsFilters.filters}
+              availableCategories={obsFilters.availableCategories}
+              resultCount={filteredObs.length}
+              isFiltering={obsFilters.isFiltering}
+              onSearchChange={obsFilters.setSearch}
+              onStartDateChange={obsFilters.setStartDate}
+              onEndDateChange={obsFilters.setEndDate}
+              onCategoryToggle={obsFilters.toggleCategory}
+              onCategoriesClear={() => obsFilters.setCategories([])}
+              onSortChange={obsFilters.setSort}
+              onClear={obsFilters.reset}
+            />
+          </div>
+        }
+        bottomRight={
+          <ExportObservationsButton
+            observations={observations}
+            projectName={selectedProject?.name}
+            disabled={observations.length === 0}
+            attachmentsByObservationId={attachmentsByObservationId}
+            displayNamesByObservationId={displayNames}
+            fieldsByKey={fieldsByKey}
+          />
+        }
+      >
+        <ObservationsMap
+          observations={filteredObs}
+          categoryByObservationId={categoryByObservationId}
+          onMarkerClick={(observationId) =>
+            navigate({
+              to: '/data/observations/$observationId',
+              params: { observationId },
+            })
+          }
+          height="h-full"
+        />
+      </MapScreenLayout>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
+      {/* Title */}
+      <h1 className="text-2xl font-bold text-text">
+        {intl.formatMessage(messages.title)}
+      </h1>
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-2">
+        <ExportObservationsButton
+          observations={observations}
+          projectName={selectedProject?.name}
+          disabled={observations.length === 0}
+          attachmentsByObservationId={attachmentsByObservationId}
+          displayNamesByObservationId={displayNames}
+          fieldsByKey={fieldsByKey}
+        />
+        <button
+          type="button"
+          onClick={() => setViewMode('map')}
+          className="inline-flex h-11 w-11 items-center justify-center rounded-button bg-surface-card text-text-muted hover:bg-surface-container-low hover:text-text transition-colors min-h-[44px]"
+          aria-label={intl.formatMessage(messages.switchToMapView)}
+          title={intl.formatMessage(messages.viewMap)}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+            <line x1="8" y1="2" x2="8" y2="18" />
+            <line x1="16" y1="6" x2="16" y2="22" />
+          </svg>
+        </button>
       </div>
 
       {/* Observations content */}

@@ -560,6 +560,39 @@ describe('DataScreen', () => {
         ).not.toBeInTheDocument();
         expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
       });
+
+      it('renders map view by default when viewMode is map', () => {
+        useViewModeStore.setState({ viewMode: 'map' });
+        mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+        render(<DataScreen />);
+        expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+      });
+
+      it('shows grid toggle button in map view and switches to grid on click', async () => {
+        const { userEvent } = await import('@tests/mocks/test-utils');
+        const user = userEvent.setup();
+        useViewModeStore.setState({ viewMode: 'map' });
+        mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+        render(<DataScreen />);
+
+        // Grid toggle button should be present in map view
+        expect(
+          screen.getByRole('button', { name: /switch to grid view/i }),
+        ).toBeInTheDocument();
+
+        // Click to switch to grid
+        await user.click(
+          screen.getByRole('button', { name: /switch to grid view/i }),
+        );
+
+        // Grid view should be shown
+        expect(
+          screen.queryByTestId('observations-map'),
+        ).not.toBeInTheDocument();
+        expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
+      });
     });
 
     // ---- Observation filter integration ----

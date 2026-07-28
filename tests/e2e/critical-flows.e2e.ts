@@ -126,6 +126,16 @@ test.describe('Critical User Flows', () => {
   test('user can navigate from home to data observations list', async ({
     page,
   }) => {
+    // Seed the persisted view-mode store to grid so the Data screen renders
+    // the grid branch (with <h1>Data</h1> and observation card links) instead
+    // of the full-screen map on a fresh context with empty localStorage.
+    await page.addInitScript(() =>
+      localStorage.setItem(
+        'view-mode-preference',
+        JSON.stringify({ state: { viewMode: 'grid' }, version: 0 }),
+      ),
+    );
+
     await seedProjectWithObservations(page, 'Test Project');
 
     // Navigate to /data via the nav link
@@ -148,6 +158,16 @@ test.describe('Critical User Flows', () => {
   test('user can navigate from data to observation detail', async ({
     page,
   }) => {
+    // Seed the persisted view-mode store to grid so the Data screen renders
+    // the grid branch (with <h1>Data</h1> and observation card links) instead
+    // of the full-screen map on a fresh context with empty localStorage.
+    await page.addInitScript(() =>
+      localStorage.setItem(
+        'view-mode-preference',
+        JSON.stringify({ state: { viewMode: 'grid' }, version: 0 }),
+      ),
+    );
+
     const projectLocalId = await seedProjectWithObservations(
       page,
       'Test Project',
