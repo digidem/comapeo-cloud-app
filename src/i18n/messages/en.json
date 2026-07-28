@@ -1217,6 +1217,27 @@
   "map.download.unknownError": {
     "defaultMessage": "Unknown error"
   },
+  "map.history.downloaded": {
+    "defaultMessage": "Downloaded"
+  },
+  "map.history.empty": {
+    "defaultMessage": "No downloads yet"
+  },
+  "map.history.retry": {
+    "defaultMessage": "Retry"
+  },
+  "map.history.size": {
+    "defaultMessage": "Size: {size}"
+  },
+  "map.history.statusError": {
+    "defaultMessage": "Failed"
+  },
+  "map.history.statusReady": {
+    "defaultMessage": "Ready"
+  },
+  "map.history.title": {
+    "defaultMessage": "Download history"
+  },
   "map.nameDialog.cancel": {
     "defaultMessage": "Cancel"
   },
@@ -1240,6 +1261,36 @@
   },
   "map.nameDialog.title": {
     "defaultMessage": "Save map"
+  },
+  "map.overlay.clear": {
+    "defaultMessage": "Clear all overlays"
+  },
+  "map.overlay.drop": {
+    "defaultMessage": "Drop a .geojson file to show it as a reference layer"
+  },
+  "map.overlay.dropActive": {
+    "defaultMessage": "Drop the file to add the overlay"
+  },
+  "map.overlay.empty": {
+    "defaultMessage": "No reference layers added"
+  },
+  "map.overlay.hidden": {
+    "defaultMessage": "Hidden"
+  },
+  "map.overlay.invalid": {
+    "defaultMessage": "Could not read “{name}”. Not valid GeoJSON."
+  },
+  "map.overlay.remove": {
+    "defaultMessage": "Remove overlay"
+  },
+  "map.overlay.title": {
+    "defaultMessage": "Reference layers"
+  },
+  "map.overlay.tooLarge": {
+    "defaultMessage": "“{name}” is {size}. Large files may slow down the editor."
+  },
+  "map.overlay.toggle": {
+    "defaultMessage": "Toggle overlay visibility"
   },
   "map.saved.activeError": {
     "defaultMessage": "Could not update active map. Please try again."
@@ -1273,6 +1324,9 @@
   },
   "map.saved.noProjectLink": {
     "defaultMessage": "Go to Home"
+  },
+  "map.saved.originProject": {
+    "defaultMessage": "Origin project"
   },
   "map.saved.removeActive": {
     "defaultMessage": "Remove active"
@@ -1318,6 +1372,12 @@
   },
   "map.saved.untitledProject": {
     "defaultMessage": "Untitled Project"
+  },
+  "map.scope.allProjects": {
+    "defaultMessage": "All projects"
+  },
+  "map.scope.thisProject": {
+    "defaultMessage": "This project"
   },
   "map.stylePicker.customMode": {
     "defaultMessage": "Custom URL"

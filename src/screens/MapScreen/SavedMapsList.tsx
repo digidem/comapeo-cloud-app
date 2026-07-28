@@ -18,6 +18,26 @@ import { mapMessages } from './messages';
 
 interface SavedMapsListProps {
   projectLocalId: string | null;
+  /**
+   * Pre-resolved maps to display instead of querying by `projectLocalId`.
+   * Used by the cross-project "All projects" view (#16), which passes
+   * maps from `useAllMaps()`.
+   *
+   * When provided, the internal `useMaps` query is skipped and these
+   * maps are rendered directly.
+   */
+  maps?: SavedMap[];
+  /**
+   * Whether the maps query is still loading (for skeleton state).
+   * Only relevant when `maps` is provided.
+   */
+  isLoading?: boolean;
+  /**
+   * Show the origin project name for each map (cross-project view, #16).
+   * When `true`, each row displays the `originProjectName` field from
+   * the `SavedMapWithProject` type.
+   */
+  showOriginProject?: boolean;
 }
 
 type PendingAction =
@@ -35,7 +55,12 @@ const STATUS_MESSAGE_BY_STATUS: Record<
   error: 'statusError',
 };
 
-export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
+export function SavedMapsList({
+  projectLocalId,
+  maps: externalMaps,
+  isLoading,
+  showOriginProject,
+}: SavedMapsListProps) {
   const intl = useIntl();
   const activeMapId = useMapStore((state) => state.activeMapId);
   const mapsQuery = useMaps(projectLocalId);
@@ -52,7 +77,10 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const [deleteTarget, setDeleteTarget] = useState<SavedMap | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const maps = mapsQuery.data ?? [];
+  const maps = externalMaps ?? mapsQuery.data ?? [];
+  const isLoadingState = externalMaps
+    ? Boolean(isLoading)
+    : mapsQuery.isPending;
   const hasPendingAction = pendingAction !== null;
 
   async function runPendingAction(
@@ -145,14 +173,14 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
         </p>
       ) : null}
 
-      {mapsQuery.isPending ? (
+      {isLoadingState ? (
         <div className="flex flex-col gap-2">
           <Skeleton height={80} className="rounded-card" />
           <Skeleton height={80} className="rounded-card" />
         </div>
       ) : null}
 
-      {!mapsQuery.isPending && maps.length === 0 ? (
+      {!isLoadingState && maps.length === 0 ? (
         <p className="rounded-card bg-surface p-4 text-sm text-text-muted">
           {intl.formatMessage(mapMessages.savedMapsEmpty)}
         </p>
@@ -172,6 +200,15 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                   <h3 className="truncate text-sm font-semibold text-text">
                     {map.name}
                   </h3>
+                  {showOriginProject &&
+                  'originProjectName' in map &&
+                  typeof (map as { originProjectName?: unknown })
+                    .originProjectName === 'string' ? (
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      {intl.formatMessage(mapMessages.originProject)}:{' '}
+                      {(map as { originProjectName: string }).originProjectName}
+                    </p>
+                  ) : null}
                   <span className="mt-1 inline-flex rounded-full bg-surface-card px-2 py-0.5 text-xs font-semibold capitalize text-text-muted">
                     {intl.formatMessage(
                       mapMessages[STATUS_MESSAGE_BY_STATUS[map.status]],

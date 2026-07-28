@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAllMaps } from '@/hooks/useAllMaps';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { useCreateMap, useMaps } from '@/hooks/useMaps';
 import { useProjects } from '@/hooks/useProjects';
@@ -23,6 +24,7 @@ import { uuid } from '@/lib/uuid';
 import { useProjectStore } from '@/stores/project-store';
 
 import { BoundsEditor } from './BoundsEditor';
+import { DownloadHistory } from './DownloadHistory';
 import { DownloadPanel } from './DownloadPanel';
 import { DrawBoundsControl } from './DrawBoundsControl';
 import { MapAuthoringCanvas } from './MapAuthoringCanvas';
@@ -40,6 +42,9 @@ interface SettingsSheetProps {
 
 const DEFAULT_BBOX: [number, number, number, number] = [-75, -12, -45, 8];
 const DEFAULT_ZOOM: ZoomRange = { minZoom: 0, maxZoom: 14 };
+
+type ViewMode = 'author' | 'history';
+type HistoryScope = 'thisProject' | 'allProjects';
 
 // Frame overlay geometry for the mobile "pan-under-frame" draw pattern
 const FRAME_LEFT = 0.1; // 10% from left
@@ -121,7 +126,10 @@ export function MapScreen() {
   const projectsQuery = useProjects();
   const createMap = useCreateMap();
   const mapsQuery = useMaps(selectedProjectId);
+  const allMapsQuery = useAllMaps();
   const mapRef = useRef<MapRef | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('author');
+  const [historyScope, setHistoryScope] = useState<HistoryScope>('thisProject');
   const [selectedStyle, setSelectedStyle] = useState<ImageryBasemap>(() =>
     findBasemap(DEFAULT_BASEMAP_ID),
   );
@@ -307,38 +315,134 @@ export function MapScreen() {
   function renderControls() {
     return (
       <div className="flex flex-col gap-5">
-        <StylePicker value={selectedStyle} onChange={setSelectedStyle} />
-        <BoundsEditor
-          bbox={bbox}
-          onChange={setBbox}
-          projectLocalId={selectedProjectId}
-          mapRef={mapRef}
-        />
-        <ZoomSelector value={zoomRange} onChange={setZoomRange} />
-        <p className="text-xs text-text-muted">
-          {intl.formatMessage(mapMessages.zoomDownloadNote)}
-        </p>
-        <SavedMapsList projectLocalId={selectedProjectId} />
-        {(() => {
-          const maps = mapsQuery.data ?? [];
-          const downloadableMaps = maps.filter(
-            (m) =>
-              m.status === 'draft' ||
-              m.status === 'downloading' ||
-              m.status === 'error' ||
-              m.status === 'ready',
-          );
-          return downloadableMaps.map((m) => (
-            <DownloadPanel key={m.id} map={m} />
-          ));
-        })()}
-        <Button
-          onClick={openNameDialog}
-          className="w-full"
-          disabled={createMap.isPending || !hasConfigChanges}
+        {/* View toggle: Author vs History (#17) */}
+        <div
+          role="tablist"
+          aria-label="Map view"
+          className="flex rounded-btn bg-surface p-1"
         >
-          {intl.formatMessage(mapMessages.saveMap)}
-        </Button>
+          <button
+            role="tab"
+            type="button"
+            aria-selected={viewMode === 'author'}
+            onClick={() => setViewMode('author')}
+            className={`min-h-[40px] flex-1 rounded-btn px-3 py-1.5 text-sm font-medium transition-colors ${
+              viewMode === 'author'
+                ? 'bg-primary text-white'
+                : 'text-text-muted hover:text-text'
+            }`}
+          >
+            {intl.formatMessage(mapMessages.title)}
+          </button>
+          <button
+            role="tab"
+            type="button"
+            aria-selected={viewMode === 'history'}
+            onClick={() => setViewMode('history')}
+            className={`min-h-[40px] flex-1 rounded-btn px-3 py-1.5 text-sm font-medium transition-colors ${
+              viewMode === 'history'
+                ? 'bg-primary text-white'
+                : 'text-text-muted hover:text-text'
+            }`}
+          >
+            {intl.formatMessage(mapMessages.historyTitle)}
+          </button>
+        </div>
+
+        {viewMode === 'author' ? (
+          <>
+            <StylePicker value={selectedStyle} onChange={setSelectedStyle} />
+            <BoundsEditor
+              bbox={bbox}
+              onChange={setBbox}
+              projectLocalId={selectedProjectId}
+              mapRef={mapRef}
+            />
+            <ZoomSelector value={zoomRange} onChange={setZoomRange} />
+            <p className="text-xs text-text-muted">
+              {intl.formatMessage(mapMessages.zoomDownloadNote)}
+            </p>
+            <SavedMapsList projectLocalId={selectedProjectId} />
+            {(() => {
+              const maps = mapsQuery.data ?? [];
+              const downloadableMaps = maps.filter(
+                (m) =>
+                  m.status === 'draft' ||
+                  m.status === 'downloading' ||
+                  m.status === 'error' ||
+                  m.status === 'ready',
+              );
+              return downloadableMaps.map((m) => (
+                <DownloadPanel key={m.id} map={m} />
+              ));
+            })()}
+            <Button
+              onClick={openNameDialog}
+              className="w-full"
+              disabled={createMap.isPending || !hasConfigChanges}
+            >
+              {intl.formatMessage(mapMessages.saveMap)}
+            </Button>
+          </>
+        ) : (
+          <>
+            {/* History scope toggle (#16) */}
+            <div
+              role="tablist"
+              aria-label="History scope"
+              className="flex rounded-btn bg-surface p-1"
+            >
+              <button
+                role="tab"
+                type="button"
+                aria-selected={historyScope === 'thisProject'}
+                onClick={() => setHistoryScope('thisProject')}
+                className={`min-h-[40px] flex-1 rounded-btn px-3 py-1.5 text-sm font-medium transition-colors ${
+                  historyScope === 'thisProject'
+                    ? 'bg-primary text-white'
+                    : 'text-text-muted hover:text-text'
+                }`}
+              >
+                {intl.formatMessage(mapMessages.scopeThisProject)}
+              </button>
+              <button
+                role="tab"
+                type="button"
+                aria-selected={historyScope === 'allProjects'}
+                onClick={() => setHistoryScope('allProjects')}
+                className={`min-h-[40px] flex-1 rounded-btn px-3 py-1.5 text-sm font-medium transition-colors ${
+                  historyScope === 'allProjects'
+                    ? 'bg-primary text-white'
+                    : 'text-text-muted hover:text-text'
+                }`}
+              >
+                {intl.formatMessage(mapMessages.scopeAllProjects)}
+              </button>
+            </div>
+
+            {historyScope === 'thisProject' ? (
+              <DownloadHistory
+                maps={mapsQuery.data ?? []}
+                isLoading={mapsQuery.isPending}
+              />
+            ) : (
+              <DownloadHistory
+                maps={allMapsQuery.data ?? []}
+                isLoading={allMapsQuery.isPending}
+              />
+            )}
+
+            {/* Cross-project saved maps list (#16) */}
+            {historyScope === 'allProjects' ? (
+              <SavedMapsList
+                projectLocalId={null}
+                maps={allMapsQuery.data ?? []}
+                isLoading={allMapsQuery.isPending}
+                showOriginProject
+              />
+            ) : null}
+          </>
+        )}
       </div>
     );
   }

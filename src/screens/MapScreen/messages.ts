@@ -398,4 +398,87 @@ export const mapMessages = defineMessages({
     defaultMessage:
       '{n} tiles could not be downloaded. The package may be incomplete.',
   },
+  // ── GeoJSON overlay (#15) ─────────────────────────────────────────────
+  overlayDrop: {
+    id: 'map.overlay.drop',
+    defaultMessage: 'Drop a .geojson file to show it as a reference layer',
+  },
+  overlayDropActive: {
+    id: 'map.overlay.dropActive',
+    defaultMessage: 'Drop the file to add the overlay',
+  },
+  overlayInvalid: {
+    id: 'map.overlay.invalid',
+    defaultMessage: 'Could not read “{name}”. Not valid GeoJSON.',
+  },
+  overlayTooLarge: {
+    id: 'map.overlay.tooLarge',
+    defaultMessage: '“{name}” is {size}. Large files may slow down the editor.',
+  },
+  overlayToggle: {
+    id: 'map.overlay.toggle',
+    defaultMessage: 'Toggle overlay visibility',
+  },
+  overlayRemove: {
+    id: 'map.overlay.remove',
+    defaultMessage: 'Remove overlay',
+  },
+  overlayClear: {
+    id: 'map.overlay.clear',
+    defaultMessage: 'Clear all overlays',
+  },
+  overlayTitle: {
+    id: 'map.overlay.title',
+    defaultMessage: 'Reference layers',
+  },
+  overlayEmpty: {
+    id: 'map.overlay.empty',
+    defaultMessage: 'No reference layers added',
+  },
+  overlayHidden: {
+    id: 'map.overlay.hidden',
+    defaultMessage: 'Hidden',
+  },
+  // ── Cross-project map scope (#16) ────────────────────────────────────
+  scopeThisProject: {
+    id: 'map.scope.thisProject',
+    defaultMessage: 'This project',
+  },
+  scopeAllProjects: {
+    id: 'map.scope.allProjects',
+    defaultMessage: 'All projects',
+  },
+  originProject: {
+    id: 'map.saved.originProject',
+    defaultMessage: 'Origin project',
+  },
+  // ── Download history (#17) ───────────────────────────────────────────
+  historyTitle: {
+    id: 'map.history.title',
+    defaultMessage: 'Download history',
+  },
+  historyRetry: {
+    id: 'map.history.retry',
+    defaultMessage: 'Retry',
+  },
+  historyEmpty: {
+    id: 'map.history.empty',
+    defaultMessage: 'No downloads yet',
+  },
+  historySize: {
+    id: 'map.history.size',
+    defaultMessage: 'Size: {size}',
+  },
+  historyDownloaded: {
+    id: 'map.history.downloaded',
+    defaultMessage: 'Downloaded',
+  },
+  historyStatusReady: {
+    id: 'map.history.statusReady',
+    defaultMessage: 'Ready',
+  },
+  historyStatusError: {
+    id: 'map.history.statusError',
+    defaultMessage: 'Failed',
+  },
 });

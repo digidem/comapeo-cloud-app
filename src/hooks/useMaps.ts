@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { ALL_MAPS_QUERY_KEY } from '@/hooks/useAllMaps';
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import type { DownloadProgress } from '@/lib/map/smp-download';
@@ -39,6 +40,7 @@ export function useCreateMap() {
       void queryClient.invalidateQueries({
         queryKey: mapsQueryKey(map.projectLocalId),
       });
+      void queryClient.invalidateQueries({ queryKey: ALL_MAPS_QUERY_KEY });
     },
   });
 }
@@ -56,6 +58,7 @@ export function useRenameMap(projectLocalId: string | null) {
         queryKey: mapsQueryKey(projectLocalId),
       });
       void queryClient.invalidateQueries({ queryKey: ['map', mapId] });
+      void queryClient.invalidateQueries({ queryKey: ALL_MAPS_QUERY_KEY });
     },
   });
 }
@@ -92,6 +95,7 @@ export function useDeleteMap(projectLocalId: string | null) {
       });
       void queryClient.invalidateQueries({ queryKey: ['map', mapId] });
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      void queryClient.invalidateQueries({ queryKey: ALL_MAPS_QUERY_KEY });
     },
   });
 }
@@ -143,11 +147,13 @@ export function useDownloadMap() {
         queryKey: mapsQueryKey(map.projectLocalId),
       });
       void queryClient.invalidateQueries({ queryKey: ['map', map.id] });
+      void queryClient.invalidateQueries({ queryKey: ALL_MAPS_QUERY_KEY });
     },
     onError: (_error, { map }) => {
       void queryClient.invalidateQueries({
         queryKey: mapsQueryKey(map.projectLocalId),
       });
+      void queryClient.invalidateQueries({ queryKey: ALL_MAPS_QUERY_KEY });
     },
   });
 }

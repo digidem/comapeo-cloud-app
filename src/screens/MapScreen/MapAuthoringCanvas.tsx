@@ -16,6 +16,8 @@ import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { crossesAntimeridian } from '@/lib/map/bbox-utils';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 
+import { GeoJsonOverlay } from './GeoJsonOverlay';
+import type { OverlayEntry } from './GeoJsonOverlay';
 import { mapMessages } from './messages';
 
 interface MapAuthoringCanvasProps {
@@ -124,6 +126,9 @@ export function MapAuthoringCanvas({
     () => (bbox ? bboxToFeature(bbox) : null),
     [bbox],
   );
+
+  // GeoJSON reference-layer overlays (#15)
+  const [overlays, setOverlays] = useState<OverlayEntry[]>([]);
 
   // Drag‑to‑draw state
   const [dragStart, setDragStart] = useState<{
@@ -386,7 +391,50 @@ export function MapAuthoringCanvas({
             />
           </Source>
         )}
+
+        {/* GeoJSON reference-layer overlays (#15) */}
+        {overlays.map((overlay) =>
+          overlay.visible ? (
+            <Source
+              key={overlay.id}
+              id={`overlay-${overlay.id}`}
+              type="geojson"
+              data={overlay.data}
+            >
+              <Layer
+                id={`overlay-${overlay.id}-fill`}
+                type="fill"
+                paint={{
+                  'fill-color': overlay.color,
+                  'fill-opacity': 0.15,
+                }}
+              />
+              <Layer
+                id={`overlay-${overlay.id}-line`}
+                type="line"
+                paint={{
+                  'line-color': overlay.color,
+                  'line-width': 2,
+                }}
+              />
+              <Layer
+                id={`overlay-${overlay.id}-circle`}
+                type="circle"
+                paint={{
+                  'circle-radius': 4,
+                  'circle-color': overlay.color,
+                  'circle-stroke-color': '#ffffff',
+                  'circle-stroke-width': 1,
+                }}
+              />
+            </Source>
+          ) : null,
+        )}
       </Map>
+
+      {/* Drag-and-drop GeoJSON overlay manager (#15) */}
+      <GeoJsonOverlay onOverlaysChange={setOverlays} />
+
       {drawError && (
         <p
           role="alert"
