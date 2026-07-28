@@ -1286,11 +1286,11 @@
   "map.overlay.title": {
     "defaultMessage": "Reference layers"
   },
-  "map.overlay.tooLarge": {
-    "defaultMessage": "“{name}” is {size}. Large files may slow down the editor."
-  },
   "map.overlay.toggle": {
     "defaultMessage": "Toggle overlay visibility"
+  },
+  "map.overlay.tooLarge": {
+    "defaultMessage": "“{name}” is {size}. Large files may slow down the editor."
   },
   "map.saved.activeError": {
     "defaultMessage": "Could not update active map. Please try again."
