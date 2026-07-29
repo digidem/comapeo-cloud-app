@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
 
+import { ToastProvider } from '@/components/ui/toast';
 import { useProjectStore } from '@/stores/project-store';
 
 import { DataScreen } from './DataScreen';
@@ -89,7 +90,13 @@ const meta: Meta<DataScreenArgs> = {
         dataMode: context.args.dataMode,
         projectDataMode: context.args.projectDataMode,
       });
-      return <Story />;
+      return (
+        <ToastProvider>
+          <main>
+            <Story />
+          </main>
+        </ToastProvider>
+      );
     },
   ],
   // The screen takes no props — render it directly so the `selectedProjectId`

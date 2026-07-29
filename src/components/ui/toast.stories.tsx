@@ -17,25 +17,27 @@ function ToastDemo({
   autoTrigger?: boolean;
 }) {
   return (
-    <ToastProvider>
-      <div
-        style={{
-          minHeight: '100vh',
-          background: '#F4F6FA',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-        }}
-      >
-        <TriggerButton
-          variant={variant}
-          title={title}
-          description={description}
-          autoTrigger={autoTrigger}
-        />
-      </div>
-    </ToastProvider>
+    <main>
+      <ToastProvider>
+        <div
+          style={{
+            minHeight: '100vh',
+            background: '#F4F6FA',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}
+        >
+          <TriggerButton
+            variant={variant}
+            title={title}
+            description={description}
+            autoTrigger={autoTrigger}
+          />
+        </div>
+      </ToastProvider>
+    </main>
   );
 }
 
@@ -69,7 +71,7 @@ function TriggerButton({
       style={{
         padding: '8px 16px',
         borderRadius: 12,
-        background: '#1F6FFF',
+        background: '#04145C',
         color: '#fff',
         border: 'none',
         fontSize: 14,
@@ -84,20 +86,22 @@ function TriggerButton({
 
 function StackedToastsDemo({ autoTrigger = false }: { autoTrigger?: boolean }) {
   return (
-    <ToastProvider>
-      <div
-        style={{
-          minHeight: '100vh',
-          background: '#F4F6FA',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-        }}
-      >
-        <StackedTriggerButton autoTrigger={autoTrigger} />
-      </div>
-    </ToastProvider>
+    <main>
+      <ToastProvider>
+        <div
+          style={{
+            minHeight: '100vh',
+            background: '#F4F6FA',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}
+        >
+          <StackedTriggerButton autoTrigger={autoTrigger} />
+        </div>
+      </ToastProvider>
+    </main>
   );
 }
 
@@ -147,7 +151,7 @@ function StackedTriggerButton({
       style={{
         padding: '8px 16px',
         borderRadius: 12,
-        background: '#1F6FFF',
+        background: '#04145C',
         color: '#fff',
         border: 'none',
         fontSize: 14,

@@ -11,6 +11,13 @@ const meta: Meta<typeof SettingsScreen> = {
   parameters: {
     layout: 'fullscreen',
   },
+  decorators: [
+    (Story) => (
+      <main>
+        <Story />
+      </main>
+    ),
+  ],
 };
 
 export default meta;

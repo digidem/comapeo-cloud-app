@@ -32,7 +32,11 @@ export default meta;
 type Story = StoryObj<typeof Button>;
 
 /** Default primary button */
-export const Primary: Story = {};
+export const Primary: Story = {
+  args: {
+    className: 'bg-navy border-navy hover:bg-navy hover:border-navy',
+  },
+};
 
 /** Secondary button — white surface with border */
 export const Secondary: Story = {
