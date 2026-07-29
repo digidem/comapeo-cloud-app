@@ -24,6 +24,8 @@ A desktop-first monitoring workspace for environmental and territorial teams —
 
 ---
 
+<!-- Pipeline dry-run test marker (issue #165) -->
+
 ## What It Does
 
 CoMapeo mobile users collect observations in disconnected field environments. These sync to self-hosted **CoMapeo Cloud** servers. This app gives coordinators a centralized workspace to:
