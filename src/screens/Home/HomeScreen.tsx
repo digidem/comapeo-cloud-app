@@ -16,6 +16,7 @@ import { useShellSlot } from '@/components/layout/shell-slot';
 import { Button } from '@/components/ui/button';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
+import { useObservationCategoryMetadata } from '@/hooks/useObservationCategoryMetadata';
 import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
@@ -413,19 +414,17 @@ function HomeScreen() {
     observations,
     state.selectedProjectId,
   );
+  const { categories: observationCategories } = useObservationCategoryMetadata({
+    observations,
+    projectLocalId: state.selectedProjectId,
+    projectRemoteId: selectedProject?.remoteId,
+    serverUrl: archiveServerUrl,
+  });
 
   const alerts = useMemo(() => alertsQuery.data ?? [], [alertsQuery.data]);
   const tracks = useMemo(() => tracksQuery.data ?? [], [tracksQuery.data]);
 
-  // Derive unique tag categories from observations
-  const categoryCount = useMemo(() => {
-    const tagKeys = new Set<string>();
-    for (const obs of observations) {
-      const cat = obs.tags?.category;
-      if (typeof cat === 'string' && cat.trim()) tagKeys.add(cat.trim());
-    }
-    return tagKeys.size;
-  }, [observations]);
+  const categoryCount = observationCategories.length;
 
   // Compute media counts from observation tags (values stored as strings).
   // Track counts come from first-class synced track records.
