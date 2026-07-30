@@ -1,3 +1,4 @@
+import type { UserEvent } from '@testing-library/user-event';
 import { server } from '@tests/mocks/node';
 import { fireEvent, render, screen, userEvent } from '@tests/mocks/test-utils';
 import { HttpResponse, http } from 'msw';
@@ -25,6 +26,15 @@ vi.mock('@/lib/local-storage-utils', () => ({
   importLocalStorageData: vi.fn(() => ({ success: true })),
   clearAllStorage: vi.fn(() => Promise.resolve()),
 }));
+
+async function generateInvite(user: UserEvent) {
+  await user.type(
+    screen.getByLabelText('Remote Archive URL'),
+    'https://archive.example.com',
+  );
+  await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
+  await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+}
 
 beforeEach(async () => {
   await resetDb();
@@ -82,12 +92,7 @@ describe('SettingsScreen', () => {
     const user = userEvent.setup();
     render(<SettingsScreen />);
 
-    await user.type(
-      screen.getByLabelText('Remote Archive URL'),
-      'https://archive.example.com',
-    );
-    await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
-    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+    await generateInvite(user);
 
     // Results header should appear
     expect(await screen.findByText('Results')).toBeInTheDocument();
@@ -113,12 +118,7 @@ describe('SettingsScreen', () => {
     const user = userEvent.setup();
     render(<SettingsScreen />);
 
-    await user.type(
-      screen.getByLabelText('Remote Archive URL'),
-      'https://archive.example.com',
-    );
-    await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
-    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+    await generateInvite(user);
 
     expect(await screen.findByText('Expires in 24 hours.')).toBeInTheDocument();
   });
@@ -141,12 +141,7 @@ describe('SettingsScreen', () => {
     const user = userEvent.setup();
     render(<SettingsScreen />);
 
-    await user.type(
-      screen.getByLabelText('Remote Archive URL'),
-      'https://archive.example.com',
-    );
-    await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
-    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+    await generateInvite(user);
 
     expect(
       await screen.findByText(
@@ -163,13 +158,7 @@ describe('SettingsScreen', () => {
     const user = userEvent.setup();
     render(<SettingsScreen />);
 
-    // Fill form and generate
-    await user.type(
-      screen.getByLabelText('Remote Archive URL'),
-      'https://archive.example.com',
-    );
-    await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
-    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+    await generateInvite(user);
 
     // Wait for results to render
     await screen.findByText('Results');
