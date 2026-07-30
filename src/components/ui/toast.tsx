@@ -22,9 +22,9 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const variantClasses: Record<ToastVariant, string> = {
-  success: 'bg-success-soft text-success border-success',
-  error: 'bg-error-soft text-error border-error',
-  info: 'bg-info-soft text-info border-info',
+  success: 'bg-success-soft text-text border-success',
+  error: 'bg-error-soft text-text border-error',
+  info: 'bg-info-soft text-text border-info',
 };
 
 function useToast() {

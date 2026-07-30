@@ -80,7 +80,7 @@ describe('Toast', () => {
     await user.click(screen.getByRole('button', { name: 'Show Toast' }));
     const toast = getVisibleToast();
     expect(toast.className).toContain('bg-success-soft');
-    expect(toast.className).toContain('text-success');
+    expect(toast.className).toContain('text-text');
   });
 
   it('renders error variant with correct styling classes', async () => {
@@ -91,7 +91,7 @@ describe('Toast', () => {
     await user.click(screen.getByRole('button', { name: 'Show Toast' }));
     const toast = getVisibleToast();
     expect(toast.className).toContain('bg-error-soft');
-    expect(toast.className).toContain('text-error');
+    expect(toast.className).toContain('text-text');
   });
 
   it('renders info variant with correct styling classes', async () => {
@@ -100,7 +100,7 @@ describe('Toast', () => {
     await user.click(screen.getByRole('button', { name: 'Show Toast' }));
     const toast = getVisibleToast();
     expect(toast.className).toContain('bg-info-soft');
-    expect(toast.className).toContain('text-info');
+    expect(toast.className).toContain('text-text');
   });
 
   it('dismiss button closes toast', async () => {

@@ -34,7 +34,7 @@ type Story = StoryObj<typeof Button>;
 /** Default primary button */
 export const Primary: Story = {
   args: {
-    className: 'bg-navy border-navy hover:bg-navy hover:border-navy',
+    className: '!bg-navy !border-navy hover:!bg-navy hover:!border-navy',
   },
 };
 
