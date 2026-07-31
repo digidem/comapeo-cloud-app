@@ -31,12 +31,8 @@ const meta: Meta<typeof Button> = {
 export default meta;
 type Story = StoryObj<typeof Button>;
 
-/** Default primary button */
-export const Primary: Story = {
-  args: {
-    className: '!bg-navy !border-navy hover:!bg-navy hover:!border-navy',
-  },
-};
+/** Default primary button — navy surface for WCAG AA contrast with white text */
+export const Primary: Story = {};
 
 /** Secondary button — white surface with border */
 export const Secondary: Story = {

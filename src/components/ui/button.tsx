@@ -13,8 +13,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
+  // Navy surface (not brand blue) so white text meets WCAG AA contrast:
+  // #04145C on white ≈ 16.8:1, whereas #1F6FFF on white ≈ 4.4:1 (< 4.5:1).
   primary:
-    'bg-primary text-white border border-primary hover:bg-primary-hover hover:border-primary-hover',
+    'bg-primary-navy text-white border border-primary-navy hover:bg-primary-hover hover:border-primary-hover',
   secondary:
     'bg-white border border-border text-text hover:bg-surface hover:border-border',
   ghost: 'bg-transparent text-text hover:bg-surface',

@@ -79,8 +79,12 @@ describe('Toast', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Show Toast' }));
     const toast = getVisibleToast();
-    expect(toast.className).toContain('bg-success-soft');
-    expect(toast.className).toContain('text-text');
+    // Pin the exact variant triplet so a stray legacy text color (e.g.
+    // 'text-success') cannot silently ride alongside 'text-text'.
+    expect(toast.className).toContain(
+      'bg-success-soft text-text border-success',
+    );
+    expect(toast.className).not.toContain('text-success');
   });
 
   it('renders error variant with correct styling classes', async () => {
@@ -90,8 +94,8 @@ describe('Toast', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Show Toast' }));
     const toast = getVisibleToast();
-    expect(toast.className).toContain('bg-error-soft');
-    expect(toast.className).toContain('text-text');
+    expect(toast.className).toContain('bg-error-soft text-text border-error');
+    expect(toast.className).not.toContain('text-error');
   });
 
   it('renders info variant with correct styling classes', async () => {
@@ -99,8 +103,8 @@ describe('Toast', () => {
     renderWithToastProvider(<ToastTestConsumer variant="info" title="Info!" />);
     await user.click(screen.getByRole('button', { name: 'Show Toast' }));
     const toast = getVisibleToast();
-    expect(toast.className).toContain('bg-info-soft');
-    expect(toast.className).toContain('text-text');
+    expect(toast.className).toContain('bg-info-soft text-text border-info');
+    expect(toast.className).not.toContain('text-info');
   });
 
   it('dismiss button closes toast', async () => {
