@@ -615,7 +615,7 @@ jobs:
     needs: preview
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Smoke test — app reachability
         run: |
@@ -627,7 +627,19 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.preview.outputs.preview-url }}/api/info")
+          # Pages Functions propagate a few seconds after "Deployment complete";
+          # until they are live, /api/* falls through to the static 404 handler.
+          # Poll until the function answers (400) instead of failing on the first
+          # request, but still assert the final status is exactly 400.
+          STATUS=""
+          for i in $(seq 1 6); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.preview.outputs.preview-url }}/api/info")
+            if [ "$STATUS" = "400" ]; then
+              break
+            fi
+            echo "Attempt $i: expected 400, got $STATUS (Functions may still be propagating); retrying in 10s..."
+            sleep 10
+          done
           if [ "$STATUS" != "400" ]; then
             echo "Expected 400 for /api/info without x-target-url, got $STATUS"
             exit 1
@@ -827,7 +839,19 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/api/info")
+          # Pages Functions propagate a few seconds after "Deployment complete";
+          # until they are live, /api/* falls through to the static 404 handler.
+          # Poll until the function answers (400) instead of failing on the first
+          # request, but still assert the final status is exactly 400.
+          STATUS=""
+          for i in $(seq 1 6); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/api/info")
+            if [ "$STATUS" = "400" ]; then
+              break
+            fi
+            echo "Attempt $i: expected 400, got $STATUS (Functions may still be propagating); retrying in 15s..."
+            sleep 15
+          done
           if [ "$STATUS" != "400" ]; then
             echo "Expected 400 for /api/info without x-target-url, got $STATUS"
             exit 1
@@ -911,7 +935,7 @@ jobs:
     needs: deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Smoke test — app reachability
         run: |
@@ -923,7 +947,19 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://app.comapeo.cloud/api/info")
+          # Pages Functions propagate a few seconds after "Deployment complete";
+          # until they are live, /api/* falls through to the static 404 handler.
+          # Poll until the function answers (400) instead of failing on the first
+          # request, but still assert the final status is exactly 400.
+          STATUS=""
+          for i in $(seq 1 6); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://app.comapeo.cloud/api/info")
+            if [ "$STATUS" = "400" ]; then
+              break
+            fi
+            echo "Attempt $i: expected 400, got $STATUS (Functions may still be propagating); retrying in 10s..."
+            sleep 10
+          done
           if [ "$STATUS" != "400" ]; then
             echo "Expected 400 for /api/info without x-target-url, got $STATUS"
             exit 1
