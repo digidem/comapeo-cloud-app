@@ -29,6 +29,42 @@ import {
 /** Canonical path for remote detection alerts, matching comapeo-cloud server. */
 export const ALERTS_PATH = '/remoteDetectionAlerts' as const;
 
+export type EndpointReconciliationMode =
+  | 'snapshot'
+  | 'delta'
+  | 'tombstone-stream'
+  | 'unknown';
+export type EndpointAvailability = 'supported' | 'unsupported';
+export type EndpointSemanticsSource = 'contract' | 'header' | 'route-404';
+
+export interface EndpointSemantics {
+  resource:
+    | 'projects'
+    | 'observations'
+    | 'alerts'
+    | 'presets'
+    | 'tracks'
+    | 'fields';
+  availability: EndpointAvailability;
+  mode: EndpointReconciliationMode;
+  source: EndpointSemanticsSource;
+  apiVersion?: string;
+}
+
+interface EndpointContract {
+  resource: EndpointSemantics['resource'];
+  mode: Exclude<EndpointReconciliationMode, 'unknown'>;
+}
+
+const ENDPOINT_CONTRACTS = {
+  projects: { resource: 'projects', mode: 'snapshot' },
+  observations: { resource: 'observations', mode: 'snapshot' },
+  alerts: { resource: 'alerts', mode: 'snapshot' },
+  presets: { resource: 'presets', mode: 'snapshot' },
+  tracks: { resource: 'tracks', mode: 'snapshot' },
+  fields: { resource: 'fields', mode: 'snapshot' },
+} as const satisfies Record<string, EndpointContract>;
+
 // ---------------------------------------------------------------------------
 // RequestConfig — explicit credentials for remote archive calls
 // ---------------------------------------------------------------------------
@@ -36,21 +72,31 @@ export const ALERTS_PATH = '/remoteDetectionAlerts' as const;
 export interface RequestConfig {
   baseUrl: string;
   token: string;
+  signal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------
 // ApiError
 // ---------------------------------------------------------------------------
 
+export type ApiErrorKind = 'http' | 'unsupported-endpoint' | 'missing-project';
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
+  readonly kind: ApiErrorKind;
 
-  constructor(status: number, code: string, message: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    kind: ApiErrorKind = 'http',
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.kind = kind;
   }
 }
 
@@ -136,11 +182,78 @@ async function handle401(config?: RequestConfig): Promise<void> {
   // failure must not invalidate the active archive session.
 }
 
-async function handleResponse<T>(
+function attachEndpointSemantics<T extends object>(
+  value: T,
+  semantics: EndpointSemantics,
+): T & { semantics: EndpointSemantics } {
+  Object.defineProperty(value, 'semantics', {
+    value: semantics,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return value as T & { semantics: EndpointSemantics };
+}
+
+function semanticsForResponse(
+  response: Response,
+  contract: EndpointContract,
+): EndpointSemantics {
+  const declaredMode = response.headers.get('x-comapeo-reconciliation-mode');
+  const mode = (
+    declaredMode === 'snapshot' ||
+    declaredMode === 'delta' ||
+    declaredMode === 'tombstone-stream'
+      ? declaredMode
+      : contract.mode
+  ) as EndpointReconciliationMode;
+  const apiVersion = response.headers.get('x-comapeo-api-version') ?? undefined;
+
+  return {
+    resource: contract.resource,
+    availability: 'supported',
+    mode,
+    source: declaredMode ? 'header' : 'contract',
+    ...(apiVersion ? { apiVersion } : {}),
+  };
+}
+
+function unsupportedSemantics(contract: EndpointContract): EndpointSemantics {
+  return {
+    resource: contract.resource,
+    availability: 'unsupported',
+    mode: 'unknown',
+    source: 'route-404',
+  };
+}
+
+function classify404(
+  body: unknown,
+  code: string,
+  message: string,
+): ApiErrorKind {
+  const topLevelMessage =
+    body && typeof body === 'object' && 'message' in body
+      ? String(body.message)
+      : '';
+  if (/^Route\s+.+\s+not found$/i.test(topLevelMessage)) {
+    return 'unsupported-endpoint';
+  }
+  if (
+    /project\s+not found|missing project/i.test(message) ||
+    /PROJECT_NOT_FOUND/i.test(code)
+  ) {
+    return 'missing-project';
+  }
+  return 'http';
+}
+
+async function handleResponse<T extends object>(
   response: Response,
   schema: v.GenericSchema<T>,
   config?: RequestConfig,
-): Promise<T> {
+  contract?: EndpointContract,
+): Promise<T & { semantics?: EndpointSemantics }> {
   if (response.status === 401) {
     await handle401(config);
   }
@@ -148,23 +261,34 @@ async function handleResponse<T>(
   if (!response.ok) {
     let code = 'UNKNOWN';
     let message = `Request failed with status ${response.status}`;
+    let body: unknown;
 
     try {
-      const body = await response.json();
+      body = await response.json();
       const parsed = v.safeParse(errorResponseSchema, body);
       if (parsed.success) {
         code = parsed.output.error.code;
         message = parsed.output.error.message;
+      } else if (body && typeof body === 'object' && 'message' in body) {
+        message = String(body.message);
       }
     } catch {
       // Response body is not JSON or unparseable — keep defaults
     }
 
-    throw new ApiError(response.status, code, message);
+    throw new ApiError(
+      response.status,
+      code,
+      message,
+      response.status === 404 ? classify404(body, code, message) : 'http',
+    );
   }
 
   const body: unknown = await response.json();
-  return v.parse(schema, body);
+  const parsed = v.parse(schema, body);
+  return contract
+    ? attachEndpointSemantics(parsed, semanticsForResponse(response, contract))
+    : (parsed as T & { semantics: EndpointSemantics });
 }
 
 // ---------------------------------------------------------------------------
@@ -178,6 +302,7 @@ export const apiClient = {
       const response = await fetch(`${request.baseUrl}/info`, {
         headers: { ...request.extraHeaders },
         cache: 'no-store',
+        signal: config?.signal,
       });
       return handleResponse(response, serverInfoResponseSchema, config);
     } catch (error) {
@@ -191,9 +316,11 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(`${request.baseUrl}/healthcheck`, {
         headers: { ...request.extraHeaders },
+        signal: config?.signal,
       });
       return response.status === 200;
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw error;
       return false;
     }
   },
@@ -204,8 +331,14 @@ export const apiClient = {
       const response = await fetch(`${request.baseUrl}/projects`, {
         headers: { ...getAuthHeaders(config), ...request.extraHeaders },
         cache: 'no-store',
+        signal: config?.signal,
       });
-      return handleResponse(response, projectsResponseSchema, config);
+      return handleResponse(
+        response,
+        projectsResponseSchema,
+        config,
+        ENDPOINT_CONTRACTS.projects,
+      );
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -220,6 +353,7 @@ export const apiClient = {
         {
           headers: { ...getAuthHeaders(config), ...request.extraHeaders },
           cache: 'no-store',
+          signal: config?.signal,
         },
       );
       return handleResponse(response, projectDetailResponseSchema, config);
@@ -237,9 +371,15 @@ export const apiClient = {
         {
           headers: { ...getAuthHeaders(config), ...request.extraHeaders },
           cache: 'no-store',
+          signal: config?.signal,
         },
       );
-      return handleResponse(response, observationsResponseSchema, config);
+      return handleResponse(
+        response,
+        observationsResponseSchema,
+        config,
+        ENDPOINT_CONTRACTS.observations,
+      );
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -254,15 +394,21 @@ export const apiClient = {
         {
           headers: { ...getAuthHeaders(config), ...request.extraHeaders },
           cache: 'no-store',
+          signal: config?.signal,
         },
       );
-      return await handleResponse(response, tracksResponseSchema, config);
+      return await handleResponse(
+        response,
+        tracksResponseSchema,
+        config,
+        ENDPOINT_CONTRACTS.tracks,
+      );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        console.warn(
-          `Track endpoint not found for project ${projectId} — legacy server may not support /track`,
+      if (error instanceof ApiError && error.kind === 'unsupported-endpoint') {
+        return attachEndpointSemantics(
+          { data: [] },
+          unsupportedSemantics(ENDPOINT_CONTRACTS.tracks),
         );
-        return { data: [] };
       }
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -277,9 +423,15 @@ export const apiClient = {
         {
           headers: { ...getAuthHeaders(config), ...request.extraHeaders },
           cache: 'no-store',
+          signal: config?.signal,
         },
       );
-      return handleResponse(response, alertsResponseSchema, config);
+      return handleResponse(
+        response,
+        alertsResponseSchema,
+        config,
+        ENDPOINT_CONTRACTS.alerts,
+      );
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -303,6 +455,7 @@ export const apiClient = {
             ...request.extraHeaders,
           },
           body: JSON.stringify(body),
+          signal: config?.signal,
         },
       );
 
@@ -344,15 +497,21 @@ export const apiClient = {
         {
           headers: { ...getAuthHeaders(config), ...request.extraHeaders },
           cache: 'no-store',
+          signal: config?.signal,
         },
       );
-      return await handleResponse(response, presetsResponseSchema, config);
+      return await handleResponse(
+        response,
+        presetsResponseSchema,
+        config,
+        ENDPOINT_CONTRACTS.presets,
+      );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        console.warn(
-          `Preset endpoint not found for project ${projectId} — legacy server may not support /preset`,
+      if (error instanceof ApiError && error.kind === 'unsupported-endpoint') {
+        return attachEndpointSemantics(
+          { data: [] },
+          unsupportedSemantics(ENDPOINT_CONTRACTS.presets),
         );
-        return { data: [] };
       }
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -367,15 +526,21 @@ export const apiClient = {
         {
           headers: { ...getAuthHeaders(config), ...request.extraHeaders },
           cache: 'no-store',
+          signal: config?.signal,
         },
       );
-      return await handleResponse(response, fieldsResponseSchema, config);
+      return await handleResponse(
+        response,
+        fieldsResponseSchema,
+        config,
+        ENDPOINT_CONTRACTS.fields,
+      );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        console.warn(
-          `Field endpoint not found for project ${projectId} — legacy server may not support /field`,
+      if (error instanceof ApiError && error.kind === 'unsupported-endpoint') {
+        return attachEndpointSemantics(
+          { data: [] },
+          unsupportedSemantics(ENDPOINT_CONTRACTS.fields),
         );
-        return { data: [] };
       }
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -391,7 +556,10 @@ export const apiClient = {
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/icon/${encodeURIComponent(docId)}`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          signal: config?.signal,
+        },
       );
 
       if (response.status === 401) {

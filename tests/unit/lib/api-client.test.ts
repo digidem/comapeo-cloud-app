@@ -92,15 +92,18 @@ describe('apiClient', () => {
       expect(result).toEqual(presetsPayload);
     });
 
-    it('returns empty data for 404 (legacy server)', async () => {
+    it('returns unsupported semantics for a legacy route 404', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue(
         makeFetchResponse(404, {
-          error: { code: 'NOT_FOUND', message: 'Project not found' },
+          message: 'Route GET:/projects/badproj/preset not found',
+          error: 'Not Found',
+          statusCode: 404,
         }),
       );
 
       const result = await apiClient.getPresets('badproj');
       expect(result).toEqual({ data: [] });
+      expect(result.semantics?.availability).toBe('unsupported');
     });
 
     it('throws ApiError for a 500 error', async () => {
@@ -125,15 +128,18 @@ describe('apiClient', () => {
   });
 
   describe('getFields', () => {
-    it('returns empty data for 404 (legacy server)', async () => {
+    it('returns unsupported semantics for a legacy route 404', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue(
         makeFetchResponse(404, {
-          error: { code: 'NOT_FOUND', message: 'Not found' },
+          message: 'Route GET:/projects/badproj/field not found',
+          error: 'Not Found',
+          statusCode: 404,
         }),
       );
 
       const result = await apiClient.getFields('badproj');
       expect(result).toEqual({ data: [] });
+      expect(result.semantics?.availability).toBe('unsupported');
     });
   });
 
