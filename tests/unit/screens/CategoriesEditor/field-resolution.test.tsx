@@ -68,24 +68,28 @@ vi.mock('@/hooks/useProjects', () => ({
   })),
 }));
 
-vi.mock('@/stores/auth-store', () => ({
-  selectActiveBaseUrl: (state: { baseUrl: string | null }) => state.baseUrl,
-  selectActiveToken: (state: { token: string | null }) => state.token,
-  useAuthStore: vi.fn(
-    (
-      selector: (s: {
-        baseUrl: string | null;
-        token: string | null;
-        servers: Array<{ id: string; baseUrl: string; token: string }>;
-      }) => unknown,
-    ) =>
-      selector({
-        baseUrl: 'https://archive.example.com',
-        token: 'test-token',
-        servers: [],
-      }),
-  ),
-}));
+vi.mock('@/stores/auth-store', () => {
+  const mockAuthState = {
+    baseUrl: 'https://archive.example.com',
+    token: 'test-token',
+    servers: [] as Array<{ id: string; baseUrl: string; token: string }>,
+    activeServerId: null as string | null,
+  };
+  const selectActiveServer = (state: typeof mockAuthState) =>
+    state.servers.find((server) => server.id === state.activeServerId) ?? null;
+
+  return {
+    selectActiveServer,
+    selectActiveBaseUrl: (state: typeof mockAuthState) => state.baseUrl,
+    selectActiveToken: (state: typeof mockAuthState) => state.token,
+    useAuthStore: Object.assign(
+      vi.fn((selector: (s: typeof mockAuthState) => unknown) =>
+        selector(mockAuthState),
+      ),
+      { getState: () => mockAuthState },
+    ),
+  };
+});
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
