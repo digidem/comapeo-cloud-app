@@ -40,6 +40,12 @@ export interface ActiveArchiveState {
   baseUrl: string | null;
 }
 
+export interface AuthIdentity {
+  activeServerId: string | null;
+  baseUrl: string | null;
+  token: string | null;
+}
+
 export interface AuthState extends ActiveArchiveState {
   // Tier
   tier: AuthTier;
@@ -74,7 +80,7 @@ export interface AuthState extends ActiveArchiveState {
   // repository path; standalone values remain available for non-archive tiers.
   setToken: (token: string) => Promise<void>;
   setBaseUrl: (url: string) => Promise<void>;
-  clearAuth: () => Promise<void>;
+  clearAuth: (expectedIdentity?: AuthIdentity) => Promise<void>;
 }
 
 // Selectors
@@ -151,6 +157,17 @@ function persistActiveServerId(id: string | null): void {
 function normalizeForIdentity(baseUrl: string): string {
   const normalized = normalizeArchiveBaseUrl(baseUrl);
   return normalized.ok ? normalized.value : baseUrl.trim().replace(/\/+$/, '');
+}
+
+function matchesAuthIdentity(
+  state: AuthState,
+  identity: AuthIdentity,
+): boolean {
+  return (
+    state.activeServerId === identity.activeServerId &&
+    selectActiveBaseUrl(state) === identity.baseUrl &&
+    selectActiveToken(state) === identity.token
+  );
 }
 
 // Store
@@ -382,25 +399,30 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }));
   },
 
-  clearAuth: async () => {
-    const state = get();
-    if (state.activeServerId) {
-      await updateRemoteServer(state.activeServerId, { token: '' });
+  clearAuth: async (expectedIdentity) => {
+    let clearedServerId: string | null = null;
+
+    set((state) => {
+      if (expectedIdentity && !matchesAuthIdentity(state, expectedIdentity)) {
+        return {};
+      }
+
+      clearedServerId = state.activeServerId;
       persistActiveServerId(null);
-      set((current) => ({
-        servers: current.servers.map((server) =>
-          server.id === current.activeServerId
-            ? { ...server, token: '' }
-            : server,
+
+      return {
+        servers: state.servers.map((server) =>
+          server.id === clearedServerId ? { ...server, token: '' } : server,
         ),
         activeServerId: null,
         token: null,
         baseUrl: null,
         isAuthenticated: false,
-      }));
-      return;
-    }
+      };
+    });
 
-    set({ token: null, baseUrl: null, isAuthenticated: false });
+    if (clearedServerId) {
+      await updateRemoteServer(clearedServerId, { token: '' });
+    }
   },
 }));

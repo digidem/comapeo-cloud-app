@@ -89,25 +89,18 @@ export function useApiPresets(
     effectiveToken !== null &&
     effectiveToken !== '';
 
-  // !!effectiveToken used in queryKey to avoid leaking the bearer token into
-  // React Query devtools / logging while still invalidating on change.
-  // The exhaustive-deps rule wants serverConfig in the key, but we
-  // intentionally omit the raw token — the boolean presence flag is
-  // sufficient for cache invalidation on credential rotation.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
   const queryResult = useQuery({
     queryKey: [
       'api-presets',
       projectRemoteId,
       effectiveBaseUrl,
-      !!effectiveToken,
+      effectiveToken,
     ],
-    queryFn: () => {
-      const config: RequestConfig = serverConfig
-        ? { baseUrl: serverConfig.baseUrl, token: serverConfig.token }
-        : { baseUrl: activeBaseUrl!, token: activeToken ?? '' };
-      return apiClient.getPresets(projectRemoteId!, config);
-    },
+    queryFn: () =>
+      apiClient.getPresets(projectRemoteId!, {
+        baseUrl: effectiveBaseUrl!,
+        token: effectiveToken!,
+      } satisfies RequestConfig),
     enabled,
     select: (data) => deduplicatePresetVersions(data.data),
   });

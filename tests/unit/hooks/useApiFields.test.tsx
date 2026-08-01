@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ReactNode } from 'react';
@@ -149,6 +149,28 @@ describe('useApiFields', () => {
       baseUrl: 'https://archive.example.org',
       token: 'secret-token',
     });
+  });
+
+  it('refetches when the token changes for the same active URL', async () => {
+    useAuthStore.setState({
+      baseUrl: 'https://archive.example.org',
+      token: 'first-token',
+    });
+
+    const { result } = renderHook(() => useApiFields(REMOTE_ID), { wrapper });
+
+    await waitFor(() => expect(getFields).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      useAuthStore.setState({ token: 'rotated-token' });
+    });
+
+    await waitFor(() => expect(getFields).toHaveBeenCalledTimes(2));
+    expect(getFields).toHaveBeenLastCalledWith(REMOTE_ID, {
+      baseUrl: 'https://archive.example.org',
+      token: 'rotated-token',
+    });
+    expect(result.current.isSuccess).toBe(true);
   });
 
   it('is disabled (never fetches) when no active server is configured', async () => {

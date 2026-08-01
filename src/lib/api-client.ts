@@ -17,7 +17,9 @@ import {
   tracksResponseSchema,
 } from '@/lib/schemas';
 import {
+  type AuthIdentity,
   selectActiveBaseUrl,
+  selectActiveServer,
   selectActiveToken,
   useAuthStore,
 } from '@/stores/auth-store';
@@ -38,10 +40,7 @@ export interface RequestConfig {
   token: string;
 }
 
-interface RequestCredentials {
-  baseUrl: string | null;
-  token: string | null;
-}
+type RequestCredentials = AuthIdentity;
 
 // ---------------------------------------------------------------------------
 // ApiError
@@ -104,12 +103,11 @@ export function resolveApiRequest(
 // ---------------------------------------------------------------------------
 
 function resolveRequestCredentials(config?: RequestConfig): RequestCredentials {
-  if (config) return config;
-
   const state = useAuthStore.getState();
   return {
-    baseUrl: selectActiveBaseUrl(state),
-    token: selectActiveToken(state),
+    activeServerId: selectActiveServer(state)?.id ?? null,
+    baseUrl: config?.baseUrl ?? selectActiveBaseUrl(state),
+    token: config?.token ?? selectActiveToken(state),
   };
 }
 
@@ -140,18 +138,7 @@ function throwNetworkError(): never {
 async function handle401(
   requestCredentials: RequestCredentials,
 ): Promise<void> {
-  const state = useAuthStore.getState();
-  const activeBaseUrl = selectActiveBaseUrl(state);
-  const activeToken = selectActiveToken(state);
-
-  if (
-    requestCredentials.baseUrl === activeBaseUrl &&
-    requestCredentials.token === activeToken
-  ) {
-    await state.clearAuth();
-  }
-  // Else: the request did not use the active credentials, so its failure must
-  // not invalidate the active archive session.
+  await useAuthStore.getState().clearAuth(requestCredentials);
 }
 
 async function handleResponse<T>(
@@ -579,7 +566,8 @@ export function getAttachmentUrl(
   variant?: string,
   options?: { baseUrl?: string },
 ): string {
-  const baseUrl = options?.baseUrl ?? useAuthStore.getState().baseUrl;
+  const baseUrl =
+    options?.baseUrl ?? selectActiveBaseUrl(useAuthStore.getState());
   // Keep archive URLs intact here. AuthImg/useAuthenticatedImageUrl converts
   // matching archive URLs to /api proxy requests with the required headers.
   const base = baseUrl?.replace(/\/+$/, '') ?? '';

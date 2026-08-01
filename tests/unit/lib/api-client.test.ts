@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, apiClient } from '@/lib/api-client';
+import { ApiError, apiClient, getAttachmentUrl } from '@/lib/api-client';
 
 // Mock the stores used by api-client internals
 const authStoreMock = vi.hoisted(() => ({
@@ -196,10 +196,14 @@ describe('apiClient', () => {
       await expect(apiClient.getPresets('project-id')).rejects.toThrow(
         ApiError,
       );
-      expect(authStoreMock.clearAuth).toHaveBeenCalled();
+      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+        activeServerId: 'active-server',
+        baseUrl: 'https://active.example.com',
+        token: 'active-token',
+      });
     });
 
-    it('does NOT call clearAuth when 401 comes from a non-active server (explicit config)', async () => {
+    it('passes non-active request identity to the atomic clear operation', async () => {
       globalThis.fetch = vi
         .fn()
         .mockResolvedValue(makeFetchResponse(401, error401));
@@ -207,7 +211,11 @@ describe('apiClient', () => {
       await expect(
         apiClient.getPresets('project-id', otherConfig),
       ).rejects.toThrow(ApiError);
-      expect(authStoreMock.clearAuth).not.toHaveBeenCalled();
+      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+        activeServerId: 'active-server',
+        baseUrl: 'https://other.example.com',
+        token: 'other-token',
+      });
     });
 
     it('does NOT clear server B when a delayed 401 from server A used the same token', async () => {
@@ -240,7 +248,11 @@ describe('apiClient', () => {
       resolveResponse(makeFetchResponse(401, error401));
 
       await expect(request).rejects.toThrow(ApiError);
-      expect(authStoreMock.clearAuth).not.toHaveBeenCalled();
+      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+        activeServerId: 'active-server',
+        baseUrl: 'https://active.example.com',
+        token: 'active-token',
+      });
     });
 
     // --- createAlert path ---
@@ -256,7 +268,7 @@ describe('apiClient', () => {
       expect(authStoreMock.clearAuth).toHaveBeenCalled();
     });
 
-    it('does NOT call clearAuth when createAlert 401 comes from a non-active server (explicit config)', async () => {
+    it('passes configured createAlert identity to the atomic clear operation', async () => {
       globalThis.fetch = vi
         .fn()
         .mockResolvedValue(makeFetchResponse(401, error401));
@@ -264,7 +276,66 @@ describe('apiClient', () => {
       await expect(
         apiClient.createAlert('project-id', alertBody, otherConfig),
       ).rejects.toThrow(ApiError);
-      expect(authStoreMock.clearAuth).not.toHaveBeenCalled();
+      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+        activeServerId: 'active-server',
+        baseUrl: 'https://other.example.com',
+        token: 'other-token',
+      });
+    });
+
+    it('passes captured identity for getIcon 401 responses', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(makeFetchResponse(401, error401));
+
+      await expect(apiClient.getIcon('project-id', 'icon-id')).rejects.toThrow(
+        ApiError,
+      );
+      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+        activeServerId: 'active-server',
+        baseUrl: 'https://active.example.com',
+        token: 'active-token',
+      });
+    });
+  });
+
+  describe('captured request credentials', () => {
+    it('keeps the Authorization header captured when the request starts', async () => {
+      let resolveResponse!: (response: Response) => void;
+      globalThis.fetch = vi.fn().mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveResponse = resolve;
+          }),
+      );
+
+      const request = apiClient.getFields('project-id');
+
+      authStoreMock.state.servers[0]!.token = 'rotated-token';
+      authStoreMock.state.token = 'rotated-token';
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'https://active.example.com/projects/project-id/field',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer active-token',
+          }),
+        }),
+      );
+
+      resolveResponse(makeFetchResponse(404));
+      await expect(request).resolves.toEqual({ data: [] });
+    });
+  });
+
+  describe('getAttachmentUrl', () => {
+    it('uses the selected active server URL instead of stale compatibility state', () => {
+      authStoreMock.state.baseUrl = 'https://stale.example.com';
+      authStoreMock.state.servers[0]!.baseUrl = 'https://selected.example.com/';
+
+      expect(getAttachmentUrl('project', 'drive', 'photo', 'image.jpg')).toBe(
+        'https://selected.example.com/projects/project/attachments/drive/photo/image.jpg',
+      );
     });
   });
 });

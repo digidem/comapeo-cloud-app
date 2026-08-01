@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiClient } from '@/lib/api-client';
 import { resetDb } from '@/lib/db';
-import { getRemoteServer } from '@/lib/local-repositories';
+import * as localRepositories from '@/lib/local-repositories';
 import {
   selectActiveBaseUrl,
   selectActiveServer,
@@ -10,6 +10,8 @@ import {
   selectIsAuthenticated,
   useAuthStore,
 } from '@/stores/auth-store';
+
+const { getRemoteServer } = localRepositories;
 
 beforeEach(async () => {
   sessionStorage.clear();
@@ -848,5 +850,92 @@ describe('active archive identity and credential invariants', () => {
     expect(server?.lastSyncedAt).toBeUndefined();
     expect((await getRemoteServer(serverId))?.errorMessage).toBeUndefined();
     expect((await getRemoteServer(serverId))?.lastSyncedAt).toBe('');
+  });
+
+  it('does not clear a newly selected server while 401 persistence is pending', async () => {
+    const { firstId, secondId } = await addTwoServers();
+    useAuthStore.getState().setActiveServer(firstId);
+    const clearIdentity = {
+      activeServerId: firstId,
+      baseUrl: 'https://first.example.com',
+      token: 'first-token',
+    };
+    let releasePersistence!: () => void;
+    let markPersistenceStarted!: () => void;
+    const persistenceStarted = new Promise<void>((resolve) => {
+      markPersistenceStarted = resolve;
+    });
+    const persistenceRelease = new Promise<void>((resolve) => {
+      releasePersistence = resolve;
+    });
+
+    vi.spyOn(localRepositories, 'updateRemoteServer').mockImplementation(
+      async () => {
+        markPersistenceStarted();
+        await persistenceRelease;
+        return undefined;
+      },
+    );
+
+    const clear = useAuthStore.getState().clearAuth(clearIdentity);
+    await persistenceStarted;
+
+    useAuthStore.getState().setActiveServer(secondId);
+    releasePersistence();
+    await clear;
+
+    const state = useAuthStore.getState();
+    expect(state.activeServerId).toBe(secondId);
+    expect(selectActiveBaseUrl(state)).toBe('https://second.example.com');
+    expect(selectActiveToken(state)).toBe('second-token');
+  });
+
+  it('does not clear a rotated token while 401 persistence is pending', async () => {
+    const serverId = await useAuthStore.getState().addServer({
+      label: 'Active',
+      baseUrl: 'https://active.example.com',
+      token: 'old-token',
+    });
+    useAuthStore.getState().setActiveServer(serverId);
+    const clearIdentity = {
+      activeServerId: serverId,
+      baseUrl: 'https://active.example.com',
+      token: 'old-token',
+    };
+    let releasePersistence!: () => void;
+    let markPersistenceStarted!: () => void;
+    const persistenceStarted = new Promise<void>((resolve) => {
+      markPersistenceStarted = resolve;
+    });
+    const persistenceRelease = new Promise<void>((resolve) => {
+      releasePersistence = resolve;
+    });
+
+    vi.spyOn(localRepositories, 'updateRemoteServer').mockImplementation(
+      async () => {
+        markPersistenceStarted();
+        await persistenceRelease;
+        return undefined;
+      },
+    );
+
+    const clear = useAuthStore.getState().clearAuth(clearIdentity);
+    await persistenceStarted;
+
+    useAuthStore.getState().setActiveServer(serverId);
+    useAuthStore.setState((state) => ({
+      servers: state.servers.map((server) =>
+        server.id === serverId ? { ...server, token: 'rotated-token' } : server,
+      ),
+      token: 'rotated-token',
+      isAuthenticated: true,
+    }));
+    releasePersistence();
+    await clear;
+
+    const state = useAuthStore.getState();
+    expect(state.activeServerId).toBe(serverId);
+    expect(selectActiveToken(state)).toBe('rotated-token');
+    expect(selectIsAuthenticated(state)).toBe(true);
   });
 });

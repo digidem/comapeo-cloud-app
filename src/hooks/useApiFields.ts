@@ -57,25 +57,13 @@ export function useApiFields(
     effectiveToken !== null &&
     effectiveToken !== '';
 
-  // !!effectiveToken used in queryKey to avoid leaking the bearer token into
-  // React Query devtools / logging while still invalidating on change.
-  // The exhaustive-deps rule wants serverConfig in the key, but we
-  // intentionally omit the raw token — the boolean presence flag is
-  // sufficient for cache invalidation on credential rotation.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
   const queryResult = useQuery({
-    queryKey: [
-      'api-fields',
-      projectRemoteId,
-      effectiveBaseUrl,
-      !!effectiveToken,
-    ],
-    queryFn: () => {
-      const config: RequestConfig = serverConfig
-        ? { baseUrl: serverConfig.baseUrl, token: serverConfig.token }
-        : { baseUrl: activeBaseUrl!, token: activeToken ?? '' };
-      return apiClient.getFields(projectRemoteId!, config);
-    },
+    queryKey: ['api-fields', projectRemoteId, effectiveBaseUrl, effectiveToken],
+    queryFn: () =>
+      apiClient.getFields(projectRemoteId!, {
+        baseUrl: effectiveBaseUrl!,
+        token: effectiveToken!,
+      } satisfies RequestConfig),
     enabled,
     select: (data) =>
       deduplicateFieldVersions(data.data.filter((f) => !f.deleted)),
