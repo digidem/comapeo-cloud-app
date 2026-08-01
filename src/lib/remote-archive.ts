@@ -1,6 +1,6 @@
 import type { Table, UpdateSpec } from 'dexie';
 
-import { apiClient } from '@/lib/api-client';
+import { ApiError, apiClient } from '@/lib/api-client';
 import type { EndpointSemantics, RequestConfig } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { buildIconUrl } from '@/lib/category-utils';
@@ -720,8 +720,9 @@ export async function pullAlerts(
 /**
  * Pre-fetch and cache the icon blobs for the given presets so the UI can
  * render category icons instantly (from IndexedDB) instead of fetching them
- * on first render. Best-effort: individual icon failures are swallowed and
- * never affect the preset sync. The cache key matches the icon URL the UI
+ * on first render. Best-effort: individual icon failures are logged as
+ * warnings and surfaced in the result, but never block the preset sync
+ * itself. The cache key matches the icon URL the UI
  * derives via {@link buildIconUrl}, so cached blobs are found on lookup.
  *
  * Concurrency is capped at 4 to avoid overwhelming the server with
@@ -767,7 +768,11 @@ async function precacheCategoryIcons(
   return results.flatMap((result, index) =>
     result.status === 'rejected'
       ? [
-          `Icon prefetch failed for ${uniqueIconDocIds[index]?.docId ?? 'unknown icon'}: ${String(result.reason)}`,
+          `Icon prefetch failed for ${uniqueIconDocIds[index]?.docId ?? 'unknown icon'}: ${
+            result.reason instanceof ApiError
+              ? `[${result.reason.kind} ${result.reason.status}] ${result.reason.code}: ${result.reason.message}`
+              : String(result.reason)
+          }`,
         ]
       : [],
   );

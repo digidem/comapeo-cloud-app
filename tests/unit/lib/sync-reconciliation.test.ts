@@ -49,12 +49,7 @@ const counts = {
 
 function result(
   resource:
-    | 'projects'
-    | 'observations'
-    | 'alerts'
-    | 'presets'
-    | 'tracks'
-    | 'fields',
+    'projects' | 'observations' | 'alerts' | 'presets' | 'tracks' | 'fields',
   availability: 'supported' | 'unsupported' = 'supported',
 ) {
   return {
