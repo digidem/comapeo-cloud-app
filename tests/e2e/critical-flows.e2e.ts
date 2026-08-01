@@ -156,9 +156,14 @@ test.describe('Critical User Flows', () => {
       await expect(page.getByRole('menuitemradio').first()).toBeVisible();
       await page.keyboard.press('Escape');
 
+      const attributionControl = page.locator('.maplibregl-ctrl-attrib');
       const attributionButton = page.locator('.maplibregl-ctrl-attrib-button');
       await expect(attributionButton).toBeVisible();
+      await expect(attributionControl).not.toHaveClass(
+        /maplibregl-compact-show/,
+      );
       await attributionButton.click();
+      await expect(attributionControl).toHaveClass(/maplibregl-compact-show/);
     });
   }
 
