@@ -7,6 +7,8 @@ export interface MapScreenLayoutProps {
   style?: CSSProperties;
   sidebar?: ReactNode;
   topLeft?: ReactNode;
+  /** Override top-left slot positioning to reserve adjacent map controls. */
+  topLeftPositionClassName?: string;
   topRight?: ReactNode;
   bottomLeft?: ReactNode;
   bottomRight?: ReactNode;
@@ -18,6 +20,7 @@ export function MapScreenLayout({
   style,
   sidebar,
   topLeft,
+  topLeftPositionClassName,
   topRight,
   bottomLeft,
   bottomRight,
@@ -34,7 +37,11 @@ export function MapScreenLayout({
         {children}
 
         {topLeft && (
-          <div className="absolute top-4 left-3 z-10 flex gap-2 items-center">
+          <div
+            className={`absolute z-10 flex gap-2 ${
+              topLeftPositionClassName ?? 'top-4 left-3 items-center'
+            }`}
+          >
             {topLeft}
           </div>
         )}

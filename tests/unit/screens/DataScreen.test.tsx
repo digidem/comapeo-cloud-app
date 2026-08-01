@@ -126,14 +126,17 @@ vi.mock('@/components/shared/ObservationsMap', () => ({
   ObservationsMap: ({
     categoryByObservationId,
     basemapSwitcherPositionClassName,
+    showEmptyState,
   }: {
     categoryByObservationId?: Map<string, unknown>;
     basemapSwitcherPositionClassName?: string;
+    showEmptyState?: boolean;
   }) => (
     <div
       data-testid="observations-map"
       data-category-count={categoryByObservationId?.size ?? 0}
       data-basemap-switcher-position={basemapSwitcherPositionClassName}
+      data-show-empty-state={String(showEmptyState)}
     />
   ),
 }));
@@ -578,8 +581,15 @@ describe('DataScreen', () => {
 
         render(<DataScreen />);
 
-        expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+        expect(screen.getByTestId('observations-map')).toHaveAttribute(
+          'data-show-empty-state',
+          'false',
+        );
         expect(screen.getByRole('status')).toHaveTextContent('Loading...');
+        expect(screen.getByRole('status')).toHaveClass('z-20');
+        expect(
+          screen.getByRole('status').querySelector('.animate-pulse'),
+        ).not.toBeNull();
       });
 
       it('shows an error state over the map when observations fail to load', () => {
@@ -592,10 +602,14 @@ describe('DataScreen', () => {
 
         render(<DataScreen />);
 
-        expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+        expect(screen.getByTestId('observations-map')).toHaveAttribute(
+          'data-show-empty-state',
+          'false',
+        );
         expect(screen.getByRole('alert')).toHaveTextContent(
           'Failed to load observations. Please try again.',
         );
+        expect(screen.getByRole('alert')).toHaveClass('z-20');
       });
 
       it('places the layer switcher below the grid toggle and hides map sorting', () => {

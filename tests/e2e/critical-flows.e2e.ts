@@ -126,20 +126,11 @@ test.describe('Critical User Flows', () => {
   test('user can navigate from home to data observations list', async ({
     page,
   }) => {
-    // Seed the persisted view-mode store to grid so the Data screen renders
-    // the grid branch (with <h1>Data</h1> and observation card links) instead
-    // of the full-screen map on a fresh context with empty localStorage.
-    await page.addInitScript(() =>
-      localStorage.setItem(
-        'view-mode-preference',
-        JSON.stringify({ state: { viewMode: 'grid' }, version: 0 }),
-      ),
-    );
-
     await seedProjectWithObservations(page, 'Test Project');
 
     // Navigate to /data via the nav link
     await page.getByRole('link', { name: 'Data' }).click();
+    await page.getByRole('button', { name: 'Switch to grid view' }).click();
 
     // Data heading visible
     await expect(
@@ -152,22 +143,39 @@ test.describe('Critical User Flows', () => {
     ).toBeVisible();
   });
 
+  test('map controls remain clickable when desktop filters wrap', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1180, height: 900 });
+    await seedProjectWithObservations(page, 'Map Controls Project');
+    await page.getByRole('link', { name: 'Data' }).click();
+
+    const layerButton = page.getByTestId('basemap-switcher-trigger');
+    const attributionButton = page.locator('.maplibregl-ctrl-attrib-button');
+    const attribution = page.locator('.maplibregl-ctrl-attrib');
+
+    for (const width of [768, 1024, 1180]) {
+      await page.setViewportSize({ width, height: 900 });
+
+      await expect(layerButton).toBeVisible();
+      await layerButton.click();
+      await expect(page.getByRole('menuitemradio').first()).toBeVisible();
+      await page.keyboard.press('Escape');
+
+      await expect(attributionButton).toBeVisible();
+      await attributionButton.click();
+      await expect(attribution).toHaveClass(/maplibregl-compact-show/);
+      await attributionButton.click();
+      await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
+    }
+  });
+
   // -------------------------------------------------------------------------
   // Flow 2: Data → Observations → Observation Detail
   // -------------------------------------------------------------------------
   test('user can navigate from data to observation detail', async ({
     page,
   }) => {
-    // Seed the persisted view-mode store to grid so the Data screen renders
-    // the grid branch (with <h1>Data</h1> and observation card links) instead
-    // of the full-screen map on a fresh context with empty localStorage.
-    await page.addInitScript(() =>
-      localStorage.setItem(
-        'view-mode-preference',
-        JSON.stringify({ state: { viewMode: 'grid' }, version: 0 }),
-      ),
-    );
-
     const projectLocalId = await seedProjectWithObservations(
       page,
       'Test Project',
@@ -175,6 +183,7 @@ test.describe('Critical User Flows', () => {
 
     // Navigate to /data via the nav link
     await page.getByRole('link', { name: 'Data' }).click();
+    await page.getByRole('button', { name: 'Switch to grid view' }).click();
     await expect(
       page.getByRole('heading', { level: 1, name: 'Data' }),
     ).toBeVisible();

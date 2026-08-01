@@ -84,7 +84,3 @@ export const WithSidebar: Story = {
     ),
   },
 };
-
-export const NonInteractive: Story = {
-  args: {},
-};

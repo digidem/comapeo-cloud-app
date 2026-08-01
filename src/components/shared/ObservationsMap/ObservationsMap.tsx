@@ -42,6 +42,8 @@ export interface ObservationsMapProps {
   height?: string | number;
   /** Override built-in basemap switcher positioning when adjacent controls overlap it. */
   basemapSwitcherPositionClassName?: string;
+  /** Whether to render the built-in no-location overlay (default: true). */
+  showEmptyState?: boolean;
   /** Test/storybook seam: override navigation. Defaults to TanStack useNavigate. */
   onMarkerClick?: (observationId: string) => void;
 }
@@ -51,6 +53,7 @@ export function ObservationsMap({
   categoryByObservationId,
   height = 'h-[min(70vh,560px)]',
   basemapSwitcherPositionClassName,
+  showEmptyState = true,
   onMarkerClick,
 }: ObservationsMapProps) {
   const intl = useIntl();
@@ -185,7 +188,7 @@ export function ObservationsMap({
         ))}
       </MapContainer>
 
-      {geoObservations.length === 0 && (
+      {showEmptyState && geoObservations.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center bg-surface-card/80 backdrop-blur-sm">
           <p className="text-text-muted text-sm">
             {intl.formatMessage(messages.empty)}

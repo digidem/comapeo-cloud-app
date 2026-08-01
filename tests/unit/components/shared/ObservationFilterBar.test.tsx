@@ -71,6 +71,14 @@ describe('ObservationFilterBar', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('applies a custom surface class for map overlays', () => {
+    renderBar({ className: 'bg-surface-card shadow-card' });
+
+    expect(screen.getByLabelText('Search').closest('.shadow-card')).toHaveClass(
+      'bg-surface-card',
+    );
+  });
+
   it('shows result count', () => {
     renderBar({ resultCount: 5 });
     expect(screen.getByText('5 results')).toBeInTheDocument();

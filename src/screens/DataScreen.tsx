@@ -318,7 +318,7 @@ export function DataScreen() {
     const mapErrorOverlay = observationsQuery.isError ? (
       <div
         role="alert"
-        className="absolute inset-0 z-[5] flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
+        className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
       >
         <span className="text-error text-sm">
           {intl.formatMessage(messages.observationsError)}
@@ -329,19 +329,26 @@ export function DataScreen() {
       observationsQuery.isPending && !observationsQuery.isError ? (
         <div
           role="status"
-          className="absolute inset-0 z-[5] flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
+          className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
         >
-          <span className="text-text-muted text-sm">
+          <span className="sr-only">
             {intl.formatMessage(messages.loading)}
           </span>
+          <div className="w-full max-w-sm space-y-3" aria-hidden="true">
+            <Skeleton className="h-8 w-2/3" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-8 w-1/2" />
+          </div>
         </div>
       ) : null;
 
     return (
       <MapScreenLayout
+        topLeftPositionClassName="top-[4.25rem] left-3 right-20 items-start"
         topLeft={
-          <div className="hidden md:block">
+          <div className="hidden w-full md:block">
             <ObservationFilterBar
+              className="w-full rounded-card bg-surface-card p-3 shadow-card"
               filters={obsFilters.filters}
               availableCategories={obsFilters.availableCategories}
               resultCount={filteredObs.length}
@@ -454,6 +461,9 @@ export function DataScreen() {
             }
             height="h-full"
             basemapSwitcherPositionClassName="top-[4.25rem] right-3"
+            showEmptyState={
+              !observationsQuery.isPending && !observationsQuery.isError
+            }
           />
 
           {mapErrorOverlay}

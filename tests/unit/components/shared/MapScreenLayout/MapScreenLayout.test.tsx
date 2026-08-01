@@ -32,6 +32,19 @@ describe('MapScreenLayout', () => {
     expect(screen.getByText('top-left-content')).toBeInTheDocument();
   });
 
+  it('supports a custom topLeft position that reserves adjacent controls', () => {
+    renderLayout({
+      topLeft: <span>top-left-content</span>,
+      topLeftPositionClassName: 'top-[4.25rem] left-3 right-20',
+    });
+
+    expect(screen.getByText('top-left-content').parentElement).toHaveClass(
+      'top-[4.25rem]',
+      'left-3',
+      'right-20',
+    );
+  });
+
   it('renders topRight slot content', () => {
     renderLayout({ topRight: <span>top-right-content</span> });
     expect(screen.getByText('top-right-content')).toBeInTheDocument();
@@ -49,8 +62,11 @@ describe('MapScreenLayout', () => {
 
   it('renders children inside map container', () => {
     renderLayout();
-    expect(screen.getByTestId('map-child')).toBeInTheDocument();
-    expect(screen.getByTestId('map-child').parentElement).not.toBeNull();
+    expect(screen.getByTestId('map-child').parentElement).toHaveClass(
+      'relative',
+      'flex-1',
+      'overflow-hidden',
+    );
   });
 
   it('does not render sidebar on mobile', () => {
@@ -77,7 +93,7 @@ describe('MapScreenLayout', () => {
     expect(document.querySelector('aside')).toBeNull();
   });
 
-  it('renders sidebar when null is explicitly provided on desktop', () => {
+  it('does not render sidebar when null is explicitly provided on desktop', () => {
     vi.mocked(useIsDesktop).mockReturnValue(true);
     renderLayout({ sidebar: null });
     // null sidebar should not render the aside

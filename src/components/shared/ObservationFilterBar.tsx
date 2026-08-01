@@ -53,6 +53,7 @@ const messages = defineMessages({
 });
 
 export interface ObservationFilterBarProps {
+  className?: string;
   filters: ObservationFilters;
   availableCategories: string[];
   resultCount: number;
@@ -69,6 +70,7 @@ export interface ObservationFilterBarProps {
 }
 
 export function ObservationFilterBar({
+  className,
   filters,
   availableCategories,
   resultCount,
@@ -91,7 +93,11 @@ export function ObservationFilterBar({
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+    <div
+      className={`flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end ${
+        className ?? ''
+      }`}
+    >
       <div className="flex-1 min-w-[180px]">
         <Input
           label={intl.formatMessage(messages.searchLabel)}

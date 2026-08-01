@@ -194,6 +194,14 @@ describe('ObservationsMap', () => {
     expect(screen.queryByTestId('obs-marker')).not.toBeInTheDocument();
   });
 
+  it('can suppress its empty overlay when a parent owns query state', () => {
+    render(<ObservationsMap observations={[]} showEmptyState={false} />);
+
+    expect(
+      screen.queryByText('No observations with location to show on the map'),
+    ).not.toBeInTheDocument();
+  });
+
   it('renders map with no markers and no crash for empty array', () => {
     render(<ObservationsMap observations={[]} />);
 
