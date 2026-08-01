@@ -26,8 +26,8 @@ export interface OnboardingResult extends SyncResult {
     | 'cancelled';
 }
 
-const activeRuns = new Map<string, Promise<SyncResult>>();
 const VALIDATION_TIMEOUT_MS = 10_000;
+const CANCELLATION_POLL_MS = 50;
 const INVALIDATED_QUERY_ROOTS = new Set([
   'projects',
   'observations',
@@ -43,6 +43,47 @@ async function invalidateSyncedData(): Promise<void> {
     predicate: (query) =>
       INVALIDATED_QUERY_ROOTS.has(String(query.queryKey[0] ?? '')),
   });
+}
+
+interface CancellationBridge {
+  signal: AbortSignal;
+  dispose: () => void;
+}
+
+function createCancellationBridge(
+  signal?: AbortSignal,
+  isCancelled?: () => boolean,
+): CancellationBridge {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  let intervalId: ReturnType<typeof setInterval> | undefined;
+
+  if (signal?.aborted || isCancelled?.()) {
+    abort();
+  } else {
+    signal?.addEventListener('abort', abort, { once: true });
+    if (isCancelled) {
+      intervalId = setInterval(() => {
+        if (isCancelled()) abort();
+      }, CANCELLATION_POLL_MS);
+    }
+  }
+
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      signal?.removeEventListener('abort', abort);
+      if (intervalId !== undefined) clearInterval(intervalId);
+    },
+  };
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof Error || (error !== null && typeof error === 'object')) &&
+    'name' in error &&
+    error.name === 'AbortError'
+  );
 }
 
 async function withValidationTimeout<T>(operation: Promise<T>): Promise<T> {
@@ -72,21 +113,32 @@ function missingServerResult(serverId: string): SyncResult {
   };
 }
 
-function cancelledOnboardingResult(serverId: string): OnboardingResult {
+function cancelledSyncResult(
+  serverId: string,
+  underlyingAborted = true,
+): SyncResult {
   return {
     success: false,
-    status: 'error',
+    status: 'cancelled',
     serverId,
     projects: [],
     warnings: [],
+    error: 'Sync cancelled',
+    underlyingAborted,
+  };
+}
+
+function cancelledOnboardingResult(serverId: string): OnboardingResult {
+  return {
+    ...cancelledSyncResult(serverId),
     error: 'Onboarding cancelled',
     errorCode: 'cancelled',
   };
 }
 
 function lifecycleForResult(result: SyncResult): {
-  status: 'connected' | 'partial' | 'error';
-  onboardingStatus: 'ready' | 'partial' | 'error';
+  status: 'connected' | 'partial' | 'error' | 'cancelled';
+  onboardingStatus: 'ready' | 'partial' | 'error' | 'cancelled';
   errorMessage?: string;
   lastSuccessfulSyncAt?: string;
 } {
@@ -107,6 +159,14 @@ function lifecycleForResult(result: SyncResult): {
     };
   }
 
+  if (result.status === 'cancelled') {
+    return {
+      status: 'cancelled',
+      onboardingStatus: 'cancelled',
+      errorMessage: undefined,
+    };
+  }
+
   return {
     status: 'error',
     onboardingStatus: 'error',
@@ -123,9 +183,6 @@ export function syncArchive(
   options?: SyncOptions,
   control?: SyncArchiveControl,
 ): Promise<SyncResult> {
-  const existing = activeRuns.get(serverId);
-  if (existing) return existing;
-
   const server = useAuthStore
     .getState()
     .servers.find((candidate) => candidate.id === serverId);
@@ -141,46 +198,80 @@ export function syncArchive(
 
   if (!resolvedOptions) return Promise.resolve(missingServerResult(serverId));
 
-  const run = (async () => {
-    await useAuthStore.getState().updateServerLifecycle(serverId, {
-      status: 'syncing',
-      onboardingStatus: 'syncing',
-      errorMessage: undefined,
-    });
+  const cancellation = createCancellationBridge(
+    resolvedOptions.signal,
+    control?.isCancelled,
+  );
 
-    let result: SyncResult;
+  return (async () => {
     try {
-      result = await syncRemoteArchive(serverId, resolvedOptions);
-    } catch (error) {
-      result = {
-        success: false,
-        status: 'error',
-        serverId,
-        projects: [],
-        warnings: [],
-        error: error instanceof Error ? error.message : 'Unknown sync error',
-      };
-    }
+      await useAuthStore.getState().updateServerLifecycle(serverId, {
+        status: 'syncing',
+        onboardingStatus: 'syncing',
+        errorMessage: undefined,
+      });
 
-    if (control?.isCancelled?.()) {
-      await cancelArchiveOnboarding(serverId);
-    } else {
-      await useAuthStore
-        .getState()
-        .updateServerLifecycle(serverId, lifecycleForResult(result));
-    }
-    await invalidateSyncedData();
-    return result;
-  })().finally(() => {
-    activeRuns.delete(serverId);
-  });
+      let result: SyncResult;
+      try {
+        result = await syncRemoteArchive(serverId, {
+          ...resolvedOptions,
+          signal: cancellation.signal,
+        });
+      } catch (error) {
+        result = isAbortError(error)
+          ? cancelledSyncResult(serverId)
+          : {
+              success: false,
+              status: 'error',
+              serverId,
+              projects: [],
+              warnings: [],
+              error:
+                error instanceof Error ? error.message : 'Unknown sync error',
+            };
+      }
 
-  activeRuns.set(serverId, run);
-  return run;
+      if (cancellation.signal.aborted && result.status !== 'cancelled') {
+        result = cancelledSyncResult(serverId);
+      }
+
+      if (result.status === 'cancelled') {
+        // A subscriber-only cancellation must not overwrite the lifecycle of a
+        // shared run that still has another active subscriber.
+        if (result.underlyingAborted !== false) {
+          await cancelArchiveOnboarding(serverId);
+          await invalidateSyncedData();
+        }
+      } else {
+        await useAuthStore
+          .getState()
+          .updateServerLifecycle(serverId, lifecycleForResult(result));
+        await invalidateSyncedData();
+      }
+      return result;
+    } finally {
+      cancellation.dispose();
+    }
+  })();
 }
 
 export async function onboardArchive(
   options: OnboardArchiveOptions,
+): Promise<OnboardingResult> {
+  const cancellation = createCancellationBridge(
+    options.signal,
+    options.isCancelled,
+  );
+  try {
+    return await onboardArchiveWithSignal(options, cancellation.signal);
+  } finally {
+    cancellation.dispose();
+  }
+}
+
+async function onboardArchiveWithSignal(
+  options: OnboardArchiveOptions,
+  signal: AbortSignal,
 ): Promise<OnboardingResult> {
   options.onStateChange?.('validating');
   const normalized = normalizeArchiveBaseUrl(options.baseUrl);
@@ -192,7 +283,11 @@ export async function onboardArchive(
     };
   }
 
-  const config = { baseUrl: normalized.value, token: options.token };
+  const config = {
+    baseUrl: normalized.value,
+    token: options.token,
+    signal,
+  };
   try {
     const healthy = await withValidationTimeout(apiClient.healthCheck(config));
     if (!healthy) {
@@ -205,6 +300,10 @@ export async function onboardArchive(
 
     await withValidationTimeout(apiClient.getProjects(config));
   } catch (error) {
+    if (isAbortError(error) || signal.aborted) {
+      options.onStateChange?.('cancelled');
+      return cancelledOnboardingResult('');
+    }
     const status =
       error && typeof error === 'object' && 'status' in error
         ? Number(error.status)
@@ -220,7 +319,7 @@ export async function onboardArchive(
     };
   }
 
-  if (options.isCancelled?.()) {
+  if (signal.aborted || options.isCancelled?.()) {
     options.onStateChange?.('cancelled');
     return cancelledOnboardingResult('');
   }
@@ -245,7 +344,7 @@ export async function onboardArchive(
     token: options.token,
     allowDuplicate: true,
   });
-  if (options.isCancelled?.()) {
+  if (signal.aborted || options.isCancelled?.()) {
     await cancelArchiveOnboarding(serverId);
     options.onStateChange?.('cancelled');
     return cancelledOnboardingResult(serverId);
@@ -257,7 +356,7 @@ export async function onboardArchive(
     errorMessage: undefined,
   });
   options.onStateChange?.('pending');
-  if (options.isCancelled?.()) {
+  if (signal.aborted || options.isCancelled?.()) {
     await cancelArchiveOnboarding(serverId);
     options.onStateChange?.('cancelled');
     return cancelledOnboardingResult(serverId);
@@ -270,10 +369,11 @@ export async function onboardArchive(
       baseUrl: normalized.value,
       token: options.token,
       serverLabel: options.label,
+      signal,
     },
     { isCancelled: options.isCancelled },
   );
-  if (options.isCancelled?.()) {
+  if (signal.aborted || options.isCancelled?.()) {
     options.onStateChange?.('cancelled');
     return cancelledOnboardingResult(serverId);
   }
@@ -291,5 +391,6 @@ export async function cancelArchiveOnboarding(serverId: string): Promise<void> {
 }
 
 export function resetSyncCoordinatorForTests(): void {
-  activeRuns.clear();
+  // In-flight request ownership lives in sync.ts. Coordinator calls are thin
+  // subscribers so independent callers can cancel without cancelling others.
 }

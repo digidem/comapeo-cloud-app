@@ -53,11 +53,15 @@ export interface EndpointSemantics {
 
 interface EndpointContract {
   resource: EndpointSemantics['resource'];
-  mode: Exclude<EndpointReconciliationMode, 'unknown'>;
+  mode: EndpointReconciliationMode;
 }
 
 const ENDPOINT_CONTRACTS = {
-  projects: { resource: 'projects', mode: 'snapshot' },
+  // Project visibility is token-scoped. An empty 200 can therefore mean that
+  // the token lost access rather than that every previously visible project
+  // was deleted. Require an explicit snapshot header before reconciling
+  // project omissions destructively.
+  projects: { resource: 'projects', mode: 'unknown' },
   observations: { resource: 'observations', mode: 'snapshot' },
   alerts: { resource: 'alerts', mode: 'snapshot' },
   presets: { resource: 'presets', mode: 'snapshot' },
@@ -200,20 +204,20 @@ function semanticsForResponse(
   contract: EndpointContract,
 ): EndpointSemantics {
   const declaredMode = response.headers.get('x-comapeo-reconciliation-mode');
-  const mode = (
+  const recognizedMode =
     declaredMode === 'snapshot' ||
     declaredMode === 'delta' ||
     declaredMode === 'tombstone-stream'
       ? declaredMode
-      : contract.mode
-  ) as EndpointReconciliationMode;
+      : undefined;
+  const mode = recognizedMode ?? contract.mode;
   const apiVersion = response.headers.get('x-comapeo-api-version') ?? undefined;
 
   return {
     resource: contract.resource,
     availability: 'supported',
     mode,
-    source: declaredMode ? 'header' : 'contract',
+    source: recognizedMode ? 'header' : 'contract',
     ...(apiVersion ? { apiVersion } : {}),
   };
 }
@@ -288,7 +292,7 @@ async function handleResponse<T extends object>(
   const parsed = v.parse(schema, body);
   return contract
     ? attachEndpointSemantics(parsed, semanticsForResponse(response, contract))
-    : (parsed as T & { semantics: EndpointSemantics });
+    : (parsed as T & { semantics?: EndpointSemantics });
 }
 
 // ---------------------------------------------------------------------------

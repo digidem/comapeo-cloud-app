@@ -6,6 +6,7 @@ interface Row {
   localId: string;
   deleted: boolean;
   updatedAt: string;
+  dirtyLocal?: boolean;
 }
 
 const existing: Row[] = [
@@ -41,6 +42,35 @@ describe('planReconciliation', () => {
       expect(result.counts.preserved).toBe(preserved);
     },
   );
+
+  it('preserves omitted dirty local rows even for a confirmed snapshot', () => {
+    const result = planReconciliation({
+      existing: [
+        ...existing,
+        {
+          localId: 'dirty-omitted',
+          deleted: false,
+          dirtyLocal: true,
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+      ],
+      incoming: [
+        {
+          localId: 'kept',
+          deleted: false,
+          updatedAt: '2024-02-01T00:00:00Z',
+        },
+      ],
+      mode: 'snapshot',
+      now: '2024-03-01T00:00:00Z',
+    });
+
+    expect(
+      result.rowsToPut.find((row) => row.localId === 'dirty-omitted'),
+    ).toBeUndefined();
+    expect(result.counts.omittedTombstones).toBe(1);
+    expect(result.counts.preserved).toBe(1);
+  });
 
   it('always preserves explicit server tombstones', () => {
     const result = planReconciliation({

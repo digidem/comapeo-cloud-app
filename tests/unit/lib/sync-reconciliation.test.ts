@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiError } from '@/lib/api-client';
 import { syncRemoteArchive } from '@/lib/sync';
 
 const mocks = vi.hoisted(() => ({
@@ -137,6 +138,29 @@ describe('sync reconciliation orchestration', () => {
     expect(sync.warnings).toContain('Project 1: tracks: tracks is unsupported');
   });
 
+  it('surfaces a missing project as an error outcome', async () => {
+    mocks.pullTracksDetailed.mockRejectedValue(
+      new ApiError(404, 'NOT_FOUND', 'Project not found', 'missing-project'),
+    );
+
+    const sync = await syncRemoteArchive('missing-project-server', {
+      baseUrl: 'https://archive.example.com',
+      token: 'test-token',
+    });
+
+    expect(sync.status).toBe('error');
+    expect(sync.projects[0]).toMatchObject({
+      status: 'error',
+      resources: expect.arrayContaining([
+        expect.objectContaining({
+          resource: 'tracks',
+          status: 'missing-project',
+          error: 'Project not found',
+        }),
+      ]),
+    });
+  });
+
   it('enforces the configured resource concurrency bound', async () => {
     let active = 0;
     let maxActive = 0;
@@ -162,6 +186,50 @@ describe('sync reconciliation orchestration', () => {
     });
 
     expect(maxActive).toBe(2);
+  });
+
+  it('lets one shared-sync subscriber cancel without cancelling another', async () => {
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    let resolveObservations!: (value: ReturnType<typeof result>) => void;
+    let internalSignal: AbortSignal | undefined;
+    mocks.pullObservationsDetailed.mockImplementation(
+      (_serverId, _remoteId, _projectLocalId, config) => {
+        internalSignal = config.signal;
+        return new Promise((resolve) => {
+          resolveObservations = resolve;
+        });
+      },
+    );
+
+    const first = syncRemoteArchive('shared-server', {
+      baseUrl: 'https://archive.example.com',
+      token: 'test-token',
+      signal: firstController.signal,
+    });
+    const second = syncRemoteArchive('shared-server', {
+      baseUrl: 'https://archive.example.com',
+      token: 'test-token',
+      signal: secondController.signal,
+    });
+
+    await vi.waitFor(() =>
+      expect(mocks.pullObservationsDetailed).toHaveBeenCalledOnce(),
+    );
+    firstController.abort();
+
+    await expect(first).resolves.toMatchObject({
+      status: 'cancelled',
+      underlyingAborted: false,
+    });
+    expect(internalSignal?.aborted).toBe(false);
+    resolveObservations(result('observations'));
+
+    await expect(second).resolves.toMatchObject({
+      success: true,
+      status: 'ready',
+    });
+    expect(mocks.pullProjectsDetailed).toHaveBeenCalledOnce();
   });
 
   it('aborts downstream project fan-out', async () => {
@@ -197,8 +265,9 @@ describe('sync reconciliation orchestration', () => {
 
     await expect(syncPromise).resolves.toMatchObject({
       success: false,
-      status: 'error',
-      error: 'Aborted',
+      status: 'cancelled',
+      error: 'Sync cancelled',
+      underlyingAborted: true,
     });
     expect(mocks.pullObservationsDetailed).toHaveBeenCalledTimes(1);
     expect(mocks.pullAlertsDetailed).not.toHaveBeenCalled();

@@ -85,25 +85,27 @@ describe('sync coordinator', () => {
     mocks.invalidateQueries.mockClear();
   });
 
-  it('shares one underlying sync run for concurrent archive requests', async () => {
+  it('keeps concurrent coordinator callers as independent subscribers', async () => {
     let resolveSync!: (result: SyncResult) => void;
-    mocks.syncRemoteArchive.mockReturnValue(
-      new Promise<SyncResult>((resolve) => {
-        resolveSync = resolve;
-      }),
-    );
+    const sharedRun = new Promise<SyncResult>((resolve) => {
+      resolveSync = resolve;
+    });
+    mocks.syncRemoteArchive.mockReturnValue(sharedRun);
 
     const first = syncArchive('server-1');
     const second = syncArchive('server-1');
 
-    expect(second).toBe(first);
+    expect(second).not.toBe(first);
     await vi.waitFor(() => {
-      expect(mocks.syncRemoteArchive).toHaveBeenCalledOnce();
+      expect(mocks.syncRemoteArchive).toHaveBeenCalledTimes(2);
     });
 
     resolveSync(readyResult);
-    await expect(first).resolves.toEqual(readyResult);
-    expect(mocks.invalidateQueries).toHaveBeenCalledOnce();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      readyResult,
+      readyResult,
+    ]);
+    expect(mocks.invalidateQueries).toHaveBeenCalledTimes(2);
     expect(mocks.state.updateServerLifecycle).toHaveBeenLastCalledWith(
       'server-1',
       expect.objectContaining({
@@ -112,6 +114,30 @@ describe('sync coordinator', () => {
         lastSuccessfulSyncAt: expect.any(String),
       }),
     );
+  });
+
+  it('does not mark the archive cancelled when another shared subscriber continues', async () => {
+    mocks.syncRemoteArchive.mockResolvedValueOnce({
+      success: false,
+      status: 'cancelled',
+      serverId: 'server-1',
+      projects: [],
+      warnings: [],
+      error: 'Sync cancelled',
+      underlyingAborted: false,
+    });
+
+    await expect(syncArchive('server-1')).resolves.toMatchObject({
+      status: 'cancelled',
+      underlyingAborted: false,
+    });
+
+    expect(mocks.state.updateServerLifecycle).toHaveBeenCalledTimes(1);
+    expect(mocks.state.updateServerLifecycle).toHaveBeenLastCalledWith(
+      'server-1',
+      expect.objectContaining({ status: 'syncing' }),
+    );
+    expect(mocks.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it('marks partial results without advancing the successful-sync timestamp', async () => {
@@ -247,6 +273,10 @@ describe('sync coordinator', () => {
       expect(mocks.syncRemoteArchive).toHaveBeenCalledOnce();
     });
     cancelled = true;
+    await vi.waitFor(() => {
+      const options = mocks.syncRemoteArchive.mock.calls[0]?.[1];
+      expect(options?.signal?.aborted).toBe(true);
+    });
     resolveSync(readyResult);
 
     await expect(onboarding).resolves.toMatchObject({

@@ -180,6 +180,27 @@ describe('remote archive reconciliation contracts', () => {
     ).toBe(true);
   });
 
+  it('reconciles legacy child rows by stable project identity, not server id', async () => {
+    await seedTrack();
+    const localId = 'remoteArchive:https://archive.example.com:track-1';
+    await getDb().tracks.update(localId, { sourceId: 'legacy-server-id' });
+    server.use(
+      http.get(`${config.baseUrl}/projects/p1/track`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await pullTracksDetailed(
+      'current-server-id',
+      'p1',
+      projectLocalId,
+      config,
+    );
+
+    expect(result.counts.omittedTombstones).toBe(1);
+    expect((await getDb().tracks.get(localId))?.deleted).toBe(true);
+  });
+
   it('preserves omitted rows for a declared delta response', async () => {
     await seedTrack();
     server.use(
@@ -209,6 +230,108 @@ describe('remote archive reconciliation contracts', () => {
     ).toBe(false);
   });
 
+  it('preserves local-only project state across legacy duplicate server ids', async () => {
+    await getDb().projects.put({
+      localId: projectLocalId,
+      remoteId: 'p1',
+      name: 'Old name',
+      sourceType: 'remoteArchive',
+      sourceId: 'legacy-server-id',
+      serverUrl: config.baseUrl,
+      activeMapId: 'selected-map',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    server.use(
+      http.get(`${config.baseUrl}/projects`, () =>
+        HttpResponse.json({ data: [{ projectId: 'p1', name: 'New name' }] }),
+      ),
+      http.get(`${config.baseUrl}/projects/p1`, () =>
+        HttpResponse.json({
+          data: { projectId: 'p1', name: 'New name', description: 'Updated' },
+        }),
+      ),
+    );
+
+    await pullProjectsDetailed('current-server-id', config);
+
+    const stored = await getDb().projects.get(projectLocalId);
+    expect(stored?.activeMapId).toBe('selected-map');
+    expect(stored?.sourceId).toBe('current-server-id');
+    expect(stored?.name).toBe('New name');
+  });
+
+  it('preserves projects when an empty response is not an explicit snapshot', async () => {
+    await getDb().projects.put({
+      localId: projectLocalId,
+      remoteId: 'p1',
+      name: 'Project 1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      serverUrl: config.baseUrl,
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    server.use(
+      http.get(`${config.baseUrl}/projects`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await pullProjectsDetailed('server-1', config);
+
+    expect(result.semantics.mode).toBe('unknown');
+    expect(result.counts.preserved).toBe(1);
+    expect((await getDb().projects.get(projectLocalId))?.deleted).toBe(false);
+  });
+
+  it('preserves an omitted project that still contains local changes', async () => {
+    await getDb().projects.put({
+      localId: projectLocalId,
+      remoteId: 'p1',
+      name: 'Project 1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      serverUrl: config.baseUrl,
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    const localObservationId = 'local-observation';
+    await getDb().observations.put({
+      localId: localObservationId,
+      projectLocalId,
+      sourceType: 'local',
+      sourceId: 'local',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: true,
+      deleted: false,
+    });
+    server.use(
+      http.get(`${config.baseUrl}/projects`, () =>
+        HttpResponse.json(
+          { data: [] },
+          { headers: { 'x-comapeo-reconciliation-mode': 'snapshot' } },
+        ),
+      ),
+    );
+
+    const result = await pullProjectsDetailed('server-1', config);
+
+    expect(result.counts.omittedTombstones).toBe(0);
+    expect(result.counts.preserved).toBe(1);
+    expect((await getDb().projects.get(projectLocalId))?.deleted).toBe(false);
+    expect((await getDb().observations.get(localObservationId))?.deleted).toBe(
+      false,
+    );
+  });
+
   it('tombstones children when a project disappears from a snapshot', async () => {
     await getDb().projects.put({
       localId: projectLocalId,
@@ -236,7 +359,10 @@ describe('remote archive reconciliation contracts', () => {
     });
     server.use(
       http.get(`${config.baseUrl}/projects`, () =>
-        HttpResponse.json({ data: [] }),
+        HttpResponse.json(
+          { data: [] },
+          { headers: { 'x-comapeo-reconciliation-mode': 'snapshot' } },
+        ),
       ),
     );
 
@@ -246,6 +372,54 @@ describe('remote archive reconciliation contracts', () => {
     expect((await getDb().projects.get(projectLocalId))?.deleted).toBe(true);
     expect((await getDb().observations.get(observationLocalId))?.deleted).toBe(
       true,
+    );
+  });
+
+  it('rolls back project tombstones when the child cascade fails', async () => {
+    await getDb().projects.put({
+      localId: projectLocalId,
+      remoteId: 'p1',
+      name: 'Project 1',
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      serverUrl: config.baseUrl,
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    const observationLocalId =
+      'remoteArchive:https://archive.example.com:rollback-observation';
+    await getDb().observations.put({
+      localId: observationLocalId,
+      projectLocalId,
+      sourceType: 'remoteArchive',
+      sourceId: 'server-1',
+      remoteId: 'rollback-observation',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    server.use(
+      http.get(`${config.baseUrl}/projects`, () =>
+        HttpResponse.json(
+          { data: [] },
+          { headers: { 'x-comapeo-reconciliation-mode': 'snapshot' } },
+        ),
+      ),
+    );
+    vi.spyOn(getDb().observations, 'bulkPut').mockRejectedValueOnce(
+      new Error('simulated child write failure'),
+    );
+
+    await expect(pullProjectsDetailed('server-1', config)).rejects.toThrow(
+      'simulated child write failure',
+    );
+
+    expect((await getDb().projects.get(projectLocalId))?.deleted).toBe(false);
+    expect((await getDb().observations.get(observationLocalId))?.deleted).toBe(
+      false,
     );
   });
 

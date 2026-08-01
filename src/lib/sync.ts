@@ -28,7 +28,7 @@ export interface SyncOptions {
   concurrency?: SyncConcurrencyOptions;
 }
 
-export type SyncStatus = 'ready' | 'partial' | 'error';
+export type SyncStatus = 'ready' | 'partial' | 'error' | 'cancelled';
 export type SyncResource =
   | 'observations'
   | 'alerts'
@@ -61,9 +61,17 @@ export interface SyncResult {
   projects: ProjectSyncOutcome[];
   warnings: string[];
   error?: string;
+  /** True only when cancellation stopped the shared underlying server run. */
+  underlyingAborted?: boolean;
 }
 
-const activeSyncs = new Map<string, Promise<SyncResult>>();
+interface ActiveSync {
+  controller: AbortController;
+  promise: Promise<SyncResult>;
+  subscribers: Set<symbol>;
+}
+
+const activeSyncs = new Map<string, ActiveSync>();
 
 async function ensureServerInStore(options: SyncOptions): Promise<string> {
   return useAuthStore.getState().addServer({
@@ -103,7 +111,23 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw abortError();
 }
 
+function cancelledResult(
+  serverId: string,
+  underlyingAborted: boolean,
+): SyncResult {
+  return {
+    success: false,
+    status: 'cancelled',
+    serverId,
+    projects: [],
+    warnings: [],
+    error: 'Sync cancelled',
+    underlyingAborted,
+  };
+}
+
 function resultForFatalError(serverId: string, error: unknown): SyncResult {
+  if (isAbortError(error)) return cancelledResult(serverId, true);
   return {
     success: false,
     status: 'error',
@@ -378,16 +402,79 @@ async function doSync(
   }
 }
 
+function subscribeToActiveSync(
+  serverId: string,
+  active: ActiveSync,
+  signal?: AbortSignal,
+): Promise<SyncResult> {
+  const subscriberId = Symbol(serverId);
+  active.subscribers.add(subscriberId);
+
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const removeSubscriber = (): boolean => {
+      active.subscribers.delete(subscriberId);
+      if (
+        active.subscribers.size === 0 &&
+        activeSyncs.get(serverId) === active &&
+        !active.controller.signal.aborted
+      ) {
+        active.controller.abort();
+        return true;
+      }
+      return false;
+    };
+
+    const finish = (result: SyncResult) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', onAbort);
+      active.subscribers.delete(subscriberId);
+      resolve(result);
+    };
+
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', onAbort);
+      const underlyingAborted = removeSubscriber();
+      resolve(cancelledResult(serverId, underlyingAborted));
+    };
+
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+    void active.promise.then(finish);
+  });
+}
+
 export function syncRemoteArchive(
   serverId: string,
   options: SyncOptions,
 ): Promise<SyncResult> {
-  const existing = activeSyncs.get(serverId);
-  if (existing) return existing;
-
-  const run = doSync(serverId, options).finally(() => {
+  let active = activeSyncs.get(serverId);
+  if (active?.controller.signal.aborted) {
     activeSyncs.delete(serverId);
-  });
-  activeSyncs.set(serverId, run);
-  return run;
+    active = undefined;
+  }
+  if (!active) {
+    const controller = new AbortController();
+    active = {
+      controller,
+      subscribers: new Set(),
+      promise: Promise.resolve(cancelledResult(serverId, true)),
+    };
+    const runOptions = { ...options, signal: controller.signal };
+    const run = doSync(serverId, runOptions).finally(() => {
+      if (activeSyncs.get(serverId) === active) activeSyncs.delete(serverId);
+    });
+    active.promise = run;
+    activeSyncs.set(serverId, active);
+  }
+
+  return subscribeToActiveSync(serverId, active, options.signal);
 }

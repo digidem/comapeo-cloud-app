@@ -45,6 +45,37 @@ describe('apiClient reconciliation semantics', () => {
     } satisfies Partial<ApiError>);
   });
 
+  it('requires an explicit snapshot declaration for token-scoped projects', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'x-comapeo-api-version': '0.6.0' },
+      }),
+    );
+
+    const unconfirmed = await apiClient.getProjects();
+
+    expect(unconfirmed.semantics).toMatchObject({
+      availability: 'supported',
+      mode: 'unknown',
+      source: 'contract',
+      apiVersion: '0.6.0',
+    });
+
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'x-comapeo-reconciliation-mode': 'snapshot' },
+      }),
+    );
+
+    const confirmed = await apiClient.getProjects();
+    expect(confirmed.semantics).toMatchObject({
+      mode: 'snapshot',
+      source: 'header',
+    });
+  });
+
   it('marks a successful empty response as a confirmed snapshot', async () => {
     globalThis.fetch = vi
       .fn()

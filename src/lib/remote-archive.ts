@@ -39,7 +39,10 @@ function resolvedSemantics(
     response.semantics ?? {
       resource,
       availability: 'supported',
-      mode: 'snapshot',
+      // Metadata can be absent in mocks or after a clone/serialization
+      // boundary because it is attached non-enumerably for API compatibility.
+      // Unknown provenance must preserve omissions rather than delete them.
+      mode: 'unknown',
       source: 'contract',
     }
   );
@@ -212,21 +215,24 @@ async function allSettledLimited<T>(
 async function tombstoneScopedRows<
   T extends {
     projectLocalId: string;
-    sourceId: string;
+    sourceType: string;
+    dirtyLocal: boolean;
     deleted: boolean;
     updatedAt: string;
   },
 >(
   table: Table<T, string>,
   projectLocalIds: readonly string[],
-  serverId: string,
   now: string,
 ): Promise<number> {
   if (projectLocalIds.length === 0) return 0;
   const rows = await table
     .where('projectLocalId')
     .anyOf(projectLocalIds)
-    .and((row) => row.sourceId === serverId && !row.deleted)
+    .and(
+      (row) =>
+        row.sourceType === 'remoteArchive' && !row.dirtyLocal && !row.deleted,
+    )
     .toArray();
   if (rows.length === 0) return 0;
   for (const row of rows) {
@@ -237,64 +243,59 @@ async function tombstoneScopedRows<
   return rows.length;
 }
 
+/**
+ * Tombstone every clean remote-archive child of an omitted remote project.
+ *
+ * The caller owns the Dexie transaction so the project row and all dependent
+ * rows commit or roll back together. Scoping by projectLocalId is intentional:
+ * project identity is stable across legacy duplicate server records whose
+ * sourceId may differ while their normalized archive URL is the same.
+ */
 async function tombstoneProjectChildren(
   projectLocalIds: readonly string[],
-  serverId: string,
+  now: string,
 ): Promise<number> {
   if (projectLocalIds.length === 0) return 0;
   const db = getDb();
-  const now = new Date().toISOString();
   let count = 0;
-  await db.transaction(
-    'rw',
-    [
-      db.observations,
-      db.attachments,
-      db.alerts,
-      db.presets,
-      db.tracks,
-      db.fields,
-    ],
-    async () => {
-      count += await tombstoneScopedRows(
-        db.observations,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-      count += await tombstoneScopedRows(
-        db.attachments,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-      count += await tombstoneScopedRows(
-        db.alerts,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-      count += await tombstoneScopedRows(
-        db.presets,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-      count += await tombstoneScopedRows(
-        db.tracks,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-      count += await tombstoneScopedRows(
-        db.fields,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-    },
-  );
+  count += await tombstoneScopedRows(db.observations, projectLocalIds, now);
+  count += await tombstoneScopedRows(db.attachments, projectLocalIds, now);
+  count += await tombstoneScopedRows(db.alerts, projectLocalIds, now);
+  count += await tombstoneScopedRows(db.presets, projectLocalIds, now);
+  count += await tombstoneScopedRows(db.tracks, projectLocalIds, now);
+  count += await tombstoneScopedRows(db.fields, projectLocalIds, now);
   return count;
+}
+
+async function projectIdsWithLocalChanges(
+  projectLocalIds: readonly string[],
+): Promise<Set<string>> {
+  const protectedIds = new Set<string>();
+  if (projectLocalIds.length === 0) return protectedIds;
+  const db = getDb();
+  const tables = [
+    db.observations,
+    db.attachments,
+    db.alerts,
+    db.presets,
+    db.tracks,
+    db.fields,
+  ] as const;
+
+  for (const table of tables) {
+    const rows = await table
+      .where('projectLocalId')
+      .anyOf(projectLocalIds)
+      .and(
+        (row) =>
+          !row.deleted &&
+          (row.dirtyLocal || row.sourceType !== 'remoteArchive'),
+      )
+      .toArray();
+    for (const row of rows) protectedIds.add(row.projectLocalId);
+  }
+
+  return protectedIds;
 }
 
 // ---------------------------------------------------------------------------
@@ -319,8 +320,13 @@ export async function pullProjectsDetailed(
   const baseUrl = serverRecord?.baseUrl ?? config.baseUrl ?? '';
   const stableKey = stableSourceKey(baseUrl);
 
+  const archiveProjectPrefix = `${sourceType}:${stableKey}:`;
   const existingRecords = await db.projects
-    .filter((row) => row.sourceType === sourceType && row.sourceId === serverId)
+    .filter(
+      (row) =>
+        row.sourceType === sourceType &&
+        row.localId.startsWith(archiveProjectPrefix),
+    )
     .toArray();
   const existingMap = new Map(
     existingRecords.map((record) => [record.localId, record]),
@@ -406,8 +412,22 @@ export async function pullProjectsDetailed(
   // sync-managed field added to the Project type in the future must appear in
   // `detailedProjects` entries (and therefore in `changes`) or it will be
   // silently omitted from updates, leaving stale values in existing rows.
+  const incomingProjectIds = new Set(
+    detailedProjects.map((project) => project.localId),
+  );
+  const omittedProjectIds = existingRecords
+    .filter(
+      (project) => !project.deleted && !incomingProjectIds.has(project.localId),
+    )
+    .map((project) => project.localId);
+  const protectedProjectIds =
+    await projectIdsWithLocalChanges(omittedProjectIds);
   const reconciliation = planReconciliation({
-    existing: existingRecords,
+    existing: existingRecords.map((project) =>
+      protectedProjectIds.has(project.localId)
+        ? { ...project, dirtyLocal: true }
+        : project,
+    ),
     incoming: detailedProjects,
     mode: semantics.mode,
   });
@@ -422,13 +442,25 @@ export async function pullProjectsDetailed(
     }
   }
 
-  await db.transaction('rw', db.projects, async () => {
-    if (inserts.length > 0) await db.projects.bulkPut(inserts);
-    if (updates.length > 0) await db.projects.bulkUpdate(updates);
-  });
-  await tombstoneProjectChildren(
-    reconciliation.tombstonedRows.map((project) => project.localId),
-    serverId,
+  const tombstonedProjectIds = reconciliation.tombstonedRows.map(
+    (project) => project.localId,
+  );
+  await db.transaction(
+    'rw',
+    [
+      db.projects,
+      db.observations,
+      db.attachments,
+      db.alerts,
+      db.presets,
+      db.tracks,
+      db.fields,
+    ],
+    async () => {
+      if (inserts.length > 0) await db.projects.bulkPut(inserts);
+      if (updates.length > 0) await db.projects.bulkUpdate(updates);
+      await tombstoneProjectChildren(tombstonedProjectIds, now);
+    },
   );
 
   return {
@@ -463,7 +495,7 @@ export async function pullObservationsDetailed(
   const existingObservations = await db.observations
     .where('projectLocalId')
     .equals(projectLocalId)
-    .and((row) => row.sourceId === serverId)
+    .and((row) => row.sourceType === sourceType)
     .toArray();
   const attachments: Attachment[] = [];
   const syncedAttachmentLocalIds = new Set<string>();
@@ -639,7 +671,7 @@ export async function pullAlertsDetailed(
   const existingAlerts = await db.alerts
     .where('projectLocalId')
     .equals(projectLocalId)
-    .and((row) => row.sourceId === serverId)
+    .and((row) => row.sourceType === sourceType)
     .toArray();
   const alerts: Alert[] = response.data.map((item) => ({
     localId: `${sourceType}:${stableKey}:${item.docId}`,
@@ -758,7 +790,7 @@ export async function pullPresetsDetailed(
   const existingPresets = await db.presets
     .where('projectLocalId')
     .equals(projectLocalId)
-    .and((row) => row.sourceId === serverId)
+    .and((row) => row.sourceType === sourceType)
     .toArray();
   if (semantics.availability === 'unsupported') {
     return unsupportedResult(
@@ -839,7 +871,7 @@ export async function pullTracksDetailed(
   const existingTracks = await db.tracks
     .where('projectLocalId')
     .equals(projectLocalId)
-    .and((row) => row.sourceId === serverId)
+    .and((row) => row.sourceType === sourceType)
     .toArray();
   if (semantics.availability === 'unsupported') {
     return unsupportedResult(
@@ -913,7 +945,7 @@ export async function pullFieldsDetailed(
   const existingFields = await db.fields
     .where('projectLocalId')
     .equals(projectLocalId)
-    .and((row) => row.sourceId === serverId)
+    .and((row) => row.sourceType === sourceType)
     .toArray();
   if (semantics.availability === 'unsupported') {
     return unsupportedResult(

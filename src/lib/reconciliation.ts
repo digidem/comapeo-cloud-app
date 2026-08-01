@@ -4,6 +4,7 @@ export interface ReconciliableRow {
   localId: string;
   deleted: boolean;
   updatedAt: string;
+  dirtyLocal?: boolean;
 }
 
 export interface ReconciliationCounts {
@@ -47,10 +48,13 @@ export function planReconciliation<T extends ReconciliableRow>({
   const omittedLiveRows = existing.filter(
     (row) => !row.deleted && !incomingIds.has(row.localId),
   );
+  const tombstoneEligibleRows = omittedLiveRows.filter(
+    (row) => !row.dirtyLocal,
+  );
 
   const omittedTombstones =
     mode === 'snapshot'
-      ? omittedLiveRows.map((row) => ({
+      ? tombstoneEligibleRows.map((row) => ({
           ...row,
           deleted: true,
           updatedAt: now,
@@ -70,7 +74,10 @@ export function planReconciliation<T extends ReconciliableRow>({
       explicitTombstones: explicitTombstones.length,
       omittedTombstones: omittedTombstones.length,
       tombstoned: tombstonedRows.length,
-      preserved: mode === 'snapshot' ? 0 : omittedLiveRows.length,
+      preserved:
+        mode === 'snapshot'
+          ? omittedLiveRows.length - tombstoneEligibleRows.length
+          : omittedLiveRows.length,
     },
   };
 }

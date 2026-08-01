@@ -305,11 +305,15 @@ describe('InviteScreen', () => {
 
     // syncRemoteArchive was called with correct params
     const args = vi.mocked(syncRemoteArchive).mock.calls[0]!;
-    expect(args[1]).toEqual({
-      baseUrl: 'https://archive.test',
-      token: 'abc123',
-      serverLabel: 'archive.test',
-    });
+    expect(args[1]).toEqual(
+      expect.objectContaining({
+        baseUrl: 'https://archive.test',
+        token: 'abc123',
+        serverLabel: 'archive.test',
+      }),
+    );
+    expect(args[1].signal).toBeDefined();
+    expect(typeof args[1].signal?.aborted).toBe('boolean');
   });
 
   it('shows invalid-invite message when archive URL is missing from a legacy URL', async () => {
