@@ -130,6 +130,7 @@ test.describe('Critical User Flows', () => {
 
     // Navigate to /data via the nav link
     await page.getByRole('link', { name: 'Data' }).click();
+    await page.getByRole('button', { name: 'Switch to grid view' }).click();
 
     // Data heading visible
     await expect(
@@ -141,6 +142,30 @@ test.describe('Critical User Flows', () => {
       page.locator('a[href^="/data/observations/"]').last(),
     ).toBeVisible();
   });
+
+  for (const width of [768, 1024, 1180]) {
+    test(`map controls remain clickable at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width: 1180, height: 900 });
+      await seedProjectWithObservations(page, `Map Controls ${width}`);
+      await page.getByRole('link', { name: 'Data' }).click();
+      await page.setViewportSize({ width, height: 900 });
+
+      const layerButton = page.getByTestId('basemap-switcher-trigger');
+      await expect(layerButton).toBeVisible();
+      await layerButton.click();
+      await expect(page.getByRole('menuitemradio').first()).toBeVisible();
+      await page.keyboard.press('Escape');
+
+      const attributionControl = page.locator('.maplibregl-ctrl-attrib');
+      const attributionButton = page.locator('.maplibregl-ctrl-attrib-button');
+      await expect(attributionButton).toBeVisible();
+      await expect(attributionControl).not.toHaveClass(
+        /maplibregl-compact-show/,
+      );
+      await attributionButton.click();
+      await expect(attributionControl).toHaveClass(/maplibregl-compact-show/);
+    });
+  }
 
   // -------------------------------------------------------------------------
   // Flow 2: Data → Observations → Observation Detail
@@ -155,6 +180,7 @@ test.describe('Critical User Flows', () => {
 
     // Navigate to /data via the nav link
     await page.getByRole('link', { name: 'Data' }).click();
+    await page.getByRole('button', { name: 'Switch to grid view' }).click();
     await expect(
       page.getByRole('heading', { level: 1, name: 'Data' }),
     ).toBeVisible();
