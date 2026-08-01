@@ -10,8 +10,9 @@ import { HttpResponse, http } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiClient } from '@/lib/api-client';
-import { syncRemoteArchive } from '@/lib/data-layer';
 import { resetDb } from '@/lib/db';
+import { syncRemoteArchive } from '@/lib/sync';
+import type { SyncResult } from '@/lib/sync';
 import { AddArchiveServerDialog } from '@/screens/Home/AddArchiveServerDialog';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -33,14 +34,24 @@ vi.mock('@/lib/local-repositories', () => ({
   getRemoteServerByBaseUrl: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock data-layer for syncRemoteArchive
-vi.mock('@/lib/data-layer', () => ({
-  syncRemoteArchive: vi.fn().mockResolvedValue({ success: true }),
+// Mock the low-level sync engine. The dialog uses the real application-level
+// coordinator, which owns validation, persistence, lifecycle, and invalidation.
+vi.mock('@/lib/sync', () => ({
+  syncRemoteArchive: vi.fn((serverId: string) =>
+    Promise.resolve({
+      success: true,
+      status: 'ready',
+      serverId,
+      projects: [],
+      warnings: [],
+    }),
+  ),
 }));
 
-// Mock sync module (data-layer re-exports from sync)
-vi.mock('@/lib/sync', () => ({
-  syncRemoteArchive: vi.fn().mockResolvedValue({ success: true }),
+vi.mock('@/lib/query-client', () => ({
+  queryClient: {
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 // Mock @tanstack/react-query for useQueryClient
@@ -54,6 +65,17 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   };
 });
 
+function failedSyncResult(error: string): SyncResult {
+  return {
+    success: false,
+    status: 'error',
+    serverId: 'test-server-id',
+    projects: [],
+    warnings: [],
+    error,
+  };
+}
+
 beforeEach(async () => {
   await resetDb();
   useAuthStore.setState({
@@ -65,6 +87,15 @@ beforeEach(async () => {
     isAuthenticated: false,
   });
   vi.clearAllMocks();
+  vi.mocked(syncRemoteArchive).mockImplementation((serverId: string) =>
+    Promise.resolve({
+      success: true,
+      status: 'ready',
+      serverId,
+      projects: [],
+      warnings: [],
+    }),
+  );
   mockCreateRemoteServer.mockResolvedValue({
     id: 'test-server-id',
     baseUrl: '',
@@ -213,7 +244,8 @@ describe('AddArchiveServerDialog', () => {
           label: 'Existing',
           baseUrl: 'https://archive.test',
           token: 'existing-token',
-          status: 'idle' as const,
+          status: 'connected' as const,
+          onboardingStatus: 'ready' as const,
         },
       ],
     });
@@ -288,8 +320,9 @@ describe('AddArchiveServerDialog', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
-    const addBtn = screen.getByRole('button', { name: /add/i });
-    expect(addBtn).toHaveAttribute('aria-busy', 'true');
+    expect(
+      screen.getByRole('heading', { name: 'Connecting to archive...' }),
+    ).toBeInTheDocument();
   });
 
   // ---- Advanced toggle tests ----
@@ -475,7 +508,8 @@ describe('AddArchiveServerDialog', () => {
           label: 'Existing',
           baseUrl: 'https://archive.test',
           token: 'existing-token',
-          status: 'idle' as const,
+          status: 'connected' as const,
+          onboardingStatus: 'ready' as const,
         },
       ],
     });
@@ -553,7 +587,7 @@ describe('AddArchiveServerDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to add server')).toBeInTheDocument();
+      expect(screen.getByText('Sync failed')).toBeInTheDocument();
     });
   });
 
@@ -579,8 +613,9 @@ describe('AddArchiveServerDialog', () => {
     await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
-    const addBtn = screen.getByRole('button', { name: /add/i });
-    expect(addBtn).toHaveAttribute('aria-busy', 'true');
+    expect(
+      screen.getByRole('heading', { name: 'Connecting to archive...' }),
+    ).toBeInTheDocument();
   });
 
   it('rejects a server URL without a protocol in advanced mode', async () => {
@@ -666,7 +701,8 @@ describe('AddArchiveServerDialog', () => {
           label: 'Existing',
           baseUrl: 'https://archive.test',
           token: 'existing-token',
-          status: 'idle' as const,
+          status: 'connected' as const,
+          onboardingStatus: 'ready' as const,
         },
       ],
     });
@@ -1214,10 +1250,9 @@ describe('AddArchiveServerDialog', () => {
     // ---- Sync failure & retry tests (issue #74) ----
 
     it('shows error message and Try Again when syncRemoteArchive fails', async () => {
-      vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
-        success: false,
-        error: 'Network error',
-      });
+      vi.mocked(syncRemoteArchive).mockResolvedValueOnce(
+        failedSyncResult('Network error'),
+      );
 
       const user = userEvent.setup();
       render(
@@ -1245,10 +1280,9 @@ describe('AddArchiveServerDialog', () => {
 
     it('retries sync successfully after clicking Try Again', async () => {
       // First attempt fails
-      vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
-        success: false,
-        error: 'Network error',
-      });
+      vi.mocked(syncRemoteArchive).mockResolvedValueOnce(
+        failedSyncResult('Network error'),
+      );
 
       const user = userEvent.setup();
       const onAdded = vi.fn();
@@ -1281,15 +1315,12 @@ describe('AddArchiveServerDialog', () => {
       );
     });
 
-    it('removes orphaned server when cancelling after sync failure', async () => {
-      vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
-        success: false,
-        error: 'Network error',
-      });
+    it('retains a failed archive as cancelled for safe retry', async () => {
+      vi.mocked(syncRemoteArchive).mockResolvedValueOnce(
+        failedSyncResult('Network error'),
+      );
 
       const removeServerSpy = vi.spyOn(useAuthStore.getState(), 'removeServer');
-      removeServerSpy.mockResolvedValue(undefined);
-
       const user = userEvent.setup();
       render(
         <AddArchiveServerDialog
@@ -1305,21 +1336,23 @@ describe('AddArchiveServerDialog', () => {
       );
       await user.click(screen.getByRole('button', { name: 'Add' }));
 
-      // Wait for sync failure
       expect(await screen.findByText('Network error')).toBeInTheDocument();
-
-      // Click Cancel
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
-      // removeServer should have been called with the server ID
       await waitFor(() => {
-        expect(removeServerSpy).toHaveBeenCalledWith('test-server-id');
+        const retained = useAuthStore
+          .getState()
+          .servers.find((server) => server.id === 'test-server-id');
+        expect(retained).toMatchObject({
+          status: 'cancelled',
+          onboardingStatus: 'cancelled',
+        });
       });
-
+      expect(removeServerSpy).not.toHaveBeenCalled();
       removeServerSpy.mockRestore();
     });
 
-    it('does not call onAdded when cancel clicked during pre-progress async work', async () => {
+    it('does not call onAdded when closed while persistence is pending', async () => {
       // Make addServer (createRemoteServer) return a controllable promise so we
       // can keep it pending while the user clicks Cancel.
       let resolveCreate: (value: { id: string }) => void = () => {};
@@ -1347,8 +1380,8 @@ describe('AddArchiveServerDialog', () => {
       );
       await user.click(screen.getByRole('button', { name: 'Add' }));
 
-      // While addServer is pending, click Cancel
-      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      // While addServer is pending, close the progress dialog.
+      await user.click(screen.getByRole('button', { name: 'Close' }));
 
       // Now resolve the pending addServer promise — the continuation should
       // be blocked by the cancelledRef guard. The guard check happens inside
@@ -1358,16 +1391,16 @@ describe('AddArchiveServerDialog', () => {
       await Promise.resolve();
       await Promise.resolve();
 
-      // Flush React effects — if the guard failed, startConnectionProgress
-      // would have set cpState.isActive=true and the component would render
-      // the progress heading. findByText rejects when the element is not
-      // found after the timeout, so we assert it rejects (guard worked).
-      await expect(
-        screen.findByText('Connecting to archive...', undefined, {
-          timeout: 500,
-        }),
-      ).rejects.toThrow();
-
+      // The controlled dialog may remain rendered until its parent applies
+      // onClose, but the pending continuation must never start or finalize sync.
+      await waitFor(() => {
+        const retained = useAuthStore
+          .getState()
+          .servers.find((server) => server.id === 'test-server-id');
+        expect(retained?.onboardingStatus).toBe('cancelled');
+      });
+      expect(syncRemoteArchive).not.toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalledOnce();
       expect(onAdded).not.toHaveBeenCalled();
     });
   });

@@ -601,7 +601,8 @@ describe('syncRemoteArchive', () => {
     });
 
     // Preset failures should not block sync success
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('partial');
 
     // Observations and alerts should still be persisted
     const db = getDb();
@@ -653,7 +654,8 @@ describe('syncRemoteArchive', () => {
     });
 
     // Alert failures should not block sync success
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('partial');
 
     const db = getDb();
     const observations = await db.observations.toArray();
@@ -709,7 +711,8 @@ describe('syncRemoteArchive', () => {
       serverLabel: 'Test Archive',
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('partial');
 
     const db = getDb();
     const observations = await db.observations.toArray();
@@ -743,6 +746,50 @@ describe('syncRemoteArchive', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('returns partial when observations fail for only some projects', async () => {
+    const serverRecord = await seedServer();
+    await useAuthStore.getState().addServer({
+      label: 'Test Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      allowDuplicate: true,
+    });
+
+    server.use(
+      http.get(archiveUrl + '/projects', () =>
+        HttpResponse.json({
+          data: [
+            { projectId: 'proj-1', name: 'Unavailable Project' },
+            { projectId: 'proj-2', name: 'Available Project' },
+          ],
+        }),
+      ),
+      http.get(archiveUrl + '/projects/proj-1/observations', () =>
+        HttpResponse.json({}, { status: 500 }),
+      ),
+      http.get(archiveUrl + '/projects/proj-2/observations', () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      serverLabel: 'Test Archive',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('partial');
+    expect(
+      result.projects.find((project) => project.projectRemoteId === 'proj-1')
+        ?.status,
+    ).toBe('error');
+    expect(
+      result.projects.find((project) => project.projectRemoteId === 'proj-2')
+        ?.status,
+    ).toBe('ready');
   });
 
   it('pulls tracks for each project during sync', async () => {
@@ -985,7 +1032,8 @@ describe('syncRemoteArchive', () => {
       serverLabel: 'Test Archive',
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('partial');
 
     const db = getDb();
     const observations = await db.observations.toArray();
@@ -1041,7 +1089,8 @@ describe('syncRemoteArchive', () => {
       serverLabel: 'Test Archive',
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('partial');
 
     const db = getDb();
     const observations = await db.observations.toArray();

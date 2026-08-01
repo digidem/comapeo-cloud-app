@@ -15,260 +15,223 @@ export interface SyncOptions {
   serverLabel?: string;
 }
 
-export interface SyncResult {
-  success: boolean;
+export type SyncStatus = 'ready' | 'partial' | 'error';
+export type SyncResource =
+  | 'observations'
+  | 'alerts'
+  | 'presets'
+  | 'tracks'
+  | 'fields';
+
+export interface ResourceSyncOutcome {
+  resource: SyncResource;
+  critical: boolean;
+  status: 'success' | 'error' | 'skipped';
   error?: string;
-  warnings?: string[];
 }
 
-// ---------------------------------------------------------------------------
-// Per-server concurrency lock
-// ---------------------------------------------------------------------------
+export interface ProjectSyncOutcome {
+  projectLocalId: string;
+  projectRemoteId?: string;
+  projectName?: string;
+  status: SyncStatus;
+  resources: ResourceSyncOutcome[];
+}
+
+export interface SyncResult {
+  success: boolean;
+  status: SyncStatus;
+  serverId: string;
+  projects: ProjectSyncOutcome[];
+  warnings: string[];
+  error?: string;
+}
 
 const activeSyncs = new Map<string, Promise<SyncResult>>();
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function ensureServerInStore(
-  options: SyncOptions,
-): Promise<string | null> {
-  // Always call addServer — it handles deduplication by baseUrl and
-  // updates the token when it has changed, keeping the auth store in
-  // sync with the credentials used for the current sync operation.
-  const id = await useAuthStore.getState().addServer({
+async function ensureServerInStore(options: SyncOptions): Promise<string> {
+  return useAuthStore.getState().addServer({
     label: options.serverLabel ?? options.baseUrl,
     baseUrl: options.baseUrl,
     token: options.token,
     allowDuplicate: true,
   });
-  return id;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function resultForFatalError(serverId: string, error: unknown): SyncResult {
+  return {
+    success: false,
+    status: 'error',
+    serverId,
+    projects: [],
+    warnings: [],
+    error: error instanceof Error ? error.message : 'Unknown sync error',
+  };
+}
+
+async function runResource(
+  resource: SyncResource,
+  critical: boolean,
+  operation: () => Promise<unknown>,
+): Promise<ResourceSyncOutcome> {
+  try {
+    await operation();
+    return { resource, critical, status: 'success' };
+  } catch (error) {
+    return {
+      resource,
+      critical,
+      status: 'error',
+      error: errorMessage(error),
+    };
+  }
+}
+
+function summarizeProject(
+  project: Awaited<ReturnType<typeof pullProjects>>[number],
+  resources: ResourceSyncOutcome[],
+): ProjectSyncOutcome {
+  const observations = resources.find(
+    (outcome) => outcome.resource === 'observations',
+  );
+  const hasResourceError = resources.some(
+    (outcome) => outcome.status === 'error',
+  );
+  let status: SyncStatus = 'ready';
+  if (observations?.status === 'error') {
+    status = 'error';
+  } else if (hasResourceError) {
+    status = 'partial';
+  }
+
+  return {
+    projectLocalId: project.localId,
+    projectRemoteId: project.remoteId,
+    projectName: project.name,
+    status,
+    resources,
+  };
+}
+
+async function syncProject(
+  serverId: string,
+  project: Awaited<ReturnType<typeof pullProjects>>[number],
+  config: { baseUrl: string; token: string },
+): Promise<ProjectSyncOutcome> {
+  if (!project.remoteId) {
+    return {
+      projectLocalId: project.localId,
+      projectName: project.name,
+      status: 'ready',
+      resources: [],
+    };
+  }
+
+  const remoteId = project.remoteId;
+  const resources = await Promise.all([
+    runResource('observations', true, () =>
+      pullObservations(serverId, remoteId, project.localId, config),
+    ),
+    runResource('alerts', false, () =>
+      pullAlerts(serverId, remoteId, project.localId, config),
+    ),
+    runResource('presets', false, () =>
+      pullPresets(serverId, remoteId, project.localId, config),
+    ),
+    runResource('tracks', false, () =>
+      pullTracks(serverId, remoteId, project.localId, config),
+    ),
+    runResource('fields', false, () =>
+      pullFields(serverId, remoteId, project.localId, config),
+    ),
+  ]);
+
+  return summarizeProject(project, resources);
+}
+
+function summarizeSync(
+  serverId: string,
+  projects: ProjectSyncOutcome[],
+): SyncResult {
+  const remoteProjects = projects.filter((project) => project.projectRemoteId);
+  const criticalFailures = remoteProjects.filter(
+    (project) => project.status === 'error',
+  );
+  const resourceFailures = projects.flatMap((project) =>
+    project.resources
+      .filter((resource) => resource.status === 'error')
+      .map(
+        (resource) =>
+          `${project.projectName ?? project.projectRemoteId ?? project.projectLocalId}: ${resource.resource}: ${resource.error ?? 'Unknown error'}`,
+      ),
+  );
+
+  let status: SyncStatus = 'ready';
+  if (
+    remoteProjects.length > 0 &&
+    criticalFailures.length === remoteProjects.length
+  ) {
+    status = 'error';
+  } else if (projects.some((project) => project.status !== 'ready')) {
+    status = 'partial';
+  }
+
+  return {
+    success: status === 'ready',
+    status,
+    serverId,
+    projects,
+    warnings: resourceFailures,
+    ...(status === 'ready'
+      ? {}
+      : {
+          error:
+            status === 'partial'
+              ? `Partial sync: ${resourceFailures.join('; ')}`
+              : resourceFailures.join('; ') || 'Sync failed',
+        }),
+  };
 }
 
 async function doSync(
-  serverDbId: string,
+  serverId: string,
   options: SyncOptions,
 ): Promise<SyncResult> {
   try {
-    // Ensure server is in the auth store so sync status tracking works
     await ensureServerInStore(options);
-
-    const serverRecord = await getRemoteServer(serverDbId);
+    const serverRecord = await getRemoteServer(serverId);
     if (!serverRecord) {
-      return {
-        success: false,
-        error: `Server ${serverDbId} not found in database`,
-      };
+      return resultForFatalError(
+        serverId,
+        new Error(`Server ${serverId} not found in database`),
+      );
     }
-
-    // Update server status to syncing
-    await useAuthStore.getState().updateServerStatus(serverDbId, 'syncing');
 
     const config = { baseUrl: options.baseUrl, token: options.token };
-
-    // Pull projects
-    const projects = await pullProjects(serverDbId, config);
-
-    // Pull observations, alerts, and presets for each project.
-    // Each data type is handled independently so a single failure does not
-    // abort the others — partial results are still persisted.
-    //
-    // Critical failures (observations): these are required for a project to
-    // be considered synced. If observations fail, the project is marked as
-    // failed but does not abort other projects.
-    //
-    // Non-critical failures (alerts, presets): these are logged as warnings
-    // but do NOT cause the project or overall sync to fail.
-    const projectWarnings: string[] = [];
-    const projectResults = await Promise.allSettled(
-      projects.map(async (project) => {
-        if (project.remoteId) {
-          const projectErrors: string[] = [];
-
-          try {
-            await pullObservations(
-              serverDbId,
-              project.remoteId,
-              project.localId,
-              config,
-            );
-          } catch (e) {
-            projectErrors.push(
-              `Observations: ${e instanceof Error ? e.message : String(e)}`,
-            );
-          }
-
-          // Alerts are non-critical — log warnings, don't fail
-          try {
-            await pullAlerts(
-              serverDbId,
-              project.remoteId,
-              project.localId,
-              config,
-            );
-          } catch (e) {
-            const msg = `Alerts: ${e instanceof Error ? e.message : String(e)}`;
-            projectWarnings.push(
-              `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
-            );
-          }
-
-          // Presets are non-critical — log warnings, don't fail
-          try {
-            await pullPresets(
-              serverDbId,
-              project.remoteId,
-              project.localId,
-              config,
-            );
-          } catch (e) {
-            const msg = `Presets: ${e instanceof Error ? e.message : String(e)}`;
-            projectWarnings.push(
-              `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
-            );
-          }
-
-          // Tracks are non-critical — log warnings, don't fail
-          try {
-            await pullTracks(
-              serverDbId,
-              project.remoteId,
-              project.localId,
-              config,
-            );
-          } catch (e) {
-            const msg = `Tracks: ${e instanceof Error ? e.message : String(e)}`;
-            projectWarnings.push(
-              `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
-            );
-          }
-
-          // Fields are non-critical — log warnings, don't fail
-          try {
-            await pullFields(
-              serverDbId,
-              project.remoteId,
-              project.localId,
-              config,
-            );
-          } catch (e) {
-            const msg = `Fields: ${e instanceof Error ? e.message : String(e)}`;
-            projectWarnings.push(
-              `${project.name ?? project.remoteId ?? 'project'}: ${msg}`,
-            );
-          }
-
-          // Only fail the project if observations (critical) failed
-          if (projectErrors.length > 0) {
-            throw new Error(projectErrors.join('; '));
-          }
-        }
-      }),
+    const projects = await pullProjects(serverId, config);
+    const projectResults = await Promise.all(
+      projects.map((project) => syncProject(serverId, project, config)),
     );
-
-    // Collect critical project errors (observations failures)
-    const projectErrors = projectResults
-      .map((r, i) => ({ r, i }))
-      .filter(
-        (x): x is { r: PromiseRejectedResult; i: number } =>
-          x.r.status === 'rejected',
-      )
-      .map(({ r, i }) => {
-        const reason =
-          r.reason instanceof Error ? r.reason.message : String(r.reason);
-        const name =
-          projects[i]?.name ?? projects[i]?.remoteId ?? `project ${i}`;
-        return `${name}: ${reason}`;
-      });
-
-    // Filter warnings to only those from projects that actually succeeded
-    // (warnings from failed projects are already covered by projectErrors)
-    if (projectErrors.length > 0) {
-      // Some projects had critical failures — but other projects may have
-      // synced successfully. If at least one project succeeded, don't fail
-      // the entire sync; just report partial failure.
-      const succeededCount = projects.length - projectErrors.length;
-
-      if (succeededCount > 0) {
-        // Partial success: some projects synced, some didn't
-        const errorMsg = `Partial sync — ${succeededCount}/${projects.length} projects synced. Errors: ${projectErrors.join('; ')}`;
-        const statusMsg =
-          projectWarnings.length > 0
-            ? `${errorMsg} (warnings: ${projectWarnings.join('; ')})`
-            : errorMsg;
-        await useAuthStore
-          .getState()
-          .updateServerStatus(serverDbId, 'connected', statusMsg);
-        return {
-          success: true,
-          error: undefined,
-          warnings: projectWarnings.length > 0 ? projectWarnings : undefined,
-        };
-      }
-
-      // Complete failure: no projects synced successfully
-      const errorMsg = projectErrors.join('; ');
-      await useAuthStore
-        .getState()
-        .updateServerStatus(serverDbId, 'error', errorMsg);
-      return { success: false, error: errorMsg };
-    }
-
-    // All projects synced observations successfully
-    if (projectWarnings.length > 0) {
-      await useAuthStore
-        .getState()
-        .updateServerStatus(
-          serverDbId,
-          'connected',
-          `Synced with warnings: ${projectWarnings.join('; ')}`,
-        );
-      return { success: true, warnings: projectWarnings };
-    }
-
-    // Perfect sync — no errors or warnings
-    await useAuthStore.getState().updateServerStatus(serverDbId, 'connected');
-
-    return { success: true };
+    return summarizeSync(serverId, projectResults);
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown sync error';
-    // Update server status to error — use serverDbId directly
-    await useAuthStore
-      .getState()
-      .updateServerStatus(serverDbId, 'error', errorMessage);
-    return { success: false, error: errorMessage };
+    return resultForFatalError(serverId, error);
   }
 }
 
-// ---------------------------------------------------------------------------
-// Public API — sync with concurrency guard
-// ---------------------------------------------------------------------------
-
-export async function syncRemoteArchive(
-  serverDbId: string,
+export function syncRemoteArchive(
+  serverId: string,
   options: SyncOptions,
 ): Promise<SyncResult> {
-  // Check the lock BEFORE any side effects (ensureServerInStore, status updates).
-  // If a sync is already running for this server, wait for it to complete
-  // and return its result instead of rejecting — this prevents confusing
-  // "Sync already in progress" errors when auto-sync and manual add compete.
-  // Note: when a sync is already running, the second caller's options are
-  // intentionally ignored — the first call's result is shared. This is
-  // acceptable because concurrent syncs for the same server typically use
-  // identical credentials (e.g. auto-sync + manual add). If token rotation
-  // during sync becomes common, revisit to merge or queue options.
-  const existingSync = activeSyncs.get(serverDbId);
-  if (existingSync) {
-    return existingSync;
-  }
+  const existing = activeSyncs.get(serverId);
+  if (existing) return existing;
 
-  const syncPromise = doSync(serverDbId, options).finally(() => {
-    activeSyncs.delete(serverDbId);
+  const run = doSync(serverId, options).finally(() => {
+    activeSyncs.delete(serverId);
   });
-
-  activeSyncs.set(serverDbId, syncPromise);
-
-  return syncPromise;
+  activeSyncs.set(serverId, run);
+  return run;
 }

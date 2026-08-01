@@ -1,23 +1,19 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { useQueryClient } from '@tanstack/react-query';
-
 import { ConnectionProgress } from '@/components/shared/ConnectionProgress';
 import type { ConnectionStep } from '@/components/shared/ConnectionProgress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
-import {
-  ApiError,
-  InviteApiError,
-  apiClient,
-  redeemEncryptedInvite,
-} from '@/lib/api-client';
+import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
-import { syncRemoteArchive } from '@/lib/data-layer';
 import { parseInviteUrl, warnLegacyInviteUrlOnce } from '@/lib/invite-url';
-import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
+import {
+  type OnboardingSource,
+  cancelArchiveOnboarding,
+  onboardArchive,
+} from '@/lib/sync-coordinator';
 
 interface AddArchiveServerDialogProps {
   isOpen: boolean;
@@ -41,6 +37,8 @@ interface ConnectionProgressState {
   serverId: string;
   baseUrl: string;
   token: string;
+  label: string;
+  source: OnboardingSource;
   steps: ConnectionStep[];
   isComplete: boolean;
   errorMessage: string | null;
@@ -53,6 +51,8 @@ const INITIAL_CP_STATE: ConnectionProgressState = {
   serverId: '',
   baseUrl: '',
   token: '',
+  label: '',
+  source: 'manual',
   steps: [],
   isComplete: false,
   errorMessage: null,
@@ -223,70 +223,6 @@ function getUrlValidationMessage(
   }
 }
 
-function checkDuplicate(normalizedUrl: string): boolean {
-  return useAuthStore.getState().servers.some((s) => {
-    const normalizedExisting = normalizeArchiveBaseUrl(s.baseUrl);
-    return normalizedExisting.ok && normalizedExisting.value === normalizedUrl;
-  });
-}
-
-/**
- * Validates that the server is reachable and the token is valid before adding.
- * Returns a discriminated union: `{ valid: true }` or
- * `{ valid: false, messageKey }`.
- */
-async function validateConnection(
-  baseUrl: string,
-  token: string,
-): Promise<
-  { valid: true } | { valid: false; messageKey: keyof typeof messages }
-> {
-  const config = { baseUrl, token };
-
-  let timeoutId: ReturnType<typeof setTimeout>;
-  const validationPromise = (async () => {
-    // First check server reachability (no auth required)
-    const healthy = await apiClient.healthCheck(config);
-    if (!healthy) {
-      return { valid: false, messageKey: 'connectionFailed' as const };
-    }
-
-    // Then check token validity by trying to fetch projects
-    try {
-      await apiClient.getProjects(config);
-    } catch (err) {
-      if (
-        err instanceof ApiError &&
-        (err.status === 401 || err.status === 403)
-      ) {
-        return { valid: false, messageKey: 'invalidToken' as const };
-      }
-      return { valid: false, messageKey: 'connectionFailed' as const };
-    }
-
-    return { valid: true } as const;
-  })();
-
-  // Structural safety net: if the underlying fetches hang indefinitely
-  // (api-client methods don't accept an AbortSignal), race against a
-  // 10-second timeout and treat it as a connection failure.
-  const timeoutPromise = new Promise<{
-    valid: false;
-    messageKey: keyof typeof messages;
-  }>((resolve) => {
-    timeoutId = setTimeout(
-      () => resolve({ valid: false, messageKey: 'connectionFailed' }),
-      10_000,
-    );
-  });
-
-  try {
-    return await Promise.race([validationPromise, timeoutPromise]);
-  } finally {
-    clearTimeout(timeoutId!);
-  }
-}
-
 function buildConnectionProgressSteps(intl: ReturnType<typeof useIntl>) {
   return [
     {
@@ -343,8 +279,6 @@ function AddArchiveServerDialog({
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [inviteUrlError, setInviteUrlError] = useState<string | null>(null);
 
-  const queryClient = useQueryClient();
-
   // Reset every piece of transient UI state. Used both when the user cancels
   // (handleClose) and after a successful connection, which closes the dialog
   // via onAdded without going through handleClose. Declared ahead of the
@@ -367,20 +301,34 @@ function AddArchiveServerDialog({
     async function runConnection() {
       const steps = [...cpState.steps];
       try {
-        // Step 1: Connecting to server (index 1)
-        steps[1] = { ...steps[1]!, status: 'active' };
-        setCpState((prev) => ({ ...prev, steps: [...steps] }));
-
-        const result = await syncRemoteArchive(cpState.serverId, {
+        const result = await onboardArchive({
           baseUrl: cpState.baseUrl,
           token: cpState.token,
+          label: cpState.label,
+          source: cpState.source,
+          isCancelled: () => cancelledRef.current,
+          onStateChange: (lifecycle) => {
+            if (cancelled) return;
+            if (lifecycle === 'validating') {
+              steps[0] = { ...steps[0]!, status: 'active' };
+            } else if (lifecycle === 'pending') {
+              steps[0] = { ...steps[0]!, status: 'completed' };
+              steps[1] = { ...steps[1]!, status: 'active' };
+            } else if (lifecycle === 'syncing') {
+              steps[1] = { ...steps[1]!, status: 'completed' };
+              steps[2] = { ...steps[2]!, status: 'active' };
+            }
+            setCpState((prev) => ({ ...prev, steps: [...steps] }));
+          },
         });
         if (cancelled) return;
 
-        if (!result.success) {
-          steps[1] = { ...steps[1]!, status: 'error' };
+        if (!result.success || result.status !== 'ready') {
+          const failedStep = result.serverId ? 2 : 1;
+          steps[failedStep] = { ...steps[failedStep]!, status: 'error' };
           setCpState((prev) => ({
             ...prev,
+            serverId: result.serverId,
             steps: [...steps],
             errorMessage:
               result.error ?? intl.formatMessage(messages.syncFailed),
@@ -388,35 +336,23 @@ function AddArchiveServerDialog({
           return;
         }
 
-        // Step 1: Connecting complete
+        steps[0] = { ...steps[0]!, status: 'completed' };
         steps[1] = { ...steps[1]!, status: 'completed' };
-        setCpState((prev) => ({ ...prev, steps: [...steps] }));
-
-        // Step 2: Syncing data (index 2)
-        steps[2] = { ...steps[2]!, status: 'active' };
-        setCpState((prev) => ({ ...prev, steps: [...steps] }));
-
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['projects'] }),
-          queryClient.invalidateQueries({ queryKey: ['observations'] }),
-          queryClient.invalidateQueries({ queryKey: ['alerts'] }),
-        ]);
-        if (cancelled) return;
-
         steps[2] = { ...steps[2]!, status: 'completed' };
-        setCpState((prev) => ({ ...prev, steps: [...steps] }));
-
-        // Step 3: Preparing dashboard (index 3)
         steps[3] = { ...steps[3]!, status: 'active' };
-        setCpState((prev) => ({ ...prev, steps: [...steps] }));
+        setCpState((prev) => ({
+          ...prev,
+          serverId: result.serverId,
+          steps: [...steps],
+        }));
 
-        // Brief pause for the "Preparing" step to be visible
         await new Promise((resolve) => setTimeout(resolve, 500));
         if (cancelled) return;
 
         steps[3] = { ...steps[3]!, status: 'completed' };
         setCpState((prev) => ({
           ...prev,
+          serverId: result.serverId,
           steps: [...steps],
           isComplete: true,
         }));
@@ -460,12 +396,19 @@ function AddArchiveServerDialog({
   }, [cpState.isActive, cpState.isComplete]);
 
   const startConnectionProgress = useCallback(
-    (serverId: string, baseUrl: string, token: string) => {
+    (
+      baseUrl: string,
+      token: string,
+      label: string,
+      source: OnboardingSource,
+    ) => {
       setCpState({
         isActive: true,
-        serverId,
+        serverId: '',
         baseUrl,
         token,
+        label,
+        source,
         steps: buildConnectionProgressSteps(intl),
         isComplete: false,
         errorMessage: null,
@@ -488,7 +431,12 @@ function AddArchiveServerDialog({
     }));
   }, [intl]);
 
-  async function finalizeAddServer(baseUrl: string, token: string) {
+  async function finalizeAddServer(
+    baseUrl: string,
+    token: string,
+    label: string,
+    source: OnboardingSource,
+  ) {
     const normalizedUrl = normalizeArchiveBaseUrl(baseUrl);
     if (!normalizedUrl.ok) {
       const urlMessage = getUrlValidationMessage(normalizedUrl.code);
@@ -499,59 +447,16 @@ function AddArchiveServerDialog({
       return;
     }
 
-    // Check for duplicate
-    if (checkDuplicate(normalizedUrl.value)) {
-      dispatch({
-        type: 'error',
-        message: intl.formatMessage(messages.duplicateServer),
-      });
-      return;
-    }
-
-    // Validate server is reachable and token is valid
-    const validation = await validateConnection(normalizedUrl.value, token);
-    if (!validation.valid) {
-      dispatch({
-        type: 'error',
-        message: intl.formatMessage(messages[validation.messageKey]),
-      });
-      return;
-    }
-
-    const hostname = (() => {
-      try {
-        return new URL(baseUrl).hostname;
-      } catch {
-        return normalizedUrl.value;
-      }
-    })();
-
-    const addServer = useAuthStore.getState().addServer;
-    addServer({
-      label: hostname,
-      baseUrl: normalizedUrl.value,
+    if (cancelledRef.current) return;
+    dispatch({ type: 'success' });
+    startConnectionProgress(
+      normalizedUrl.value,
       token,
-    }).then(
-      (serverId) => {
-        if (cancelledRef.current) return;
-        // Instead of immediately calling onAdded, start connection progress
-        dispatch({ type: 'success' });
-        startConnectionProgress(serverId, normalizedUrl.value, token);
-      },
-      (err: unknown) => {
-        if (err instanceof DuplicateServerError) {
-          dispatch({
-            type: 'error',
-            message: intl.formatMessage(messages.duplicateServer),
-          });
-          return;
-        }
-        const message =
-          err instanceof Error
-            ? err.message
-            : intl.formatMessage(messages.failed);
-        dispatch({ type: 'error', message });
-      },
+      label ||
+        (source === 'manual'
+          ? normalizedUrl.value
+          : new URL(normalizedUrl.value).hostname),
+      source,
     );
   }
 
@@ -584,18 +489,9 @@ function AddArchiveServerDialog({
         return;
       }
 
-      // Check for duplicate
-      if (checkDuplicate(normalizedUrl.value)) {
-        dispatch({
-          type: 'error',
-          message: intl.formatMessage(messages.duplicateServer),
-        });
-        return;
-      }
-
       cancelledRef.current = false;
       dispatch({ type: 'submit' });
-      await finalizeAddServer(parsed.baseUrl, parsed.token);
+      await finalizeAddServer(parsed.baseUrl, parsed.token, '', 'invite');
       return;
     }
 
@@ -605,7 +501,12 @@ function AddArchiveServerDialog({
     redeemEncryptedInvite(parsed.code)
       .then(
         async (redeemed) => {
-          await finalizeAddServer(redeemed.baseUrl, redeemed.token);
+          await finalizeAddServer(
+            redeemed.baseUrl,
+            redeemed.token,
+            '',
+            'invite',
+          );
         },
         (err: unknown) => {
           if (err instanceof InviteApiError && err.code === 'INVITE_EXPIRED') {
@@ -662,55 +563,9 @@ function AddArchiveServerDialog({
       return;
     }
 
-    // Check for duplicate URL (normalized comparison)
-    if (checkDuplicate(normalizedUrl.value)) {
-      dispatch({
-        type: 'error',
-        message: intl.formatMessage(messages.duplicateServer),
-      });
-      return;
-    }
-
     cancelledRef.current = false;
     dispatch({ type: 'submit' });
-
-    // Validate server is reachable and token is valid
-    const validation = await validateConnection(normalizedUrl.value, token);
-    if (!validation.valid) {
-      dispatch({
-        type: 'error',
-        message: intl.formatMessage(messages[validation.messageKey]),
-      });
-      return;
-    }
-
-    const addServer = useAuthStore.getState().addServer;
-    addServer({
-      label: label || normalizedUrl.value,
-      baseUrl: normalizedUrl.value,
-      token,
-    }).then(
-      (serverId) => {
-        if (cancelledRef.current) return;
-        // Instead of immediately calling onAdded, start connection progress
-        dispatch({ type: 'success' });
-        startConnectionProgress(serverId, normalizedUrl.value, token);
-      },
-      (err: unknown) => {
-        if (err instanceof DuplicateServerError) {
-          dispatch({
-            type: 'error',
-            message: intl.formatMessage(messages.duplicateServer),
-          });
-          return;
-        }
-        const message =
-          err instanceof Error
-            ? err.message
-            : intl.formatMessage(messages.failed);
-        dispatch({ type: 'error', message });
-      },
-    );
+    await finalizeAddServer(normalizedUrl.value, token, label, 'manual');
   }
 
   function handleSubmit() {
@@ -723,26 +578,11 @@ function AddArchiveServerDialog({
   }
 
   function handleClose() {
-    // If the user cancels a connection that failed to sync, the server was
-    // already persisted to the auth store — addServer runs before connection
-    // progress starts, so cancelling would otherwise leave behind an orphaned,
-    // half-connected server entry. Remove it to restore the pre-attempt state.
-    // This is safe because addServer always takes the create-new path here
-    // (the dialog pre-checks for duplicates), so we only ever delete the server
-    // we just created this session — never one the user already had.
     cancelledRef.current = true;
-    if (
-      cpState.isActive &&
-      !cpState.isComplete &&
-      cpState.serverId !== '' &&
-      cpState.errorMessage !== null
-    ) {
-      void useAuthStore
-        .getState()
-        .removeServer(cpState.serverId)
-        .catch((err) => {
-          console.error('Failed to remove orphaned server:', err);
-        });
+    if (cpState.isActive && !cpState.isComplete && cpState.serverId !== '') {
+      void cancelArchiveOnboarding(cpState.serverId).catch((err) => {
+        console.error('Failed to retain cancelled onboarding state:', err);
+      });
     }
     resetDialogState();
     onClose();
@@ -753,8 +593,8 @@ function AddArchiveServerDialog({
     return (
       <Modal
         open={isOpen}
-        onOpenChange={() => {
-          // Prevent closing during connection progress
+        onOpenChange={(open) => {
+          if (!open) handleClose();
         }}
         title={intl.formatMessage(messages.title)}
       >

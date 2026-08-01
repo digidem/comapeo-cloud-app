@@ -22,6 +22,14 @@ export class DuplicateServerError extends Error {
 }
 
 export type AuthTier = 'local' | 'remoteArchive' | 'cloud';
+export type ArchiveLifecycleStatus =
+  | 'validating'
+  | 'pending'
+  | 'syncing'
+  | 'ready'
+  | 'partial'
+  | 'error'
+  | 'cancelled';
 
 export interface RemoteArchiveServer {
   id: string;
@@ -29,7 +37,17 @@ export interface RemoteArchiveServer {
   baseUrl: string;
   token: string;
   lastSyncedAt?: string;
-  status: 'idle' | 'syncing' | 'connected' | 'offline' | 'error';
+  lastSuccessfulSyncAt?: string;
+  onboardingStatus?: ArchiveLifecycleStatus;
+  status:
+    | 'idle'
+    | 'pending'
+    | 'syncing'
+    | 'connected'
+    | 'partial'
+    | 'offline'
+    | 'error'
+    | 'cancelled';
   errorMessage?: string;
 }
 
@@ -72,6 +90,15 @@ export interface AuthState extends ActiveArchiveState {
   updateServer: (
     id: string,
     updates: { label?: string; baseUrl?: string; token?: string },
+  ) => Promise<void>;
+  updateServerLifecycle: (
+    id: string,
+    updates: {
+      status: RemoteArchiveServer['status'];
+      onboardingStatus: ArchiveLifecycleStatus;
+      errorMessage?: string;
+      lastSuccessfulSyncAt?: string;
+    },
   ) => Promise<void>;
   hydrateServers: () => Promise<void>;
   clearAll: () => void;
@@ -304,6 +331,43 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     });
   },
 
+  updateServerLifecycle: async (id, updates) => {
+    const persistedUpdates = {
+      status: updates.status,
+      onboardingStatus: updates.onboardingStatus,
+      errorMessage: updates.errorMessage,
+      ...(updates.lastSuccessfulSyncAt !== undefined
+        ? {
+            lastSuccessfulSyncAt: updates.lastSuccessfulSyncAt,
+            lastSyncedAt: updates.lastSuccessfulSyncAt,
+          }
+        : {}),
+    };
+
+    await updateRemoteServer(id, persistedUpdates);
+
+    set((state) => {
+      const servers = state.servers.map((server) =>
+        server.id === id
+          ? {
+              ...server,
+              ...persistedUpdates,
+              lastSyncedAt:
+                persistedUpdates.lastSyncedAt ?? server.lastSyncedAt,
+              lastSuccessfulSyncAt:
+                persistedUpdates.lastSuccessfulSyncAt ??
+                server.lastSuccessfulSyncAt,
+            }
+          : server,
+      );
+
+      return {
+        servers,
+        ...deriveActiveFields(servers, state.activeServerId),
+      };
+    });
+  },
+
   updateServer: async (id, updates) => {
     const persistedUpdates = {
       ...(updates.label !== undefined ? { label: updates.label } : {}),
@@ -333,12 +397,23 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         label: record.label ?? record.baseUrl,
         baseUrl: record.baseUrl,
         token: record.token ?? '',
-        status: (['idle', 'syncing', 'connected', 'offline', 'error'].includes(
-          record.status,
-        )
+        status: ([
+          'idle',
+          'pending',
+          'syncing',
+          'connected',
+          'partial',
+          'offline',
+          'error',
+          'cancelled',
+        ].includes(record.status)
           ? record.status
           : 'idle') as RemoteArchiveServer['status'],
         lastSyncedAt: record.lastSyncedAt || undefined,
+        lastSuccessfulSyncAt: record.lastSuccessfulSyncAt || undefined,
+        onboardingStatus: record.onboardingStatus as
+          | ArchiveLifecycleStatus
+          | undefined,
         errorMessage: record.errorMessage,
       }));
 

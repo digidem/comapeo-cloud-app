@@ -12,7 +12,6 @@ import {
 } from '@/components/layout/shell-slot';
 import { useAutoSync } from '@/hooks/useAutoSync';
 import { useProjects } from '@/hooks/useProjects';
-import { syncRemoteArchive } from '@/lib/data-layer';
 import { getDb } from '@/lib/db';
 import { AddArchiveServerDialog } from '@/screens/Home/AddArchiveServerDialog';
 import { ArchiveBrowser } from '@/screens/Home/ArchiveBrowser';
@@ -330,27 +329,8 @@ function AuthenticatedLayoutInner() {
       <AddArchiveServerDialog
         isOpen={isAddServerOpen}
         onClose={() => setAddServerOpen(false)}
-        onAdded={(serverId) => {
+        onAdded={() => {
           setAddServerOpen(false);
-          const server = useAuthStore
-            .getState()
-            .servers.find((s) => s.id === serverId);
-          if (server) {
-            void syncRemoteArchive(serverId, {
-              baseUrl: server.baseUrl,
-              token: server.token,
-            })
-              .then(() => {
-                void queryClient.invalidateQueries({ queryKey: ['projects'] });
-                void queryClient.invalidateQueries({
-                  queryKey: ['observations'],
-                });
-                void queryClient.invalidateQueries({ queryKey: ['alerts'] });
-              })
-              .catch(() => {
-                // Sync failure is handled by the sync layer — don't block UI
-              });
-          }
         }}
       />
 
