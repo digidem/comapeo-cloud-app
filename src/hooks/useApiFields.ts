@@ -6,7 +6,11 @@ import {
 } from '@/hooks/useApiPresets';
 import type { RequestConfig } from '@/lib/api-client';
 import { apiClient } from '@/lib/api-client';
-import { useAuthStore } from '@/stores/auth-store';
+import {
+  selectActiveBaseUrl,
+  selectActiveToken,
+  useAuthStore,
+} from '@/stores/auth-store';
 
 /**
  * Deduplicate field versions using `originalVersionId ?? docId` as the
@@ -41,8 +45,8 @@ export function useApiFields(
   projectRemoteId: string | null,
   serverConfig?: { baseUrl: string; token: string } | null,
 ) {
-  const activeBaseUrl = useAuthStore((s) => s.baseUrl);
-  const activeToken = useAuthStore((s) => s.token);
+  const activeBaseUrl = useAuthStore(selectActiveBaseUrl);
+  const activeToken = useAuthStore(selectActiveToken);
 
   const effectiveBaseUrl = serverConfig?.baseUrl ?? activeBaseUrl;
   const effectiveToken = serverConfig?.token ?? activeToken;

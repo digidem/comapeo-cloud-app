@@ -69,6 +69,8 @@ vi.mock('@/hooks/useProjects', () => ({
 }));
 
 vi.mock('@/stores/auth-store', () => ({
+  selectActiveBaseUrl: (state: { baseUrl: string | null }) => state.baseUrl,
+  selectActiveToken: (state: { token: string | null }) => state.token,
   useAuthStore: vi.fn(
     (
       selector: (s: {

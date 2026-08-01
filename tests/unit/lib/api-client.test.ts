@@ -5,21 +5,40 @@ import { ApiError, apiClient } from '@/lib/api-client';
 // Mock the stores used by api-client internals
 const authStoreMock = vi.hoisted(() => ({
   state: {
+    activeServerId: 'active-server' as string | null,
+    servers: [
+      {
+        id: 'active-server',
+        label: 'Active Server',
+        baseUrl: 'https://active.example.com',
+        token: 'active-token',
+        status: 'connected' as const,
+      },
+    ],
     baseUrl: 'https://active.example.com' as string | null,
-    token: 'active-token',
+    token: 'active-token' as string | null,
   },
-  clearAuth: vi.fn(),
+  clearAuth: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/stores/auth-store', () => ({
-  useAuthStore: {
-    getState: () => ({
-      baseUrl: authStoreMock.state.baseUrl,
-      token: authStoreMock.state.token,
-      clearAuth: authStoreMock.clearAuth,
-    }),
-  },
-}));
+vi.mock('@/stores/auth-store', () => {
+  const selectActiveServer = (state: typeof authStoreMock.state) =>
+    state.servers.find((server) => server.id === state.activeServerId) ?? null;
+
+  return {
+    selectActiveServer,
+    selectActiveBaseUrl: (state: typeof authStoreMock.state) =>
+      selectActiveServer(state)?.baseUrl ?? state.baseUrl,
+    selectActiveToken: (state: typeof authStoreMock.state) =>
+      selectActiveServer(state)?.token ?? state.token,
+    useAuthStore: {
+      getState: () => ({
+        ...authStoreMock.state,
+        clearAuth: authStoreMock.clearAuth,
+      }),
+    },
+  };
+});
 
 describe('apiClient', () => {
   const originalFetch = globalThis.fetch;

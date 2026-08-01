@@ -16,7 +16,11 @@ import {
   serverInfoResponseSchema,
   tracksResponseSchema,
 } from '@/lib/schemas';
-import { useAuthStore } from '@/stores/auth-store';
+import {
+  selectActiveBaseUrl,
+  selectActiveToken,
+  useAuthStore,
+} from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -85,7 +89,7 @@ export function resolveApiRequest(
     return { baseUrl: config.baseUrl, extraHeaders: {} };
   }
 
-  const { baseUrl } = useAuthStore.getState();
+  const baseUrl = selectActiveBaseUrl(useAuthStore.getState());
   if (baseUrl) return { baseUrl, extraHeaders: {} };
   return { baseUrl: window.location.origin, extraHeaders: {} };
 }
@@ -96,7 +100,7 @@ export function resolveApiRequest(
 
 function getAuthHeaders(config?: RequestConfig): Record<string, string> {
   if (config?.token) return { Authorization: `Bearer ${config.token}` };
-  const { token } = useAuthStore.getState();
+  const token = selectActiveToken(useAuthStore.getState());
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
 }
@@ -117,19 +121,19 @@ function throwNetworkError(): never {
  * configured token (e.g. from a different archive server) from clearing
  * a valid active session.
  */
-function handle401(config?: RequestConfig): void {
-  const { baseUrl: activeBaseUrl, token: activeToken } =
-    useAuthStore.getState();
-  if (!config) {
-    // Ambient request (no explicit config) — clear active session
-    useAuthStore.getState().clearAuth();
-  } else if (config.baseUrl === activeBaseUrl && config.token === activeToken) {
-    // Configured request matches active session exactly — clear auth
-    useAuthStore.getState().clearAuth();
+async function handle401(config?: RequestConfig): Promise<void> {
+  const state = useAuthStore.getState();
+  const activeBaseUrl = selectActiveBaseUrl(state);
+  const activeToken = selectActiveToken(state);
+
+  if (
+    !config ||
+    (config.baseUrl === activeBaseUrl && config.token === activeToken)
+  ) {
+    await state.clearAuth();
   }
-  // else: configured request to same URL but different token — don't clear
-  // the active session (the configured token may be stale but the active
-  // session could still be valid)
+  // Else: the configured request did not use the active credentials, so its
+  // failure must not invalidate the active archive session.
 }
 
 async function handleResponse<T>(
@@ -138,7 +142,7 @@ async function handleResponse<T>(
   config?: RequestConfig,
 ): Promise<T> {
   if (response.status === 401) {
-    handle401(config);
+    await handle401(config);
   }
 
   if (!response.ok) {
@@ -303,7 +307,7 @@ export const apiClient = {
       );
 
       if (response.status === 401) {
-        handle401(config);
+        await handle401(config);
       }
 
       if (response.status === 201) {
@@ -391,7 +395,7 @@ export const apiClient = {
       );
 
       if (response.status === 401) {
-        handle401(config);
+        await handle401(config);
       }
 
       if (!response.ok) {

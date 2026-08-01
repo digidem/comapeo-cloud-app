@@ -2,7 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 
 import type { RequestConfig } from '@/lib/api-client';
 import { apiClient } from '@/lib/api-client';
-import { useAuthStore } from '@/stores/auth-store';
+import {
+  selectActiveBaseUrl,
+  selectActiveToken,
+  useAuthStore,
+} from '@/stores/auth-store';
 
 export interface PresetVersionLike {
   docId: string;
@@ -73,8 +77,8 @@ export function useApiPresets(
   projectRemoteId: string | null,
   serverConfig?: { baseUrl: string; token: string } | null,
 ) {
-  const activeBaseUrl = useAuthStore((s) => s.baseUrl);
-  const activeToken = useAuthStore((s) => s.token);
+  const activeBaseUrl = useAuthStore(selectActiveBaseUrl);
+  const activeToken = useAuthStore(selectActiveToken);
 
   const effectiveBaseUrl = serverConfig?.baseUrl ?? activeBaseUrl;
   const effectiveToken = serverConfig?.token ?? activeToken;

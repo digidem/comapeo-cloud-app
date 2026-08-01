@@ -3,7 +3,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ARCHIVE_TARGET_HEADER } from '@/lib/archive-proxy';
 import { getCachedIconBlob, putCachedIconBlob } from '@/lib/db';
 import { type CacheKey, createImageBlobCache } from '@/lib/image-blob-cache';
-import { useAuthStore } from '@/stores/auth-store';
+import {
+  selectActiveBaseUrl,
+  selectActiveToken,
+  useAuthStore,
+} from '@/stores/auth-store';
 
 interface AuthenticatedImageState {
   blobUrl: string | null;
@@ -145,8 +149,8 @@ export function useAuthenticatedImageUrl(
 
   // Subscribe to auth store to re-fetch when servers or token change
   const servers = useAuthStore((s) => s.servers);
-  const token = useAuthStore((s) => s.token);
-  const baseUrl = useAuthStore((s) => s.baseUrl);
+  const token = useAuthStore(selectActiveToken);
+  const baseUrl = useAuthStore(selectActiveBaseUrl);
 
   useEffect(() => {
     mountedRef.current = true;
