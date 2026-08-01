@@ -30,11 +30,7 @@ export interface SyncOptions {
 
 export type SyncStatus = 'ready' | 'partial' | 'error' | 'cancelled';
 export type SyncResource =
-  | 'observations'
-  | 'alerts'
-  | 'presets'
-  | 'tracks'
-  | 'fields';
+  'observations' | 'alerts' | 'presets' | 'tracks' | 'fields';
 
 export interface ResourceSyncOutcome {
   resource: SyncResource;
