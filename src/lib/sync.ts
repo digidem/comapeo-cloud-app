@@ -1,18 +1,31 @@
+import { ApiError, type EndpointSemantics } from '@/lib/api-client';
+import type { Project } from '@/lib/db';
 import { getRemoteServer } from '@/lib/local-repositories';
+import type { ReconciliationCounts } from '@/lib/reconciliation';
 import {
-  pullAlerts,
-  pullFields,
-  pullObservations,
-  pullPresets,
-  pullProjects,
-  pullTracks,
+  type PullResult,
+  pullAlertsDetailed,
+  pullFieldsDetailed,
+  pullObservationsDetailed,
+  pullPresetsDetailed,
+  pullProjectsDetailed,
+  pullTracksDetailed,
 } from '@/lib/remote-archive';
 import { useAuthStore } from '@/stores/auth-store';
+
+export interface SyncConcurrencyOptions {
+  projects?: number;
+  resources?: number;
+  projectDetails?: number;
+  icons?: number;
+}
 
 export interface SyncOptions {
   baseUrl: string;
   token: string;
   serverLabel?: string;
+  signal?: AbortSignal;
+  concurrency?: SyncConcurrencyOptions;
 }
 
 export type SyncStatus = 'ready' | 'partial' | 'error';
@@ -26,7 +39,10 @@ export type SyncResource =
 export interface ResourceSyncOutcome {
   resource: SyncResource;
   critical: boolean;
-  status: 'success' | 'error' | 'skipped';
+  status: 'success' | 'error' | 'skipped' | 'missing-project';
+  semantics?: EndpointSemantics;
+  counts?: ReconciliationCounts;
+  warnings?: string[];
   error?: string;
 }
 
@@ -59,7 +75,32 @@ async function ensureServerInStore(options: SyncOptions): Promise<string> {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) return error.message;
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof Error || (error !== null && typeof error === 'object')) &&
+    'name' in error &&
+    error.name === 'AbortError'
+  );
+}
+
+function abortError(): DOMException {
+  return new DOMException('The operation was aborted', 'AbortError');
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortError();
 }
 
 function resultForFatalError(serverId: string, error: unknown): SyncResult {
@@ -69,19 +110,67 @@ function resultForFatalError(serverId: string, error: unknown): SyncResult {
     serverId,
     projects: [],
     warnings: [],
-    error: error instanceof Error ? error.message : 'Unknown sync error',
+    error: errorMessage(error) || 'Unknown sync error',
   };
+}
+
+async function mapLimited<T, R>(
+  items: readonly T[],
+  limit: number,
+  signal: AbortSignal | undefined,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+
+  async function worker(): Promise<void> {
+    while (cursor < items.length) {
+      throwIfAborted(signal);
+      const index = cursor++;
+      results[index] = await mapper(items[index]!, index);
+    }
+  }
+
+  const workerCount = Math.min(Math.max(limit, 1), items.length);
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return results;
 }
 
 async function runResource(
   resource: SyncResource,
   critical: boolean,
-  operation: () => Promise<unknown>,
+  operation: () => Promise<PullResult<unknown>>,
 ): Promise<ResourceSyncOutcome> {
   try {
-    await operation();
-    return { resource, critical, status: 'success' };
+    const result = await operation();
+    if (result.semantics.availability === 'unsupported') {
+      return {
+        resource,
+        critical,
+        status: 'skipped',
+        semantics: result.semantics,
+        counts: result.counts,
+        warnings: result.warnings,
+      };
+    }
+    return {
+      resource,
+      critical,
+      status: 'success',
+      semantics: result.semantics,
+      counts: result.counts,
+      warnings: result.warnings,
+    };
   } catch (error) {
+    if (isAbortError(error)) throw error;
+    if (error instanceof ApiError && error.kind === 'missing-project') {
+      return {
+        resource,
+        critical,
+        status: 'missing-project',
+        error: error.message,
+      };
+    }
     return {
       resource,
       critical,
@@ -92,17 +181,24 @@ async function runResource(
 }
 
 function summarizeProject(
-  project: Awaited<ReturnType<typeof pullProjects>>[number],
+  project: Project,
   resources: ResourceSyncOutcome[],
 ): ProjectSyncOutcome {
   const observations = resources.find(
     (outcome) => outcome.resource === 'observations',
   );
+  const hasMissingProject = resources.some(
+    (outcome) => outcome.status === 'missing-project',
+  );
   const hasResourceError = resources.some(
     (outcome) => outcome.status === 'error',
   );
   let status: SyncStatus = 'ready';
-  if (observations?.status === 'error') {
+  if (
+    observations?.status === 'error' ||
+    observations?.status === 'missing-project' ||
+    hasMissingProject
+  ) {
     status = 'error';
   } else if (hasResourceError) {
     status = 'partial';
@@ -119,8 +215,8 @@ function summarizeProject(
 
 async function syncProject(
   serverId: string,
-  project: Awaited<ReturnType<typeof pullProjects>>[number],
-  config: { baseUrl: string; token: string },
+  project: Project,
+  options: SyncOptions,
 ): Promise<ProjectSyncOutcome> {
   if (!project.remoteId) {
     return {
@@ -132,23 +228,56 @@ async function syncProject(
   }
 
   const remoteId = project.remoteId;
-  const resources = await Promise.all([
-    runResource('observations', true, () =>
-      pullObservations(serverId, remoteId, project.localId, config),
-    ),
-    runResource('alerts', false, () =>
-      pullAlerts(serverId, remoteId, project.localId, config),
-    ),
-    runResource('presets', false, () =>
-      pullPresets(serverId, remoteId, project.localId, config),
-    ),
-    runResource('tracks', false, () =>
-      pullTracks(serverId, remoteId, project.localId, config),
-    ),
-    runResource('fields', false, () =>
-      pullFields(serverId, remoteId, project.localId, config),
-    ),
-  ]);
+  const config = {
+    baseUrl: options.baseUrl,
+    token: options.token,
+    signal: options.signal,
+  };
+  const tasks: Array<{
+    resource: SyncResource;
+    critical: boolean;
+    run: () => Promise<PullResult<unknown>>;
+  }> = [
+    {
+      resource: 'observations',
+      critical: true,
+      run: () =>
+        pullObservationsDetailed(serverId, remoteId, project.localId, config),
+    },
+    {
+      resource: 'alerts',
+      critical: false,
+      run: () =>
+        pullAlertsDetailed(serverId, remoteId, project.localId, config),
+    },
+    {
+      resource: 'presets',
+      critical: false,
+      run: () =>
+        pullPresetsDetailed(serverId, remoteId, project.localId, config, {
+          concurrency: options.concurrency?.icons,
+        }),
+    },
+    {
+      resource: 'tracks',
+      critical: false,
+      run: () =>
+        pullTracksDetailed(serverId, remoteId, project.localId, config),
+    },
+    {
+      resource: 'fields',
+      critical: false,
+      run: () =>
+        pullFieldsDetailed(serverId, remoteId, project.localId, config),
+    },
+  ];
+
+  const resources = await mapLimited(
+    tasks,
+    options.concurrency?.resources ?? 3,
+    options.signal,
+    (task) => runResource(task.resource, task.critical, task.run),
+  );
 
   return summarizeProject(project, resources);
 }
@@ -156,6 +285,7 @@ async function syncProject(
 function summarizeSync(
   serverId: string,
   projects: ProjectSyncOutcome[],
+  initialWarnings: string[] = [],
 ): SyncResult {
   const remoteProjects = projects.filter((project) => project.projectRemoteId);
   const criticalFailures = remoteProjects.filter(
@@ -163,12 +293,28 @@ function summarizeSync(
   );
   const resourceFailures = projects.flatMap((project) =>
     project.resources
-      .filter((resource) => resource.status === 'error')
+      .filter(
+        (resource) =>
+          resource.status === 'error' || resource.status === 'missing-project',
+      )
       .map(
         (resource) =>
           `${project.projectName ?? project.projectRemoteId ?? project.projectLocalId}: ${resource.resource}: ${resource.error ?? 'Unknown error'}`,
       ),
   );
+  const resourceWarnings = projects.flatMap((project) =>
+    project.resources.flatMap((resource) =>
+      (resource.warnings ?? []).map(
+        (warning) =>
+          `${project.projectName ?? project.projectRemoteId ?? project.projectLocalId}: ${resource.resource}: ${warning}`,
+      ),
+    ),
+  );
+  const warnings = [
+    ...initialWarnings,
+    ...resourceWarnings,
+    ...resourceFailures,
+  ];
 
   let status: SyncStatus = 'ready';
   if (
@@ -185,7 +331,7 @@ function summarizeSync(
     status,
     serverId,
     projects,
-    warnings: resourceFailures,
+    warnings,
     ...(status === 'ready'
       ? {}
       : {
@@ -202,6 +348,7 @@ async function doSync(
   options: SyncOptions,
 ): Promise<SyncResult> {
   try {
+    throwIfAborted(options.signal);
     await ensureServerInStore(options);
     const serverRecord = await getRemoteServer(serverId);
     if (!serverRecord) {
@@ -211,12 +358,21 @@ async function doSync(
       );
     }
 
-    const config = { baseUrl: options.baseUrl, token: options.token };
-    const projects = await pullProjects(serverId, config);
-    const projectResults = await Promise.all(
-      projects.map((project) => syncProject(serverId, project, config)),
+    const config = {
+      baseUrl: options.baseUrl,
+      token: options.token,
+      signal: options.signal,
+    };
+    const projects = await pullProjectsDetailed(serverId, config, {
+      concurrency: options.concurrency?.projectDetails,
+    });
+    const projectResults = await mapLimited(
+      projects.rows,
+      options.concurrency?.projects ?? 3,
+      options.signal,
+      (project) => syncProject(serverId, project, options),
     );
-    return summarizeSync(serverId, projectResults);
+    return summarizeSync(serverId, projectResults, projects.warnings);
   } catch (error) {
     return resultForFatalError(serverId, error);
   }
