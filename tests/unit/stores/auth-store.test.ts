@@ -193,7 +193,10 @@ describe('tier-aware connection store', () => {
 
     const updated = useAuthStore.getState().servers.find((s) => s.id === id);
     expect(updated?.status).toBe('connected');
-    expect(updated?.lastSyncedAt).toBeUndefined();
+    expect(updated?.lastSyncedAt).toEqual(expect.any(String));
+    expect(new Date(updated!.lastSyncedAt!).toISOString()).toBe(
+      updated?.lastSyncedAt,
+    );
 
     await useAuthStore
       .getState()
@@ -830,7 +833,7 @@ describe('active archive identity and credential invariants', () => {
     expect(localStorage.getItem('comapeo:activeServerId')).toBe(secondId);
   });
 
-  it('clears a stale error on connected without recording a sync', async () => {
+  it('clears a stale error on connected and records the sync', async () => {
     const serverId = await useAuthStore.getState().addServer({
       label: 'Status',
       baseUrl: 'https://status.example.com',
@@ -847,9 +850,11 @@ describe('active archive identity and credential invariants', () => {
       .servers.find((candidate) => candidate.id === serverId);
     expect(server?.status).toBe('connected');
     expect(server?.errorMessage).toBeUndefined();
-    expect(server?.lastSyncedAt).toBeUndefined();
+    expect(server?.lastSyncedAt).toEqual(expect.any(String));
     expect((await getRemoteServer(serverId))?.errorMessage).toBeUndefined();
-    expect((await getRemoteServer(serverId))?.lastSyncedAt).toBe('');
+    expect((await getRemoteServer(serverId))?.lastSyncedAt).toBe(
+      server?.lastSyncedAt,
+    );
   });
 
   it('does not clear a newly selected server while 401 persistence is pending', async () => {

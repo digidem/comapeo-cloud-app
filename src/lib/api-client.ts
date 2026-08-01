@@ -134,11 +134,18 @@ function throwNetworkError(): never {
  * request matches the active credentials exactly. Prevents a stale
  * configured token (e.g. from a different archive server) from clearing
  * a valid active session.
+ *
+ * Cleanup failures (e.g. IndexedDB errors) are logged and swallowed so the
+ * caller still surfaces the original ApiError(401) rather than a storage error.
  */
 async function handle401(
   requestCredentials: RequestCredentials,
 ): Promise<void> {
-  await useAuthStore.getState().clearAuth(requestCredentials);
+  try {
+    await useAuthStore.getState().clearAuth(requestCredentials);
+  } catch (error) {
+    console.error('Failed to clear credentials after 401 response:', error);
+  }
 }
 
 async function handleResponse<T>(

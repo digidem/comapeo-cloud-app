@@ -275,10 +275,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   updateServerStatus: async (id, status, errorMessage) => {
     const nextErrorMessage = status === 'error' ? errorMessage : undefined;
+    // A successful connection is also the most recent sync point.
+    const lastSyncedAt =
+      status === 'connected' ? new Date().toISOString() : undefined;
 
     await updateRemoteServer(id, {
       status,
       errorMessage: nextErrorMessage,
+      ...(lastSyncedAt ? { lastSyncedAt } : {}),
     });
 
     set((state) => {
@@ -288,6 +292,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
               ...server,
               status,
               errorMessage: nextErrorMessage,
+              ...(lastSyncedAt ? { lastSyncedAt } : {}),
             }
           : server,
       );

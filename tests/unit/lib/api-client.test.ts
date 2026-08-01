@@ -297,6 +297,49 @@ describe('apiClient', () => {
         token: 'active-token',
       });
     });
+
+    // --- cleanup failures must not mask the original 401 ---
+
+    describe('when clearAuth fails', () => {
+      const dbError = new Error('DbError: IndexedDB update failed');
+      let consoleError: ReturnType<typeof vi.spyOn>;
+
+      beforeEach(() => {
+        consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        globalThis.fetch = vi
+          .fn()
+          .mockResolvedValue(makeFetchResponse(401, error401));
+      });
+
+      afterEach(() => {
+        consoleError.mockRestore();
+      });
+
+      const expect401 = async (promise: Promise<unknown>) => {
+        const error = await promise.then(
+          () => null,
+          (thrown: unknown) => thrown,
+        );
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBe(401);
+        expect(consoleError).toHaveBeenCalled();
+      };
+
+      it('still throws ApiError(401) from handleResponse', async () => {
+        authStoreMock.clearAuth.mockRejectedValueOnce(dbError);
+        await expect401(apiClient.getPresets('project-id'));
+      });
+
+      it('still throws ApiError(401) from createAlert', async () => {
+        authStoreMock.clearAuth.mockRejectedValueOnce(dbError);
+        await expect401(apiClient.createAlert('project-id', alertBody));
+      });
+
+      it('still throws ApiError(401) from getIcon', async () => {
+        authStoreMock.clearAuth.mockRejectedValueOnce(dbError);
+        await expect401(apiClient.getIcon('project-id', 'icon-id'));
+      });
+    });
   });
 
   describe('captured request credentials', () => {
