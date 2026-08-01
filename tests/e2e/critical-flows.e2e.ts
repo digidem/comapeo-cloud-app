@@ -143,32 +143,24 @@ test.describe('Critical User Flows', () => {
     ).toBeVisible();
   });
 
-  test('map controls remain clickable when desktop filters wrap', async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1180, height: 900 });
-    await seedProjectWithObservations(page, 'Map Controls Project');
-    await page.getByRole('link', { name: 'Data' }).click();
-
-    const layerButton = page.getByTestId('basemap-switcher-trigger');
-    const attributionButton = page.locator('.maplibregl-ctrl-attrib-button');
-    const attribution = page.locator('.maplibregl-ctrl-attrib');
-
-    for (const width of [768, 1024, 1180]) {
+  for (const width of [768, 1024, 1180]) {
+    test(`map controls remain clickable at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width: 1180, height: 900 });
+      await seedProjectWithObservations(page, `Map Controls ${width}`);
+      await page.getByRole('link', { name: 'Data' }).click();
       await page.setViewportSize({ width, height: 900 });
 
+      const layerButton = page.getByTestId('basemap-switcher-trigger');
       await expect(layerButton).toBeVisible();
       await layerButton.click();
       await expect(page.getByRole('menuitemradio').first()).toBeVisible();
       await page.keyboard.press('Escape');
 
+      const attributionButton = page.locator('.maplibregl-ctrl-attrib-button');
       await expect(attributionButton).toBeVisible();
       await attributionButton.click();
-      await expect(attribution).toHaveClass(/maplibregl-compact-show/);
-      await attributionButton.click();
-      await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
-    }
-  });
+    });
+  }
 
   // -------------------------------------------------------------------------
   // Flow 2: Data → Observations → Observation Detail

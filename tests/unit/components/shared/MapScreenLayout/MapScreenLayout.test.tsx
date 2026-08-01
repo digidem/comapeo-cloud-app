@@ -50,6 +50,19 @@ describe('MapScreenLayout', () => {
     expect(screen.getByText('top-right-content')).toBeInTheDocument();
   });
 
+  it('supports a custom topRight layer above blocking query overlays', () => {
+    renderLayout({
+      topRight: <span>top-right-content</span>,
+      topRightPositionClassName: 'top-4 right-3 z-30 items-center',
+    });
+
+    expect(screen.getByText('top-right-content').parentElement).toHaveClass(
+      'top-4',
+      'right-3',
+      'z-30',
+    );
+  });
+
   it('renders bottomLeft slot content', () => {
     renderLayout({ bottomLeft: <span>bottom-left-content</span> });
     expect(screen.getByText('bottom-left-content')).toBeInTheDocument();

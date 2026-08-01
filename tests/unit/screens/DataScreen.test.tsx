@@ -592,7 +592,7 @@ describe('DataScreen', () => {
         ).not.toBeNull();
       });
 
-      it('shows an error state over the map when observations fail to load', () => {
+      it('shows an error state over the map when observations fail to load', async () => {
         useViewModeStore.setState({ viewMode: 'map' });
         mockObservationsQuery = {
           data: undefined,
@@ -610,6 +610,17 @@ describe('DataScreen', () => {
           'Failed to load observations. Please try again.',
         );
         expect(screen.getByRole('alert')).toHaveClass('z-20');
+
+        const gridToggle = screen.getByRole('button', {
+          name: /switch to grid view/i,
+        });
+        expect(gridToggle.parentElement).toHaveClass('z-30');
+
+        const { userEvent } = await import('@tests/mocks/test-utils');
+        await userEvent.setup().click(gridToggle);
+        expect(
+          screen.queryByTestId('observations-map'),
+        ).not.toBeInTheDocument();
       });
 
       it('places the layer switcher below the grid toggle and hides map sorting', () => {
