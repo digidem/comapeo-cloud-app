@@ -6,8 +6,9 @@ import React from 'react';
 import { AuthenticatedLayout } from '@/components/layout/authenticated-layout';
 import { useProjectStore } from '@/stores/project-store';
 
-const { mockNavigate, mockRouterState } = vi.hoisted(() => ({
+const { mockNavigate, mockPostAddSync, mockRouterState } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
+  mockPostAddSync: vi.fn(),
   mockRouterState: { pathname: '/' },
 }));
 
@@ -39,6 +40,29 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@/hooks/useAutoSync', () => ({
   useAutoSync: vi.fn(),
+}));
+
+vi.mock('@/lib/data-layer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/data-layer')>();
+  return {
+    ...actual,
+    syncRemoteArchive: mockPostAddSync,
+  };
+});
+
+vi.mock('@/screens/Home/AddArchiveServerDialog', () => ({
+  AddArchiveServerDialog: ({
+    isOpen,
+    onAdded,
+  }: {
+    isOpen: boolean;
+    onAdded: (serverId: string) => void;
+  }) =>
+    isOpen ? (
+      <button type="button" onClick={() => onAdded('server-1')}>
+        Complete Archive Add
+      </button>
+    ) : null,
 }));
 
 vi.mock('@/screens/Home/ArchiveBrowser', () => ({
@@ -163,5 +187,20 @@ describe('AuthenticatedLayout', () => {
 
     expect(useProjectStore.getState().selectedProjectId).toBe('project-2');
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/' });
+  });
+
+  it('does not start a second sync after onboarding completes', async () => {
+    const user = userEvent.setup();
+    render(<AuthenticatedLayout />);
+
+    await user.click(screen.getByRole('button', { name: 'Add Server' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Complete Archive Add' }),
+    );
+
+    expect(mockPostAddSync).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('button', { name: 'Complete Archive Add' }),
+    ).not.toBeInTheDocument();
   });
 });
