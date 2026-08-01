@@ -46,6 +46,18 @@ describe('apiClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authStoreMock.clearAuth.mockClear();
+    authStoreMock.state.activeServerId = 'active-server';
+    authStoreMock.state.servers = [
+      {
+        id: 'active-server',
+        label: 'Active Server',
+        baseUrl: 'https://active.example.com',
+        token: 'active-token',
+        status: 'connected',
+      },
+    ];
+    authStoreMock.state.baseUrl = 'https://active.example.com';
+    authStoreMock.state.token = 'active-token';
   });
 
   afterEach(() => {
@@ -195,6 +207,39 @@ describe('apiClient', () => {
       await expect(
         apiClient.getPresets('project-id', otherConfig),
       ).rejects.toThrow(ApiError);
+      expect(authStoreMock.clearAuth).not.toHaveBeenCalled();
+    });
+
+    it('does NOT clear server B when a delayed 401 from server A used the same token', async () => {
+      let resolveResponse!: (response: Response) => void;
+      globalThis.fetch = vi.fn().mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveResponse = resolve;
+          }),
+      );
+
+      const request = apiClient.getPresets('project-id');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'https://active.example.com/projects/project-id/preset',
+        expect.any(Object),
+      );
+
+      authStoreMock.state.activeServerId = 'server-b';
+      authStoreMock.state.servers = [
+        {
+          id: 'server-b',
+          label: 'Server B',
+          baseUrl: 'https://server-b.example.com',
+          token: 'active-token',
+          status: 'connected',
+        },
+      ];
+      authStoreMock.state.baseUrl = 'https://server-b.example.com';
+
+      resolveResponse(makeFetchResponse(401, error401));
+
+      await expect(request).rejects.toThrow(ApiError);
       expect(authStoreMock.clearAuth).not.toHaveBeenCalled();
     });
 

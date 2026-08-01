@@ -38,6 +38,11 @@ export interface RequestConfig {
   token: string;
 }
 
+interface RequestCredentials {
+  baseUrl: string | null;
+  token: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // ApiError
 // ---------------------------------------------------------------------------
@@ -98,9 +103,20 @@ export function resolveApiRequest(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getAuthHeaders(config?: RequestConfig): Record<string, string> {
-  if (config?.token) return { Authorization: `Bearer ${config.token}` };
-  const token = selectActiveToken(useAuthStore.getState());
+function resolveRequestCredentials(config?: RequestConfig): RequestCredentials {
+  if (config) return config;
+
+  const state = useAuthStore.getState();
+  return {
+    baseUrl: selectActiveBaseUrl(state),
+    token: selectActiveToken(state),
+  };
+}
+
+function getAuthHeaders(
+  credentials: RequestCredentials,
+): Record<string, string> {
+  const { token } = credentials;
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
 }
@@ -121,28 +137,30 @@ function throwNetworkError(): never {
  * configured token (e.g. from a different archive server) from clearing
  * a valid active session.
  */
-async function handle401(config?: RequestConfig): Promise<void> {
+async function handle401(
+  requestCredentials: RequestCredentials,
+): Promise<void> {
   const state = useAuthStore.getState();
   const activeBaseUrl = selectActiveBaseUrl(state);
   const activeToken = selectActiveToken(state);
 
   if (
-    !config ||
-    (config.baseUrl === activeBaseUrl && config.token === activeToken)
+    requestCredentials.baseUrl === activeBaseUrl &&
+    requestCredentials.token === activeToken
   ) {
     await state.clearAuth();
   }
-  // Else: the configured request did not use the active credentials, so its
-  // failure must not invalidate the active archive session.
+  // Else: the request did not use the active credentials, so its failure must
+  // not invalidate the active archive session.
 }
 
 async function handleResponse<T>(
   response: Response,
   schema: v.GenericSchema<T>,
-  config?: RequestConfig,
+  requestCredentials: RequestCredentials,
 ): Promise<T> {
   if (response.status === 401) {
-    await handle401(config);
+    await handle401(requestCredentials);
   }
 
   if (!response.ok) {
@@ -174,12 +192,13 @@ async function handleResponse<T>(
 export const apiClient = {
   async getServerInfo(config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(`${request.baseUrl}/info`, {
         headers: { ...request.extraHeaders },
         cache: 'no-store',
       });
-      return handleResponse(response, serverInfoResponseSchema, config);
+      return handleResponse(response, serverInfoResponseSchema, credentials);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -200,12 +219,13 @@ export const apiClient = {
 
   async getProjects(config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(`${request.baseUrl}/projects`, {
-        headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+        headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
         cache: 'no-store',
       });
-      return handleResponse(response, projectsResponseSchema, config);
+      return handleResponse(response, projectsResponseSchema, credentials);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -214,15 +234,16 @@ export const apiClient = {
 
   async getProject(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return handleResponse(response, projectDetailResponseSchema, config);
+      return handleResponse(response, projectDetailResponseSchema, credentials);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -231,15 +252,16 @@ export const apiClient = {
 
   async getObservations(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/observations`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return handleResponse(response, observationsResponseSchema, config);
+      return handleResponse(response, observationsResponseSchema, credentials);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -248,15 +270,16 @@ export const apiClient = {
 
   async getTracks(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/track`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return await handleResponse(response, tracksResponseSchema, config);
+      return await handleResponse(response, tracksResponseSchema, credentials);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         console.warn(
@@ -271,15 +294,16 @@ export const apiClient = {
 
   async getAlerts(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return handleResponse(response, alertsResponseSchema, config);
+      return handleResponse(response, alertsResponseSchema, credentials);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -292,6 +316,7 @@ export const apiClient = {
     config?: RequestConfig,
   ): Promise<{ success: true }> {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
@@ -299,7 +324,7 @@ export const apiClient = {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...getAuthHeaders(config),
+            ...getAuthHeaders(credentials),
             ...request.extraHeaders,
           },
           body: JSON.stringify(body),
@@ -307,7 +332,7 @@ export const apiClient = {
       );
 
       if (response.status === 401) {
-        await handle401(config);
+        await handle401(credentials);
       }
 
       if (response.status === 201) {
@@ -338,15 +363,16 @@ export const apiClient = {
 
   async getPresets(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/preset`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return await handleResponse(response, presetsResponseSchema, config);
+      return await handleResponse(response, presetsResponseSchema, credentials);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         console.warn(
@@ -361,15 +387,16 @@ export const apiClient = {
 
   async getFields(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/field`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return await handleResponse(response, fieldsResponseSchema, config);
+      return await handleResponse(response, fieldsResponseSchema, credentials);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         console.warn(
@@ -388,14 +415,20 @@ export const apiClient = {
     config?: RequestConfig,
   ): Promise<Blob> {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/icon/${encodeURIComponent(docId)}`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: {
+            ...getAuthHeaders(credentials),
+            ...request.extraHeaders,
+          },
+        },
       );
 
       if (response.status === 401) {
-        await handle401(config);
+        await handle401(credentials);
       }
 
       if (!response.ok) {
