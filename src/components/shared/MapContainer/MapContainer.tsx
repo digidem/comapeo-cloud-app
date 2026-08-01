@@ -104,6 +104,9 @@ export interface MapContainerProps extends MapPassthroughProps {
   /** Position of the basemap switcher overlay */
   basemapSwitcherPosition?: SwitcherPosition;
 
+  /** Override the switcher wrapper position classes for layouts with nearby controls. */
+  basemapSwitcherPositionClassName?: string;
+
   /** Escape hatch: render a custom basemap switcher instead of the built-in one */
   basemapSwitcherSlot?: ReactNode;
 
@@ -143,6 +146,7 @@ function MapContainer({
   basemaps = BASEMAP_CATALOG,
   showBasemapSwitcher = true,
   basemapSwitcherPosition = 'top-right',
+  basemapSwitcherPositionClassName,
   basemapSwitcherSlot,
   mapRef,
   onLoad,
@@ -256,7 +260,9 @@ function MapContainer({
     }
   };
 
-  const positionClass = POSITION_CLASSES[basemapSwitcherPosition];
+  const positionClass =
+    basemapSwitcherPositionClassName ??
+    POSITION_CLASSES[basemapSwitcherPosition];
 
   const containerStyle: CSSProperties = {
     height: typeof height === 'number' ? `${height}px` : height,

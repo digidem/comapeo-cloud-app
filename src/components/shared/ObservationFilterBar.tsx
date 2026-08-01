@@ -63,6 +63,8 @@ export interface ObservationFilterBarProps {
   onCategoryToggle: (v: string) => void;
   onCategoriesClear: () => void;
   onSortChange: (v: ObservationSort) => void;
+  /** Whether to show ordering controls (default: true). */
+  showSort?: boolean;
   onClear: () => void;
 }
 
@@ -77,6 +79,7 @@ export function ObservationFilterBar({
   onCategoryToggle,
   onCategoriesClear,
   onSortChange,
+  showSort = true,
   onClear,
 }: ObservationFilterBarProps) {
   const intl = useIntl();
@@ -129,24 +132,26 @@ export function ObservationFilterBar({
         />
       </div>
 
-      <div className="min-w-[160px]">
-        <Select
-          value={filters.sort}
-          onValueChange={handleSortChange}
-          placeholder={intl.formatMessage(messages.sortLabel)}
-          ariaLabel={intl.formatMessage(messages.sortLabel)}
-        >
-          <Select.Item value="newest">
-            {intl.formatMessage(messages.sortNewest)}
-          </Select.Item>
-          <Select.Item value="oldest">
-            {intl.formatMessage(messages.sortOldest)}
-          </Select.Item>
-          <Select.Item value="category">
-            {intl.formatMessage(messages.sortCategory)}
-          </Select.Item>
-        </Select>
-      </div>
+      {showSort && (
+        <div className="min-w-[160px]">
+          <Select
+            value={filters.sort}
+            onValueChange={handleSortChange}
+            placeholder={intl.formatMessage(messages.sortLabel)}
+            ariaLabel={intl.formatMessage(messages.sortLabel)}
+          >
+            <Select.Item value="newest">
+              {intl.formatMessage(messages.sortNewest)}
+            </Select.Item>
+            <Select.Item value="oldest">
+              {intl.formatMessage(messages.sortOldest)}
+            </Select.Item>
+            <Select.Item value="category">
+              {intl.formatMessage(messages.sortCategory)}
+            </Select.Item>
+          </Select>
+        </div>
+      )}
 
       {isFiltering && (
         <div className="flex items-end">

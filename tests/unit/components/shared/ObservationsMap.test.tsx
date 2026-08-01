@@ -13,6 +13,7 @@ vi.mock('@/components/shared/MapContainer', () => ({
     children,
     onLoad,
     mapRef,
+    basemapSwitcherPositionClassName,
   }: {
     children: React.ReactNode;
     onLoad?: () => void;
@@ -20,6 +21,7 @@ vi.mock('@/components/shared/MapContainer', () => ({
     initialViewState?: Record<string, unknown>;
     height?: string | number;
     className?: string;
+    basemapSwitcherPositionClassName?: string;
   }) => {
     // Wire up the ref so tests can assert fitBounds
     if (mapRef && typeof mapRef === 'object' && 'current' in mapRef) {
@@ -30,7 +32,10 @@ vi.mock('@/components/shared/MapContainer', () => ({
       ).current = mockMapRef.current;
     }
     return (
-      <div data-testid="map-container">
+      <div
+        data-testid="map-container"
+        data-basemap-switcher-position={basemapSwitcherPositionClassName}
+      >
         {children}
         <button data-testid="map-load-trigger" onClick={onLoad}>
           load
@@ -194,6 +199,20 @@ describe('ObservationsMap', () => {
 
     expect(screen.getByTestId('map-container')).toBeInTheDocument();
     expect(screen.queryByTestId('obs-marker')).not.toBeInTheDocument();
+  });
+
+  it('forwards a custom basemap switcher position to the map container', () => {
+    render(
+      <ObservationsMap
+        observations={[]}
+        basemapSwitcherPositionClassName="top-[4.25rem] right-3"
+      />,
+    );
+
+    expect(screen.getByTestId('map-container')).toHaveAttribute(
+      'data-basemap-switcher-position',
+      'top-[4.25rem] right-3',
+    );
   });
 
   it('calls fitBounds on map load', () => {

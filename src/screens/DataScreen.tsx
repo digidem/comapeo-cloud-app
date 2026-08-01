@@ -330,6 +330,7 @@ export function DataScreen() {
               onCategoryToggle={obsFilters.toggleCategory}
               onCategoriesClear={() => obsFilters.setCategories([])}
               onSortChange={obsFilters.setSort}
+              showSort={false}
               onClear={obsFilters.reset}
             />
           </div>
@@ -403,6 +404,7 @@ export function DataScreen() {
               onCategoryToggle={obsFilters.toggleCategory}
               onCategoriesClear={() => obsFilters.setCategories([])}
               onSortChange={obsFilters.setSort}
+              showSort={false}
               onClear={obsFilters.reset}
             />
           </div>
@@ -428,6 +430,7 @@ export function DataScreen() {
             })
           }
           height="h-full"
+          basemapSwitcherPositionClassName="top-[4.25rem] right-3"
         />
       </MapScreenLayout>
     );

@@ -64,6 +64,13 @@ describe('ObservationFilterBar', () => {
     expect(sortTrigger).toBeInTheDocument();
   });
 
+  it('hides sort select when showSort is false', () => {
+    renderBar({ showSort: false });
+    expect(
+      screen.queryByRole('combobox', { name: 'Sort' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows result count', () => {
     renderBar({ resultCount: 5 });
     expect(screen.getByText('5 results')).toBeInTheDocument();

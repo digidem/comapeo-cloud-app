@@ -125,12 +125,15 @@ vi.mock('@/components/shared/ExportObservationsButton', () => ({
 vi.mock('@/components/shared/ObservationsMap', () => ({
   ObservationsMap: ({
     categoryByObservationId,
+    basemapSwitcherPositionClassName,
   }: {
     categoryByObservationId?: Map<string, unknown>;
+    basemapSwitcherPositionClassName?: string;
   }) => (
     <div
       data-testid="observations-map"
       data-category-count={categoryByObservationId?.size ?? 0}
+      data-basemap-switcher-position={basemapSwitcherPositionClassName}
     />
   ),
 }));
@@ -567,6 +570,21 @@ describe('DataScreen', () => {
 
         render(<DataScreen />);
         expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+      });
+
+      it('places the layer switcher below the grid toggle and hides map sorting', () => {
+        useViewModeStore.setState({ viewMode: 'map' });
+        mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+        render(<DataScreen />);
+
+        expect(screen.getByTestId('observations-map')).toHaveAttribute(
+          'data-basemap-switcher-position',
+          'top-[4.25rem] right-3',
+        );
+        expect(
+          screen.queryByRole('combobox', { name: 'Sort' }),
+        ).not.toBeInTheDocument();
       });
 
       it('shows grid toggle button in map view and switches to grid on click', async () => {

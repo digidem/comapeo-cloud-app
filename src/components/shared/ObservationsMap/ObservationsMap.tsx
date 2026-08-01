@@ -40,6 +40,8 @@ export interface ObservationsMapProps {
   categoryByObservationId?: Map<string, ObservationCategory>;
   /** Optional height override; defaults to responsive mobile-friendly value. */
   height?: string | number;
+  /** Override built-in basemap switcher positioning when adjacent controls overlap it. */
+  basemapSwitcherPositionClassName?: string;
   /** Test/storybook seam: override navigation. Defaults to TanStack useNavigate. */
   onMarkerClick?: (observationId: string) => void;
 }
@@ -48,6 +50,7 @@ export function ObservationsMap({
   observations,
   categoryByObservationId,
   height = 'h-[min(70vh,560px)]',
+  basemapSwitcherPositionClassName,
   onMarkerClick,
 }: ObservationsMapProps) {
   const intl = useIntl();
@@ -139,6 +142,7 @@ export function ObservationsMap({
           fitMapToBounds(mapBounds);
         }}
         className="h-full w-full"
+        basemapSwitcherPositionClassName={basemapSwitcherPositionClassName}
       >
         {geoObservations.map((o) => (
           <Marker
