@@ -22,7 +22,8 @@ import {
   getLegacyDisplayName,
   matchObservationToPreset,
 } from '@/lib/preset-utils';
-import { syncRemoteArchive as doSync } from '@/lib/sync';
+import type { SyncOptions, SyncResult } from '@/lib/sync';
+import { syncArchive } from '@/lib/sync-coordinator';
 import { useAuthStore } from '@/stores/auth-store';
 
 // Re-export types from db
@@ -279,11 +280,11 @@ export function getSyncStatus(): {
   };
 }
 
-export async function syncRemoteArchive(
+export function syncRemoteArchive(
   serverId: string,
-  options: { baseUrl: string; token: string; serverLabel?: string },
-): Promise<{ success: boolean; error?: string }> {
-  return doSync(serverId, options);
+  options?: SyncOptions,
+): Promise<SyncResult> {
+  return syncArchive(serverId, options);
 }
 
 // ---------------------------------------------------------------------------
