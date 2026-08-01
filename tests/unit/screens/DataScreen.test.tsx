@@ -572,6 +572,32 @@ describe('DataScreen', () => {
         expect(screen.getByTestId('observations-map')).toBeInTheDocument();
       });
 
+      it('shows a loading state over the map while observations are pending', () => {
+        useViewModeStore.setState({ viewMode: 'map' });
+        mockObservationsQuery = { data: undefined, isPending: true };
+
+        render(<DataScreen />);
+
+        expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+        expect(screen.getByRole('status')).toHaveTextContent('Loading...');
+      });
+
+      it('shows an error state over the map when observations fail to load', () => {
+        useViewModeStore.setState({ viewMode: 'map' });
+        mockObservationsQuery = {
+          data: undefined,
+          isPending: false,
+          isError: true,
+        };
+
+        render(<DataScreen />);
+
+        expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          'Failed to load observations. Please try again.',
+        );
+      });
+
       it('places the layer switcher below the grid toggle and hides map sorting', () => {
         useViewModeStore.setState({ viewMode: 'map' });
         mockObservationsQuery = { data: defaultObservations, isPending: false };

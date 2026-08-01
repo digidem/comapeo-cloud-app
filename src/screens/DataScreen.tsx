@@ -315,6 +315,28 @@ export function DataScreen() {
   // or pending so the map shows its own empty/loading overlay (no grid
   // flash on cold load).
   if (viewMode === 'map') {
+    const mapErrorOverlay = observationsQuery.isError ? (
+      <div
+        role="alert"
+        className="absolute inset-0 z-[5] flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
+      >
+        <span className="text-error text-sm">
+          {intl.formatMessage(messages.observationsError)}
+        </span>
+      </div>
+    ) : null;
+    const mapLoadingOverlay =
+      observationsQuery.isPending && !observationsQuery.isError ? (
+        <div
+          role="status"
+          className="absolute inset-0 z-[5] flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
+        >
+          <span className="text-text-muted text-sm">
+            {intl.formatMessage(messages.loading)}
+          </span>
+        </div>
+      ) : null;
+
     return (
       <MapScreenLayout
         topLeft={
@@ -420,18 +442,23 @@ export function DataScreen() {
           />
         }
       >
-        <ObservationsMap
-          observations={filteredObs}
-          categoryByObservationId={categoryByObservationId}
-          onMarkerClick={(observationId) =>
-            navigate({
-              to: '/data/observations/$observationId',
-              params: { observationId },
-            })
-          }
-          height="h-full"
-          basemapSwitcherPositionClassName="top-[4.25rem] right-3"
-        />
+        <div className="relative h-full">
+          <ObservationsMap
+            observations={filteredObs}
+            categoryByObservationId={categoryByObservationId}
+            onMarkerClick={(observationId) =>
+              navigate({
+                to: '/data/observations/$observationId',
+                params: { observationId },
+              })
+            }
+            height="h-full"
+            basemapSwitcherPositionClassName="top-[4.25rem] right-3"
+          />
+
+          {mapErrorOverlay}
+          {mapLoadingOverlay}
+        </div>
       </MapScreenLayout>
     );
   }
