@@ -1,6 +1,6 @@
 import { ObservationCategoryIcon } from '@/components/shared/ObservationCategoryIcon';
 import { buildIconUrl } from '@/lib/category-utils';
-import { useAuthStore } from '@/stores/auth-store';
+import { selectActiveBaseUrl, useAuthStore } from '@/stores/auth-store';
 
 interface CategoryIconProps {
   projectRemoteId: string | null;
@@ -21,7 +21,7 @@ function CategoryIcon({
   iconSize = size * 0.7,
   serverBaseUrl,
 }: CategoryIconProps) {
-  const baseUrl = useAuthStore((s) => s.baseUrl);
+  const baseUrl = useAuthStore(selectActiveBaseUrl);
 
   const iconUrl = buildIconUrl({
     projectRemoteId: projectRemoteId ?? undefined,

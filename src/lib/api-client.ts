@@ -16,7 +16,13 @@ import {
   serverInfoResponseSchema,
   tracksResponseSchema,
 } from '@/lib/schemas';
-import { useAuthStore } from '@/stores/auth-store';
+import {
+  type AuthIdentity,
+  selectActiveBaseUrl,
+  selectActiveServer,
+  selectActiveToken,
+  useAuthStore,
+} from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -33,6 +39,8 @@ export interface RequestConfig {
   baseUrl: string;
   token: string;
 }
+
+type RequestCredentials = AuthIdentity;
 
 // ---------------------------------------------------------------------------
 // ApiError
@@ -85,7 +93,7 @@ export function resolveApiRequest(
     return { baseUrl: config.baseUrl, extraHeaders: {} };
   }
 
-  const { baseUrl } = useAuthStore.getState();
+  const baseUrl = selectActiveBaseUrl(useAuthStore.getState());
   if (baseUrl) return { baseUrl, extraHeaders: {} };
   return { baseUrl: window.location.origin, extraHeaders: {} };
 }
@@ -94,9 +102,19 @@ export function resolveApiRequest(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getAuthHeaders(config?: RequestConfig): Record<string, string> {
-  if (config?.token) return { Authorization: `Bearer ${config.token}` };
-  const { token } = useAuthStore.getState();
+function resolveRequestCredentials(config?: RequestConfig): RequestCredentials {
+  const state = useAuthStore.getState();
+  return {
+    activeServerId: selectActiveServer(state)?.id ?? null,
+    baseUrl: config?.baseUrl ?? selectActiveBaseUrl(state),
+    token: config?.token ?? selectActiveToken(state),
+  };
+}
+
+function getAuthHeaders(
+  credentials: RequestCredentials,
+): Record<string, string> {
+  const { token } = credentials;
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
 }
@@ -116,29 +134,27 @@ function throwNetworkError(): never {
  * request matches the active credentials exactly. Prevents a stale
  * configured token (e.g. from a different archive server) from clearing
  * a valid active session.
+ *
+ * Cleanup failures (e.g. IndexedDB errors) are logged and swallowed so the
+ * caller still surfaces the original ApiError(401) rather than a storage error.
  */
-function handle401(config?: RequestConfig): void {
-  const { baseUrl: activeBaseUrl, token: activeToken } =
-    useAuthStore.getState();
-  if (!config) {
-    // Ambient request (no explicit config) — clear active session
-    useAuthStore.getState().clearAuth();
-  } else if (config.baseUrl === activeBaseUrl && config.token === activeToken) {
-    // Configured request matches active session exactly — clear auth
-    useAuthStore.getState().clearAuth();
+async function handle401(
+  requestCredentials: RequestCredentials,
+): Promise<void> {
+  try {
+    await useAuthStore.getState().clearAuth(requestCredentials);
+  } catch (error) {
+    console.error('Failed to clear credentials after 401 response:', error);
   }
-  // else: configured request to same URL but different token — don't clear
-  // the active session (the configured token may be stale but the active
-  // session could still be valid)
 }
 
 async function handleResponse<T>(
   response: Response,
   schema: v.GenericSchema<T>,
-  config?: RequestConfig,
+  requestCredentials: RequestCredentials,
 ): Promise<T> {
   if (response.status === 401) {
-    handle401(config);
+    await handle401(requestCredentials);
   }
 
   if (!response.ok) {
@@ -170,12 +186,13 @@ async function handleResponse<T>(
 export const apiClient = {
   async getServerInfo(config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(`${request.baseUrl}/info`, {
         headers: { ...request.extraHeaders },
         cache: 'no-store',
       });
-      return handleResponse(response, serverInfoResponseSchema, config);
+      return handleResponse(response, serverInfoResponseSchema, credentials);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -196,12 +213,13 @@ export const apiClient = {
 
   async getProjects(config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(`${request.baseUrl}/projects`, {
-        headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+        headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
         cache: 'no-store',
       });
-      return handleResponse(response, projectsResponseSchema, config);
+      return handleResponse(response, projectsResponseSchema, credentials);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -210,15 +228,16 @@ export const apiClient = {
 
   async getProject(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return handleResponse(response, projectDetailResponseSchema, config);
+      return handleResponse(response, projectDetailResponseSchema, credentials);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -227,15 +246,16 @@ export const apiClient = {
 
   async getObservations(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/observations`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return handleResponse(response, observationsResponseSchema, config);
+      return handleResponse(response, observationsResponseSchema, credentials);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -244,15 +264,16 @@ export const apiClient = {
 
   async getTracks(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/track`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return await handleResponse(response, tracksResponseSchema, config);
+      return await handleResponse(response, tracksResponseSchema, credentials);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         console.warn(
@@ -267,15 +288,16 @@ export const apiClient = {
 
   async getAlerts(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return handleResponse(response, alertsResponseSchema, config);
+      return handleResponse(response, alertsResponseSchema, credentials);
     } catch (error) {
       if (isNetworkError(error)) throwNetworkError();
       throw error;
@@ -288,6 +310,7 @@ export const apiClient = {
     config?: RequestConfig,
   ): Promise<{ success: true }> {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
@@ -295,7 +318,7 @@ export const apiClient = {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...getAuthHeaders(config),
+            ...getAuthHeaders(credentials),
             ...request.extraHeaders,
           },
           body: JSON.stringify(body),
@@ -303,7 +326,7 @@ export const apiClient = {
       );
 
       if (response.status === 401) {
-        handle401(config);
+        await handle401(credentials);
       }
 
       if (response.status === 201) {
@@ -334,15 +357,16 @@ export const apiClient = {
 
   async getPresets(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/preset`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return await handleResponse(response, presetsResponseSchema, config);
+      return await handleResponse(response, presetsResponseSchema, credentials);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         console.warn(
@@ -357,15 +381,16 @@ export const apiClient = {
 
   async getFields(projectId: string, config?: RequestConfig) {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/field`,
         {
-          headers: { ...getAuthHeaders(config), ...request.extraHeaders },
+          headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
           cache: 'no-store',
         },
       );
-      return await handleResponse(response, fieldsResponseSchema, config);
+      return await handleResponse(response, fieldsResponseSchema, credentials);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         console.warn(
@@ -384,14 +409,20 @@ export const apiClient = {
     config?: RequestConfig,
   ): Promise<Blob> {
     try {
+      const credentials = resolveRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/icon/${encodeURIComponent(docId)}`,
-        { headers: { ...getAuthHeaders(config), ...request.extraHeaders } },
+        {
+          headers: {
+            ...getAuthHeaders(credentials),
+            ...request.extraHeaders,
+          },
+        },
       );
 
       if (response.status === 401) {
-        handle401(config);
+        await handle401(credentials);
       }
 
       if (!response.ok) {
@@ -542,7 +573,8 @@ export function getAttachmentUrl(
   variant?: string,
   options?: { baseUrl?: string },
 ): string {
-  const baseUrl = options?.baseUrl ?? useAuthStore.getState().baseUrl;
+  const baseUrl =
+    options?.baseUrl ?? selectActiveBaseUrl(useAuthStore.getState());
   // Keep archive URLs intact here. AuthImg/useAuthenticatedImageUrl converts
   // matching archive URLs to /api proxy requests with the required headers.
   const base = baseUrl?.replace(/\/+$/, '') ?? '';

@@ -1,25 +1,44 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, apiClient } from '@/lib/api-client';
+import { ApiError, apiClient, getAttachmentUrl } from '@/lib/api-client';
 
 // Mock the stores used by api-client internals
 const authStoreMock = vi.hoisted(() => ({
   state: {
+    activeServerId: 'active-server' as string | null,
+    servers: [
+      {
+        id: 'active-server',
+        label: 'Active Server',
+        baseUrl: 'https://active.example.com',
+        token: 'active-token',
+        status: 'connected' as const,
+      },
+    ],
     baseUrl: 'https://active.example.com' as string | null,
-    token: 'active-token',
+    token: 'active-token' as string | null,
   },
-  clearAuth: vi.fn(),
+  clearAuth: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/stores/auth-store', () => ({
-  useAuthStore: {
-    getState: () => ({
-      baseUrl: authStoreMock.state.baseUrl,
-      token: authStoreMock.state.token,
-      clearAuth: authStoreMock.clearAuth,
-    }),
-  },
-}));
+vi.mock('@/stores/auth-store', () => {
+  const selectActiveServer = (state: typeof authStoreMock.state) =>
+    state.servers.find((server) => server.id === state.activeServerId) ?? null;
+
+  return {
+    selectActiveServer,
+    selectActiveBaseUrl: (state: typeof authStoreMock.state) =>
+      selectActiveServer(state)?.baseUrl ?? state.baseUrl,
+    selectActiveToken: (state: typeof authStoreMock.state) =>
+      selectActiveServer(state)?.token ?? state.token,
+    useAuthStore: {
+      getState: () => ({
+        ...authStoreMock.state,
+        clearAuth: authStoreMock.clearAuth,
+      }),
+    },
+  };
+});
 
 describe('apiClient', () => {
   const originalFetch = globalThis.fetch;
@@ -27,6 +46,18 @@ describe('apiClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authStoreMock.clearAuth.mockClear();
+    authStoreMock.state.activeServerId = 'active-server';
+    authStoreMock.state.servers = [
+      {
+        id: 'active-server',
+        label: 'Active Server',
+        baseUrl: 'https://active.example.com',
+        token: 'active-token',
+        status: 'connected',
+      },
+    ];
+    authStoreMock.state.baseUrl = 'https://active.example.com';
+    authStoreMock.state.token = 'active-token';
   });
 
   afterEach(() => {
@@ -165,10 +196,14 @@ describe('apiClient', () => {
       await expect(apiClient.getPresets('project-id')).rejects.toThrow(
         ApiError,
       );
-      expect(authStoreMock.clearAuth).toHaveBeenCalled();
+      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+        activeServerId: 'active-server',
+        baseUrl: 'https://active.example.com',
+        token: 'active-token',
+      });
     });
 
-    it('does NOT call clearAuth when 401 comes from a non-active server (explicit config)', async () => {
+    it('passes non-active request identity to the atomic clear operation', async () => {
       globalThis.fetch = vi
         .fn()
         .mockResolvedValue(makeFetchResponse(401, error401));
@@ -176,7 +211,48 @@ describe('apiClient', () => {
       await expect(
         apiClient.getPresets('project-id', otherConfig),
       ).rejects.toThrow(ApiError);
-      expect(authStoreMock.clearAuth).not.toHaveBeenCalled();
+      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+        activeServerId: 'active-server',
+        baseUrl: 'https://other.example.com',
+        token: 'other-token',
+      });
+    });
+
+    it('does NOT clear server B when a delayed 401 from server A used the same token', async () => {
+      let resolveResponse!: (response: Response) => void;
+      globalThis.fetch = vi.fn().mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveResponse = resolve;
+          }),
+      );
+
+      const request = apiClient.getPresets('project-id');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'https://active.example.com/projects/project-id/preset',
+        expect.any(Object),
+      );
+
+      authStoreMock.state.activeServerId = 'server-b';
+      authStoreMock.state.servers = [
+        {
+          id: 'server-b',
+          label: 'Server B',
+          baseUrl: 'https://server-b.example.com',
+          token: 'active-token',
+          status: 'connected',
+        },
+      ];
+      authStoreMock.state.baseUrl = 'https://server-b.example.com';
+
+      resolveResponse(makeFetchResponse(401, error401));
+
+      await expect(request).rejects.toThrow(ApiError);
+      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+        activeServerId: 'active-server',
+        baseUrl: 'https://active.example.com',
+        token: 'active-token',
+      });
     });
 
     // --- createAlert path ---
@@ -192,7 +268,7 @@ describe('apiClient', () => {
       expect(authStoreMock.clearAuth).toHaveBeenCalled();
     });
 
-    it('does NOT call clearAuth when createAlert 401 comes from a non-active server (explicit config)', async () => {
+    it('passes configured createAlert identity to the atomic clear operation', async () => {
       globalThis.fetch = vi
         .fn()
         .mockResolvedValue(makeFetchResponse(401, error401));
@@ -200,7 +276,109 @@ describe('apiClient', () => {
       await expect(
         apiClient.createAlert('project-id', alertBody, otherConfig),
       ).rejects.toThrow(ApiError);
-      expect(authStoreMock.clearAuth).not.toHaveBeenCalled();
+      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+        activeServerId: 'active-server',
+        baseUrl: 'https://other.example.com',
+        token: 'other-token',
+      });
+    });
+
+    it('passes captured identity for getIcon 401 responses', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(makeFetchResponse(401, error401));
+
+      await expect(apiClient.getIcon('project-id', 'icon-id')).rejects.toThrow(
+        ApiError,
+      );
+      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+        activeServerId: 'active-server',
+        baseUrl: 'https://active.example.com',
+        token: 'active-token',
+      });
+    });
+
+    // --- cleanup failures must not mask the original 401 ---
+
+    describe('when clearAuth fails', () => {
+      const dbError = new Error('DbError: IndexedDB update failed');
+      let consoleError: ReturnType<typeof vi.spyOn>;
+
+      beforeEach(() => {
+        consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        globalThis.fetch = vi
+          .fn()
+          .mockResolvedValue(makeFetchResponse(401, error401));
+      });
+
+      afterEach(() => {
+        consoleError.mockRestore();
+      });
+
+      const expect401 = async (promise: Promise<unknown>) => {
+        const error = await promise.then(
+          () => null,
+          (thrown: unknown) => thrown,
+        );
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBe(401);
+        expect(consoleError).toHaveBeenCalled();
+      };
+
+      it('still throws ApiError(401) from handleResponse', async () => {
+        authStoreMock.clearAuth.mockRejectedValueOnce(dbError);
+        await expect401(apiClient.getPresets('project-id'));
+      });
+
+      it('still throws ApiError(401) from createAlert', async () => {
+        authStoreMock.clearAuth.mockRejectedValueOnce(dbError);
+        await expect401(apiClient.createAlert('project-id', alertBody));
+      });
+
+      it('still throws ApiError(401) from getIcon', async () => {
+        authStoreMock.clearAuth.mockRejectedValueOnce(dbError);
+        await expect401(apiClient.getIcon('project-id', 'icon-id'));
+      });
+    });
+  });
+
+  describe('captured request credentials', () => {
+    it('keeps the Authorization header captured when the request starts', async () => {
+      let resolveResponse!: (response: Response) => void;
+      globalThis.fetch = vi.fn().mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveResponse = resolve;
+          }),
+      );
+
+      const request = apiClient.getFields('project-id');
+
+      authStoreMock.state.servers[0]!.token = 'rotated-token';
+      authStoreMock.state.token = 'rotated-token';
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'https://active.example.com/projects/project-id/field',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer active-token',
+          }),
+        }),
+      );
+
+      resolveResponse(makeFetchResponse(404));
+      await expect(request).resolves.toEqual({ data: [] });
+    });
+  });
+
+  describe('getAttachmentUrl', () => {
+    it('uses the selected active server URL instead of stale compatibility state', () => {
+      authStoreMock.state.baseUrl = 'https://stale.example.com';
+      authStoreMock.state.servers[0]!.baseUrl = 'https://selected.example.com/';
+
+      expect(getAttachmentUrl('project', 'drive', 'photo', 'image.jpg')).toBe(
+        'https://selected.example.com/projects/project/attachments/drive/photo/image.jpg',
+      );
     });
   });
 });
