@@ -260,7 +260,10 @@ function classify404(
   ) {
     return 'missing-project';
   }
-  return 'http';
+  // Default for 404: treat as unsupported endpoint so legacy servers that
+  // return a bare 404 (no JSON body, no "Route not found" message) still
+  // degrade gracefully instead of surfacing a hard error that blocks sync.
+  return 'unsupported-endpoint';
 }
 
 async function handleResponse<T extends object>(
@@ -739,9 +742,8 @@ export function getAttachmentUrl(
   variant?: string,
   options?: { baseUrl?: string },
 ): string {
-  const server = selectActiveServer(useAuthStore.getState());
   const baseUrl =
-    options?.baseUrl ?? server?.baseUrl ?? useAuthStore.getState().baseUrl;
+    options?.baseUrl ?? selectActiveBaseUrl(useAuthStore.getState());
   // Keep archive URLs intact here. AuthImg/useAuthenticatedImageUrl converts
   // matching archive URLs to /api proxy requests with the required headers.
   const base = baseUrl?.replace(/\/+$/, '') ?? '';

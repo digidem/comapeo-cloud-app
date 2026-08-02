@@ -129,19 +129,34 @@ export function syncArchive(
   const server = useAuthStore
     .getState()
     .servers.find((candidate) => candidate.id === serverId);
-  const resolvedOptions =
+
+  // Bridge isCancelled polling to an AbortController so that the AbortSignal
+  // threaded through sync.ts / remote-archive.ts actually fires when the
+  // caller cancels. Without this, the entire abort path is dead code.
+  const abortController = new AbortController();
+  const resolvedOptions: SyncOptions | null =
     options ??
     (server
       ? {
           baseUrl: server.baseUrl,
           token: server.token,
           serverLabel: server.label,
+          signal: abortController.signal,
         }
       : null);
+
+  if (options && !options.signal) {
+    options.signal = abortController.signal;
+  }
 
   if (!resolvedOptions) return Promise.resolve(missingServerResult(serverId));
 
   const run = (async () => {
+    // Check cancellation before starting sync — abort immediately if cancelled
+    if (control?.isCancelled?.()) {
+      abortController.abort();
+    }
+
     await useAuthStore.getState().updateServerLifecycle(serverId, {
       status: 'syncing',
       onboardingStatus: 'syncing',
@@ -152,6 +167,19 @@ export function syncArchive(
     try {
       result = await syncRemoteArchive(serverId, resolvedOptions);
     } catch (error) {
+      // If cancelled, produce a cancelled-style result instead of an error
+      if (control?.isCancelled?.() || abortController.signal.aborted) {
+        await cancelArchiveOnboarding(serverId);
+        const cancelledResult: SyncResult = {
+          success: false,
+          status: 'error',
+          serverId,
+          projects: [],
+          warnings: [],
+          error: 'Onboarding cancelled',
+        };
+        return cancelledResult;
+      }
       result = {
         success: false,
         status: 'error',

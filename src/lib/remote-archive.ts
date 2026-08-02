@@ -39,7 +39,11 @@ function resolvedSemantics(
     response.semantics ?? {
       resource,
       availability: 'supported',
-      mode: 'snapshot',
+      // Default to 'unknown' so that if semantics are lost (e.g. via
+      // structuredClone or spread — the non-enumerable property does not
+      // survive), planReconciliation preserves local data instead of
+      // tombstoning everything in snapshot mode.
+      mode: 'unknown',
       source: 'contract',
     }
   );
@@ -237,66 +241,6 @@ async function tombstoneScopedRows<
   return rows.length;
 }
 
-async function tombstoneProjectChildren(
-  projectLocalIds: readonly string[],
-  serverId: string,
-): Promise<number> {
-  if (projectLocalIds.length === 0) return 0;
-  const db = getDb();
-  const now = new Date().toISOString();
-  let count = 0;
-  await db.transaction(
-    'rw',
-    [
-      db.observations,
-      db.attachments,
-      db.alerts,
-      db.presets,
-      db.tracks,
-      db.fields,
-    ],
-    async () => {
-      count += await tombstoneScopedRows(
-        db.observations,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-      count += await tombstoneScopedRows(
-        db.attachments,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-      count += await tombstoneScopedRows(
-        db.alerts,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-      count += await tombstoneScopedRows(
-        db.presets,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-      count += await tombstoneScopedRows(
-        db.tracks,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-      count += await tombstoneScopedRows(
-        db.fields,
-        projectLocalIds,
-        serverId,
-        now,
-      );
-    },
-  );
-  return count;
-}
-
 // ---------------------------------------------------------------------------
 // Fetch archive data and store locally
 // ---------------------------------------------------------------------------
@@ -422,13 +366,69 @@ export async function pullProjectsDetailed(
     }
   }
 
-  await db.transaction('rw', db.projects, async () => {
-    if (inserts.length > 0) await db.projects.bulkPut(inserts);
-    if (updates.length > 0) await db.projects.bulkUpdate(updates);
-  });
-  await tombstoneProjectChildren(
-    reconciliation.tombstonedRows.map((project) => project.localId),
-    serverId,
+  // Persist projects and tombstone removed children in a SINGLE transaction
+  // so a failure (quota, IDB error) cannot leave tombstoned projects with
+  // live orphaned children. Children are tombstoned first, then projects
+  // are written — if children fails, projects are never touched.
+  const tombstonedProjectLocalIds = reconciliation.tombstonedRows.map(
+    (project) => project.localId,
+  );
+  await db.transaction(
+    'rw',
+    [
+      db.projects,
+      db.observations,
+      db.attachments,
+      db.alerts,
+      db.presets,
+      db.tracks,
+      db.fields,
+    ],
+    async () => {
+      // Tombstone children of removed projects first
+      if (tombstonedProjectLocalIds.length > 0) {
+        const now = new Date().toISOString();
+        await tombstoneScopedRows(
+          db.observations,
+          tombstonedProjectLocalIds,
+          serverId,
+          now,
+        );
+        await tombstoneScopedRows(
+          db.attachments,
+          tombstonedProjectLocalIds,
+          serverId,
+          now,
+        );
+        await tombstoneScopedRows(
+          db.alerts,
+          tombstonedProjectLocalIds,
+          serverId,
+          now,
+        );
+        await tombstoneScopedRows(
+          db.presets,
+          tombstonedProjectLocalIds,
+          serverId,
+          now,
+        );
+        await tombstoneScopedRows(
+          db.tracks,
+          tombstonedProjectLocalIds,
+          serverId,
+          now,
+        );
+        await tombstoneScopedRows(
+          db.fields,
+          tombstonedProjectLocalIds,
+          serverId,
+          now,
+        );
+      }
+      // Then write projects
+      if (inserts.length > 0) await db.projects.bulkPut(inserts);
+      if (updates.length > 0) await db.projects.bulkUpdate(updates);
+    },
   );
 
   return {
