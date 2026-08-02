@@ -118,13 +118,28 @@ interface SyncArchiveControl {
   isCancelled?: () => boolean;
 }
 
+// Per-server set of cancellation callbacks. When a second caller passes a
+// new `control.isCancelled` while a sync is already running, we register
+// it here so the polling interval checks it too — the caller's cancel
+// intent is never silently dropped.
+const cancellationPollers = new Map<string, Array<() => boolean>>();
+
 export function syncArchive(
   serverId: string,
   options?: SyncOptions,
   control?: SyncArchiveControl,
 ): Promise<SyncResult> {
   const existing = activeRuns.get(serverId);
-  if (existing) return existing;
+  if (existing) {
+    // Register the second caller's cancellation callback so it's not
+    // silently dropped by the dedup.
+    if (control?.isCancelled) {
+      const pollers = cancellationPollers.get(serverId) ?? [];
+      pollers.push(control.isCancelled);
+      cancellationPollers.set(serverId, pollers);
+    }
+    return existing;
+  }
 
   const server = useAuthStore
     .getState()
@@ -157,48 +172,67 @@ export function syncArchive(
       abortController.abort();
     }
 
-    await useAuthStore.getState().updateServerLifecycle(serverId, {
-      status: 'syncing',
-      onboardingStatus: 'syncing',
-      errorMessage: undefined,
-    });
+    // Poll all registered cancellation callbacks at 2s intervals so
+    // cancellation takes effect during the sync, not just before it starts.
+    const pollers: Array<() => boolean> = [];
+    if (control?.isCancelled) pollers.push(control.isCancelled);
+    cancellationPollers.set(serverId, pollers);
+    const pollInterval = setInterval(() => {
+      for (const poller of pollers) {
+        if (poller()) {
+          abortController.abort();
+          break;
+        }
+      }
+    }, 2_000);
 
     let result: SyncResult;
     try {
-      result = await syncRemoteArchive(serverId, resolvedOptions);
-    } catch (error) {
-      // If cancelled, produce a cancelled-style result instead of an error
-      if (control?.isCancelled?.() || abortController.signal.aborted) {
-        await cancelArchiveOnboarding(serverId);
-        const cancelledResult: SyncResult = {
+      await useAuthStore.getState().updateServerLifecycle(serverId, {
+        status: 'syncing',
+        onboardingStatus: 'syncing',
+        errorMessage: undefined,
+      });
+
+      try {
+        result = await syncRemoteArchive(serverId, resolvedOptions);
+      } catch (error) {
+        // If cancelled, produce a cancelled-style result instead of an error
+        if (control?.isCancelled?.() || abortController.signal.aborted) {
+          await cancelArchiveOnboarding(serverId);
+          const cancelledResult: SyncResult = {
+            success: false,
+            status: 'error',
+            serverId,
+            projects: [],
+            warnings: [],
+            error: 'Onboarding cancelled',
+          };
+          return cancelledResult;
+        }
+        result = {
           success: false,
           status: 'error',
           serverId,
           projects: [],
           warnings: [],
-          error: 'Onboarding cancelled',
+          error: error instanceof Error ? error.message : 'Unknown sync error',
         };
-        return cancelledResult;
       }
-      result = {
-        success: false,
-        status: 'error',
-        serverId,
-        projects: [],
-        warnings: [],
-        error: error instanceof Error ? error.message : 'Unknown sync error',
-      };
-    }
 
-    if (control?.isCancelled?.()) {
-      await cancelArchiveOnboarding(serverId);
-    } else {
-      await useAuthStore
-        .getState()
-        .updateServerLifecycle(serverId, lifecycleForResult(result));
+      if (control?.isCancelled?.()) {
+        await cancelArchiveOnboarding(serverId);
+      } else {
+        await useAuthStore
+          .getState()
+          .updateServerLifecycle(serverId, lifecycleForResult(result));
+      }
+      await invalidateSyncedData();
+      return result;
+    } finally {
+      clearInterval(pollInterval);
+      cancellationPollers.delete(serverId);
     }
-    await invalidateSyncedData();
-    return result;
   })().finally(() => {
     activeRuns.delete(serverId);
   });

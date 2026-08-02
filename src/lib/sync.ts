@@ -184,21 +184,20 @@ function summarizeProject(
   project: Project,
   resources: ResourceSyncOutcome[],
 ): ProjectSyncOutcome {
-  const observations = resources.find(
-    (outcome) => outcome.resource === 'observations',
+  const hasCriticalError = resources.some(
+    (outcome) =>
+      outcome.critical &&
+      (outcome.status === 'error' || outcome.status === 'missing-project'),
   );
-  const hasMissingProject = resources.some(
-    (outcome) => outcome.status === 'missing-project',
+  const hasCriticalMissing = resources.some(
+    (outcome) => outcome.critical && outcome.status === 'missing-project',
   );
   const hasResourceError = resources.some(
     (outcome) => outcome.status === 'error',
   );
+
   let status: SyncStatus = 'ready';
-  if (
-    observations?.status === 'error' ||
-    observations?.status === 'missing-project' ||
-    hasMissingProject
-  ) {
+  if (hasCriticalError || hasCriticalMissing) {
     status = 'error';
   } else if (hasResourceError) {
     status = 'partial';
