@@ -55,11 +55,15 @@ export interface EndpointSemantics {
 
 interface EndpointContract {
   resource: EndpointSemantics['resource'];
-  mode: Exclude<EndpointReconciliationMode, 'unknown'>;
+  mode: EndpointReconciliationMode;
 }
 
 const ENDPOINT_CONTRACTS = {
-  projects: { resource: 'projects', mode: 'snapshot' },
+  // Project visibility is token-scoped. An empty 200 can therefore mean that
+  // the token lost access rather than that every previously visible project
+  // was deleted. Require an explicit snapshot header before reconciling
+  // project omissions destructively.
+  projects: { resource: 'projects', mode: 'unknown' },
   observations: { resource: 'observations', mode: 'snapshot' },
   alerts: { resource: 'alerts', mode: 'snapshot' },
   presets: { resource: 'presets', mode: 'snapshot' },
