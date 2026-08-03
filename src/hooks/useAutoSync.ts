@@ -26,7 +26,11 @@ export function useAutoSync(options?: { pollIntervalMs?: number }): void {
 
       const serversWithCredentials = records.filter(
         (record): record is typeof record & { token: string } =>
-          Boolean(record.baseUrl && record.token),
+          Boolean(
+            record.baseUrl &&
+            record.token &&
+            record.onboardingStatus !== 'cancelled',
+          ),
       );
       const results = await Promise.allSettled(
         serversWithCredentials.map((server) =>

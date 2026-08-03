@@ -241,6 +241,44 @@ describe('useAutoSync', () => {
       expect(mockSyncRemoteArchive).toHaveBeenCalledTimes(1);
     });
   });
+
+  it('does NOT sync cancelled servers (T174-3a Issue B)', async () => {
+    vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
+      {
+        id: 'server-1',
+        baseUrl: 'https://archive1.example.com',
+        label: 'Server 1',
+        token: 'token-1',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+      {
+        id: 'server-cancelled',
+        baseUrl: 'https://cancelled.example.com',
+        label: 'Cancelled Server',
+        token: 'token-cancelled',
+        status: 'cancelled',
+        onboardingStatus: 'cancelled',
+        lastSyncedAt: '',
+      },
+    ]);
+
+    renderHook(() => useAutoSync(), { wrapper });
+
+    await waitFor(() => {
+      // Should only sync server-1, not the cancelled one
+      expect(mockSyncRemoteArchive).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockSyncRemoteArchive).toHaveBeenCalledWith('server-1', {
+      baseUrl: 'https://archive1.example.com',
+      token: 'token-1',
+    });
+    expect(mockSyncRemoteArchive).not.toHaveBeenCalledWith(
+      'server-cancelled',
+      expect.anything(),
+    );
+  });
 });
 
 describe('useAutoSync polling', () => {

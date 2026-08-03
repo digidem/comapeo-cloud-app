@@ -1352,6 +1352,139 @@ describe('AddArchiveServerDialog', () => {
       removeServerSpy.mockRestore();
     });
 
+    // ---- T174-2a: i18n regression tests ----
+
+    it('shows translated error for invalid URL (not hardcoded English)', async () => {
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      // Switch to advanced mode
+      await user.click(screen.getByTestId('advanced-toggle'));
+
+      // Enter an invalid URL (no protocol)
+      await user.type(screen.getByLabelText('Server URL'), 'archive.test');
+      await user.type(screen.getByLabelText('Bearer Token'), 'my-token');
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Should show translated message, not hardcoded English
+      expect(
+        await screen.findByText(
+          'Enter a full URL including http:// or https://',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('shows translated connection error (not hardcoded English)', async () => {
+      server.use(
+        http.get('*/healthcheck', () =>
+          HttpResponse.json(
+            { error: { message: 'Connection refused' } },
+            { status: 502 },
+          ),
+        ),
+      );
+
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.click(screen.getByTestId('advanced-toggle'));
+      await user.type(
+        screen.getByLabelText('Server URL'),
+        'https://archive.test',
+      );
+      await user.type(screen.getByLabelText('Bearer Token'), 'some-token');
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Should show translated message, not hardcoded English
+      expect(
+        await screen.findByText('Could not connect to server'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows translated authorization error (not hardcoded English)', async () => {
+      server.use(
+        http.get('*/projects', () =>
+          HttpResponse.json(
+            {
+              error: { code: 'UNAUTHORIZED', message: 'Invalid bearer token' },
+            },
+            { status: 401 },
+          ),
+        ),
+      );
+
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.click(screen.getByTestId('advanced-toggle'));
+      await user.type(
+        screen.getByLabelText('Server URL'),
+        'https://archive.test',
+      );
+      await user.type(screen.getByLabelText('Bearer Token'), 'bad-token');
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Should show translated message, not hardcoded English
+      expect(
+        await screen.findByText('Invalid token or unauthorized'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows translated duplicate server error (not hardcoded English)', async () => {
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 'existing-id',
+            label: 'Existing',
+            baseUrl: 'https://archive.test',
+            token: 'existing-token',
+            status: 'connected' as const,
+            onboardingStatus: 'ready' as const,
+          },
+        ],
+      });
+
+      const user = userEvent.setup();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={() => {}}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.click(screen.getByTestId('advanced-toggle'));
+      await user.type(
+        screen.getByLabelText('Server URL'),
+        'https://archive.test',
+      );
+      await user.type(screen.getByLabelText('Bearer Token'), 'new-token');
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Should show translated message, not hardcoded English
+      expect(
+        await screen.findByText('This archive server is already connected'),
+      ).toBeInTheDocument();
+    });
+
     it('does not call onAdded when closed while persistence is pending', async () => {
       // Make addServer (createRemoteServer) return a controllable promise so we
       // can keep it pending while the user clicks Cancel.
@@ -1402,6 +1535,81 @@ describe('AddArchiveServerDialog', () => {
       expect(syncRemoteArchive).not.toHaveBeenCalled();
       expect(onClose).toHaveBeenCalledOnce();
       expect(onAdded).not.toHaveBeenCalled();
+    });
+
+    // ---- T174-3a: Ghost server on cancel tests ----
+
+    it('cancels onboarding when user closes during pending state (before serverId is set)', async () => {
+      // Make addServer resolve but syncRemoteArchive hang indefinitely
+      let resolveSync: (value: SyncResult) => void = () => {};
+      mockCreateRemoteServer.mockResolvedValue({
+        id: 'pending-server-id',
+        baseUrl: 'https://archive.test',
+        label: 'archive.test',
+        status: 'pending' as const,
+        lastSyncedAt: '',
+      });
+      vi.mocked(syncRemoteArchive).mockReturnValue(
+        new Promise((resolve) => {
+          resolveSync = resolve;
+        }),
+      );
+
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(
+        <AddArchiveServerDialog
+          isOpen={true}
+          onClose={onClose}
+          onAdded={() => {}}
+        />,
+      );
+
+      await user.type(
+        screen.getByLabelText('Invite URL or Code'),
+        'https://app.com/invite?hash=abc&url=https%3A%2F%2Farchive.test',
+      );
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+
+      // Wait for server to be added but sync to still be pending
+      await waitFor(() => {
+        const server = useAuthStore
+          .getState()
+          .servers.find((s) => s.id === 'pending-server-id');
+        expect(server).toBeDefined();
+        // During onboarding the status may be 'pending' or 'syncing'
+        expect(['pending', 'syncing']).toContain(server?.status);
+      });
+
+      // User cancels while sync is pending - simulate closing via modal X button
+      // During the progress window there is no Cancel button; the close path is
+      // the Modal's onOpenChange(false) via the aria-label="Close" button.
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+
+      await waitFor(() => {
+        const server = useAuthStore
+          .getState()
+          .servers.find((s) => s.id === 'pending-server-id');
+        expect(server?.onboardingStatus).toBe('cancelled');
+      });
+
+      expect(onClose).toHaveBeenCalledOnce();
+
+      // Now resolve the sync - it should not resurrect the server
+      resolveSync({
+        success: true,
+        status: 'ready',
+        serverId: 'pending-server-id',
+        projects: [],
+        warnings: [],
+      });
+      await Promise.resolve();
+
+      // Server should remain cancelled
+      const server = useAuthStore
+        .getState()
+        .servers.find((s) => s.id === 'pending-server-id');
+      expect(server?.onboardingStatus).toBe('cancelled');
     });
   });
 });

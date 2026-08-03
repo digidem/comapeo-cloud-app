@@ -635,6 +635,9 @@
   "home.archive.dialog.labelPlaceholder": {
     "defaultMessage": "e.g. Production Server"
   },
+  "home.archive.dialog.onboardingCancelled": {
+    "defaultMessage": "Onboarding cancelled"
+  },
   "home.archive.dialog.syncFailed": {
     "defaultMessage": "Sync failed"
   },

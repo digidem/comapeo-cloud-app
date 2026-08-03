@@ -99,7 +99,7 @@ function summarizeProject(
     (outcome) => outcome.resource === 'observations',
   );
   const hasResourceError = resources.some(
-    (outcome) => outcome.status === 'error',
+    (outcome) => outcome.status === 'error' && outcome.critical,
   );
   let status: SyncStatus = 'ready';
   if (observations?.status === 'error') {
