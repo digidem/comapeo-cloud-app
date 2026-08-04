@@ -144,7 +144,10 @@ test.describe('Critical User Flows', () => {
   });
 
   for (const width of [768, 1024, 1180]) {
-    test(`map controls remain clickable at ${width}px`, async ({ page }) => {
+    test(`map controls remain clickable at ${width}px`, async ({
+      page,
+      browserName,
+    }) => {
       await page.setViewportSize({ width: 1180, height: 900 });
       await seedProjectWithObservations(page, `Map Controls ${width}`);
       await page.getByRole('link', { name: 'Data' }).click();
@@ -155,6 +158,14 @@ test.describe('Critical User Flows', () => {
       await layerButton.click();
       await expect(page.getByRole('menuitemradio').first()).toBeVisible();
       await page.keyboard.press('Escape');
+
+      // MapLibre requires WebGL; Playwright's bundled Firefox/WebKit have no
+      // GL backend, so the attribution control is never created there.
+      // Chromium (SwiftShader) still exercises this assertion.
+      test.skip(
+        browserName !== 'chromium',
+        'MapLibre attribution control requires WebGL (unavailable in Playwright firefox/webkit)',
+      );
 
       const attributionControl = page.locator('.maplibregl-ctrl-attrib');
       const attributionButton = page.locator('.maplibregl-ctrl-attrib-button');
