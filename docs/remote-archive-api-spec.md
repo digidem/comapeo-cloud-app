@@ -237,7 +237,7 @@ The demo server at `demo.comapeo.cloud` runs **comapeo-cloud v0.4.0** which:
 - Has NO `/preset`, `/field`, or `/track` endpoints
 - Observations do NOT include `presetRef`, `versionId`, `originalVersionId`, `schemaName`, `links`, `metadata`, `createdBy`, or `updatedBy`
 
-The current `main` branch (unreleased) adds all these. The app's `api-client.ts` already requests the new routes (`/preset`, `/field`, `/track`, `/observation`).
+The current server branch adds these resources. The app deliberately continues to request the backwards-compatible plural `/observations` route, while using `/preset`, `/field`, and `/track` when available.
 
 ---
 
@@ -266,13 +266,40 @@ Auth errors:
 
 ---
 
+## Reconciliation Contract
+
+The client treats collection responses as **snapshots by default**. A server can explicitly override that mode with the `X-CoMapeo-Reconciliation-Mode` response header. Supported values are `snapshot`, `delta`, and `tombstone-stream`. `X-CoMapeo-API-Version` is recorded when present for diagnostics and future capability negotiation.
+
+| Entity | Default 200 mode | Explicit tombstones | Omitted-row policy |
+|---|---|---|---|
+| Projects | Snapshot | Not currently emitted | Tombstone omitted projects and their local children |
+| Observations | Snapshot | Preserve `deleted: true` | Tombstone omitted observations and dependent attachments |
+| Alerts | Snapshot | Preserve `deleted: true` | Tombstone omitted alerts |
+| Presets | Snapshot | Preserve `deleted: true` | Tombstone omitted presets only when the route is supported |
+| Tracks | Snapshot | Preserve `deleted: true` | Tombstone omitted tracks only when the route is supported |
+| Fields | Snapshot | Preserve `deleted: true` | Tombstone omitted fields only when the route is supported |
+
+### Response classification
+
+- **200 with data:** reconcile according to the declared or default mode.
+- **200 with an empty `data` array:** a confirmed empty snapshot by default; stale rows are tombstoned according to the table above.
+- **Fastify route-level 404** such as `Route GET:/projects/:id/track not found`: the endpoint is unsupported. Existing local rows are preserved and the resource outcome is `skipped` with a warning.
+- **Project-level 404** such as `Project not found`: the project is missing. This is an error outcome and is never converted into an empty collection.
+- **Delta or tombstone-stream:** omitted rows are preserved. Explicit server tombstones are still persisted.
+
+### Owned work and cancellation
+
+Project detail requests, project fan-out, per-project resources, and icon prefetch all use configurable concurrency limits. Every downstream archive request receives the sync `AbortSignal`; workers check cancellation before scheduling another item. Preset sync owns icon prefetch and does not report completion until all icon cache writes have settled. Individual icon failures become structured warnings rather than detached background mutations.
+
+---
+
 ## Implication for Issue #45
 
-The app validates API responses against Valibot schemas. When a 404 hits `/preset`, the schema parse throws, and the error is swallowed by `sync.ts:116-128` as a non-critical warning. The `presets` table in IndexedDB stays empty. With no presets loaded, `matchObservationToPreset()` returns `undefined` for every observation, and the UI falls through to "Observation".
+The app validates API responses against Valibot schemas. A route-level 404 for `/preset` is now classified as an unsupported legacy endpoint, reported as a structured skipped-resource warning, and never interpreted as an empty snapshot. Existing local presets are preserved; a first connection to a v0.4 server still has no remote presets to load. With no presets available, `matchObservationToPreset()` returns `undefined` for every observation and the UI falls through to "Observation".
 
 Even with a current server, the observations on this demo **have no `presetRef`** and use ad-hoc tags — so preset matching would rely entirely on the tag-scoring fallback in `preset-utils.ts:34-62`. That scoring requires preset tags like `{category: "forest-risk"}` to match observation tags like `{category: "forest-risk"}`, but demo observations use arbitrary keys like `{"limite": "yes"}`.
 
 **Three compounding causes:**
-1. Demo server v0.4.0 doesn't have `/preset` → 404 → schema parse fails → error swallowed → presets table empty
+1. Demo server v0.4.0 doesn't have `/preset` → route 404 → endpoint is skipped → no remote presets are available on first sync
 2. Even with presets loaded, demo observations lack `presetRef` → no fast-path match
 3. Demo observation tags don't match any preset's tag schemas → tag-scoring fallback also fails

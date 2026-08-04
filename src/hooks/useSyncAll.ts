@@ -24,7 +24,11 @@ export function useSyncAll(): {
       const servers = useAuthStore.getState().servers;
       const serversWithCredentials = servers.filter(
         (server): server is typeof server & { token: string } =>
-          Boolean(server.baseUrl && server.token),
+          Boolean(
+            server.baseUrl &&
+            server.token &&
+            server.onboardingStatus !== 'cancelled',
+          ),
       );
       if (serversWithCredentials.length === 0) return;
 

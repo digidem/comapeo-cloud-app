@@ -118,59 +118,121 @@ interface SyncArchiveControl {
   isCancelled?: () => boolean;
 }
 
+// Per-server set of cancellation callbacks. When a second caller passes a
+// new `control.isCancelled` while a sync is already running, we register
+// it here so the polling interval checks it too — the caller's cancel
+// intent is never silently dropped.
+const cancellationPollers = new Map<string, Array<() => boolean>>();
+
 export function syncArchive(
   serverId: string,
   options?: SyncOptions,
   control?: SyncArchiveControl,
 ): Promise<SyncResult> {
   const existing = activeRuns.get(serverId);
-  if (existing) return existing;
+  if (existing) {
+    // Register the second caller's cancellation callback so it's not
+    // silently dropped by the dedup.
+    if (control?.isCancelled) {
+      const pollers = cancellationPollers.get(serverId) ?? [];
+      pollers.push(control.isCancelled);
+      cancellationPollers.set(serverId, pollers);
+    }
+    return existing;
+  }
 
   const server = useAuthStore
     .getState()
     .servers.find((candidate) => candidate.id === serverId);
-  const resolvedOptions =
+
+  // Bridge isCancelled polling to an AbortController so that the AbortSignal
+  // threaded through sync.ts / remote-archive.ts actually fires when the
+  // caller cancels. Without this, the entire abort path is dead code.
+  const abortController = new AbortController();
+  const resolvedOptions: SyncOptions | null =
     options ??
     (server
       ? {
           baseUrl: server.baseUrl,
           token: server.token,
           serverLabel: server.label,
+          signal: abortController.signal,
         }
       : null);
+
+  if (options && !options.signal) {
+    options.signal = abortController.signal;
+  }
 
   if (!resolvedOptions) return Promise.resolve(missingServerResult(serverId));
 
   const run = (async () => {
-    await useAuthStore.getState().updateServerLifecycle(serverId, {
-      status: 'syncing',
-      onboardingStatus: 'syncing',
-      errorMessage: undefined,
-    });
+    // Check cancellation before starting sync — abort immediately if cancelled
+    if (control?.isCancelled?.()) {
+      abortController.abort();
+    }
+
+    // Poll all registered cancellation callbacks at 2s intervals so
+    // cancellation takes effect during the sync, not just before it starts.
+    const pollers: Array<() => boolean> = [];
+    if (control?.isCancelled) pollers.push(control.isCancelled);
+    cancellationPollers.set(serverId, pollers);
+    const pollInterval = setInterval(() => {
+      for (const poller of pollers) {
+        if (poller()) {
+          abortController.abort();
+          break;
+        }
+      }
+    }, 2_000);
 
     let result: SyncResult;
     try {
-      result = await syncRemoteArchive(serverId, resolvedOptions);
-    } catch (error) {
-      result = {
-        success: false,
-        status: 'error',
-        serverId,
-        projects: [],
-        warnings: [],
-        error: error instanceof Error ? error.message : 'Unknown sync error',
-      };
-    }
+      await useAuthStore.getState().updateServerLifecycle(serverId, {
+        status: 'syncing',
+        onboardingStatus: 'syncing',
+        errorMessage: undefined,
+      });
 
-    if (control?.isCancelled?.()) {
-      await cancelArchiveOnboarding(serverId);
-    } else {
-      await useAuthStore
-        .getState()
-        .updateServerLifecycle(serverId, lifecycleForResult(result));
+      try {
+        result = await syncRemoteArchive(serverId, resolvedOptions);
+      } catch (error) {
+        // If cancelled, produce a cancelled-style result instead of an error
+        if (control?.isCancelled?.() || abortController.signal.aborted) {
+          await cancelArchiveOnboarding(serverId);
+          const cancelledResult: SyncResult = {
+            success: false,
+            status: 'error',
+            serverId,
+            projects: [],
+            warnings: [],
+            error: 'Onboarding cancelled',
+          };
+          return cancelledResult;
+        }
+        result = {
+          success: false,
+          status: 'error',
+          serverId,
+          projects: [],
+          warnings: [],
+          error: error instanceof Error ? error.message : 'Unknown sync error',
+        };
+      }
+
+      if (control?.isCancelled?.()) {
+        await cancelArchiveOnboarding(serverId);
+      } else {
+        await useAuthStore
+          .getState()
+          .updateServerLifecycle(serverId, lifecycleForResult(result));
+      }
+      await invalidateSyncedData();
+      return result;
+    } finally {
+      clearInterval(pollInterval);
+      cancellationPollers.delete(serverId);
     }
-    await invalidateSyncedData();
-    return result;
   })().finally(() => {
     activeRuns.delete(serverId);
   });

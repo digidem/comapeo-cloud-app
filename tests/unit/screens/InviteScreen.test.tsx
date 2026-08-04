@@ -305,7 +305,7 @@ describe('InviteScreen', () => {
 
     // syncRemoteArchive was called with correct params
     const args = vi.mocked(syncRemoteArchive).mock.calls[0]!;
-    expect(args[1]).toEqual({
+    expect(args[1]).toMatchObject({
       baseUrl: 'https://archive.test',
       token: 'abc123',
       serverLabel: 'archive.test',
