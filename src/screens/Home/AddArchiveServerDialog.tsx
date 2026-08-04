@@ -14,6 +14,7 @@ import {
   cancelArchiveOnboarding,
   onboardArchive,
 } from '@/lib/sync-coordinator';
+import { useAuthStore } from '@/stores/auth-store';
 
 interface AddArchiveServerDialogProps {
   isOpen: boolean;
@@ -189,6 +190,10 @@ const messages = defineMessages({
     id: 'home.archive.dialog.syncFailed',
     defaultMessage: 'Sync failed',
   },
+  onboardingCancelled: {
+    id: 'home.archive.dialog.onboardingCancelled',
+    defaultMessage: 'Onboarding cancelled',
+  },
 });
 
 function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
@@ -201,6 +206,23 @@ function dialogReducer(_state: DialogState, action: DialogAction): DialogState {
       return { status: 'error', message: action.message };
     case 'reset':
       return { status: 'idle' };
+  }
+}
+
+function errorForCode(code: string, intl: ReturnType<typeof useIntl>): string {
+  switch (code) {
+    case 'invalid-url':
+      return intl.formatMessage(messages.invalidUrl);
+    case 'connection':
+      return intl.formatMessage(messages.connectionFailed);
+    case 'authorization':
+      return intl.formatMessage(messages.invalidToken);
+    case 'duplicate':
+      return intl.formatMessage(messages.duplicateServer);
+    case 'cancelled':
+      return intl.formatMessage(messages.onboardingCancelled);
+    default:
+      return intl.formatMessage(messages.syncFailed);
   }
 }
 
@@ -331,7 +353,9 @@ function AddArchiveServerDialog({
             serverId: result.serverId,
             steps: [...steps],
             errorMessage:
-              result.error ?? intl.formatMessage(messages.syncFailed),
+              (result.errorCode
+                ? errorForCode(result.errorCode, intl)
+                : result.error) ?? intl.formatMessage(messages.syncFailed),
           }));
           return;
         }
@@ -579,10 +603,26 @@ function AddArchiveServerDialog({
 
   function handleClose() {
     cancelledRef.current = true;
-    if (cpState.isActive && !cpState.isComplete && cpState.serverId !== '') {
-      void cancelArchiveOnboarding(cpState.serverId).catch((err) => {
-        console.error('Failed to retain cancelled onboarding state:', err);
-      });
+    if (cpState.isActive && !cpState.isComplete) {
+      // If serverId is not set yet, find the pending server by baseUrl
+      const serverIdToCancel =
+        cpState.serverId !== ''
+          ? cpState.serverId
+          : (useAuthStore
+              .getState()
+              .servers.find(
+                (s: { baseUrl: string; onboardingStatus?: string }) =>
+                  s.baseUrl === cpState.baseUrl &&
+                  (s.onboardingStatus === 'pending' ||
+                    s.onboardingStatus === 'syncing' ||
+                    s.onboardingStatus === 'validating'),
+              )?.id ?? '');
+
+      if (serverIdToCancel !== '') {
+        void cancelArchiveOnboarding(serverIdToCancel).catch((err) => {
+          console.error('Failed to retain cancelled onboarding state:', err);
+        });
+      }
     }
     resetDialogState();
     onClose();

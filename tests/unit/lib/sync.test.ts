@@ -600,9 +600,9 @@ describe('syncRemoteArchive', () => {
       serverLabel: 'Test Archive',
     });
 
-    // Preset failures should not block sync success
-    expect(result.success).toBe(false);
-    expect(result.status).toBe('partial');
+    // Preset failures should not block sync success (non-critical)
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('ready');
 
     // Observations and alerts should still be persisted
     const db = getDb();
@@ -653,9 +653,9 @@ describe('syncRemoteArchive', () => {
       serverLabel: 'Test Archive',
     });
 
-    // Alert failures should not block sync success
-    expect(result.success).toBe(false);
-    expect(result.status).toBe('partial');
+    // Alert failures should not block sync success (non-critical)
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('ready');
 
     const db = getDb();
     const observations = await db.observations.toArray();
@@ -711,8 +711,8 @@ describe('syncRemoteArchive', () => {
       serverLabel: 'Test Archive',
     });
 
-    expect(result.success).toBe(false);
-    expect(result.status).toBe('partial');
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('ready');
 
     const db = getDb();
     const observations = await db.observations.toArray();
@@ -1032,8 +1032,8 @@ describe('syncRemoteArchive', () => {
       serverLabel: 'Test Archive',
     });
 
-    expect(result.success).toBe(false);
-    expect(result.status).toBe('partial');
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('ready');
 
     const db = getDb();
     const observations = await db.observations.toArray();
@@ -1089,11 +1089,78 @@ describe('syncRemoteArchive', () => {
       serverLabel: 'Test Archive',
     });
 
-    expect(result.success).toBe(false);
-    expect(result.status).toBe('partial');
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('ready');
 
     const db = getDb();
     const observations = await db.observations.toArray();
     expect(observations.length).toBeGreaterThan(0);
+  });
+
+  describe('summarizeProject', () => {
+    it('returns ready status when observations succeed but non-critical resource fails', async () => {
+      const serverRecord = await seedServer();
+      await useAuthStore.getState().addServer({
+        label: 'Test Archive',
+        baseUrl: archiveUrl,
+        token: archiveToken,
+        allowDuplicate: true,
+      });
+
+      server.use(
+        http.get(`${archiveUrl}/projects`, () =>
+          HttpResponse.json({
+            data: [{ projectId: 'proj-1', name: 'Forest Monitor' }],
+          }),
+        ),
+        http.get(`${archiveUrl}/projects/proj-1/observations`, () =>
+          HttpResponse.json({
+            data: [
+              {
+                docId: 'obs-1',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+                deleted: false,
+                attachments: [],
+                tags: {},
+              },
+            ],
+          }),
+        ),
+        http.get(`${archiveUrl}/projects/proj-1/remoteDetectionAlerts`, () =>
+          HttpResponse.json({ data: [] }),
+        ),
+        http.get(`${archiveUrl}/projects/proj-1/preset`, () =>
+          HttpResponse.json({ data: [] }),
+        ),
+        // Non-critical resource failure: tracks
+        http.get(`${archiveUrl}/projects/proj-1/track`, () =>
+          HttpResponse.json({}, { status: 500 }),
+        ),
+        http.get(`${archiveUrl}/projects/proj-1/field`, () =>
+          HttpResponse.json({ data: [] }),
+        ),
+      );
+
+      const result = await syncRemoteArchive(serverRecord.id, {
+        baseUrl: archiveUrl,
+        token: archiveToken,
+        serverLabel: 'Test Archive',
+      });
+
+      // Should succeed because observations succeeded (tracks is non-critical)
+      expect(result.success).toBe(true);
+      expect(result.status).toBe('ready');
+
+      const projectOutcome = result.projects[0]!;
+      expect(projectOutcome.status).toBe('ready');
+      expect(
+        projectOutcome.resources.find((r) => r.resource === 'observations')
+          ?.status,
+      ).toBe('success');
+      expect(
+        projectOutcome.resources.find((r) => r.resource === 'tracks')?.status,
+      ).toBe('error');
+    });
   });
 });

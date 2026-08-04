@@ -111,6 +111,14 @@ export async function setupMockServer(page: Page): Promise<void> {
     }),
   );
 
+  await page.route('**/projects/*/track', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: EMPTY_ARRAY_RESPONSE,
+    }),
+  );
+
   // ---------------------------------------------------------------------------
   // Attachment mock — returns 1x1 transparent PNG for any attachment URL.
   // The observation fixtures contain full absolute URLs like
