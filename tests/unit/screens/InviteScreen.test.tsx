@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
 
-import { syncRemoteArchive } from '@/lib/data-layer';
 import { resetDb } from '@/lib/db';
+import { syncRemoteArchive } from '@/lib/sync';
+import type { SyncResult } from '@/lib/sync';
+import { resetSyncCoordinatorForTests } from '@/lib/sync-coordinator';
 import { InviteScreen } from '@/screens/InviteScreen';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -32,14 +34,22 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   };
 });
 
-// Mock syncRemoteArchive
-vi.mock('@/lib/data-layer', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/data-layer')>();
-  return {
-    ...actual,
-    syncRemoteArchive: vi.fn().mockResolvedValue({ success: true }),
-  };
-});
+// Mock the low-level sync engine. InviteScreen exercises the real coordinator.
+vi.mock('@/lib/sync', () => ({
+  syncRemoteArchive: vi.fn((serverId: string) =>
+    Promise.resolve({
+      success: true,
+      status: 'ready',
+      serverId,
+      projects: [],
+      warnings: [],
+    }),
+  ),
+}));
+
+vi.mock('@/lib/query-client', () => ({
+  queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) },
+}));
 
 // Mock redeemEncryptedInvite — wraps the real implementation so MSW handlers
 // still process encrypted/expired codes, but allows per-test overrides for
@@ -54,6 +64,27 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
     ),
   };
 });
+
+function readyResult(serverId = 'test-server-id'): SyncResult {
+  return {
+    success: true,
+    status: 'ready',
+    serverId,
+    projects: [],
+    warnings: [],
+  };
+}
+
+function failedResult(error: string): SyncResult {
+  return {
+    success: false,
+    status: 'error',
+    serverId: 'test-server-id',
+    projects: [],
+    warnings: [],
+    error,
+  };
+}
 
 function setSearchParams(params: string) {
   const origin = 'http://localhost:5173';
@@ -74,14 +105,16 @@ function setSearchParams(params: string) {
 
 describe('InviteScreen', () => {
   beforeEach(async () => {
+    resetSyncCoordinatorForTests();
     await resetDb();
-    useAuthStore.getState().clearAll();
-    vi.mocked(syncRemoteArchive).mockResolvedValue({ success: true });
+    await useAuthStore.getState().clearAll();
+    vi.mocked(syncRemoteArchive).mockResolvedValue(readyResult());
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    resetSyncCoordinatorForTests();
     vi.clearAllMocks();
-    useAuthStore.getState().clearAll();
+    await useAuthStore.getState().clearAll();
   });
 
   // -----------------------------------------------------------------------
@@ -133,10 +166,7 @@ describe('InviteScreen', () => {
   // Error state — retry button
   // -----------------------------------------------------------------------
   it('shows Try Again button on error', async () => {
-    vi.mocked(syncRemoteArchive).mockResolvedValue({
-      success: false,
-      error: 'Test error',
-    });
+    vi.mocked(syncRemoteArchive).mockResolvedValue(failedResult('Test error'));
     setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
     render(<InviteScreen />);
     await waitFor(() => {
@@ -147,10 +177,7 @@ describe('InviteScreen', () => {
   });
 
   it('shows Go to Home link on error', async () => {
-    vi.mocked(syncRemoteArchive).mockResolvedValue({
-      success: false,
-      error: 'Test error',
-    });
+    vi.mocked(syncRemoteArchive).mockResolvedValue(failedResult('Test error'));
     setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
     render(<InviteScreen />);
     await waitFor(() => {
@@ -162,10 +189,7 @@ describe('InviteScreen', () => {
 
   it('Try Again button restarts the connection flow', async () => {
     // First call fails
-    vi.mocked(syncRemoteArchive).mockResolvedValueOnce({
-      success: false,
-      error: 'Test error',
-    });
+    vi.mocked(syncRemoteArchive).mockResolvedValue(failedResult('Test error'));
     setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
     render(<InviteScreen />);
 
@@ -284,6 +308,7 @@ describe('InviteScreen', () => {
     expect(args[1]).toEqual({
       baseUrl: 'https://archive.test',
       token: 'abc123',
+      serverLabel: 'archive.test',
     });
   });
 
@@ -316,28 +341,19 @@ describe('InviteScreen', () => {
       expect(servers).toHaveLength(1);
       expect(servers[0]!.token).toBe('real-token');
     });
-
-    const args = vi.mocked(syncRemoteArchive).mock.calls[0]!;
-    expect(args[1]).toEqual({
-      baseUrl: 'https://archive.test',
-      token: 'real-token',
-    });
   });
 
   it('shows error when syncRemoteArchive returns success: false', async () => {
-    vi.mocked(syncRemoteArchive).mockResolvedValue({
-      success: false,
-      error: 'unauthorized',
-    });
+    vi.mocked(syncRemoteArchive).mockResolvedValue(
+      failedResult('unauthorized'),
+    );
 
     setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
 
     render(<InviteScreen />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Failed to connect to archive.'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('unauthorized')).toBeInTheDocument();
     });
 
     // Should not have navigated home

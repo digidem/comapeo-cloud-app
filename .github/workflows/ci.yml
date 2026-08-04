@@ -515,7 +515,19 @@ jobs:
         #
         # GHSA-r28c-9q8g-f849: PostCSS source map path traversal
         # (transitive dev dep via storybook). Resolved via override.
-        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv --ignore=GHSA-mh99-v99m-4gvg
+        #
+        # GHSA-7p8r-x3mc-p8w7: fast-uri host confusion via backslash
+        # authority introducer (transitive dev dep via eslint ajv /
+        # workbox-build). Dev/build dependency only.
+        #
+        # GHSA-rgw5-rvv9-x895: brace-expansion DoS bypassing
+        # CVE-2026-14257 mitigation (transitive dev dep via minimatch in
+        # eslint/storybook tooling). Dev dependency only.
+        #
+        # GHSA-4cwx-7wf7-3272: undici cross-user info disclosure via
+        # degenerate private cache directives (transitive dev dep via
+        # @sentry/cli, jsdom, wrangler). Dev/build dependency only.
+        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv --ignore=GHSA-mh99-v99m-4gvg --ignore=GHSA-7p8r-x3mc-p8w7 --ignore=GHSA-rgw5-rvv9-x895 --ignore=GHSA-4cwx-7wf7-3272
 
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request
