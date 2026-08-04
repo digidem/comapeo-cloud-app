@@ -187,14 +187,20 @@ function summarizeProject(
   const observations = resources.find(
     (outcome) => outcome.resource === 'observations',
   );
-  const hasResourceError = resources.some(
-    (outcome) => outcome.status === 'error' && outcome.critical,
+  const hasCriticalMissing = resources.some(
+    (outcome) => outcome.critical && outcome.status === 'missing-project',
+  );
+  const hasMissingProject = resources.some(
+    (outcome) => outcome.status === 'missing-project',
   );
 
   let status: SyncStatus = 'ready';
-  if (observations?.status === 'error') {
+  // A deleted remote project is a hard failure when it affects the critical
+  // resource (observations) or observations errored outright; otherwise it
+  // leaves the project partially synced.
+  if (observations?.status === 'error' || hasCriticalMissing) {
     status = 'error';
-  } else if (hasResourceError) {
+  } else if (hasMissingProject) {
     status = 'partial';
   }
 
