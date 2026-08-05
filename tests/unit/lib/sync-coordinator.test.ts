@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SyncResult } from '@/lib/sync';
 import {
@@ -272,6 +272,126 @@ describe('sync coordinator', () => {
       status: 'cancelled',
       onboardingStatus: 'cancelled',
       errorMessage: undefined,
+    });
+  });
+
+  describe('abort bridge and cancellation polling', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('aborts the bridged AbortSignal when isCancelled() is already true before sync starts', async () => {
+      let capturedSignal: AbortSignal | undefined;
+      mocks.syncRemoteArchive.mockImplementationOnce((_id, opts) => {
+        capturedSignal = (opts as { signal?: AbortSignal }).signal;
+        return Promise.resolve(readyResult);
+      });
+
+      await syncArchive('server-1', undefined, { isCancelled: () => true });
+
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal!.aborted).toBe(true);
+    });
+
+    it('threads the bridged AbortSignal through to syncRemoteArchive when using explicit options', async () => {
+      let capturedSignal: AbortSignal | undefined;
+      mocks.syncRemoteArchive.mockImplementationOnce((_id, opts) => {
+        capturedSignal = (opts as { signal?: AbortSignal }).signal;
+        return Promise.resolve(readyResult);
+      });
+
+      await syncArchive('server-1', {
+        baseUrl: 'https://archive.example.com',
+        token: TEST_CREDENTIAL,
+      });
+
+      expect(capturedSignal).toBeInstanceOf(AbortSignal);
+      expect(capturedSignal!.aborted).toBe(false);
+    });
+
+    it('fires the ~2s cancellation poller and aborts the in-flight sync once isCancelled() flips true', async () => {
+      vi.useFakeTimers();
+      let capturedSignal: AbortSignal | undefined;
+      mocks.syncRemoteArchive.mockImplementationOnce((_id, opts) => {
+        capturedSignal = (opts as { signal?: AbortSignal }).signal;
+        return new Promise((_resolve, reject) => {
+          capturedSignal!.addEventListener('abort', () => {
+            const error = new Error('The operation was aborted');
+            error.name = 'AbortError';
+            reject(error);
+          });
+        });
+      });
+
+      let cancelled = false;
+      const run = syncArchive('server-1', undefined, {
+        isCancelled: () => cancelled,
+      });
+
+      // Let the run() IIFE start and register the poller before advancing.
+      await vi.advanceTimersByTimeAsync(0);
+      expect(capturedSignal!.aborted).toBe(false);
+
+      // Poller hasn't fired yet at just under 2s.
+      cancelled = true;
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(capturedSignal!.aborted).toBe(false);
+
+      // Poller fires at the 2s mark and aborts the in-flight sync.
+      await vi.advanceTimersByTimeAsync(1);
+      expect(capturedSignal!.aborted).toBe(true);
+
+      await expect(run).resolves.toMatchObject({
+        error: 'Onboarding cancelled',
+      });
+      expect(mocks.state.updateServerLifecycle).toHaveBeenLastCalledWith(
+        'server-1',
+        {
+          status: 'cancelled',
+          onboardingStatus: 'cancelled',
+          errorMessage: undefined,
+        },
+      );
+    });
+
+    it('registers a second caller on the existing poller instead of starting a duplicate sync', async () => {
+      vi.useFakeTimers();
+      let capturedSignal: AbortSignal | undefined;
+      mocks.syncRemoteArchive.mockImplementationOnce((_id, opts) => {
+        capturedSignal = (opts as { signal?: AbortSignal }).signal;
+        return new Promise((_resolve, reject) => {
+          capturedSignal!.addEventListener('abort', () => {
+            const error = new Error('The operation was aborted');
+            error.name = 'AbortError';
+            reject(error);
+          });
+        });
+      });
+
+      const first = syncArchive('server-1', undefined, {
+        isCancelled: () => false,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      let secondCancelled = false;
+      const second = syncArchive('server-1', undefined, {
+        isCancelled: () => secondCancelled,
+      });
+
+      // Dedup: no duplicate sync started for the second caller.
+      expect(second).toBe(first);
+      expect(mocks.syncRemoteArchive).toHaveBeenCalledOnce();
+
+      // The first caller's isCancelled always returns false; only the
+      // second caller's callback flips. The shared poller must still pick
+      // it up since it was registered onto the same poller list.
+      secondCancelled = true;
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      expect(capturedSignal!.aborted).toBe(true);
+      await expect(first).resolves.toMatchObject({
+        error: 'Onboarding cancelled',
+      });
     });
   });
 });

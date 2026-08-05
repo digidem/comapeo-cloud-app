@@ -16,8 +16,7 @@ import type {
 } from './types';
 
 type PolygonClippingGeom =
-  | polygonClipping.Polygon
-  | polygonClipping.MultiPolygon;
+  polygonClipping.Polygon | polygonClipping.MultiPolygon;
 
 // turf's internal feature/featureCollection use the same structure as geojson types
 // but TypeScript resolves them differently; cast via unknown where needed.
