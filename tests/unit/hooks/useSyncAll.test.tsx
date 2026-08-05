@@ -261,4 +261,79 @@ describe('useSyncAll', () => {
       token: 'token-2',
     });
   });
+
+  it('skips servers whose onboardingStatus is "cancelled"', async () => {
+    mockSyncRemoteArchive.mockResolvedValue(readyResult());
+
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-1',
+          label: 'Cancelled Server',
+          baseUrl: 'https://archive1.example.com',
+          token: 'token-1',
+          status: 'cancelled',
+          onboardingStatus: 'cancelled',
+        },
+        {
+          id: 'server-2',
+          label: 'Active Server',
+          baseUrl: 'https://archive2.example.com',
+          token: 'token-2',
+          status: 'idle',
+          onboardingStatus: 'ready',
+        },
+      ],
+    });
+
+    const { useSyncAll } = await import('@/hooks/useSyncAll');
+    const { result } = renderHook(() => useSyncAll(), { wrapper });
+
+    await act(async () => {
+      await result.current.sync();
+    });
+
+    expect(mockSyncRemoteArchive).toHaveBeenCalledTimes(1);
+    expect(mockSyncRemoteArchive).toHaveBeenCalledWith('server-2', {
+      baseUrl: 'https://archive2.example.com',
+      token: 'token-2',
+    });
+    expect(mockSyncRemoteArchive).not.toHaveBeenCalledWith(
+      'server-1',
+      expect.anything(),
+    );
+  });
+
+  it('syncs servers with any non-cancelled onboardingStatus, including undefined', async () => {
+    mockSyncRemoteArchive.mockResolvedValue(readyResult());
+
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-1',
+          label: 'No onboardingStatus set',
+          baseUrl: 'https://archive1.example.com',
+          token: 'token-1',
+          status: 'idle',
+        },
+        {
+          id: 'server-2',
+          label: 'Partial',
+          baseUrl: 'https://archive2.example.com',
+          token: 'token-2',
+          status: 'partial',
+          onboardingStatus: 'partial',
+        },
+      ],
+    });
+
+    const { useSyncAll } = await import('@/hooks/useSyncAll');
+    const { result } = renderHook(() => useSyncAll(), { wrapper });
+
+    await act(async () => {
+      await result.current.sync();
+    });
+
+    expect(mockSyncRemoteArchive).toHaveBeenCalledTimes(2);
+  });
 });
