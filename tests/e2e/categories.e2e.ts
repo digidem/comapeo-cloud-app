@@ -52,69 +52,94 @@ function registerSeedScript(page: Page) {
  * Seed IndexedDB via page.evaluate AFTER Dexie has created stores,
  * then dynamically import the auth store and call hydrateServers()
  * so the in-memory store picks up the seeded remoteServers.
+ *
+ * On webkit, Dexie's own `db.open()` (triggered by the app mounting) can
+ * still be mid-upgrade when this raw `indexedDB.open()` call fires, so the
+ * required object stores may not exist yet. Retry (via `expect.toPass`)
+ * until the stores are present instead of racing a single attempt.
  */
 async function seedDbAndHydrate(page: Page) {
-  await page.evaluate(
-    ({ now, remoteId }) =>
-      new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open('comapeo-cloud-app');
-        req.onsuccess = () => {
-          const db = req.result;
-          try {
-            const tx = db.transaction(
-              ['remoteServers', 'projects', 'fields'],
-              'readwrite',
+  const REQUIRED_STORES = ['remoteServers', 'projects', 'fields'] as const;
+
+  await expect(async () => {
+    await page.evaluate(
+      ({ now, remoteId, requiredStores }) =>
+        new Promise<void>((resolve, reject) => {
+          const req = indexedDB.open('comapeo-cloud-app');
+          req.onsuccess = () => {
+            const db = req.result;
+            const missing = requiredStores.filter(
+              (name) => !db.objectStoreNames.contains(name),
             );
-            tx.objectStore('remoteServers').put({
-              id: 'server-1',
-              baseUrl: 'http://archive.test',
-              token: 'test-bearer-token',
-              status: 'connected',
-              lastSyncedAt: now,
-            });
-            tx.objectStore('projects').put({
-              localId: 'test-project-local-1',
-              sourceType: 'remoteArchive',
-              sourceId: 'server-1',
-              remoteId,
-              name: 'Test Project',
-              createdAt: now,
-              updatedAt: now,
-              dirtyLocal: false,
-              deleted: false,
-            });
-            tx.objectStore('fields').put({
-              localId: 'field-local-001',
-              projectLocalId: 'test-project-local-1',
-              sourceType: 'remoteArchive',
-              sourceId: 'server-1',
-              remoteId: 'field-001',
-              type: 'text',
-              key: 'notes',
-              label: 'Notes',
-              universal: false,
-              createdAt: now,
-              updatedAt: now,
-              dirtyLocal: false,
-              deleted: false,
-            });
-            tx.oncomplete = () => {
+            if (missing.length > 0) {
               db.close();
-              resolve();
-            };
-            tx.onerror = () => {
+              reject(
+                new Error(
+                  `IndexedDB stores not ready yet: ${missing.join(', ')}`,
+                ),
+              );
+              return;
+            }
+            try {
+              const tx = db.transaction(
+                ['remoteServers', 'projects', 'fields'],
+                'readwrite',
+              );
+              tx.objectStore('remoteServers').put({
+                id: 'server-1',
+                baseUrl: 'http://archive.test',
+                token: 'test-bearer-token',
+                status: 'connected',
+                lastSyncedAt: now,
+              });
+              tx.objectStore('projects').put({
+                localId: 'test-project-local-1',
+                sourceType: 'remoteArchive',
+                sourceId: 'server-1',
+                remoteId,
+                name: 'Test Project',
+                createdAt: now,
+                updatedAt: now,
+                dirtyLocal: false,
+                deleted: false,
+              });
+              tx.objectStore('fields').put({
+                localId: 'field-local-001',
+                projectLocalId: 'test-project-local-1',
+                sourceType: 'remoteArchive',
+                sourceId: 'server-1',
+                remoteId: 'field-001',
+                type: 'text',
+                key: 'notes',
+                label: 'Notes',
+                universal: false,
+                createdAt: now,
+                updatedAt: now,
+                dirtyLocal: false,
+                deleted: false,
+              });
+              tx.oncomplete = () => {
+                db.close();
+                resolve();
+              };
+              tx.onerror = () => {
+                db.close();
+                reject(tx.error);
+              };
+            } catch (err) {
               db.close();
-              reject(tx.error);
-            };
-          } catch (err) {
-            db.close();
-            reject(err);
-          }
-        };
-        req.onerror = () => reject(req.error);
-      }),
-    { now: NOW, remoteId: TEST_PROJECT_REMOTE_ID },
-  );
+              reject(err);
+            }
+          };
+          req.onerror = () => reject(req.error);
+        }),
+      {
+        now: NOW,
+        remoteId: TEST_PROJECT_REMOTE_ID,
+        requiredStores: REQUIRED_STORES,
+      },
+    );
+  }).toPass({ timeout: 10_000, intervals: [100, 200, 500] });
 
   // Re-hydrate the auth store so it picks up the seeded remoteServers.
   // The auth store is an in-memory Zustand store — dynamic import lets
