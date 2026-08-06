@@ -16,6 +16,7 @@ import {
 } from '@/components/layout/shell-slot';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
+import { useObservationCategoryMetadata } from '@/hooks/useObservationCategoryMetadata';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
@@ -87,6 +88,10 @@ vi.mock('@/hooks/useObservations', () => ({
   useObservations: vi.fn(),
 }));
 
+vi.mock('@/hooks/useObservationCategoryMetadata', () => ({
+  useObservationCategoryMetadata: vi.fn(),
+}));
+
 vi.mock('@/hooks/useAlerts', () => ({
   useAlerts: vi.fn(),
 }));
@@ -139,6 +144,9 @@ vi.mock('@/screens/Home/AreaMap', () => ({
 const mockUseProjects = vi.mocked(useProjects);
 const mockUseProjectCoverage = vi.mocked(useProjectCoverage);
 const mockUseArchiveStatus = vi.mocked(useArchiveStatus);
+const mockUseObservationCategoryMetadata = vi.mocked(
+  useObservationCategoryMetadata,
+);
 const mockUseObservations = vi.mocked(useObservations);
 const mockUseAlerts = vi.mocked(useAlerts);
 const mockUseTracks = vi.mocked(useTracks);
@@ -209,6 +217,12 @@ beforeEach(() => {
 
   mockUseProjectCoverage.mockReturnValue(defaultCoverageState);
   mockUseArchiveStatus.mockReturnValue(defaultArchiveStatus);
+  mockUseObservationCategoryMetadata.mockReturnValue({
+    categories: [],
+    categoryByObservationId: new Map(),
+    displayNamesByObservationId: new Map(),
+    isLoading: false,
+  });
   mockUseObservations.mockReturnValue({
     data: [],
     isLoading: false,
@@ -944,6 +958,123 @@ describe('HomeScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('5 Observations')).toBeInTheDocument();
     });
+  });
+
+  it('renders the category count returned by useObservationCategoryMetadata', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Preset Categories Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+    mockUseObservations.mockReturnValue({
+      data: [
+        {
+          localId: 'obs1',
+          createdAt: new Date().toISOString(),
+          tags: { type: 'forest' },
+        },
+        {
+          localId: 'obs2',
+          createdAt: new Date().toISOString(),
+          tags: { type: 'water' },
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+    const forestCategory = { id: 'forest', name: 'Forest' };
+    const waterCategory = { id: 'water', name: 'Water' };
+    const huntingCategory = { id: 'hunting', name: 'Hunting' };
+    mockUseObservationCategoryMetadata.mockReturnValue({
+      categories: [forestCategory, waterCategory, huntingCategory],
+      categoryByObservationId: new Map([
+        ['obs1', forestCategory],
+        ['obs2', forestCategory],
+      ]),
+      displayNamesByObservationId: new Map(),
+      isLoading: false,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await waitForWorkspace('Preset Categories Project');
+
+    const categoriesCard =
+      screen.getByText('Categories').parentElement?.parentElement;
+    expect(categoriesCard).not.toBeNull();
+    expect(within(categoriesCard!).getByText('1')).toBeInTheDocument();
+    expect(mockUseObservationCategoryMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        observations: expect.arrayContaining([
+          expect.objectContaining({ localId: 'obs1' }),
+          expect.objectContaining({ localId: 'obs2' }),
+        ]),
+        projectLocalId: 'p1',
+      }),
+    );
+  });
+
+  it('renders a loading skeleton for Categories when category metadata is loading', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Preset Categories Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+    mockUseObservations.mockReturnValue({
+      data: [
+        {
+          localId: 'obs1',
+          createdAt: new Date().toISOString(),
+          tags: { type: 'forest' },
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+    mockUseObservationCategoryMetadata.mockReturnValue({
+      categories: [],
+      categoryByObservationId: new Map(),
+      displayNamesByObservationId: new Map(),
+      isLoading: true,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await waitForWorkspace('Preset Categories Project');
+
+    const categoriesCard =
+      screen.getByText('Categories').parentElement?.parentElement;
+    expect(categoriesCard).not.toBeNull();
+    expect(within(categoriesCard!).getByTestId('skeleton')).toBeInTheDocument();
+    expect(within(categoriesCard!).queryByText('0')).not.toBeInTheDocument();
   });
 
   it('uses singular Observation label when count is 1', async () => {

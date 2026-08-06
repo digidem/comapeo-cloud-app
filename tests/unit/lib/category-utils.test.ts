@@ -142,7 +142,7 @@ describe('buildObservationCategoryMetadata', () => {
     );
   });
 
-  it('skips unmatched tags.category values without creating synthetic categories', () => {
+  it('synthesizes a category for unmatched tags.category values without adding it to the preset-derived set', () => {
     const observation = makeObservation({
       localId: 'obs-tag-category',
       tags: { category: 'custom forest' },
@@ -150,12 +150,25 @@ describe('buildObservationCategoryMetadata', () => {
 
     const metadata = buildObservationCategoryMetadata([observation], [], {});
 
-    expect(metadata.categoryByObservationId.has('obs-tag-category')).toBe(
-      false,
+    expect(metadata.categoryByObservationId.get('obs-tag-category')).toEqual({
+      id: 'tag:custom forest',
+      name: 'custom forest',
+    });
+    expect(metadata.displayNamesByObservationId.get('obs-tag-category')).toBe(
+      'custom forest',
     );
-    expect(metadata.displayNamesByObservationId.has('obs-tag-category')).toBe(
-      false,
+    expect(metadata.categories).toHaveLength(0);
+  });
+
+  it('counts raw tags.category values when the project has no presets', () => {
+    const obs = (id: string, category: string): Observation =>
+      makeObservation({ localId: id, tags: { category } });
+    const metadata = buildObservationCategoryMetadata(
+      [obs('o1', 'Hunting'), obs('o2', 'Fishing'), obs('o3', 'hunting')],
+      [],
+      {},
     );
+    expect(new Set(metadata.categoryByObservationId.values()).size).toBe(2);
   });
 
   it('maps category tag values to preset category icons when direct refs are absent', () => {

@@ -49,85 +49,114 @@ function registerSeedScript(page: Page) {
 }
 
 /**
- * Seed IndexedDB via page.evaluate AFTER Dexie has created stores,
- * then dynamically import the auth store and call hydrateServers()
- * so the in-memory store picks up the seeded remoteServers.
+ * Seed IndexedDB via page.evaluate AFTER Dexie has created its stores.
+ *
+ * On webkit, Dexie's own `db.open()` (triggered by the app mounting) can
+ * still be mid-upgrade when this code runs. Calling `indexedDB.open(name)`
+ * with no version — before the database exists at all — would itself
+ * create an empty v1 database and steal the upgrade race from Dexie. To
+ * avoid that, first check for existence non-destructively via
+ * `indexedDB.databases()`; only once the database is known to exist do we
+ * open it (which, given it already exists, won't trigger a competing
+ * upgrade) and verify the required object stores are present. Retry (via
+ * `expect.toPass`) until both the database and its stores are ready.
  */
 async function seedDbAndHydrate(page: Page) {
-  await page.evaluate(
-    ({ now, remoteId }) =>
-      new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open('comapeo-cloud-app');
-        req.onsuccess = () => {
-          const db = req.result;
-          try {
-            const tx = db.transaction(
-              ['remoteServers', 'projects', 'fields'],
-              'readwrite',
-            );
-            tx.objectStore('remoteServers').put({
-              id: 'server-1',
-              baseUrl: 'http://archive.test',
-              token: 'test-bearer-token',
-              status: 'connected',
-              lastSyncedAt: now,
-            });
-            tx.objectStore('projects').put({
-              localId: 'test-project-local-1',
-              sourceType: 'remoteArchive',
-              sourceId: 'server-1',
-              remoteId,
-              name: 'Test Project',
-              createdAt: now,
-              updatedAt: now,
-              dirtyLocal: false,
-              deleted: false,
-            });
-            tx.objectStore('fields').put({
-              localId: 'field-local-001',
-              projectLocalId: 'test-project-local-1',
-              sourceType: 'remoteArchive',
-              sourceId: 'server-1',
-              remoteId: 'field-001',
-              type: 'text',
-              key: 'notes',
-              label: 'Notes',
-              universal: false,
-              createdAt: now,
-              updatedAt: now,
-              dirtyLocal: false,
-              deleted: false,
-            });
-            tx.oncomplete = () => {
-              db.close();
-              resolve();
-            };
-            tx.onerror = () => {
-              db.close();
-              reject(tx.error);
-            };
-          } catch (err) {
-            db.close();
-            reject(err);
-          }
-        };
-        req.onerror = () => reject(req.error);
-      }),
-    { now: NOW, remoteId: TEST_PROJECT_REMOTE_ID },
-  );
+  const REQUIRED_STORES = ['remoteServers', 'projects', 'fields'] as const;
+  const DB_NAME = 'comapeo-cloud-app';
 
-  // Re-hydrate the auth store so it picks up the seeded remoteServers.
-  // The auth store is an in-memory Zustand store — dynamic import lets
-  // us call its getState() from the page context.
-  await page.evaluate(async () => {
-    try {
-      // Dynamic import via Vite dev server — uses the @ alias.
-      const mod = await import('@/stores/auth-store');
-      await mod.useAuthStore.getState().hydrateServers();
-    } catch {
-      // Module might not be accessible — fall through.
+  await expect(async () => {
+    const dbExists = await page.evaluate(async (name) => {
+      const dbs = await indexedDB.databases();
+      return dbs.some(
+        (entry) => entry.name === name && (entry.version ?? 0) > 0,
+      );
+    }, DB_NAME);
+
+    if (!dbExists) {
+      throw new Error('IndexedDB database not created yet');
     }
-  });
+
+    await page.evaluate(
+      ({ now, remoteId, requiredStores, dbName }) =>
+        new Promise<void>((resolve, reject) => {
+          const req = indexedDB.open(dbName);
+          req.onsuccess = () => {
+            const db = req.result;
+            const missing = requiredStores.filter(
+              (name) => !db.objectStoreNames.contains(name),
+            );
+            if (missing.length > 0) {
+              db.close();
+              reject(
+                new Error(
+                  `IndexedDB stores not ready yet: ${missing.join(', ')}`,
+                ),
+              );
+              return;
+            }
+            try {
+              const tx = db.transaction(requiredStores, 'readwrite');
+              tx.objectStore('remoteServers').put({
+                id: 'server-1',
+                baseUrl: 'http://archive.test',
+                token: 'test-bearer-token',
+                status: 'connected',
+                lastSyncedAt: now,
+              });
+              tx.objectStore('projects').put({
+                localId: 'test-project-local-1',
+                sourceType: 'remoteArchive',
+                sourceId: 'server-1',
+                remoteId,
+                name: 'Test Project',
+                createdAt: now,
+                updatedAt: now,
+                dirtyLocal: false,
+                deleted: false,
+              });
+              tx.objectStore('fields').put({
+                localId: 'field-local-001',
+                projectLocalId: 'test-project-local-1',
+                sourceType: 'remoteArchive',
+                sourceId: 'server-1',
+                remoteId: 'field-001',
+                type: 'text',
+                key: 'notes',
+                label: 'Notes',
+                universal: false,
+                createdAt: now,
+                updatedAt: now,
+                dirtyLocal: false,
+                deleted: false,
+              });
+              tx.oncomplete = () => {
+                db.close();
+                resolve();
+              };
+              tx.onerror = () => {
+                db.close();
+                reject(tx.error);
+              };
+              tx.onabort = () => {
+                db.close();
+                reject(tx.error ?? new Error('Transaction aborted'));
+              };
+            } catch (err) {
+              db.close();
+              reject(err);
+            }
+          };
+          req.onerror = () => reject(req.error);
+        }),
+      {
+        now: NOW,
+        remoteId: TEST_PROJECT_REMOTE_ID,
+        requiredStores: REQUIRED_STORES,
+        dbName: DB_NAME,
+      },
+    );
+  }).toPass({ timeout: 10_000, intervals: [100, 200, 500] });
 }
 
 async function setupCategoriesPage(page: Page) {
@@ -135,7 +164,7 @@ async function setupCategoriesPage(page: Page) {
   await registerSeedScript(page);
   // Load / first so Dexie creates IndexedDB stores.
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  // Seed IndexedDB and call hydrateServers() via dynamic import.
+  // Seed IndexedDB and call hydrateServers() so the auth store picks up the seeded remoteServers.
   await seedDbAndHydrate(page);
   // Navigate to categories. React mounts fresh → useProjects refetches
   // from IndexedDB (staleTime=0), useAuthStore is hydrated.

@@ -8,10 +8,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAutoSync } from '@/hooks/useAutoSync';
 import { syncRemoteArchive } from '@/lib/data-layer';
 import * as localRepos from '@/lib/local-repositories';
+import type { SyncResult } from '@/lib/sync';
 import { useAuthStore } from '@/stores/auth-store';
 
 vi.mock('@/lib/data-layer', () => ({
-  syncRemoteArchive: vi.fn().mockResolvedValue({ success: true }),
+  syncRemoteArchive: vi.fn().mockResolvedValue({
+    success: true,
+    status: 'ready',
+    serverId: 'server-1',
+    projects: [],
+    warnings: [],
+  }),
 }));
 
 vi.mock('@/lib/local-repositories', () => ({
@@ -19,6 +26,16 @@ vi.mock('@/lib/local-repositories', () => ({
 }));
 
 const mockSyncRemoteArchive = vi.mocked(syncRemoteArchive);
+
+function readyResult(serverId = 'server-1'): SyncResult {
+  return {
+    success: true,
+    status: 'ready',
+    serverId,
+    projects: [],
+    warnings: [],
+  };
+}
 
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({
@@ -142,7 +159,7 @@ describe('useAutoSync', () => {
     expect(server.baseUrl).toBe('https://archive1.example.com');
   });
 
-  it('invalidates queries after successful sync', async () => {
+  it('leaves cache invalidation to the sync coordinator', async () => {
     vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
       {
         id: 'server-1',
@@ -174,15 +191,7 @@ describe('useAutoSync', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
 
-    expect(invalidateSpyBind).toHaveBeenCalledWith({
-      queryKey: ['projects'],
-    });
-    expect(invalidateSpyBind).toHaveBeenCalledWith({
-      queryKey: ['observations'],
-    });
-    expect(invalidateSpyBind).toHaveBeenCalledWith({
-      queryKey: ['alerts'],
-    });
+    expect(invalidateSpyBind).not.toHaveBeenCalled();
   });
 
   it('only syncs once on mount (not on re-renders)', async () => {
@@ -231,6 +240,44 @@ describe('useAutoSync', () => {
     await waitFor(() => {
       expect(mockSyncRemoteArchive).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('does NOT sync cancelled servers (T174-3a Issue B)', async () => {
+    vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
+      {
+        id: 'server-1',
+        baseUrl: 'https://archive1.example.com',
+        label: 'Server 1',
+        token: 'token-1',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+      {
+        id: 'server-cancelled',
+        baseUrl: 'https://cancelled.example.com',
+        label: 'Cancelled Server',
+        token: 'token-cancelled',
+        status: 'cancelled',
+        onboardingStatus: 'cancelled',
+        lastSyncedAt: '',
+      },
+    ]);
+
+    renderHook(() => useAutoSync(), { wrapper });
+
+    await waitFor(() => {
+      // Should only sync server-1, not the cancelled one
+      expect(mockSyncRemoteArchive).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockSyncRemoteArchive).toHaveBeenCalledWith('server-1', {
+      baseUrl: 'https://archive1.example.com',
+      token: 'token-1',
+    });
+    expect(mockSyncRemoteArchive).not.toHaveBeenCalledWith(
+      'server-cancelled',
+      expect.anything(),
+    );
   });
 });
 
@@ -401,10 +448,10 @@ describe('useAutoSync polling', () => {
   });
 
   it('skips poll when previous sync still in flight', async () => {
-    let resolveSync!: (value: { success: boolean }) => void;
+    let resolveSync!: (value: SyncResult) => void;
     mockSyncRemoteArchive.mockImplementation(
       () =>
-        new Promise<{ success: boolean }>((resolve) => {
+        new Promise<SyncResult>((resolve) => {
           resolveSync = resolve;
         }),
     );
@@ -440,7 +487,7 @@ describe('useAutoSync polling', () => {
 
     // Now resolve the pending sync
     await act(async () => {
-      resolveSync({ success: true });
+      resolveSync(readyResult());
       // flush the microtask that settles the promise chain
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -487,7 +534,7 @@ describe('useAutoSync polling', () => {
   it('uses custom pollIntervalMs when provided', async () => {
     // Reset mock explicitly — the "skips poll" test's mockImplementation
     // can leave residual state even after vi.clearAllMocks().
-    mockSyncRemoteArchive.mockResolvedValue({ success: true });
+    mockSyncRemoteArchive.mockResolvedValue(readyResult());
 
     vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
       {

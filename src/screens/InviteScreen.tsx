@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IntlShape, defineMessages, useIntl } from 'react-intl';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 
 import {
@@ -10,13 +9,12 @@ import {
 } from '@/components/shared/ConnectionProgress';
 import { Button } from '@/components/ui/button';
 import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
-import { syncRemoteArchive } from '@/lib/data-layer';
 import {
   type ParseInviteResult,
   parseInviteUrl,
   warnLegacyInviteUrlOnce,
 } from '@/lib/invite-url';
-import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
+import { onboardArchive } from '@/lib/sync-coordinator';
 
 // ---------------------------------------------------------------------------
 // i18n
@@ -79,12 +77,7 @@ const messages = defineMessages({
 // ---------------------------------------------------------------------------
 
 type FlowStatus =
-  | 'loading'
-  | 'connected'
-  | 'error'
-  | 'expired'
-  | 'invalid'
-  | 'networkError';
+  'loading' | 'connected' | 'error' | 'expired' | 'invalid' | 'networkError';
 
 type FlowStep = 'verify' | 'connect' | 'sync' | 'prepare';
 
@@ -131,7 +124,6 @@ function getErrorDisplayMessage(
 export function InviteScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const invite = useMemo(() => parseInviteFromLocation(), []);
 
   const [status, setStatus] = useState<FlowStatus>(() => initialStatus(invite));
@@ -222,35 +214,32 @@ export function InviteScreen() {
         }
         if (cancelledRef.current) return;
 
-        // Step 2: Add server
-        setActiveStep('connect');
-        const serverId = await useAuthStore.getState().addServer({
-          label: new URL(baseUrl).hostname,
+        const onboardingResult = await onboardArchive({
           baseUrl,
           token,
+          label: new URL(baseUrl).hostname,
+          source: 'invite',
+          isCancelled: () => cancelledRef.current,
+          onStateChange: (lifecycle) => {
+            if (lifecycle === 'validating') setActiveStep('verify');
+            else if (lifecycle === 'pending') setActiveStep('connect');
+            else if (lifecycle === 'syncing') setActiveStep('sync');
+          },
         });
         if (cancelledRef.current) return;
 
-        // Step 3: Sync
-        setActiveStep('sync');
-        const syncResult = await syncRemoteArchive(serverId, {
-          baseUrl,
-          token,
-        });
-        if (cancelledRef.current) return;
-        if (!syncResult || !syncResult.success) {
+        if (!onboardingResult.success || onboardingResult.status !== 'ready') {
           setStatus('error');
-          setErrorMessage(intlRef.current.formatMessage(messages.error));
+          setErrorMessage(
+            onboardingResult.errorCode === 'duplicate'
+              ? intlRef.current.formatMessage(messages.alreadyConnected)
+              : (onboardingResult.error ??
+                  intlRef.current.formatMessage(messages.error)),
+          );
           return;
         }
 
-        // Step 4: Prepare dashboard
         setActiveStep('prepare');
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['projects'] }),
-          queryClient.invalidateQueries({ queryKey: ['observations'] }),
-          queryClient.invalidateQueries({ queryKey: ['alerts'] }),
-        ]);
         if (cancelledRef.current) return;
 
         setStatus('connected');
@@ -259,13 +248,6 @@ export function InviteScreen() {
         }, 1500);
       } catch (err) {
         if (cancelledRef.current) return;
-        if (err instanceof DuplicateServerError) {
-          setStatus('error');
-          setErrorMessage(
-            intlRef.current.formatMessage(messages.alreadyConnected),
-          );
-          return;
-        }
         if (err instanceof InviteApiError) {
           if (err.code === 'INVITE_EXPIRED') {
             setStatus('expired');
@@ -291,7 +273,7 @@ export function InviteScreen() {
     }
 
     void run();
-  }, [invite, navigate, queryClient]);
+  }, [invite, navigate]);
 
   useEffect(() => {
     // Reset the cancellation flag so the \"Try Again\" button (which calls

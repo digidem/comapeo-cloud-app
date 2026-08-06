@@ -175,6 +175,74 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('Copied!')).toBeInTheDocument();
   });
 
+  describe('Long value wrapping (issue #155)', () => {
+    async function generateInvite(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(
+        screen.getByLabelText('Remote Archive URL'),
+        'https://archive.example.com',
+      );
+      await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
+      await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+      await screen.findByText('Results');
+    }
+
+    it('Invite URL code wraps long values instead of truncating', async () => {
+      const user = userEvent.setup();
+      render(<SettingsScreen />);
+      await generateInvite(user);
+
+      const inviteUrlCode = await screen.findByText(
+        /\/invite\?code=mock-encrypted-code-/,
+        { selector: 'code' },
+      );
+
+      // Must NOT use truncate (which hides the value behind an ellipsis)
+      expect(inviteUrlCode).not.toHaveClass('truncate');
+      // Must wrap long unbreakable tokens (base64url, URLs)
+      expect(inviteUrlCode).toHaveClass('break-words');
+      expect(inviteUrlCode).toHaveClass('wrap-anywhere');
+      // Flex child must be able to shrink below content size
+      expect(inviteUrlCode).toHaveClass('min-w-0');
+      // Full value remains visible and selectable (not hidden)
+      expect(inviteUrlCode.textContent).toMatch(
+        /^https?:\/\/[^/]+\/invite\?code=mock-encrypted-code-/,
+      );
+    });
+
+    it('Invite Code code wraps long unbreakable tokens', async () => {
+      const user = userEvent.setup();
+      render(<SettingsScreen />);
+      await generateInvite(user);
+
+      const inviteCode = await screen.findByText(/^mock-encrypted-code-/, {
+        selector: 'code',
+      });
+
+      expect(inviteCode).toHaveClass('break-words');
+      expect(inviteCode).toHaveClass('wrap-anywhere');
+      expect(inviteCode).toHaveClass('min-w-0');
+      // Full value remains visible (not hidden by truncation)
+      expect(inviteCode.textContent).toMatch(/^mock-encrypted-code-/);
+    });
+
+    it('Copy button still copies the full invite code value', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      navigator.clipboard.writeText = writeText;
+
+      const user = userEvent.setup();
+      render(<SettingsScreen />);
+      await generateInvite(user);
+
+      const copyButtons = screen.getAllByRole('button', { name: 'Copy' });
+      await user.click(copyButtons[1]!);
+
+      expect(writeText).toHaveBeenCalledTimes(1);
+      expect(writeText).toHaveBeenCalledWith(
+        expect.stringMatching(/^mock-encrypted-code-/),
+      );
+    });
+  });
+
   describe('Backup & Restore', () => {
     it('renders Backup & Restore section heading', () => {
       render(<SettingsScreen />);

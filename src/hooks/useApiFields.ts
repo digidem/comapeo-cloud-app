@@ -6,7 +6,11 @@ import {
 } from '@/hooks/useApiPresets';
 import type { RequestConfig } from '@/lib/api-client';
 import { apiClient } from '@/lib/api-client';
-import { useAuthStore } from '@/stores/auth-store';
+import {
+  selectActiveBaseUrl,
+  selectActiveToken,
+  useAuthStore,
+} from '@/stores/auth-store';
 
 /**
  * Deduplicate field versions using `originalVersionId ?? docId` as the
@@ -41,8 +45,8 @@ export function useApiFields(
   projectRemoteId: string | null,
   serverConfig?: { baseUrl: string; token: string } | null,
 ) {
-  const activeBaseUrl = useAuthStore((s) => s.baseUrl);
-  const activeToken = useAuthStore((s) => s.token);
+  const activeBaseUrl = useAuthStore(selectActiveBaseUrl);
+  const activeToken = useAuthStore(selectActiveToken);
 
   const effectiveBaseUrl = serverConfig?.baseUrl ?? activeBaseUrl;
   const effectiveToken = serverConfig?.token ?? activeToken;
@@ -53,25 +57,13 @@ export function useApiFields(
     effectiveToken !== null &&
     effectiveToken !== '';
 
-  // !!effectiveToken used in queryKey to avoid leaking the bearer token into
-  // React Query devtools / logging while still invalidating on change.
-  // The exhaustive-deps rule wants serverConfig in the key, but we
-  // intentionally omit the raw token — the boolean presence flag is
-  // sufficient for cache invalidation on credential rotation.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
   const queryResult = useQuery({
-    queryKey: [
-      'api-fields',
-      projectRemoteId,
-      effectiveBaseUrl,
-      !!effectiveToken,
-    ],
-    queryFn: () => {
-      const config: RequestConfig = serverConfig
-        ? { baseUrl: serverConfig.baseUrl, token: serverConfig.token }
-        : { baseUrl: activeBaseUrl!, token: activeToken ?? '' };
-      return apiClient.getFields(projectRemoteId!, config);
-    },
+    queryKey: ['api-fields', projectRemoteId, effectiveBaseUrl, effectiveToken],
+    queryFn: () =>
+      apiClient.getFields(projectRemoteId!, {
+        baseUrl: effectiveBaseUrl!,
+        token: effectiveToken!,
+      } satisfies RequestConfig),
     enabled,
     select: (data) =>
       deduplicateFieldVersions(data.data.filter((f) => !f.deleted)),

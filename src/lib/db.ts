@@ -166,6 +166,9 @@ export interface RemoteServer {
   token?: string;
   status: string;
   lastSyncedAt: string;
+  lastSuccessfulSyncAt?: string;
+  onboardingStatus?: string;
+  errorMessage?: string;
 }
 
 export interface SyncMetadata {

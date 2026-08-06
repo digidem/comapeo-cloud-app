@@ -10,6 +10,7 @@ vi.mock('@/components/shared/auth-img', () => ({
 }));
 
 vi.mock('@/stores/auth-store', () => ({
+  selectActiveBaseUrl: (state: { baseUrl: string | null }) => state.baseUrl,
   useAuthStore: vi.fn(
     (selector: (s: { baseUrl: string | null }) => string | null) =>
       selector({ baseUrl: 'https://archive.example.com' }),

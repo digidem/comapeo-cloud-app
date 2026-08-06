@@ -145,6 +145,7 @@ const { mockBaseUrl, mockServers } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/stores/auth-store', () => ({
+  selectActiveBaseUrl: (state: { baseUrl: string | null }) => state.baseUrl,
   useAuthStore: vi.fn(
     (
       selector: (s: {

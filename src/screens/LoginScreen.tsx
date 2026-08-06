@@ -81,8 +81,7 @@ export function LoginScreen() {
   const navigate = useNavigate();
 
   type SubmitState =
-    | { status: 'idle' | 'loading' }
-    | { status: 'error'; message: string };
+    { status: 'idle' | 'loading' } | { status: 'error'; message: string };
   const [submitState, setSubmitState] = useState<SubmitState>({
     status: 'idle',
   });

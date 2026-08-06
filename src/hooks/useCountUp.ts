@@ -26,10 +26,10 @@ export function useCountUp(
   value: string | number,
   duration = 400,
 ): string | number {
-  const [display, setDisplay] = useState<string | number>('0');
+  const [display, setDisplay] = useState<string | number>(value);
   const rafRef = useRef<number | null>(null);
   // Tracks the last numeric value shown on screen (updated every frame)
-  const lastNumericRef = useRef<number>(0);
+  const lastNumericRef = useRef<number>(parseNumericValue(value) ?? 0);
 
   useEffect(() => {
     const target = parseNumericValue(value);
@@ -64,6 +64,14 @@ export function useCountUp(
     const numericTarget: number = target;
     // Start from wherever the display currently is (not the old completed target)
     const startValue = lastNumericRef.current;
+
+    // Already showing the target (e.g. warm mount) — skip the animation loop
+    if (startValue === numericTarget) {
+      rafRef.current = null;
+      setDisplay(value);
+      return;
+    }
+
     const startTime = performance.now();
 
     function frame(currentTime: number) {

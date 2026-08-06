@@ -11,7 +11,7 @@ interface ViewModeState {
 export const useViewModeStore = create<ViewModeState>()(
   persist(
     (set) => ({
-      viewMode: 'grid',
+      viewMode: 'map',
       setViewMode: (viewMode) => set({ viewMode }),
     }),
     {

@@ -125,12 +125,18 @@ vi.mock('@/components/shared/ExportObservationsButton', () => ({
 vi.mock('@/components/shared/ObservationsMap', () => ({
   ObservationsMap: ({
     categoryByObservationId,
+    basemapSwitcherPositionClassName,
+    showEmptyState,
   }: {
     categoryByObservationId?: Map<string, unknown>;
+    basemapSwitcherPositionClassName?: string;
+    showEmptyState?: boolean;
   }) => (
     <div
       data-testid="observations-map"
       data-category-count={categoryByObservationId?.size ?? 0}
+      data-basemap-switcher-position={basemapSwitcherPositionClassName}
+      data-show-empty-state={String(showEmptyState)}
     />
   ),
 }));
@@ -220,6 +226,18 @@ describe('DataScreen', () => {
 
       render(<DataScreen />);
       expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('wraps long observation names instead of truncating', () => {
+      mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+      render(<DataScreen />);
+
+      // The observation name span should use word-break classes instead of truncate
+      const nameSpans = screen.getAllByText('forest', { selector: 'span' });
+      const nameSpan = nameSpans[0];
+      expect(nameSpan).toHaveClass('break-words', 'wrap-anywhere');
+      expect(nameSpan).not.toHaveClass('truncate');
     });
 
     it('renders the matched category icon for observation cards', () => {
@@ -555,6 +573,102 @@ describe('DataScreen', () => {
         await user.click(
           screen.getByRole('button', { name: /switch to grid view/i }),
         );
+        expect(
+          screen.queryByTestId('observations-map'),
+        ).not.toBeInTheDocument();
+        expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
+      });
+
+      it('renders map view by default when viewMode is map', () => {
+        useViewModeStore.setState({ viewMode: 'map' });
+        mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+        render(<DataScreen />);
+        expect(screen.getByTestId('observations-map')).toBeInTheDocument();
+      });
+
+      it('shows a loading state over the map while observations are pending', () => {
+        useViewModeStore.setState({ viewMode: 'map' });
+        mockObservationsQuery = { data: undefined, isPending: true };
+
+        render(<DataScreen />);
+
+        expect(screen.getByTestId('observations-map')).toHaveAttribute(
+          'data-show-empty-state',
+          'false',
+        );
+        expect(screen.getByRole('status')).toHaveTextContent('Loading...');
+        expect(screen.getByRole('status')).toHaveClass('z-20');
+        expect(
+          screen.getByRole('status').querySelector('.animate-pulse'),
+        ).not.toBeNull();
+      });
+
+      it('shows an error state over the map when observations fail to load', async () => {
+        useViewModeStore.setState({ viewMode: 'map' });
+        mockObservationsQuery = {
+          data: undefined,
+          isPending: false,
+          isError: true,
+        };
+
+        render(<DataScreen />);
+
+        expect(screen.getByTestId('observations-map')).toHaveAttribute(
+          'data-show-empty-state',
+          'false',
+        );
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          'Failed to load observations. Please try again.',
+        );
+        expect(screen.getByRole('alert')).toHaveClass('z-20');
+
+        const gridToggle = screen.getByRole('button', {
+          name: /switch to grid view/i,
+        });
+        expect(gridToggle.parentElement).toHaveClass('z-30');
+
+        const { userEvent } = await import('@tests/mocks/test-utils');
+        await userEvent.setup().click(gridToggle);
+        expect(
+          screen.queryByTestId('observations-map'),
+        ).not.toBeInTheDocument();
+      });
+
+      it('places the layer switcher below the grid toggle and hides map sorting', () => {
+        useViewModeStore.setState({ viewMode: 'map' });
+        mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+        render(<DataScreen />);
+
+        expect(screen.getByTestId('observations-map')).toHaveAttribute(
+          'data-basemap-switcher-position',
+          'top-[4.25rem] right-3',
+        );
+        expect(
+          screen.queryByRole('combobox', { name: 'Sort' }),
+        ).not.toBeInTheDocument();
+      });
+
+      it('shows grid toggle button in map view and switches to grid on click', async () => {
+        const { userEvent } = await import('@tests/mocks/test-utils');
+        const user = userEvent.setup();
+        useViewModeStore.setState({ viewMode: 'map' });
+        mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+        render(<DataScreen />);
+
+        // Grid toggle button should be present in map view
+        expect(
+          screen.getByRole('button', { name: /switch to grid view/i }),
+        ).toBeInTheDocument();
+
+        // Click to switch to grid
+        await user.click(
+          screen.getByRole('button', { name: /switch to grid view/i }),
+        );
+
+        // Grid view should be shown
         expect(
           screen.queryByTestId('observations-map'),
         ).not.toBeInTheDocument();

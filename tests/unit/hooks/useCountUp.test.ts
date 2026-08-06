@@ -12,24 +12,9 @@ describe('useCountUp', () => {
     vi.useRealTimers();
   });
 
-  it('starts at 0 and animates to the target number', () => {
+  it('shows the initial target number immediately without a zero flash', () => {
     const { result } = renderHook(() => useCountUp(100, 400));
 
-    // Initially starts at 0
-    expect(result.current).toBe('0');
-
-    // Advance halfway through animation
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-    // Should be partway through (eased)
-    expect(result.current).not.toBe('0');
-    expect(result.current).not.toBe(100);
-
-    // Complete the animation
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
     expect(result.current).toBe(100);
   });
 
