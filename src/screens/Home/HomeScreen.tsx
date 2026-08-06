@@ -16,6 +16,7 @@ import { useShellSlot } from '@/components/layout/shell-slot';
 import { Button } from '@/components/ui/button';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
+import { useObservationCategoryMetadata } from '@/hooks/useObservationCategoryMetadata';
 import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
@@ -359,14 +360,6 @@ const messages = defineMessages({
 
 // ---- Component ----
 
-/** Internal metadata tags that should be filtered from the tags display */
-const INTERNAL_TAGS = new Set([
-  'photoUrls',
-  'photoCount',
-  'audioCount',
-  'trackCount',
-]);
-
 function HomeScreen() {
   const [state, dispatch] = useReducer(homeReducer, INITIAL_STATE);
   const persistedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -421,24 +414,20 @@ function HomeScreen() {
     observations,
     state.selectedProjectId,
   );
+  const { categoryByObservationId, isLoading: isCategoriesLoading } =
+    useObservationCategoryMetadata({
+      observations,
+      projectLocalId: state.selectedProjectId,
+      projectRemoteId: selectedProject?.remoteId,
+      serverUrl: archiveServerUrl,
+    });
 
   const alerts = useMemo(() => alertsQuery.data ?? [], [alertsQuery.data]);
   const tracks = useMemo(() => tracksQuery.data ?? [], [tracksQuery.data]);
 
-  // Derive unique tag categories from observations
-  const categoryCount = useMemo(() => {
-    const tagKeys = new Set<string>();
-    for (const obs of observations) {
-      if (obs.tags) {
-        for (const key of Object.keys(obs.tags)) {
-          if (!INTERNAL_TAGS.has(key)) {
-            tagKeys.add(key);
-          }
-        }
-      }
-    }
-    return tagKeys.size;
-  }, [observations]);
+  const categoryCount = new Set(
+    Array.from(categoryByObservationId.values(), (c) => c.id),
+  ).size;
 
   // Compute media counts from observation tags (values stored as strings).
   // Track counts come from first-class synced track records.
@@ -1083,7 +1072,7 @@ function HomeScreen() {
             title={intl.formatMessage(messages.statCategories)}
             value={categoryCount}
             staggerIndex={2}
-            isLoading={isObservationsLoading}
+            isLoading={isObservationsLoading || isCategoriesLoading}
           />
           <StatCard
             title={intl.formatMessage(messages.statActiveAlerts)}

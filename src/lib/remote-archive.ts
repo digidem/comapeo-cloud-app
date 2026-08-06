@@ -1,7 +1,7 @@
-import type { UpdateSpec } from 'dexie';
+import type { Table, UpdateSpec } from 'dexie';
 
-import { apiClient } from '@/lib/api-client';
-import type { RequestConfig } from '@/lib/api-client';
+import { ApiError, apiClient } from '@/lib/api-client';
+import type { EndpointSemantics, RequestConfig } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { buildIconUrl } from '@/lib/category-utils';
 import { getCachedIconBlob, getDb, putCachedIconBlob } from '@/lib/db';
@@ -15,6 +15,77 @@ import type {
   Track,
 } from '@/lib/db';
 import { getRemoteServer } from '@/lib/local-repositories';
+import {
+  type ReconciliationCounts,
+  planReconciliation,
+} from '@/lib/reconciliation';
+
+export interface PullExecutionOptions {
+  concurrency?: number;
+}
+
+export interface PullResult<T> {
+  rows: T[];
+  semantics: EndpointSemantics;
+  counts: ReconciliationCounts;
+  warnings: string[];
+}
+
+function resolvedSemantics(
+  response: { semantics?: EndpointSemantics },
+  resource: EndpointSemantics['resource'],
+): EndpointSemantics {
+  return (
+    response.semantics ?? {
+      resource,
+      availability: 'supported',
+      // Metadata can be absent in mocks or after a clone/serialization
+      // boundary because it is attached non-enumerably for API compatibility.
+      // Unknown provenance must preserve omissions rather than delete them.
+      mode: 'unknown',
+      source: 'contract',
+    }
+  );
+}
+
+function emptyCounts(preserved = 0): ReconciliationCounts {
+  return {
+    received: 0,
+    upserted: 0,
+    explicitTombstones: 0,
+    omittedTombstones: 0,
+    tombstoned: 0,
+    preserved,
+  };
+}
+
+function unsupportedResult<T>(
+  semantics: EndpointSemantics,
+  preserved = 0,
+): PullResult<T> {
+  return {
+    rows: [],
+    semantics,
+    counts: emptyCounts(preserved),
+    warnings: [`${semantics.resource} endpoint is unsupported by this archive`],
+  };
+}
+
+function abortError(): DOMException {
+  return new DOMException('The operation was aborted', 'AbortError');
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortError();
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof Error || (error !== null && typeof error === 'object')) &&
+    'name' in error &&
+    error.name === 'AbortError'
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Stable localId generation
@@ -114,40 +185,133 @@ function resolveAttachmentUrl(url: string, archiveBaseUrl: string): string {
  * order. Used by the per-project detail fetch in pullProjects to avoid
  * unbounded N+1 fan-out.
  */
-function allSettledLimited<T>(
+async function allSettledLimited<T>(
   tasks: Array<() => Promise<T>>,
   limit = 5,
+  signal?: AbortSignal,
 ): Promise<PromiseSettledResult<T>[]> {
   const results: PromiseSettledResult<T>[] = new Array(tasks.length);
   let cursor = 0;
 
   async function worker() {
     while (cursor < tasks.length) {
+      throwIfAborted(signal);
       const i = cursor++;
       try {
         results[i] = { status: 'fulfilled', value: await tasks[i]!() };
       } catch (reason) {
+        if (isAbortError(reason) || signal?.aborted) throw abortError();
         results[i] = { status: 'rejected', reason };
       }
     }
   }
 
-  return Promise.all(
-    Array.from({ length: Math.min(limit, tasks.length) }, worker),
-  ).then(() => results);
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(limit, 1), tasks.length) }, worker),
+  );
+  return results;
+}
+
+async function tombstoneScopedRows<
+  T extends {
+    projectLocalId: string;
+    sourceType: string;
+    dirtyLocal: boolean;
+    deleted: boolean;
+    updatedAt: string;
+  },
+>(
+  table: Table<T, string>,
+  projectLocalIds: readonly string[],
+  now: string,
+): Promise<number> {
+  if (projectLocalIds.length === 0) return 0;
+  const rows = await table
+    .where('projectLocalId')
+    .anyOf(projectLocalIds)
+    .and(
+      (row) =>
+        row.sourceType === 'remoteArchive' && !row.dirtyLocal && !row.deleted,
+    )
+    .toArray();
+  if (rows.length === 0) return 0;
+  for (const row of rows) {
+    row.deleted = true;
+    row.updatedAt = now;
+  }
+  await table.bulkPut(rows);
+  return rows.length;
+}
+
+/**
+ * Tombstone every clean remote-archive child of an omitted remote project.
+ *
+ * The caller owns the Dexie transaction so the project row and all dependent
+ * rows commit or roll back together. Scoping by projectLocalId is intentional:
+ * project identity is stable across legacy duplicate server records whose
+ * sourceId may differ while their normalized archive URL is the same.
+ */
+async function tombstoneProjectChildren(
+  projectLocalIds: readonly string[],
+  now: string,
+): Promise<number> {
+  if (projectLocalIds.length === 0) return 0;
+  const db = getDb();
+  let count = 0;
+  count += await tombstoneScopedRows(db.observations, projectLocalIds, now);
+  count += await tombstoneScopedRows(db.attachments, projectLocalIds, now);
+  count += await tombstoneScopedRows(db.alerts, projectLocalIds, now);
+  count += await tombstoneScopedRows(db.presets, projectLocalIds, now);
+  count += await tombstoneScopedRows(db.tracks, projectLocalIds, now);
+  count += await tombstoneScopedRows(db.fields, projectLocalIds, now);
+  return count;
+}
+
+async function projectIdsWithLocalChanges(
+  projectLocalIds: readonly string[],
+): Promise<Set<string>> {
+  const protectedIds = new Set<string>();
+  if (projectLocalIds.length === 0) return protectedIds;
+  const db = getDb();
+  const tables = [
+    db.observations,
+    db.attachments,
+    db.alerts,
+    db.presets,
+    db.tracks,
+    db.fields,
+  ] as const;
+
+  for (const table of tables) {
+    const rows = await table
+      .where('projectLocalId')
+      .anyOf(projectLocalIds)
+      .and(
+        (row) =>
+          !row.deleted &&
+          (row.dirtyLocal || row.sourceType !== 'remoteArchive'),
+      )
+      .toArray();
+    for (const row of rows) protectedIds.add(row.projectLocalId);
+  }
+
+  return protectedIds;
 }
 
 // ---------------------------------------------------------------------------
 // Fetch archive data and store locally
 // ---------------------------------------------------------------------------
 
-export async function pullProjects(
+export async function pullProjectsDetailed(
   serverId: string,
   config: RequestConfig,
-): Promise<Project[]> {
+  options: PullExecutionOptions = {},
+): Promise<PullResult<Project>> {
   const response = await apiClient.getProjects(config);
+  const semantics = resolvedSemantics(response, 'projects');
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
+  const warnings: string[] = [];
 
   // Look up the server record to get the archive's baseUrl.
   // Fall back to config.baseUrl if no record exists (e.g. during sync
@@ -156,16 +320,17 @@ export async function pullProjects(
   const baseUrl = serverRecord?.baseUrl ?? config.baseUrl ?? '';
   const stableKey = stableSourceKey(baseUrl);
 
-  const localIds = response.data.map(
-    (item) => `${sourceType}:${stableKey}:${item.projectId}`,
+  const archiveProjectPrefix = `${sourceType}:${stableKey}:`;
+  const existingRecords = await db.projects
+    .filter(
+      (row) =>
+        row.sourceType === sourceType &&
+        row.localId.startsWith(archiveProjectPrefix),
+    )
+    .toArray();
+  const existingMap = new Map(
+    existingRecords.map((record) => [record.localId, record]),
   );
-
-  // Fetch existing records to preserve timestamps
-  const existingRecords = await db.projects.bulkGet(localIds);
-  const existingMap = new Map<string, Project>();
-  for (const record of existingRecords) {
-    if (record) existingMap.set(record.localId, record);
-  }
 
   const now = new Date().toISOString();
   const detailedProjects: Project[] = [];
@@ -179,6 +344,8 @@ export async function pullProjects(
       const detailResponse = await apiClient.getProject(item.projectId, config);
       return { basic: item, detail: detailResponse.data };
     }),
+    options.concurrency ?? 5,
+    config.signal,
   );
 
   for (const [index, result] of projectDetails.entries()) {
@@ -187,10 +354,9 @@ export async function pullProjects(
     const existing = existingMap.get(localId);
 
     if (result.status === 'rejected') {
-      console.warn(
-        `Failed to fetch details for project ${basic.projectId}:`,
-        result.reason,
-      );
+      const warning = `Failed to fetch details for project ${basic.projectId}: ${String(result.reason)}`;
+      warnings.push(warning);
+      console.warn(warning);
       const nameChanged = existing?.name !== basic.name;
       detailedProjects.push({
         localId,
@@ -246,9 +412,28 @@ export async function pullProjects(
   // sync-managed field added to the Project type in the future must appear in
   // `detailedProjects` entries (and therefore in `changes`) or it will be
   // silently omitted from updates, leaving stale values in existing rows.
+  const incomingProjectIds = new Set(
+    detailedProjects.map((project) => project.localId),
+  );
+  const omittedProjectIds = existingRecords
+    .filter(
+      (project) => !project.deleted && !incomingProjectIds.has(project.localId),
+    )
+    .map((project) => project.localId);
+  const protectedProjectIds =
+    await projectIdsWithLocalChanges(omittedProjectIds);
+  const reconciliation = planReconciliation({
+    existing: existingRecords.map((project) =>
+      protectedProjectIds.has(project.localId)
+        ? { ...project, dirtyLocal: true }
+        : project,
+    ),
+    incoming: detailedProjects,
+    mode: semantics.mode,
+  });
   const inserts: Project[] = [];
   const updates: Array<{ key: string; changes: UpdateSpec<Project> }> = [];
-  for (const project of detailedProjects) {
+  for (const project of reconciliation.rowsToPut) {
     if (existingMap.has(project.localId)) {
       const { localId, activeMapId: _preserve, ...changes } = project;
       updates.push({ key: localId, changes });
@@ -257,27 +442,66 @@ export async function pullProjects(
     }
   }
 
-  await db.transaction('rw', db.projects, async () => {
-    if (inserts.length > 0) await db.projects.bulkPut(inserts);
-    if (updates.length > 0) await db.projects.bulkUpdate(updates);
-  });
+  // Persist projects and tombstone removed children in a SINGLE transaction
+  // so a failure (quota, IDB error) cannot leave tombstoned projects with
+  // live orphaned children. Children are tombstoned first, then projects
+  // are written — if children fails, projects are never touched.
+  const tombstonedProjectIds = reconciliation.tombstonedRows.map(
+    (project) => project.localId,
+  );
+  await db.transaction(
+    'rw',
+    [
+      db.projects,
+      db.observations,
+      db.attachments,
+      db.alerts,
+      db.presets,
+      db.tracks,
+      db.fields,
+    ],
+    async () => {
+      await tombstoneProjectChildren(tombstonedProjectIds, now);
+      // Then write projects
+      if (inserts.length > 0) await db.projects.bulkPut(inserts);
+      if (updates.length > 0) await db.projects.bulkUpdate(updates);
+    },
+  );
 
-  return detailedProjects;
+  return {
+    rows: reconciliation.activeRows,
+    semantics,
+    counts: reconciliation.counts,
+    warnings,
+  };
 }
 
-export async function pullObservations(
+export async function pullProjects(
+  serverId: string,
+  config: RequestConfig,
+): Promise<Project[]> {
+  return (await pullProjectsDetailed(serverId, config)).rows;
+}
+
+export async function pullObservationsDetailed(
   serverId: string,
   projectRemoteId: string,
   projectLocalId: string,
   config: RequestConfig,
-): Promise<Observation[]> {
+): Promise<PullResult<Observation>> {
   const response = await apiClient.getObservations(projectRemoteId, config);
+  const semantics = resolvedSemantics(response, 'observations');
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
   const serverRecord = await getRemoteServer(serverId);
   const stableKey = stableSourceKey(
     serverRecord?.baseUrl ?? config.baseUrl ?? '',
   );
+  const existingObservations = await db.observations
+    .where('projectLocalId')
+    .equals(projectLocalId)
+    .and((row) => row.sourceType === sourceType)
+    .toArray();
   const attachments: Attachment[] = [];
   const syncedAttachmentLocalIds = new Set<string>();
   const syncedObservationLocalIds = new Set<string>();
@@ -377,18 +601,26 @@ export async function pullObservations(
     };
   });
 
+  const reconciliation = planReconciliation({
+    existing: existingObservations,
+    incoming: observations,
+    mode: semantics.mode,
+  });
+  const attachmentScope = new Set([
+    ...syncedObservationLocalIds,
+    ...reconciliation.tombstonedRows.map((row) => row.localId),
+  ]);
+
   await db.transaction('rw', [db.observations, db.attachments], async () => {
-    await db.observations.bulkPut(observations);
+    if (reconciliation.rowsToPut.length > 0) {
+      await db.observations.bulkPut(reconciliation.rowsToPut);
+    }
     if (attachments.length > 0) await db.attachments.bulkPut(attachments);
 
-    // Tombstone attachments that belong to the synced observations but
-    // were not returned by the server on this sync. This handles
-    // server-side removal: the local row stays around (preserving the
-    // localId reference) but is marked deleted so the UI can hide it.
-    if (syncedObservationLocalIds.size > 0) {
+    if (attachmentScope.size > 0) {
       const staleAttachments = await db.attachments
         .where('observationLocalId')
-        .anyOf(Array.from(syncedObservationLocalIds))
+        .anyOf(Array.from(attachmentScope))
         .and(
           (row) => !syncedAttachmentLocalIds.has(row.localId) && !row.deleted,
         )
@@ -403,22 +635,49 @@ export async function pullObservations(
       }
     }
   });
-  return observations;
+  return {
+    rows: observations,
+    semantics,
+    counts: reconciliation.counts,
+    warnings: [],
+  };
 }
 
-export async function pullAlerts(
+export async function pullObservations(
   serverId: string,
   projectRemoteId: string,
   projectLocalId: string,
   config: RequestConfig,
-): Promise<Alert[]> {
+): Promise<Observation[]> {
+  return (
+    await pullObservationsDetailed(
+      serverId,
+      projectRemoteId,
+      projectLocalId,
+      config,
+    )
+  ).rows;
+}
+
+export async function pullAlertsDetailed(
+  serverId: string,
+  projectRemoteId: string,
+  projectLocalId: string,
+  config: RequestConfig,
+): Promise<PullResult<Alert>> {
   const response = await apiClient.getAlerts(projectRemoteId, config);
+  const semantics = resolvedSemantics(response, 'alerts');
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
   const serverRecord = await getRemoteServer(serverId);
   const stableKey = stableSourceKey(
     serverRecord?.baseUrl ?? config.baseUrl ?? '',
   );
+  const existingAlerts = await db.alerts
+    .where('projectLocalId')
+    .equals(projectLocalId)
+    .and((row) => row.sourceType === sourceType)
+    .toArray();
   const alerts: Alert[] = response.data.map((item) => ({
     localId: `${sourceType}:${stableKey}:${item.docId}`,
     projectLocalId,
@@ -435,9 +694,32 @@ export async function pullAlerts(
     dirtyLocal: false,
     deleted: item.deleted,
   }));
+  const reconciliation = planReconciliation({
+    existing: existingAlerts,
+    incoming: alerts,
+    mode: semantics.mode,
+  });
 
-  await db.alerts.bulkPut(alerts);
-  return alerts;
+  if (reconciliation.rowsToPut.length > 0) {
+    await db.alerts.bulkPut(reconciliation.rowsToPut);
+  }
+  return {
+    rows: alerts,
+    semantics,
+    counts: reconciliation.counts,
+    warnings: [],
+  };
+}
+
+export async function pullAlerts(
+  serverId: string,
+  projectRemoteId: string,
+  projectLocalId: string,
+  config: RequestConfig,
+): Promise<Alert[]> {
+  return (
+    await pullAlertsDetailed(serverId, projectRemoteId, projectLocalId, config)
+  ).rows;
 }
 
 /**
@@ -457,7 +739,8 @@ async function precacheCategoryIcons(
   projectRemoteId: string,
   serverUrl: string,
   config: RequestConfig,
-): Promise<void> {
+  concurrency = ICON_FETCH_CONCURRENCY,
+): Promise<string[]> {
   const seen = new Set<string>();
   const uniqueIconDocIds = presets
     .filter((preset) => !preset.deleted && preset.iconDocId)
@@ -475,34 +758,55 @@ async function precacheCategoryIcons(
       (item): item is { iconUrl: string; docId: string } => item !== null,
     );
 
-  // Process with bounded concurrency
-  for (let i = 0; i < uniqueIconDocIds.length; i += ICON_FETCH_CONCURRENCY) {
-    const batch = uniqueIconDocIds.slice(i, i + ICON_FETCH_CONCURRENCY);
-    await Promise.allSettled(
-      batch.map(async ({ iconUrl, docId }) => {
-        // Skip if already cached to avoid redundant network fetches.
-        const existing = await getCachedIconBlob(iconUrl);
-        if (existing) return;
+  const results = await allSettledLimited(
+    uniqueIconDocIds.map(({ iconUrl, docId }) => async () => {
+      const existing = await getCachedIconBlob(iconUrl);
+      if (existing) return;
+      const blob = await apiClient.getIcon(projectRemoteId, docId, config);
+      await putCachedIconBlob(iconUrl, blob);
+    }),
+    concurrency,
+    config.signal,
+  );
 
-        const blob = await apiClient.getIcon(projectRemoteId, docId, config);
-        await putCachedIconBlob(iconUrl, blob);
-      }),
-    );
-  }
+  return results.flatMap((result, index) =>
+    result.status === 'rejected'
+      ? [
+          `Icon prefetch failed for ${uniqueIconDocIds[index]?.docId ?? 'unknown icon'}: ${
+            result.reason instanceof ApiError
+              ? `[${result.reason.kind} ${result.reason.status}] ${result.reason.code}: ${result.reason.message}`
+              : String(result.reason)
+          }`,
+        ]
+      : [],
+  );
 }
 
-export async function pullPresets(
+export async function pullPresetsDetailed(
   serverId: string,
   projectRemoteId: string,
   projectLocalId: string,
   config: RequestConfig,
-): Promise<Preset[]> {
+  options: PullExecutionOptions = {},
+): Promise<PullResult<Preset>> {
   const response = await apiClient.getPresets(projectRemoteId, config);
+  const semantics = resolvedSemantics(response, 'presets');
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
   const serverRecord = await getRemoteServer(serverId);
   const baseUrl = serverRecord?.baseUrl ?? config.baseUrl ?? '';
   const stableKey = stableSourceKey(baseUrl);
+  const existingPresets = await db.presets
+    .where('projectLocalId')
+    .equals(projectLocalId)
+    .and((row) => row.sourceType === sourceType)
+    .toArray();
+  if (semantics.availability === 'unsupported') {
+    return unsupportedResult(
+      semantics,
+      existingPresets.filter((row) => !row.deleted).length,
+    );
+  }
 
   // Map ALL items (including deleted) and write them all to DB as tombstones
   // matching the pattern from pullObservations / pullAlerts
@@ -524,35 +828,67 @@ export async function pullPresets(
     deleted: item.deleted,
   }));
 
-  await db.presets.bulkPut(allPresets);
+  const reconciliation = planReconciliation({
+    existing: existingPresets,
+    incoming: allPresets,
+    mode: semantics.mode,
+  });
+  if (reconciliation.rowsToPut.length > 0) {
+    await db.presets.bulkPut(reconciliation.rowsToPut);
+  }
+  const warnings = await precacheCategoryIcons(
+    reconciliation.activeRows,
+    projectRemoteId,
+    baseUrl,
+    config,
+    options.concurrency,
+  );
 
-  // Pre-cache category icons so the UI renders them instantly. Fire-and-forget
-  // so a slow/hung icon fetch never blocks the sync. The hook lazily caches on
-  // first render as a fallback.
-  void precacheCategoryIcons(allPresets, projectRemoteId, baseUrl, config);
-
-  // Return only the non-deleted subset to callers; deleted items remain
-  // locally as tombstones so they are not re-surfaced after server-side deletion
-  return allPresets.filter((p) => !p.deleted);
+  return {
+    rows: reconciliation.activeRows,
+    semantics,
+    counts: reconciliation.counts,
+    warnings,
+  };
 }
 
-export async function pullTracks(
+export async function pullPresets(
   serverId: string,
   projectRemoteId: string,
   projectLocalId: string,
   config: RequestConfig,
-): Promise<Track[]> {
+): Promise<Preset[]> {
+  return (
+    await pullPresetsDetailed(serverId, projectRemoteId, projectLocalId, config)
+  ).rows;
+}
+
+export async function pullTracksDetailed(
+  serverId: string,
+  projectRemoteId: string,
+  projectLocalId: string,
+  config: RequestConfig,
+): Promise<PullResult<Track>> {
   const response = await apiClient.getTracks(projectRemoteId, config);
+  const semantics = resolvedSemantics(response, 'tracks');
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
   const serverRecord = await getRemoteServer(serverId);
   const stableKey = stableSourceKey(
     serverRecord?.baseUrl ?? config.baseUrl ?? '',
   );
+  const existingTracks = await db.tracks
+    .where('projectLocalId')
+    .equals(projectLocalId)
+    .and((row) => row.sourceType === sourceType)
+    .toArray();
+  if (semantics.availability === 'unsupported') {
+    return unsupportedResult(
+      semantics,
+      existingTracks.filter((row) => !row.deleted).length,
+    );
+  }
 
-  // Map ALL items (including deleted) and write them all to DB as tombstones,
-  // then mark previously-synced rows that the server no longer returns as
-  // deleted so they don't surface as stale data after remote deletion.
   const allTracks: Track[] = response.data.map((item) => ({
     localId: `${sourceType}:${stableKey}:${item.docId}`,
     projectLocalId,
@@ -573,78 +909,60 @@ export async function pullTracks(
     dirtyLocal: false,
     deleted: item.deleted,
   }));
-
-  await db.transaction('rw', [db.tracks], async () => {
-    await db.tracks.bulkPut(allTracks);
-    await tombstoneStaleRows(db.tracks, projectLocalId, serverId, allTracks);
+  const reconciliation = planReconciliation({
+    existing: existingTracks,
+    incoming: allTracks,
+    mode: semantics.mode,
   });
-  return allTracks.filter((t) => !t.deleted);
-}
 
-/**
- * Mark previously-synced rows for (projectLocalId, sourceId) as `deleted: true`
- * when the current pull did not return them. Without this, a remote delete
- * (or an empty response from a 0.4 server that no longer emits the resource)
- * leaves stale rows in IndexedDB that the UI continues to show.
- */
-async function tombstoneStaleRows<
-  T extends {
-    localId: string;
-    projectLocalId: string;
-    sourceId: string;
-    deleted: boolean;
-    updatedAt: string;
-  },
->(
-  table: {
-    bulkPut: (rows: T[]) => Promise<unknown>;
-    where: (key: string) => {
-      equals: (value: string) => {
-        and: (pred: (row: T) => boolean) => { toArray: () => Promise<T[]> };
-      };
-    };
-  },
-  projectLocalId: string,
-  sourceId: string,
-  currentRows: readonly T[],
-): Promise<void> {
-  const syncedIds = new Set(currentRows.map((r) => r.localId));
-  const staleRows = await table
-    .where('projectLocalId')
-    .equals(projectLocalId)
-    .and(
-      (row) =>
-        row.sourceId === sourceId &&
-        !row.deleted &&
-        !syncedIds.has(row.localId),
-    )
-    .toArray();
-  if (staleRows.length === 0) return;
-  const now = new Date().toISOString();
-  for (const row of staleRows) {
-    row.deleted = true;
-    row.updatedAt = now;
+  if (reconciliation.rowsToPut.length > 0) {
+    await db.tracks.bulkPut(reconciliation.rowsToPut);
   }
-  await table.bulkPut(staleRows);
+  return {
+    rows: reconciliation.activeRows,
+    semantics,
+    counts: reconciliation.counts,
+    warnings: [],
+  };
 }
 
-export async function pullFields(
+export async function pullTracks(
   serverId: string,
   projectRemoteId: string,
   projectLocalId: string,
   config: RequestConfig,
-): Promise<Field[]> {
+): Promise<Track[]> {
+  return (
+    await pullTracksDetailed(serverId, projectRemoteId, projectLocalId, config)
+  ).rows;
+}
+
+export async function pullFieldsDetailed(
+  serverId: string,
+  projectRemoteId: string,
+  projectLocalId: string,
+  config: RequestConfig,
+): Promise<PullResult<Field>> {
   const response = await apiClient.getFields(projectRemoteId, config);
+  const semantics = resolvedSemantics(response, 'fields');
   const db = getDb();
   const sourceType = 'remoteArchive' as const;
   const serverRecord = await getRemoteServer(serverId);
   const stableKey = stableSourceKey(
     serverRecord?.baseUrl ?? config.baseUrl ?? '',
   );
+  const existingFields = await db.fields
+    .where('projectLocalId')
+    .equals(projectLocalId)
+    .and((row) => row.sourceType === sourceType)
+    .toArray();
+  if (semantics.availability === 'unsupported') {
+    return unsupportedResult(
+      semantics,
+      existingFields.filter((row) => !row.deleted).length,
+    );
+  }
 
-  // Map ALL items (including deleted) and write them all to DB as tombstones,
-  // then mark previously-synced rows that the server no longer returns as
-  // deleted so they don't surface as stale data after remote deletion.
   const allFields: Field[] = response.data.map((item) => ({
     localId: `${sourceType}:${stableKey}:${item.docId}`,
     projectLocalId,
@@ -656,22 +974,42 @@ export async function pullFields(
     schemaName: item.schemaName,
     links: item.links ?? [],
     type: item.type,
-    key: item.key,
+    key: item.tagKey ?? item.key ?? '',
     label: item.label,
     placeholder: item.placeholder,
     universal: item.universal,
     options: item.options,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
+    createdAt: item.createdAt ?? '',
+    updatedAt: item.updatedAt ?? '',
     dirtyLocal: false,
     deleted: item.deleted,
   }));
-
-  await db.transaction('rw', [db.fields], async () => {
-    await db.fields.bulkPut(allFields);
-    await tombstoneStaleRows(db.fields, projectLocalId, serverId, allFields);
+  const reconciliation = planReconciliation({
+    existing: existingFields,
+    incoming: allFields,
+    mode: semantics.mode,
   });
-  return allFields.filter((f) => !f.deleted);
+
+  if (reconciliation.rowsToPut.length > 0) {
+    await db.fields.bulkPut(reconciliation.rowsToPut);
+  }
+  return {
+    rows: reconciliation.activeRows,
+    semantics,
+    counts: reconciliation.counts,
+    warnings: [],
+  };
+}
+
+export async function pullFields(
+  serverId: string,
+  projectRemoteId: string,
+  projectLocalId: string,
+  config: RequestConfig,
+): Promise<Field[]> {
+  return (
+    await pullFieldsDetailed(serverId, projectRemoteId, projectLocalId, config)
+  ).rows;
 }
 
 export async function deriveAttachmentsFromObservations(

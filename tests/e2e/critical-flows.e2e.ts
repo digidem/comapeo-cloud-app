@@ -130,6 +130,7 @@ test.describe('Critical User Flows', () => {
 
     // Navigate to /data via the nav link
     await page.getByRole('link', { name: 'Data' }).click();
+    await page.getByRole('button', { name: 'Switch to grid view' }).click();
 
     // Data heading visible
     await expect(
@@ -140,6 +141,55 @@ test.describe('Critical User Flows', () => {
     await expect(
       page.locator('a[href^="/data/observations/"]').last(),
     ).toBeVisible();
+  });
+
+  async function openDataMapAtWidth(
+    page: import('@playwright/test').Page,
+    label: string,
+    width: number,
+  ) {
+    await page.setViewportSize({ width: 1180, height: 900 });
+    await seedProjectWithObservations(page, label);
+    await page.getByRole('link', { name: 'Data' }).click();
+    await page.setViewportSize({ width, height: 900 });
+  }
+
+  for (const width of [768, 1024, 1180]) {
+    // Runs on every browser project — no WebGL dependency.
+    test(`map controls remain clickable at ${width}px`, async ({ page }) => {
+      await openDataMapAtWidth(page, `Map Controls ${width}`, width);
+
+      const layerButton = page.getByTestId('basemap-switcher-trigger');
+      await expect(layerButton).toBeVisible();
+      await layerButton.click();
+      await expect(page.getByRole('menuitemradio').first()).toBeVisible();
+      await page.keyboard.press('Escape');
+    });
+  }
+
+  // MapLibre requires WebGL; Playwright's bundled Firefox/WebKit have no
+  // GL backend, so the attribution control is never created there.
+  // Chromium (SwiftShader) still exercises this assertion. The skip is
+  // the first statement so non-chromium runs are reported as skipped
+  // accurately — this test has no assertions to run on those browsers.
+  // Behavior is width-independent, so a single width is sufficient.
+  test('map attribution control toggles compact view', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(
+      browserName !== 'chromium',
+      'MapLibre attribution control requires WebGL (unavailable in Playwright firefox/webkit)',
+    );
+
+    await openDataMapAtWidth(page, 'Map Attribution', 1180);
+
+    const attributionControl = page.locator('.maplibregl-ctrl-attrib');
+    const attributionButton = page.locator('.maplibregl-ctrl-attrib-button');
+    await expect(attributionButton).toBeVisible();
+    await expect(attributionControl).not.toHaveClass(/maplibregl-compact-show/);
+    await attributionButton.click();
+    await expect(attributionControl).toHaveClass(/maplibregl-compact-show/);
   });
 
   // -------------------------------------------------------------------------
@@ -155,6 +205,7 @@ test.describe('Critical User Flows', () => {
 
     // Navigate to /data via the nav link
     await page.getByRole('link', { name: 'Data' }).click();
+    await page.getByRole('button', { name: 'Switch to grid view' }).click();
     await expect(
       page.getByRole('heading', { level: 1, name: 'Data' }),
     ).toBeVisible();

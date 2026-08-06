@@ -1,0 +1,11 @@
+{
+  "tagKey": "ecological-status",
+  "type": "selectOne",
+  "label": "Ecological status",
+  "helperText": "What is the ecological status of this area?",
+  "options": [
+    { "label": "Pristine", "value": "pristine" },
+    { "label": "Degraded", "value": "degraded" },
+    { "label": "Restored", "value": "restored" }
+  ]
+}

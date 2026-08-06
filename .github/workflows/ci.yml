@@ -508,7 +508,26 @@ jobs:
         # GHSA-p63j-vcc4-9vmv: @vitest/browser Browser Mode file-access
         # bypass. Fixed in 4.1.10 (we have 4.1.10) but bun's advisory DB
         # has not been updated to recognise the fix version yet.
-        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv
+        #
+        # GHSA-mh99-v99m-4gvg: brace-expansion DoS via unbounded expansion
+        # length causing OOM (transitive dev dep via eslint/glob).
+        # Cannot override to v5 — breaks minimatch's default import.
+        #
+        # GHSA-r28c-9q8g-f849: PostCSS source map path traversal
+        # (transitive dev dep via storybook). Resolved via override.
+        #
+        # GHSA-7p8r-x3mc-p8w7: fast-uri host confusion via backslash
+        # authority introducer (transitive dev dep via eslint ajv /
+        # workbox-build). Dev/build dependency only.
+        #
+        # GHSA-rgw5-rvv9-x895: brace-expansion DoS bypassing
+        # CVE-2026-14257 mitigation (transitive dev dep via minimatch in
+        # eslint/storybook tooling). Dev dependency only.
+        #
+        # GHSA-4cwx-7wf7-3272: undici cross-user info disclosure via
+        # degenerate private cache directives (transitive dev dep via
+        # @sentry/cli, jsdom, wrangler). Dev/build dependency only.
+        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv --ignore=GHSA-mh99-v99m-4gvg --ignore=GHSA-7p8r-x3mc-p8w7 --ignore=GHSA-rgw5-rvv9-x895 --ignore=GHSA-4cwx-7wf7-3272
 
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request
@@ -608,7 +627,7 @@ jobs:
     needs: preview
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Smoke test — app reachability
         run: |
@@ -620,7 +639,15 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.preview.outputs.preview-url }}/api/info")
+          STATUS=""
+          for i in $(seq 1 5); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "${{ needs.preview.outputs.preview-url }}/api/info" || true)
+            if [ "$STATUS" = "400" ]; then
+              break
+            fi
+            echo "Attempt $i: expected 400, got $STATUS — retrying in 10s..."
+            [ "$i" -lt 5 ] && sleep 10
+          done
           if [ "$STATUS" != "400" ]; then
             echo "Expected 400 for /api/info without x-target-url, got $STATUS"
             exit 1
@@ -808,7 +835,7 @@ jobs:
     needs: staging
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Smoke test — app reachability
         run: |
@@ -820,7 +847,15 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/api/info")
+          STATUS=""
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/api/info" || true)
+            if [ "$STATUS" = "400" ]; then
+              break
+            fi
+            echo "Attempt $i: expected 400, got $STATUS — retrying in 15s..."
+            [ "$i" -lt 10 ] && sleep 15
+          done
           if [ "$STATUS" != "400" ]; then
             echo "Expected 400 for /api/info without x-target-url, got $STATUS"
             exit 1
@@ -904,7 +939,7 @@ jobs:
     needs: deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Smoke test — app reachability
         run: |
@@ -916,7 +951,15 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://app.comapeo.cloud/api/info")
+          STATUS=""
+          for i in $(seq 1 5); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "https://app.comapeo.cloud/api/info" || true)
+            if [ "$STATUS" = "400" ]; then
+              break
+            fi
+            echo "Attempt $i: expected 400, got $STATUS — retrying in 10s..."
+            [ "$i" -lt 5 ] && sleep 10
+          done
           if [ "$STATUS" != "400" ]; then
             echo "Expected 400 for /api/info without x-target-url, got $STATUS"
             exit 1

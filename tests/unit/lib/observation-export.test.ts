@@ -195,7 +195,7 @@ describe('observationsToGeoJson', () => {
   });
 
   it('handles empty tags by using empty object', () => {
-    const obs = makeObservation({ lat: 0, lon: 0 });
+    const obs = makeObservation({ lat: -8.35, lon: -55.45 });
     const fc = observationsToGeoJson([obs]);
     const props = fc.features[0]!.properties;
 
@@ -222,8 +222,8 @@ describe('observationsToGeoJson', () => {
 
   it('canonical keys win over tag collisions', () => {
     const obs = makeObservation({
-      lat: 0,
-      lon: 0,
+      lat: -8.35,
+      lon: -55.45,
       tags: { docId: 'should-be-overridden' },
     });
     const fc = observationsToGeoJson([obs]);
@@ -240,6 +240,52 @@ describe('observationsToGeoJson', () => {
     const fc = observationsToGeoJson(observations);
 
     expect(fc.features).toHaveLength(2);
+  });
+
+  it('drops observations at lat/long 0,0 from the feature collection', () => {
+    const obsZero = makeObservation({
+      localId: 'obs-zero',
+      lat: 0,
+      lon: 0,
+    });
+    const obsValid = makeObservation({
+      localId: 'obs-valid',
+      lat: -8.35,
+      lon: -55.45,
+    });
+    const fc = observationsToGeoJson([obsZero, obsValid]);
+
+    expect(fc.features).toHaveLength(1);
+    expect(fc.features[0]!.geometry).toEqual({
+      type: 'Point',
+      coordinates: [-55.45, -8.35],
+    });
+  });
+
+  it('keeps observations with a single zero coordinate (equator/prime meridian)', () => {
+    const obsEquator = makeObservation({
+      localId: 'obs-equator',
+      lat: 0,
+      lon: -60,
+    });
+    const obsNormal = makeObservation({
+      localId: 'obs-normal',
+      lat: -8.35,
+      lon: -55.45,
+    });
+    const fc = observationsToGeoJson([obsEquator, obsNormal]);
+
+    // Both are kept — only an exact 0,0 is dropped
+    expect(fc.features).toHaveLength(2);
+
+    const equatorFeature = fc.features.find(
+      (f) => f.properties?.docId === 'obs-equator',
+    );
+    expect(equatorFeature).toBeDefined();
+    expect(equatorFeature!.geometry).toEqual({
+      type: 'Point',
+      coordinates: [-60, 0],
+    });
   });
 });
 
@@ -532,5 +578,36 @@ describe('observationsToCsv', () => {
     const csv = observationsToCsv([obs]);
     // Category field starting with whitespace then '=' should still be prefixed
     expect(csv).toContain("' =IMPORTXML");
+  });
+
+  it('drops observations at lat/long 0,0 from data rows', () => {
+    const obsZero = makeObservation({
+      localId: 'obs-zero',
+      lat: 0,
+      lon: 0,
+    });
+    const obsValid = makeObservation({
+      localId: 'obs-valid',
+      lat: -8.35,
+      lon: -55.45,
+    });
+    const csv = observationsToCsv([obsZero, obsValid]);
+
+    expect(csv.split('\n').length).toBe(2); // header + 1 data row
+    expect(csv).toContain('obs-valid');
+    expect(csv).not.toContain('obs-zero');
+  });
+
+  it('keeps observations with a single zero coordinate (prime meridian) in CSV', () => {
+    const obsMeridian = makeObservation({
+      localId: 'obs-meridian',
+      lat: 45,
+      lon: 0,
+    });
+    const csv = observationsToCsv([obsMeridian]);
+
+    // header + 1 data row — the single-zero observation is NOT dropped
+    expect(csv.split('\n').length).toBe(2);
+    expect(csv).toContain('obs-meridian');
   });
 });

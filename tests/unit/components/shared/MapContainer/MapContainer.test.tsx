@@ -117,6 +117,16 @@ describe('MapContainer', () => {
     expect(screen.getByTestId('basemap-switcher')).toBeInTheDocument();
   });
 
+  it('uses a custom basemap switcher position class when provided', () => {
+    render(
+      <MapContainer basemapSwitcherPositionClassName="top-[4.25rem] right-3" />,
+    );
+    expect(screen.getByTestId('basemap-switcher').parentElement).toHaveClass(
+      'top-[4.25rem]',
+      'right-3',
+    );
+  });
+
   it('hides the basemap switcher when showBasemapSwitcher is false', () => {
     render(<MapContainer showBasemapSwitcher={false} />);
     expect(screen.queryByTestId('basemap-switcher')).not.toBeInTheDocument();

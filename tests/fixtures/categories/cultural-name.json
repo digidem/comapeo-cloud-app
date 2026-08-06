@@ -1,0 +1,6 @@
+{
+  "tagKey": "cultural-name",
+  "type": "text",
+  "label": "Cultural name",
+  "helperText": "Local or traditional name for this place"
+}

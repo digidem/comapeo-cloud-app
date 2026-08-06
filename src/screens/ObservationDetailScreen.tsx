@@ -342,7 +342,7 @@ export function ObservationDetailScreen() {
               .map(([key, value]) => (
                 <span
                   key={key}
-                  className="rounded-pill bg-surface-container-low px-3 py-1 text-xs text-text"
+                  className="rounded-pill bg-surface-container-low px-3 py-1 text-xs text-text break-words wrap-anywhere max-w-full"
                 >
                   {key}: {String(value)}
                 </span>

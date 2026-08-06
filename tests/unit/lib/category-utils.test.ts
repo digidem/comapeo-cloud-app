@@ -81,6 +81,19 @@ describe('buildProjectCategorySet', () => {
       },
     ]);
   });
+
+  it('deduplicates presets that share the same id', () => {
+    const categories = buildProjectCategorySet(
+      [
+        makePreset({ remoteId: 'same-id', name: 'First' }),
+        makePreset({ remoteId: 'same-id', name: 'Second' }),
+      ],
+      {},
+    );
+
+    expect(categories).toHaveLength(1);
+    expect(categories[0]!.name).toBe('First');
+  });
 });
 
 describe('buildObservationCategoryMetadata', () => {
@@ -129,7 +142,7 @@ describe('buildObservationCategoryMetadata', () => {
     );
   });
 
-  it('adds fallback category metadata from tags.category without a matching preset', () => {
+  it('synthesizes a category for unmatched tags.category values without adding it to the preset-derived set', () => {
     const observation = makeObservation({
       localId: 'obs-tag-category',
       tags: { category: 'custom forest' },
@@ -137,15 +150,25 @@ describe('buildObservationCategoryMetadata', () => {
 
     const metadata = buildObservationCategoryMetadata([observation], [], {});
 
-    expect(
-      metadata.categoryByObservationId.get('obs-tag-category'),
-    ).toMatchObject({
+    expect(metadata.categoryByObservationId.get('obs-tag-category')).toEqual({
       id: 'tag:custom forest',
       name: 'custom forest',
     });
     expect(metadata.displayNamesByObservationId.get('obs-tag-category')).toBe(
       'custom forest',
     );
+    expect(metadata.categories).toHaveLength(0);
+  });
+
+  it('counts raw tags.category values when the project has no presets', () => {
+    const obs = (id: string, category: string): Observation =>
+      makeObservation({ localId: id, tags: { category } });
+    const metadata = buildObservationCategoryMetadata(
+      [obs('o1', 'Hunting'), obs('o2', 'Fishing'), obs('o3', 'hunting')],
+      [],
+      {},
+    );
+    expect(new Set(metadata.categoryByObservationId.values()).size).toBe(2);
   });
 
   it('maps category tag values to preset category icons when direct refs are absent', () => {
@@ -177,6 +200,42 @@ describe('buildObservationCategoryMetadata', () => {
       iconUrl: '/projects/remote-project/icon/icon-forest',
     });
     expect(metadata.displayNamesByObservationId.get('obs-forest-tag')).toBe(
+      'Forest',
+    );
+  });
+
+  it('matches tag category via normalized lookup when case/whitespace differs from preset tags', () => {
+    // Preset tags use mixed case; observation tags use lowercase.
+    // matchObservationToPreset uses exact === so it won't match,
+    // but the normalized categoryByTagValue lookup should still find it.
+    const forestPreset = makePreset({
+      remoteId: 'preset-forest',
+      name: 'Forest',
+      iconDocId: 'icon-forest',
+      tags: { category: 'Forest' },
+    });
+    const observation = makeObservation({
+      localId: 'obs-forest-case',
+      tags: { category: 'forest' },
+    });
+
+    const metadata = buildObservationCategoryMetadata(
+      [observation],
+      [forestPreset],
+      {
+        projectRemoteId: 'remote-project',
+      },
+    );
+
+    expect(
+      metadata.categoryByObservationId.get('obs-forest-case'),
+    ).toMatchObject({
+      id: 'preset-forest',
+      name: 'Forest',
+      iconDocId: 'icon-forest',
+      iconUrl: '/projects/remote-project/icon/icon-forest',
+    });
+    expect(metadata.displayNamesByObservationId.get('obs-forest-case')).toBe(
       'Forest',
     );
   });

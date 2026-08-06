@@ -14,13 +14,11 @@ const mockUseAuthenticatedImageUrl = vi.hoisted(() => {
     error: Error | null;
   };
 
-  return vi.fn(
-    (): AuthenticatedImageState => ({
-      blobUrl: 'blob:mocked-url',
-      isLoading: false,
-      error: null,
-    }),
-  );
+  return vi.fn((): AuthenticatedImageState => ({
+    blobUrl: 'blob:mocked-url',
+    isLoading: false,
+    error: null,
+  }));
 });
 
 vi.mock('@/hooks/useAuthenticatedImageUrl', () => ({

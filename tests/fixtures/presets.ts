@@ -62,7 +62,7 @@ export const fieldsFixture = {
       links: [],
       deleted: false,
       type: 'text' as const,
-      key: 'notes',
+      tagKey: 'notes',
       label: 'Notes',
       placeholder: 'Enter notes...',
       universal: false,

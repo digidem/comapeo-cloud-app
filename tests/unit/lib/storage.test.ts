@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDb, resetDb } from '@/lib/db';
+import type { Observation } from '@/lib/db';
 import {
   clearAllData,
   clearProjectData,
@@ -8,6 +9,23 @@ import {
   getStorageStats,
 } from '@/lib/storage';
 import { useAuthStore } from '@/stores/auth-store';
+
+// --- Helpers ---
+
+function makeObs(
+  overrides: Partial<Observation> & { localId: string },
+): Observation {
+  return {
+    projectLocalId: 'proj-1',
+    sourceType: 'local',
+    sourceId: 'src-1',
+    createdAt: '2024-03-15T10:30:00Z',
+    updatedAt: '2024-03-15T10:30:00Z',
+    dirtyLocal: false,
+    deleted: false,
+    ...overrides,
+  };
+}
 
 // Mock navigator.storage.estimate
 const mockEstimate = vi.fn();
@@ -133,6 +151,56 @@ describe('getStorageStats', () => {
     expect(stats.tables.fields.count).toBe(1);
     expect(stats.tables.remoteServers.count).toBe(0);
     expect(stats.tables.syncMetadata.count).toBe(0);
+  });
+
+  it('excludes 0,0 observations from the observations count', async () => {
+    const db = getDb();
+
+    await db.observations.bulkPut([
+      makeObs({ localId: 'obs-real', lat: 10, lon: 20 }),
+      makeObs({ localId: 'obs-null-island', lat: 0, lon: 0 }),
+      makeObs({ localId: 'obs-equator', lat: 0, lon: -60 }),
+    ]);
+
+    const stats = await getStorageStats();
+    expect(stats.tables.observations.count).toBe(2);
+  });
+
+  it('counts all observations when none are at 0,0', async () => {
+    const db = getDb();
+
+    await db.observations.bulkPut([
+      makeObs({ localId: 'obs-1', lat: 10, lon: 20 }),
+      makeObs({ localId: 'obs-2', lat: -33.8688, lon: 151.2093 }),
+      makeObs({ localId: 'obs-3', lat: 0, lon: -60 }),
+    ]);
+
+    const stats = await getStorageStats();
+    expect(stats.tables.observations.count).toBe(3);
+  });
+
+  it('counts observations with undefined lat/lon', async () => {
+    const db = getDb();
+
+    await db.observations.bulkPut([
+      makeObs({ localId: 'obs-undefined' }),
+      makeObs({ localId: 'obs-real', lat: 10, lon: 20 }),
+    ]);
+
+    const stats = await getStorageStats();
+    expect(stats.tables.observations.count).toBe(2);
+  });
+
+  it('counts observations with NaN lat/lon (only exact 0,0 is excluded)', async () => {
+    const db = getDb();
+
+    await db.observations.bulkPut([
+      makeObs({ localId: 'obs-nan', lat: NaN, lon: NaN }),
+      makeObs({ localId: 'obs-real', lat: 10, lon: 20 }),
+    ]);
+
+    const stats = await getStorageStats();
+    expect(stats.tables.observations.count).toBe(2);
   });
 
   it('handles navigator.storage.estimate being unavailable', async () => {
