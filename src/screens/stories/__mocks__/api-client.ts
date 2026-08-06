@@ -38,8 +38,9 @@ const LONG_MOCK_INVITE_CODE =
   'v1.mock-encrypted-invite-code-aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-abcdefghijklmnopqrstuvwxyz0123456789-abcdefghijklmnopqrstuvwxyz0123456789-abcdefghijklmnopqrstuvwxyz0123456789';
 
 export async function createEncryptedInvite(
-  _url: string,
+  _baseUrl: string,
   _token: string,
+  _ttlHours?: number,
 ): Promise<{ code: string }> {
   return {
     code: LONG_MOCK_INVITE_CODE,
