@@ -64,6 +64,14 @@ export function useCountUp(
     const numericTarget: number = target;
     // Start from wherever the display currently is (not the old completed target)
     const startValue = lastNumericRef.current;
+
+    // Already showing the target (e.g. warm mount) — skip the animation loop
+    if (startValue === numericTarget) {
+      rafRef.current = null;
+      setDisplay(value);
+      return;
+    }
+
     const startTime = performance.now();
 
     function frame(currentTime: number) {

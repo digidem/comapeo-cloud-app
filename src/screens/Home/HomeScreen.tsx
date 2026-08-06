@@ -414,17 +414,20 @@ function HomeScreen() {
     observations,
     state.selectedProjectId,
   );
-  const { categories: observationCategories } = useObservationCategoryMetadata({
-    observations,
-    projectLocalId: state.selectedProjectId,
-    projectRemoteId: selectedProject?.remoteId,
-    serverUrl: archiveServerUrl,
-  });
+  const { categoryByObservationId, isLoading: isCategoriesLoading } =
+    useObservationCategoryMetadata({
+      observations,
+      projectLocalId: state.selectedProjectId,
+      projectRemoteId: selectedProject?.remoteId,
+      serverUrl: archiveServerUrl,
+    });
 
   const alerts = useMemo(() => alertsQuery.data ?? [], [alertsQuery.data]);
   const tracks = useMemo(() => tracksQuery.data ?? [], [tracksQuery.data]);
 
-  const categoryCount = observationCategories.length;
+  const categoryCount = new Set(
+    Array.from(categoryByObservationId.values(), (c) => c.id),
+  ).size;
 
   // Compute media counts from observation tags (values stored as strings).
   // Track counts come from first-class synced track records.
@@ -1069,7 +1072,7 @@ function HomeScreen() {
             title={intl.formatMessage(messages.statCategories)}
             value={categoryCount}
             staggerIndex={2}
-            isLoading={isObservationsLoading}
+            isLoading={isObservationsLoading || isCategoriesLoading}
           />
           <StatCard
             title={intl.formatMessage(messages.statActiveAlerts)}

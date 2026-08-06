@@ -221,6 +221,7 @@ beforeEach(() => {
     categories: [],
     categoryByObservationId: new Map(),
     displayNamesByObservationId: new Map(),
+    isLoading: false,
   });
   mockUseObservations.mockReturnValue({
     data: [],
@@ -959,7 +960,7 @@ describe('HomeScreen', () => {
     });
   });
 
-  it('counts categories resolved through preset matching', async () => {
+  it('renders the category count returned by useObservationCategoryMetadata', async () => {
     mockUseProjects.mockReturnValue({
       data: [
         {
@@ -996,13 +997,17 @@ describe('HomeScreen', () => {
       isCalculating: false,
       error: null,
     });
+    const forestCategory = { id: 'forest', name: 'Forest' };
+    const waterCategory = { id: 'water', name: 'Water' };
+    const huntingCategory = { id: 'hunting', name: 'Hunting' };
     mockUseObservationCategoryMetadata.mockReturnValue({
-      categories: [
-        { id: 'forest', name: 'Forest' },
-        { id: 'water', name: 'Water' },
-      ],
-      categoryByObservationId: new Map(),
+      categories: [forestCategory, waterCategory, huntingCategory],
+      categoryByObservationId: new Map([
+        ['obs1', forestCategory],
+        ['obs2', forestCategory],
+      ]),
       displayNamesByObservationId: new Map(),
+      isLoading: false,
     });
 
     renderWithShell(<HomeScreen />);
@@ -1011,7 +1016,7 @@ describe('HomeScreen', () => {
     const categoriesCard =
       screen.getByText('Categories').parentElement?.parentElement;
     expect(categoriesCard).not.toBeNull();
-    expect(within(categoriesCard!).getByText('2')).toBeInTheDocument();
+    expect(within(categoriesCard!).getByText('1')).toBeInTheDocument();
     expect(mockUseObservationCategoryMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         observations: expect.arrayContaining([
@@ -1021,6 +1026,55 @@ describe('HomeScreen', () => {
         projectLocalId: 'p1',
       }),
     );
+  });
+
+  it('renders a loading skeleton for Categories when category metadata is loading', async () => {
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          name: 'Preset Categories Project',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+    mockUseObservations.mockReturnValue({
+      data: [
+        {
+          localId: 'obs1',
+          createdAt: new Date().toISOString(),
+          tags: { type: 'forest' },
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useObservations>);
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+    mockUseObservationCategoryMetadata.mockReturnValue({
+      categories: [],
+      categoryByObservationId: new Map(),
+      displayNamesByObservationId: new Map(),
+      isLoading: true,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await waitForWorkspace('Preset Categories Project');
+
+    const categoriesCard =
+      screen.getByText('Categories').parentElement?.parentElement;
+    expect(categoriesCard).not.toBeNull();
+    expect(within(categoriesCard!).getByTestId('skeleton')).toBeInTheDocument();
+    expect(within(categoriesCard!).queryByText('0')).not.toBeInTheDocument();
   });
 
   it('uses singular Observation label when count is 1', async () => {
