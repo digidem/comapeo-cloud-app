@@ -108,6 +108,14 @@ describe('ObservationDetailScreen', () => {
     expect(screen.getByText(/notes.*Eagle sighting/)).toBeInTheDocument();
   });
 
+  it('wraps long tag pill values instead of truncating', () => {
+    resetMocks();
+    render(<ObservationDetailScreen />);
+
+    const tagPill = screen.getByText(/category.*Wildlife/);
+    expect(tagPill).toHaveClass('break-words', 'wrap-anywhere', 'max-w-full');
+  });
+
   it('renders arrow back link to data', () => {
     resetMocks();
     render(<ObservationDetailScreen />);

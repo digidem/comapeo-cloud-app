@@ -222,6 +222,18 @@ describe('DataScreen', () => {
       expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
     });
 
+    it('wraps long observation names instead of truncating', () => {
+      mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+      render(<DataScreen />);
+
+      // The observation name span should use word-break classes instead of truncate
+      const nameSpans = screen.getAllByText('forest', { selector: 'span' });
+      const nameSpan = nameSpans[0];
+      expect(nameSpan).toHaveClass('break-words', 'wrap-anywhere', 'min-w-0');
+      expect(nameSpan).not.toHaveClass('truncate');
+    });
+
     it('renders the matched category icon for observation cards', () => {
       mockObservationsQuery = { data: defaultObservations, isPending: false };
       mockCategoryMetadata = {
