@@ -112,13 +112,14 @@ export function buildObservationCategoryMetadata(
     }
 
     if (tagCategoryValue) {
-      const category = categoryByTagValue.get(
-        normalizeCategoryValue(tagCategoryValue),
-      );
-      if (category) {
-        categoryByObservationId.set(observation.localId, category);
-        displayNamesByObservationId.set(observation.localId, category.name);
+      const key = normalizeCategoryValue(tagCategoryValue);
+      let category = categoryByTagValue.get(key);
+      if (!category) {
+        category = { id: `tag:${key}`, name: tagCategoryValue };
+        categoryByTagValue.set(key, category);
       }
+      categoryByObservationId.set(observation.localId, category);
+      displayNamesByObservationId.set(observation.localId, category.name);
       continue;
     }
 

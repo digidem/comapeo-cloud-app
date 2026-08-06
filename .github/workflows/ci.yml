@@ -627,7 +627,7 @@ jobs:
     needs: preview
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Smoke test — app reachability
         run: |
@@ -639,7 +639,15 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.preview.outputs.preview-url }}/api/info")
+          STATUS=""
+          for i in $(seq 1 5); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "${{ needs.preview.outputs.preview-url }}/api/info" || true)
+            if [ "$STATUS" = "400" ]; then
+              break
+            fi
+            echo "Attempt $i: expected 400, got $STATUS — retrying in 10s..."
+            [ "$i" -lt 5 ] && sleep 10
+          done
           if [ "$STATUS" != "400" ]; then
             echo "Expected 400 for /api/info without x-target-url, got $STATUS"
             exit 1
@@ -827,7 +835,7 @@ jobs:
     needs: staging
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Smoke test — app reachability
         run: |
@@ -839,7 +847,15 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/api/info")
+          STATUS=""
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/api/info" || true)
+            if [ "$STATUS" = "400" ]; then
+              break
+            fi
+            echo "Attempt $i: expected 400, got $STATUS — retrying in 15s..."
+            [ "$i" -lt 10 ] && sleep 15
+          done
           if [ "$STATUS" != "400" ]; then
             echo "Expected 400 for /api/info without x-target-url, got $STATUS"
             exit 1
@@ -923,7 +939,7 @@ jobs:
     needs: deploy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Smoke test — app reachability
         run: |
@@ -935,7 +951,15 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://app.comapeo.cloud/api/info")
+          STATUS=""
+          for i in $(seq 1 5); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "https://app.comapeo.cloud/api/info" || true)
+            if [ "$STATUS" = "400" ]; then
+              break
+            fi
+            echo "Attempt $i: expected 400, got $STATUS — retrying in 10s..."
+            [ "$i" -lt 5 ] && sleep 10
+          done
           if [ "$STATUS" != "400" ]; then
             echo "Expected 400 for /api/info without x-target-url, got $STATUS"
             exit 1

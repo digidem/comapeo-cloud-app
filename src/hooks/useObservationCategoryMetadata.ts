@@ -23,10 +23,10 @@ export function useObservationCategoryMetadata({
   projectLocalId: string | null;
   projectRemoteId?: string;
   serverUrl?: string;
-}): ObservationCategoryMetadata {
+}): ObservationCategoryMetadata & { isLoading: boolean } {
   const presetsQuery = usePresets(projectLocalId);
 
-  return useMemo(() => {
+  const metadata = useMemo(() => {
     const presets = presetsQuery.data ?? [];
     if (observations.length === 0 && presets.length === 0) {
       return EMPTY_METADATA;
@@ -37,4 +37,6 @@ export function useObservationCategoryMetadata({
       serverUrl,
     });
   }, [observations, presetsQuery.data, projectRemoteId, serverUrl]);
+
+  return { ...metadata, isLoading: presetsQuery.isLoading };
 }
