@@ -230,7 +230,7 @@ describe('DataScreen', () => {
       // The observation name span should use word-break classes instead of truncate
       const nameSpans = screen.getAllByText('forest', { selector: 'span' });
       const nameSpan = nameSpans[0];
-      expect(nameSpan).toHaveClass('break-words', 'wrap-anywhere', 'min-w-0');
+      expect(nameSpan).toHaveClass('break-words', 'wrap-anywhere');
       expect(nameSpan).not.toHaveClass('truncate');
     });
 

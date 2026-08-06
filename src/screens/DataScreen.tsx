@@ -254,7 +254,7 @@ export function DataScreen() {
                     <div className="h-12 w-12" aria-hidden="true" />
                   )}
                   <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-sm font-medium text-text break-words wrap-anywhere min-w-0">
+                    <span className="text-sm font-medium text-text break-words wrap-anywhere">
                       {displayNames.get(obs.localId) ??
                         getCategoryLabel(obs) ??
                         intl.formatMessage(messages.observationFallback)}
