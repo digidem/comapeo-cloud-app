@@ -34,11 +34,20 @@ export class InviteApiError extends Error {
   }
 }
 
+const LONG_MOCK_INVITE_CODE =
+  'v1.mock-encrypted-invite-code-aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-abcdefghijklmnopqrstuvwxyz0123456789-abcdefghijklmnopqrstuvwxyz0123456789-abcdefghijklmnopqrstuvwxyz0123456789';
+
 export async function createEncryptedInvite(
   _url: string,
   _token: string,
+  length?: 'long' | 'short',
 ): Promise<{ code: string }> {
-  return { code: 'v1.mock-invite-code-for-storybook-testing' };
+  return {
+    code:
+      length === 'short'
+        ? 'v1.mock-invite-code-for-storybook-testing'
+        : LONG_MOCK_INVITE_CODE,
+  };
 }
 
 export async function redeemEncryptedInvite(
