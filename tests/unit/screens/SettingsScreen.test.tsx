@@ -176,16 +176,6 @@ describe('SettingsScreen', () => {
   });
 
   describe('Long value wrapping (issue #155)', () => {
-    async function generateInvite(user: ReturnType<typeof userEvent.setup>) {
-      await user.type(
-        screen.getByLabelText('Remote Archive URL'),
-        'https://archive.example.com',
-      );
-      await user.type(screen.getByLabelText('Bearer Token'), 'my-secret-token');
-      await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
-      await screen.findByText('Results');
-    }
-
     it('Invite URL code wraps long values instead of truncating', async () => {
       const user = userEvent.setup();
       render(<SettingsScreen />);
