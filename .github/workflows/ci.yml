@@ -498,6 +498,9 @@ jobs:
         # (transitive dep via @storybook/test-runner → nyc →
         # @istanbuljs/load-nyc-config → js-yaml). Dev dependency only.
         #
+        # GHSA-5p4m-2wfm-xmqj: JS-YAML quadratic CPU in !!omap resolution
+        # (transitive dep via @storybook/test-runner → nyc). Dev only.
+        #
         # GHSA-395f-4hp3-45gv: shell-quote DoS via quadratic parse()
         # (transitive dep via npm-run-all → shell-quote). Dev dependency only.
         #
@@ -527,7 +530,7 @@ jobs:
         # GHSA-4cwx-7wf7-3272: undici cross-user info disclosure via
         # degenerate private cache directives (transitive dev dep via
         # @sentry/cli, jsdom, wrangler). Dev/build dependency only.
-        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv --ignore=GHSA-mh99-v99m-4gvg --ignore=GHSA-7p8r-x3mc-p8w7 --ignore=GHSA-rgw5-rvv9-x895 --ignore=GHSA-4cwx-7wf7-3272
+        run: bun audit --audit-level=high --ignore=GHSA-gv7w-rqvm-qjhr --ignore=GHSA-vmh5-mc38-953g --ignore=GHSA-vxpw-j846-p89q --ignore=GHSA-hm92-r4w5-c3mj --ignore=GHSA-3jxr-9vmj-r5cp --ignore=GHSA-52cp-r559-cp3m --ignore=GHSA-5p4m-2wfm-xmqj --ignore=GHSA-395f-4hp3-45gv --ignore=GHSA-gcfj-64vw-6mp9 --ignore=GHSA-p63j-vcc4-9vmv --ignore=GHSA-mh99-v99m-4gvg --ignore=GHSA-7p8r-x3mc-p8w7 --ignore=GHSA-rgw5-rvv9-x895 --ignore=GHSA-4cwx-7wf7-3272
 
   # -----------------------------------------------------------------------
   # Preview deploy on pull_request
