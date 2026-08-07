@@ -286,6 +286,11 @@ export function InviteScreen() {
     // bumps the counter, invalidating the first invocation's microtask.
     // Only the second (\"real\") invocation's microtask survives the check.
     const generation = ++effectGenerationRef.current;
+    // Capture the ref object in a local alias so the cleanup doesn't
+    // access a component-scope ref's `.current` directly (which triggers
+    // react-hooks/exhaustive-deps). The alias points to the *same* ref
+    // object, so the generation counter stays shared across effect re-runs.
+    const effectGenerationRefLocal = effectGenerationRef;
 
     // Defer via microtask to avoid synchronous setState in effect body
     // (required by react-hooks/set-state-in-effect; React 18+ batches the updates).
@@ -297,7 +302,7 @@ export function InviteScreen() {
     return () => {
       // Bump the generation so any microtask still pending from a
       // previous invocation is silently dropped.
-      effectGenerationRef.current++;
+      effectGenerationRefLocal.current++;
       // Signal in-flight async work (inside run()) that the component
       // is unmounting so it can short-circuit early.
       cancelledRef.current = true;

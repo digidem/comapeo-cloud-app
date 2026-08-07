@@ -170,7 +170,7 @@ describe('SettingsScreen', () => {
     await screen.findByText('Results');
 
     // Scope to the invite-URL row and click its Copy button
-    const inviteUrlRow = screen.getByText('Invite URL').closest('div')!;
+    const inviteUrlRow = screen.getByTestId('invite-url-row');
     await user.click(
       within(inviteUrlRow).getByRole('button', { name: 'Copy' }),
     );
@@ -231,7 +231,7 @@ describe('SettingsScreen', () => {
       render(<SettingsScreen />);
       await generateInvite(user);
 
-      const inviteCodeRow = screen.getByText('Invite Code').closest('div')!;
+      const inviteCodeRow = screen.getByTestId('invite-code-row');
       await user.click(
         within(inviteCodeRow).getByRole('button', { name: 'Copy' }),
       );

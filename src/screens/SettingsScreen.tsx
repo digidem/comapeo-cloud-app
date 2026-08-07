@@ -355,7 +355,7 @@ export function SettingsScreen() {
             {intl.formatMessage(_messages.resultsTitle)}
           </h3>
           <div className="space-y-3">
-            <div>
+            <div data-testid="invite-url-row">
               <p className="text-sm text-text-muted mb-1">
                 {intl.formatMessage(_messages.inviteUrlLabel)}
               </p>
@@ -375,7 +375,7 @@ export function SettingsScreen() {
                 </Button>
               </div>
             </div>
-            <div>
+            <div data-testid="invite-code-row">
               <p className="text-sm text-text-muted mb-1">
                 {intl.formatMessage(_messages.inviteCodeLabel)}
               </p>
