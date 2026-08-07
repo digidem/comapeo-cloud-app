@@ -140,6 +140,10 @@ export function MapScreen() {
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showUndo, setShowUndo] = useState(false);
   const [frameError, setFrameError] = useState<string | null>(null);
+  // Track the computed project bbox for hasConfigChanges comparison
+  const [projectBbox, setProjectBbox] = useState<
+    [number, number, number, number] | null
+  >(null);
 
   useEffect(() => {
     return () => {
@@ -157,14 +161,16 @@ export function MapScreen() {
         const points = await getProjectPoints(projectId!);
         if (cancelled) return;
         const coords: [number, number][] = [];
-        for (const feature of points.features ?? []) {
+        for (const feature of points?.features ?? []) {
           if (
             feature.geometry?.type === 'Point' &&
             Array.isArray(feature.geometry.coordinates) &&
             feature.geometry.coordinates.length === 2
           ) {
-            // getProjectPoints guarantees valid coords for Point geometries
-            coords.push(feature.geometry.coordinates as [number, number]);
+            const [lng, lat] = feature.geometry.coordinates as [number, number];
+            if (Number.isFinite(lng) && Number.isFinite(lat)) {
+              coords.push([lng, lat]);
+            }
           }
         }
         if (coords.length > 0) {
@@ -176,7 +182,34 @@ export function MapScreen() {
             Math.max(...lngs),
             Math.max(...lats),
           ];
-          setBbox(projectBbox);
+          // Ensure minimum span to avoid zero-area bbox for single-point projects
+          const MIN_SPAN = 0.01;
+          const finalBbox: [number, number, number, number] = [
+            projectBbox[0],
+            projectBbox[1],
+            projectBbox[2] - projectBbox[0] < MIN_SPAN
+              ? projectBbox[0] + MIN_SPAN
+              : projectBbox[2],
+            projectBbox[3] - projectBbox[1] < MIN_SPAN
+              ? projectBbox[1] + MIN_SPAN
+              : projectBbox[3],
+          ];
+          // Validate antimeridian and latitude bounds
+          if (crossesAntimeridian([finalBbox[0], finalBbox[2]])) {
+            return; // Skip invalid bbox
+          }
+          const clampedBbox = clampBboxLatitude(finalBbox);
+          if (
+            clampedBbox[1] >= clampedBbox[3] ||
+            clampedBbox[0] >= clampedBbox[2]
+          ) {
+            return; // Skip zero-area bbox
+          }
+          setProjectBbox(clampedBbox);
+          // Only set if user isn't actively drawing (drawing takes precedence)
+          if (drawMode === null) {
+            setBbox(clampedBbox);
+          }
         }
       } catch {
         // Ignore errors, keep DEFAULT_BBOX
@@ -266,17 +299,18 @@ export function MapScreen() {
   );
   useShellSlot(shellSlot);
 
-  const hasConfigChanges = useMemo(
-    () =>
-      bbox[0] !== DEFAULT_BBOX[0] ||
-      bbox[1] !== DEFAULT_BBOX[1] ||
-      bbox[2] !== DEFAULT_BBOX[2] ||
-      bbox[3] !== DEFAULT_BBOX[3] ||
+  const hasConfigChanges = useMemo(() => {
+    const baseline = projectBbox ?? DEFAULT_BBOX;
+    return (
+      bbox[0] !== baseline[0] ||
+      bbox[1] !== baseline[1] ||
+      bbox[2] !== baseline[2] ||
+      bbox[3] !== baseline[3] ||
       zoomRange.minZoom !== DEFAULT_ZOOM.minZoom ||
       zoomRange.maxZoom !== DEFAULT_ZOOM.maxZoom ||
-      selectedStyle.id !== DEFAULT_BASEMAP_ID,
-    [bbox, zoomRange, selectedStyle],
-  );
+      selectedStyle.id !== DEFAULT_BASEMAP_ID
+    );
+  }, [bbox, zoomRange, selectedStyle, projectBbox]);
 
   function openNameDialog() {
     setNameError(null);

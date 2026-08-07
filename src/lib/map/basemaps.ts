@@ -84,8 +84,8 @@ export const BASEMAP_CATALOG: ImageryBasemap[] = [
   },
 ];
 
-/** Default basemap id — Esri World Imagery satellite basemap. */
-export const DEFAULT_BASEMAP_ID = 'esri-world-imagery' as const;
+/** Default basemap id — CartoDB Positron light street basemap. */
+export const DEFAULT_BASEMAP_ID = 'carto-positron' as const;
 
 /**
  * Find a basemap by id, falling back gracefully:

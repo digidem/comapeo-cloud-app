@@ -1,5 +1,5 @@
-// Test for issue #153: MapScreen should default to Esri World Imagery basemap
-import { render, screen } from '@tests/mocks/test-utils';
+// Test for issue #153: MapScreen should default to CartoDB Positron basemap
+import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
@@ -110,56 +110,56 @@ describe('MapScreen - default basemap (issue #153)', () => {
     });
   });
 
-  it('renders with Esri World Imagery as the default basemap (not CartoDB Positron)', async () => {
+  it('renders with CartoDB Positron as the default basemap', async () => {
     render(<MapScreen />);
 
     // Wait for the map to render
     await screen.findByTestId('mock-authoring-map');
 
-    // The map style should contain the Esri tile URL, not CartoDB Positron
-    // For raster basemaps, mapStyle is a StyleSpecification object with sources
+    // The map style should contain the CartoDB Positron style URL
     expect(mapProps.length).toBeGreaterThan(0);
     const lastMapProps = mapProps[mapProps.length - 1]!;
     const mapStyle = lastMapProps.mapStyle;
 
-    // For raster basemaps (like Esri World Imagery), mapStyle is a StyleSpecification object
-    // with sources containing the tile URL
-    if (
-      typeof mapStyle === 'object' &&
-      mapStyle !== null &&
-      'sources' in mapStyle
-    ) {
-      const sources = (mapStyle as { sources: Record<string, unknown> })
-        .sources;
-      const esriSource = sources['esri-world-imagery'];
-      expect(esriSource).toBeDefined();
-      if (
-        esriSource &&
-        typeof esriSource === 'object' &&
-        'tiles' in esriSource
-      ) {
-        const tiles = (esriSource as { tiles: string[] }).tiles;
-        expect(tiles).toContain(
-          'https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        );
-      }
+    // For vector style basemaps (like CartoDB Positron), mapStyle is a URL string
+    if (typeof mapStyle === 'string') {
+      expect(mapStyle).toContain('cartocdn.com/gl/positron-gl-style');
     } else {
-      // For vector style basemaps, mapStyle is a URL string
-      expect(mapStyle).not.toContain('cartocdn.com/gl/positron-gl-style');
+      // For raster basemaps, mapStyle is a StyleSpecification object
+      // with sources containing the tile URL
+      if (
+        typeof mapStyle === 'object' &&
+        mapStyle !== null &&
+        'sources' in mapStyle
+      ) {
+        const sources = (mapStyle as { sources: Record<string, unknown> })
+          .sources;
+        const positronSource = sources['carto-positron'];
+        expect(positronSource).toBeDefined();
+      }
     }
   });
 
-  it('hasConfigChanges should be false at default config (Esri World Imagery + DEFAULT_BBOX + DEFAULT_ZOOM)', async () => {
+  it('hasConfigChanges should be false at default config (CartoDB Positron + DEFAULT_BBOX + DEFAULT_ZOOM)', async () => {
     // This test verifies that hasConfigChanges correctly compares against
-    // the new defaults (Esri World Imagery) instead of the old defaults (CartoDB Positron)
+    // the defaults (CartoDB Positron) instead of the old defaults
     render(<MapScreen />);
 
     await screen.findByTestId('mock-authoring-map');
 
-    // The Save Map button in the settings sheet should be DISABLED at default config
-    // because hasConfigChanges should be false when everything is at defaults
-    // (We test this by checking the settings sheet Save Map button)
-    // Note: The floating quick-action Save Map is intentionally enabled at defaults
-    // per the "Intentionally no !hasConfigChanges guard" comment in MapScreen.tsx
+    // Open settings sheet to access the Save Map button
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole('button', { name: 'Map settings', hidden: true }),
+    );
+
+    // The settings-sheet Save Map should be disabled at defaults
+    // (hasConfigChanges should be false)
+    const allSaves = screen.getAllByRole('button', {
+      name: 'Save Map',
+      hidden: true,
+    });
+    const settingsSheetSave = allSaves[allSaves.length - 1];
+    expect(settingsSheetSave).toBeDisabled();
   });
 });
