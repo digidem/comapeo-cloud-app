@@ -21,10 +21,15 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+// All variants use `text-text` (deep ink) rather than the colored status
+// tokens (`text-success`/`text-error`/`text-info`). The colored text variants
+// fail WCAG AA contrast (~3:1) against their soft backgrounds (`bg-*-soft`),
+// while `text-text` clears 4.5:1; the status color survives in the border.
+// Do not "restore" colored text without re-checking contrast.
 const variantClasses: Record<ToastVariant, string> = {
-  success: 'bg-success-soft text-success border-success',
-  error: 'bg-error-soft text-error border-error',
-  info: 'bg-info-soft text-info border-info',
+  success: 'bg-success-soft text-text border-success',
+  error: 'bg-error-soft text-text border-error',
+  info: 'bg-info-soft text-text border-info',
 };
 
 function useToast() {

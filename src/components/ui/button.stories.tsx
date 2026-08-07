@@ -31,7 +31,7 @@ const meta: Meta<typeof Button> = {
 export default meta;
 type Story = StoryObj<typeof Button>;
 
-/** Default primary button */
+/** Default primary button — navy surface for WCAG AA contrast with white text */
 export const Primary: Story = {};
 
 /** Secondary button — white surface with border */
