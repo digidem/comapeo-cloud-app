@@ -642,17 +642,29 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
+          # Pages Functions propagate a few seconds after "Deployment complete";
+          # until they are live, /api/* falls through to the static 404 handler.
+          # Poll until the function answers (400) instead of failing on the first
+          # request, but still assert the final status is exactly 400.
+          # `|| true` keeps a connection-level curl failure (DNS not ready /
+          # connection refused mid-propagation) from tripping this step's
+          # `set -e` and aborting before we get a chance to retry.
+          MAX_ATTEMPTS=6
           STATUS=""
-          for i in $(seq 1 5); do
+          for i in $(seq 1 "$MAX_ATTEMPTS"); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "${{ needs.preview.outputs.preview-url }}/api/info" || true)
             if [ "$STATUS" = "400" ]; then
               break
             fi
-            echo "Attempt $i: expected 400, got $STATUS — retrying in 10s..."
-            [ "$i" -lt 5 ] && sleep 10
+            if [ "$i" -lt "$MAX_ATTEMPTS" ]; then
+              echo "Attempt $i/$MAX_ATTEMPTS: expected 400, got ${STATUS:-none} (Functions may still be propagating); retrying in 10s..."
+              sleep 10
+            else
+              echo "Attempt $i/$MAX_ATTEMPTS: expected 400, got ${STATUS:-none}; giving up"
+            fi
           done
           if [ "$STATUS" != "400" ]; then
-            echo "Expected 400 for /api/info without x-target-url, got $STATUS"
+            echo "Expected 400 for /api/info without x-target-url, got ${STATUS:-none}"
             exit 1
           fi
 
@@ -838,6 +850,9 @@ jobs:
     needs: staging
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    # Staging uses longer curl retries (--retry 10 --retry-delay 15) plus the
+    # 15s Function-propagation poll, so its worst-case wait exceeds the
+    # preview/prod smoke jobs; give it a matching headroom bump.
     timeout-minutes: 8
     steps:
       - name: Smoke test — app reachability
@@ -850,17 +865,29 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
+          # Pages Functions propagate a few seconds after "Deployment complete";
+          # until they are live, /api/* falls through to the static 404 handler.
+          # Poll until the function answers (400) instead of failing on the first
+          # request, but still assert the final status is exactly 400.
+          # `|| true` keeps a connection-level curl failure (DNS not ready /
+          # connection refused mid-propagation) from tripping this step's
+          # `set -e` and aborting before we get a chance to retry.
+          MAX_ATTEMPTS=6
           STATUS=""
-          for i in $(seq 1 10); do
+          for i in $(seq 1 "$MAX_ATTEMPTS"); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "${{ vars.STAGING_URL || needs.staging.outputs.deployment-url }}/api/info" || true)
             if [ "$STATUS" = "400" ]; then
               break
             fi
-            echo "Attempt $i: expected 400, got $STATUS — retrying in 15s..."
-            [ "$i" -lt 10 ] && sleep 15
+            if [ "$i" -lt "$MAX_ATTEMPTS" ]; then
+              echo "Attempt $i/$MAX_ATTEMPTS: expected 400, got ${STATUS:-none} (Functions may still be propagating); retrying in 15s..."
+              sleep 15
+            else
+              echo "Attempt $i/$MAX_ATTEMPTS: expected 400, got ${STATUS:-none}; giving up"
+            fi
           done
           if [ "$STATUS" != "400" ]; then
-            echo "Expected 400 for /api/info without x-target-url, got $STATUS"
+            echo "Expected 400 for /api/info without x-target-url, got ${STATUS:-none}"
             exit 1
           fi
 
@@ -954,17 +981,29 @@ jobs:
 
       - name: Smoke test — API proxy rejects missing target
         run: |
+          # Pages Functions propagate a few seconds after "Deployment complete";
+          # until they are live, /api/* falls through to the static 404 handler.
+          # Poll until the function answers (400) instead of failing on the first
+          # request, but still assert the final status is exactly 400.
+          # `|| true` keeps a connection-level curl failure (DNS not ready /
+          # connection refused mid-propagation) from tripping this step's
+          # `set -e` and aborting before we get a chance to retry.
+          MAX_ATTEMPTS=6
           STATUS=""
-          for i in $(seq 1 5); do
+          for i in $(seq 1 "$MAX_ATTEMPTS"); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "https://app.comapeo.cloud/api/info" || true)
             if [ "$STATUS" = "400" ]; then
               break
             fi
-            echo "Attempt $i: expected 400, got $STATUS — retrying in 10s..."
-            [ "$i" -lt 5 ] && sleep 10
+            if [ "$i" -lt "$MAX_ATTEMPTS" ]; then
+              echo "Attempt $i/$MAX_ATTEMPTS: expected 400, got ${STATUS:-none} (Functions may still be propagating); retrying in 10s..."
+              sleep 10
+            else
+              echo "Attempt $i/$MAX_ATTEMPTS: expected 400, got ${STATUS:-none}; giving up"
+            fi
           done
           if [ "$STATUS" != "400" ]; then
-            echo "Expected 400 for /api/info without x-target-url, got $STATUS"
+            echo "Expected 400 for /api/info without x-target-url, got ${STATUS:-none}"
             exit 1
           fi
 
