@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { useCreateMap, useMaps } from '@/hooks/useMaps';
 import { useProjects } from '@/hooks/useProjects';
+import { getProjectPoints } from '@/lib/data-layer';
 import type { SavedMap } from '@/lib/db';
 import { DEFAULT_BASEMAP_ID, findBasemap } from '@/lib/map/basemaps';
 import { clampBboxLatitude, crossesAntimeridian } from '@/lib/map/bbox-utils';
@@ -145,6 +146,47 @@ export function MapScreen() {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     };
   }, []);
+
+  // Compute project area bbox from observations on mount
+  useEffect(() => {
+    const projectId = selectedProjectId;
+    if (!projectId) return;
+    let cancelled = false;
+    async function loadProjectBbox() {
+      try {
+        const points = await getProjectPoints(projectId!);
+        if (cancelled) return;
+        const coords: [number, number][] = [];
+        for (const feature of points.features ?? []) {
+          if (
+            feature.geometry?.type === 'Point' &&
+            Array.isArray(feature.geometry.coordinates) &&
+            feature.geometry.coordinates.length === 2
+          ) {
+            // getProjectPoints guarantees valid coords for Point geometries
+            coords.push(feature.geometry.coordinates as [number, number]);
+          }
+        }
+        if (coords.length > 0) {
+          const lngs = coords.map((c) => c[0]);
+          const lats = coords.map((c) => c[1]);
+          const projectBbox: [number, number, number, number] = [
+            Math.min(...lngs),
+            Math.min(...lats),
+            Math.max(...lngs),
+            Math.max(...lats),
+          ];
+          setBbox(projectBbox);
+        }
+      } catch {
+        // Ignore errors, keep DEFAULT_BBOX
+      }
+    }
+    loadProjectBbox();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
 
   function handleDrawModeChange(
     mode: 'draw_rectangle' | 'simple_select' | null,

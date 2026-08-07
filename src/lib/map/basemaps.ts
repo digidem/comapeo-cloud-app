@@ -84,8 +84,8 @@ export const BASEMAP_CATALOG: ImageryBasemap[] = [
   },
 ];
 
-/** Default basemap id — matches the existing AreaMap hardcoded style. */
-export const DEFAULT_BASEMAP_ID = 'carto-positron' as const;
+/** Default basemap id — Esri World Imagery satellite basemap. */
+export const DEFAULT_BASEMAP_ID = 'esri-world-imagery' as const;
 
 /**
  * Find a basemap by id, falling back gracefully:
