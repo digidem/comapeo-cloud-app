@@ -144,6 +144,8 @@ export function MapScreen() {
   const [projectBbox, setProjectBbox] = useState<
     [number, number, number, number] | null
   >(null);
+  // Track if user has explicitly modified bbox (drawing, inputs, current view, project area button)
+  const hasUserModifiedBboxRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -206,8 +208,8 @@ export function MapScreen() {
             return; // Skip zero-area bbox
           }
           setProjectBbox(clampedBbox);
-          // Only set if user isn't actively drawing (drawing takes precedence)
-          if (drawMode === null) {
+          // Only set if user hasn't explicitly modified bbox (user edits take precedence)
+          if (drawMode === null && !hasUserModifiedBboxRef.current) {
             setBbox(clampedBbox);
           }
         }
@@ -231,6 +233,7 @@ export function MapScreen() {
   function handleDrawCreate(next: [number, number, number, number]) {
     previousBboxRef.current = bbox;
     setBbox(next);
+    hasUserModifiedBboxRef.current = true;
     setShowUndo(true);
     setFrameError(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -386,7 +389,10 @@ export function MapScreen() {
         <StylePicker value={selectedStyle} onChange={setSelectedStyle} />
         <BoundsEditor
           bbox={bbox}
-          onChange={setBbox}
+          onChange={(nextBbox) => {
+            hasUserModifiedBboxRef.current = true;
+            setBbox(nextBbox);
+          }}
           projectLocalId={selectedProjectId}
           mapRef={mapRef}
         />
