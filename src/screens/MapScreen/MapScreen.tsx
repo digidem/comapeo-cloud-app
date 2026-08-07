@@ -157,8 +157,12 @@ export function MapScreen() {
   useEffect(() => {
     const projectId = selectedProjectId;
     if (!projectId) return;
+    // Reset user-modified flag when project changes
+    hasUserModifiedBboxRef.current = false;
     let cancelled = false;
     async function loadProjectBbox() {
+      // Reset project bbox when project changes
+      setProjectBbox(null);
       try {
         const points = await getProjectPoints(projectId!);
         if (cancelled) return;
@@ -178,7 +182,7 @@ export function MapScreen() {
         if (coords.length > 0) {
           const lngs = coords.map((c) => c[0]);
           const lats = coords.map((c) => c[1]);
-          const projectBbox: [number, number, number, number] = [
+          const rawBbox: [number, number, number, number] = [
             Math.min(...lngs),
             Math.min(...lats),
             Math.max(...lngs),
@@ -187,19 +191,16 @@ export function MapScreen() {
           // Ensure minimum span to avoid zero-area bbox for single-point projects
           const MIN_SPAN = 0.01;
           const finalBbox: [number, number, number, number] = [
-            projectBbox[0],
-            projectBbox[1],
-            projectBbox[2] - projectBbox[0] < MIN_SPAN
-              ? projectBbox[0] + MIN_SPAN
-              : projectBbox[2],
-            projectBbox[3] - projectBbox[1] < MIN_SPAN
-              ? projectBbox[1] + MIN_SPAN
-              : projectBbox[3],
+            rawBbox[0],
+            rawBbox[1],
+            rawBbox[2] - rawBbox[0] < MIN_SPAN
+              ? rawBbox[0] + MIN_SPAN
+              : rawBbox[2],
+            rawBbox[3] - rawBbox[1] < MIN_SPAN
+              ? rawBbox[1] + MIN_SPAN
+              : rawBbox[3],
           ];
-          // Validate antimeridian and latitude bounds
-          if (crossesAntimeridian([finalBbox[0], finalBbox[2]])) {
-            return; // Skip invalid bbox
-          }
+          // Validate latitude bounds (antimeridian crossing can't happen with valid lon)
           const clampedBbox = clampBboxLatitude(finalBbox);
           if (
             clampedBbox[1] >= clampedBbox[3] ||
@@ -221,7 +222,7 @@ export function MapScreen() {
     return () => {
       cancelled = true;
     };
-  }, [selectedProjectId]);
+  }, [selectedProjectId, drawMode]);
 
   function handleDrawModeChange(
     mode: 'draw_rectangle' | 'simple_select' | null,
@@ -436,6 +437,15 @@ export function MapScreen() {
             drawMode={isDesktop ? drawMode : null}
             onDrawCreate={handleDrawCreate}
             onDrawModeChange={handleDrawModeChange}
+            initialViewState={
+              projectBbox
+                ? {
+                    longitude: (projectBbox[0] + projectBbox[2]) / 2,
+                    latitude: (projectBbox[1] + projectBbox[3]) / 2,
+                    zoom: 10,
+                  }
+                : undefined
+            }
           />
 
           {drawMode !== 'draw_rectangle' && (
