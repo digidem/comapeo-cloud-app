@@ -1,5 +1,11 @@
 import { server } from '@tests/mocks/node';
-import { fireEvent, render, screen, userEvent } from '@tests/mocks/test-utils';
+import {
+  fireEvent,
+  render,
+  screen,
+  userEvent,
+  within,
+} from '@tests/mocks/test-utils';
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -174,9 +180,11 @@ describe('SettingsScreen', () => {
     // Wait for results to render
     await screen.findByText('Results');
 
-    // Click copy button (there are two — URL and code)
-    const copyButtons = screen.getAllByRole('button', { name: 'Copy' });
-    await user.click(copyButtons[0]!);
+    // Scope to the invite-URL row and click its Copy button
+    const inviteUrlRow = screen.getByText('Invite URL').closest('div')!;
+    await user.click(
+      within(inviteUrlRow).getByRole('button', { name: 'Copy' }),
+    );
 
     expect(writeText).toHaveBeenCalledWith(
       expect.stringContaining('/invite?code='),
@@ -244,14 +252,20 @@ describe('SettingsScreen', () => {
       render(<SettingsScreen />);
       await generateInvite(user);
 
-      const copyButtons = screen.getAllByRole('button', { name: 'Copy' });
-      await user.click(copyButtons[1]!);
+      const inviteCodeRow = screen.getByText('Invite Code').closest('div')!;
+      await user.click(
+        within(inviteCodeRow).getByRole('button', { name: 'Copy' }),
+      );
 
       expect(writeText).toHaveBeenCalledTimes(1);
       expect(writeText).toHaveBeenCalledWith(
         expect.stringMatching(/^mock-encrypted-code-/),
       );
+
+      // Should show "Copied!" feedback
+      expect(screen.getByText('Copied!')).toBeInTheDocument();
     });
+  });
   });
 
   describe('Backup & Restore', () => {
