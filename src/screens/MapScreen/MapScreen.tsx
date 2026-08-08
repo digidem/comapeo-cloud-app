@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { useCreateMap, useMaps } from '@/hooks/useMaps';
 import { useProjects } from '@/hooks/useProjects';
+import { getProjectPoints } from '@/lib/data-layer';
 import type { SavedMap } from '@/lib/db';
 import { DEFAULT_BASEMAP_ID, findBasemap } from '@/lib/map/basemaps';
 import { clampBboxLatitude, crossesAntimeridian } from '@/lib/map/bbox-utils';
@@ -139,12 +140,89 @@ export function MapScreen() {
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showUndo, setShowUndo] = useState(false);
   const [frameError, setFrameError] = useState<string | null>(null);
+  // Track the computed project bbox for hasConfigChanges comparison
+  const [projectBbox, setProjectBbox] = useState<
+    [number, number, number, number] | null
+  >(null);
+  // Track if user has explicitly modified bbox (drawing, inputs, current view, project area button)
+  const hasUserModifiedBboxRef = useRef(false);
 
   useEffect(() => {
     return () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     };
   }, []);
+
+  // Compute project area bbox from observations on mount
+  useEffect(() => {
+    const projectId = selectedProjectId;
+    if (!projectId) return;
+    // Reset user-modified flag when project changes
+    hasUserModifiedBboxRef.current = false;
+    let cancelled = false;
+    async function loadProjectBbox() {
+      // Reset project bbox when project changes
+      setProjectBbox(null);
+      try {
+        const points = await getProjectPoints(projectId!);
+        if (cancelled) return;
+        const coords: [number, number][] = [];
+        for (const feature of points?.features ?? []) {
+          if (
+            feature.geometry?.type === 'Point' &&
+            Array.isArray(feature.geometry.coordinates) &&
+            feature.geometry.coordinates.length === 2
+          ) {
+            const [lng, lat] = feature.geometry.coordinates as [number, number];
+            if (Number.isFinite(lng) && Number.isFinite(lat)) {
+              coords.push([lng, lat]);
+            }
+          }
+        }
+        if (coords.length > 0) {
+          const lngs = coords.map((c) => c[0]);
+          const lats = coords.map((c) => c[1]);
+          const rawBbox: [number, number, number, number] = [
+            Math.min(...lngs),
+            Math.min(...lats),
+            Math.max(...lngs),
+            Math.max(...lats),
+          ];
+          // Ensure minimum span to avoid zero-area bbox for single-point projects
+          const MIN_SPAN = 0.01;
+          const finalBbox: [number, number, number, number] = [
+            rawBbox[0],
+            rawBbox[1],
+            rawBbox[2] - rawBbox[0] < MIN_SPAN
+              ? rawBbox[0] + MIN_SPAN
+              : rawBbox[2],
+            rawBbox[3] - rawBbox[1] < MIN_SPAN
+              ? rawBbox[1] + MIN_SPAN
+              : rawBbox[3],
+          ];
+          // Validate latitude bounds (antimeridian crossing can't happen with valid lon)
+          const clampedBbox = clampBboxLatitude(finalBbox);
+          if (
+            clampedBbox[1] >= clampedBbox[3] ||
+            clampedBbox[0] >= clampedBbox[2]
+          ) {
+            return; // Skip zero-area bbox
+          }
+          setProjectBbox(clampedBbox);
+          // Only set if user hasn't explicitly modified bbox (user edits take precedence)
+          if (drawMode === null && !hasUserModifiedBboxRef.current) {
+            setBbox(clampedBbox);
+          }
+        }
+      } catch {
+        // Ignore errors, keep DEFAULT_BBOX
+      }
+    }
+    loadProjectBbox();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId, drawMode]);
 
   function handleDrawModeChange(
     mode: 'draw_rectangle' | 'simple_select' | null,
@@ -156,6 +234,7 @@ export function MapScreen() {
   function handleDrawCreate(next: [number, number, number, number]) {
     previousBboxRef.current = bbox;
     setBbox(next);
+    hasUserModifiedBboxRef.current = true;
     setShowUndo(true);
     setFrameError(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -224,17 +303,18 @@ export function MapScreen() {
   );
   useShellSlot(shellSlot);
 
-  const hasConfigChanges = useMemo(
-    () =>
-      bbox[0] !== DEFAULT_BBOX[0] ||
-      bbox[1] !== DEFAULT_BBOX[1] ||
-      bbox[2] !== DEFAULT_BBOX[2] ||
-      bbox[3] !== DEFAULT_BBOX[3] ||
+  const hasConfigChanges = useMemo(() => {
+    const baseline = projectBbox ?? DEFAULT_BBOX;
+    return (
+      bbox[0] !== baseline[0] ||
+      bbox[1] !== baseline[1] ||
+      bbox[2] !== baseline[2] ||
+      bbox[3] !== baseline[3] ||
       zoomRange.minZoom !== DEFAULT_ZOOM.minZoom ||
       zoomRange.maxZoom !== DEFAULT_ZOOM.maxZoom ||
-      selectedStyle.id !== DEFAULT_BASEMAP_ID,
-    [bbox, zoomRange, selectedStyle],
-  );
+      selectedStyle.id !== DEFAULT_BASEMAP_ID
+    );
+  }, [bbox, zoomRange, selectedStyle, projectBbox]);
 
   function openNameDialog() {
     setNameError(null);
@@ -310,7 +390,10 @@ export function MapScreen() {
         <StylePicker value={selectedStyle} onChange={setSelectedStyle} />
         <BoundsEditor
           bbox={bbox}
-          onChange={setBbox}
+          onChange={(nextBbox) => {
+            hasUserModifiedBboxRef.current = true;
+            setBbox(nextBbox);
+          }}
           projectLocalId={selectedProjectId}
           mapRef={mapRef}
         />
@@ -354,6 +437,15 @@ export function MapScreen() {
             drawMode={isDesktop ? drawMode : null}
             onDrawCreate={handleDrawCreate}
             onDrawModeChange={handleDrawModeChange}
+            initialViewState={
+              projectBbox
+                ? {
+                    longitude: (projectBbox[0] + projectBbox[2]) / 2,
+                    latitude: (projectBbox[1] + projectBbox[3]) / 2,
+                    zoom: 10,
+                  }
+                : undefined
+            }
           />
 
           {drawMode !== 'draw_rectangle' && (

@@ -27,6 +27,8 @@ interface MapAuthoringCanvasProps {
   /** Called when a rectangle is drawn via map drag */
   onDrawCreate?: (bbox: [number, number, number, number]) => void;
   onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
+  /** Optional initial view state to override the default */
+  initialViewState?: { longitude: number; latitude: number; zoom: number };
 }
 
 const INITIAL_VIEW_STATE = {
@@ -117,6 +119,7 @@ export function MapAuthoringCanvas({
   drawMode,
   onDrawCreate,
   onDrawModeChange,
+  initialViewState,
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();
   const mapStyle = useMemo(() => basemapToMapStyle(basemap), [basemap]);
@@ -354,7 +357,7 @@ export function MapAuthoringCanvas({
     >
       <Map
         ref={mapRef}
-        initialViewState={INITIAL_VIEW_STATE}
+        initialViewState={initialViewState ?? INITIAL_VIEW_STATE}
         mapStyle={mapStyle}
         style={MAP_STYLE}
         attributionControl={false}

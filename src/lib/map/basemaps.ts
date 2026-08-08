@@ -84,7 +84,7 @@ export const BASEMAP_CATALOG: ImageryBasemap[] = [
   },
 ];
 
-/** Default basemap id — matches the existing AreaMap hardcoded style. */
+/** Default basemap id — CartoDB Positron light street basemap. */
 export const DEFAULT_BASEMAP_ID = 'carto-positron' as const;
 
 /**
