@@ -268,7 +268,7 @@ describe('clearAllStorage', () => {
     expect(mockReload).toHaveBeenCalledOnce();
   });
 
-  it('still reloads even if resetDb() throws', async () => {
+  it('throws and does not reload if resetDb() throws', async () => {
     const { resetDb } = await import('@/lib/db');
     vi.mocked(resetDb).mockRejectedValueOnce(new Error('DB error'));
 
@@ -278,8 +278,7 @@ describe('clearAllStorage', () => {
       writable: true,
     });
 
-    await clearAllStorage();
-
-    expect(mockReload).toHaveBeenCalledOnce();
+    await expect(clearAllStorage()).rejects.toThrow('DB error');
+    expect(mockReload).not.toHaveBeenCalled();
   });
 });

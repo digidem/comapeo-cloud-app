@@ -308,7 +308,6 @@ describe('InviteScreen', () => {
     expect(args[1]).toMatchObject({
       baseUrl: 'https://archive.test',
       token: 'abc123',
-      serverLabel: 'archive.test',
     });
   });
 
@@ -353,7 +352,9 @@ describe('InviteScreen', () => {
     render(<InviteScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('unauthorized')).toBeInTheDocument();
+      expect(
+        screen.getByText('Failed to connect to archive.'),
+      ).toBeInTheDocument();
     });
 
     // Should not have navigated home

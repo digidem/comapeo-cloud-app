@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IntlShape, defineMessages, useIntl } from 'react-intl';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 
 import {
@@ -9,12 +10,13 @@ import {
 } from '@/components/shared/ConnectionProgress';
 import { Button } from '@/components/ui/button';
 import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
+import { syncRemoteArchive } from '@/lib/data-layer';
 import {
   type ParseInviteResult,
   parseInviteUrl,
   warnLegacyInviteUrlOnce,
 } from '@/lib/invite-url';
-import { onboardArchive } from '@/lib/sync-coordinator';
+import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
 // i18n
@@ -77,7 +79,12 @@ const messages = defineMessages({
 // ---------------------------------------------------------------------------
 
 type FlowStatus =
-  'loading' | 'connected' | 'error' | 'expired' | 'invalid' | 'networkError';
+  | 'loading'
+  | 'connected'
+  | 'error'
+  | 'expired'
+  | 'invalid'
+  | 'networkError';
 
 type FlowStep = 'verify' | 'connect' | 'sync' | 'prepare';
 
@@ -124,6 +131,7 @@ function getErrorDisplayMessage(
 export function InviteScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const invite = useMemo(() => parseInviteFromLocation(), []);
 
   const [status, setStatus] = useState<FlowStatus>(() => initialStatus(invite));
@@ -214,32 +222,36 @@ export function InviteScreen() {
         }
         if (cancelledRef.current) return;
 
-        const onboardingResult = await onboardArchive({
+        // Step 2: Add server
+        setActiveStep('connect');
+        const serverId = await useAuthStore.getState().addServer({
+          label: new URL(baseUrl).hostname,
           baseUrl,
           token,
-          label: new URL(baseUrl).hostname,
-          source: 'invite',
-          isCancelled: () => cancelledRef.current,
-          onStateChange: (lifecycle) => {
-            if (lifecycle === 'validating') setActiveStep('verify');
-            else if (lifecycle === 'pending') setActiveStep('connect');
-            else if (lifecycle === 'syncing') setActiveStep('sync');
-          },
+          allowDuplicate: true,
         });
         if (cancelledRef.current) return;
 
-        if (!onboardingResult.success || onboardingResult.status !== 'ready') {
+        // Step 3: Sync
+        setActiveStep('sync');
+        const syncResult = await syncRemoteArchive(serverId, {
+          baseUrl,
+          token,
+        });
+        if (cancelledRef.current) return;
+        if (!syncResult || !syncResult.success) {
           setStatus('error');
-          setErrorMessage(
-            onboardingResult.errorCode === 'duplicate'
-              ? intlRef.current.formatMessage(messages.alreadyConnected)
-              : (onboardingResult.error ??
-                  intlRef.current.formatMessage(messages.error)),
-          );
+          setErrorMessage(intlRef.current.formatMessage(messages.error));
           return;
         }
 
+        // Step 4: Prepare dashboard
         setActiveStep('prepare');
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['projects'] }),
+          queryClient.invalidateQueries({ queryKey: ['observations'] }),
+          queryClient.invalidateQueries({ queryKey: ['alerts'] }),
+        ]);
         if (cancelledRef.current) return;
 
         setStatus('connected');
@@ -248,6 +260,13 @@ export function InviteScreen() {
         }, 1500);
       } catch (err) {
         if (cancelledRef.current) return;
+        if (err instanceof DuplicateServerError) {
+          setStatus('error');
+          setErrorMessage(
+            intlRef.current.formatMessage(messages.alreadyConnected),
+          );
+          return;
+        }
         if (err instanceof InviteApiError) {
           if (err.code === 'INVITE_EXPIRED') {
             setStatus('expired');
@@ -273,7 +292,7 @@ export function InviteScreen() {
     }
 
     void run();
-  }, [invite, navigate]);
+  }, [invite, navigate, queryClient]);
 
   useEffect(() => {
     // Reset the cancellation flag so the \"Try Again\" button (which calls
@@ -284,13 +303,8 @@ export function InviteScreen() {
     // StrictMode double-invoke from executing the flow twice.  In
     // StrictMode the cleanup runs between the two effect invocations and
     // bumps the counter, invalidating the first invocation's microtask.
-    // Only the second (\"real\") invocation's microtask survives the check.
+    // Only the second ("real") invocation's microtask survives the check.
     const generation = ++effectGenerationRef.current;
-    // Capture the ref object in a local alias so the cleanup doesn't
-    // access a component-scope ref's `.current` directly (which triggers
-    // react-hooks/exhaustive-deps). The alias points to the *same* ref
-    // object, so the generation counter stays shared across effect re-runs.
-    const effectGenerationRefLocal = effectGenerationRef;
 
     // Defer via microtask to avoid synchronous setState in effect body
     // (required by react-hooks/set-state-in-effect; React 18+ batches the updates).
@@ -302,7 +316,7 @@ export function InviteScreen() {
     return () => {
       // Bump the generation so any microtask still pending from a
       // previous invocation is silently dropped.
-      effectGenerationRefLocal.current++;
+      effectGenerationRef.current++;
       // Signal in-flight async work (inside run()) that the component
       // is unmounting so it can short-circuit early.
       cancelledRef.current = true;
