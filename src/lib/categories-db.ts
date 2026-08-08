@@ -75,3 +75,17 @@ export async function getCategorySet(
 ): Promise<CategorySetRecord | undefined> {
   return categoriesDb.categorySets.get(setId);
 }
+
+// ---------------------------------------------------------------------------
+// Reset helper (for clear all data)
+// ---------------------------------------------------------------------------
+
+/**
+ * Clears all data from the categories database.
+ * Used by the "Clear All Data" flow to ensure no stale category sets persist.
+ */
+export async function resetCategoriesDb(): Promise<void> {
+  await categoriesDb.transaction('rw', categoriesDb.tables, async () => {
+    await Promise.all(categoriesDb.tables.map((table) => table.clear()));
+  });
+}
