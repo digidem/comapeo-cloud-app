@@ -51,7 +51,10 @@ const messages = defineMessages({
 });
 
 type SwitcherPosition =
-  'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+  | 'top-right'
+  | 'top-left'
+  | 'bottom-right'
+  | 'bottom-left';
 
 /** Props forwarded to the underlying react-map-gl Map component. */
 export type MapPassthroughProps = Omit<
