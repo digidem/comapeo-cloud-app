@@ -191,7 +191,12 @@ const messages = defineMessages({
 });
 
 type SyncState =
-  'syncing' | 'error' | 'offline' | 'needsAttention' | 'synced' | 'idle';
+  | 'syncing'
+  | 'error'
+  | 'offline'
+  | 'needsAttention'
+  | 'synced'
+  | 'idle';
 
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());

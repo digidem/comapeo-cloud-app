@@ -19,7 +19,11 @@ export interface OnboardArchiveOptions extends SyncOptions {
 
 export interface OnboardingResult extends SyncResult {
   errorCode?:
-    'invalid-url' | 'connection' | 'authorization' | 'duplicate' | 'cancelled';
+    | 'invalid-url'
+    | 'connection'
+    | 'authorization'
+    | 'duplicate'
+    | 'cancelled';
 }
 
 const activeRuns = new Map<string, Promise<SyncResult>>();
