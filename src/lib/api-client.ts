@@ -32,13 +32,21 @@ import {
 export const ALERTS_PATH = '/remoteDetectionAlerts' as const;
 
 export type EndpointReconciliationMode =
-  'snapshot' | 'delta' | 'tombstone-stream' | 'unknown';
+  | 'snapshot'
+  | 'delta'
+  | 'tombstone-stream'
+  | 'unknown';
 export type EndpointAvailability = 'supported' | 'unsupported';
 export type EndpointSemanticsSource = 'contract' | 'header' | 'route-404';
 
 export interface EndpointSemantics {
   resource:
-    'projects' | 'observations' | 'alerts' | 'presets' | 'tracks' | 'fields';
+    | 'projects'
+    | 'observations'
+    | 'alerts'
+    | 'presets'
+    | 'tracks'
+    | 'fields';
   availability: EndpointAvailability;
   mode: EndpointReconciliationMode;
   source: EndpointSemanticsSource;
