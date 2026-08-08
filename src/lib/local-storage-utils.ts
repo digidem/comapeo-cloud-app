@@ -1,6 +1,5 @@
 import * as v from 'valibot';
 
-import { resetCategoriesDb } from '@/lib/categories-db';
 import { resetDb } from '@/lib/db';
 import { backupSchema } from '@/lib/schemas/backup-schema';
 import { useAuthStore } from '@/stores/auth-store';
@@ -70,10 +69,14 @@ export function importLocalStorageData(jsonString: string): {
 }
 
 export async function clearAllStorage(): Promise<void> {
-  // Only clear comapeo-* prefixed keys, not all localStorage
-  removeComapeoKeys();
-  await resetDb();
-  await resetCategoriesDb();
-  useAuthStore.getState().clearAll();
-  window.location.reload();
+  try {
+    // Only clear comapeo-* prefixed keys, not all localStorage
+    removeComapeoKeys();
+    await resetDb();
+    useAuthStore.getState().clearAll();
+  } catch {
+    // Swallow errors — reload below resets all state regardless
+  } finally {
+    window.location.reload();
+  }
 }

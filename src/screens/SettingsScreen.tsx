@@ -298,6 +298,7 @@ export function SettingsScreen() {
 
   const handleClearAll = useCallback(async () => {
     await clearAllStorage();
+    window.location.reload();
   }, []);
 
   return (
