@@ -228,6 +228,7 @@ export function InviteScreen() {
           label: new URL(baseUrl).hostname,
           baseUrl,
           token,
+          allowDuplicate: true,
         });
         if (cancelledRef.current) return;
 

@@ -38,6 +38,21 @@ manually and note it in the sweep file.
 - Cross-check API endpoint docs against actual route definitions in the codebase
 - Verify dependency versions mentioned in docs match `package.json`
 
+**Run `npm test` / `npm run build` in the foreground, never `run_in_background`.**
+The unit suite (1931 tests) routinely takes 5-10 minutes. This is a single
+scheduled run with no interactive session to wake back up on a background-job
+notification — backgrounding the test/build step and then polling for it wastes
+the run's own budget and can stall out before the sweep is ever reported (see
+2026-08-03 in the Timeline: the run backgrounded `npm test`, spent its whole
+budget waiting/polling, and reported only pre-scan counters — no drift verdict,
+no PR, no `sweepsCompleted` bump). Instead call `npm test` and `npm run build`
+directly with `timeout: 600000` (the Bash tool's max) and let the call block.
+If it still doesn't finish in that window, kill orphaned vitest
+(`pkill -f vitest && rm -rf coverage`) and retry once, synchronously; if it
+fails twice, note the unverified state explicitly in the sweep file rather than
+silently skipping verification (only the documented same-commit case in the
+git worktree protocol below may skip it outright).
+
 **What to fix vs. leave alone**:
 - Fix: outdated commands, wrong paths, stale versions, broken links, missing steps, incorrect API docs
 - Don't touch: style preferences, rewording for clarity (unless factually wrong), adding new documentation that doesn't exist yet
@@ -112,6 +127,7 @@ The project is a React + TypeScript web dashboard for comapeo-cloud. Documentati
 Environment facts worth carrying forward:
 
 - **`npm ci` fails on `main`** — `package-lock.json` is out of sync with `package.json`. CI never hits this because every job uses `bun install --frozen-lockfile`. Use `npm install` (or bun) when setting up a sweep worktree.
+- **`npm test` takes 5-10 minutes for the full unit suite (1931 tests).** Run it (and `npm run build`) in the foreground with `timeout: 600000` — never `run_in_background`. This is a one-shot scheduled run, not an interactive session; backgrounding a step whose result gates the rest of the sweep stranded a whole run on 2026-08-03 (it polled for the rest of its budget and never reported a real verdict). Backgrounding is fine for the pre-push hook below, whose result the sweep doesn't need to branch on.
 - **Pushing runs a pre-push hook** (`scripts/validate.sh`: lint + types + tests + build), so a push takes several minutes. Run it in the background; a slow push is not a stall. If a push times out, `pkill -f vitest && rm -rf coverage` before retrying — orphaned vitest processes collide on `coverage/.tmp` and fail the next attempt.
 - Commit with `git -c core.hooksPath=/dev/null commit` to skip the pre-commit hook; let the pre-push hook do the validation once.
 - `design/`, `.claude/`, `.codex/` are gitignored and untracked — doc references into them are broken for every clone. The pre-scan will surface these each sweep; they are genuine drift for a fresh cloner, but decide per case whether to repoint or drop the reference.
@@ -151,3 +167,35 @@ Files" section is entirely dead references to an external Stitch workspace.
 Dismissed 3 candidates as intentional prose. Verdicts folded into Current
 understanding; details in `sweep-2026-07-20.md`. `npm test`/`npm run build`
 deliberately skipped — same commit, verified green 2026-07-19.
+
+### 2026-07-27 — sweep #3, 1 fix, PR #150
+
+Fixed `docs/deployment-runbook.md`'s reference to the deleted
+`functions/api/[[path]].ts` (replaced by `_middleware.ts` in #141). Ran no
+`npm test`/`npm run build` at all (not even the documented same-commit skip —
+`origin/main` had moved) and never reported `lastCommit`, so the pre-scan's
+"changed since last sweep" diff has had no baseline to work from since it was
+introduced. `sweepsCompleted` = 3.
+
+### 2026-08-03 — stalled run, no sweep completed
+
+Backgrounded `npm test`/`npm run build` in the fresh worktree and then spent
+the rest of the run polling/waiting for a completion notification that never
+arrived within the run's own budget. Reported only the pre-scan's mechanical
+counters (`scannedDocs`, `brokenPathCandidates`, etc.) with no drift verdict,
+no PR decision, and no `sweepsCompleted` bump — a wasted $2.21 run. Root cause
+and fix folded into the Spec's verification section and Current understanding
+by the same-day evolution pass below.
+
+### 2026-08-03 — evolution pass
+
+Two runs (#3 and this one) never reported `lastCommit` despite the Spec asking
+for it since 2026-07-19 — it isn't in the metric schema, so exec runs never see
+an explicit instruction to emit it, and the pre-scan's `changedSinceLastSweep`
+diff has been silently empty every single sweep. Added `lastCommit` to the
+schema so the standing prompt now asks for it explicitly, and bound it on the
+dashboard. Sharpened the Spec's verification section to require running
+`npm test`/`npm run build` in the foreground with `timeout: 600000`, never
+backgrounded — the 2026-08-03 stall was caused by treating a synchronous
+verification step (whose pass/fail result gates the rest of the sweep) like the
+already-documented background-safe git push.

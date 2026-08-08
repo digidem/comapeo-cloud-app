@@ -269,6 +269,63 @@ The `@tanstack/react-router` is NOT mocked — the `@storybook/tanstack-react` f
 3. Use `useProjectStore.setState()` in decorators to control store state
 4. Set `parameters: { layout: 'fullscreen' }` for screen-level stories
 
+## Storybook test-runner pitfalls (for AI coding agents)
+
+When writing Storybook `play()` functions, follow these rules to avoid CI failures:
+
+### 1. findByText matches ALL page text — scope aggressively
+`canvas.findByText(regex)` searches the entire story output. When mock data appears in multiple elements (e.g. a code string that appears in both a URL `<code>` and a plain-code `<code>`), the test-runner fails with:
+
+```
+Found multiple elements with the text: /some-pattern/
+```
+
+**Fix:** scope queries to the specific container using `within()` or DOM traversal:
+```ts
+// ✅ Good: scope to the specific row
+const label = await canvas.findByText('Invite Code', undefined, { timeout: PLAY_TIMEOUT });
+const el = label.closest('div')!.querySelector('code')!;
+await expect(el).toBeVisible();
+
+// ❌ Bad: un-scoped findByText
+const el = await canvas.findByText(/code-pattern/);
+```
+
+### 2. NEVER use DOM-indexed queries
+```ts
+// ❌ FRAGILE — breaks silently if button order changes
+const copyButtons = screen.getAllByRole('button', { name: 'Copy' });
+await user.click(copyButtons[1]!);
+```
+Use `within()` scoped to the relevant section instead.
+
+### 3. Pre-existing a11y violations are NOT your problem
+The CI `storybook-test-runner` job runs axe on **every story**. Known pre-existing violations in Toast (Success/Error/Stacked) and Button (Primary) will fail CI on any PR. If your branch doesn't touch those stories, the failure is pre-existing — do NOT try to fix it. The orchestrator will handle.
+
+### 4. Mock data must use distinct prefixes
+When mock data appears in URL query params AND plain text, use distinct prefixes so findByText can disambiguate:
+```ts
+// ❌ BAD: same code in URL and plain text
+mockResolvedValue({ code: 'mock-code-abc123' }); // appears in both ?code= and <code>
+
+// ✅ GOOD: distinct prefix
+mockResolvedValue({ code: 'invite-code-abc123' });
+```
+
+## Tailwind CSS v4 — class naming rules
+
+### Dead classes pass tests trivially in jsdom
+`overflow-wrap-anywhere` is **NOT** a real Tailwind v4 utility. The correct class is `wrap-anywhere`. Both `break-words` and `wrap-anywhere` set `overflow-wrap` — using both is redundant but harmless.
+
+**Always verify utility names** against the installed Tailwind version before writing assertions. `toHaveClass()` on a dead class passes in jsdom (it only checks the `class` attribute, not computed styles) — dead-class assertions are false positives.
+
+Common pairings:
+| Purpose | Correct class |
+|---|---|
+| `overflow-wrap: anywhere` | `wrap-anywhere` |
+| `overflow-wrap: break-word` | `break-words` |
+| `word-break: break-all` | `break-all` |
+
 ## Cloudflare Deployment
 
 - Target: Cloudflare Pages (static SPA)
