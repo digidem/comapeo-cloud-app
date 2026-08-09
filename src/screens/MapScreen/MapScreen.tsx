@@ -203,24 +203,50 @@ export function MapScreen() {
           ];
           // Handle antimeridian crossing - if the span crosses the antimeridian,
           // the simple min/max approach would produce an inverted bbox.
-          // For antimeridian-spanning projects, we shift the bbox by adding 360
-          // to negative longitudes so MapLibre can fit it correctly.
+          // For antimeridian-spanning projects, shift all longitudes by +360
+          // then take min/max so MapLibre can fit the bbox correctly.
           if (spansAntimeridian(lngs)) {
+            // Shift longitudes by adding 360 to negative values, then compute bbox
+            const shiftedLngs = lngs.map((lng) => (lng < 0 ? lng + 360 : lng));
+            const shiftedLats = lats;
             const shiftedBbox: [number, number, number, number] = [
-              rawBbox[0] < 0 ? rawBbox[0] + 360 : rawBbox[0],
-              rawBbox[1],
-              rawBbox[2] < 0 ? rawBbox[2] + 360 : rawBbox[2],
-              rawBbox[3],
+              Math.min(...shiftedLngs),
+              Math.min(...shiftedLats),
+              Math.max(...shiftedLngs),
+              Math.max(...shiftedLats),
             ];
+            // Apply minimum span to avoid zero-area bbox for single-point projects
+            const MIN_SPAN = 0.01;
+            const finalBbox: [number, number, number, number] = [
+              shiftedBbox[0],
+              shiftedBbox[1],
+              shiftedBbox[2] - shiftedBbox[0] < MIN_SPAN
+                ? shiftedBbox[0] + MIN_SPAN
+                : shiftedBbox[2],
+              shiftedBbox[3] - shiftedBbox[1] < MIN_SPAN
+                ? shiftedBbox[1] + MIN_SPAN
+                : shiftedBbox[3],
+            ];
+            // Validate latitude bounds
+            const clampedBbox = clampBboxLatitude(finalBbox);
+            if (
+              clampedBbox[1] >= clampedBbox[3] ||
+              clampedBbox[0] >= clampedBbox[2]
+            ) {
+              // If invalid, don't auto-fit; leave as-is
+              setProjectBbox(clampedBbox);
+              return;
+            }
+            setProjectBbox(clampedBbox);
+            // Only apply and fit if user hasn't edited and not in draw mode
             if (
               !hasUserModifiedBboxRef.current &&
               drawModeRef.current === null
             ) {
-              setBbox(shiftedBbox);
-              setAutoFitBbox(shiftedBbox);
-            } else if (!hasUserModifiedBboxRef.current) {
-              setAutoFitBbox(DEFAULT_BBOX);
+              setBbox(clampedBbox);
+              setAutoFitBbox(clampedBbox);
             }
+            // If user edited or in draw mode, don't auto-fit - leave camera alone
             return;
           }
           // Ensure minimum span to avoid zero-area bbox for single-point projects
@@ -255,9 +281,8 @@ export function MapScreen() {
           if (!hasUserModifiedBboxRef.current && drawModeRef.current === null) {
             setBbox(DEFAULT_BBOX);
             setAutoFitBbox(DEFAULT_BBOX);
-          } else if (!hasUserModifiedBboxRef.current) {
-            setAutoFitBbox(DEFAULT_BBOX);
           }
+          // If user edited or in draw mode, don't auto-fit - leave camera alone
         }
       } catch {
         // Ignore errors, keep DEFAULT_BBOX
@@ -265,9 +290,8 @@ export function MapScreen() {
         if (!hasUserModifiedBboxRef.current && drawModeRef.current === null) {
           setBbox(DEFAULT_BBOX);
           setAutoFitBbox(DEFAULT_BBOX);
-        } else if (!hasUserModifiedBboxRef.current) {
-          setAutoFitBbox(DEFAULT_BBOX);
         }
+        // If user edited or in draw mode, don't auto-fit - leave camera alone
       }
     }
     loadProjectBbox();

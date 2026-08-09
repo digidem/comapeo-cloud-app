@@ -446,4 +446,60 @@ describe('MapScreen - default project area (issue #153)', () => {
     const settingsSheetSave = allSaves[allSaves.length - 1];
     expect(settingsSheetSave).toBeDisabled();
   });
+
+  it('handles antimeridian-spanning projects by shifting and fitting correctly', async () => {
+    // Points at 179 and -179 span the antimeridian
+    vi.mocked(getProjectPoints).mockResolvedValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-1', createdAt: '2026-01-01T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [179, 0] },
+        },
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-2', createdAt: '2026-01-02T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-179, 1] },
+        },
+      ],
+    });
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+
+    // Should shift longitudes: -179 -> 181, 179 stays 179
+    // bbox: west=179, east=181, south=0, north=1
+    // The span is 1 degree (> MIN_SPAN 0.01), so MIN_SPAN doesn't apply
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [179, 0],
+          [181, 1],
+        ],
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
+      );
+    });
+
+    // Also verify BoundsEditor shows the shifted bbox
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole('button', { name: 'Map settings' }),
+    );
+
+    await waitFor(() => {
+      const westInput = screen.getByLabelText('West');
+      expect(westInput).toHaveValue(179);
+      const southInput = screen.getByLabelText('South');
+      expect(southInput).toHaveValue(0);
+      const eastInput = screen.getByLabelText('East');
+      expect(eastInput).toHaveValue(181);
+      const northInput = screen.getByLabelText('North');
+      expect(northInput).toHaveValue(1);
+    });
+  });
 });

@@ -54,7 +54,7 @@ export function spansAntimeridian(lngs: number[]): boolean {
   if (lngs.length < 2) return false;
 
   // Normalize to [0, 360)
-  const normalized = lngs.map((lng) => (lng < 0 ? lng + 360 : lng));
+  const normalized = lngs.map((lng) => ((lng % 360) + 360) % 360);
   const sorted = [...normalized].sort((a, b) => a - b);
 
   let maxGap = 0;
