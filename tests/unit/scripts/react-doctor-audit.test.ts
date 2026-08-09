@@ -26,13 +26,16 @@ const diagnostic = {
 };
 
 describe('react-doctor weekly audit', () => {
-  it('extracts and de-duplicates diagnostics from schema v3 project reports', () => {
+  it('extracts and de-duplicates diagnostics from complete schema v3 reports', () => {
     const report = {
       schemaVersion: 3,
-      projects: [{ diagnostics: [diagnostic] }],
+      ok: true,
+      reactDetected: true,
+      projects: [{ complete: true, diagnostics: [diagnostic] }],
       diagnostics: [diagnostic],
     };
 
+    expect(() => assertReconciliableReport(report)).not.toThrow();
     expect(extractDiagnostics(report)).toEqual([diagnostic]);
   });
 
@@ -42,15 +45,32 @@ describe('react-doctor weekly audit', () => {
     ]);
   });
 
-  it('refuses to reconcile a failed or partial scan', () => {
+  it('refuses to reconcile failed, partial, or unrecognized scans', () => {
     expect(() => assertReconciliableReport({ ok: false })).toThrow(
+      'React Doctor report is not safe to reconcile',
+    );
+    expect(() => assertReconciliableReport({})).toThrow(
+      'React Doctor report is not safe to reconcile',
+    );
+    expect(() => assertReconciliableReport({ diagnostics: [] })).toThrow(
       'React Doctor report is not safe to reconcile',
     );
     expect(() =>
       assertReconciliableReport({
+        schemaVersion: 4,
         ok: true,
         reactDetected: true,
-        projects: [{ complete: false }],
+        projects: [{ complete: true, diagnostics: [] }],
+        diagnostics: [],
+      }),
+    ).toThrow('React Doctor report is not safe to reconcile');
+    expect(() =>
+      assertReconciliableReport({
+        schemaVersion: 3,
+        ok: true,
+        reactDetected: true,
+        projects: [{ complete: false, diagnostics: [] }],
+        diagnostics: [],
       }),
     ).toThrow('React Doctor report is not safe to reconcile');
   });
@@ -67,6 +87,17 @@ describe('react-doctor weekly audit', () => {
     expect(groups.get('src/components/Foo.tsx')).toEqual([diagnostic, second]);
   });
 
+  it('does not collapse the same diagnostic id across different locations', () => {
+    const second = {
+      ...diagnostic,
+      filePath: 'src/components/Bar.tsx',
+      normalizedFilePath: 'src/components/Bar.tsx',
+    };
+    const report = { diagnostics: [diagnostic, second] };
+
+    expect(extractDiagnostics(report)).toHaveLength(2);
+  });
+
   it('does not mutate an unchanged tracked issue on a later weekly run', () => {
     const groups = groupDiagnosticsByFile([diagnostic]);
     const firstPlan = buildIssuePlan({
@@ -74,7 +105,6 @@ describe('react-doctor weekly audit', () => {
       existingIssues: [],
       runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/123',
       maxNewIssues: 10,
-      metaThreshold: 50,
     });
     const created = firstPlan.create[0];
     if (!created) throw new Error('Expected the first run to create an issue');
@@ -91,7 +121,6 @@ describe('react-doctor weekly audit', () => {
       ],
       runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/456',
       maxNewIssues: 10,
-      metaThreshold: 50,
     });
 
     expect(secondPlan.create).toHaveLength(0);
@@ -121,13 +150,40 @@ describe('react-doctor weekly audit', () => {
       existingIssues: existing,
       runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/123',
       maxNewIssues: 10,
-      metaThreshold: 50,
     });
 
     expect(plan.create).toHaveLength(0);
     expect(plan.update.map((item) => item.number)).toEqual([10]);
     expect(plan.close.map((item) => item.number)).toEqual([11]);
     expect(plan.meta).toBeNull();
+  });
+
+  it('preserves human notes while updating an automated issue', () => {
+    const groups = groupDiagnosticsByFile([diagnostic]);
+    const firstPlan = buildIssuePlan({
+      groups,
+      existingIssues: [],
+      runUrl: 'dry-run',
+    });
+    const created = firstPlan.create[0];
+    if (!created) throw new Error('Expected an issue draft');
+
+    const changed = { ...diagnostic, message: 'Updated scanner message.' };
+    const plan = buildIssuePlan({
+      groups: groupDiagnosticsByFile([changed]),
+      existingIssues: [
+        {
+          number: 10,
+          title: created.title,
+          body: `${created.body}\nKeep this triage context.`,
+          labels: created.labels.map((name) => ({ name })),
+        },
+      ],
+      runUrl: 'dry-run',
+    });
+
+    expect(plan.update[0]?.body).toContain('Updated scanner message.');
+    expect(plan.update[0]?.body).toContain('Keep this triage context.');
   });
 
   it('uses a single meta issue instead of flooding GitHub on a large audit', () => {
@@ -144,15 +200,14 @@ describe('react-doctor weekly audit', () => {
       existingIssues: [],
       runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/123',
       maxNewIssues: 10,
-      metaThreshold: 50,
     });
 
-    expect(plan.create).toHaveLength(0);
+    expect(plan.create).toHaveLength(10);
     expect(plan.meta?.action).toBe('create');
     if (plan.meta?.action !== 'create') {
       throw new Error('Expected a meta issue to be created');
     }
-    expect(plan.meta.body).toContain('50 findings');
+    expect(plan.meta.body).toContain('40 additional files');
   });
 
   it('keeps the PR gate advisory and the weekly audit scheduled', () => {
@@ -165,17 +220,25 @@ describe('react-doctor weekly audit', () => {
       'utf8',
     );
 
-    expect(prWorkflow).toContain('millionco/react-doctor@v2');
+    expect(prWorkflow).toContain(
+      'millionco/react-doctor@01820bb4fd4d0a4aebcd8df2b2a143a098649cb2',
+    );
     expect(prWorkflow).toContain('blocking: none');
     expect(prWorkflow).toContain('scope: changed');
     expect(prWorkflow).toContain('fetch-depth: 0');
+    expect(prWorkflow).toContain('persist-credentials: false');
     expect(prWorkflow).toContain('statuses: write');
+    expect(prWorkflow).not.toContain('issues: write');
+    expect(prWorkflow).toContain('head.repo.fork');
 
     expect(auditWorkflow).toContain("cron: '0 6 * * 1'");
+    expect(auditWorkflow).toContain('pull_request:');
     expect(auditWorkflow).toContain('issues: write');
     expect(auditWorkflow).toContain('react-doctor@0.9.11');
     expect(auditWorkflow).toContain('--scope full');
     expect(auditWorkflow).toContain('react-doctor-report.json');
+    expect(auditWorkflow).toContain('--dry-run');
+    expect(auditWorkflow).toContain('persist-credentials: false');
     expect(auditWorkflow).toContain(
       'tsx@4.23.11 scripts/react-doctor-audit.ts',
     );

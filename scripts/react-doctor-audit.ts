@@ -47,6 +47,9 @@ export type IssuePlan = {
 
 const FILE_MARKER_PREFIX = '<!-- react-doctor:file=';
 const META_MARKER = '<!-- react-doctor:meta -->';
+const HUMAN_NOTES_MARKER = '<!-- react-doctor:human-notes -->';
+const AUTOMATION_FOOTER =
+  '_This issue is maintained automatically. It will be updated while findings remain and closed when the file is clean._';
 const BASE_LABELS = ['react-doctor', 'tech-debt'];
 
 const LABEL_DEFINITIONS = [
@@ -82,17 +85,15 @@ function diagnosticFile(diagnostic: ReactDoctorDiagnostic): string | null {
 }
 
 function diagnosticKey(diagnostic: ReactDoctorDiagnostic): string {
-  return (
-    diagnostic.id ??
-    [
-      diagnosticFile(diagnostic),
-      diagnostic.line ?? 0,
-      diagnostic.column ?? 0,
-      diagnostic.plugin ?? 'react-doctor',
-      diagnostic.rule ?? 'unknown-rule',
-      diagnostic.message ?? '',
-    ].join('::')
-  );
+  return [
+    diagnosticFile(diagnostic),
+    diagnostic.line ?? 0,
+    diagnostic.column ?? 0,
+    diagnostic.plugin ?? 'react-doctor',
+    diagnostic.rule ?? 'unknown-rule',
+    diagnostic.id ?? '',
+    diagnostic.message ?? '',
+  ].join('::');
 }
 
 export function assertReconciliableReport(report: unknown): void {
@@ -103,21 +104,34 @@ export function assertReconciliableReport(report: unknown): void {
   }
 
   const value = report as {
-    ok?: boolean;
-    reactDetected?: boolean;
-    projects?: Array<{ complete?: boolean }>;
+    schemaVersion?: unknown;
+    ok?: unknown;
+    reactDetected?: unknown;
+    diagnostics?: unknown;
+    projects?: unknown;
   };
-  const hasPartialProject = value.projects?.some(
-    (project) => project.complete === false,
-  );
 
-  if (
-    value.ok === false ||
-    value.reactDetected === false ||
-    hasPartialProject === true
-  ) {
+  const isCompleteSchemaV3Report =
+    value.schemaVersion === 3 &&
+    value.ok === true &&
+    value.reactDetected === true &&
+    Array.isArray(value.diagnostics) &&
+    Array.isArray(value.projects) &&
+    value.projects.length > 0 &&
+    value.projects.every((project) => {
+      if (!project || typeof project !== 'object') return false;
+      const candidate = project as {
+        complete?: unknown;
+        diagnostics?: unknown;
+      };
+      return (
+        candidate.complete === true && Array.isArray(candidate.diagnostics)
+      );
+    });
+
+  if (!isCompleteSchemaV3Report) {
     throw new Error(
-      'React Doctor report is not safe to reconcile: scan failed or was incomplete',
+      'React Doctor report is not safe to reconcile: scan failed, was incomplete, or has an unrecognized schema',
     );
   }
 }
@@ -164,7 +178,16 @@ export function groupDiagnosticsByFile(
   }
 
   for (const findings of groups.values()) {
-    findings.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
+    findings.sort(
+      (a, b) =>
+        (a.line ?? 0) - (b.line ?? 0) ||
+        (a.column ?? 0) - (b.column ?? 0) ||
+        (a.rule ?? a.id ?? '').localeCompare(b.rule ?? b.id ?? '') ||
+        (a.message ?? a.title ?? '').localeCompare(
+          b.message ?? b.title ?? '',
+        ) ||
+        (a.plugin ?? '').localeCompare(b.plugin ?? ''),
+    );
   }
 
   return groups;
@@ -230,7 +253,10 @@ function issueBody(file: string, findings: ReactDoctorDiagnostic[]): string {
     '',
     ...rows,
     '',
-    '_This issue is maintained automatically. It will be updated while findings remain and closed when the file is clean._',
+    AUTOMATION_FOOTER,
+    '',
+    '_Human triage notes below this marker are preserved by the weekly audit._',
+    HUMAN_NOTES_MARKER,
   ].join('\n');
 }
 
@@ -256,6 +282,9 @@ function metaBody(
     '_The latest complete JSON report is retained as an artifact of the React Doctor Weekly Audit workflow._',
     '',
     '_This meta-issue is maintained automatically and closes once the audit can return to normal per-file tracking._',
+    '',
+    '_Human triage notes below this marker are preserved by the weekly audit._',
+    HUMAN_NOTES_MARKER,
   ].join('\n');
 }
 
@@ -289,9 +318,34 @@ function labelsWithManagedState(
   return [...unmanaged, ...desired];
 }
 
+function humanNotesFromBody(body: string | null): string {
+  if (!body) return '';
+
+  const markerIndex = body.indexOf(HUMAN_NOTES_MARKER);
+  if (markerIndex >= 0) {
+    return body.slice(markerIndex + HUMAN_NOTES_MARKER.length).trim();
+  }
+
+  const footerIndex = body.indexOf(AUTOMATION_FOOTER);
+  if (footerIndex < 0) return '';
+  return body.slice(footerIndex + AUTOMATION_FOOTER.length).trim();
+}
+
+function draftForExistingIssue(
+  issue: ExistingIssue,
+  draft: IssueDraft,
+): IssueDraft {
+  const humanNotes = humanNotesFromBody(issue.body);
+  return {
+    ...draft,
+    body: humanNotes ? `${draft.body}\n${humanNotes}` : draft.body,
+    labels: labelsWithManagedState(issue, draft.labels),
+  };
+}
+
 function issueMatchesDraft(issue: ExistingIssue, draft: IssueDraft): boolean {
   const actualLabels = [...labelNames(issue)].sort();
-  const desiredLabels = [...labelsWithManagedState(issue, draft.labels)].sort();
+  const desiredLabels = [...draft.labels].sort();
   return (
     issue.title === draft.title &&
     issue.body === draft.body &&
@@ -303,13 +357,11 @@ export function buildIssuePlan({
   groups,
   existingIssues,
   maxNewIssues = 10,
-  metaThreshold = 50,
 }: {
   groups: Map<string, ReactDoctorDiagnostic[]>;
   existingIssues: ExistingIssue[];
   runUrl: string;
   maxNewIssues?: number;
-  metaThreshold?: number;
 }): IssuePlan {
   const trackedIssues = existingIssues.filter((issue) => !issue.pull_request);
   const existingMeta = trackedIssues.find((issue) =>
@@ -328,12 +380,11 @@ export function buildIssuePlan({
   for (const [file, issue] of existingByFile) {
     const findings = groups.get(file);
     if (findings?.length) {
-      const draft = makeDraft(file, findings);
+      const draft = draftForExistingIssue(issue, makeDraft(file, findings));
       if (!issueMatchesDraft(issue, draft)) {
         update.push({
           number: issue.number,
           ...draft,
-          labels: labelsWithManagedState(issue, draft.labels),
         });
       }
     } else {
@@ -348,29 +399,6 @@ export function buildIssuePlan({
     (sum, findings) => sum + findings.length,
     0,
   );
-
-  if (totalFindings >= metaThreshold) {
-    const draft: IssueDraft = {
-      title: `[react-doctor] Weekly audit backlog (${totalFindings} findings)`,
-      body: metaBody(
-        groups,
-        totalFindings,
-        `The backlog exceeds the ${metaThreshold}-finding flood-control threshold, so new per-file issues are paused for this run.`,
-      ),
-      labels: [...BASE_LABELS, severityLabel([...groups.values()].flat())],
-    };
-    const meta: MetaChange | null = existingMeta
-      ? issueMatchesDraft(existingMeta, draft)
-        ? null
-        : {
-            action: 'update',
-            number: existingMeta.number,
-            ...draft,
-            labels: labelsWithManagedState(existingMeta, draft.labels),
-          }
-      : { action: 'create', ...draft };
-    return { create: [], update, close, meta };
-  }
 
   const create = newGroups
     .slice(0, maxNewIssues)
@@ -388,21 +416,48 @@ export function buildIssuePlan({
       ),
       labels: [...BASE_LABELS, severityLabel([...groups.values()].flat())],
     };
-    meta = existingMeta
-      ? issueMatchesDraft(existingMeta, draft)
+    if (existingMeta) {
+      const existingDraft = draftForExistingIssue(existingMeta, draft);
+      meta = issueMatchesDraft(existingMeta, existingDraft)
         ? null
         : {
             action: 'update',
             number: existingMeta.number,
-            ...draft,
-            labels: labelsWithManagedState(existingMeta, draft.labels),
-          }
-      : { action: 'create', ...draft };
+            ...existingDraft,
+          };
+    } else {
+      meta = { action: 'create', ...draft };
+    }
   } else if (existingMeta) {
     meta = { action: 'close', number: existingMeta.number };
   }
 
   return { create, update, close, meta };
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function retryDelayMs(response: Response, attempt: number): number | null {
+  const retryAfter = response.headers.get('retry-after');
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds)) return Math.min(seconds * 1000, 60_000);
+  }
+
+  const rateLimitReset = response.headers.get('x-ratelimit-reset');
+  const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
+  if (rateLimitReset && rateLimitRemaining === '0') {
+    const resetMs = Number(rateLimitReset) * 1000 - Date.now();
+    if (Number.isFinite(resetMs))
+      return Math.min(Math.max(resetMs, 1000), 60_000);
+  }
+
+  if (response.status === 429 || response.status >= 500) {
+    return Math.min(1000 * 2 ** attempt, 10_000);
+  }
+  return null;
 }
 
 async function githubRequest<T>(
@@ -411,29 +466,48 @@ async function githubRequest<T>(
   endpoint: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(
-    `https://api.github.com/repos/${repo}${endpoint}`,
-    {
-      ...init,
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-        'Content-Type': 'application/json',
-        ...init.headers,
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const response = await fetch(
+      `https://api.github.com/repos/${repo}${endpoint}`,
+      {
+        ...init,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+          ...init.headers,
+        },
       },
-    },
-  );
+    );
 
-  if (!response.ok) {
+    if (response.ok) {
+      const result =
+        response.status === 204
+          ? (undefined as T)
+          : ((await response.json()) as T);
+      if (init.method && init.method !== 'GET') await sleep(800);
+      return result;
+    }
+
+    const delay = retryDelayMs(response, attempt);
+    if (delay !== null && attempt < 3) {
+      console.warn(
+        `GitHub API ${init.method ?? 'GET'} ${endpoint} returned ${response.status}; retrying after ${delay}ms`,
+      );
+      await sleep(delay);
+      continue;
+    }
+
     const text = await response.text();
     throw new Error(
       `GitHub API ${init.method ?? 'GET'} ${endpoint} failed (${response.status}): ${text}`,
     );
   }
 
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  throw new Error(
+    `GitHub API request unexpectedly exhausted retries: ${endpoint}`,
+  );
 }
 
 async function listTrackedIssues(
@@ -475,8 +549,22 @@ async function applyPlan(
   token: string,
   plan: IssuePlan,
 ): Promise<void> {
+  const failures: Error[] = [];
+  const mutate = async (
+    description: string,
+    endpoint: string,
+    init: RequestInit,
+  ): Promise<void> => {
+    try {
+      await githubRequest(repo, token, endpoint, init);
+    } catch (error) {
+      const cause = error instanceof Error ? error : new Error(String(error));
+      failures.push(new Error(`${description}: ${cause.message}`, { cause }));
+    }
+  };
+
   for (const issue of plan.update) {
-    await githubRequest(repo, token, `/issues/${issue.number}`, {
+    await mutate(`update issue #${issue.number}`, `/issues/${issue.number}`, {
       method: 'PATCH',
       body: JSON.stringify({
         title: issue.title,
@@ -486,23 +574,15 @@ async function applyPlan(
     });
   }
 
-  for (const issue of plan.close) {
-    await githubRequest(repo, token, `/issues/${issue.number}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ state: 'closed', state_reason: 'completed' }),
-    });
-  }
-
   for (const issue of plan.create) {
-    await githubRequest(repo, token, '/issues', {
+    await mutate(`create issue ${issue.title}`, '/issues', {
       method: 'POST',
       body: JSON.stringify(issue),
     });
   }
 
-  if (!plan.meta) return;
-  if (plan.meta.action === 'create') {
-    await githubRequest(repo, token, '/issues', {
+  if (plan.meta?.action === 'create') {
+    await mutate(`create meta issue ${plan.meta.title}`, '/issues', {
       method: 'POST',
       body: JSON.stringify({
         title: plan.meta.title,
@@ -510,36 +590,76 @@ async function applyPlan(
         labels: plan.meta.labels,
       }),
     });
-  } else if (plan.meta.action === 'update') {
-    await githubRequest(repo, token, `/issues/${plan.meta.number}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        title: plan.meta.title,
-        body: plan.meta.body,
-        labels: plan.meta.labels,
-      }),
-    });
-  } else {
-    await githubRequest(repo, token, `/issues/${plan.meta.number}`, {
+  } else if (plan.meta?.action === 'update') {
+    await mutate(
+      `update meta issue #${plan.meta.number}`,
+      `/issues/${plan.meta.number}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: plan.meta.title,
+          body: plan.meta.body,
+          labels: plan.meta.labels,
+        }),
+      },
+    );
+  }
+
+  // Destructive mutations are last so a transient failure cannot close tracked
+  // work before current findings and backlog state have been persisted.
+  for (const issue of plan.close) {
+    await mutate(`close issue #${issue.number}`, `/issues/${issue.number}`, {
       method: 'PATCH',
       body: JSON.stringify({ state: 'closed', state_reason: 'completed' }),
     });
+  }
+
+  if (plan.meta?.action === 'close') {
+    await mutate(
+      `close meta issue #${plan.meta.number}`,
+      `/issues/${plan.meta.number}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ state: 'closed', state_reason: 'completed' }),
+      },
+    );
+  }
+
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures,
+      `React Doctor reconciliation completed with ${failures.length} failed GitHub mutation${failures.length === 1 ? '' : 's'}; rerun is safe because the plan is idempotent.`,
+    );
   }
 }
 
 async function main(): Promise<void> {
   const reportPath = process.argv[2] ?? 'react-doctor-report.json';
-  const repo = process.env.GITHUB_REPOSITORY;
-  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
-  const runId = process.env.GITHUB_RUN_ID;
-
-  if (!repo) throw new Error('GITHUB_REPOSITORY is required');
-  if (!token) throw new Error('GITHUB_TOKEN or GH_TOKEN is required');
-
+  const dryRun =
+    process.env.REACT_DOCTOR_DRY_RUN === '1' ||
+    process.argv.includes('--dry-run');
   const report = JSON.parse(await readFile(reportPath, 'utf8')) as unknown;
+
   assertReconciliableReport(report);
   const diagnostics = extractDiagnostics(report);
   const groups = groupDiagnosticsByFile(diagnostics);
+
+  if (dryRun) {
+    const plan = buildIssuePlan({
+      groups,
+      existingIssues: [],
+      runUrl: 'dry-run',
+    });
+    console.log(JSON.stringify(plan, null, 2));
+    return;
+  }
+
+  const repo = process.env.GITHUB_REPOSITORY;
+  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+  const runId = process.env.GITHUB_RUN_ID;
+  if (!repo) throw new Error('GITHUB_REPOSITORY is required');
+  if (!token) throw new Error('GITHUB_TOKEN or GH_TOKEN is required');
+
   const runUrl = runId
     ? `https://github.com/${repo}/actions/runs/${runId}`
     : `https://github.com/${repo}/actions`;
