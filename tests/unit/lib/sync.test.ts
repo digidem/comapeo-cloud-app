@@ -1,7 +1,8 @@
 import { server } from '@tests/mocks/node';
 import { HttpResponse, http } from 'msw';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiError, apiClient } from '@/lib/api-client';
 import { getDb, resetDb } from '@/lib/db';
 import { createRemoteServer } from '@/lib/local-repositories';
 import { syncRemoteArchive } from '@/lib/sync';
@@ -181,6 +182,22 @@ describe('syncRemoteArchive', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
+    expect(result.errorCode).toBe('connection');
+  });
+
+  it('classifies rejected archive credentials as authorization failures', async () => {
+    const serverRecord = await seedServer();
+    vi.spyOn(apiClient, 'getProjects').mockRejectedValueOnce(
+      new ApiError(401, 'UNAUTHORIZED', 'Invalid bearer credential'),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe('authorization');
   });
 
   it('returns error on invalid response from server', async () => {
@@ -782,6 +799,7 @@ describe('syncRemoteArchive', () => {
 
     expect(result.success).toBe(false);
     expect(result.status).toBe('partial');
+    expect(result.errorCode).toBe('partial');
     expect(
       result.projects.find((project) => project.projectRemoteId === 'proj-1')
         ?.status,

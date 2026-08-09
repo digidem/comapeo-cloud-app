@@ -88,6 +88,28 @@ function failedResult(error: string): SyncResult {
   };
 }
 
+function codedFailedResult(
+  error: string,
+  errorCode: 'authorization' | 'connection',
+): SyncResult & { errorCode: typeof errorCode } {
+  return {
+    ...failedResult(error),
+    errorCode,
+  };
+}
+
+function partialResult(): SyncResult & { errorCode: 'partial' } {
+  return {
+    success: false,
+    status: 'partial',
+    serverId: 'test-server-id',
+    projects: [],
+    warnings: ['Some archive data could not be synced'],
+    error: 'Partial sync',
+    errorCode: 'partial',
+  };
+}
+
 function setSearchParams(params: string) {
   const origin = 'http://localhost:5173';
   Object.defineProperty(window, 'location', {
@@ -316,6 +338,23 @@ describe('InviteScreen', () => {
     expect(useAuthStore.getState().servers).toHaveLength(0);
   });
 
+  it('shows the network message when pre-persist validation times out', async () => {
+    const addServerSpy = vi.spyOn(useAuthStore.getState(), 'addServer');
+    vi.spyOn(apiClient, 'healthCheck').mockRejectedValueOnce(
+      new Error('Archive validation timed out'),
+    );
+
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Unable to connect. Check your internet connection.'),
+      ).toBeInTheDocument();
+    });
+    expect(addServerSpy).not.toHaveBeenCalled();
+  });
+
   it('passes a cancellation control into the sync so unmount aborts it', async () => {
     setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
     // Never-settling sync (empty executor — no resolvers used) to test
@@ -410,6 +449,103 @@ describe('InviteScreen', () => {
         removeServer: realRemoveServer,
       }));
     }
+  });
+
+  it('restores an existing connected server when the screen unmounts mid-sync', async () => {
+    const snapshot = {
+      id: 'existing-archive',
+      label: 'archive.test',
+      baseUrl: 'https://archive.test',
+      token: 'old',
+      status: 'connected' as const,
+      onboardingStatus: 'ready' as const,
+      lastSyncedAt: '2026-08-01T12:00:00.000Z',
+      lastSuccessfulSyncAt: '2026-08-01T12:00:00.000Z',
+      errorMessage: undefined,
+    };
+    useAuthStore.setState({ servers: [snapshot] });
+
+    let resolveSync!: (result: SyncResult) => void;
+    vi.mocked(syncRemoteArchive).mockReturnValueOnce(
+      new Promise<SyncResult>((resolve) => {
+        resolveSync = resolve;
+      }),
+    );
+
+    setSearchParams('?hash=new&url=https%3A%2F%2Farchive.test');
+    const { unmount } = render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().servers[0]!.token).toBe('new');
+      expect(syncRemoteArchive).toHaveBeenCalledOnce();
+    });
+
+    unmount();
+    resolveSync(readyResult(snapshot.id));
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().servers[0]).toEqual(snapshot);
+    });
+  });
+
+  it('restores an existing connected server and shows auth guidance when sync loses authorization', async () => {
+    const snapshot = {
+      id: 'existing-archive',
+      label: 'archive.test',
+      baseUrl: 'https://archive.test',
+      token: 'old',
+      status: 'connected' as const,
+      onboardingStatus: 'ready' as const,
+      lastSyncedAt: '2026-08-01T12:00:00.000Z',
+      lastSuccessfulSyncAt: '2026-08-01T12:00:00.000Z',
+      errorMessage: undefined,
+    };
+    useAuthStore.setState({ servers: [snapshot] });
+    vi.mocked(syncRemoteArchive).mockResolvedValueOnce(
+      codedFailedResult('Invalid bearer credential', 'authorization'),
+    );
+
+    setSearchParams('?hash=new&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Invalid token or unauthorized'),
+      ).toBeInTheDocument();
+    });
+    expect(useAuthStore.getState().servers[0]).toEqual(snapshot);
+  });
+
+  it('shows a distinct message for partial sync and rolls back the pending server', async () => {
+    vi.mocked(syncRemoteArchive).mockResolvedValueOnce(partialResult());
+
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Connected, but some archive data could not be synced. Try again.',
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(useAuthStore.getState().servers).toHaveLength(0);
+  });
+
+  it('shows the network message when sync fails with a connection error', async () => {
+    vi.mocked(syncRemoteArchive).mockResolvedValueOnce(
+      codedFailedResult('Unable to connect', 'connection'),
+    );
+
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Unable to connect. Check your internet connection.'),
+      ).toBeInTheDocument();
+    });
+    expect(useAuthStore.getState().servers).toHaveLength(0);
   });
 
   // -----------------------------------------------------------------------

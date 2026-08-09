@@ -5,6 +5,7 @@ import {
   getCategorySet,
   getCategorySets,
   importCategorySet,
+  resetCategoriesDb,
 } from '@/lib/categories-db';
 
 beforeEach(async () => {
@@ -181,5 +182,24 @@ describe('getCategorySet', () => {
       fields: data.fields,
       importedAt: expect.any(String),
     });
+  });
+});
+
+describe('resetCategoriesDb', () => {
+  it('clears imported category sets through the real Dexie transaction', async () => {
+    await importCategorySet('set-a', 'Set A', {
+      categories: {},
+      fields: {},
+    });
+    await importCategorySet('set-b', 'Set B', {
+      categories: {},
+      fields: {},
+    });
+
+    expect(await getCategorySets()).toHaveLength(2);
+
+    await resetCategoriesDb();
+
+    expect(await getCategorySets()).toEqual([]);
   });
 });
