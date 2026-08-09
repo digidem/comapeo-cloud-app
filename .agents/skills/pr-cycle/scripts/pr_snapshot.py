@@ -14,7 +14,7 @@ import sys
 from typing import Any
 
 
-PASSING_CHECK_CONCLUSIONS = {"SUCCESS", "SKIPPED", "NEUTRAL"}
+PASSING_CHECK_CONCLUSIONS = {"SUCCESS"}
 FAILING_CHECK_CONCLUSIONS = {
     "ACTION_REQUIRED",
     "CANCELLED",
@@ -68,16 +68,6 @@ def resolve_repo(repo: str | None) -> str:
     return value
 
 
-def resolve_pr(repo: str, pr: int | None) -> int:
-    if pr is not None:
-        return pr
-    data = run_gh_json(["pr", "view", "--repo", repo, "--json", "number"])
-    value = data.get("number")
-    if not isinstance(value, int):
-        raise SnapshotError("could not resolve pull request number")
-    return value
-
-
 def fetch_pr(repo: str, pr: int) -> dict[str, Any]:
     fields = (
         "number,url,state,isDraft,headRefName,headRefOid,baseRefName,mergeable,"
@@ -105,7 +95,8 @@ query($owner:String!,$name:String!,$number:Int!,$cursor:String){
           isOutdated
           path
           line
-          comments(first:20){
+          comments(last:100){
+            totalCount
             nodes{
               author{login}
               body
@@ -122,8 +113,14 @@ query($owner:String!,$name:String!,$number:Int!,$cursor:String){
 
     threads: list[dict[str, Any]] = []
     cursor: str | None = None
+    seen_cursors: set[str] = set()
+    page_count = 0
 
     while True:
+        page_count += 1
+        if page_count > 100:
+            raise SnapshotError("review-thread pagination exceeded 100 pages")
+
         args = [
             "api",
             "graphql",
@@ -150,12 +147,30 @@ query($owner:String!,$name:String!,$number:Int!,$cursor:String){
         if not isinstance(nodes, list) or not isinstance(page_info, dict):
             raise SnapshotError("review-thread GraphQL pagination data was incomplete")
 
-        threads.extend(node for node in nodes if isinstance(node, dict))
+        for node in nodes:
+            if not isinstance(node, dict):
+                raise SnapshotError("review-thread response contained a malformed thread")
+            comments = node.get("comments")
+            if not isinstance(comments, dict):
+                raise SnapshotError("review-thread comments response was incomplete")
+            comment_nodes = comments.get("nodes")
+            comment_total = comments.get("totalCount")
+            if not isinstance(comment_nodes, list) or not isinstance(comment_total, int):
+                raise SnapshotError("review-thread comments pagination data was incomplete")
+            if comment_total > len(comment_nodes):
+                raise SnapshotError(
+                    "a review thread has more than 100 comments; inspect it manually"
+                )
+            threads.append(node)
         if not page_info.get("hasNextPage"):
             break
-        cursor = page_info.get("endCursor")
-        if not isinstance(cursor, str) or not cursor:
+        next_cursor = page_info.get("endCursor")
+        if not isinstance(next_cursor, str) or not next_cursor:
             raise SnapshotError("review-thread pagination cursor was missing")
+        if next_cursor in seen_cursors:
+            raise SnapshotError("review-thread pagination cursor repeated")
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
 
     return threads
 
@@ -166,6 +181,7 @@ def classify_checks(rollup: Any) -> dict[str, Any]:
 
     passing: list[str] = []
     skipped: list[str] = []
+    neutral: list[str] = []
     failing: list[str] = []
     pending: list[str] = []
     unknown: list[str] = []
@@ -185,6 +201,8 @@ def classify_checks(rollup: Any) -> dict[str, Any]:
                 pending.append(name)
             elif conclusion == "SKIPPED":
                 skipped.append(name)
+            elif conclusion == "NEUTRAL":
+                neutral.append(name)
             elif conclusion in PASSING_CHECK_CONCLUSIONS:
                 passing.append(name)
             elif conclusion in FAILING_CHECK_CONCLUSIONS:
@@ -208,10 +226,18 @@ def classify_checks(rollup: Any) -> dict[str, Any]:
         "total": len(rollup),
         "passing": passing,
         "skipped": skipped,
+        "neutral": neutral,
         "failing": failing,
         "pending": pending,
         "unknown": unknown,
-        "terminal_green": not failing and not pending and not unknown,
+        # Deliberately conservative: no checks, skipped checks, and neutral checks
+        # all require caller adjudication rather than becoming a green signal.
+        "terminal_green": bool(rollup)
+        and not failing
+        and not pending
+        and not skipped
+        and not neutral
+        and not unknown,
     }
 
 
@@ -225,9 +251,14 @@ def compact_threads(threads: list[dict[str, Any]]) -> dict[str, Any]:
             resolved += 1
             continue
 
-        comments = thread.get("comments", {}).get("nodes", [])
-        first = comments[0] if isinstance(comments, list) and comments else {}
-        body = first.get("body") if isinstance(first, dict) else None
+        comments_connection = thread.get("comments", {})
+        comments = (
+            comments_connection.get("nodes", [])
+            if isinstance(comments_connection, dict)
+            else []
+        )
+        latest = comments[-1] if isinstance(comments, list) and comments else {}
+        body = latest.get("body") if isinstance(latest, dict) else None
         if isinstance(body, str) and len(body) > 240:
             body = body[:237] + "..."
 
@@ -236,12 +267,17 @@ def compact_threads(threads: list[dict[str, Any]]) -> dict[str, Any]:
             "path": thread.get("path"),
             "line": thread.get("line"),
             "outdated": bool(thread.get("isOutdated")),
-            "author": (
-                first.get("author", {}).get("login")
-                if isinstance(first, dict) and isinstance(first.get("author"), dict)
+            "comment_count": (
+                comments_connection.get("totalCount")
+                if isinstance(comments_connection, dict)
                 else None
             ),
-            "url": first.get("url") if isinstance(first, dict) else None,
+            "author": (
+                latest.get("author", {}).get("login")
+                if isinstance(latest, dict) and isinstance(latest.get("author"), dict)
+                else None
+            ),
+            "url": latest.get("url") if isinstance(latest, dict) else None,
             "body": body,
         }
         unresolved.append(entry)
@@ -257,9 +293,30 @@ def compact_threads(threads: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def build_snapshot(repo: str, pr_number: int) -> dict[str, Any]:
-    pr = fetch_pr(repo, pr_number)
+def build_snapshot(
+    repo: str, pr_number: int, expected_head: str | None = None
+) -> dict[str, Any]:
+    pr_before = fetch_pr(repo, pr_number)
+    head_before = pr_before.get("headRefOid")
+    if not isinstance(head_before, str) or not head_before:
+        raise SnapshotError("pull request head SHA was missing")
+    if expected_head is not None and head_before != expected_head:
+        raise SnapshotError(
+            f"pull request head changed: expected {expected_head}, found {head_before}"
+        )
+
     threads = fetch_review_threads(repo, pr_number)
+    pr = fetch_pr(repo, pr_number)
+    head_after = pr.get("headRefOid")
+    if head_after != head_before:
+        raise SnapshotError(
+            f"pull request head changed during snapshot: {head_before} -> {head_after}"
+        )
+    if expected_head is not None and head_after != expected_head:
+        raise SnapshotError(
+            f"pull request head changed: expected {expected_head}, found {head_after}"
+        )
+
     checks = classify_checks(pr.get("statusCheckRollup"))
     review_threads = compact_threads(threads)
 
@@ -302,7 +359,11 @@ def build_snapshot(repo: str, pr_number: int) -> dict[str, Any]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", help="GitHub repository as OWNER/REPO")
-    parser.add_argument("--pr", type=int, help="Pull request number")
+    parser.add_argument("--pr", type=int, required=True, help="Pull request number")
+    parser.add_argument(
+        "--expect-head",
+        help="Fail unless the PR head SHA equals this exact reviewed/pushed SHA",
+    )
     parser.add_argument("--compact", action="store_true", help="Emit compact JSON")
     return parser.parse_args()
 
@@ -311,8 +372,7 @@ def main() -> int:
     args = parse_args()
     try:
         repo = resolve_repo(args.repo)
-        pr_number = resolve_pr(repo, args.pr)
-        snapshot = build_snapshot(repo, pr_number)
+        snapshot = build_snapshot(repo, args.pr, args.expect_head)
     except SnapshotError as exc:
         error = {"complete": False, "error": str(exc), "merge_ready": False}
         json.dump(error, sys.stdout, indent=None if args.compact else 2, sort_keys=True)

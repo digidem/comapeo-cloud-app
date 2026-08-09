@@ -11,7 +11,7 @@ gh pr view <pr> --repo <owner/repo> --json state,isDraft,headRefName,headRefOid,
 Prefer the bundled snapshot helper when available:
 
 ```bash
-python3 .agents/skills/pr-cycle/scripts/pr_snapshot.py --repo <owner/repo> --pr <pr>
+python3 .agents/skills/pr-cycle/scripts/pr_snapshot.py --repo <owner/repo> --pr <pr> --expect-head <reviewed-sha>
 ```
 
 The helper exits non-zero when GitHub state could not be read completely. Treat incomplete output as not merge-ready.
@@ -22,10 +22,10 @@ Flat PR comments are not sufficient. Query review threads so `isResolved` and in
 
 ```bash
 gh api graphql \
-  -F owner=<owner> \
-  -F name=<repo> \
+  -f owner=<owner> \
+  -f name=<repo> \
   -F number=<pr> \
-  -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved isOutdated path line comments(first:20){nodes{author{login} body url}}}}}}}'
+  -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved isOutdated path line comments(last:100){totalCount nodes{author{login} body url}}}}}}}'
 ```
 
 If more than 100 threads exist, paginate rather than assuming the first page is complete.
@@ -43,7 +43,7 @@ gh run view <run-id> --repo <owner/repo> --json name,workflowName,conclusion,sta
 gh run view <run-id> --repo <owner/repo> --log
 ```
 
-Wait until relevant checks are terminal. Conditional `SKIPPED` jobs can be legitimate; queued, pending, in-progress, cancelled, timed-out, action-required, and failing relevant checks are not green.
+Wait until relevant checks are terminal. Treat every `SKIPPED` or `NEUTRAL` result as requiring explicit adjudication before readiness; only clearly legitimate conditional skips are acceptable. Queued, pending, in-progress, cancelled, timed-out, action-required, and failing relevant checks are not green.
 
 ## Exact-head discipline
 
@@ -72,10 +72,11 @@ Require `state` to be `MERGED` and record the merge commit SHA.
 Perform cleanup only for the merged PR branch and its isolated worktree.
 
 1. Confirm the PR worktree has no local changes.
-2. Remove the PR branch from the remote if it still exists.
-3. Remove the isolated PR worktree.
-4. Remove the local PR branch after the worktree is gone.
-5. Verify the remote branch is absent and the PR worktree is not registered.
-6. Recheck unrelated/default worktrees and preserve all pre-existing changes.
+2. Prove there are no unpushed branch commits before deleting anything. If the remote-tracking branch still exists, require the local branch tip to equal it. If the remote branch is already absent, require the local branch tip to equal the PR head SHA captured when the merge was verified. Preserve and report the branch on any mismatch.
+3. Remove the PR branch from the remote if it still exists.
+4. Remove the isolated PR worktree.
+5. Remove the local PR branch only after step 2 proved it safe and the worktree is gone.
+6. Verify the remote branch is absent and the PR worktree is not registered.
+7. Recheck unrelated/default worktrees and preserve all pre-existing changes.
 
 Avoid broad cleanup or pruning commands during normal PR cleanup.

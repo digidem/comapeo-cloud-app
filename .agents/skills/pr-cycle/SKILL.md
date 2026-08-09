@@ -25,7 +25,7 @@ Drive one PR to a defensible merge-ready state without disturbing unrelated work
 5. If the main/default worktree is dirty, leave it untouched and never switch its branch for convenience.
 6. Snapshot unrelated worktree paths so cleanup can be scoped later.
 
-Use `scripts/pr_snapshot.py` for a conservative GitHub-side state snapshot when `gh` is available. See `references/github-runbook.md` for canonical command patterns.
+Use `scripts/pr_snapshot.py` for a conservative GitHub-side state snapshot when `gh` is available. Once a pushed/reviewed head SHA is known, pass it with `--expect-head` so the snapshot fails if the PR moves during verification. See `references/github-runbook.md` for canonical command patterns.
 
 ## 2. Establish current truth
 
@@ -50,7 +50,7 @@ Repeat until there are no actionable findings on the current head:
 3. Follow repository development rules, including required TDD and validation practices.
 4. Run narrow relevant tests first, then repository-required lint, type, test, and build checks when practical.
 5. Commit and push intentional changes on the PR branch only.
-6. Once a fix is pushed and validated, reply to or resolve addressed actionable threads when the PR-cycle request authorized addressing all review feedback.
+6. Once a fix is pushed and validated, reply to addressed actionable threads. Resolve a thread only when its requested change is fully satisfied and the latest thread context does not indicate that reviewer follow-up is still needed; a PR-cycle request authorizes this resolution behavior for addressed feedback.
 7. Record the new pushed head SHA. All earlier readiness and reviewer verdicts are now stale.
 
 Do not stop after the first green CI run if unresolved actionable review feedback remains.
@@ -77,7 +77,7 @@ Declare `MERGE-READY` only when all of these are true simultaneously for one exa
 - PR is open and not draft.
 - Current GitHub head SHA equals the SHA used for final review and verification.
 - GitHub reports the PR mergeable and clean, or an explicitly understood repository-equivalent state.
-- All required and relevant checks are terminal and green. Legitimate conditional skips are acceptable; pending, queued, running, cancelled, timed-out, action-required, or failing relevant checks are not.
+- All required and relevant checks are terminal and green. Treat every skipped or neutral check as requiring explicit adjudication before readiness; only clearly legitimate conditional skips are acceptable. Pending, queued, running, cancelled, timed-out, action-required, or failing relevant checks are not.
 - No unresolved actionable review threads remain.
 - No outstanding blocker or should-fix finding remains from requested independent reviewers.
 - Local PR worktree is clean after the final push.
@@ -103,11 +103,12 @@ Only after explicit authorization:
 Clean only resources belonging to the merged PR:
 
 1. Confirm the isolated PR worktree is clean.
-2. Remove the PR remote branch if it still exists.
-3. Remove the isolated PR worktree.
-4. Remove the PR local branch after the worktree is gone.
-5. Verify the remote branch is absent and the worktree is no longer registered.
-6. Recheck the default and unrelated worktrees and confirm pre-existing changes remain untouched.
+2. Before deleting any branch, prove the local PR branch has no unpushed commits: if its remote-tracking branch exists, require the local tip to equal that remote tip; if the remote branch is already absent, require the local tip to equal the PR head SHA recorded at verified merge time. If either check fails, preserve the branch and report it instead of cleaning it up.
+3. Remove the PR remote branch if it still exists.
+4. Remove the isolated PR worktree.
+5. Remove the PR local branch after the worktree is gone and only after step 2 proved it safe.
+6. Verify the remote branch is absent and the worktree is no longer registered.
+7. Recheck the default and unrelated worktrees and confirm pre-existing changes remain untouched.
 
 Avoid broad repository cleanup operations unless the user explicitly requests them.
 
