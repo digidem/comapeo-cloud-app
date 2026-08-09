@@ -251,6 +251,27 @@ function withTileFolder(
   return { ...source, tiles };
 }
 
+function getOrCreateSourceFolders(style: SmpStyle): Record<string, string> {
+  let metadata = style.metadata;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    metadata = {};
+    style.metadata = metadata;
+  }
+
+  const metadataRecord = metadata as Record<string, unknown>;
+  let sourceFolders = metadataRecord['smp:sourceFolders'];
+  if (
+    !sourceFolders ||
+    typeof sourceFolders !== 'object' ||
+    Array.isArray(sourceFolders)
+  ) {
+    sourceFolders = {};
+    metadataRecord['smp:sourceFolders'] = sourceFolders;
+  }
+
+  return sourceFolders as Record<string, string>;
+}
+
 async function mergeGlobalOverviewSmp(
   globalBytes: Uint8Array,
   regionalBytes: Uint8Array,
@@ -303,6 +324,9 @@ async function mergeGlobalOverviewSmp(
       globalFolder,
       mergedFolder,
     );
+    const sourceFolders = getOrCreateSourceFolders(regionalStyle);
+    sourceFolders[sourceId] ??= `s/${regionalFolder}`;
+    sourceFolders[globalSourceId] = `s/${mergedFolder}`;
     sourceMap.set(sourceId, { globalSourceId, globalFolder, mergedFolder });
 
     for (const path of Object.keys(regionalZip.files)) {

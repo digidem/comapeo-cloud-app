@@ -204,6 +204,11 @@ describe('downloadSmp', () => {
           },
         },
         layers: [{ id: 'raster', type: 'raster', source: 'raster' }],
+        metadata: {
+          'smp:bounds': [-180, -85.0511, 180, 85.0511],
+          'smp:maxzoom': 3,
+          'smp:sourceFolders': { raster: 's/0' },
+        },
       }),
     );
     globalZip.file('s/0/0/0/0.png', new Uint8Array([1]));
@@ -224,6 +229,11 @@ describe('downloadSmp', () => {
           },
         },
         layers: [{ id: 'raster', type: 'raster', source: 'raster' }],
+        metadata: {
+          'smp:bounds': [-75, -12, -45, 8],
+          'smp:maxzoom': 4,
+          'smp:sourceFolders': { raster: 's/0' },
+        },
       }),
     );
     regionalZip.file('s/0/3/4/4.png', new Uint8Array([3]));
@@ -277,11 +287,22 @@ describe('downloadSmp', () => {
         minzoom?: number;
         maxzoom?: number;
       }>;
+      metadata?: {
+        'smp:bounds'?: number[];
+        'smp:maxzoom'?: number;
+        'smp:sourceFolders'?: Record<string, string>;
+      };
     };
     expect(validateStyleMin(style as unknown as StyleSpecification)).toEqual(
       [],
     );
     expect(style.sources.raster__global_overview?.maxzoom).toBe(3);
+    expect(style.metadata?.['smp:bounds']).toEqual([-75, -12, -45, 8]);
+    expect(style.metadata?.['smp:maxzoom']).toBe(4);
+    expect(style.metadata?.['smp:sourceFolders']).toEqual({
+      raster: 's/0',
+      raster__global_overview: 's/g0',
+    });
     expect(style.layers).toEqual([
       expect.objectContaining({
         id: 'raster__global_overview',
