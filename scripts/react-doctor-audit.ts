@@ -377,13 +377,17 @@ export function buildIssuePlan({
   const trackedIssues = existingIssues
     .filter((issue) => !issue.pull_request)
     .sort((a, b) => a.number - b.number);
-  const existingMeta = trackedIssues.find(
+  const duplicateClose: Array<{ number: number }> = [];
+  const metaCandidates = trackedIssues.filter(
     (issue) =>
       issue.body?.includes(META_MARKER) &&
       fileFromIssueMarker(issue.body) === null,
   );
+  const existingMeta = metaCandidates[0];
+  duplicateClose.push(
+    ...metaCandidates.slice(1).map((issue) => ({ number: issue.number })),
+  );
   const existingByFile = new Map<string, ExistingIssue>();
-  const duplicateClose: Array<{ number: number }> = [];
 
   for (const issue of trackedIssues) {
     const file = fileFromIssueMarker(issue.body);

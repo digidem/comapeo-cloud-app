@@ -301,6 +301,22 @@ describe('react-doctor weekly audit', () => {
     expect(plan.meta).toEqual({ action: 'close', number: 99 });
   });
 
+  it('self-heals duplicate meta issues', () => {
+    const meta = (number: number) => ({
+      number,
+      title: '[react-doctor] old meta',
+      body: '<!-- react-doctor:meta -->\nold body',
+      labels: [{ name: 'react-doctor' }],
+    });
+    const plan = buildIssuePlan({
+      groups: new Map(),
+      existingIssues: [meta(98), meta(99)],
+    });
+
+    expect(plan.meta).toEqual({ action: 'close', number: 98 });
+    expect(plan.close).toContainEqual({ number: 99 });
+  });
+
   it('does not retry ambiguous failed issue creation requests', () => {
     expect(
       retryDelayMs(new Response(null, { status: 502 }), 0, 'POST'),
@@ -342,6 +358,9 @@ describe('react-doctor weekly audit', () => {
     expect(prWorkflow).toContain('head.repo.fork');
 
     expect(auditWorkflow).toContain("cron: '0 6 * * 1'");
+    expect(auditWorkflow).toContain(
+      "react-doctor-weekly-audit-${{ github.event.pull_request.number || 'reconcile' }}",
+    );
     expect(auditWorkflow).toContain('pull_request:');
     expect(auditWorkflow).toContain('issues: write');
     expect(auditWorkflow).toContain('react-doctor@0.9.11');

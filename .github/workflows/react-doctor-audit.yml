@@ -12,7 +12,7 @@ on:
       - 'tests/unit/scripts/react-doctor-audit.test.ts'
 
 concurrency:
-  group: react-doctor-weekly-audit-${{ github.event.pull_request.number || github.ref }}
+  group: react-doctor-weekly-audit-${{ github.event.pull_request.number || 'reconcile' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
