@@ -1,6 +1,7 @@
 import type { UserEvent } from '@testing-library/user-event';
 import { server } from '@tests/mocks/node';
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -489,6 +490,53 @@ describe('SettingsScreen', () => {
       );
 
       expect(clearAllStorage).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows translated error toast and reloads after 1500ms when clearing fails', async () => {
+      vi.useFakeTimers();
+      try {
+        const mockReload = vi.fn();
+        Object.defineProperty(window, 'location', {
+          value: { reload: mockReload },
+          writable: true,
+        });
+        vi.mocked(clearAllStorage).mockRejectedValueOnce(
+          new Error('DB exploded'),
+        );
+
+        renderWithToast(<SettingsScreen />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Clear All Data' }));
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+        );
+
+        // Flush the rejection microtask so the catch block runs.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+
+        // Translated description, never the raw error message.
+        expect(
+          screen.getByText(
+            'Some data could not be cleared. The app will reload.',
+          ),
+        ).toBeInTheDocument();
+        expect(screen.queryByText('DB exploded')).not.toBeInTheDocument();
+        // Reload is deferred so the toast stays visible.
+        expect(mockReload).not.toHaveBeenCalled();
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1499);
+        });
+        expect(mockReload).not.toHaveBeenCalled();
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(mockReload).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

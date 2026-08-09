@@ -136,6 +136,10 @@ const _messages = defineMessages({
     id: 'settings.clear.errorTitle',
     defaultMessage: 'Failed to clear data',
   },
+  clearErrorDescription: {
+    id: 'settings.clear.errorDescription',
+    defaultMessage: 'Some data could not be cleared. The app will reload.',
+  },
   clearCancelButton: {
     id: 'settings.clear.cancelButton',
     defaultMessage: 'Cancel',
@@ -306,15 +310,16 @@ export function SettingsScreen() {
     try {
       await clearAllStorage();
     } catch (err) {
+      console.error('Failed to clear local data', err);
       addToast({
         title: intl.formatMessage(_messages.clearErrorTitle),
-        description:
-          err instanceof Error ? err.message : 'Failed to clear data',
+        description: intl.formatMessage(_messages.clearErrorDescription),
         variant: 'error',
       });
       // Half-cleared state must not persist: force a reload so stale
-      // in-memory state is discarded even when the clear fails.
-      window.location.reload();
+      // in-memory state is discarded even when the clear fails. Delay it
+      // so the error toast stays visible.
+      setTimeout(() => window.location.reload(), 1500);
     }
   }, [addToast, intl]);
 

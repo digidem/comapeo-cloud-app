@@ -298,4 +298,20 @@ describe('clearAllStorage', () => {
     await expect(clearAllStorage()).rejects.toThrow('DB error');
     expect(mockReload).not.toHaveBeenCalled();
   });
+
+  it('throws and does not reload if resetCategoriesDb() throws', async () => {
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
+      new Error('Categories error'),
+    );
+
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    await expect(clearAllStorage()).rejects.toThrow('Categories error');
+    expect(mockReload).not.toHaveBeenCalled();
+  });
 });

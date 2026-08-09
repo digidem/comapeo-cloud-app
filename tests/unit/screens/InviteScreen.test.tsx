@@ -339,6 +339,47 @@ describe('InviteScreen', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Regression #182: a cancelled invite must leave no orphan server record
+  // -----------------------------------------------------------------------
+  it('removes the server record when the screen unmounts mid-addServer', async () => {
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+
+    // Hold addServer in flight; release it AFTER unmount, then run the real
+    // implementation so a genuine server record is created and rolled back.
+    const realAddServer = useAuthStore.getState().addServer;
+    let releaseAddServer!: () => void;
+    const addServerSpy = vi
+      .spyOn(useAuthStore.getState(), 'addServer')
+      .mockImplementation(
+        (config) =>
+          new Promise<string>((resolve) => {
+            releaseAddServer = () => {
+              void realAddServer(config).then(resolve);
+            };
+          }),
+      );
+
+    try {
+      const { unmount } = render(<InviteScreen />);
+
+      await waitFor(() => {
+        expect(addServerSpy).toHaveBeenCalled();
+      });
+
+      unmount();
+      releaseAddServer();
+
+      // The invite resolved after unmount — the rollback must have removed
+      // the orphaned server record.
+      await waitFor(() => {
+        expect(useAuthStore.getState().servers).toHaveLength(0);
+      });
+    } finally {
+      addServerSpy.mockRestore();
+    }
+  });
+
+  // -----------------------------------------------------------------------
   // Network error message
   // -----------------------------------------------------------------------
   it('shows network error message when fetch fails', async () => {

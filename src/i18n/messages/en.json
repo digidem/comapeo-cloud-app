@@ -1559,6 +1559,9 @@
   "settings.clear.description": {
     "defaultMessage": "Remove all local settings, preferences, and cached data. This cannot be undone."
   },
+  "settings.clear.errorDescription": {
+    "defaultMessage": "Some data could not be cleared. The app will reload."
+  },
   "settings.clear.errorTitle": {
     "defaultMessage": "Failed to clear data"
   },

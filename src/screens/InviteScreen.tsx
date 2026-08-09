@@ -20,7 +20,7 @@ import {
   parseInviteUrl,
   warnLegacyInviteUrlOnce,
 } from '@/lib/invite-url';
-import { useAuthStore } from '@/stores/auth-store';
+import { type RemoteArchiveServer, useAuthStore } from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
 // i18n
@@ -113,6 +113,33 @@ async function withValidationTimeout<T>(operation: Promise<T>): Promise<T> {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Rolls back whatever addServer() persisted when the screen unmounts while
+// the call is in flight. addServer() either created a brand-new server record
+// or refreshed the token on an existing one; both must be undone so a
+// cancelled invite leaves no trace behind.
+async function rollbackPendingAddServer(
+  serverId: string,
+  previousServers: RemoteArchiveServer[],
+): Promise<void> {
+  const { servers, removeServer, updateServer } = useAuthStore.getState();
+  const persisted = servers.find((server) => server.id === serverId);
+  if (!persisted) return;
+
+  const previous = previousServers.find((server) => server.id === serverId);
+  if (!previous) {
+    // A brand-new record was created by the cancelled invite — remove it.
+    await removeServer(serverId);
+    return;
+  }
+
+  // An existing record may have had its token refreshed by the invite.
+  // Restore the previous token so the cancelled invite leaves the
+  // connection untouched.
+  if (persisted.token !== previous.token) {
+    await updateServer(serverId, { token: previous.token });
+  }
+}
 
 function parseInviteFromLocation(): ParseInviteResult | null {
   if (typeof window === 'undefined') return null;
@@ -280,13 +307,20 @@ export function InviteScreen() {
         if (cancelledRef.current) return;
 
         // Step 3: Add server (validation passed)
+        const previousServers = useAuthStore.getState().servers;
         const serverId = await useAuthStore.getState().addServer({
           label: new URL(baseUrl).hostname,
           baseUrl,
           token,
           allowDuplicate: true,
         });
-        if (cancelledRef.current) return;
+        if (cancelledRef.current) {
+          // The screen unmounted while addServer() was pending: roll back
+          // whatever was persisted (new record or token refresh) so a
+          // cancelled invite never leaves a stray server behind.
+          await rollbackPendingAddServer(serverId, previousServers);
+          return;
+        }
 
         // Step 4: Sync — pass the cancellation control so unmount aborts it
         setActiveStep('sync');
