@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Cycle"
+  short_description: "Run an autonomous PR review/fix/CI/merge-readiness cycle safely."
+  default_prompt: "Run the full PR cycle on this pull request. Fix actionable findings and CI failures until the exact pushed head is merge-ready; do not merge unless I explicitly authorize it."
