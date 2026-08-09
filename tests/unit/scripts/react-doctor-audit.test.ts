@@ -8,6 +8,7 @@ import {
   extractDiagnostics,
   groupDiagnosticsByFile,
   issueMarkerForFile,
+  retryDelayMs,
 } from '../../../scripts/react-doctor-audit';
 
 const rootDir = process.cwd();
@@ -103,7 +104,6 @@ describe('react-doctor weekly audit', () => {
     const firstPlan = buildIssuePlan({
       groups,
       existingIssues: [],
-      runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/123',
       maxNewIssues: 10,
     });
     const created = firstPlan.create[0];
@@ -119,7 +119,6 @@ describe('react-doctor weekly audit', () => {
           labels: created.labels.map((name) => ({ name })),
         },
       ],
-      runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/456',
       maxNewIssues: 10,
     });
 
@@ -148,7 +147,6 @@ describe('react-doctor weekly audit', () => {
     const plan = buildIssuePlan({
       groups,
       existingIssues: existing,
-      runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/123',
       maxNewIssues: 10,
     });
 
@@ -163,7 +161,6 @@ describe('react-doctor weekly audit', () => {
     const firstPlan = buildIssuePlan({
       groups,
       existingIssues: [],
-      runUrl: 'dry-run',
     });
     const created = firstPlan.create[0];
     if (!created) throw new Error('Expected an issue draft');
@@ -179,7 +176,6 @@ describe('react-doctor weekly audit', () => {
           labels: created.labels.map((name) => ({ name })),
         },
       ],
-      runUrl: 'dry-run',
     });
 
     expect(plan.update[0]?.body).toContain('Updated scanner message.');
@@ -198,7 +194,6 @@ describe('react-doctor weekly audit', () => {
     const plan = buildIssuePlan({
       groups: groupDiagnosticsByFile(diagnostics),
       existingIssues: [],
-      runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/123',
       maxNewIssues: 10,
     });
 
@@ -208,6 +203,92 @@ describe('react-doctor weekly audit', () => {
       throw new Error('Expected a meta issue to be created');
     }
     expect(plan.meta.body).toContain('40 additional files');
+  });
+
+  it('self-heals duplicate tracked file issues', () => {
+    const groups = groupDiagnosticsByFile([diagnostic]);
+    const firstPlan = buildIssuePlan({ groups, existingIssues: [] });
+    const created = firstPlan.create[0];
+    if (!created) throw new Error('Expected an issue draft');
+
+    const plan = buildIssuePlan({
+      groups,
+      existingIssues: [
+        {
+          number: 10,
+          title: created.title,
+          body: created.body,
+          labels: created.labels.map((name) => ({ name })),
+        },
+        {
+          number: 11,
+          title: created.title,
+          body: created.body,
+          labels: created.labels.map((name) => ({ name })),
+        },
+      ],
+    });
+
+    expect(plan.update).toHaveLength(0);
+    expect(plan.close).toEqual([{ number: 11 }]);
+  });
+
+  it('blocks an unexpectedly large set of destructive closures', () => {
+    const existingIssues = Array.from({ length: 6 }, (_, index) => ({
+      number: index + 1,
+      title: `[react-doctor] old ${index}`,
+      body: `${issueMarkerForFile(`src/components/Old${index}.tsx`)}\nold body`,
+      labels: [{ name: 'react-doctor' }],
+    }));
+
+    const plan = buildIssuePlan({
+      groups: new Map(),
+      existingIssues,
+    });
+
+    expect(plan.close).toHaveLength(0);
+    expect(plan.meta?.action).toBe('create');
+    if (plan.meta?.action !== 'create') {
+      throw new Error('Expected a safety meta issue');
+    }
+    expect(plan.meta.title).toContain('safety hold');
+    expect(plan.meta.body).toContain('6 of 6 tracked file issues');
+    expect(plan.meta.body).toContain('closures were skipped');
+  });
+
+  it('closes an obsolete meta issue when no guard or overflow remains', () => {
+    const plan = buildIssuePlan({
+      groups: new Map(),
+      existingIssues: [
+        {
+          number: 99,
+          title: '[react-doctor] old meta',
+          body: '<!-- react-doctor:meta -->\nold body',
+          labels: [{ name: 'react-doctor' }],
+        },
+      ],
+    });
+
+    expect(plan.meta).toEqual({ action: 'close', number: 99 });
+  });
+
+  it('does not retry ambiguous failed issue creation requests', () => {
+    expect(
+      retryDelayMs(new Response(null, { status: 502 }), 0, 'POST'),
+    ).toBeNull();
+    expect(retryDelayMs(new Response(null, { status: 502 }), 0, 'GET')).toBe(
+      1000,
+    );
+    expect(
+      retryDelayMs(
+        new Response(null, {
+          status: 429,
+          headers: { 'retry-after': '2' },
+        }),
+        0,
+        'POST',
+      ),
+    ).toBe(2000);
   });
 
   it('keeps the PR gate advisory and the weekly audit scheduled', () => {

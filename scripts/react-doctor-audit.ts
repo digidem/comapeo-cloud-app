@@ -353,6 +353,18 @@ function issueMatchesDraft(issue: ExistingIssue, draft: IssueDraft): boolean {
   );
 }
 
+function metaChangeForDraft(
+  existingMeta: ExistingIssue | undefined,
+  draft: IssueDraft,
+): MetaChange | null {
+  if (!existingMeta) return { action: 'create', ...draft };
+
+  const existingDraft = draftForExistingIssue(existingMeta, draft);
+  return issueMatchesDraft(existingMeta, existingDraft)
+    ? null
+    : { action: 'update', number: existingMeta.number, ...existingDraft };
+}
+
 export function buildIssuePlan({
   groups,
   existingIssues,
@@ -360,22 +372,29 @@ export function buildIssuePlan({
 }: {
   groups: Map<string, ReactDoctorDiagnostic[]>;
   existingIssues: ExistingIssue[];
-  runUrl: string;
   maxNewIssues?: number;
 }): IssuePlan {
-  const trackedIssues = existingIssues.filter((issue) => !issue.pull_request);
+  const trackedIssues = existingIssues
+    .filter((issue) => !issue.pull_request)
+    .sort((a, b) => a.number - b.number);
   const existingMeta = trackedIssues.find((issue) =>
     issue.body?.includes(META_MARKER),
   );
   const existingByFile = new Map<string, ExistingIssue>();
+  const duplicateClose: Array<{ number: number }> = [];
 
   for (const issue of trackedIssues) {
     const file = fileFromIssueMarker(issue.body);
-    if (file && !existingByFile.has(file)) existingByFile.set(file, issue);
+    if (!file) continue;
+    if (existingByFile.has(file)) {
+      duplicateClose.push({ number: issue.number });
+    } else {
+      existingByFile.set(file, issue);
+    }
   }
 
   const update: IssueUpdate[] = [];
-  const close: Array<{ number: number }> = [];
+  const missingClose: Array<{ number: number }> = [];
 
   for (const [file, issue] of existingByFile) {
     const findings = groups.get(file);
@@ -388,9 +407,15 @@ export function buildIssuePlan({
         });
       }
     } else {
-      close.push({ number: issue.number });
+      missingClose.push({ number: issue.number });
     }
   }
+
+  const maxClosures = Math.max(5, Math.ceil(existingByFile.size * 0.5));
+  const closureGuardTriggered = missingClose.length > maxClosures;
+  const close = closureGuardTriggered
+    ? duplicateClose
+    : [...duplicateClose, ...missingClose];
 
   const newGroups = [...groups.entries()].filter(
     ([file]) => !existingByFile.has(file),
@@ -406,7 +431,22 @@ export function buildIssuePlan({
   const overflow = newGroups.length - create.length;
 
   let meta: MetaChange | null = null;
-  if (overflow > 0) {
+  if (closureGuardTriggered) {
+    const overflowNote =
+      overflow > 0
+        ? ` This run also created at most ${maxNewIssues} new per-file issues; **${overflow} additional files** remain queued.`
+        : '';
+    const draft: IssueDraft = {
+      title: `[react-doctor] Weekly audit safety hold (${missingClose.length} closures blocked)`,
+      body: metaBody(
+        groups,
+        totalFindings,
+        `The audit proposed closing **${missingClose.length} of ${existingByFile.size} tracked file issues**, exceeding the safety limit of ${maxClosures}. Those closures were skipped to protect against an under-reported or truncated scan.${overflowNote}`,
+      ),
+      labels: [...BASE_LABELS, severityLabel([...groups.values()].flat())],
+    };
+    meta = metaChangeForDraft(existingMeta, draft);
+  } else if (overflow > 0) {
     const draft: IssueDraft = {
       title: `[react-doctor] Weekly audit overflow (${overflow} files queued)`,
       body: metaBody(
@@ -416,18 +456,7 @@ export function buildIssuePlan({
       ),
       labels: [...BASE_LABELS, severityLabel([...groups.values()].flat())],
     };
-    if (existingMeta) {
-      const existingDraft = draftForExistingIssue(existingMeta, draft);
-      meta = issueMatchesDraft(existingMeta, existingDraft)
-        ? null
-        : {
-            action: 'update',
-            number: existingMeta.number,
-            ...existingDraft,
-          };
-    } else {
-      meta = { action: 'create', ...draft };
-    }
+    meta = metaChangeForDraft(existingMeta, draft);
   } else if (existingMeta) {
     meta = { action: 'close', number: existingMeta.number };
   }
@@ -439,7 +468,23 @@ function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function retryDelayMs(response: Response, attempt: number): number | null {
+export function retryDelayMs(
+  response: Response,
+  attempt: number,
+  method = 'GET',
+): number | null {
+  const normalizedMethod = method.toUpperCase();
+  const isPost = normalizedMethod === 'POST';
+  const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
+  const isExplicitRateLimit =
+    response.status === 429 ||
+    (response.status === 403 && rateLimitRemaining === '0');
+
+  // Retrying a POST after an ambiguous 5xx can duplicate an issue if GitHub
+  // committed the write before returning the error. Only retry POSTs when the
+  // response explicitly says the request was rate-limited.
+  if (isPost && !isExplicitRateLimit) return null;
+
   const retryAfter = response.headers.get('retry-after');
   if (retryAfter) {
     const seconds = Number(retryAfter);
@@ -447,7 +492,6 @@ function retryDelayMs(response: Response, attempt: number): number | null {
   }
 
   const rateLimitReset = response.headers.get('x-ratelimit-reset');
-  const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
   if (rateLimitReset && rateLimitRemaining === '0') {
     const resetMs = Number(rateLimitReset) * 1000 - Date.now();
     if (Number.isFinite(resetMs))
@@ -490,7 +534,7 @@ async function githubRequest<T>(
       return result;
     }
 
-    const delay = retryDelayMs(response, attempt);
+    const delay = retryDelayMs(response, attempt, init.method ?? 'GET');
     if (delay !== null && attempt < 3) {
       console.warn(
         `GitHub API ${init.method ?? 'GET'} ${endpoint} returned ${response.status}; retrying after ${delay}ms`,
@@ -528,12 +572,16 @@ async function listTrackedIssues(
 }
 
 async function ensureLabels(repo: string, token: string): Promise<void> {
-  const existing = await githubRequest<Array<{ name: string }>>(
-    repo,
-    token,
-    '/labels?per_page=100',
-  );
-  const names = new Set(existing.map((label) => label.name));
+  const names = new Set<string>();
+  for (let page = 1; page <= 10; page += 1) {
+    const batch = await githubRequest<Array<{ name: string }>>(
+      repo,
+      token,
+      `/labels?per_page=100&page=${page}`,
+    );
+    for (const label of batch) names.add(label.name);
+    if (batch.length < 100) break;
+  }
 
   for (const label of LABEL_DEFINITIONS) {
     if (names.has(label.name)) continue;
@@ -648,7 +696,6 @@ async function main(): Promise<void> {
     const plan = buildIssuePlan({
       groups,
       existingIssues: [],
-      runUrl: 'dry-run',
     });
     console.log(JSON.stringify(plan, null, 2));
     return;
@@ -656,17 +703,12 @@ async function main(): Promise<void> {
 
   const repo = process.env.GITHUB_REPOSITORY;
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
-  const runId = process.env.GITHUB_RUN_ID;
   if (!repo) throw new Error('GITHUB_REPOSITORY is required');
   if (!token) throw new Error('GITHUB_TOKEN or GH_TOKEN is required');
 
-  const runUrl = runId
-    ? `https://github.com/${repo}/actions/runs/${runId}`
-    : `https://github.com/${repo}/actions`;
-
   await ensureLabels(repo, token);
   const existingIssues = await listTrackedIssues(repo, token);
-  const plan = buildIssuePlan({ groups, existingIssues, runUrl });
+  const plan = buildIssuePlan({ groups, existingIssues });
   await applyPlan(repo, token, plan);
 
   console.log(
@@ -679,6 +721,11 @@ const entrypoint = process.argv[1]
   : undefined;
 if (entrypoint === import.meta.url) {
   main().catch((error: unknown) => {
+    if (error instanceof AggregateError) {
+      for (const inner of error.errors) {
+        console.error(inner instanceof Error ? inner.stack : inner);
+      }
+    }
     console.error(error instanceof Error ? error.stack : error);
     process.exitCode = 1;
   });
