@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
 
+import { ApiError, apiClient } from '@/lib/api-client';
 import { resetDb } from '@/lib/db';
 import { syncRemoteArchive } from '@/lib/sync';
 import type { SyncResult } from '@/lib/sync';
+import * as syncCoordinator from '@/lib/sync-coordinator';
 import { resetSyncCoordinatorForTests } from '@/lib/sync-coordinator';
 import { InviteScreen } from '@/screens/InviteScreen';
 import { useAuthStore } from '@/stores/auth-store';
@@ -257,6 +259,83 @@ describe('InviteScreen', () => {
     // Unmount before sync resolves
     unmount();
     // No error — the cancelled ref prevented state updates on unmounted component
+  });
+
+  // -----------------------------------------------------------------------
+  // Regression #182: validation must run BEFORE any server state is persisted
+  // -----------------------------------------------------------------------
+  it('does not overwrite an existing server when a replacement invite token is rejected (401)', async () => {
+    // Seed an already-connected archive that the invite targets.
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'existing-archive',
+          label: 'archive.test',
+          baseUrl: 'https://archive.test',
+          token: 'working-token',
+          status: 'connected',
+        },
+      ],
+    });
+    const addServerSpy = vi.spyOn(useAuthStore.getState(), 'addServer');
+    vi.spyOn(apiClient, 'healthCheck').mockResolvedValueOnce(true);
+    vi.spyOn(apiClient, 'getProjects').mockRejectedValueOnce(
+      new ApiError(401, 'UNAUTHORIZED', 'Invalid bearer token'),
+    );
+
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Invalid token or unauthorized'),
+      ).toBeInTheDocument();
+    });
+
+    // The old working connection must be untouched — addServer never ran.
+    expect(addServerSpy).not.toHaveBeenCalled();
+    const servers = useAuthStore.getState().servers;
+    expect(servers).toHaveLength(1);
+    expect(servers[0]!.token).toBe('working-token');
+  });
+
+  it('does not create a server record when the invite targets an unreachable server', async () => {
+    const addServerSpy = vi.spyOn(useAuthStore.getState(), 'addServer');
+    vi.spyOn(apiClient, 'healthCheck').mockResolvedValueOnce(false);
+
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Unable to connect. Check your internet connection.'),
+      ).toBeInTheDocument();
+    });
+
+    expect(addServerSpy).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().servers).toHaveLength(0);
+  });
+
+  it('passes a cancellation control into the sync so unmount aborts it', async () => {
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    // Never-settling sync (empty executor — no resolvers used) to test
+    // mid-flight unmount; matches the existing cleanup test pattern.
+    vi.mocked(syncRemoteArchive).mockReturnValue(
+      new Promise<SyncResult>(() => {}),
+    );
+    const syncArchiveSpy = vi.spyOn(syncCoordinator, 'syncArchive');
+
+    const { unmount } = render(<InviteScreen />);
+    await waitFor(() => {
+      expect(syncArchiveSpy).toHaveBeenCalled();
+    });
+
+    const control = syncArchiveSpy.mock.calls[0]![2];
+    expect(control?.isCancelled).toBeTypeOf('function');
+    expect(control?.isCancelled?.()).toBe(false);
+
+    unmount();
+    expect(control?.isCancelled?.()).toBe(true);
   });
 
   // -----------------------------------------------------------------------

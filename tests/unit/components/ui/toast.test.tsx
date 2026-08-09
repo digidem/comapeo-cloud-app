@@ -1,29 +1,144 @@
-import { act, fireEvent } from '@testing-library/react';
+import { act, fireEvent, render as rawRender } from '@testing-library/react';
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
-import React from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 import { ToastProvider, useToast } from '@/components/ui/toast';
 
-vi.mock('@radix-ui/react-toast', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@radix-ui/react-toast')>();
-  const ActualRoot = actual.Root;
+// ---------------------------------------------------------------------------
+// Static mock for @radix-ui/react-toast
+//
+// The previous importOriginal-based mock dies with
+// "Cannot access '__vi_import_2__' before initialization": test-utils now
+// imports ToastProvider (-> @radix-ui/react-toast), so this factory runs
+// while evaluating test-utils, before THIS file's own imports are
+// initialized. Top-level runtime references are therefore in TDZ — the mock
+// must be fully self-contained. Static imports cannot work here (they are
+// hoisted above vi.mock and evaluated too late), so React is loaded inside
+// the factory, mirroring importOriginal's module-boundary behavior.
+//
+// The mock reimplements the two behaviors ToastProvider relies on:
+//  - onOpenChange(true) on mount (Radix never fires it in uncontrolled mode)
+//  - auto-dismiss via a duration timer (Radix schedules this internally)
+// ---------------------------------------------------------------------------
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockedRoot = React.forwardRef<any, any>((props, _ref) => {
-    // Call onOpenChange(true) on mount to cover the !open === false branch
-    // (Radix Toast never calls onOpenChange(true) in uncontrolled mode)
-    React.useEffect(() => {
-      (props.onOpenChange as ((open: boolean) => void) | undefined)?.(true);
+interface MockToastContextValue {
+  onOpenChange?: (open: boolean) => void;
+}
+
+interface PrimitiveProps {
+  children?: ReactNode;
+  className?: string;
+}
+
+interface RootProps extends PrimitiveProps {
+  role?: string;
+  duration?: number;
+  onOpenChange?: (open: boolean) => void;
+}
+
+vi.mock('@radix-ui/react-toast', async () => {
+  // See header comment: static imports are hoisted above vi.mock and are in
+  // TDZ when this factory runs (test-utils imports ToastProvider first), so
+  // React must be loaded inside the factory.
+  const { createContext, forwardRef, useContext, useEffect } =
+    await import('react');
+
+  const MockToastContext = createContext<MockToastContextValue>({});
+
+  const MockRoot = forwardRef<HTMLLIElement, RootProps>(function MockRoot(
+    { children, className, duration, onOpenChange, role },
+    ref,
+  ) {
+    // Fire onOpenChange(true) on mount to cover the !open === false (noop)
+    // branch in ToastProvider, and implement Radix's auto-dismiss so
+    // duration-based dismissal keeps working without the real implementation.
+    useEffect(() => {
+      onOpenChange?.(true);
+      if (duration === undefined) return undefined;
+      const timer = setTimeout(() => onOpenChange?.(false), duration);
+      return () => clearTimeout(timer);
     }, []);
-    return React.createElement(ActualRoot, props);
+    return (
+      <MockToastContext.Provider value={{ onOpenChange }}>
+        <li ref={ref} role={role} className={className}>
+          {children}
+        </li>
+      </MockToastContext.Provider>
+    );
   });
-  MockedRoot.displayName = 'Root';
+  MockRoot.displayName = 'Root';
+
+  const MockClose = forwardRef<
+    HTMLButtonElement,
+    PrimitiveProps & { 'aria-label'?: string }
+  >(function MockClose({ children, className, 'aria-label': ariaLabel }, ref) {
+    const { onOpenChange } = useContext(MockToastContext);
+    return (
+      <button
+        ref={ref}
+        type="button"
+        aria-label={ariaLabel}
+        className={className}
+        onClick={() => onOpenChange?.(false)}
+      >
+        {children}
+      </button>
+    );
+  });
+  MockClose.displayName = 'Close';
+
+  const MockTitle = forwardRef<HTMLDivElement, PrimitiveProps>(
+    function MockTitle({ children, className }, ref) {
+      return (
+        <div ref={ref} className={className}>
+          {children}
+        </div>
+      );
+    },
+  );
+  MockTitle.displayName = 'Title';
+
+  const MockDescription = forwardRef<HTMLDivElement, PrimitiveProps>(
+    function MockDescription({ children, className }, ref) {
+      return (
+        <div ref={ref} className={className}>
+          {children}
+        </div>
+      );
+    },
+  );
+  MockDescription.displayName = 'Description';
+
+  const MockViewport = forwardRef<HTMLOListElement, PrimitiveProps>(
+    function MockViewport({ children, className }, ref) {
+      return (
+        <ol ref={ref} className={className}>
+          {children}
+        </ol>
+      );
+    },
+  );
+  MockViewport.displayName = 'Viewport';
+
+  function MockProvider({
+    children,
+  }: {
+    children?: ReactNode;
+    swipeDirection?: string;
+  }) {
+    return <>{children}</>;
+  }
+  MockProvider.displayName = 'Provider';
 
   return {
-    ...actual,
-    Root: MockedRoot,
+    Provider: MockProvider,
+    Root: MockRoot,
+    Title: MockTitle,
+    Description: MockDescription,
+    Close: MockClose,
+    Viewport: MockViewport,
   };
 });
 
@@ -49,16 +164,21 @@ function ToastTestConsumer({
   );
 }
 
-function renderWithToastProvider(ui: React.ReactElement) {
+function renderWithToastProvider(ui: ReactElement) {
   return render(<ToastProvider>{ui}</ToastProvider>);
 }
 
-// Radix Toast renders multiple elements with role="status" (the toast itself + an aria-live announcer).
-// We select the visible toast (the <li> inside the viewport <ol>) by finding the one that contains the title text.
+// The static mock renders the visible toast as a <li role="status"> inside
+// the viewport <ol>. The real Radix implementation also emits an aria-live
+// announcer with role="status", so we still select the LI to be safe.
 function getVisibleToast() {
   const allStatus = screen.getAllByRole('status');
-  // The visible toast is the <li> element that is a direct child of the <ol> viewport
-  return allStatus.find((el) => el.tagName === 'LI') as HTMLElement;
+  const visibleToast = allStatus.find((el) => el.tagName === 'LI') as
+    HTMLElement | undefined;
+  if (!visibleToast) {
+    throw new Error('No visible toast <li> found');
+  }
+  return visibleToast;
 }
 
 describe('Toast', () => {
@@ -144,7 +264,9 @@ describe('Toast', () => {
     const consoleError = vi
       .spyOn(console, 'error')
       .mockImplementation(() => {});
-    expect(() => render(<BadConsumer />)).toThrow(
+    // Raw render: the test-utils wrapper always provides ToastProvider, so it
+    // cannot exercise the missing-provider path.
+    expect(() => rawRender(<BadConsumer />)).toThrow(
       'useToast must be used within a ToastProvider',
     );
     consoleError.mockRestore();

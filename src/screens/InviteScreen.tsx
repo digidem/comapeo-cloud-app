@@ -9,7 +9,11 @@ import {
   type ConnectionStep,
 } from '@/components/shared/ConnectionProgress';
 import { Button } from '@/components/ui/button';
-import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
+import {
+  InviteApiError,
+  apiClient,
+  redeemEncryptedInvite,
+} from '@/lib/api-client';
 import { syncRemoteArchive } from '@/lib/data-layer';
 import {
   type ParseInviteResult,
@@ -60,6 +64,10 @@ const messages = defineMessages({
     id: 'invite.progress.networkError',
     defaultMessage: 'Unable to connect. Check your internet connection.',
   },
+  invalidToken: {
+    id: 'home.archive.dialog.invalidToken',
+    defaultMessage: 'Invalid token or unauthorized',
+  },
   retry: {
     id: 'invite.progress.retry',
     defaultMessage: 'Try Again',
@@ -80,6 +88,27 @@ type FlowStatus =
 type FlowStep = 'verify' | 'connect' | 'sync' | 'prepare';
 
 const ALL_STEP_IDS: FlowStep[] = ['verify', 'connect', 'sync', 'prepare'];
+
+const VALIDATION_TIMEOUT_MS = 10_000;
+
+// Guards the pre-persist validation calls so a stalled server never leaves
+// the flow hanging. Mirrors the (non-exported) withValidationTimeout helper
+// in sync-coordinator.ts.
+async function withValidationTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error('Archive validation timed out')),
+      VALIDATION_TIMEOUT_MS,
+    );
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -213,8 +242,44 @@ export function InviteScreen() {
         }
         if (cancelledRef.current) return;
 
-        // Step 2: Add server
+        // Step 2: Validate server + credentials BEFORE persisting anything.
+        // An invalid or malicious invite must never overwrite an existing
+        // working connection (issue #182): addServer() below persists the
+        // token, so it only runs once the server has proven reachable and the
+        // token authorized.
         setActiveStep('connect');
+        const config = { baseUrl, token };
+        const healthy = await withValidationTimeout(
+          apiClient.healthCheck(config),
+        );
+        if (cancelledRef.current) return;
+        if (!healthy) {
+          setStatus('error');
+          setErrorMessage(intlRef.current.formatMessage(messages.networkError));
+          return;
+        }
+
+        try {
+          await withValidationTimeout(apiClient.getProjects(config));
+        } catch (error) {
+          if (cancelledRef.current) return;
+          const errorStatus =
+            error && typeof error === 'object' && 'status' in error
+              ? Number(error.status)
+              : undefined;
+          setStatus('error');
+          setErrorMessage(
+            intlRef.current.formatMessage(
+              errorStatus === 401 || errorStatus === 403
+                ? messages.invalidToken
+                : messages.networkError,
+            ),
+          );
+          return;
+        }
+        if (cancelledRef.current) return;
+
+        // Step 3: Add server (validation passed)
         const serverId = await useAuthStore.getState().addServer({
           label: new URL(baseUrl).hostname,
           baseUrl,
@@ -223,12 +288,13 @@ export function InviteScreen() {
         });
         if (cancelledRef.current) return;
 
-        // Step 3: Sync
+        // Step 4: Sync — pass the cancellation control so unmount aborts it
         setActiveStep('sync');
-        const syncResult = await syncRemoteArchive(serverId, {
-          baseUrl,
-          token,
-        });
+        const syncResult = await syncRemoteArchive(
+          serverId,
+          { baseUrl, token },
+          { isCancelled: () => cancelledRef.current },
+        );
         if (cancelledRef.current) return;
         if (!syncResult || !syncResult.success) {
           setStatus('error');
@@ -236,7 +302,7 @@ export function InviteScreen() {
           return;
         }
 
-        // Step 4: Prepare dashboard
+        // Step 5: Prepare dashboard
         setActiveStep('prepare');
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['projects'] }),
