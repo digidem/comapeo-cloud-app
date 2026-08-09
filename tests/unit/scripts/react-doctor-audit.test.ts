@@ -254,6 +254,35 @@ describe('react-doctor weekly audit', () => {
     expect(plan.meta.title).toContain('safety hold');
     expect(plan.meta.body).toContain('6 of 6 tracked file issues');
     expect(plan.meta.body).toContain('closures were skipped');
+    expect(plan.meta.body).toContain('Blocked issues: #1, #2, #3, #4, #5, #6');
+  });
+
+  it('caps destructive closures even when they are below half the backlog', () => {
+    const existingIssues = Array.from({ length: 100 }, (_, index) => ({
+      number: index + 1,
+      title: `[react-doctor] old ${index}`,
+      body: `${issueMarkerForFile(`src/components/Old${index}.tsx`)}\nold body`,
+      labels: [{ name: 'react-doctor' }],
+    }));
+    const remainingDiagnostics = Array.from({ length: 74 }, (_, index) => ({
+      ...diagnostic,
+      filePath: `src/components/Old${index + 26}.tsx`,
+      normalizedFilePath: `src/components/Old${index + 26}.tsx`,
+      id: `remaining-${index}`,
+    }));
+
+    const plan = buildIssuePlan({
+      groups: groupDiagnosticsByFile(remainingDiagnostics),
+      existingIssues,
+    });
+
+    expect(plan.close).toHaveLength(0);
+    expect(plan.meta?.action).toBe('create');
+    if (plan.meta?.action !== 'create') {
+      throw new Error('Expected an absolute closure safety hold');
+    }
+    expect(plan.meta.title).toContain('26 closures blocked');
+    expect(plan.meta.body).toContain('safety limit of 25');
   });
 
   it('closes an obsolete meta issue when no guard or overflow remains', () => {

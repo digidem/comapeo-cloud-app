@@ -377,8 +377,10 @@ export function buildIssuePlan({
   const trackedIssues = existingIssues
     .filter((issue) => !issue.pull_request)
     .sort((a, b) => a.number - b.number);
-  const existingMeta = trackedIssues.find((issue) =>
-    issue.body?.includes(META_MARKER),
+  const existingMeta = trackedIssues.find(
+    (issue) =>
+      issue.body?.includes(META_MARKER) &&
+      fileFromIssueMarker(issue.body) === null,
   );
   const existingByFile = new Map<string, ExistingIssue>();
   const duplicateClose: Array<{ number: number }> = [];
@@ -411,7 +413,10 @@ export function buildIssuePlan({
     }
   }
 
-  const maxClosures = Math.max(5, Math.ceil(existingByFile.size * 0.5));
+  const maxClosures = Math.min(
+    25,
+    Math.max(5, Math.ceil(existingByFile.size * 0.5)),
+  );
   const closureGuardTriggered = missingClose.length > maxClosures;
   const close = closureGuardTriggered
     ? duplicateClose
@@ -436,12 +441,17 @@ export function buildIssuePlan({
       overflow > 0
         ? ` This run also created at most ${maxNewIssues} new per-file issues; **${overflow} additional files** remain queued.`
         : '';
+    const blockedIssues = missingClose
+      .slice(0, 25)
+      .map(({ number }) => `#${number}`)
+      .join(', ');
+    const blockedIssueNote = ` Blocked issue${missingClose.length === 1 ? '' : 's'}: ${blockedIssues}${missingClose.length > 25 ? `, and ${missingClose.length - 25} more` : ''}.`;
     const draft: IssueDraft = {
       title: `[react-doctor] Weekly audit safety hold (${missingClose.length} closures blocked)`,
       body: metaBody(
         groups,
         totalFindings,
-        `The audit proposed closing **${missingClose.length} of ${existingByFile.size} tracked file issues**, exceeding the safety limit of ${maxClosures}. Those closures were skipped to protect against an under-reported or truncated scan.${overflowNote}`,
+        `The audit proposed closing **${missingClose.length} of ${existingByFile.size} tracked file issues**, exceeding the safety limit of ${maxClosures}. Those closures were skipped to protect against an under-reported or truncated scan.${blockedIssueNote}${overflowNote}`,
       ),
       labels: [...BASE_LABELS, severityLabel([...groups.values()].flat())],
     };
@@ -511,19 +521,39 @@ async function githubRequest<T>(
   init: RequestInit = {},
 ): Promise<T> {
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const response = await fetch(
-      `https://api.github.com/repos/${repo}${endpoint}`,
-      {
-        ...init,
-        headers: {
-          Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${token}`,
-          'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
-          ...init.headers,
+    const method = init.method ?? 'GET';
+    let response: Response;
+    try {
+      response = await fetch(
+        `https://api.github.com/repos/${repo}${endpoint}`,
+        {
+          ...init,
+          headers: {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${token}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+            'Content-Type': 'application/json',
+            ...init.headers,
+          },
         },
-      },
-    );
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // A transport failure after a POST is ambiguous: GitHub may have
+      // committed the issue before the connection failed. Do not retry it.
+      if (method.toUpperCase() === 'POST' || attempt >= 3) {
+        throw new Error(
+          `GitHub API ${method} ${endpoint} transport failure: ${message}`,
+          { cause: error },
+        );
+      }
+      const delay = Math.min(1000 * 2 ** attempt, 10_000);
+      console.warn(
+        `GitHub API ${method} ${endpoint} transport failure; retrying after ${delay}ms`,
+      );
+      await sleep(delay);
+      continue;
+    }
 
     if (response.ok) {
       const result =
@@ -559,13 +589,18 @@ async function listTrackedIssues(
   token: string,
 ): Promise<ExistingIssue[]> {
   const issues: ExistingIssue[] = [];
+  const seenNumbers = new Set<number>();
   for (let page = 1; page <= 10; page += 1) {
     const batch = await githubRequest<ExistingIssue[]>(
       repo,
       token,
       `/issues?state=open&labels=react-doctor&per_page=100&page=${page}`,
     );
-    issues.push(...batch.filter((issue) => !issue.pull_request));
+    for (const issue of batch) {
+      if (issue.pull_request || seenNumbers.has(issue.number)) continue;
+      seenNumbers.add(issue.number);
+      issues.push(issue);
+    }
     if (batch.length < 100) break;
   }
   return issues;
