@@ -275,7 +275,7 @@ function getOrCreateSourceFolders(style: SmpStyle): Record<string, string> {
 async function mergeGlobalOverviewSmp(
   globalBytes: Uint8Array,
   regionalBytes: Uint8Array,
-): Promise<Uint8Array> {
+): Promise<Blob> {
   const [globalZip, regionalZip] = await Promise.all([
     JSZip.loadAsync(globalBytes),
     JSZip.loadAsync(regionalBytes),
@@ -388,23 +388,29 @@ async function mergeGlobalOverviewSmp(
   regionalZip.file('style.json', JSON.stringify(regionalStyle));
 
   return regionalZip.generateAsync({
-    type: 'uint8array',
+    type: 'blob',
     compression: 'STORE',
   });
+}
+
+async function collectDownloadChunks(
+  stream: ReadableStream<Uint8Array>,
+): Promise<Uint8Array[]> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  return chunks;
 }
 
 async function collectDownloadStream(
   stream: ReadableStream<Uint8Array>,
 ): Promise<Uint8Array> {
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    size += value.byteLength;
-  }
+  const chunks = await collectDownloadChunks(stream);
+  const size = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
   const result = new Uint8Array(size);
   let offset = 0;
   for (const chunk of chunks) {
@@ -443,19 +449,20 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
 
   let skippedTiles = 0;
   let styleUrl = '';
-  let packageBytes: Uint8Array;
+  let blob: Blob | undefined;
+  let packageParts: Uint8Array[] | undefined;
   const passProgress = {
     global: { downloaded: 0, total: 0, bytes: 0, skipped: 0 },
     regional: { downloaded: 0, total: 0, bytes: 0, skipped: 0 },
   };
 
-  const runPass = async (
+  const startPass = (
     kind: 'global' | 'regional',
     bbox: [number, number, number, number],
     maxzoom: number,
     passBufferTiles: number,
-  ): Promise<Uint8Array> => {
-    const stream = download({
+  ): ReadableStream<Uint8Array> => {
+    return download({
       bbox,
       maxzoom,
       styleUrl,
@@ -480,36 +487,26 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
         });
       },
     });
-    return collectDownloadStream(stream);
   };
 
   try {
     styleUrl = getDownloadStyleUrl(map);
     if (includeGlobalOverview) {
       const globalMaxZoom = Math.min(GLOBAL_OVERVIEW_MAX_ZOOM, map.maxZoom);
-      const globalBytes = await runPass(
-        'global',
-        GLOBAL_OVERVIEW_BBOX,
-        globalMaxZoom,
-        0,
+      const globalBytes = await collectDownloadStream(
+        startPass('global', GLOBAL_OVERVIEW_BBOX, globalMaxZoom, 0),
       );
       if (map.maxZoom <= GLOBAL_OVERVIEW_MAX_ZOOM) {
-        packageBytes = globalBytes;
+        packageParts = [globalBytes];
       } else {
-        const regionalBytes = await runPass(
-          'regional',
-          map.bbox,
-          map.maxZoom,
-          bufferTiles,
+        const regionalBytes = await collectDownloadStream(
+          startPass('regional', map.bbox, map.maxZoom, bufferTiles),
         );
-        packageBytes = await mergeGlobalOverviewSmp(globalBytes, regionalBytes);
+        blob = await mergeGlobalOverviewSmp(globalBytes, regionalBytes);
       }
     } else {
-      packageBytes = await runPass(
-        'regional',
-        map.bbox,
-        map.maxZoom,
-        bufferTiles,
+      packageParts = await collectDownloadChunks(
+        startPass('regional', map.bbox, map.maxZoom, bufferTiles),
       );
     }
   } catch (error) {
@@ -537,25 +534,27 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     }
   }
 
-  let blob: Blob;
-  try {
-    blob = new Blob([packageBytes as unknown as BlobPart], {
-      type: 'application/zip',
-    });
-  } catch (blobError) {
-    const message =
-      blobError instanceof Error
-        ? `Failed to create download package: ${blobError.message}`
-        : 'Failed to create download package';
-    await recoveryWrite(db, map.id, {
-      status: 'error',
-      errorMessage: message,
-      updatedAt: new Date().toISOString(),
-    });
-    throw blobError;
+  if (!blob) {
+    try {
+      if (!packageParts) throw new Error('Download package is empty');
+      blob = new Blob(packageParts as unknown as BlobPart[], {
+        type: 'application/zip',
+      });
+    } catch (blobError) {
+      const message =
+        blobError instanceof Error
+          ? `Failed to create download package: ${blobError.message}`
+          : 'Failed to create download package';
+      await recoveryWrite(db, map.id, {
+        status: 'error',
+        errorMessage: message,
+        updatedAt: new Date().toISOString(),
+      });
+      throw blobError;
+    }
   }
 
-  const totalSize = packageBytes.byteLength;
+  const totalSize = blob.size;
   onProgress?.({
     downloaded:
       passProgress.global.downloaded + passProgress.regional.downloaded,
