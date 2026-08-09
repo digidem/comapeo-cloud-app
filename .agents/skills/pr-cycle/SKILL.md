@@ -78,6 +78,7 @@ Declare `MERGE-READY` only when all of these are true simultaneously for one exa
 - Current GitHub head SHA equals the SHA used for final review and verification.
 - GitHub reports the PR mergeable and clean, or an explicitly understood repository-equivalent state.
 - All required and relevant checks are terminal and green. Treat every skipped or neutral check as requiring explicit adjudication before readiness; only clearly legitimate conditional skips are acceptable. Pending, queued, running, cancelled, timed-out, action-required, or failing relevant checks are not.
+- GitHub review decision is not `CHANGES_REQUESTED` or `REVIEW_REQUIRED`; a top-level blocking review counts even when it created no inline review thread.
 - No unresolved actionable review threads remain.
 - No outstanding blocker or should-fix finding remains from requested independent reviewers.
 - Local PR worktree is clean after the final push.
@@ -94,7 +95,7 @@ Only after explicit authorization:
 1. Re-read live PR state immediately before merging.
 2. Confirm the head SHA still equals the reviewed merge-ready SHA. If it changed, return to the review/CI loop.
 3. Reconfirm terminal-green CI, unresolved thread state, and clean mergeability.
-4. Perform a squash merge with an exact-head guard when supported.
+4. Perform a squash merge with an atomic exact-head guard. If the available GitHub tooling cannot enforce the reviewed head SHA at merge time, do not merge; report the tooling limitation instead. Never bypass repository protections with an administrative override unless the user explicitly authorizes that separate override.
 5. Verify GitHub reports the PR merged and capture the resulting merge commit SHA.
 6. Do not begin branch/worktree cleanup until merge verification succeeds.
 
@@ -102,7 +103,7 @@ Only after explicit authorization:
 
 Clean only resources belonging to the merged PR:
 
-1. Confirm the isolated PR worktree is clean.
+1. Confirm the isolated PR worktree is clean, including no untracked files that need preserving. Never force-remove a PR worktree to bypass a dirty-worktree check.
 2. Before deleting any branch, prove the local PR branch has no unpushed commits: if its remote-tracking branch exists, require the local tip to equal that remote tip; if the remote branch is already absent, require the local tip to equal the PR head SHA recorded at verified merge time. If either check fails, preserve the branch and report it instead of cleaning it up.
 3. Remove the PR remote branch if it still exists.
 4. Remove the isolated PR worktree.

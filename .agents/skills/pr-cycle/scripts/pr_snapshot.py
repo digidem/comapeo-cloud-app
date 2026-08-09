@@ -58,8 +58,9 @@ def run_gh_json(args: list[str]) -> Any:
 
 def resolve_repo(repo: str | None) -> str:
     if repo:
-        if "/" not in repo:
-            raise SnapshotError("--repo must be OWNER/REPO")
+        parts = repo.split("/")
+        if len(parts) != 2 or not all(parts):
+            raise SnapshotError("--repo must be exactly OWNER/REPO")
         return repo
     data = run_gh_json(["repo", "view", "--json", "nameWithOwner"])
     value = data.get("nameWithOwner")
@@ -293,16 +294,32 @@ def compact_threads(threads: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def normalize_expected_head(expected_head: str | None) -> str | None:
+    if expected_head is None:
+        return None
+    normalized = expected_head.strip().lower()
+    if not 7 <= len(normalized) <= 40 or any(
+        char not in "0123456789abcdef" for char in normalized
+    ):
+        raise SnapshotError("--expect-head must be a 7-40 character hexadecimal SHA")
+    return normalized
+
+
+def head_matches(expected_head: str | None, actual_head: str) -> bool:
+    return expected_head is None or actual_head.lower().startswith(expected_head)
+
+
 def build_snapshot(
     repo: str, pr_number: int, expected_head: str | None = None
 ) -> dict[str, Any]:
+    expected_head = normalize_expected_head(expected_head)
     pr_before = fetch_pr(repo, pr_number)
     head_before = pr_before.get("headRefOid")
     if not isinstance(head_before, str) or not head_before:
         raise SnapshotError("pull request head SHA was missing")
-    if expected_head is not None and head_before != expected_head:
+    if not head_matches(expected_head, head_before):
         raise SnapshotError(
-            f"pull request head changed: expected {expected_head}, found {head_before}"
+            f"pull request head does not match expected {expected_head}: found {head_before}"
         )
 
     threads = fetch_review_threads(repo, pr_number)
@@ -312,10 +329,14 @@ def build_snapshot(
         raise SnapshotError(
             f"pull request head changed during snapshot: {head_before} -> {head_after}"
         )
-    if expected_head is not None and head_after != expected_head:
+    if not isinstance(head_after, str) or not head_matches(expected_head, head_after):
         raise SnapshotError(
-            f"pull request head changed: expected {expected_head}, found {head_after}"
+            f"pull request head does not match expected {expected_head}: found {head_after}"
         )
+
+    review_decision = pr.get("reviewDecision")
+    if not isinstance(review_decision, str):
+        raise SnapshotError("pull request reviewDecision was missing or invalid")
 
     checks = classify_checks(pr.get("statusCheckRollup"))
     review_threads = compact_threads(threads)
@@ -325,6 +346,7 @@ def build_snapshot(
         and pr.get("isDraft") is False
         and pr.get("mergeable") == "MERGEABLE"
         and pr.get("mergeStateStatus") == "CLEAN"
+        and review_decision in {"", "APPROVED"}
         and checks["terminal_green"]
     )
 
