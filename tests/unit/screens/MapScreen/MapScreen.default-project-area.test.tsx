@@ -29,12 +29,14 @@ vi.mock('@tanstack/react-router', async () => {
 
 const mapProps: Array<Record<string, unknown>> = [];
 const attributionControlProps: Array<Record<string, unknown>> = [];
+const fitBoundsMock = vi.fn();
 const unprojectMock = vi.fn((point: [number, number]) => ({
   lng: point[0],
   lat: point[1],
 }));
 
 interface MockMapHandle {
+  fitBounds: typeof fitBoundsMock;
   getMap: () => {
     getCanvas: () => { clientWidth: number; clientHeight: number };
     getBounds: () => {
@@ -55,7 +57,12 @@ vi.mock('react-map-gl/maplibre', () => ({
   default: React.forwardRef<MockMapHandle, Record<string, unknown>>(
     function MockMap(props, ref) {
       mapProps.push(props);
+      React.useEffect(() => {
+        const onLoad = props.onLoad as (() => void) | undefined;
+        onLoad?.();
+      }, [props.onLoad]);
       React.useImperativeHandle(ref, () => ({
+        fitBounds: fitBoundsMock,
         getMap: () => ({
           getCanvas: () => ({ clientWidth: 800, clientHeight: 600 }),
           getBounds: () => ({
@@ -114,6 +121,7 @@ describe('MapScreen - default project area (issue #153)', () => {
     localStorage.clear();
     mapProps.length = 0;
     attributionControlProps.length = 0;
+    fitBoundsMock.mockReset();
     unprojectMock.mockReset();
     unprojectMock.mockImplementation((point: [number, number]) => ({
       lng: point[0],
@@ -180,6 +188,171 @@ describe('MapScreen - default project area (issue #153)', () => {
       expect(eastInput).toHaveValue(-50);
       const northInput = screen.getByLabelText('North');
       expect(northInput).toHaveValue(5);
+    });
+  });
+
+  it('fits the map to the project bbox with padding after project points load', async () => {
+    vi.mocked(getProjectPoints).mockResolvedValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-1', createdAt: '2026-01-01T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-70, -10] },
+        },
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-2', createdAt: '2026-01-02T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-50, 5] },
+        },
+      ],
+    });
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [-70, -10],
+          [-50, 5],
+        ],
+        { padding: 32, duration: 0 },
+      );
+    });
+  });
+
+  it('does not overwrite a manual bbox edit when project points resolve late', async () => {
+    let resolvePoints!: (
+      value: Awaited<ReturnType<typeof getProjectPoints>>,
+    ) => void;
+    const pendingPoints = new Promise<
+      Awaited<ReturnType<typeof getProjectPoints>>
+    >((resolve) => {
+      resolvePoints = resolve;
+    });
+    vi.mocked(getProjectPoints).mockReturnValue(pendingPoints);
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+
+    const user = userEvent.setup();
+    const westInput = screen.getByLabelText('West');
+    await user.clear(westInput);
+    await user.type(westInput, '-72');
+
+    await waitFor(() => {
+      const saveButtons = screen.getAllByRole('button', {
+        name: 'Save Map',
+        hidden: true,
+      });
+      expect(saveButtons[saveButtons.length - 1]).toBeEnabled();
+    });
+
+    resolvePoints({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-1', createdAt: '2026-01-01T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-40, -5] },
+        },
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-2', createdAt: '2026-01-02T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-30, 2] },
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('West')).toHaveValue(-72);
+    });
+    expect(fitBoundsMock).not.toHaveBeenLastCalledWith(
+      [
+        [-40, -5],
+        [-30, 2],
+      ],
+      { padding: 32, duration: 0 },
+    );
+  });
+
+  it('treats the computed project bbox as the unchanged config baseline', async () => {
+    vi.mocked(getProjectPoints).mockResolvedValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-1', createdAt: '2026-01-01T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-70, -10] },
+        },
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-2', createdAt: '2026-01-02T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-50, 5] },
+        },
+      ],
+    });
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [-70, -10],
+          [-50, 5],
+        ],
+        { padding: 32, duration: 0 },
+      );
+    });
+
+    const saveButtons = screen.getAllByRole('button', {
+      name: 'Save Map',
+      hidden: true,
+    });
+    expect(saveButtons[saveButtons.length - 1]).toBeDisabled();
+  });
+
+  it('pads a single-point project to the minimum bbox span before fitting', async () => {
+    vi.mocked(getProjectPoints).mockResolvedValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-1', createdAt: '2026-01-01T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [10, 20] },
+        },
+      ],
+    });
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [10, 20],
+          [10.01, 20.01],
+        ],
+        { padding: 32, duration: 0 },
+      );
+    });
+  });
+
+  it('falls back to DEFAULT_BBOX when loading project points throws', async () => {
+    vi.mocked(getProjectPoints).mockRejectedValue(new Error('db read failed'));
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [-75, -12],
+          [-45, 8],
+        ],
+        { padding: 32, duration: 0 },
+      );
     });
   });
 

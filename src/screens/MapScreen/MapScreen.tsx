@@ -144,6 +144,8 @@ export function MapScreen() {
   const [projectBbox, setProjectBbox] = useState<
     [number, number, number, number] | null
   >(null);
+  const [autoFitBbox, setAutoFitBbox] =
+    useState<[number, number, number, number]>(DEFAULT_BBOX);
   // Track if user has explicitly modified bbox (drawing, inputs, current view, project area button)
   const hasUserModifiedBboxRef = useRef(false);
 
@@ -161,8 +163,9 @@ export function MapScreen() {
     hasUserModifiedBboxRef.current = false;
     let cancelled = false;
     async function loadProjectBbox() {
-      // Reset project bbox when project changes
+      // Reset project bbox and fitted view when project changes
       setProjectBbox(null);
+      setAutoFitBbox(DEFAULT_BBOX);
       try {
         const points = await getProjectPoints(projectId!);
         if (cancelled) return;
@@ -209,9 +212,10 @@ export function MapScreen() {
             return; // Skip zero-area bbox
           }
           setProjectBbox(clampedBbox);
-          // Only set if user hasn't explicitly modified bbox (user edits take precedence)
-          if (drawMode === null && !hasUserModifiedBboxRef.current) {
+          // Only apply and fit the project bbox if the user has not already edited it.
+          if (!hasUserModifiedBboxRef.current) {
             setBbox(clampedBbox);
+            setAutoFitBbox(clampedBbox);
           }
         }
       } catch {
@@ -222,7 +226,7 @@ export function MapScreen() {
     return () => {
       cancelled = true;
     };
-  }, [selectedProjectId, drawMode]);
+  }, [selectedProjectId]);
 
   function handleDrawModeChange(
     mode: 'draw_rectangle' | 'simple_select' | null,
@@ -437,15 +441,7 @@ export function MapScreen() {
             drawMode={isDesktop ? drawMode : null}
             onDrawCreate={handleDrawCreate}
             onDrawModeChange={handleDrawModeChange}
-            initialViewState={
-              projectBbox
-                ? {
-                    longitude: (projectBbox[0] + projectBbox[2]) / 2,
-                    latitude: (projectBbox[1] + projectBbox[3]) / 2,
-                    zoom: 10,
-                  }
-                : undefined
-            }
+            fitBounds={autoFitBbox}
           />
 
           {drawMode !== 'draw_rectangle' && (

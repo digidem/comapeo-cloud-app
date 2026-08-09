@@ -3,7 +3,7 @@ import type { MapMouseEvent, MapTouchEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { RefObject } from 'react';
+import type { ComponentProps, RefObject } from 'react';
 import { useIntl } from 'react-intl';
 import Map, {
   AttributionControl,
@@ -28,7 +28,9 @@ interface MapAuthoringCanvasProps {
   onDrawCreate?: (bbox: [number, number, number, number]) => void;
   onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
   /** Optional initial view state to override the default */
-  initialViewState?: { longitude: number; latitude: number; zoom: number };
+  initialViewState?: ComponentProps<typeof Map>['initialViewState'];
+  /** Bounds to fit after the map is ready. */
+  fitBounds?: [number, number, number, number];
 }
 
 const INITIAL_VIEW_STATE = {
@@ -120,6 +122,7 @@ export function MapAuthoringCanvas({
   onDrawCreate,
   onDrawModeChange,
   initialViewState,
+  fitBounds,
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();
   const mapStyle = useMemo(() => basemapToMapStyle(basemap), [basemap]);
@@ -346,6 +349,17 @@ export function MapAuthoringCanvas({
     );
     el?.classList.remove('maplibregl-compact-show');
   }, []);
+
+  useEffect(() => {
+    if (!mapReady || !fitBounds || !mapRef.current) return;
+    mapRef.current.fitBounds(
+      [
+        [fitBounds[0], fitBounds[1]],
+        [fitBounds[2], fitBounds[3]],
+      ],
+      { padding: 32, duration: 0 },
+    );
+  }, [fitBounds, mapReady, mapRef]);
 
   return (
     <section
