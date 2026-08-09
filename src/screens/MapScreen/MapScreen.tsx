@@ -200,7 +200,14 @@ export function MapScreen() {
           const finalizedBbox = finalizeBbox(lngs, lats);
 
           if (finalizedBbox === null) {
-            // Invalid bbox - don't auto-fit
+            // Invalid bbox - fall back to DEFAULT_BBOX if user hasn't edited
+            if (
+              !hasUserModifiedBboxRef.current &&
+              drawModeRef.current === null
+            ) {
+              setBbox(DEFAULT_BBOX);
+              setAutoFitBbox(DEFAULT_BBOX);
+            }
             return;
           }
 
