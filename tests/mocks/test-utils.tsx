@@ -6,7 +6,6 @@ import { IntlProvider } from 'react-intl';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { ToastProvider } from '@/components/ui/toast';
 import { getMessages } from '@/i18n/load-messages';
 
 // Create a fresh QueryClient for each test to prevent shared state
@@ -36,7 +35,7 @@ function TestProviders({
   return (
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale={locale} defaultLocale="en" messages={messages}>
-        <ToastProvider>{children}</ToastProvider>
+        {children}
       </IntlProvider>
     </QueryClientProvider>
   );
@@ -72,7 +71,7 @@ export function createQueryWrapper(locale = 'en') {
     return (
       <QueryClientProvider client={queryClient}>
         <IntlProvider locale={locale} defaultLocale="en" messages={messages}>
-          <ToastProvider>{children}</ToastProvider>
+          {children}
         </IntlProvider>
       </QueryClientProvider>
     );
