@@ -79,12 +79,7 @@ const messages = defineMessages({
 // ---------------------------------------------------------------------------
 
 type FlowStatus =
-  | 'loading'
-  | 'connected'
-  | 'error'
-  | 'expired'
-  | 'invalid'
-  | 'networkError';
+  'loading' | 'connected' | 'error' | 'expired' | 'invalid' | 'networkError';
 
 type FlowStep = 'verify' | 'connect' | 'sync' | 'prepare';
 

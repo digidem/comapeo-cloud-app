@@ -412,8 +412,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         lastSyncedAt: record.lastSyncedAt || undefined,
         lastSuccessfulSyncAt: record.lastSuccessfulSyncAt || undefined,
         onboardingStatus: record.onboardingStatus as
-          | ArchiveLifecycleStatus
-          | undefined,
+          ArchiveLifecycleStatus | undefined,
         errorMessage: record.errorMessage,
       }));
 
