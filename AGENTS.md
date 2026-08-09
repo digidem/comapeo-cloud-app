@@ -172,6 +172,8 @@ Follow `DESIGN_OVERVIEW.md` for all visual decisions:
 | i18n extraction | @formatjs/cli | `npm run extract-messages` |
 | Runtime validation | Valibot schemas on API boundaries | At runtime |
 | CI | GitHub Actions (lint, types, coverage, E2E, screenshots, i18n check, deploy) | On push/PR |
+| React quality | React Doctor advisory changed-file gate + full reconciliation smoke | On PR |
+| React tech-debt audit | React Doctor full scan + rate-limited GitHub issue reconciliation | Monday 06:00 UTC / manual |
 | Secret scanning | TruffleHog (pre-commit + CI) | On `git commit` + CI |
 | Screen back buttons | Arrow icon + page name | Every detail screen |
 | Skeleton loading | Skeleton component while data loads | Every screen with async data |
