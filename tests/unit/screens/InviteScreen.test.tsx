@@ -344,17 +344,39 @@ describe('InviteScreen', () => {
   it('removes the server record when the screen unmounts mid-addServer', async () => {
     setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
 
-    // Hold addServer in flight; release it AFTER unmount, then run the real
-    // implementation so a genuine server record is created and rolled back.
+    // Capture the real actions so they can be reinstalled on the live store
+    // state in finally. Zustand copies actions forward onto new state objects
+    // on set(), so mockRestore() (which targets the object captured at
+    // spyOn-time) is not enough to fully restore the store.
     const realAddServer = useAuthStore.getState().addServer;
+    const realRemoveServer = useAuthStore.getState().removeServer;
+    const removeServerSpy = vi.spyOn(useAuthStore.getState(), 'removeServer');
+
+    // Hold addServer in flight; release it AFTER unmount. On release,
+    // persist a realistic server record DIRECTLY into the store (bypassing
+    // Dexie so the record exists deterministically, unlike the real
+    // implementation) and resolve — the component must notice the cancelled
+    // ref and roll the orphaned record back.
     let releaseAddServer!: () => void;
     const addServerSpy = vi
       .spyOn(useAuthStore.getState(), 'addServer')
       .mockImplementation(
-        (config) =>
+        () =>
           new Promise<string>((resolve) => {
             releaseAddServer = () => {
-              void realAddServer(config).then(resolve);
+              useAuthStore.setState((s) => ({
+                servers: [
+                  ...s.servers,
+                  {
+                    id: 'server-1',
+                    label: 'archive.test',
+                    baseUrl: 'https://archive.test',
+                    token: 'abc123',
+                    status: 'idle',
+                  },
+                ],
+              }));
+              resolve('server-1');
             };
           }),
       );
@@ -370,12 +392,23 @@ describe('InviteScreen', () => {
       releaseAddServer();
 
       // The invite resolved after unmount — the rollback must have removed
-      // the orphaned server record.
+      // the orphaned server record. On pre-fix source (no rollback) the
+      // record persists, so this fails with length 1.
       await waitFor(() => {
         expect(useAuthStore.getState().servers).toHaveLength(0);
       });
+
+      // Directly proves the rollback branch ran: removeServer was invoked
+      // for the record created by the cancelled invite.
+      expect(removeServerSpy).toHaveBeenCalledWith('server-1');
     } finally {
       addServerSpy.mockRestore();
+      removeServerSpy.mockRestore();
+      useAuthStore.setState((s) => ({
+        ...s,
+        addServer: realAddServer,
+        removeServer: realRemoveServer,
+      }));
     }
   });
 
