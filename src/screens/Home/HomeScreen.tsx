@@ -16,8 +16,8 @@ import { useShellSlot } from '@/components/layout/shell-slot';
 import { Button } from '@/components/ui/button';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
+import { useAttachmentsForProject } from '@/hooks/useAttachmentsForProject';
 import { useObservationCategoryMetadata } from '@/hooks/useObservationCategoryMetadata';
-import { useObservationDisplayNames } from '@/hooks/useObservationDisplayNames';
 import { useObservations } from '@/hooks/useObservations';
 import { useProjectCoverage } from '@/hooks/useProjectCoverage';
 import { useProjects } from '@/hooks/useProjects';
@@ -44,7 +44,7 @@ import { HomeScreenSkeleton } from './HomeScreenSkeleton';
 import { IntroPage } from './IntroPage';
 import { MethodSelector } from './MethodSelector';
 import { ProjectBannerCard } from './ProjectBannerCard';
-import { RecentActivityList } from './RecentActivityList';
+import { type ActivityItem, RecentActivityList } from './RecentActivityList';
 import { StatCard } from './StatCard';
 
 // ---- Helpers ----
@@ -383,6 +383,7 @@ function HomeScreen() {
     state.coverageRefreshKey,
   );
   const observationsQuery = useObservations(state.selectedProjectId);
+  const attachmentsQuery = useAttachmentsForProject(state.selectedProjectId);
   const alertsQuery = useAlerts(state.selectedProjectId);
   const tracksQuery = useTracks(state.selectedProjectId);
   const archiveStatus = useArchiveStatus();
@@ -409,18 +410,26 @@ function HomeScreen() {
     [observationsQuery.data],
   );
 
-  // Pre-compute observation display names using preset matching + legacy fallback
-  const observationDisplayNames = useObservationDisplayNames(
+  const {
+    categoryByObservationId,
+    displayNamesByObservationId,
+    isLoading: isCategoriesLoading,
+  } = useObservationCategoryMetadata({
     observations,
-    state.selectedProjectId,
-  );
-  const { categoryByObservationId, isLoading: isCategoriesLoading } =
-    useObservationCategoryMetadata({
-      observations,
-      projectLocalId: state.selectedProjectId,
-      projectRemoteId: selectedProject?.remoteId,
-      serverUrl: archiveServerUrl,
-    });
+    projectLocalId: state.selectedProjectId,
+    projectRemoteId: selectedProject?.remoteId,
+    serverUrl: selectedProject?.serverUrl ?? archiveServerUrl,
+  });
+  const attachmentsByObservationId = useMemo(() => {
+    const attachments = attachmentsQuery.data;
+    const map = new Map<string, NonNullable<typeof attachments>>();
+    for (const attachment of attachments ?? []) {
+      const existing = map.get(attachment.observationLocalId) ?? [];
+      existing.push(attachment);
+      map.set(attachment.observationLocalId, existing);
+    }
+    return map;
+  }, [attachmentsQuery.data]);
 
   const alerts = useMemo(() => alertsQuery.data ?? [], [alertsQuery.data]);
   const tracks = useMemo(() => tracksQuery.data ?? [], [tracksQuery.data]);
@@ -462,43 +471,26 @@ function HomeScreen() {
     return urls;
   }, [observations, selectedProject?.serverUrl]);
 
-  // Build recent activity from real observations and alerts
+  // Build recent activity from real observations and alerts.
+  // Observation entries carry the same resolved category + media data as DataScreen.
   const recentActivities = useMemo(() => {
-    const items: Array<{
-      id: string;
-      title: string;
-      description: string;
-      timestamp: string;
-      type: 'record' | 'map' | 'sync';
-      category?: string;
-      photoCount?: number;
-      audioCount?: number;
-      details?: string;
-      _sortKey: number;
-    }> = [];
+    const items: Array<ActivityItem & { _sortKey: number }> = [];
 
     for (const obs of observations) {
       const createdMs = new Date(obs.createdAt).getTime();
       const ageMs = now - createdMs;
-      const hasCoords = obs.lat !== undefined && obs.lon !== undefined;
       items.push({
         id: obs.localId,
-        title:
-          observationDisplayNames.get(obs.localId) ??
-          intl.formatMessage(messages.activityObservationWithCoords),
-        description: hasCoords
-          ? `${obs.lat!.toFixed(4)}, ${obs.lon!.toFixed(4)}`
-          : intl.formatMessage(messages.activityNoLocation),
-        timestamp: formatRelativeTime(ageMs, intl),
         type: 'record',
-        category: obs.tags?.category,
-        photoCount: obs.tags?.photoCount
-          ? Number(obs.tags.photoCount) || undefined
-          : undefined,
-        audioCount: obs.tags?.audioCount
-          ? Number(obs.tags.audioCount) || undefined
-          : undefined,
-        details: obs.tags?.notes ?? obs.tags?.details,
+        displayName:
+          displayNamesByObservationId.get(obs.localId) ??
+          obs.tags?.category ??
+          intl.formatMessage(messages.activityObservationWithCoords),
+        createdAt: obs.createdAt,
+        timestamp: formatRelativeTime(ageMs, intl),
+        category: categoryByObservationId.get(obs.localId),
+        tags: obs.tags,
+        attachments: attachmentsByObservationId.get(obs.localId),
         _sortKey: createdMs,
       });
     }
@@ -520,7 +512,15 @@ function HomeScreen() {
     items.sort((a, b) => b._sortKey - a._sortKey);
 
     return items.map(({ _sortKey: _, ...rest }) => rest);
-  }, [observations, alerts, intl, now, observationDisplayNames]);
+  }, [
+    observations,
+    alerts,
+    intl,
+    now,
+    displayNamesByObservationId,
+    categoryByObservationId,
+    attachmentsByObservationId,
+  ]);
 
   // Derive territory area from coverage results
   const territoryArea = useMemo(() => {
