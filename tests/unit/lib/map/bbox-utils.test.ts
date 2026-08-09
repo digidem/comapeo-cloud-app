@@ -5,6 +5,7 @@ import {
   clampBboxLatitude,
   clampLatitude,
   crossesAntimeridian,
+  spansAntimeridian,
 } from '@/lib/map/bbox-utils';
 
 describe('clampLatitude', () => {
@@ -49,5 +50,41 @@ describe('clampBboxLatitude', () => {
       180,
       WEB_MERCATOR_LAT_LIMIT,
     ]);
+  });
+});
+
+describe('spansAntimeridian', () => {
+  it('returns true for tight clusters crossing the antimeridian', () => {
+    // Points at 179 and -179 span the antimeridian with a small angular span (2°)
+    expect(spansAntimeridian([179, -179])).toBe(true);
+    expect(spansAntimeridian([175, -175])).toBe(true);
+    // Multiple points crossing
+    expect(spansAntimeridian([179, -179, 178])).toBe(true);
+  });
+
+  it('returns false for clusters that do not cross the antimeridian', () => {
+    // Normal range
+    expect(spansAntimeridian([-10, 10])).toBe(false);
+    // Cluster entirely on one side
+    expect(spansAntimeridian([-70, -50])).toBe(false);
+    expect(spansAntimeridian([175, 178])).toBe(false);
+    // Cluster crossing prime meridian but not antimeridian
+    expect(spansAntimeridian([-10, 10, 20])).toBe(false);
+    // Points spread around the world (not a tight cluster)
+    expect(spansAntimeridian([-170, 0, 170])).toBe(false);
+  });
+
+  it('returns false for single points', () => {
+    expect(spansAntimeridian([5])).toBe(false);
+    expect(spansAntimeridian([179])).toBe(false);
+    expect(spansAntimeridian([-179])).toBe(false);
+  });
+
+  it('uses strict comparison at ±180 boundary', () => {
+    // A cluster exactly touching 180° on one side is NOT antimeridian-spanning
+    expect(spansAntimeridian([179, 180])).toBe(false);
+    expect(spansAntimeridian([-180, -179])).toBe(false);
+    // But a cluster straddling 180° IS
+    expect(spansAntimeridian([179.5, 180.5])).toBe(true);
   });
 });

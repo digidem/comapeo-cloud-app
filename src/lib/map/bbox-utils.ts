@@ -87,10 +87,11 @@ export function spansAntimeridian(lngs: number[]): boolean {
 
   // If the max gap is the wrap gap, the cluster is contiguous in [0, 360)
   // Check if this contiguous cluster crosses the antimeridian (180°)
+  // Use strict comparison: cluster exactly touching 180° on one side is NOT antimeridian-spanning
   if (maxGapIndex === -1) {
     const clusterMin = sorted[0] ?? 0;
     const clusterMax = sorted[sorted.length - 1] ?? 0;
-    return clusterMin <= 180 && clusterMax >= 180;
+    return clusterMin < 180 && clusterMax > 180;
   }
 
   // If max gap is internal, the cluster wraps around 0/360 (prime meridian),

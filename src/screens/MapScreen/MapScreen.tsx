@@ -207,6 +207,9 @@ export function MapScreen() {
           // and fall back to DEFAULT_BBOX since we can't reliably auto-fit
           // antimeridian-spanning projects.
           if (spansAntimeridian(lngs)) {
+            if (!hasUserModifiedBboxRef.current) {
+              setBbox(DEFAULT_BBOX);
+            }
             setAutoFitBbox(DEFAULT_BBOX);
             return;
           }
@@ -232,21 +235,24 @@ export function MapScreen() {
           }
           setProjectBbox(clampedBbox);
           // Only apply and fit the project bbox if the user has not already edited it
-          // and is not currently in draw mode.
-          if (
-            !hasUserModifiedBboxRef.current &&
-            drawModeRef.current !== 'draw_rectangle'
-          ) {
+          // and draw mode is null (not drawing and not in simple_select).
+          if (!hasUserModifiedBboxRef.current && drawModeRef.current === null) {
             setBbox(clampedBbox);
             setAutoFitBbox(clampedBbox);
           }
         } else {
           // No geolocated observations - reset to default
+          if (!hasUserModifiedBboxRef.current) {
+            setBbox(DEFAULT_BBOX);
+          }
           setAutoFitBbox(DEFAULT_BBOX);
         }
       } catch {
         // Ignore errors, keep DEFAULT_BBOX
         if (cancelled) return;
+        if (!hasUserModifiedBboxRef.current) {
+          setBbox(DEFAULT_BBOX);
+        }
         setAutoFitBbox(DEFAULT_BBOX);
       }
     }
