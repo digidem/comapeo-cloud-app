@@ -1,3 +1,6 @@
+import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
+import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
+import JSZip from 'jszip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
@@ -56,6 +59,18 @@ describe('estimateDownloadSize', () => {
     const small = estimateDownloadSize([-0.1, -0.1, 0.1, 0.1], 0, 4);
     const large = estimateDownloadSize([-80, -50, -30, 20], 0, 4);
     expect(large).toBeGreaterThan(small);
+  });
+
+  it('uses worldwide coverage for zooms 0-3 when global overview is enabled', () => {
+    const bbox: [number, number, number, number] = [-75, -12, -45, 8];
+    const global = estimateDownloadSize(bbox, 0, 5, {
+      includeGlobalOverview: true,
+    });
+    const expected =
+      estimateDownloadSize([-180, -85.0511, 180, 85.0511], 0, 3) +
+      estimateDownloadSize(bbox, 4, 5);
+
+    expect(global).toBe(expected);
   });
 });
 
@@ -155,7 +170,10 @@ describe('downloadSmp', () => {
       }),
     );
 
-    const result = await downloadSmp({ map: createMockMap() });
+    const result = await downloadSmp({
+      map: createMockMap(),
+      includeGlobalOverview: false,
+    });
 
     expect(result).toBe('map-1');
     expect(updateSpy).toHaveBeenCalledTimes(2);
@@ -166,6 +184,116 @@ describe('downloadSmp', () => {
       errorMessage: undefined,
       updatedAt: expect.any(String),
     });
+  });
+
+  it('merges global zoom 0-3 tiles into the regional SMP by default', async () => {
+    const updateSpy = vi.spyOn(getDb().maps, 'update').mockResolvedValue(1);
+    const globalZip = new JSZip();
+    globalZip.file('VERSION', '1.0');
+    globalZip.file(
+      'style.json',
+      JSON.stringify({
+        version: 8,
+        sources: {
+          raster: {
+            type: 'raster',
+            tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.png'],
+            minzoom: 0,
+            maxzoom: 3,
+            bounds: [-180, -85.0511, 180, 85.0511],
+          },
+        },
+        layers: [{ id: 'raster', type: 'raster', source: 'raster' }],
+      }),
+    );
+    globalZip.file('s/0/0/0/0.png', new Uint8Array([1]));
+    globalZip.file('s/0/3/7/7.png', new Uint8Array([2]));
+    const regionalZip = new JSZip();
+    regionalZip.file('VERSION', '1.0');
+    regionalZip.file(
+      'style.json',
+      JSON.stringify({
+        version: 8,
+        sources: {
+          raster: {
+            type: 'raster',
+            tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.png'],
+            minzoom: 0,
+            maxzoom: 4,
+            bounds: [-75, -12, -45, 8],
+          },
+        },
+        layers: [{ id: 'raster', type: 'raster', source: 'raster' }],
+      }),
+    );
+    regionalZip.file('s/0/3/4/4.png', new Uint8Array([3]));
+    regionalZip.file('s/0/4/8/8.png', new Uint8Array([4]));
+
+    const streams = [
+      await globalZip.generateAsync({ type: 'uint8array' }),
+      await regionalZip.generateAsync({ type: 'uint8array' }),
+    ];
+    mockDownload.mockImplementation(() => {
+      const bytes = streams.shift();
+      if (!bytes) throw new Error('Unexpected download call');
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(bytes);
+          controller.close();
+        },
+      });
+    });
+
+    await downloadSmp({ map: createMockMap({ maxZoom: 4 }) });
+
+    expect(mockDownload).toHaveBeenCalledTimes(2);
+    expect(mockDownload).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        bbox: [-180, -85.0511, 180, 85.0511],
+        maxzoom: 3,
+      }),
+    );
+    expect(mockDownload).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ bbox: [-75, -12, -45, 8], maxzoom: 4 }),
+    );
+
+    const persisted = updateSpy.mock.calls.at(-1)?.[1] as
+      Partial<SavedMap> | undefined;
+    expect(persisted?.smpBlob).toBeInstanceOf(Blob);
+    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    expect(merged.file('s/g0/0/0/0.png')).not.toBeNull();
+    expect(merged.file('s/g0/3/7/7.png')).not.toBeNull();
+    expect(merged.file('s/0/3/4/4.png')).toBeNull();
+    expect(merged.file('s/0/4/8/8.png')).not.toBeNull();
+    const style = JSON.parse(
+      (await merged.file('style.json')?.async('string')) ?? '{}',
+    ) as {
+      sources: Record<string, { minzoom?: number; maxzoom?: number }>;
+      layers: Array<{
+        id: string;
+        source?: string;
+        minzoom?: number;
+        maxzoom?: number;
+      }>;
+    };
+    expect(validateStyleMin(style as unknown as StyleSpecification)).toEqual(
+      [],
+    );
+    expect(style.sources.raster__global_overview?.maxzoom).toBe(3);
+    expect(style.layers).toEqual([
+      expect.objectContaining({
+        id: 'raster__global_overview',
+        source: 'raster__global_overview',
+        maxzoom: 4,
+      }),
+      expect.objectContaining({
+        id: 'raster',
+        source: 'raster',
+        minzoom: 4,
+      }),
+    ]);
   });
 
   it('preserves the storage error when recording the error state also fails', async () => {
@@ -186,9 +314,9 @@ describe('downloadSmp', () => {
       }),
     );
 
-    await expect(downloadSmp({ map: createMockMap() })).rejects.toBe(
-      storageError,
-    );
+    await expect(
+      downloadSmp({ map: createMockMap(), includeGlobalOverview: false }),
+    ).rejects.toBe(storageError);
     expect(updateSpy).toHaveBeenCalledTimes(4);
     expect(updateSpy).toHaveBeenLastCalledWith('map-1', {
       errorMessage: 'Storage error: Quota exceeded while saving blob',

@@ -3,6 +3,7 @@ import { useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
 import { useDownloadMap } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
@@ -52,6 +53,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const [exportReady, setExportReady] = useState(false);
   const [exportMissing, setExportMissing] = useState(false);
   const [concurrencyWarning, setConcurrencyWarning] = useState(false);
+  const [includeGlobalOverview, setIncludeGlobalOverview] = useState(true);
   const storageBypassedRef = useRef(false);
   const exportUrlRef = useRef<string | null>(null);
   const exportBlobNameRef = useRef<string>('');
@@ -99,6 +101,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     map.bbox,
     0, // library always downloads from zoom 0 regardless of user minZoom setting
     map.maxZoom,
+    { includeGlobalOverview },
   );
   const estimatedFormatted = formatBytes(estimatedBytes);
   const isLarge = estimatedBytes > 100 * 1024 * 1024;
@@ -157,6 +160,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         onProgress: setProgress,
         signal: controller.signal,
         mapboxAccessToken,
+        includeGlobalOverview,
       });
       if (isRetryAttempt) {
         setRetryCount((n) => n + 1);
@@ -184,6 +188,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     estimatedFormatted,
     intl,
     mapboxAccessToken,
+    includeGlobalOverview,
   ]);
 
   const handleCancel = useCallback(() => {
@@ -487,6 +492,19 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         </div>
       ) : (
         <>
+          <div className="flex flex-col gap-1">
+            <Switch
+              id={`global-overview-${map.id}`}
+              checked={includeGlobalOverview}
+              onCheckedChange={setIncludeGlobalOverview}
+              label={intl.formatMessage(mapMessages.downloadGlobalOverview)}
+            />
+            <p className="text-xs text-text-muted">
+              {intl.formatMessage(
+                mapMessages.downloadGlobalOverviewDescription,
+              )}
+            </p>
+          </div>
           <div className="text-xs text-text-muted">
             {intl.formatMessage(mapMessages.downloadEstimatedSize, {
               size: estimatedFormatted,

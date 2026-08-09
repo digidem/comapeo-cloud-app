@@ -130,13 +130,21 @@ export function useDownloadMap() {
       onProgress,
       signal,
       mapboxAccessToken,
+      includeGlobalOverview,
     }: {
       map: SavedMap;
       onProgress?: (progress: DownloadProgress) => void;
       signal?: AbortSignal;
       mapboxAccessToken?: string;
+      includeGlobalOverview?: boolean;
     }): Promise<string> => {
-      return downloadSmp({ map, onProgress, signal, mapboxAccessToken });
+      return downloadSmp({
+        map,
+        onProgress,
+        signal,
+        mapboxAccessToken,
+        includeGlobalOverview,
+      });
     },
     onSuccess: (_mapId, { map }) => {
       void queryClient.invalidateQueries({

@@ -1187,6 +1187,12 @@
   "map.download.export": {
     "defaultMessage": "Download SMP File"
   },
+  "map.download.globalOverview": {
+    "defaultMessage": "Global overview"
+  },
+  "map.download.globalOverviewDescription": {
+    "defaultMessage": "Include worldwide context at zoom levels 0–3."
+  },
   "map.download.interrupted": {
     "defaultMessage": "A previous download was interrupted. You can try again."
   },
