@@ -145,7 +145,10 @@ export function MapAuthoringCanvas({
   const startPointRef = useRef<{ x: number; y: number } | null>(null);
   const endPointRef = useRef<{ x: number; y: number } | null>(null);
   const MIN_DRAG_PX = 12;
-  // Track the last fitted bbox to avoid refitting on remount with same bounds
+  // Track the last fitted bbox to dedupe consecutive fitBounds calls
+  // with identical bounds within the same mount. This prevents unnecessary
+  // camera jumps when fitBounds prop changes to a new array reference
+  // but represents the same geographic bounds.
   const lastFittedBboxRef = useRef<[number, number, number, number] | null>(
     null,
   );

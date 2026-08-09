@@ -403,6 +403,23 @@ describe('MapScreen - default project area (issue #153)', () => {
         },
       );
     });
+
+    // Also verify the BoundsEditor shows the fallback values
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole('button', { name: 'Map settings' }),
+    );
+
+    await waitFor(() => {
+      const westInput = screen.getByLabelText('West');
+      expect(westInput).toHaveValue(-75);
+      const southInput = screen.getByLabelText('South');
+      expect(southInput).toHaveValue(-12);
+      const eastInput = screen.getByLabelText('East');
+      expect(eastInput).toHaveValue(-45);
+      const northInput = screen.getByLabelText('North');
+      expect(northInput).toHaveValue(8);
+    });
   });
 
   it('hasConfigChanges is false at default config when using project area fallback', async () => {

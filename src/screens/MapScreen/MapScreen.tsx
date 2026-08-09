@@ -203,14 +203,24 @@ export function MapScreen() {
           ];
           // Handle antimeridian crossing - if the span crosses the antimeridian,
           // the simple min/max approach would produce an inverted bbox.
-          // For project area, we don't try to wrap - we just skip auto-fitting
-          // and fall back to DEFAULT_BBOX since we can't reliably auto-fit
-          // antimeridian-spanning projects.
+          // For antimeridian-spanning projects, we shift the bbox by adding 360
+          // to negative longitudes so MapLibre can fit it correctly.
           if (spansAntimeridian(lngs)) {
-            if (!hasUserModifiedBboxRef.current) {
-              setBbox(DEFAULT_BBOX);
+            const shiftedBbox: [number, number, number, number] = [
+              rawBbox[0] < 0 ? rawBbox[0] + 360 : rawBbox[0],
+              rawBbox[1],
+              rawBbox[2] < 0 ? rawBbox[2] + 360 : rawBbox[2],
+              rawBbox[3],
+            ];
+            if (
+              !hasUserModifiedBboxRef.current &&
+              drawModeRef.current === null
+            ) {
+              setBbox(shiftedBbox);
+              setAutoFitBbox(shiftedBbox);
+            } else if (!hasUserModifiedBboxRef.current) {
+              setAutoFitBbox(DEFAULT_BBOX);
             }
-            setAutoFitBbox(DEFAULT_BBOX);
             return;
           }
           // Ensure minimum span to avoid zero-area bbox for single-point projects
@@ -242,18 +252,22 @@ export function MapScreen() {
           }
         } else {
           // No geolocated observations - reset to default
-          if (!hasUserModifiedBboxRef.current) {
+          if (!hasUserModifiedBboxRef.current && drawModeRef.current === null) {
             setBbox(DEFAULT_BBOX);
+            setAutoFitBbox(DEFAULT_BBOX);
+          } else if (!hasUserModifiedBboxRef.current) {
+            setAutoFitBbox(DEFAULT_BBOX);
           }
-          setAutoFitBbox(DEFAULT_BBOX);
         }
       } catch {
         // Ignore errors, keep DEFAULT_BBOX
         if (cancelled) return;
-        if (!hasUserModifiedBboxRef.current) {
+        if (!hasUserModifiedBboxRef.current && drawModeRef.current === null) {
           setBbox(DEFAULT_BBOX);
+          setAutoFitBbox(DEFAULT_BBOX);
+        } else if (!hasUserModifiedBboxRef.current) {
+          setAutoFitBbox(DEFAULT_BBOX);
         }
-        setAutoFitBbox(DEFAULT_BBOX);
       }
     }
     loadProjectBbox();
