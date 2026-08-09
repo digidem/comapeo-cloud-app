@@ -148,6 +148,11 @@ export function MapScreen() {
     useState<[number, number, number, number]>(DEFAULT_BBOX);
   // Track if user has explicitly modified bbox (drawing, inputs, current view, project area button)
   const hasUserModifiedBboxRef = useRef(false);
+  // Ref to track drawMode without adding it as an effect dependency
+  const drawModeRef = useRef(drawMode);
+  useEffect(() => {
+    drawModeRef.current = drawMode;
+  }, [drawMode]);
 
   useEffect(() => {
     return () => {
@@ -163,9 +168,9 @@ export function MapScreen() {
     hasUserModifiedBboxRef.current = false;
     let cancelled = false;
     async function loadProjectBbox() {
-      // Reset project bbox and fitted view when project changes
+      // Reset project bbox when project changes; defer autoFitBbox reset
+      // until we know whether there are geolocated points
       setProjectBbox(null);
-      setAutoFitBbox(DEFAULT_BBOX);
       try {
         const points = await getProjectPoints(projectId!);
         if (cancelled) return;
@@ -191,6 +196,15 @@ export function MapScreen() {
             Math.max(...lngs),
             Math.max(...lats),
           ];
+          // Handle antimeridian crossing - if the span crosses the antimeridian,
+          // the simple min/max approach would produce an inverted bbox.
+          // For project area, we don't try to wrap - we just skip auto-fitting
+          // and fall back to DEFAULT_BBOX since we can't reliably auto-fit
+          // antimeridian-spanning projects.
+          if (crossesAntimeridian(lngs)) {
+            setAutoFitBbox(DEFAULT_BBOX);
+            return;
+          }
           // Ensure minimum span to avoid zero-area bbox for single-point projects
           const MIN_SPAN = 0.01;
           const finalBbox: [number, number, number, number] = [
@@ -212,14 +226,22 @@ export function MapScreen() {
             return; // Skip zero-area bbox
           }
           setProjectBbox(clampedBbox);
-          // Only apply and fit the project bbox if the user has not already edited it.
-          if (!hasUserModifiedBboxRef.current) {
+          // Only apply and fit the project bbox if the user has not already edited it
+          // and is not currently in draw mode.
+          if (
+            !hasUserModifiedBboxRef.current &&
+            drawModeRef.current !== 'draw_rectangle'
+          ) {
             setBbox(clampedBbox);
             setAutoFitBbox(clampedBbox);
           }
+        } else {
+          // No geolocated observations - reset to default
+          setAutoFitBbox(DEFAULT_BBOX);
         }
       } catch {
         // Ignore errors, keep DEFAULT_BBOX
+        setAutoFitBbox(DEFAULT_BBOX);
       }
     }
     loadProjectBbox();

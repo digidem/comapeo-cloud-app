@@ -3,7 +3,7 @@ import type { MapMouseEvent, MapTouchEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ComponentProps, RefObject } from 'react';
+import type { RefObject } from 'react';
 import { useIntl } from 'react-intl';
 import Map, {
   AttributionControl,
@@ -27,8 +27,6 @@ interface MapAuthoringCanvasProps {
   /** Called when a rectangle is drawn via map drag */
   onDrawCreate?: (bbox: [number, number, number, number]) => void;
   onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
-  /** Optional initial view state to override the default */
-  initialViewState?: ComponentProps<typeof Map>['initialViewState'];
   /** Bounds to fit after the map is ready. */
   fitBounds?: [number, number, number, number];
 }
@@ -121,7 +119,6 @@ export function MapAuthoringCanvas({
   drawMode,
   onDrawCreate,
   onDrawModeChange,
-  initialViewState,
   fitBounds,
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();
@@ -148,6 +145,10 @@ export function MapAuthoringCanvas({
   const startPointRef = useRef<{ x: number; y: number } | null>(null);
   const endPointRef = useRef<{ x: number; y: number } | null>(null);
   const MIN_DRAG_PX = 12;
+  // Track the last fitted bbox to avoid refitting on remount with same bounds
+  const lastFittedBboxRef = useRef<[number, number, number, number] | null>(
+    null,
+  );
 
   // Keep latest callback refs to avoid re‑binding the effect
   const onDrawCreateRef = useRef(onDrawCreate);
@@ -352,13 +353,32 @@ export function MapAuthoringCanvas({
 
   useEffect(() => {
     if (!mapReady || !fitBounds || !mapRef.current) return;
+
+    // Skip if we've already fitted to the same bbox (prevents refit on remount)
+    if (
+      lastFittedBboxRef.current &&
+      lastFittedBboxRef.current[0] === fitBounds[0] &&
+      lastFittedBboxRef.current[1] === fitBounds[1] &&
+      lastFittedBboxRef.current[2] === fitBounds[2] &&
+      lastFittedBboxRef.current[3] === fitBounds[3]
+    ) {
+      return;
+    }
+
     mapRef.current.fitBounds(
       [
         [fitBounds[0], fitBounds[1]],
         [fitBounds[2], fitBounds[3]],
       ],
-      { padding: 32, duration: 0 },
+      {
+        padding: { top: 64, bottom: 32, left: 32, right: 32 },
+        duration: 0,
+        maxZoom: 14,
+      },
     );
+
+    // Remember the bbox we just fitted to
+    lastFittedBboxRef.current = [...fitBounds];
   }, [fitBounds, mapReady, mapRef]);
 
   return (
@@ -371,7 +391,7 @@ export function MapAuthoringCanvas({
     >
       <Map
         ref={mapRef}
-        initialViewState={initialViewState ?? INITIAL_VIEW_STATE}
+        initialViewState={INITIAL_VIEW_STATE}
         mapStyle={mapStyle}
         style={MAP_STYLE}
         attributionControl={false}

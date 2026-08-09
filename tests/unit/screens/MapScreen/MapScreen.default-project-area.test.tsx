@@ -217,7 +217,11 @@ describe('MapScreen - default project area (issue #153)', () => {
           [-70, -10],
           [-50, 5],
         ],
-        { padding: 32, duration: 0 },
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
       );
     });
   });
@@ -268,7 +272,7 @@ describe('MapScreen - default project area (issue #153)', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('West')).toHaveValue(-72);
     });
-    expect(fitBoundsMock).not.toHaveBeenLastCalledWith(
+    expect(fitBoundsMock).not.toHaveBeenCalledWith(
       [
         [-40, -5],
         [-30, 2],
@@ -302,7 +306,11 @@ describe('MapScreen - default project area (issue #153)', () => {
           [-70, -10],
           [-50, 5],
         ],
-        { padding: 32, duration: 0 },
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
       );
     });
 
@@ -334,7 +342,11 @@ describe('MapScreen - default project area (issue #153)', () => {
           [10, 20],
           [10.01, 20.01],
         ],
-        { padding: 32, duration: 0 },
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
       );
     });
   });
@@ -345,13 +357,22 @@ describe('MapScreen - default project area (issue #153)', () => {
     render(<MapScreen />);
     await screen.findByTestId('mock-authoring-map');
 
+    // Wait for the error to be caught and fallback to apply
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenCalledTimes(1);
+    });
+
     await waitFor(() => {
       expect(fitBoundsMock).toHaveBeenLastCalledWith(
         [
           [-75, -12],
           [-45, 8],
         ],
-        { padding: 32, duration: 0 },
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
       );
     });
   });
@@ -366,6 +387,11 @@ describe('MapScreen - default project area (issue #153)', () => {
     render(<MapScreen />);
 
     await screen.findByTestId('mock-authoring-map');
+
+    // Wait for the fallback to apply (should be 1 call with DEFAULT_BBOX)
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenCalledTimes(1);
+    });
 
     // Open settings to see BoundsEditor
     const user = userEvent.setup();
