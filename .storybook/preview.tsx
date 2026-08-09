@@ -12,6 +12,7 @@ import {
 } from '@tanstack/react-router';
 
 import { ShellSlotProvider } from '@/components/layout/shell-slot';
+import { ToastProvider } from '@/components/ui/toast';
 import { SUPPORTED_LOCALES, getMessages } from '@/i18n/load-messages';
 import type { Locale } from '@/stores/locale-store';
 
@@ -98,7 +99,9 @@ function StorybookProviders({
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale={locale} defaultLocale="en" messages={messages}>
         <RouterContextProvider router={storybookRouter}>
-          <ShellSlotProvider>{children}</ShellSlotProvider>
+          <ShellSlotProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </ShellSlotProvider>
         </RouterContextProvider>
       </IntlProvider>
     </QueryClientProvider>

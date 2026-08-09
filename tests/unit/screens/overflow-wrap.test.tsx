@@ -17,12 +17,23 @@
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ReactElement } from 'react';
+
+import { ToastProvider } from '@/components/ui/toast';
 import { resetDb } from '@/lib/db';
 import { DataScreen } from '@/screens/DataScreen';
 import { ObservationDetailScreen } from '@/screens/ObservationDetailScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { useAuthStore } from '@/stores/auth-store';
 import { useViewModeStore } from '@/stores/view-mode-store';
+
+// SettingsScreen calls useToast(), which throws without a ToastProvider.
+// The shared test-utils render does NOT wrap in ToastProvider (it would
+// pollute every container.innerHTML assertion across the suite), so wrap
+// locally here.
+function renderWithToast(ui: ReactElement) {
+  return render(<ToastProvider>{ui}</ToastProvider>);
+}
 
 vi.mock('@/lib/local-storage-utils', () => ({
   exportLocalStorageData: vi.fn(() => '"{\\"version\\":1,\\"data\\":{}}"'),
@@ -117,7 +128,7 @@ describe('overflow guard: SettingsScreen invite code (issue #155)', () => {
 
   it('wraps a long generated invite code instead of overflowing', async () => {
     const user = userEvent.setup();
-    render(<SettingsScreen />);
+    renderWithToast(<SettingsScreen />);
 
     // A long URL + token forces a long base64 invite code from the mock
     // /api/invites/encrypt handler. Pasting (rather than typing keystroke

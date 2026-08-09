@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IntlShape, defineMessages, useIntl } from 'react-intl';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 
 import {
@@ -8,13 +9,18 @@ import {
   type ConnectionStep,
 } from '@/components/shared/ConnectionProgress';
 import { Button } from '@/components/ui/button';
-import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
+import {
+  InviteApiError,
+  apiClient,
+  redeemEncryptedInvite,
+} from '@/lib/api-client';
+import { syncRemoteArchive } from '@/lib/data-layer';
 import {
   type ParseInviteResult,
   parseInviteUrl,
   warnLegacyInviteUrlOnce,
 } from '@/lib/invite-url';
-import { onboardArchive } from '@/lib/sync-coordinator';
+import { type RemoteArchiveServer, useAuthStore } from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
 // i18n
@@ -58,9 +64,9 @@ const messages = defineMessages({
     id: 'invite.progress.networkError',
     defaultMessage: 'Unable to connect. Check your internet connection.',
   },
-  alreadyConnected: {
-    id: 'invite.alreadyConnected',
-    defaultMessage: 'This archive server is already connected',
+  invalidToken: {
+    id: 'home.archive.dialog.invalidToken',
+    defaultMessage: 'Invalid token or unauthorized',
   },
   retry: {
     id: 'invite.progress.retry',
@@ -83,9 +89,57 @@ type FlowStep = 'verify' | 'connect' | 'sync' | 'prepare';
 
 const ALL_STEP_IDS: FlowStep[] = ['verify', 'connect', 'sync', 'prepare'];
 
+const VALIDATION_TIMEOUT_MS = 10_000;
+
+// Guards the pre-persist validation calls so a stalled server never leaves
+// the flow hanging. Mirrors the (non-exported) withValidationTimeout helper
+// in sync-coordinator.ts.
+async function withValidationTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error('Archive validation timed out')),
+      VALIDATION_TIMEOUT_MS,
+    );
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Rolls back whatever addServer() persisted when the screen unmounts while
+// the call is in flight. addServer() either created a brand-new server record
+// or refreshed the token on an existing one; both must be undone so a
+// cancelled invite leaves no trace behind.
+async function rollbackPendingAddServer(
+  serverId: string,
+  previousServers: RemoteArchiveServer[],
+): Promise<void> {
+  const { servers, removeServer, updateServer } = useAuthStore.getState();
+  const persisted = servers.find((server) => server.id === serverId);
+  if (!persisted) return;
+
+  const previous = previousServers.find((server) => server.id === serverId);
+  if (!previous) {
+    // A brand-new record was created by the cancelled invite — remove it.
+    await removeServer(serverId);
+    return;
+  }
+
+  // An existing record may have had its token refreshed by the invite.
+  // Restore the previous token so the cancelled invite leaves the
+  // connection untouched.
+  if (persisted.token !== previous.token) {
+    await updateServer(serverId, { token: previous.token });
+  }
+}
 
 function parseInviteFromLocation(): ParseInviteResult | null {
   if (typeof window === 'undefined') return null;
@@ -124,6 +178,7 @@ function getErrorDisplayMessage(
 export function InviteScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const invite = useMemo(() => parseInviteFromLocation(), []);
 
   const [status, setStatus] = useState<FlowStatus>(() => initialStatus(invite));
@@ -214,32 +269,80 @@ export function InviteScreen() {
         }
         if (cancelledRef.current) return;
 
-        const onboardingResult = await onboardArchive({
-          baseUrl,
-          token,
-          label: new URL(baseUrl).hostname,
-          source: 'invite',
-          isCancelled: () => cancelledRef.current,
-          onStateChange: (lifecycle) => {
-            if (lifecycle === 'validating') setActiveStep('verify');
-            else if (lifecycle === 'pending') setActiveStep('connect');
-            else if (lifecycle === 'syncing') setActiveStep('sync');
-          },
-        });
+        // Step 2: Validate server + credentials BEFORE persisting anything.
+        // An invalid or malicious invite must never overwrite an existing
+        // working connection (issue #182): addServer() below persists the
+        // token, so it only runs once the server has proven reachable and the
+        // token authorized.
+        setActiveStep('connect');
+        const config = { baseUrl, token };
+        const healthy = await withValidationTimeout(
+          apiClient.healthCheck(config),
+        );
         if (cancelledRef.current) return;
-
-        if (!onboardingResult.success || onboardingResult.status !== 'ready') {
+        if (!healthy) {
           setStatus('error');
-          setErrorMessage(
-            onboardingResult.errorCode === 'duplicate'
-              ? intlRef.current.formatMessage(messages.alreadyConnected)
-              : (onboardingResult.error ??
-                  intlRef.current.formatMessage(messages.error)),
-          );
+          setErrorMessage(intlRef.current.formatMessage(messages.networkError));
           return;
         }
 
+        try {
+          await withValidationTimeout(apiClient.getProjects(config));
+        } catch (error) {
+          if (cancelledRef.current) return;
+          const errorStatus =
+            error && typeof error === 'object' && 'status' in error
+              ? Number(error.status)
+              : undefined;
+          setStatus('error');
+          setErrorMessage(
+            intlRef.current.formatMessage(
+              errorStatus === 401 || errorStatus === 403
+                ? messages.invalidToken
+                : messages.networkError,
+            ),
+          );
+          return;
+        }
+        if (cancelledRef.current) return;
+
+        // Step 3: Add server (validation passed)
+        const previousServers = useAuthStore.getState().servers;
+        const serverId = await useAuthStore.getState().addServer({
+          label: new URL(baseUrl).hostname,
+          baseUrl,
+          token,
+          allowDuplicate: true,
+        });
+        if (cancelledRef.current) {
+          // The screen unmounted while addServer() was pending: roll back
+          // whatever was persisted (new record or token refresh) so a
+          // cancelled invite never leaves a stray server behind.
+          await rollbackPendingAddServer(serverId, previousServers);
+          return;
+        }
+
+        // Step 4: Sync — pass the cancellation control so unmount aborts it
+        setActiveStep('sync');
+        const syncResult = await syncRemoteArchive(
+          serverId,
+          { baseUrl, token },
+          { isCancelled: () => cancelledRef.current },
+        );
+        if (cancelledRef.current) return;
+        if (!syncResult || !syncResult.success) {
+          setStatus('error');
+          setErrorMessage(intlRef.current.formatMessage(messages.error));
+          return;
+        }
+
+        // Step 5: Prepare dashboard
         setActiveStep('prepare');
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['projects'] }),
+          queryClient.invalidateQueries({ queryKey: ['observations'] }),
+          queryClient.invalidateQueries({ queryKey: ['alerts'] }),
+        ]);
         if (cancelledRef.current) return;
 
         setStatus('connected');
@@ -273,7 +376,7 @@ export function InviteScreen() {
     }
 
     void run();
-  }, [invite, navigate]);
+  }, [invite, navigate, queryClient]);
 
   useEffect(() => {
     // Reset the cancellation flag so the \"Try Again\" button (which calls
@@ -284,13 +387,8 @@ export function InviteScreen() {
     // StrictMode double-invoke from executing the flow twice.  In
     // StrictMode the cleanup runs between the two effect invocations and
     // bumps the counter, invalidating the first invocation's microtask.
-    // Only the second (\"real\") invocation's microtask survives the check.
+    // Only the second ("real") invocation's microtask survives the check.
     const generation = ++effectGenerationRef.current;
-    // Capture the ref object in a local alias so the cleanup doesn't
-    // access a component-scope ref's `.current` directly (which triggers
-    // react-hooks/exhaustive-deps). The alias points to the *same* ref
-    // object, so the generation counter stays shared across effect re-runs.
-    const effectGenerationRefLocal = effectGenerationRef;
 
     // Defer via microtask to avoid synchronous setState in effect body
     // (required by react-hooks/set-state-in-effect; React 18+ batches the updates).
@@ -301,8 +399,10 @@ export function InviteScreen() {
 
     return () => {
       // Bump the generation so any microtask still pending from a
-      // previous invocation is silently dropped.
-      effectGenerationRefLocal.current++;
+      // previous invocation is silently dropped. Deliberate write to a
+      // stable generation counter; staleness is the point, not a hazard.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      effectGenerationRef.current++;
       // Signal in-flight async work (inside run()) that the component
       // is unmounting so it can short-circuit early.
       cancelledRef.current = true;

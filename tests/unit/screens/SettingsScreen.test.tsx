@@ -1,6 +1,7 @@
 import type { UserEvent } from '@testing-library/user-event';
 import { server } from '@tests/mocks/node';
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -10,6 +11,9 @@ import {
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ReactElement } from 'react';
+
+import { ToastProvider } from '@/components/ui/toast';
 import { resetDb } from '@/lib/db';
 import {
   clearAllStorage,
@@ -18,6 +22,14 @@ import {
 } from '@/lib/local-storage-utils';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { useAuthStore } from '@/stores/auth-store';
+
+// SettingsScreen calls useToast(), which throws without a ToastProvider.
+// The shared test-utils render does NOT wrap in ToastProvider (it would
+// pollute every container.innerHTML assertion across the suite), so wrap
+// locally here.
+function renderWithToast(ui: ReactElement) {
+  return render(<ToastProvider>{ui}</ToastProvider>);
+}
 
 // Mock clipboard API
 Object.defineProperty(navigator, 'clipboard', {
@@ -59,12 +71,12 @@ beforeEach(async () => {
 
 describe('SettingsScreen', () => {
   it('renders the settings heading', () => {
-    render(<SettingsScreen />);
+    renderWithToast(<SettingsScreen />);
     expect(screen.getByRole('heading', { level: 1 })).toBeDefined();
   });
 
   it('renders language info with current locale', () => {
-    render(<SettingsScreen />);
+    renderWithToast(<SettingsScreen />);
     expect(
       screen.getByText('Change language from the top navigation bar.'),
     ).toBeInTheDocument();
@@ -73,12 +85,12 @@ describe('SettingsScreen', () => {
   });
 
   it('renders the Remote Archive Invites section', () => {
-    render(<SettingsScreen />);
+    renderWithToast(<SettingsScreen />);
     expect(screen.getByText('Remote Archive Invites')).toBeInTheDocument();
   });
 
   it('renders generate invite form fields', () => {
-    render(<SettingsScreen />);
+    renderWithToast(<SettingsScreen />);
     expect(screen.getByText('Remote Archive URL')).toBeInTheDocument();
     expect(screen.getByText('Bearer Token')).toBeInTheDocument();
     expect(
@@ -87,7 +99,7 @@ describe('SettingsScreen', () => {
   });
 
   it('does not render the dead "Use an Invite" section', () => {
-    render(<SettingsScreen />);
+    renderWithToast(<SettingsScreen />);
     expect(screen.queryByText('Use an Invite')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Connect' }),
@@ -96,7 +108,7 @@ describe('SettingsScreen', () => {
 
   it('shows an encrypted invite URL after generating (no raw token leaks)', async () => {
     const user = userEvent.setup();
-    render(<SettingsScreen />);
+    renderWithToast(<SettingsScreen />);
 
     await generateInvite(user);
 
@@ -122,7 +134,7 @@ describe('SettingsScreen', () => {
 
   it('shows the "Expires in 24 hours" caption after generating', async () => {
     const user = userEvent.setup();
-    render(<SettingsScreen />);
+    renderWithToast(<SettingsScreen />);
 
     await generateInvite(user);
 
@@ -145,7 +157,7 @@ describe('SettingsScreen', () => {
     );
 
     const user = userEvent.setup();
-    render(<SettingsScreen />);
+    renderWithToast(<SettingsScreen />);
 
     await generateInvite(user);
 
@@ -162,7 +174,7 @@ describe('SettingsScreen', () => {
     navigator.clipboard.writeText = writeText;
 
     const user = userEvent.setup();
-    render(<SettingsScreen />);
+    renderWithToast(<SettingsScreen />);
 
     await generateInvite(user);
 
@@ -186,7 +198,7 @@ describe('SettingsScreen', () => {
   describe('Long value wrapping (issue #155)', () => {
     it('Invite URL code wraps long values instead of truncating', async () => {
       const user = userEvent.setup();
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
       await generateInvite(user);
 
       const inviteUrlCode = await screen.findByText(
@@ -209,7 +221,7 @@ describe('SettingsScreen', () => {
 
     it('Invite Code code wraps long unbreakable tokens', async () => {
       const user = userEvent.setup();
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
       await generateInvite(user);
 
       const inviteCode = await screen.findByText(/^mock-encrypted-code-/, {
@@ -228,7 +240,7 @@ describe('SettingsScreen', () => {
       navigator.clipboard.writeText = writeText;
 
       const user = userEvent.setup();
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
       await generateInvite(user);
 
       const inviteCodeRow = screen.getByTestId('invite-code-row');
@@ -245,19 +257,19 @@ describe('SettingsScreen', () => {
 
   describe('Backup & Restore', () => {
     it('renders Backup & Restore section heading', () => {
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
       expect(screen.getByText('Backup & Restore')).toBeInTheDocument();
     });
 
     it('renders Export Backup button', () => {
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
       expect(
         screen.getByRole('button', { name: 'Export Backup' }),
       ).toBeInTheDocument();
     });
 
     it('renders Import Backup button', () => {
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
       expect(
         screen.getByRole('button', { name: 'Import Backup' }),
       ).toBeInTheDocument();
@@ -267,7 +279,7 @@ describe('SettingsScreen', () => {
       const user = userEvent.setup();
       const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click');
 
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
 
       await user.click(screen.getByRole('button', { name: 'Export Backup' }));
 
@@ -283,7 +295,7 @@ describe('SettingsScreen', () => {
 
     it('shows success feedback after export', async () => {
       const user = userEvent.setup();
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
 
       await user.click(screen.getByRole('button', { name: 'Export Backup' }));
 
@@ -296,7 +308,7 @@ describe('SettingsScreen', () => {
       const user = userEvent.setup();
       const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
 
-      const { unmount } = render(<SettingsScreen />);
+      const { unmount } = renderWithToast(<SettingsScreen />);
 
       await user.click(screen.getByRole('button', { name: 'Export Backup' }));
       unmount();
@@ -312,7 +324,7 @@ describe('SettingsScreen', () => {
       });
 
       const user = userEvent.setup();
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
 
       await user.click(screen.getByRole('button', { name: 'Export Backup' }));
 
@@ -337,7 +349,7 @@ describe('SettingsScreen', () => {
           }
         } as unknown as typeof window.FileReader;
 
-        render(<SettingsScreen />);
+        renderWithToast(<SettingsScreen />);
 
         const fileInput = screen.getByTestId('backup-file-input');
         fireEvent.change(fileInput, {
@@ -370,7 +382,7 @@ describe('SettingsScreen', () => {
           }
         } as unknown as typeof window.FileReader;
 
-        render(<SettingsScreen />);
+        renderWithToast(<SettingsScreen />);
 
         const fileInput = screen.getByTestId('backup-file-input');
         fireEvent.change(fileInput, {
@@ -402,7 +414,7 @@ describe('SettingsScreen', () => {
           }
         } as unknown as typeof window.FileReader;
 
-        render(<SettingsScreen />);
+        renderWithToast(<SettingsScreen />);
 
         const fileInput = screen.getByTestId('backup-file-input');
         fireEvent.change(fileInput, {
@@ -421,12 +433,12 @@ describe('SettingsScreen', () => {
 
   describe('Clear Local Data', () => {
     it('renders Clear Local Data section heading', () => {
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
       expect(screen.getByText('Clear Local Data')).toBeInTheDocument();
     });
 
     it('renders Clear All Data button', () => {
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
       expect(
         screen.getByRole('button', { name: 'Clear All Data' }),
       ).toBeInTheDocument();
@@ -434,7 +446,7 @@ describe('SettingsScreen', () => {
 
     it('clicking Clear All Data opens confirmation dialog', async () => {
       const user = userEvent.setup();
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
 
       await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
 
@@ -443,7 +455,7 @@ describe('SettingsScreen', () => {
 
     it('confirmation dialog shows warning text', async () => {
       const user = userEvent.setup();
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
 
       await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
 
@@ -457,7 +469,7 @@ describe('SettingsScreen', () => {
 
     it('clicking cancel closes dialog without clearing data', async () => {
       const user = userEvent.setup();
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
 
       await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
       expect(screen.getByText('Clear All Data?')).toBeInTheDocument();
@@ -470,7 +482,7 @@ describe('SettingsScreen', () => {
 
     it('clicking confirm calls clearAllStorage', async () => {
       const user = userEvent.setup();
-      render(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
 
       await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
       await user.click(
@@ -478,6 +490,53 @@ describe('SettingsScreen', () => {
       );
 
       expect(clearAllStorage).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows translated error toast and reloads after 1500ms when clearing fails', async () => {
+      vi.useFakeTimers();
+      try {
+        const mockReload = vi.fn();
+        Object.defineProperty(window, 'location', {
+          value: { reload: mockReload },
+          writable: true,
+        });
+        vi.mocked(clearAllStorage).mockRejectedValueOnce(
+          new Error('DB exploded'),
+        );
+
+        renderWithToast(<SettingsScreen />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Clear All Data' }));
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+        );
+
+        // Flush the rejection microtask so the catch block runs.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+
+        // Translated description, never the raw error message.
+        expect(
+          screen.getByText(
+            'Some data could not be cleared. The app will reload.',
+          ),
+        ).toBeInTheDocument();
+        expect(screen.queryByText('DB exploded')).not.toBeInTheDocument();
+        // Reload is deferred so the toast stays visible.
+        expect(mockReload).not.toHaveBeenCalled();
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1499);
+        });
+        expect(mockReload).not.toHaveBeenCalled();
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(mockReload).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

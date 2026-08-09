@@ -1001,9 +1001,6 @@
   "home.untitledProject": {
     "defaultMessage": "Untitled Project"
   },
-  "invite.alreadyConnected": {
-    "defaultMessage": "This archive server is already connected"
-  },
   "invite.error": {
     "defaultMessage": "Failed to connect to archive."
   },
@@ -1561,6 +1558,12 @@
   },
   "settings.clear.description": {
     "defaultMessage": "Remove all local settings, preferences, and cached data. This cannot be undone."
+  },
+  "settings.clear.errorDescription": {
+    "defaultMessage": "Some data could not be cleared. The app will reload."
+  },
+  "settings.clear.errorTitle": {
+    "defaultMessage": "Failed to clear data"
   },
   "settings.clear.title": {
     "defaultMessage": "Clear Local Data"

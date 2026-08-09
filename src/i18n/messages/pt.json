@@ -503,6 +503,8 @@
   "settings.storage.clearConfirmButton": "Sim, limpar tudo",
   "settings.storage.clearConfirmDescription": "Isso removerá todos os dados armazenados em cache localmente, incluindo projetos, observações, alertas e anexos. Servidores de arquivo conectados também serão removidos e devem ser readicionados. Esta ação não pode ser desfeita.",
   "settings.storage.clearConfirmTitle": "Limpar todos os dados em cache?",
+  "settings.clear.errorDescription": "Alguns dados não puderam ser apagados. O aplicativo será recarregado.",
+  "settings.clear.errorTitle": "Falha ao limpar dados",
   "settings.storage.description": "Gerencie os dados em cache armazenados no seu navegador.",
   "settings.storage.observations": "Observações",
   "settings.storage.presets": "Predefinições",

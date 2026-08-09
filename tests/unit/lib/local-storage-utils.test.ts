@@ -10,6 +10,10 @@ vi.mock('@/lib/db', () => ({
   resetDb: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/lib/categories-db', () => ({
+  resetCategoriesDb: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: {
     getState: vi.fn(() => ({ clearAll: vi.fn() })),
@@ -256,6 +260,19 @@ describe('clearAllStorage', () => {
     expect(mockClearAll).toHaveBeenCalledOnce();
   });
 
+  it('calls resetCategoriesDb() to clear categories IndexedDB', async () => {
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+    });
+
+    await clearAllStorage();
+
+    expect(resetCategoriesDb).toHaveBeenCalledOnce();
+  });
+
   it('calls window.location.reload()', async () => {
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
@@ -268,7 +285,7 @@ describe('clearAllStorage', () => {
     expect(mockReload).toHaveBeenCalledOnce();
   });
 
-  it('still reloads even if resetDb() throws', async () => {
+  it('throws and does not reload if resetDb() throws', async () => {
     const { resetDb } = await import('@/lib/db');
     vi.mocked(resetDb).mockRejectedValueOnce(new Error('DB error'));
 
@@ -278,8 +295,23 @@ describe('clearAllStorage', () => {
       writable: true,
     });
 
-    await clearAllStorage();
+    await expect(clearAllStorage()).rejects.toThrow('DB error');
+    expect(mockReload).not.toHaveBeenCalled();
+  });
 
-    expect(mockReload).toHaveBeenCalledOnce();
+  it('throws and does not reload if resetCategoriesDb() throws', async () => {
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
+      new Error('Categories error'),
+    );
+
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    await expect(clearAllStorage()).rejects.toThrow('Categories error');
+    expect(mockReload).not.toHaveBeenCalled();
   });
 });

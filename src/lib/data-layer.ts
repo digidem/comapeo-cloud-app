@@ -283,8 +283,9 @@ export function getSyncStatus(): {
 export function syncRemoteArchive(
   serverId: string,
   options?: SyncOptions,
+  control?: { isCancelled?: () => boolean },
 ): Promise<SyncResult> {
-  return syncArchive(serverId, options);
+  return syncArchive(serverId, options, control);
 }
 
 // ---------------------------------------------------------------------------

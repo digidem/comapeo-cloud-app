@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
 
+import { ApiError, apiClient } from '@/lib/api-client';
 import { resetDb } from '@/lib/db';
 import { syncRemoteArchive } from '@/lib/sync';
 import type { SyncResult } from '@/lib/sync';
+import * as syncCoordinator from '@/lib/sync-coordinator';
 import { resetSyncCoordinatorForTests } from '@/lib/sync-coordinator';
 import { InviteScreen } from '@/screens/InviteScreen';
 import { useAuthStore } from '@/stores/auth-store';
@@ -260,6 +262,157 @@ describe('InviteScreen', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Regression #182: validation must run BEFORE any server state is persisted
+  // -----------------------------------------------------------------------
+  it('does not overwrite an existing server when a replacement invite token is rejected (401)', async () => {
+    // Seed an already-connected archive that the invite targets.
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'existing-archive',
+          label: 'archive.test',
+          baseUrl: 'https://archive.test',
+          token: 'working-token',
+          status: 'connected',
+        },
+      ],
+    });
+    const addServerSpy = vi.spyOn(useAuthStore.getState(), 'addServer');
+    vi.spyOn(apiClient, 'healthCheck').mockResolvedValueOnce(true);
+    vi.spyOn(apiClient, 'getProjects').mockRejectedValueOnce(
+      new ApiError(401, 'UNAUTHORIZED', 'Invalid bearer token'),
+    );
+
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Invalid token or unauthorized'),
+      ).toBeInTheDocument();
+    });
+
+    // The old working connection must be untouched — addServer never ran.
+    expect(addServerSpy).not.toHaveBeenCalled();
+    const servers = useAuthStore.getState().servers;
+    expect(servers).toHaveLength(1);
+    expect(servers[0]!.token).toBe('working-token');
+  });
+
+  it('does not create a server record when the invite targets an unreachable server', async () => {
+    const addServerSpy = vi.spyOn(useAuthStore.getState(), 'addServer');
+    vi.spyOn(apiClient, 'healthCheck').mockResolvedValueOnce(false);
+
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Unable to connect. Check your internet connection.'),
+      ).toBeInTheDocument();
+    });
+
+    expect(addServerSpy).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().servers).toHaveLength(0);
+  });
+
+  it('passes a cancellation control into the sync so unmount aborts it', async () => {
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+    // Never-settling sync (empty executor — no resolvers used) to test
+    // mid-flight unmount; matches the existing cleanup test pattern.
+    vi.mocked(syncRemoteArchive).mockReturnValue(
+      new Promise<SyncResult>(() => {}),
+    );
+    const syncArchiveSpy = vi.spyOn(syncCoordinator, 'syncArchive');
+
+    const { unmount } = render(<InviteScreen />);
+    await waitFor(() => {
+      expect(syncArchiveSpy).toHaveBeenCalled();
+    });
+
+    const control = syncArchiveSpy.mock.calls[0]![2];
+    expect(control?.isCancelled).toBeTypeOf('function');
+    expect(control?.isCancelled?.()).toBe(false);
+
+    unmount();
+    expect(control?.isCancelled?.()).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // Regression #182: a cancelled invite must leave no orphan server record
+  // -----------------------------------------------------------------------
+  it('removes the server record when the screen unmounts mid-addServer', async () => {
+    setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
+
+    // Capture the real actions so they can be reinstalled on the live store
+    // state in finally. Zustand copies actions forward onto new state objects
+    // on set(), so mockRestore() (which targets the object captured at
+    // spyOn-time) is not enough to fully restore the store.
+    const realAddServer = useAuthStore.getState().addServer;
+    const realRemoveServer = useAuthStore.getState().removeServer;
+    const removeServerSpy = vi.spyOn(useAuthStore.getState(), 'removeServer');
+
+    // Hold addServer in flight; release it AFTER unmount. On release,
+    // persist a realistic server record DIRECTLY into the store (bypassing
+    // Dexie so the record exists deterministically, unlike the real
+    // implementation) and resolve — the component must notice the cancelled
+    // ref and roll the orphaned record back.
+    let releaseAddServer!: () => void;
+    const addServerSpy = vi
+      .spyOn(useAuthStore.getState(), 'addServer')
+      .mockImplementation(
+        () =>
+          new Promise<string>((resolve) => {
+            releaseAddServer = () => {
+              useAuthStore.setState((s) => ({
+                servers: [
+                  ...s.servers,
+                  {
+                    id: 'server-1',
+                    label: 'archive.test',
+                    baseUrl: 'https://archive.test',
+                    token: 'abc123',
+                    status: 'idle',
+                  },
+                ],
+              }));
+              resolve('server-1');
+            };
+          }),
+      );
+
+    try {
+      const { unmount } = render(<InviteScreen />);
+
+      await waitFor(() => {
+        expect(addServerSpy).toHaveBeenCalled();
+      });
+
+      unmount();
+      releaseAddServer();
+
+      // The invite resolved after unmount — the rollback must have removed
+      // the orphaned server record. On pre-fix source (no rollback) the
+      // record persists, so this fails with length 1.
+      await waitFor(() => {
+        expect(useAuthStore.getState().servers).toHaveLength(0);
+      });
+
+      // Directly proves the rollback branch ran: removeServer was invoked
+      // for the record created by the cancelled invite.
+      expect(removeServerSpy).toHaveBeenCalledWith('server-1');
+    } finally {
+      addServerSpy.mockRestore();
+      removeServerSpy.mockRestore();
+      useAuthStore.setState((s) => ({
+        ...s,
+        addServer: realAddServer,
+        removeServer: realRemoveServer,
+      }));
+    }
+  });
+
+  // -----------------------------------------------------------------------
   // Network error message
   // -----------------------------------------------------------------------
   it('shows network error message when fetch fails', async () => {
@@ -308,7 +461,6 @@ describe('InviteScreen', () => {
     expect(args[1]).toMatchObject({
       baseUrl: 'https://archive.test',
       token: 'abc123',
-      serverLabel: 'archive.test',
     });
   });
 
@@ -353,7 +505,9 @@ describe('InviteScreen', () => {
     render(<InviteScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('unauthorized')).toBeInTheDocument();
+      expect(
+        screen.getByText('Failed to connect to archive.'),
+      ).toBeInTheDocument();
     });
 
     // Should not have navigated home
