@@ -1,0 +1,51 @@
+name: React Doctor Weekly Audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: react-doctor-weekly-audit
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      - name: Run full React Doctor audit
+        run: >-
+          npx --yes react-doctor@0.9.11 .
+          --json
+          --json-compact
+          --json-out react-doctor-report.json
+          --scope full
+          --blocking none
+          --no-score
+          --max-duration 120
+
+      - name: Reconcile GitHub issues
+        run: npx --yes tsx@4.23.11 scripts/react-doctor-audit.ts react-doctor-report.json
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Upload full audit report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: react-doctor-report
+          path: react-doctor-report.json
+          if-no-files-found: ignore
+          retention-days: 14

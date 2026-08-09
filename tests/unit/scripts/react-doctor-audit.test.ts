@@ -1,0 +1,183 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+import {
+  assertReconciliableReport,
+  buildIssuePlan,
+  extractDiagnostics,
+  groupDiagnosticsByFile,
+  issueMarkerForFile,
+} from '../../../scripts/react-doctor-audit';
+
+const rootDir = process.cwd();
+
+const diagnostic = {
+  filePath: 'src/components/Foo.tsx',
+  plugin: 'react-doctor',
+  rule: 'no-array-index-as-key',
+  severity: 'warning',
+  title: 'Array index used as a key',
+  message: 'Use a stable key.',
+  help: 'Use a stable id from the item.',
+  line: 42,
+  column: 7,
+  id: 'foo-diagnostic',
+};
+
+describe('react-doctor weekly audit', () => {
+  it('extracts and de-duplicates diagnostics from schema v3 project reports', () => {
+    const report = {
+      schemaVersion: 3,
+      projects: [{ diagnostics: [diagnostic] }],
+      diagnostics: [diagnostic],
+    };
+
+    expect(extractDiagnostics(report)).toEqual([diagnostic]);
+  });
+
+  it('accepts the legacy top-level diagnostics shape from the issue draft', () => {
+    expect(extractDiagnostics({ diagnostics: [diagnostic] })).toEqual([
+      diagnostic,
+    ]);
+  });
+
+  it('refuses to reconcile a failed or partial scan', () => {
+    expect(() => assertReconciliableReport({ ok: false })).toThrow(
+      'React Doctor report is not safe to reconcile',
+    );
+    expect(() =>
+      assertReconciliableReport({
+        ok: true,
+        reactDetected: true,
+        projects: [{ complete: false }],
+      }),
+    ).toThrow('React Doctor report is not safe to reconcile');
+  });
+
+  it('batches findings by file', () => {
+    const second = {
+      ...diagnostic,
+      rule: 'prefer-html-dialog',
+      line: 50,
+      id: 'foo-dialog',
+    };
+
+    const groups = groupDiagnosticsByFile([diagnostic, second]);
+    expect(groups.get('src/components/Foo.tsx')).toEqual([diagnostic, second]);
+  });
+
+  it('does not mutate an unchanged tracked issue on a later weekly run', () => {
+    const groups = groupDiagnosticsByFile([diagnostic]);
+    const firstPlan = buildIssuePlan({
+      groups,
+      existingIssues: [],
+      runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/123',
+      maxNewIssues: 10,
+      metaThreshold: 50,
+    });
+    const created = firstPlan.create[0];
+    if (!created) throw new Error('Expected the first run to create an issue');
+
+    const secondPlan = buildIssuePlan({
+      groups,
+      existingIssues: [
+        {
+          number: 10,
+          title: created.title,
+          body: created.body,
+          labels: created.labels.map((name) => ({ name })),
+        },
+      ],
+      runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/456',
+      maxNewIssues: 10,
+      metaThreshold: 50,
+    });
+
+    expect(secondPlan.create).toHaveLength(0);
+    expect(secondPlan.update).toHaveLength(0);
+    expect(secondPlan.close).toHaveLength(0);
+  });
+
+  it('creates, updates, and closes tracked file issues without duplicates', () => {
+    const groups = groupDiagnosticsByFile([diagnostic]);
+    const existing = [
+      {
+        number: 10,
+        title: '[react-doctor] old title',
+        body: `${issueMarkerForFile('src/components/Foo.tsx')}\nold body`,
+        labels: [{ name: 'react-doctor' }],
+      },
+      {
+        number: 11,
+        title: '[react-doctor] resolved file',
+        body: `${issueMarkerForFile('src/components/Resolved.tsx')}\nold body`,
+        labels: [{ name: 'react-doctor' }],
+      },
+    ];
+
+    const plan = buildIssuePlan({
+      groups,
+      existingIssues: existing,
+      runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/123',
+      maxNewIssues: 10,
+      metaThreshold: 50,
+    });
+
+    expect(plan.create).toHaveLength(0);
+    expect(plan.update.map((item) => item.number)).toEqual([10]);
+    expect(plan.close.map((item) => item.number)).toEqual([11]);
+    expect(plan.meta).toBeNull();
+  });
+
+  it('uses a single meta issue instead of flooding GitHub on a large audit', () => {
+    const diagnostics = Array.from({ length: 50 }, (_, index) => ({
+      ...diagnostic,
+      filePath: `src/components/File${index}.tsx`,
+      normalizedFilePath: `src/components/File${index}.tsx`,
+      id: `diagnostic-${index}`,
+      line: index + 1,
+    }));
+
+    const plan = buildIssuePlan({
+      groups: groupDiagnosticsByFile(diagnostics),
+      existingIssues: [],
+      runUrl: 'https://github.com/digidem/comapeo-cloud-app/actions/runs/123',
+      maxNewIssues: 10,
+      metaThreshold: 50,
+    });
+
+    expect(plan.create).toHaveLength(0);
+    expect(plan.meta?.action).toBe('create');
+    if (plan.meta?.action !== 'create') {
+      throw new Error('Expected a meta issue to be created');
+    }
+    expect(plan.meta.body).toContain('50 findings');
+  });
+
+  it('keeps the PR gate advisory and the weekly audit scheduled', () => {
+    const prWorkflow = readFileSync(
+      path.join(rootDir, '.github/workflows/react-doctor.yml'),
+      'utf8',
+    );
+    const auditWorkflow = readFileSync(
+      path.join(rootDir, '.github/workflows/react-doctor-audit.yml'),
+      'utf8',
+    );
+
+    expect(prWorkflow).toContain('millionco/react-doctor@v2');
+    expect(prWorkflow).toContain('blocking: none');
+    expect(prWorkflow).toContain('scope: changed');
+    expect(prWorkflow).toContain('fetch-depth: 0');
+    expect(prWorkflow).toContain('statuses: write');
+
+    expect(auditWorkflow).toContain("cron: '0 6 * * 1'");
+    expect(auditWorkflow).toContain('issues: write');
+    expect(auditWorkflow).toContain('react-doctor@0.9.11');
+    expect(auditWorkflow).toContain('--scope full');
+    expect(auditWorkflow).toContain('react-doctor-report.json');
+    expect(auditWorkflow).toContain(
+      'tsx@4.23.11 scripts/react-doctor-audit.ts',
+    );
+  });
+});
