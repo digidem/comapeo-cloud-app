@@ -18,7 +18,11 @@ import { useProjects } from '@/hooks/useProjects';
 import { getProjectPoints } from '@/lib/data-layer';
 import type { SavedMap } from '@/lib/db';
 import { DEFAULT_BASEMAP_ID, findBasemap } from '@/lib/map/basemaps';
-import { clampBboxLatitude, crossesAntimeridian } from '@/lib/map/bbox-utils';
+import {
+  clampBboxLatitude,
+  crossesAntimeridian,
+  spansAntimeridian,
+} from '@/lib/map/bbox-utils';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { uuid } from '@/lib/uuid';
 import { useProjectStore } from '@/stores/project-store';
@@ -144,8 +148,9 @@ export function MapScreen() {
   const [projectBbox, setProjectBbox] = useState<
     [number, number, number, number] | null
   >(null);
-  const [autoFitBbox, setAutoFitBbox] =
-    useState<[number, number, number, number]>(DEFAULT_BBOX);
+  const [autoFitBbox, setAutoFitBbox] = useState<
+    [number, number, number, number] | null
+  >(null);
   // Track if user has explicitly modified bbox (drawing, inputs, current view, project area button)
   const hasUserModifiedBboxRef = useRef(false);
   // Ref to track drawMode without adding it as an effect dependency
@@ -201,7 +206,7 @@ export function MapScreen() {
           // For project area, we don't try to wrap - we just skip auto-fitting
           // and fall back to DEFAULT_BBOX since we can't reliably auto-fit
           // antimeridian-spanning projects.
-          if (crossesAntimeridian(lngs)) {
+          if (spansAntimeridian(lngs)) {
             setAutoFitBbox(DEFAULT_BBOX);
             return;
           }
@@ -241,6 +246,7 @@ export function MapScreen() {
         }
       } catch {
         // Ignore errors, keep DEFAULT_BBOX
+        if (cancelled) return;
         setAutoFitBbox(DEFAULT_BBOX);
       }
     }

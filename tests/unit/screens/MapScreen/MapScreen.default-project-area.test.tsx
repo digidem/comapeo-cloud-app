@@ -272,13 +272,10 @@ describe('MapScreen - default project area (issue #153)', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('West')).toHaveValue(-72);
     });
-    expect(fitBoundsMock).not.toHaveBeenCalledWith(
-      [
-        [-40, -5],
-        [-30, 2],
-      ],
-      { padding: 32, duration: 0 },
-    );
+    // The manual edit should not trigger a fitBounds call with the project bbox
+    // Since we made an edit before the points resolved, hasUserModifiedBboxRef is true
+    // So no fitBounds should be called at all (autoFitBbox starts as null, so no initial fit either)
+    expect(fitBoundsMock).toHaveBeenCalledTimes(0);
   });
 
   it('treats the computed project bbox as the unchanged config baseline', async () => {
@@ -393,22 +390,18 @@ describe('MapScreen - default project area (issue #153)', () => {
       expect(fitBoundsMock).toHaveBeenCalledTimes(1);
     });
 
-    // Open settings to see BoundsEditor
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole('button', { name: 'Map settings' }),
-    );
-
-    // Should fall back to DEFAULT_BBOX = [-75, -12, -45, 8]
     await waitFor(() => {
-      const westInput = screen.getByLabelText('West');
-      expect(westInput).toHaveValue(-75);
-      const southInput = screen.getByLabelText('South');
-      expect(southInput).toHaveValue(-12);
-      const eastInput = screen.getByLabelText('East');
-      expect(eastInput).toHaveValue(-45);
-      const northInput = screen.getByLabelText('North');
-      expect(northInput).toHaveValue(8);
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [-75, -12],
+          [-45, 8],
+        ],
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
+      );
     });
   });
 

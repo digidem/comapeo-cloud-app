@@ -28,7 +28,7 @@ interface MapAuthoringCanvasProps {
   onDrawCreate?: (bbox: [number, number, number, number]) => void;
   onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
   /** Bounds to fit after the map is ready. */
-  fitBounds?: [number, number, number, number];
+  fitBounds?: [number, number, number, number] | null;
 }
 
 const INITIAL_VIEW_STATE = {
