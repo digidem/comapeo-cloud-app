@@ -10,6 +10,10 @@ vi.mock('@/lib/db', () => ({
   resetDb: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/lib/categories-db', () => ({
+  resetCategoriesDb: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: {
     getState: vi.fn(() => ({ clearAll: vi.fn() })),
@@ -254,6 +258,19 @@ describe('clearAllStorage', () => {
 
     expect(useAuthStore.getState).toHaveBeenCalledOnce();
     expect(mockClearAll).toHaveBeenCalledOnce();
+  });
+
+  it('calls resetCategoriesDb() to clear categories IndexedDB', async () => {
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+    });
+
+    await clearAllStorage();
+
+    expect(resetCategoriesDb).toHaveBeenCalledOnce();
   });
 
   it('calls window.location.reload()', async () => {

@@ -9,6 +9,7 @@ import { StorageSettings } from '@/components/shared/StorageSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { useToast } from '@/components/ui/toast';
 import { InviteApiError, createEncryptedInvite } from '@/lib/api-client';
 import {
   clearAllStorage,
@@ -131,6 +132,10 @@ const _messages = defineMessages({
     id: 'settings.clear.confirmButton',
     defaultMessage: 'Yes, Clear Everything',
   },
+  clearErrorTitle: {
+    id: 'settings.clear.errorTitle',
+    defaultMessage: 'Failed to clear data',
+  },
   clearCancelButton: {
     id: 'settings.clear.cancelButton',
     defaultMessage: 'Cancel',
@@ -157,6 +162,7 @@ const LOCALE_LABELS: Record<string, string> = {
 export function SettingsScreen() {
   const intl = useIntl();
   const locale = useLocaleStore((s) => s.locale);
+  const { addToast } = useToast();
 
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -297,8 +303,20 @@ export function SettingsScreen() {
   );
 
   const handleClearAll = useCallback(async () => {
-    await clearAllStorage();
-  }, []);
+    try {
+      await clearAllStorage();
+    } catch (err) {
+      addToast({
+        title: intl.formatMessage(_messages.clearErrorTitle),
+        description:
+          err instanceof Error ? err.message : 'Failed to clear data',
+        variant: 'error',
+      });
+      // Half-cleared state must not persist: force a reload so stale
+      // in-memory state is discarded even when the clear fails.
+      window.location.reload();
+    }
+  }, [addToast, intl]);
 
   return (
     <section className="p-3 sm:p-4 lg:p-6">

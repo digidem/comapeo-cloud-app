@@ -1001,9 +1001,6 @@
   "home.untitledProject": {
     "defaultMessage": "Untitled Project"
   },
-  "invite.alreadyConnected": {
-    "defaultMessage": "This archive server is already connected"
-  },
   "invite.error": {
     "defaultMessage": "Failed to connect to archive."
   },
@@ -1621,6 +1618,9 @@
   },
   "settings.storage.clearConfirmTitle": {
     "defaultMessage": "Clear All Cached Data?"
+  },
+  "settings.storage.clearErrorTitle": {
+    "defaultMessage": "Failed to clear data"
   },
   "settings.storage.description": {
     "defaultMessage": "Manage cached data stored in your browser."

@@ -67,3 +67,4 @@ WORKFLOW.*.md
 
 # Local test cache (UUIDs mapped to worktree paths)
 cache/
+.worktree-lock

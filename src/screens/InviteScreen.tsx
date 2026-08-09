@@ -16,7 +16,7 @@ import {
   parseInviteUrl,
   warnLegacyInviteUrlOnce,
 } from '@/lib/invite-url';
-import { DuplicateServerError, useAuthStore } from '@/stores/auth-store';
+import { useAuthStore } from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
 // i18n
@@ -59,10 +59,6 @@ const messages = defineMessages({
   networkError: {
     id: 'invite.progress.networkError',
     defaultMessage: 'Unable to connect. Check your internet connection.',
-  },
-  alreadyConnected: {
-    id: 'invite.alreadyConnected',
-    defaultMessage: 'This archive server is already connected',
   },
   retry: {
     id: 'invite.progress.retry',
@@ -255,13 +251,6 @@ export function InviteScreen() {
         }, 1500);
       } catch (err) {
         if (cancelledRef.current) return;
-        if (err instanceof DuplicateServerError) {
-          setStatus('error');
-          setErrorMessage(
-            intlRef.current.formatMessage(messages.alreadyConnected),
-          );
-          return;
-        }
         if (err instanceof InviteApiError) {
           if (err.code === 'INVITE_EXPIRED') {
             setStatus('expired');
@@ -310,7 +299,9 @@ export function InviteScreen() {
 
     return () => {
       // Bump the generation so any microtask still pending from a
-      // previous invocation is silently dropped.
+      // previous invocation is silently dropped. Deliberate write to a
+      // stable generation counter; staleness is the point, not a hazard.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       effectGenerationRef.current++;
       // Signal in-flight async work (inside run()) that the component
       // is unmounting so it can short-circuit early.
