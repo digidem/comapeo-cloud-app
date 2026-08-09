@@ -101,6 +101,25 @@ export function spansAntimeridian(lngs: number[]): boolean {
 
 const MIN_BBOX_SPAN = 0.01;
 
+/** Internal helper: apply min-span, lat clamp, and degenerate-check to a raw bbox. */
+function applyMinSpanAndClamp(
+  bbox: [number, number, number, number],
+): [number, number, number, number] | null {
+  // Apply minimum span
+  const finalBbox: [number, number, number, number] = [
+    bbox[0],
+    bbox[1],
+    bbox[2] - bbox[0] < MIN_BBOX_SPAN ? bbox[0] + MIN_BBOX_SPAN : bbox[2],
+    bbox[3] - bbox[1] < MIN_BBOX_SPAN ? bbox[1] + MIN_BBOX_SPAN : bbox[3],
+  ];
+  // Validate latitude bounds
+  const clampedBbox = clampBboxLatitude(finalBbox);
+  if (clampedBbox[1] >= clampedBbox[3] || clampedBbox[0] >= clampedBbox[2]) {
+    return null;
+  }
+  return clampedBbox;
+}
+
 /**
  * Finalize a bbox from raw coordinates.
  * Handles antimeridian crossing, minimum span, and latitude clamping.
@@ -114,30 +133,13 @@ export function finalizeBbox(
   if (spansAntimeridian(lngs)) {
     // Shift longitudes by adding 360 to negative values, then compute bbox
     const shiftedLngs = lngs.map((lng) => (lng < 0 ? lng + 360 : lng));
-    const shiftedLats = lats;
     const shiftedBbox: [number, number, number, number] = [
       Math.min(...shiftedLngs),
-      Math.min(...shiftedLats),
+      Math.min(...lats),
       Math.max(...shiftedLngs),
-      Math.max(...shiftedLats),
+      Math.max(...lats),
     ];
-    // Apply minimum span
-    const finalBbox: [number, number, number, number] = [
-      shiftedBbox[0],
-      shiftedBbox[1],
-      shiftedBbox[2] - shiftedBbox[0] < MIN_BBOX_SPAN
-        ? shiftedBbox[0] + MIN_BBOX_SPAN
-        : shiftedBbox[2],
-      shiftedBbox[3] - shiftedBbox[1] < MIN_BBOX_SPAN
-        ? shiftedBbox[1] + MIN_BBOX_SPAN
-        : shiftedBbox[3],
-    ];
-    // Validate latitude bounds
-    const clampedBbox = clampBboxLatitude(finalBbox);
-    if (clampedBbox[1] >= clampedBbox[3] || clampedBbox[0] >= clampedBbox[2]) {
-      return null;
-    }
-    return clampedBbox;
+    return applyMinSpanAndClamp(shiftedBbox);
   }
 
   // Normal case
@@ -147,21 +149,5 @@ export function finalizeBbox(
     Math.max(...lngs),
     Math.max(...lats),
   ];
-  // Apply minimum span
-  const finalBbox: [number, number, number, number] = [
-    rawBbox[0],
-    rawBbox[1],
-    rawBbox[2] - rawBbox[0] < MIN_BBOX_SPAN
-      ? rawBbox[0] + MIN_BBOX_SPAN
-      : rawBbox[2],
-    rawBbox[3] - rawBbox[1] < MIN_BBOX_SPAN
-      ? rawBbox[1] + MIN_BBOX_SPAN
-      : rawBbox[3],
-  ];
-  // Validate latitude bounds
-  const clampedBbox = clampBboxLatitude(finalBbox);
-  if (clampedBbox[1] >= clampedBbox[3] || clampedBbox[0] >= clampedBbox[2]) {
-    return null;
-  }
-  return clampedBbox;
+  return applyMinSpanAndClamp(rawBbox);
 }
