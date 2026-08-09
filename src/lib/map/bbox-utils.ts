@@ -98,3 +98,70 @@ export function spansAntimeridian(lngs: number[]): boolean {
   // not the antimeridian (which is at 180° in normalized space)
   return false;
 }
+
+const MIN_BBOX_SPAN = 0.01;
+
+/**
+ * Finalize a bbox from raw coordinates.
+ * Handles antimeridian crossing, minimum span, and latitude clamping.
+ * Returns the finalized bbox or null if invalid.
+ */
+export function finalizeBbox(
+  lngs: number[],
+  lats: number[],
+): [number, number, number, number] | null {
+  // Check for antimeridian crossing
+  if (spansAntimeridian(lngs)) {
+    // Shift longitudes by adding 360 to negative values, then compute bbox
+    const shiftedLngs = lngs.map((lng) => (lng < 0 ? lng + 360 : lng));
+    const shiftedLats = lats;
+    const shiftedBbox: [number, number, number, number] = [
+      Math.min(...shiftedLngs),
+      Math.min(...shiftedLats),
+      Math.max(...shiftedLngs),
+      Math.max(...shiftedLats),
+    ];
+    // Apply minimum span
+    const finalBbox: [number, number, number, number] = [
+      shiftedBbox[0],
+      shiftedBbox[1],
+      shiftedBbox[2] - shiftedBbox[0] < MIN_BBOX_SPAN
+        ? shiftedBbox[0] + MIN_BBOX_SPAN
+        : shiftedBbox[2],
+      shiftedBbox[3] - shiftedBbox[1] < MIN_BBOX_SPAN
+        ? shiftedBbox[1] + MIN_BBOX_SPAN
+        : shiftedBbox[3],
+    ];
+    // Validate latitude bounds
+    const clampedBbox = clampBboxLatitude(finalBbox);
+    if (clampedBbox[1] >= clampedBbox[3] || clampedBbox[0] >= clampedBbox[2]) {
+      return null;
+    }
+    return clampedBbox;
+  }
+
+  // Normal case
+  const rawBbox: [number, number, number, number] = [
+    Math.min(...lngs),
+    Math.min(...lats),
+    Math.max(...lngs),
+    Math.max(...lats),
+  ];
+  // Apply minimum span
+  const finalBbox: [number, number, number, number] = [
+    rawBbox[0],
+    rawBbox[1],
+    rawBbox[2] - rawBbox[0] < MIN_BBOX_SPAN
+      ? rawBbox[0] + MIN_BBOX_SPAN
+      : rawBbox[2],
+    rawBbox[3] - rawBbox[1] < MIN_BBOX_SPAN
+      ? rawBbox[1] + MIN_BBOX_SPAN
+      : rawBbox[3],
+  ];
+  // Validate latitude bounds
+  const clampedBbox = clampBboxLatitude(finalBbox);
+  if (clampedBbox[1] >= clampedBbox[3] || clampedBbox[0] >= clampedBbox[2]) {
+    return null;
+  }
+  return clampedBbox;
+}

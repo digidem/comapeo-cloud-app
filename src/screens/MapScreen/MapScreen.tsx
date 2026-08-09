@@ -21,7 +21,7 @@ import { DEFAULT_BASEMAP_ID, findBasemap } from '@/lib/map/basemaps';
 import {
   clampBboxLatitude,
   crossesAntimeridian,
-  spansAntimeridian,
+  finalizeBbox,
 } from '@/lib/map/bbox-utils';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { uuid } from '@/lib/uuid';
@@ -195,87 +195,22 @@ export function MapScreen() {
         if (coords.length > 0) {
           const lngs = coords.map((c) => c[0]);
           const lats = coords.map((c) => c[1]);
-          const rawBbox: [number, number, number, number] = [
-            Math.min(...lngs),
-            Math.min(...lats),
-            Math.max(...lngs),
-            Math.max(...lats),
-          ];
-          // Handle antimeridian crossing - if the span crosses the antimeridian,
-          // the simple min/max approach would produce an inverted bbox.
-          // For antimeridian-spanning projects, shift all longitudes by +360
-          // then take min/max so MapLibre can fit the bbox correctly.
-          if (spansAntimeridian(lngs)) {
-            // Shift longitudes by adding 360 to negative values, then compute bbox
-            const shiftedLngs = lngs.map((lng) => (lng < 0 ? lng + 360 : lng));
-            const shiftedLats = lats;
-            const shiftedBbox: [number, number, number, number] = [
-              Math.min(...shiftedLngs),
-              Math.min(...shiftedLats),
-              Math.max(...shiftedLngs),
-              Math.max(...shiftedLats),
-            ];
-            // Apply minimum span to avoid zero-area bbox for single-point projects
-            const MIN_SPAN = 0.01;
-            const finalBbox: [number, number, number, number] = [
-              shiftedBbox[0],
-              shiftedBbox[1],
-              shiftedBbox[2] - shiftedBbox[0] < MIN_SPAN
-                ? shiftedBbox[0] + MIN_SPAN
-                : shiftedBbox[2],
-              shiftedBbox[3] - shiftedBbox[1] < MIN_SPAN
-                ? shiftedBbox[1] + MIN_SPAN
-                : shiftedBbox[3],
-            ];
-            // Validate latitude bounds
-            const clampedBbox = clampBboxLatitude(finalBbox);
-            if (
-              clampedBbox[1] >= clampedBbox[3] ||
-              clampedBbox[0] >= clampedBbox[2]
-            ) {
-              // If invalid, don't auto-fit; leave as-is
-              setProjectBbox(clampedBbox);
-              return;
-            }
-            setProjectBbox(clampedBbox);
-            // Only apply and fit if user hasn't edited and not in draw mode
-            if (
-              !hasUserModifiedBboxRef.current &&
-              drawModeRef.current === null
-            ) {
-              setBbox(clampedBbox);
-              setAutoFitBbox(clampedBbox);
-            }
-            // If user edited or in draw mode, don't auto-fit - leave camera alone
+
+          // Use finalizeBbox to handle both antimeridian and normal cases consistently
+          const finalizedBbox = finalizeBbox(lngs, lats);
+
+          if (finalizedBbox === null) {
+            // Invalid bbox - don't auto-fit
             return;
           }
-          // Ensure minimum span to avoid zero-area bbox for single-point projects
-          const MIN_SPAN = 0.01;
-          const finalBbox: [number, number, number, number] = [
-            rawBbox[0],
-            rawBbox[1],
-            rawBbox[2] - rawBbox[0] < MIN_SPAN
-              ? rawBbox[0] + MIN_SPAN
-              : rawBbox[2],
-            rawBbox[3] - rawBbox[1] < MIN_SPAN
-              ? rawBbox[1] + MIN_SPAN
-              : rawBbox[3],
-          ];
-          // Validate latitude bounds (antimeridian crossing can't happen with valid lon)
-          const clampedBbox = clampBboxLatitude(finalBbox);
-          if (
-            clampedBbox[1] >= clampedBbox[3] ||
-            clampedBbox[0] >= clampedBbox[2]
-          ) {
-            return; // Skip zero-area bbox
-          }
-          setProjectBbox(clampedBbox);
-          // Only apply and fit the project bbox if the user has not already edited it
-          // and draw mode is null (not drawing and not in simple_select).
+
+          setProjectBbox(finalizedBbox);
+          // Only apply and fit if user hasn't edited and not in draw mode
           if (!hasUserModifiedBboxRef.current && drawModeRef.current === null) {
-            setBbox(clampedBbox);
-            setAutoFitBbox(clampedBbox);
+            setBbox(finalizedBbox);
+            setAutoFitBbox(finalizedBbox);
           }
+          // If user edited or in draw mode, don't auto-fit - leave camera alone
         } else {
           // No geolocated observations - reset to default
           if (!hasUserModifiedBboxRef.current && drawModeRef.current === null) {
