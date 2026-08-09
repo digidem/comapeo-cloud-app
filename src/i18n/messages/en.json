@@ -1559,6 +1559,9 @@
   "settings.clear.description": {
     "defaultMessage": "Remove all local settings, preferences, and cached data. This cannot be undone."
   },
+  "settings.clear.errorTitle": {
+    "defaultMessage": "Failed to clear data"
+  },
   "settings.clear.title": {
     "defaultMessage": "Clear Local Data"
   },
@@ -1618,9 +1621,6 @@
   },
   "settings.storage.clearConfirmTitle": {
     "defaultMessage": "Clear All Cached Data?"
-  },
-  "settings.storage.clearErrorTitle": {
-    "defaultMessage": "Failed to clear data"
   },
   "settings.storage.description": {
     "defaultMessage": "Manage cached data stored in your browser."

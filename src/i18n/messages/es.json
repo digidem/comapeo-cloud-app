@@ -503,7 +503,7 @@
   "settings.storage.clearConfirmButton": "Sí, borrar todo",
   "settings.storage.clearConfirmDescription": "Esto eliminará todos los datos almacenados en caché localmente, incluidos proyectos, observaciones, alertas y adjuntos. Los servidores de archivo conectados también se eliminarán y deberán volver a agregarse. Esta acción no se puede deshacer.",
   "settings.storage.clearConfirmTitle": "¿Borrar todos los datos en caché?",
-  "settings.storage.clearErrorTitle": "Error al limpiar datos",
+  "settings.clear.errorTitle": "Error al limpiar datos",
   "settings.storage.description": "Administra los datos en caché almacenados en tu navegador.",
   "settings.storage.observations": "Observaciones",
   "settings.storage.presets": "Preajustes",
