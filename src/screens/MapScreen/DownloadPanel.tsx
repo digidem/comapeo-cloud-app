@@ -497,6 +497,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
               id={`global-overview-${map.id}`}
               checked={includeGlobalOverview}
               onCheckedChange={setIncludeGlobalOverview}
+              disabled={downloadMap.isPending}
               label={intl.formatMessage(mapMessages.downloadGlobalOverview)}
             />
             <p className="text-xs text-text-muted">

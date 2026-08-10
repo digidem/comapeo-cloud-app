@@ -363,6 +363,8 @@
   "map.download.error": "Falha no download: {error}",
   "map.download.estimatedSize": "Tamanho estimado: {size}",
   "map.download.export": "Baixar arquivo SMP",
+  "map.download.globalOverview": "Visão global",
+  "map.download.globalOverviewDescription": "Incluir contexto mundial nos níveis de zoom 0–3.",
   "map.download.interrupted": "Um download anterior foi interrompido. Você pode tentar novamente.",
   "map.download.maxRetries": "Máximo de tentativas atingido",
   "map.download.missing": "O pacote do mapa salvo está faltando ou é ilegível. Você pode regenerá-lo.",

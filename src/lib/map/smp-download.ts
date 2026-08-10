@@ -160,6 +160,20 @@ function estimateBboxDownloadSize(
   minZoom: number,
   maxZoom: number,
 ): number {
+  return countBboxTiles(bbox, minZoom, maxZoom) * ESTIMATED_TILE_SIZE;
+}
+
+/**
+ * Count the number of tiles covering a bbox across a zoom range. Used both for
+ * byte-size estimates and to pre-seed progress-bar totals before a download
+ * pass starts (see downloadSmp's passProgress seeding).
+ */
+function countBboxTiles(
+  bbox: [number, number, number, number],
+  minZoom: number,
+  maxZoom: number,
+  bufferTiles = 0,
+): number {
   if (minZoom > maxZoom) return 0;
   const [west, rawSouth, east, rawNorth] = bbox;
   const south = clampLatitude(rawSouth);
@@ -169,8 +183,14 @@ function estimateBboxDownloadSize(
   let totalTiles = 0;
   for (let z = minZoom; z <= maxZoom; z += 1) {
     const n = 2 ** z;
-    const xMin = clampTile(Math.floor(((west + 180) / 360) * n), n);
-    const xMax = clampTile(Math.floor(((east + 180) / 360) * n), n);
+    const xMin = clampTile(
+      Math.floor(((west + 180) / 360) * n) - bufferTiles,
+      n,
+    );
+    const xMax = clampTile(
+      Math.floor(((east + 180) / 360) * n) + bufferTiles,
+      n,
+    );
     const lat2y = (lat: number) =>
       ((1 -
         Math.log(
@@ -179,13 +199,13 @@ function estimateBboxDownloadSize(
           Math.PI) /
         2) *
       n;
-    const yMin = clampTile(Math.floor(lat2y(north)), n);
-    const yMax = clampTile(Math.floor(lat2y(south)), n);
+    const yMin = clampTile(Math.floor(lat2y(north)) - bufferTiles, n);
+    const yMax = clampTile(Math.floor(lat2y(south)) + bufferTiles, n);
     const tilesAtZoom =
       Math.max(0, xMax - xMin + 1) * Math.max(0, yMax - yMin + 1);
     totalTiles += tilesAtZoom;
   }
-  return totalTiles * ESTIMATED_TILE_SIZE;
+  return totalTiles;
 }
 
 function clampTile(v: number, n: number): number {
@@ -272,14 +292,22 @@ function getOrCreateSourceFolders(style: SmpStyle): Record<string, string> {
   return sourceFolders as Record<string, string>;
 }
 
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('Download cancelled', 'AbortError');
+  }
+}
+
 async function mergeGlobalOverviewSmp(
   globalBytes: Uint8Array,
   regionalBytes: Uint8Array,
+  signal?: AbortSignal,
 ): Promise<Blob> {
   const [globalZip, regionalZip] = await Promise.all([
     JSZip.loadAsync(globalBytes),
     JSZip.loadAsync(regionalBytes),
   ]);
+  throwIfAborted(signal);
   const globalStyleFile = globalZip.file('style.json');
   const regionalStyleFile = regionalZip.file('style.json');
   if (!globalStyleFile || !regionalStyleFile) {
@@ -348,7 +376,13 @@ async function mergeGlobalOverviewSmp(
         binary: true,
         compression: 'STORE',
       });
+      throwIfAborted(signal);
     }
+  }
+
+  if (sourceMap.size > 0) {
+    const metadata = regionalStyle.metadata as Record<string, unknown>;
+    metadata['smp:bounds'] = GLOBAL_OVERVIEW_BBOX;
   }
 
   const mergedLayers: SmpStyle['layers'] = [];
@@ -387,10 +421,12 @@ async function mergeGlobalOverviewSmp(
   regionalStyle.layers = mergedLayers;
   regionalZip.file('style.json', JSON.stringify(regionalStyle));
 
-  return regionalZip.generateAsync({
+  const merged = await regionalZip.generateAsync({
     type: 'blob',
     compression: 'STORE',
   });
+  throwIfAborted(signal);
+  return merged;
 }
 
 async function collectDownloadChunks(
@@ -451,9 +487,34 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
   let styleUrl = '';
   let blob: Blob | undefined;
   let packageParts: Uint8Array[] | undefined;
+
+  // Seed both passes' totals upfront (from a tile-count estimate) so the
+  // combined denominator is stable from the first progress event, instead of
+  // spiking when the regional pass's real total replaces its seeded 0.
+  const globalMaxZoom = Math.min(GLOBAL_OVERVIEW_MAX_ZOOM, map.maxZoom);
+  const runsGlobalPass = includeGlobalOverview;
+  const runsRegionalPass =
+    !includeGlobalOverview || map.maxZoom > GLOBAL_OVERVIEW_MAX_ZOOM;
+  const estimatedGlobalTotal = runsGlobalPass
+    ? countBboxTiles(GLOBAL_OVERVIEW_BBOX, 0, globalMaxZoom)
+    : 0;
+  const estimatedRegionalTotal = runsRegionalPass
+    ? countBboxTiles(map.bbox, 0, map.maxZoom, bufferTiles)
+    : 0;
+
   const passProgress = {
-    global: { downloaded: 0, total: 0, bytes: 0, skipped: 0 },
-    regional: { downloaded: 0, total: 0, bytes: 0, skipped: 0 },
+    global: {
+      downloaded: 0,
+      total: estimatedGlobalTotal,
+      bytes: 0,
+      skipped: 0,
+    },
+    regional: {
+      downloaded: 0,
+      total: estimatedRegionalTotal,
+      bytes: 0,
+      skipped: 0,
+    },
   };
 
   const startPass = (
@@ -492,7 +553,6 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
   try {
     styleUrl = getDownloadStyleUrl(map);
     if (includeGlobalOverview) {
-      const globalMaxZoom = Math.min(GLOBAL_OVERVIEW_MAX_ZOOM, map.maxZoom);
       const globalBytes = await collectDownloadStream(
         startPass('global', GLOBAL_OVERVIEW_BBOX, globalMaxZoom, 0),
       );
@@ -502,7 +562,7 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
         const regionalBytes = await collectDownloadStream(
           startPass('regional', map.bbox, map.maxZoom, bufferTiles),
         );
-        blob = await mergeGlobalOverviewSmp(globalBytes, regionalBytes);
+        blob = await mergeGlobalOverviewSmp(globalBytes, regionalBytes, signal);
       }
     } else {
       packageParts = await collectDownloadChunks(
@@ -532,6 +592,15 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     if (map.type === 'raster' && styleUrl) {
       setTimeout(() => URL.revokeObjectURL(styleUrl), 5_000);
     }
+  }
+
+  if (signal?.aborted) {
+    await recoveryWrite(db, map.id, {
+      status: 'draft',
+      errorMessage: undefined,
+      updatedAt: new Date().toISOString(),
+    });
+    throw new DOMException('Download cancelled', 'AbortError');
   }
 
   if (!blob) {

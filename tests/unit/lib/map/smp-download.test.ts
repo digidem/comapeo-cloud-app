@@ -297,7 +297,9 @@ describe('downloadSmp', () => {
       [],
     );
     expect(style.sources.raster__global_overview?.maxzoom).toBe(3);
-    expect(style.metadata?.['smp:bounds']).toEqual([-75, -12, -45, 8]);
+    expect(style.metadata?.['smp:bounds']).toEqual([
+      -180, -85.0511, 180, 85.0511,
+    ]);
     expect(style.metadata?.['smp:maxzoom']).toBe(4);
     expect(style.metadata?.['smp:sourceFolders']).toEqual({
       raster: 's/0',
