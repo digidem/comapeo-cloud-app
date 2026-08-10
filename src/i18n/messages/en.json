@@ -434,9 +434,6 @@
   "home.activity.alertDesc": {
     "defaultMessage": "New alert event detected in project area."
   },
-  "home.activity.audios": {
-    "defaultMessage": "{count, plural, one {# audio} other {# audios}}"
-  },
   "home.activity.empty": {
     "defaultMessage": "No recent activity"
   },
@@ -448,9 +445,6 @@
   },
   "home.activity.observationWithCoords": {
     "defaultMessage": "New CoMapeo Observation"
-  },
-  "home.activity.photos": {
-    "defaultMessage": "{count, plural, one {# photo} other {# photos}}"
   },
   "home.activity.recentTitle": {
     "defaultMessage": "Recent Activity"

@@ -1,21 +1,34 @@
 import { defineMessages, useIntl } from 'react-intl';
 
+import {
+  ObservationListItem,
+  type ObservationListItemCategory,
+} from '@/components/shared/ObservationListItem';
 import { PaginationControls } from '@/components/shared/PaginationControls';
 import { Card } from '@/components/ui/card';
 import { usePaginatedItems } from '@/hooks/usePaginatedItems';
+import type { Attachment } from '@/lib/data-layer';
 
-interface ActivityItem {
+export interface ObservationActivityItem {
+  id: string;
+  type: 'record';
+  displayName: string;
+  createdAt: string;
+  timestamp: string;
+  category?: ObservationListItemCategory;
+  tags?: Record<string, string>;
+  attachments?: Attachment[];
+}
+
+export interface GenericActivityItem {
   id: string;
   title: string;
   description: string;
   timestamp: string;
-  type: 'record' | 'map' | 'sync';
-  // Optional fields for observation enrichment
-  category?: string;
-  photoCount?: number;
-  audioCount?: number;
-  details?: string;
+  type: 'map' | 'sync';
 }
+
+export type ActivityItem = ObservationActivityItem | GenericActivityItem;
 
 interface RecentActivityListProps {
   activities: ActivityItem[];
@@ -32,15 +45,48 @@ const messages = defineMessages({
     id: 'home.activity.empty',
     defaultMessage: 'No recent activity',
   },
-  photos: {
-    id: 'home.activity.photos',
-    defaultMessage: '{count, plural, one {# photo} other {# photos}}',
-  },
-  audios: {
-    id: 'home.activity.audios',
-    defaultMessage: '{count, plural, one {# audio} other {# audios}}',
-  },
 });
+
+function GenericActivityIcon({ type }: { type: GenericActivityItem['type'] }) {
+  return (
+    <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+      {type === 'map' ? (
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+          <line x1="9" y1="3" x2="9" y2="21" />
+          <line x1="15" y1="3" x2="15" y2="21" />
+        </svg>
+      ) : (
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 2v6h-6" />
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+          <path d="M3 22v-6h6" />
+          <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+        </svg>
+      )}
+    </div>
+  );
+}
 
 export function RecentActivityList({ activities }: RecentActivityListProps) {
   const intl = useIntl();
@@ -70,107 +116,36 @@ export function RecentActivityList({ activities }: RecentActivityListProps) {
             <div
               key={activity.id}
               data-activity-item
-              className={`flex items-start gap-4 p-5 ${index !== visibleActivities.length - 1 ? 'border-b border-border' : ''}`}
+              className={`p-5 ${index !== visibleActivities.length - 1 ? 'border-b border-border' : ''}`}
             >
-              <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
-                {activity.type === 'record' && (
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                )}
-                {activity.type === 'map' && (
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
-                    <line x1="9" y1="3" x2="9" y2="21" />
-                    <line x1="15" y1="3" x2="15" y2="21" />
-                  </svg>
-                )}
-                {activity.type === 'sync' && (
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21 2v6h-6" />
-                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                    <path d="M3 22v-6h6" />
-                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-                  </svg>
-                )}
-              </div>
-              <div className="flex flex-1 flex-col">
-                <div className="flex items-start sm:items-center justify-between gap-2">
-                  <span className="font-semibold text-text">
-                    {activity.title}
-                  </span>
-                  <span className="text-xs font-medium text-text-muted uppercase tracking-wide">
-                    {activity.timestamp}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-text-muted">
-                  {activity.description}
-                </p>
-                {/* Observation metadata row */}
-                {activity.type === 'record' &&
-                  (activity.category ||
-                    activity.photoCount ||
-                    activity.audioCount ||
-                    activity.details) && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                      {activity.category && (
-                        <span className="inline-flex items-center rounded-full bg-primary-soft px-2 py-0.5 text-primary">
-                          {activity.category}
-                        </span>
-                      )}
-                      {typeof activity.photoCount === 'number' &&
-                        activity.photoCount !== 0 && (
-                          <span>
-                            {intl.formatMessage(messages.photos, {
-                              count: activity.photoCount,
-                            })}
-                          </span>
-                        )}
-                      {typeof activity.audioCount === 'number' &&
-                        activity.audioCount !== 0 && (
-                          <span>
-                            {intl.formatMessage(messages.audios, {
-                              count: activity.audioCount,
-                            })}
-                          </span>
-                        )}
-                      {activity.details && (
-                        <span className="truncate max-w-[200px]">
-                          {activity.details}
-                        </span>
-                      )}
+              {activity.type === 'record' ? (
+                <ObservationListItem
+                  observationLocalId={activity.id}
+                  category={activity.category}
+                  displayName={activity.displayName}
+                  createdAt={activity.createdAt}
+                  dateLabel={activity.timestamp}
+                  tags={activity.tags}
+                  attachments={activity.attachments}
+                />
+              ) : (
+                <div className="flex items-start gap-4">
+                  <GenericActivityIcon type={activity.type} />
+                  <div className="flex flex-1 flex-col">
+                    <div className="flex items-start sm:items-center justify-between gap-2">
+                      <span className="font-semibold text-text">
+                        {activity.title}
+                      </span>
+                      <span className="text-xs font-medium text-text-muted uppercase tracking-wide">
+                        {activity.timestamp}
+                      </span>
                     </div>
-                  )}
-              </div>
+                    <p className="mt-1 text-sm text-text-muted">
+                      {activity.description}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           ))
         )}

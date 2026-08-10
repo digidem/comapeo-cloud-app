@@ -7,9 +7,8 @@ import { useShellSlot } from '@/components/layout/shell-slot';
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { FilterSheet } from '@/components/shared/FilterSheet';
 import { MapScreenLayout } from '@/components/shared/MapScreenLayout';
-import { MediaPreview } from '@/components/shared/MediaPreview';
-import { ObservationCategoryIcon } from '@/components/shared/ObservationCategoryIcon';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
+import { ObservationListItem } from '@/components/shared/ObservationListItem';
 import { ObservationsMap } from '@/components/shared/ObservationsMap';
 import { PaginationControls } from '@/components/shared/PaginationControls';
 import { Button } from '@/components/ui/button';
@@ -24,6 +23,7 @@ import { usePaginatedItems } from '@/hooks/usePaginatedItems';
 import { useProjects } from '@/hooks/useProjects';
 import { useResponsivePageSize } from '@/hooks/useResponsivePageSize';
 import type { Field } from '@/lib/data-layer';
+import { resolveObservationListItemName } from '@/lib/observation-list-item';
 import { useProjectStore } from '@/stores/project-store';
 import { useViewModeStore } from '@/stores/view-mode-store';
 
@@ -85,16 +85,6 @@ const messages = defineMessages({
     defaultMessage: 'Filters',
   },
 });
-
-/** Safely extract category label from observation tags */
-function getCategoryLabel(obs: {
-  tags?: Record<string, unknown>;
-}): string | null {
-  const raw = obs.tags?.category;
-  if (raw === undefined || raw === null) return null;
-  const str = String(raw);
-  return str === '' ? null : str;
-}
 
 export function DataScreen() {
   const intl = useIntl();
@@ -229,31 +219,18 @@ export function DataScreen() {
               className="no-underline"
             >
               <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
-                <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-                  {categoryByObservationId.get(obs.localId) ? (
-                    <ObservationCategoryIcon
-                      category={categoryByObservationId.get(obs.localId)!}
-                      size={48}
-                    />
-                  ) : (
-                    <div className="h-12 w-12" aria-hidden="true" />
-                  )}
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-sm font-medium text-text break-words wrap-anywhere">
-                      {displayNames.get(obs.localId) ??
-                        getCategoryLabel(obs) ??
-                        intl.formatMessage(messages.observationFallback)}
-                    </span>
-                    <span className="text-xs text-text-muted">
-                      {new Date(obs.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <MediaPreview
-                    observationLocalId={obs.localId}
-                    tags={obs.tags}
-                    attachments={attachmentsByObservationId.get(obs.localId)}
-                  />
-                </div>
+                <ObservationListItem
+                  observationLocalId={obs.localId}
+                  category={categoryByObservationId.get(obs.localId)}
+                  displayName={resolveObservationListItemName({
+                    resolvedDisplayName: displayNames.get(obs.localId),
+                    categoryTag: obs.tags?.category,
+                    fallback: intl.formatMessage(messages.observationFallback),
+                  })}
+                  createdAt={obs.createdAt}
+                  tags={obs.tags}
+                  attachments={attachmentsByObservationId.get(obs.localId)}
+                />
               </Card>
             </Link>
           ))}
