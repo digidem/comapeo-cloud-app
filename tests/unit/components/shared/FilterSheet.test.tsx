@@ -132,7 +132,8 @@ describe('FilterSheet', () => {
     const user = userEvent.setup();
     renderSheet();
     const trigger = screen.getByRole('button', { name: /Categories/ });
-    await user.click(trigger);
+    trigger.focus();
+    await user.keyboard('{Enter}');
     await user.click(screen.getByRole('button', { name: 'Close categories' }));
     await waitFor(() => expect(trigger).toHaveFocus());
   });
