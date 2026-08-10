@@ -126,6 +126,7 @@ function CategoryFilterSheet({
             type="button"
             variant="secondary"
             size="sm"
+            disabled={selected.length === 0}
             onClick={onDeselectAll}
             className="flex-1"
           >

@@ -26,14 +26,28 @@ const messages = defineMessages({
     id: 'data.filters.categorySheetTrigger',
     defaultMessage: 'Categories',
   },
+  categoryAll: {
+    id: 'data.filters.categoryAll',
+    defaultMessage: 'All categories',
+  },
+  categorySelected: {
+    id: 'data.filters.categoryHiddenSelected',
+    defaultMessage: '{count} selected',
+  },
 });
 
 interface FilterSheetProps extends ObservationFilterBarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCategoriesSelectAll: () => void;
 }
 
-function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
+function FilterSheet({
+  open,
+  onOpenChange,
+  onCategoriesSelectAll,
+  ...filterProps
+}: FilterSheetProps) {
   const intl = useIntl();
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(
     null,
@@ -122,17 +136,10 @@ function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
               <span>{intl.formatMessage(messages.categorySheetTrigger)}</span>
               <span className="text-sm text-text-muted">
                 {filterProps.filters.categories.length === 0
-                  ? intl.formatMessage({
-                      id: 'data.filters.categoryAll',
-                      defaultMessage: 'All categories',
-                    })
-                  : intl.formatMessage(
-                      {
-                        id: 'data.filters.categoryHiddenSelected',
-                        defaultMessage: '{count} selected',
-                      },
-                      { count: filterProps.filters.categories.length },
-                    )}
+                  ? intl.formatMessage(messages.categoryAll)
+                  : intl.formatMessage(messages.categorySelected, {
+                      count: filterProps.filters.categories.length,
+                    })}
               </span>
             </button>
             <SelectPortalProvider container={portalContainer}>
@@ -153,7 +160,7 @@ function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
             categories={filterProps.availableCategories}
             selected={filterProps.filters.categories}
             onToggle={filterProps.onCategoryToggle}
-            onSelectAll={filterProps.onCategoriesSelectAll ?? (() => {})}
+            onSelectAll={onCategoriesSelectAll}
             onDeselectAll={filterProps.onCategoriesClear}
           />
         </Dialog.Content>

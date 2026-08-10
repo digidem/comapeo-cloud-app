@@ -63,7 +63,6 @@ export interface ObservationFilterBarProps {
   onEndDateChange: (v: string | null) => void;
   onCategoryToggle: (v: string) => void;
   onCategoriesClear: () => void;
-  onCategoriesSelectAll?: () => void;
   onSortChange: (v: ObservationSort) => void;
   /** Whether to show ordering controls (default: true). */
   showSort?: boolean;
