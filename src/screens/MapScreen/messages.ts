@@ -328,6 +328,14 @@ export const mapMessages = defineMessages({
     id: 'map.download.estimatedSize',
     defaultMessage: 'Estimated size: {size}',
   },
+  downloadGlobalOverview: {
+    id: 'map.download.globalOverview',
+    defaultMessage: 'Global overview',
+  },
+  downloadGlobalOverviewDescription: {
+    id: 'map.download.globalOverviewDescription',
+    defaultMessage: 'Include worldwide context at zoom levels 0–3.',
+  },
   downloadRetry: {
     id: 'map.download.retry',
     defaultMessage: 'Retry',

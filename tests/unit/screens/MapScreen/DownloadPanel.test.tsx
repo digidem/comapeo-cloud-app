@@ -52,6 +52,31 @@ describe('DownloadPanel', () => {
     ).toBeInTheDocument();
   });
 
+  it('includes the global overview by default and lets the user disable it', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(smpDownload, 'checkStorageQuota').mockResolvedValue({
+      available: 1_000_000_000,
+      sufficient: true,
+    });
+    const map = createMockMap({ maxZoom: 2 });
+    render(<DownloadPanel map={map} />);
+
+    const globalOverview = screen.getByRole('switch', {
+      name: /global overview/i,
+    });
+    expect(globalOverview).toHaveAttribute('aria-checked', 'true');
+
+    await user.click(globalOverview);
+    expect(globalOverview).toHaveAttribute('aria-checked', 'false');
+    await user.click(screen.getByRole('button', { name: /download map/i }));
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ includeGlobalOverview: false }),
+      );
+    });
+  });
+
   it('shows confirmation dialog for large downloads', async () => {
     const user = userEvent.setup();
     const map = createMockMap({ minZoom: 0, maxZoom: 22 });
