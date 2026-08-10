@@ -32,6 +32,13 @@ describe('MapDownloadStatus', () => {
     expect(screen.getByText('Forest Map')).toBeInTheDocument();
     expect(screen.getByText(/starting download/i)).toBeInTheDocument();
     expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.getByTestId('map-download-status')).not.toHaveAttribute(
+      'aria-live',
+    );
+    expect(screen.getByTestId('map-download-status')).not.toHaveAttribute(
+      'role',
+      'status',
+    );
 
     await user.click(screen.getByRole('button', { name: /cancel/i }));
     expect(cancel).toHaveBeenCalledOnce();

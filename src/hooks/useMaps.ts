@@ -5,6 +5,7 @@ import { getDb } from '@/lib/db';
 import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
 import { closeSmpReader } from '@/lib/map/smp-serve';
+import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
 export const mapsQueryKey = (projectLocalId: string | null) => [
@@ -65,6 +66,12 @@ export function useDeleteMap(projectLocalId: string | null) {
 
   return useMutation({
     mutationFn: async (mapId: string) => {
+      const downloadState = useMapDownloadStore.getState();
+      if (downloadState.active?.mapId === mapId) {
+        downloadState.active.cancel();
+        downloadState.clear(mapId);
+      }
+
       await closeSmpReader(mapId);
       const db = getDb();
       const updatedAt = new Date().toISOString();

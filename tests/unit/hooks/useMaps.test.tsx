@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ReactNode } from 'react';
 
@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useDeleteMap, useSetActiveMapMutation } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import { getDb, resetDb } from '@/lib/db';
+import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -56,6 +57,7 @@ describe('useDeleteMap', () => {
     await resetDb();
     localStorage.clear();
     useMapStore.setState({ activeProjectLocalId: null, activeMapId: null });
+    useMapDownloadStore.setState({ active: null });
   });
 
   it('clears the active map in the store when the deleted map is active for the current project', async () => {
@@ -123,6 +125,28 @@ describe('useDeleteMap', () => {
       expect((await getDb().projects.get('project-1'))?.activeMapId).toBeNull();
       expect((await getDb().projects.get('project-2'))?.activeMapId).toBeNull();
     });
+  });
+
+  it('cancels and clears an active download before deleting its map', async () => {
+    await addProject('project-1', 'map-1');
+    await getDb().maps.add(createMap({ status: 'downloading' }));
+    const cancel = vi.fn();
+    useMapDownloadStore.getState().start({
+      mapId: 'map-1',
+      mapName: 'Territory draft',
+      cancel,
+    });
+
+    const { result } = renderHook(() => useDeleteMap('project-1'), {
+      wrapper,
+    });
+    result.current.mutate('map-1');
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(useMapDownloadStore.getState().active).toBeNull();
+    expect(await getDb().maps.get('map-1')).toBeUndefined();
   });
 });
 

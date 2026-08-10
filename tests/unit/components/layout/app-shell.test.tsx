@@ -1,9 +1,10 @@
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
 
 import { AppShell } from '@/components/layout/app-shell';
+import { useMapDownloadStore } from '@/stores/map-download-store';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual =
@@ -35,6 +36,10 @@ const navItems = [
 ];
 
 describe('AppShell', () => {
+  beforeEach(() => {
+    useMapDownloadStore.setState({ active: null });
+  });
+
   it('renders topbar with branding text', () => {
     render(
       <AppShell navItems={navItems} activeNavPath="/dashboard">
@@ -122,6 +127,38 @@ describe('AppShell', () => {
     expect(main.parentElement).toHaveClass('pt-14');
     expect(main).toHaveClass('overflow-y-auto');
     expect(main).not.toHaveClass('overflow-hidden');
+  });
+
+  it('shows active map download status after navigating away from the map', () => {
+    useMapDownloadStore.getState().start({
+      mapId: 'map-1',
+      mapName: 'Forest Map',
+      cancel: vi.fn(),
+    });
+
+    render(
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByTestId('map-download-status')).toBeInTheDocument();
+  });
+
+  it('does not duplicate the global download status on the map route', () => {
+    useMapDownloadStore.getState().start({
+      mapId: 'map-1',
+      mapName: 'Forest Map',
+      cancel: vi.fn(),
+    });
+
+    render(
+      <AppShell navItems={navItems} activeNavPath="/map">
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    expect(screen.queryByTestId('map-download-status')).not.toBeInTheDocument();
   });
 
   it('renders secondaryContent when provided', () => {

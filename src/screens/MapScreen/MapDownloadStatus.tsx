@@ -22,8 +22,6 @@ export function MapDownloadStatus() {
     <div
       className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-md rounded-card bg-surface-card p-4 shadow-elevated sm:left-4 sm:right-auto sm:mx-0 sm:w-[360px]"
       data-testid="map-download-status"
-      role="status"
-      aria-live="polite"
     >
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
