@@ -1,5 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 
+import type { ReactNode } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,7 @@ export interface CategoryFilterSheetProps {
   onToggle: (category: string) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
+  trigger?: ReactNode;
 }
 
 function CategoryFilterSheet({
@@ -45,13 +47,16 @@ function CategoryFilterSheet({
   onToggle,
   onSelectAll,
   onDeselectAll,
+  trigger,
 }: CategoryFilterSheetProps) {
   const intl = useIntl();
   const allSelected =
-    categories.length > 0 && selected.length === categories.length;
+    categories.length > 0 &&
+    categories.every((category) => selected.includes(category));
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      {trigger ? <Dialog.Trigger asChild>{trigger}</Dialog.Trigger> : null}
       {/* Dialog.Overlay + Dialog.Content are rendered inline (without
           Dialog.Portal) so that sheet content renders in the normal React
           tree. This keeps the scrollable list within the owning component's
@@ -116,7 +121,7 @@ function CategoryFilterSheet({
             type="button"
             variant="secondary"
             size="sm"
-            disabled={allSelected}
+            disabled={allSelected || categories.length === 0}
             onClick={onSelectAll}
             className="flex-1"
           >

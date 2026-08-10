@@ -1,5 +1,5 @@
 import userEvent from '@testing-library/user-event';
-import { fireEvent, render, screen } from '@tests/mocks/test-utils';
+import { fireEvent, render, screen, waitFor } from '@tests/mocks/test-utils';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { FilterSheetProps } from '@/components/shared/FilterSheet';
@@ -126,5 +126,14 @@ describe('FilterSheet', () => {
     renderSheet({ availableCategories: [] });
     await user.click(screen.getByRole('button', { name: /Categories/ }));
     expect(screen.getByText('No categories available')).toBeInTheDocument();
+  });
+
+  it('restores focus to the categories trigger after the category sheet closes', async () => {
+    const user = userEvent.setup();
+    renderSheet();
+    const trigger = screen.getByRole('button', { name: /Categories/ });
+    await user.click(trigger);
+    await user.click(screen.getByRole('button', { name: 'Close categories' }));
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 });

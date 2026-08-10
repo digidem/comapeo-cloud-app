@@ -124,24 +124,6 @@ function FilterSheet({
 
           {/* Filter controls */}
           <div className="overflow-y-auto p-4">
-            {/* Categories entry — opens dedicated category sheet */}
-            <button
-              type="button"
-              className="mb-3 flex w-full min-h-[44px] items-center justify-between rounded-btn border border-border bg-surface px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              aria-haspopup="dialog"
-              aria-expanded={categorySheetOpen}
-              style={{ touchAction: 'manipulation' }}
-              onClick={() => setCategorySheetOpen(true)}
-            >
-              <span>{intl.formatMessage(messages.categorySheetTrigger)}</span>
-              <span className="text-sm text-text-muted">
-                {filterProps.filters.categories.length === 0
-                  ? intl.formatMessage(messages.categoryAll)
-                  : intl.formatMessage(messages.categorySelected, {
-                      count: filterProps.filters.categories.length,
-                    })}
-              </span>
-            </button>
             <SelectPortalProvider container={portalContainer}>
               <ObservationFilterBar {...filterProps} hideCategories />
             </SelectPortalProvider>
@@ -162,6 +144,23 @@ function FilterSheet({
             onToggle={filterProps.onCategoryToggle}
             onSelectAll={onCategoriesSelectAll}
             onDeselectAll={filterProps.onCategoriesClear}
+            trigger={
+              <button
+                type="button"
+                className="mb-3 flex w-full min-h-[44px] items-center justify-between rounded-btn border border-border bg-surface px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-expanded={categorySheetOpen}
+                style={{ touchAction: 'manipulation' }}
+              >
+                <span>{intl.formatMessage(messages.categorySheetTrigger)}</span>
+                <span className="text-sm text-text-muted">
+                  {filterProps.filters.categories.length === 0
+                    ? intl.formatMessage(messages.categoryAll)
+                    : intl.formatMessage(messages.categorySelected, {
+                        count: filterProps.filters.categories.length,
+                      })}
+                </span>
+              </button>
+            }
           />
         </Dialog.Content>
       </Dialog.Portal>

@@ -127,4 +127,31 @@ describe('CategoryFilterSheet', () => {
     renderSheet();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
+
+  it('Select all is enabled when a stale selection does not match the available categories', () => {
+    renderSheet({ selected: ['Wildlife'], categories: ['Mining', 'Forest'] });
+    expect(
+      screen.getByRole('button', { name: 'Select all' }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Deselect all' }),
+    ).not.toBeDisabled();
+  });
+
+  it('Select all and Deselect all are disabled when there are no categories', () => {
+    renderSheet({ categories: [] });
+    expect(screen.getByRole('button', { name: 'Select all' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Deselect all' })).toBeDisabled();
+  });
+
+  it('Select all is disabled when all available categories are selected', () => {
+    renderSheet({
+      selected: ['Mining', 'Forest'],
+      categories: ['Mining', 'Forest'],
+    });
+    expect(screen.getByRole('button', { name: 'Select all' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Deselect all' }),
+    ).not.toBeDisabled();
+  });
 });
