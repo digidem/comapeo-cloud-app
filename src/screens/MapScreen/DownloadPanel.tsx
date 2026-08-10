@@ -33,6 +33,20 @@ interface DownloadPanelProps {
 
 const MAX_RETRIES = 3;
 
+// Persisted across remounts (e.g. a refresh mid-download) so retry entry
+// points — which reuse whatever this state holds — respect a toggle the
+// user already set, instead of silently resetting to the default.
+const GLOBAL_OVERVIEW_STORAGE_KEY = 'comapeo:downloadIncludeGlobalOverview';
+
+function readStoredIncludeGlobalOverview(): boolean {
+  try {
+    const stored = localStorage.getItem(GLOBAL_OVERVIEW_STORAGE_KEY);
+    return stored === null ? true : stored === 'true';
+  } catch {
+    return true;
+  }
+}
+
 export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const intl = useIntl();
   const downloadMap = useDownloadMap();
@@ -53,7 +67,18 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const [exportReady, setExportReady] = useState(false);
   const [exportMissing, setExportMissing] = useState(false);
   const [concurrencyWarning, setConcurrencyWarning] = useState(false);
-  const [includeGlobalOverview, setIncludeGlobalOverview] = useState(true);
+  const [includeGlobalOverview, setIncludeGlobalOverviewState] = useState(
+    readStoredIncludeGlobalOverview,
+  );
+  const setIncludeGlobalOverview = useCallback((value: boolean) => {
+    setIncludeGlobalOverviewState(value);
+    try {
+      localStorage.setItem(GLOBAL_OVERVIEW_STORAGE_KEY, String(value));
+    } catch {
+      // Ignore storage errors (private browsing, quota, etc.) — the
+      // in-memory state still drives this session correctly.
+    }
+  }, []);
   const storageBypassedRef = useRef(false);
   const exportUrlRef = useRef<string | null>(null);
   const exportBlobNameRef = useRef<string>('');

@@ -303,13 +303,16 @@ function throwIfAborted(signal?: AbortSignal): void {
 }
 
 async function mergeGlobalOverviewSmp(
-  globalBytes: Uint8Array,
-  regionalBytes: Uint8Array,
+  globalChunks: Uint8Array[],
+  regionalChunks: Uint8Array[],
   signal?: AbortSignal,
 ): Promise<Blob> {
+  // Load from Blob rather than concatenating chunks into a contiguous
+  // Uint8Array first — avoids a ~1x peak-heap copy on top of what JSZip
+  // and the final generateAsync() already allocate.
   const [globalZip, regionalZip] = await Promise.all([
-    JSZip.loadAsync(globalBytes),
-    JSZip.loadAsync(regionalBytes),
+    JSZip.loadAsync(new Blob(globalChunks as BlobPart[])),
+    JSZip.loadAsync(new Blob(regionalChunks as BlobPart[])),
   ]);
   throwIfAborted(signal);
   const globalStyleFile = globalZip.file('style.json');
@@ -335,6 +338,15 @@ async function mergeGlobalOverviewSmp(
   );
   let globalIndex = 0;
 
+  // Seed sourceFolders metadata from every regional source up front, so
+  // sources with no global counterpart (e.g. self-hosted overlays not
+  // present in the global style) still get an entry a reader can resolve.
+  const sourceFolders = getOrCreateSourceFolders(regionalStyle);
+  for (const [sourceId, source] of Object.entries(regionalStyle.sources)) {
+    const folder = getSmpTileFolder(source);
+    if (folder) sourceFolders[sourceId] ??= `s/${folder}`;
+  }
+
   for (const [sourceId, globalSource] of Object.entries(globalStyle.sources)) {
     const regionalSource = regionalStyle.sources[sourceId];
     if (!regionalSource) continue;
@@ -356,26 +368,36 @@ async function mergeGlobalOverviewSmp(
       globalFolder,
       mergedFolder,
     );
-    const sourceFolders = getOrCreateSourceFolders(regionalStyle);
-    sourceFolders[sourceId] ??= `s/${regionalFolder}`;
     sourceFolders[globalSourceId] = `s/${mergedFolder}`;
     sourceMap.set(sourceId, { globalSourceId, globalFolder, mergedFolder });
 
+    const regionalPrefix = `s/${regionalFolder}/`;
     for (const path of Object.keys(regionalZip.files)) {
-      const match = new RegExp(`^s/${regionalFolder}/(\\d+)/`).exec(path);
-      if (match && Number(match[1]) <= GLOBAL_OVERVIEW_MAX_ZOOM) {
+      if (!path.startsWith(regionalPrefix)) continue;
+      const zoomSegment = path.slice(regionalPrefix.length).split('/')[0];
+      // Reject non-digit segments — notably the empty string from the
+      // folder's own directory entry ("s/0/"), which Number() coerces to
+      // 0 and would otherwise match zoom <= 3 and cascade-delete the
+      // entire subtree (including higher-zoom regional tiles) via
+      // JSZip's recursive folder removal.
+      if (!zoomSegment || !/^\d+$/.test(zoomSegment)) continue;
+      const zoom = Number(zoomSegment);
+      if (zoom <= GLOBAL_OVERVIEW_MAX_ZOOM) {
         regionalZip.remove(path);
       }
     }
   }
 
   for (const { globalFolder, mergedFolder } of sourceMap.values()) {
+    const globalPrefix = `s/${globalFolder}/`;
     for (const [path, file] of Object.entries(globalZip.files)) {
-      const match = new RegExp(`^s/${globalFolder}/(\\d+)/`).exec(path);
-      if (!match || Number(match[1]) > GLOBAL_OVERVIEW_MAX_ZOOM || file.dir) {
-        continue;
-      }
-      const target = path.replace(`s/${globalFolder}/`, `s/${mergedFolder}/`);
+      if (file.dir || !path.startsWith(globalPrefix)) continue;
+      const rest = path.slice(globalPrefix.length);
+      const zoomSegment = rest.split('/')[0];
+      if (!zoomSegment || !/^\d+$/.test(zoomSegment)) continue;
+      const zoom = Number(zoomSegment);
+      if (zoom > GLOBAL_OVERVIEW_MAX_ZOOM) continue;
+      const target = `s/${mergedFolder}/${rest}`;
       regionalZip.file(target, await file.async('uint8array'), {
         binary: true,
         compression: 'STORE',
@@ -386,6 +408,9 @@ async function mergeGlobalOverviewSmp(
 
   if (sourceMap.size > 0) {
     const metadata = regionalStyle.metadata as Record<string, unknown>;
+    // Keep the original region-of-interest bbox under a separate key so a
+    // consumer fitting the initial view doesn't zoom out to the whole world.
+    metadata['smp:regionalBounds'] = metadata['smp:bounds'];
     metadata['smp:bounds'] = GLOBAL_OVERVIEW_BBOX;
   }
 
@@ -411,7 +436,6 @@ async function mergeGlobalOverviewSmp(
         ...layer,
         id: globalLayerId,
         source: mapping.globalSourceId,
-        ...(minZoom > 0 ? { minzoom: minZoom } : {}),
         maxzoom: Math.min(maxZoom, splitZoom),
       });
     }
@@ -444,20 +468,6 @@ async function collectDownloadChunks(
     chunks.push(value);
   }
   return chunks;
-}
-
-async function collectDownloadStream(
-  stream: ReadableStream<Uint8Array>,
-): Promise<Uint8Array> {
-  const chunks = await collectDownloadChunks(stream);
-  const size = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
-  const result = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return result;
 }
 
 /**
@@ -557,16 +567,24 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
   try {
     styleUrl = getDownloadStyleUrl(map);
     if (includeGlobalOverview) {
-      const globalBytes = await collectDownloadStream(
+      const globalChunks = await collectDownloadChunks(
         startPass('global', GLOBAL_OVERVIEW_BBOX, globalMaxZoom, 0),
       );
       if (map.maxZoom <= GLOBAL_OVERVIEW_MAX_ZOOM) {
-        packageParts = [globalBytes];
+        packageParts = globalChunks;
       } else {
-        const regionalBytes = await collectDownloadStream(
+        // download() has no minzoom option — it always fetches z0..maxzoom
+        // over `bbox`, so this regional pass re-downloads z0-3 (already
+        // covered by the global pass) only to have them discarded below.
+        // The wasted requests are a known tradeoff of the underlying library.
+        const regionalChunks = await collectDownloadChunks(
           startPass('regional', map.bbox, map.maxZoom, bufferTiles),
         );
-        blob = await mergeGlobalOverviewSmp(globalBytes, regionalBytes, signal);
+        blob = await mergeGlobalOverviewSmp(
+          globalChunks,
+          regionalChunks,
+          signal,
+        );
       }
     } else {
       packageParts = await collectDownloadChunks(
@@ -628,21 +646,34 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
   }
 
   const totalSize = blob.size;
+  // The global overview pass hits ~85 world tiles (z0-3) from the same
+  // source. Sources with limited coverage (country WMTS, regional imagery,
+  // self-hosted) will 404 on most of them — that's expected and shouldn't
+  // block the export of an otherwise-complete regional package. Only treat
+  // skips as fatal when they come from the regional pass, or when the
+  // global pass *is* the entire package (map.maxZoom <= overview max zoom,
+  // so there was no regional pass to fall back on).
+  const isGlobalOnlyPackage =
+    includeGlobalOverview && map.maxZoom <= GLOBAL_OVERVIEW_MAX_ZOOM;
+  const criticalSkipped = isGlobalOnlyPackage
+    ? skippedTiles
+    : passProgress.regional.skipped;
   onProgress?.({
     downloaded:
       passProgress.global.downloaded + passProgress.regional.downloaded,
     total: passProgress.global.total + passProgress.regional.total,
     bytes: totalSize,
     skipped: skippedTiles,
+    warning: criticalSkipped === 0 && skippedTiles > 0,
   });
 
   try {
-    if (skippedTiles > 0) {
+    if (criticalSkipped > 0) {
       await db.maps.update(map.id, {
         smpBlob: blob,
         smpSize: totalSize,
         status: 'error',
-        errorMessage: `${skippedTiles} tiles could not be downloaded. The package is incomplete.`,
+        errorMessage: `${criticalSkipped} tiles could not be downloaded. The package is incomplete.`,
         updatedAt: new Date().toISOString(),
       });
     } else {
