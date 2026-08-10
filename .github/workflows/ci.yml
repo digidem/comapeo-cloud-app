@@ -61,7 +61,8 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        # Supply-chain hardening: keep lifecycle scripts off; jobs needing setup (e.g. Playwright) run it explicitly.
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Lint
         run: npm run lint
@@ -86,7 +87,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Type check
         run: npm run lint:types
@@ -111,7 +112,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Unit tests with coverage
         run: npm run test:coverage
@@ -149,7 +150,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -214,7 +215,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Install Playwright browsers (chromium-only for test-runner)
         run: npx playwright install --with-deps chromium
@@ -303,7 +304,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -368,7 +369,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Download build artifact
         uses: actions/download-artifact@v8
@@ -429,7 +430,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -478,7 +479,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Security audit
         # GHSA-gv7w-rqvm-qjhr: esbuild Deno-only RCE via NPM_CONFIG_REGISTRY.
@@ -558,7 +559,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Download build artifact
         uses: actions/download-artifact@v8
@@ -702,7 +703,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -721,9 +722,6 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      # Job-level so step-level `if:` can evaluate `env.SENTRY_AUTH_TOKEN`.
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     outputs:
       deployment-url: ${{ steps.deploy.outputs.deployment-url }}
     steps:
@@ -740,7 +738,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Download build artifact
         uses: actions/download-artifact@v8
@@ -749,9 +747,15 @@ jobs:
           path: dist/
 
       - name: Upload source maps to Sentry
-        if: vars.VITE_SENTRY_DSN != '' && env.SENTRY_AUTH_TOKEN != ''
-        run: npx tsx scripts/upload-sourcemaps.ts --production
+        if: vars.VITE_SENTRY_DSN != ''
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "Skipping Sentry upload — SENTRY_AUTH_TOKEN is not configured."
+            exit 0
+          fi
+          npx tsx scripts/upload-sourcemaps.ts --production
         env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
@@ -786,9 +790,6 @@ jobs:
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      # Job-level so step-level `if:` can evaluate `env.SENTRY_AUTH_TOKEN`.
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     outputs:
       deployment-url: ${{ steps.deploy.outputs.deployment-url }}
     steps:
@@ -805,7 +806,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Download build artifact
         uses: actions/download-artifact@v8
@@ -814,9 +815,15 @@ jobs:
           path: dist/
 
       - name: Upload source maps to Sentry (staging)
-        if: vars.VITE_SENTRY_DSN != '' && env.SENTRY_AUTH_TOKEN != ''
-        run: npx tsx scripts/upload-sourcemaps.ts
+        if: vars.VITE_SENTRY_DSN != ''
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "Skipping Sentry upload — SENTRY_AUTH_TOKEN is not configured."
+            exit 0
+          fi
+          npx tsx scripts/upload-sourcemaps.ts
         env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
@@ -921,7 +928,7 @@ jobs:
 
       # Lighthouse CI needs @lhci/cli which is in devDependencies
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Lighthouse CI against production
         uses: treosh/lighthouse-ci-action@v12
@@ -951,7 +958,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Lighthouse CI against staging
         uses: treosh/lighthouse-ci-action@v12
