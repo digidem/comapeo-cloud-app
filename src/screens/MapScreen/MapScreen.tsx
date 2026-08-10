@@ -18,7 +18,12 @@ import { useProjects } from '@/hooks/useProjects';
 import { getProjectPoints } from '@/lib/data-layer';
 import type { SavedMap } from '@/lib/db';
 import { DEFAULT_BASEMAP_ID, findBasemap } from '@/lib/map/basemaps';
-import { clampBboxLatitude, crossesAntimeridian } from '@/lib/map/bbox-utils';
+import {
+  clampBboxLatitude,
+  crossesAntimeridian,
+  finalizeBbox,
+  spansAntimeridian,
+} from '@/lib/map/bbox-utils';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { uuid } from '@/lib/uuid';
 import { useProjectStore } from '@/stores/project-store';
@@ -144,8 +149,16 @@ export function MapScreen() {
   const [projectBbox, setProjectBbox] = useState<
     [number, number, number, number] | null
   >(null);
+  const [autoFitBbox, setAutoFitBbox] = useState<
+    [number, number, number, number] | null
+  >(null);
   // Track if user has explicitly modified bbox (drawing, inputs, current view, project area button)
   const hasUserModifiedBboxRef = useRef(false);
+  // Ref to track drawMode without adding it as an effect dependency
+  const drawModeRef = useRef(drawMode);
+  useEffect(() => {
+    drawModeRef.current = drawMode;
+  }, [drawMode]);
 
   useEffect(() => {
     return () => {
@@ -161,7 +174,8 @@ export function MapScreen() {
     hasUserModifiedBboxRef.current = false;
     let cancelled = false;
     async function loadProjectBbox() {
-      // Reset project bbox when project changes
+      // Reset project bbox when project changes; defer autoFitBbox reset
+      // until we know whether there are geolocated points
       setProjectBbox(null);
       try {
         const points = await getProjectPoints(projectId!);
@@ -182,47 +196,68 @@ export function MapScreen() {
         if (coords.length > 0) {
           const lngs = coords.map((c) => c[0]);
           const lats = coords.map((c) => c[1]);
-          const rawBbox: [number, number, number, number] = [
-            Math.min(...lngs),
-            Math.min(...lats),
-            Math.max(...lngs),
-            Math.max(...lats),
-          ];
-          // Ensure minimum span to avoid zero-area bbox for single-point projects
-          const MIN_SPAN = 0.01;
-          const finalBbox: [number, number, number, number] = [
-            rawBbox[0],
-            rawBbox[1],
-            rawBbox[2] - rawBbox[0] < MIN_SPAN
-              ? rawBbox[0] + MIN_SPAN
-              : rawBbox[2],
-            rawBbox[3] - rawBbox[1] < MIN_SPAN
-              ? rawBbox[1] + MIN_SPAN
-              : rawBbox[3],
-          ];
-          // Validate latitude bounds (antimeridian crossing can't happen with valid lon)
-          const clampedBbox = clampBboxLatitude(finalBbox);
-          if (
-            clampedBbox[1] >= clampedBbox[3] ||
-            clampedBbox[0] >= clampedBbox[2]
-          ) {
-            return; // Skip zero-area bbox
+
+          // Use finalizeBbox to handle both antimeridian and normal cases consistently
+          const finalizedBbox = finalizeBbox(lngs, lats);
+
+          if (finalizedBbox === null) {
+            // Invalid bbox - fall back to DEFAULT_BBOX if user hasn't edited
+            if (
+              !hasUserModifiedBboxRef.current &&
+              drawModeRef.current === null
+            ) {
+              setBbox(DEFAULT_BBOX);
+              setAutoFitBbox(DEFAULT_BBOX);
+            }
+            return;
           }
-          setProjectBbox(clampedBbox);
-          // Only set if user hasn't explicitly modified bbox (user edits take precedence)
-          if (drawMode === null && !hasUserModifiedBboxRef.current) {
-            setBbox(clampedBbox);
+
+          // Antimeridian-spanning projects: the camera can render lng > 180,
+          // but the editable/savable bbox cannot (schema requires ±180).
+          // Keep the shifted bbox camera-only; fall back to DEFAULT_BBOX for
+          // the savable bbox and baseline so BoundsEditor shows valid values.
+          if (spansAntimeridian(lngs)) {
+            setProjectBbox(null);
+            if (
+              !hasUserModifiedBboxRef.current &&
+              drawModeRef.current === null
+            ) {
+              setBbox(DEFAULT_BBOX);
+              setAutoFitBbox(finalizedBbox);
+            }
+            return;
           }
+
+          setProjectBbox(finalizedBbox);
+          // Only apply and fit if user hasn't edited and not in draw mode
+          if (!hasUserModifiedBboxRef.current && drawModeRef.current === null) {
+            setBbox(finalizedBbox);
+            setAutoFitBbox(finalizedBbox);
+          }
+          // If user edited or in draw mode, don't auto-fit - leave camera alone
+        } else {
+          // No geolocated observations - reset to default
+          if (!hasUserModifiedBboxRef.current && drawModeRef.current === null) {
+            setBbox(DEFAULT_BBOX);
+            setAutoFitBbox(DEFAULT_BBOX);
+          }
+          // If user edited or in draw mode, don't auto-fit - leave camera alone
         }
       } catch {
         // Ignore errors, keep DEFAULT_BBOX
+        if (cancelled) return;
+        if (!hasUserModifiedBboxRef.current && drawModeRef.current === null) {
+          setBbox(DEFAULT_BBOX);
+          setAutoFitBbox(DEFAULT_BBOX);
+        }
+        // If user edited or in draw mode, don't auto-fit - leave camera alone
       }
     }
     loadProjectBbox();
     return () => {
       cancelled = true;
     };
-  }, [selectedProjectId, drawMode]);
+  }, [selectedProjectId]);
 
   function handleDrawModeChange(
     mode: 'draw_rectangle' | 'simple_select' | null,
@@ -437,15 +472,7 @@ export function MapScreen() {
             drawMode={isDesktop ? drawMode : null}
             onDrawCreate={handleDrawCreate}
             onDrawModeChange={handleDrawModeChange}
-            initialViewState={
-              projectBbox
-                ? {
-                    longitude: (projectBbox[0] + projectBbox[2]) / 2,
-                    latitude: (projectBbox[1] + projectBbox[3]) / 2,
-                    zoom: 10,
-                  }
-                : undefined
-            }
+            fitBounds={autoFitBbox}
           />
 
           {drawMode !== 'draw_rectangle' && (

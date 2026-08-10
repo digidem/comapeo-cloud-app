@@ -29,12 +29,14 @@ vi.mock('@tanstack/react-router', async () => {
 
 const mapProps: Array<Record<string, unknown>> = [];
 const attributionControlProps: Array<Record<string, unknown>> = [];
+const fitBoundsMock = vi.fn();
 const unprojectMock = vi.fn((point: [number, number]) => ({
   lng: point[0],
   lat: point[1],
 }));
 
 interface MockMapHandle {
+  fitBounds: typeof fitBoundsMock;
   getMap: () => {
     getCanvas: () => { clientWidth: number; clientHeight: number };
     getBounds: () => {
@@ -55,7 +57,12 @@ vi.mock('react-map-gl/maplibre', () => ({
   default: React.forwardRef<MockMapHandle, Record<string, unknown>>(
     function MockMap(props, ref) {
       mapProps.push(props);
+      React.useEffect(() => {
+        const onLoad = props.onLoad as (() => void) | undefined;
+        onLoad?.();
+      }, [props.onLoad]);
       React.useImperativeHandle(ref, () => ({
+        fitBounds: fitBoundsMock,
         getMap: () => ({
           getCanvas: () => ({ clientWidth: 800, clientHeight: 600 }),
           getBounds: () => ({
@@ -114,6 +121,7 @@ describe('MapScreen - default project area (issue #153)', () => {
     localStorage.clear();
     mapProps.length = 0;
     attributionControlProps.length = 0;
+    fitBoundsMock.mockReset();
     unprojectMock.mockReset();
     unprojectMock.mockImplementation((point: [number, number]) => ({
       lng: point[0],
@@ -183,6 +191,189 @@ describe('MapScreen - default project area (issue #153)', () => {
     });
   });
 
+  it('fits the map to the project bbox with padding after project points load', async () => {
+    vi.mocked(getProjectPoints).mockResolvedValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-1', createdAt: '2026-01-01T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-70, -10] },
+        },
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-2', createdAt: '2026-01-02T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-50, 5] },
+        },
+      ],
+    });
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [-70, -10],
+          [-50, 5],
+        ],
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
+      );
+    });
+  });
+
+  it('does not overwrite a manual bbox edit when project points resolve late', async () => {
+    let resolvePoints!: (
+      value: Awaited<ReturnType<typeof getProjectPoints>>,
+    ) => void;
+    const pendingPoints = new Promise<
+      Awaited<ReturnType<typeof getProjectPoints>>
+    >((resolve) => {
+      resolvePoints = resolve;
+    });
+    vi.mocked(getProjectPoints).mockReturnValue(pendingPoints);
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+
+    const user = userEvent.setup();
+    const westInput = screen.getByLabelText('West');
+    await user.clear(westInput);
+    await user.type(westInput, '-72');
+
+    await waitFor(() => {
+      const saveButtons = screen.getAllByRole('button', {
+        name: 'Save Map',
+        hidden: true,
+      });
+      expect(saveButtons[saveButtons.length - 1]).toBeEnabled();
+    });
+
+    resolvePoints({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-1', createdAt: '2026-01-01T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-40, -5] },
+        },
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-2', createdAt: '2026-01-02T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-30, 2] },
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('West')).toHaveValue(-72);
+    });
+    // The manual edit should not trigger a fitBounds call with the project bbox
+    // Since we made an edit before the points resolved, hasUserModifiedBboxRef is true
+    // So no fitBounds should be called at all (autoFitBbox starts as null, so no initial fit either)
+    expect(fitBoundsMock).toHaveBeenCalledTimes(0);
+  });
+
+  it('treats the computed project bbox as the unchanged config baseline', async () => {
+    vi.mocked(getProjectPoints).mockResolvedValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-1', createdAt: '2026-01-01T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-70, -10] },
+        },
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-2', createdAt: '2026-01-02T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-50, 5] },
+        },
+      ],
+    });
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [-70, -10],
+          [-50, 5],
+        ],
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
+      );
+    });
+
+    const saveButtons = screen.getAllByRole('button', {
+      name: 'Save Map',
+      hidden: true,
+    });
+    expect(saveButtons[saveButtons.length - 1]).toBeDisabled();
+  });
+
+  it('pads a single-point project to the minimum bbox span before fitting', async () => {
+    vi.mocked(getProjectPoints).mockResolvedValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-1', createdAt: '2026-01-01T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [10, 20] },
+        },
+      ],
+    });
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [10, 20],
+          [10.01, 20.01],
+        ],
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
+      );
+    });
+  });
+
+  it('falls back to DEFAULT_BBOX when loading project points throws', async () => {
+    vi.mocked(getProjectPoints).mockRejectedValue(new Error('db read failed'));
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+
+    // Wait for the error to be caught and fallback to apply
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [-75, -12],
+          [-45, 8],
+        ],
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
+      );
+    });
+  });
+
   it('falls back to DEFAULT_BBOX when project has no geolocated observations', async () => {
     // Mock getProjectPoints to return empty FeatureCollection (no points with valid coords)
     vi.mocked(getProjectPoints).mockResolvedValue({
@@ -194,13 +385,31 @@ describe('MapScreen - default project area (issue #153)', () => {
 
     await screen.findByTestId('mock-authoring-map');
 
-    // Open settings to see BoundsEditor
+    // Wait for the fallback to apply (should be 1 call with DEFAULT_BBOX)
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [-75, -12],
+          [-45, 8],
+        ],
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
+      );
+    });
+
+    // Also verify the BoundsEditor shows the fallback values
     const user = userEvent.setup();
     await user.click(
       await screen.findByRole('button', { name: 'Map settings' }),
     );
 
-    // Should fall back to DEFAULT_BBOX = [-75, -12, -45, 8]
     await waitFor(() => {
       const westInput = screen.getByLabelText('West');
       expect(westInput).toHaveValue(-75);
@@ -236,5 +445,61 @@ describe('MapScreen - default project area (issue #153)', () => {
     });
     const settingsSheetSave = allSaves[allSaves.length - 1];
     expect(settingsSheetSave).toBeDisabled();
+  });
+
+  it('handles antimeridian-spanning projects by shifting and fitting correctly', async () => {
+    // Points at 179 and -179 span the antimeridian
+    vi.mocked(getProjectPoints).mockResolvedValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-1', createdAt: '2026-01-01T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [179, 0] },
+        },
+        {
+          type: 'Feature',
+          properties: { docId: 'obs-2', createdAt: '2026-01-02T00:00:00.000Z' },
+          geometry: { type: 'Point', coordinates: [-179, 1] },
+        },
+      ],
+    });
+
+    render(<MapScreen />);
+    await screen.findByTestId('mock-authoring-map');
+
+    // Should shift longitudes: -179 -> 181, 179 stays 179
+    // bbox: west=179, east=181, south=0, north=1
+    // The span is 1 degree (> MIN_SPAN 0.01), so MIN_SPAN doesn't apply
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [179, 0],
+          [181, 1],
+        ],
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
+      );
+    });
+
+    // BoundsEditor should show DEFAULT_BBOX (since savable bbox must be ±180)
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole('button', { name: 'Map settings' }),
+    );
+
+    await waitFor(() => {
+      const westInput = screen.getByLabelText('West');
+      expect(westInput).toHaveValue(-75);
+      const southInput = screen.getByLabelText('South');
+      expect(southInput).toHaveValue(-12);
+      const eastInput = screen.getByLabelText('East');
+      expect(eastInput).toHaveValue(-45);
+      const northInput = screen.getByLabelText('North');
+      expect(northInput).toHaveValue(8);
+    });
   });
 });

@@ -27,8 +27,8 @@ interface MapAuthoringCanvasProps {
   /** Called when a rectangle is drawn via map drag */
   onDrawCreate?: (bbox: [number, number, number, number]) => void;
   onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
-  /** Optional initial view state to override the default */
-  initialViewState?: { longitude: number; latitude: number; zoom: number };
+  /** Bounds to fit after the map is ready. */
+  fitBounds?: [number, number, number, number] | null;
 }
 
 const INITIAL_VIEW_STATE = {
@@ -119,7 +119,7 @@ export function MapAuthoringCanvas({
   drawMode,
   onDrawCreate,
   onDrawModeChange,
-  initialViewState,
+  fitBounds,
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();
   const mapStyle = useMemo(() => basemapToMapStyle(basemap), [basemap]);
@@ -145,6 +145,13 @@ export function MapAuthoringCanvas({
   const startPointRef = useRef<{ x: number; y: number } | null>(null);
   const endPointRef = useRef<{ x: number; y: number } | null>(null);
   const MIN_DRAG_PX = 12;
+  // Track the last fitted bbox to dedupe consecutive fitBounds calls
+  // with identical bounds within the same mount. This prevents unnecessary
+  // camera jumps when fitBounds prop changes to a new array reference
+  // but represents the same geographic bounds.
+  const lastFittedBboxRef = useRef<[number, number, number, number] | null>(
+    null,
+  );
 
   // Keep latest callback refs to avoid re‑binding the effect
   const onDrawCreateRef = useRef(onDrawCreate);
@@ -347,6 +354,36 @@ export function MapAuthoringCanvas({
     el?.classList.remove('maplibregl-compact-show');
   }, []);
 
+  useEffect(() => {
+    if (!mapReady || !fitBounds || !mapRef.current) return;
+
+    // Skip if we've already fitted to the same bbox (prevents refit on remount)
+    if (
+      lastFittedBboxRef.current &&
+      lastFittedBboxRef.current[0] === fitBounds[0] &&
+      lastFittedBboxRef.current[1] === fitBounds[1] &&
+      lastFittedBboxRef.current[2] === fitBounds[2] &&
+      lastFittedBboxRef.current[3] === fitBounds[3]
+    ) {
+      return;
+    }
+
+    mapRef.current.fitBounds(
+      [
+        [fitBounds[0], fitBounds[1]],
+        [fitBounds[2], fitBounds[3]],
+      ],
+      {
+        padding: { top: 64, bottom: 32, left: 32, right: 32 },
+        duration: 0,
+        maxZoom: 14,
+      },
+    );
+
+    // Remember the bbox we just fitted to
+    lastFittedBboxRef.current = [...fitBounds];
+  }, [fitBounds, mapReady, mapRef]);
+
   return (
     <section
       ref={sectionRef}
@@ -357,7 +394,7 @@ export function MapAuthoringCanvas({
     >
       <Map
         ref={mapRef}
-        initialViewState={initialViewState ?? INITIAL_VIEW_STATE}
+        initialViewState={INITIAL_VIEW_STATE}
         mapStyle={mapStyle}
         style={MAP_STYLE}
         attributionControl={false}
