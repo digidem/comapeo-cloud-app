@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Observation } from '@/lib/db';
 import {
+  type CategoryResolver,
   DEFAULT_FILTERS,
   type ObservationFilters,
   type ObservationSort,
@@ -26,6 +27,7 @@ export interface UseObservationFiltersResult {
 export function useObservationFilters(
   observations: Observation[],
   projectId?: string,
+  resolveCategory?: CategoryResolver,
 ): UseObservationFiltersResult {
   const [filters, setFilters] = useState<ObservationFilters>(DEFAULT_FILTERS);
   const prevProjectIdRef = useRef(projectId);
@@ -76,14 +78,14 @@ export function useObservationFilters(
 
   // availableCategories from the FULL (unfiltered) list
   const availableCategories = useMemo(
-    () => extractCategories(observations),
-    [observations],
+    () => extractCategories(observations, resolveCategory),
+    [observations, resolveCategory],
   );
 
   // filteredObservations: apply filters + sort
   const filteredObservations = useMemo(
-    () => filterObservations(observations, filters),
-    [observations, filters],
+    () => filterObservations(observations, filters, resolveCategory),
+    [observations, filters, resolveCategory],
   );
 
   // isFiltering: any actual filter deviates from DEFAULT_FILTERS (sort is excluded

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Observation } from '@/lib/db';
 import {
+  type CategoryResolver,
   DEFAULT_FILTERS,
   extractCategories,
   filterObservations,
@@ -417,6 +418,51 @@ describe('filterObservations — combined filters', () => {
     // obs-3 matches date and category but not search ("Reforestation effort" does not contain "deforestation")
     expect(result).toHaveLength(1);
     expect(result[0]!.localId).toBe('1');
+  });
+});
+
+// --- filterObservations: category with resolver ---
+
+describe('filterObservations — category with resolver', () => {
+  // Observations whose tags lack a `category` key (as seen on real synced
+  // observations that carry a presetRef instead). The resolver maps them to
+  // preset-based category names, mirroring DataScreen's behavior.
+  const observations = [
+    makeObs({ localId: '1', tags: { notes: 'preset-based' } }),
+    makeObs({ localId: '2', tags: { notes: 'preset-based 2' } }),
+    makeObs({ localId: '3' }), // no tags, resolver returns undefined
+  ];
+
+  const resolver: CategoryResolver = (obs) => {
+    if (obs.localId === '1') return 'Deforestation';
+    if (obs.localId === '2') return 'Wildlife';
+    return undefined;
+  };
+
+  it('extractCategories returns resolved names when tags.category is absent', () => {
+    expect(extractCategories(observations, resolver)).toEqual([
+      'Deforestation',
+      'Wildlife',
+    ]);
+  });
+
+  it('filterObservations matches by resolved name even without tags.category', () => {
+    const result = filterObservations(
+      observations,
+      { ...DEFAULT_FILTERS, categories: ['Deforestation'] },
+      resolver,
+    );
+    expect(result.map((o) => o.localId)).toEqual(['1']);
+  });
+
+  it('filterObservations excludes observations that resolve to undefined when category filter is active', () => {
+    const result = filterObservations(
+      observations,
+      { ...DEFAULT_FILTERS, categories: ['Wildlife'] },
+      resolver,
+    );
+    // obs '3' resolves to undefined -> excluded
+    expect(result.map((o) => o.localId)).toEqual(['2']);
   });
 });
 
