@@ -61,6 +61,7 @@ jobs:
           node-version-file: .node-version
 
       - name: Install dependencies
+        # Supply-chain hardening: keep lifecycle scripts off; jobs needing setup (e.g. Playwright) run it explicitly.
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Lint
