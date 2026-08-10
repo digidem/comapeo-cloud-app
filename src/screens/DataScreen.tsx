@@ -8,7 +8,10 @@ import { ExportObservationsButton } from '@/components/shared/ExportObservations
 import { FilterSheet } from '@/components/shared/FilterSheet';
 import { MapScreenLayout } from '@/components/shared/MapScreenLayout';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
-import { ObservationListItem } from '@/components/shared/ObservationListItem';
+import {
+  ObservationListItem,
+  resolveObservationListItemName,
+} from '@/components/shared/ObservationListItem';
 import { ObservationsMap } from '@/components/shared/ObservationsMap';
 import { PaginationControls } from '@/components/shared/PaginationControls';
 import { Button } from '@/components/ui/button';
@@ -84,16 +87,6 @@ const messages = defineMessages({
     defaultMessage: 'Filters',
   },
 });
-
-/** Safely extract category label from observation tags */
-function getCategoryLabel(obs: {
-  tags?: Record<string, unknown>;
-}): string | null {
-  const raw = obs.tags?.category;
-  if (raw === undefined || raw === null) return null;
-  const str = String(raw);
-  return str === '' ? null : str;
-}
 
 export function DataScreen() {
   const intl = useIntl();
@@ -231,11 +224,11 @@ export function DataScreen() {
                 <ObservationListItem
                   observationLocalId={obs.localId}
                   category={categoryByObservationId.get(obs.localId)}
-                  displayName={
-                    displayNames.get(obs.localId) ??
-                    getCategoryLabel(obs) ??
-                    intl.formatMessage(messages.observationFallback)
-                  }
+                  displayName={resolveObservationListItemName({
+                    resolvedDisplayName: displayNames.get(obs.localId),
+                    categoryTag: obs.tags?.category,
+                    fallback: intl.formatMessage(messages.observationFallback),
+                  })}
                   createdAt={obs.createdAt}
                   tags={obs.tags}
                   attachments={attachmentsByObservationId.get(obs.localId)}

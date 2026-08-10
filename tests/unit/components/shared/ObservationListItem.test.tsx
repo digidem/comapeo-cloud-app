@@ -1,7 +1,10 @@
 import { render, screen } from '@tests/mocks/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import { ObservationListItem } from '@/components/shared/ObservationListItem';
+import {
+  ObservationListItem,
+  resolveObservationListItemName,
+} from '@/components/shared/ObservationListItem';
 
 const category = {
   id: 'forest',
@@ -12,6 +15,37 @@ const category = {
 };
 
 describe('ObservationListItem', () => {
+  it('uses the same resolved-name fallback semantics across list surfaces', () => {
+    expect(
+      resolveObservationListItemName({
+        resolvedDisplayName: undefined,
+        categoryTag: undefined,
+        fallback: 'Observation',
+      }),
+    ).toBe('Observation');
+    expect(
+      resolveObservationListItemName({
+        resolvedDisplayName: undefined,
+        categoryTag: '',
+        fallback: 'Observation',
+      }),
+    ).toBe('Observation');
+    expect(
+      resolveObservationListItemName({
+        resolvedDisplayName: undefined,
+        categoryTag: 'forest',
+        fallback: 'Observation',
+      }),
+    ).toBe('forest');
+    expect(
+      resolveObservationListItemName({
+        resolvedDisplayName: 'Forest observation',
+        categoryTag: 'forest',
+        fallback: 'Observation',
+      }),
+    ).toBe('Forest observation');
+  });
+
   it('renders the canonical observation category, name, date, and media layout', () => {
     render(
       <ObservationListItem

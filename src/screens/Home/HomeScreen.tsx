@@ -13,6 +13,7 @@ import { type IntlShape, defineMessages, useIntl } from 'react-intl';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { resolveObservationListItemName } from '@/components/shared/ObservationListItem';
 import { Button } from '@/components/ui/button';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
@@ -233,6 +234,10 @@ const messages = defineMessages({
   monitoredArea: {
     id: 'home.monitoredArea.title',
     defaultMessage: 'Monitored Area',
+  },
+  observationFallback: {
+    id: 'data.observationFallback',
+    defaultMessage: 'Observation',
   },
   activityObservation: {
     id: 'home.activity.observation',
@@ -482,10 +487,11 @@ function HomeScreen() {
       items.push({
         id: obs.localId,
         type: 'record',
-        displayName:
-          displayNamesByObservationId.get(obs.localId) ??
-          obs.tags?.category ??
-          intl.formatMessage(messages.activityObservationWithCoords),
+        displayName: resolveObservationListItemName({
+          resolvedDisplayName: displayNamesByObservationId.get(obs.localId),
+          categoryTag: obs.tags?.category,
+          fallback: intl.formatMessage(messages.observationFallback),
+        }),
         createdAt: obs.createdAt,
         timestamp: formatRelativeTime(ageMs, intl),
         category: categoryByObservationId.get(obs.localId),
