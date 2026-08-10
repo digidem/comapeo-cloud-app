@@ -1,10 +1,8 @@
 import { render, screen } from '@tests/mocks/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import {
-  ObservationListItem,
-  resolveObservationListItemName,
-} from '@/components/shared/ObservationListItem';
+import { ObservationListItem } from '@/components/shared/ObservationListItem';
+import { resolveObservationListItemName } from '@/lib/observation-list-item';
 
 const category = {
   id: 'forest',

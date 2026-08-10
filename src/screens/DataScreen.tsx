@@ -8,10 +8,7 @@ import { ExportObservationsButton } from '@/components/shared/ExportObservations
 import { FilterSheet } from '@/components/shared/FilterSheet';
 import { MapScreenLayout } from '@/components/shared/MapScreenLayout';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
-import {
-  ObservationListItem,
-  resolveObservationListItemName,
-} from '@/components/shared/ObservationListItem';
+import { ObservationListItem } from '@/components/shared/ObservationListItem';
 import { ObservationsMap } from '@/components/shared/ObservationsMap';
 import { PaginationControls } from '@/components/shared/PaginationControls';
 import { Button } from '@/components/ui/button';
@@ -26,6 +23,7 @@ import { usePaginatedItems } from '@/hooks/usePaginatedItems';
 import { useProjects } from '@/hooks/useProjects';
 import { useResponsivePageSize } from '@/hooks/useResponsivePageSize';
 import type { Field } from '@/lib/data-layer';
+import { resolveObservationListItemName } from '@/lib/observation-list-item';
 import { useProjectStore } from '@/stores/project-store';
 import { useViewModeStore } from '@/stores/view-mode-store';
 

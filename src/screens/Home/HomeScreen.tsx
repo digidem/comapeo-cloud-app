@@ -13,7 +13,6 @@ import { type IntlShape, defineMessages, useIntl } from 'react-intl';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
-import { resolveObservationListItemName } from '@/components/shared/ObservationListItem';
 import { Button } from '@/components/ui/button';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
@@ -30,6 +29,7 @@ import type { AreaUnit } from '@/lib/area-format';
 import { convertArea } from '@/lib/area-format';
 import { syncRemoteArchive } from '@/lib/data-layer';
 import { exportFeatureCollection } from '@/lib/geojson-export';
+import { resolveObservationListItemName } from '@/lib/observation-list-item';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
