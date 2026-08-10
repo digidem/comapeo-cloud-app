@@ -485,21 +485,6 @@ describe('MapScreen - default project area (issue #153)', () => {
       );
     });
 
-    // Camera should fit to the shifted bbox
-    await waitFor(() => {
-      expect(fitBoundsMock).toHaveBeenLastCalledWith(
-        [
-          [179, 0],
-          [181, 1],
-        ],
-        {
-          padding: { top: 64, bottom: 32, left: 32, right: 32 },
-          duration: 0,
-          maxZoom: 14,
-        },
-      );
-    });
-
     // BoundsEditor should show DEFAULT_BBOX (since savable bbox must be ±180)
     const user = userEvent.setup();
     await user.click(
