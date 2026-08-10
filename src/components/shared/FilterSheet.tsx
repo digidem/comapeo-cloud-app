@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { CategoryFilterSheet } from '@/components/shared/CategoryFilterSheet';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
 import type { ObservationFilterBarProps } from '@/components/shared/ObservationFilterBar';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,10 @@ const messages = defineMessages({
     id: 'data.filterSheetClose',
     defaultMessage: 'Close filters',
   },
+  categorySheetTrigger: {
+    id: 'data.filters.categorySheetTrigger',
+    defaultMessage: 'Categories',
+  },
 });
 
 interface FilterSheetProps extends ObservationFilterBarProps {
@@ -33,8 +38,10 @@ function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(
     null,
   );
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false);
 
   function handleApply() {
+    setCategorySheetOpen(false);
     onOpenChange(false);
   }
 
@@ -103,8 +110,33 @@ function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
 
           {/* Filter controls */}
           <div className="overflow-y-auto p-4">
+            {/* Categories entry — opens dedicated category sheet */}
+            <button
+              type="button"
+              className="mb-3 flex w-full min-h-[44px] items-center justify-between rounded-btn border border-border bg-surface px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-haspopup="dialog"
+              aria-expanded={categorySheetOpen}
+              style={{ touchAction: 'manipulation' }}
+              onClick={() => setCategorySheetOpen(true)}
+            >
+              <span>{intl.formatMessage(messages.categorySheetTrigger)}</span>
+              <span className="text-sm text-text-muted">
+                {filterProps.filters.categories.length === 0
+                  ? intl.formatMessage({
+                      id: 'data.filters.categoryAll',
+                      defaultMessage: 'All categories',
+                    })
+                  : intl.formatMessage(
+                      {
+                        id: 'data.filters.categoryHiddenSelected',
+                        defaultMessage: '{count} selected',
+                      },
+                      { count: filterProps.filters.categories.length },
+                    )}
+              </span>
+            </button>
             <SelectPortalProvider container={portalContainer}>
-              <ObservationFilterBar {...filterProps} />
+              <ObservationFilterBar {...filterProps} hideCategories />
             </SelectPortalProvider>
           </div>
 
@@ -114,6 +146,16 @@ function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
               {intl.formatMessage(messages.apply)}
             </Button>
           </div>
+
+          <CategoryFilterSheet
+            open={categorySheetOpen}
+            onOpenChange={setCategorySheetOpen}
+            categories={filterProps.availableCategories}
+            selected={filterProps.filters.categories}
+            onToggle={filterProps.onCategoryToggle}
+            onSelectAll={filterProps.onCategoriesSelectAll ?? (() => {})}
+            onDeselectAll={filterProps.onCategoriesClear}
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

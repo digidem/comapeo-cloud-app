@@ -344,11 +344,29 @@
   "data.filters.categoryAll": {
     "defaultMessage": "All categories"
   },
+  "data.filters.categoryDeselectAll": {
+    "defaultMessage": "Deselect all"
+  },
   "data.filters.categoryGroupLabel": {
     "defaultMessage": "Filter by category"
   },
   "data.filters.categoryHiddenSelected": {
     "defaultMessage": "{count} selected"
+  },
+  "data.filters.categorySelectAll": {
+    "defaultMessage": "Select all"
+  },
+  "data.filters.categorySheetClose": {
+    "defaultMessage": "Close categories"
+  },
+  "data.filters.categorySheetEmpty": {
+    "defaultMessage": "No categories available"
+  },
+  "data.filters.categorySheetTitle": {
+    "defaultMessage": "Categories"
+  },
+  "data.filters.categorySheetTrigger": {
+    "defaultMessage": "Categories"
   },
   "data.filters.categoryShowLess": {
     "defaultMessage": "Show less"

@@ -63,9 +63,12 @@ export interface ObservationFilterBarProps {
   onEndDateChange: (v: string | null) => void;
   onCategoryToggle: (v: string) => void;
   onCategoriesClear: () => void;
+  onCategoriesSelectAll?: () => void;
   onSortChange: (v: ObservationSort) => void;
   /** Whether to show ordering controls (default: true). */
   showSort?: boolean;
+  /** Whether to hide the inline category multi-select chip row (default: false). */
+  hideCategories?: boolean;
   onClear: () => void;
 }
 
@@ -82,6 +85,7 @@ export function ObservationFilterBar({
   onCategoriesClear,
   onSortChange,
   showSort = true,
+  hideCategories = false,
   onClear,
 }: ObservationFilterBarProps) {
   const intl = useIntl();
@@ -129,14 +133,16 @@ export function ObservationFilterBar({
         />
       </div>
 
-      <div className="flex-1 min-w-[200px]">
-        <CategoryMultiSelect
-          categories={availableCategories}
-          selected={filters.categories}
-          onToggle={onCategoryToggle}
-          onClear={onCategoriesClear}
-        />
-      </div>
+      {!hideCategories && (
+        <div className="flex-1 min-w-[200px]">
+          <CategoryMultiSelect
+            categories={availableCategories}
+            selected={filters.categories}
+            onToggle={onCategoryToggle}
+            onClear={onCategoriesClear}
+          />
+        </div>
+      )}
 
       {showSort && (
         <div className="min-w-[160px]">
