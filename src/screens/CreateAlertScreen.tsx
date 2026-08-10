@@ -1,37 +1,52 @@
 import { valibotResolver } from '@hookform/resolvers/valibot';
 import * as v from 'valibot';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { useNavigate } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { GeometryPicker } from '@/components/shared/GeometryPicker';
+import { MetadataFields } from '@/components/shared/MetadataFields';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCreateAlert } from '@/hooks/useCreateAlert';
 import { useProjects } from '@/hooks/useProjects';
-import { geometrySchema } from '@/lib/schemas/geometry';
+import {
+  type AlertGeometry,
+  type MetadataRow,
+  metadataRowsToRecord,
+} from '@/lib/alert-form-utils';
 import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
-  title: {
-    id: 'alerts.create.title',
-    defaultMessage: 'Create Alert',
-  },
+  title: { id: 'alerts.create.title', defaultMessage: 'Create Alert' },
   geometryLabel: {
     id: 'alerts.create.geometryLabel',
-    defaultMessage: 'Geometry (GeoJSON)',
+    defaultMessage: 'Location and shape',
   },
-  geometryPlaceholder: {
-    id: 'alerts.create.geometryPlaceholder',
-    defaultMessage: '{"type":"Point","coordinates":[0,0]}',
+  geometryRequired: {
+    id: 'alerts.create.geometryRequired',
+    defaultMessage: 'Choose a valid alert location or shape.',
   },
-  metadataLabel: {
-    id: 'alerts.create.metadataLabel',
-    defaultMessage: 'Metadata (JSON, optional)',
+  metadataKeyRequired: {
+    id: 'alerts.create.metadataKeyRequired',
+    defaultMessage: 'Field name is required.',
+  },
+  metadataDuplicateKey: {
+    id: 'alerts.create.metadataDuplicateKey',
+    defaultMessage: 'Field names must be unique.',
+  },
+  metadataInvalidNumber: {
+    id: 'alerts.create.metadataInvalidNumber',
+    defaultMessage: 'Enter a valid number.',
+  },
+  metadataInvalidBoolean: {
+    id: 'alerts.create.metadataInvalidBoolean',
+    defaultMessage: 'Choose true or false.',
   },
   detectionDateStartLabel: {
     id: 'alerts.create.detectionDateStart',
@@ -41,34 +56,14 @@ const messages = defineMessages({
     id: 'alerts.create.detectionDateEnd',
     defaultMessage: 'Detection Date End',
   },
-  submit: {
-    id: 'alerts.create.submit',
-    defaultMessage: 'Create',
-  },
-  cancel: {
-    id: 'alerts.create.cancel',
-    defaultMessage: 'Cancel',
-  },
-  invalidGeometry: {
-    id: 'alerts.create.invalidGeometry',
-    defaultMessage: 'Invalid GeoJSON geometry',
-  },
-  required: {
-    id: 'alerts.create.required',
-    defaultMessage: 'This field is required',
-  },
-  invalidJson: {
-    id: 'alerts.create.invalidJson',
-    defaultMessage: 'Invalid JSON',
-  },
+  sourceIdLabel: { id: 'alerts.create.sourceId', defaultMessage: 'Source ID' },
+  submit: { id: 'alerts.create.submit', defaultMessage: 'Create' },
+  cancel: { id: 'alerts.create.cancel', defaultMessage: 'Cancel' },
   noProject: {
     id: 'alerts.create.noProject',
     defaultMessage: 'Select a project first',
   },
-  alertsLabel: {
-    id: 'alerts.title',
-    defaultMessage: 'Alerts',
-  },
+  alertsLabel: { id: 'alerts.title', defaultMessage: 'Alerts' },
   untitledProject: {
     id: 'data.untitledProject',
     defaultMessage: 'Untitled Project',
@@ -76,48 +71,11 @@ const messages = defineMessages({
 });
 
 const formSchema = v.object({
-  geometry: v.pipe(
-    v.string(),
-    v.minLength(1, 'required'),
-    v.check((value) => {
-      try {
-        v.parse(geometrySchema, JSON.parse(value));
-        return true;
-      } catch {
-        return false;
-      }
-    }, 'invalidGeometry'),
-  ),
-  metadata: v.pipe(
-    v.string(),
-    v.check((value) => {
-      if (value.trim() === '') return true;
-      try {
-        const parsed: unknown = JSON.parse(value);
-        return (
-          typeof parsed === 'object' &&
-          parsed !== null &&
-          !Array.isArray(parsed)
-        );
-      } catch {
-        return false;
-      }
-    }, 'invalidJson'),
-  ),
   detectionDateStart: v.string(),
   detectionDateEnd: v.string(),
+  sourceId: v.string(),
 });
-
 type FormData = v.InferInput<typeof formSchema>;
-
-function errorMessageKey(
-  code: string | undefined,
-): keyof typeof messages | undefined {
-  if (code === 'required') return 'required';
-  if (code === 'invalidGeometry') return 'invalidGeometry';
-  if (code === 'invalidJson') return 'invalidJson';
-  return undefined;
-}
 
 export function CreateAlertScreen() {
   const intl = useIntl();
@@ -127,6 +85,13 @@ export function CreateAlertScreen() {
   const projectsQuery = useProjects();
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
+  const [geometry, setGeometry] = useState<AlertGeometry>();
+  const [geometryMessage, setGeometryMessage] = useState<string>();
+  const [geometrySubmitError, setGeometrySubmitError] = useState(false);
+  const [metadataRows, setMetadataRows] = useState<MetadataRow[]>([]);
+  const [metadataErrors, setMetadataErrors] = useState<Record<string, string>>(
+    {},
+  );
 
   const topbarWorkspaceName =
     selectedProject?.name ?? intl.formatMessage(messages.untitledProject);
@@ -135,22 +100,16 @@ export function CreateAlertScreen() {
       topbarWorkspaceName: selectedProjectId ? topbarWorkspaceName : undefined,
       topbarModeLabel: intl.formatMessage(messages.alertsLabel),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedProjectId, topbarWorkspaceName],
+    [intl, selectedProjectId, topbarWorkspaceName],
   );
   useShellSlot(shellSlot);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<FormData>({
+  const { register, handleSubmit } = useForm<FormData>({
     resolver: valibotResolver(formSchema),
     defaultValues: {
-      geometry: '',
-      metadata: '',
       detectionDateStart: '',
       detectionDateEnd: '',
+      sourceId: '',
     },
   });
 
@@ -164,142 +123,118 @@ export function CreateAlertScreen() {
     );
   }
 
-  function onSubmit(data: FormData) {
-    if (!selectedProjectId) return;
-    const parsedGeometry = JSON.parse(data.geometry) as {
-      type: string;
-      coordinates: unknown;
+  function translateMetadataErrors(errors: Record<string, string>) {
+    const messageFor = (code: string) => {
+      if (code === 'keyRequired') {
+        return intl.formatMessage(messages.metadataKeyRequired);
+      }
+      if (code === 'duplicateKey') {
+        return intl.formatMessage(messages.metadataDuplicateKey);
+      }
+      if (code === 'invalidNumber') {
+        return intl.formatMessage(messages.metadataInvalidNumber);
+      }
+      return intl.formatMessage(messages.metadataInvalidBoolean);
     };
-    const parsedMetadata = data.metadata.trim()
-      ? (JSON.parse(data.metadata) as Record<string, unknown>)
-      : undefined;
-
-    createAlert.mutate(
-      {
-        projectLocalId: selectedProjectId,
-        geometry: parsedGeometry,
-        metadata: parsedMetadata,
-        detectionDateStart: data.detectionDateStart || undefined,
-        detectionDateEnd: data.detectionDateEnd || undefined,
-      },
-      {
-        onSuccess: () => {
-          void navigate({ to: '/alerts' });
-        },
-      },
+    return Object.fromEntries(
+      Object.entries(errors).map(([id, code]) => [id, messageFor(code)]),
     );
   }
 
-  const geometryErrorKey = errorMessageKey(errors.geometry?.message);
-  const metadataErrorKey = errorMessageKey(errors.metadata?.message);
+  function onSubmit(data: FormData) {
+    if (!selectedProjectId) return;
+    if (!geometry) {
+      setGeometrySubmitError(true);
+      return;
+    }
+    const metadata = metadataRowsToRecord(metadataRows);
+    if (Object.keys(metadata.errors).length > 0) {
+      setMetadataErrors(translateMetadataErrors(metadata.errors));
+      return;
+    }
+    setMetadataErrors({});
+    createAlert.mutate(
+      {
+        projectLocalId: selectedProjectId,
+        geometry,
+        metadata: metadata.value,
+        detectionDateStart: data.detectionDateStart || undefined,
+        detectionDateEnd: data.detectionDateEnd || undefined,
+        sourceId: data.sourceId || undefined,
+      },
+      { onSuccess: () => void navigate({ to: '/alerts' }) },
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
       <h1 className="text-2xl font-bold text-text">
         {intl.formatMessage(messages.title)}
       </h1>
-
       <Card className="p-6">
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-5"
           noValidate
         >
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="alert-geometry"
-              className="text-sm font-medium text-text"
-            >
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium text-text">
               {intl.formatMessage(messages.geometryLabel)}
-            </label>
-            <textarea
-              id="alert-geometry"
-              {...register('geometry')}
-              placeholder={intl.formatMessage(messages.geometryPlaceholder)}
-              rows={4}
-              aria-invalid={geometryErrorKey ? true : undefined}
-              aria-describedby={
-                geometryErrorKey ? 'alert-geometry-error' : undefined
-              }
-              className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm text-text font-mono placeholder:text-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            </h2>
+            <GeometryPicker
+              onChange={(next) => {
+                setGeometry(next);
+                setGeometrySubmitError(false);
+              }}
+              onValidationChange={setGeometryMessage}
             />
-            {geometryErrorKey && (
-              <p
-                id="alert-geometry-error"
-                role="alert"
-                className="text-sm text-error"
-              >
-                {intl.formatMessage(messages[geometryErrorKey])}
+            {(geometrySubmitError || geometryMessage) && (
+              <p role="alert" className="text-sm text-error">
+                {geometryMessage ??
+                  intl.formatMessage(messages.geometryRequired)}
               </p>
             )}
           </div>
-
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="alert-metadata"
-              className="text-sm font-medium text-text"
-            >
-              {intl.formatMessage(messages.metadataLabel)}
-            </label>
-            <textarea
-              id="alert-metadata"
-              {...register('metadata')}
-              rows={3}
-              aria-invalid={metadataErrorKey ? true : undefined}
-              aria-describedby={
-                metadataErrorKey ? 'alert-metadata-error' : undefined
-              }
-              className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm text-text font-mono placeholder:text-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            />
-            {metadataErrorKey && (
-              <p
-                id="alert-metadata-error"
-                role="alert"
-                className="text-sm text-error"
-              >
-                {intl.formatMessage(messages[metadataErrorKey])}
-              </p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="alert-date-start"
-                className="text-sm font-medium text-text"
-              >
-                {intl.formatMessage(messages.detectionDateStartLabel)}
-              </label>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <label className="flex flex-col gap-1 text-sm font-medium text-text">
+              {intl.formatMessage(messages.detectionDateStartLabel)}
               <input
-                id="alert-date-start"
                 type="date"
                 {...register('detectionDateStart')}
-                className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
               />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="alert-date-end"
-                className="text-sm font-medium text-text"
-              >
-                {intl.formatMessage(messages.detectionDateEndLabel)}
-              </label>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-text">
+              {intl.formatMessage(messages.detectionDateEndLabel)}
               <input
-                id="alert-date-end"
                 type="date"
                 {...register('detectionDateEnd')}
-                className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
               />
-            </div>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-text">
+              {intl.formatMessage(messages.sourceIdLabel)}
+              <input
+                type="text"
+                {...register('sourceId')}
+                className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
+              />
+            </label>
           </div>
-
+          <MetadataFields
+            rows={metadataRows}
+            onChange={(rows) => {
+              setMetadataRows(rows);
+              setMetadataErrors({});
+            }}
+            errors={metadataErrors}
+          />
           {!selectedProjectId && (
             <p role="alert" className="text-sm text-error">
               {intl.formatMessage(messages.noProject)}
             </p>
           )}
-
-          <div className="flex flex-col-reverse sm:flex-row gap-3">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row">
             <Button
               type="submit"
               variant="primary"

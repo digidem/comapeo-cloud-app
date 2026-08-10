@@ -74,26 +74,110 @@
   "alerts.create.detectionDateStart": {
     "defaultMessage": "Detection Date Start"
   },
+  "alerts.create.geometryClear": {
+    "defaultMessage": "Clear"
+  },
+  "alerts.create.geometryCoordinates": {
+    "defaultMessage": "Coordinates must be valid longitude and latitude values."
+  },
+  "alerts.create.geometryFinish": {
+    "defaultMessage": "Finish"
+  },
+  "alerts.create.geometryHintLine": {
+    "defaultMessage": "Click or tap to add line points, then finish."
+  },
+  "alerts.create.geometryHintPoint": {
+    "defaultMessage": "Click or tap the map to place the alert point."
+  },
+  "alerts.create.geometryHintPolygon": {
+    "defaultMessage": "Click or tap to add polygon points, then finish."
+  },
+  "alerts.create.geometryInvalid": {
+    "defaultMessage": "This geometry is not valid."
+  },
   "alerts.create.geometryLabel": {
-    "defaultMessage": "Geometry (GeoJSON)"
+    "defaultMessage": "Location and shape"
   },
-  "alerts.create.geometryPlaceholder": {
-    "defaultMessage": "{\"type\":\"Point\",\"coordinates\":[0,0]}"
+  "alerts.create.geometryLine": {
+    "defaultMessage": "Line"
   },
-  "alerts.create.invalidGeometry": {
-    "defaultMessage": "Invalid GeoJSON geometry"
+  "alerts.create.geometryLinePoints": {
+    "defaultMessage": "A line needs at least 2 points."
   },
-  "alerts.create.invalidJson": {
-    "defaultMessage": "Invalid JSON"
+  "alerts.create.geometryPoint": {
+    "defaultMessage": "Point"
   },
-  "alerts.create.metadataLabel": {
-    "defaultMessage": "Metadata (JSON, optional)"
+  "alerts.create.geometryPointRequired": {
+    "defaultMessage": "Place a point on the map."
+  },
+  "alerts.create.geometryPolygon": {
+    "defaultMessage": "Polygon"
+  },
+  "alerts.create.geometryPolygonPoints": {
+    "defaultMessage": "A polygon needs at least 3 points."
+  },
+  "alerts.create.geometryRequired": {
+    "defaultMessage": "Choose a valid alert location or shape."
+  },
+  "alerts.create.geometryType": {
+    "defaultMessage": "Geometry type"
+  },
+  "alerts.create.geometryUndo": {
+    "defaultMessage": "Undo last point"
+  },
+  "alerts.create.metadataAdd": {
+    "defaultMessage": "Add field"
+  },
+  "alerts.create.metadataBoolean": {
+    "defaultMessage": "Boolean"
+  },
+  "alerts.create.metadataDate": {
+    "defaultMessage": "Date"
+  },
+  "alerts.create.metadataDuplicateKey": {
+    "defaultMessage": "Field names must be unique."
+  },
+  "alerts.create.metadataFalse": {
+    "defaultMessage": "False"
+  },
+  "alerts.create.metadataFields": {
+    "defaultMessage": "Metadata fields"
+  },
+  "alerts.create.metadataInvalidBoolean": {
+    "defaultMessage": "Choose true or false."
+  },
+  "alerts.create.metadataInvalidNumber": {
+    "defaultMessage": "Enter a valid number."
+  },
+  "alerts.create.metadataKeyRequired": {
+    "defaultMessage": "Field name is required."
+  },
+  "alerts.create.metadataName": {
+    "defaultMessage": "Field name"
+  },
+  "alerts.create.metadataNumber": {
+    "defaultMessage": "Number"
+  },
+  "alerts.create.metadataRemove": {
+    "defaultMessage": "Remove"
+  },
+  "alerts.create.metadataText": {
+    "defaultMessage": "Text"
+  },
+  "alerts.create.metadataTrue": {
+    "defaultMessage": "True"
+  },
+  "alerts.create.metadataType": {
+    "defaultMessage": "Value type"
+  },
+  "alerts.create.metadataValue": {
+    "defaultMessage": "Value"
   },
   "alerts.create.noProject": {
     "defaultMessage": "Select a project first"
   },
-  "alerts.create.required": {
-    "defaultMessage": "This field is required"
+  "alerts.create.sourceId": {
+    "defaultMessage": "Source ID"
   },
   "alerts.create.submit": {
     "defaultMessage": "Create"

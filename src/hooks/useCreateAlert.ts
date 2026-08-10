@@ -12,6 +12,7 @@ export function useCreateAlert() {
       metadata?: Record<string, unknown>;
       detectionDateStart?: string;
       detectionDateEnd?: string;
+      sourceId?: string;
     }) => createAlert(input),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({
