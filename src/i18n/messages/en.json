@@ -1022,6 +1022,9 @@
   "invite.progress.networkError": {
     "defaultMessage": "Unable to connect. Check your internet connection."
   },
+  "invite.progress.partialSync": {
+    "defaultMessage": "Connected, but some archive data could not be synced. Try again."
+  },
   "invite.progress.redirecting": {
     "defaultMessage": "Redirecting..."
   },

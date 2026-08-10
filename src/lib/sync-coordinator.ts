@@ -2,6 +2,7 @@ import { apiClient } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { queryClient } from '@/lib/query-client';
 import {
+  type SyncErrorCode,
   type SyncOptions,
   type SyncResult,
   syncRemoteArchive,
@@ -17,9 +18,8 @@ export interface OnboardArchiveOptions extends SyncOptions {
   isCancelled?: () => boolean;
 }
 
-export interface OnboardingResult extends SyncResult {
-  errorCode?:
-    'invalid-url' | 'connection' | 'authorization' | 'duplicate' | 'cancelled';
+export interface OnboardingResult extends Omit<SyncResult, 'errorCode'> {
+  errorCode?: SyncErrorCode | 'invalid-url' | 'duplicate' | 'cancelled';
 }
 
 const activeRuns = new Map<string, Promise<SyncResult>>();

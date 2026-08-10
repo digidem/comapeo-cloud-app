@@ -89,7 +89,7 @@ export interface AuthState extends ActiveArchiveState {
   ) => Promise<void>;
   updateServer: (
     id: string,
-    updates: { label?: string; baseUrl?: string; token?: string },
+    updates: Partial<Omit<RemoteArchiveServer, 'id'>>,
   ) => Promise<void>;
   updateServerLifecycle: (
     id: string,
@@ -369,13 +369,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   updateServer: async (id, updates) => {
-    const persistedUpdates = {
-      ...(updates.label !== undefined ? { label: updates.label } : {}),
-      ...(updates.baseUrl !== undefined ? { baseUrl: updates.baseUrl } : {}),
-      ...(updates.token !== undefined ? { token: updates.token } : {}),
-    };
-
-    await updateRemoteServer(id, persistedUpdates);
+    await updateRemoteServer(id, updates);
 
     set((state) => {
       const servers = state.servers.map((server) =>

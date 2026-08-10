@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IntlShape, defineMessages, useIntl } from 'react-intl';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 
 import {
@@ -68,6 +67,11 @@ const messages = defineMessages({
     id: 'home.archive.dialog.invalidToken',
     defaultMessage: 'Invalid token or unauthorized',
   },
+  partialSync: {
+    id: 'invite.progress.partialSync',
+    defaultMessage:
+      'Connected, but some archive data could not be synced. Try again.',
+  },
   retry: {
     id: 'invite.progress.retry',
     defaultMessage: 'Try Again',
@@ -114,11 +118,10 @@ async function withValidationTimeout<T>(operation: Promise<T>): Promise<T> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Rolls back whatever addServer() persisted when the screen unmounts while
-// the call is in flight. addServer() either created a brand-new server record
-// or refreshed the token on an existing one; both must be undone so a
-// cancelled invite leaves no trace behind.
-async function rollbackPendingAddServer(
+// Undo every mutation made after invite validation. A new archive is removed;
+// an existing archive is restored to the exact connection/lifecycle snapshot
+// from before addServer() refreshed its credentials.
+async function rollbackPersistedInviteServer(
   serverId: string,
   previousServers: RemoteArchiveServer[],
 ): Promise<void> {
@@ -128,17 +131,18 @@ async function rollbackPendingAddServer(
 
   const previous = previousServers.find((server) => server.id === serverId);
   if (!previous) {
-    // A brand-new record was created by the cancelled invite — remove it.
     await removeServer(serverId);
     return;
   }
 
-  // An existing record may have had its token refreshed by the invite.
-  // Restore the previous token so the cancelled invite leaves the
-  // connection untouched.
-  if (persisted.token !== previous.token) {
-    await updateServer(serverId, { token: previous.token });
-  }
+  await updateServer(serverId, {
+    token: previous.token,
+    status: previous.status,
+    onboardingStatus: previous.onboardingStatus,
+    errorMessage: previous.errorMessage,
+    lastSyncedAt: previous.lastSyncedAt,
+    lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
+  });
 }
 
 function parseInviteFromLocation(): ParseInviteResult | null {
@@ -178,7 +182,6 @@ function getErrorDisplayMessage(
 export function InviteScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const invite = useMemo(() => parseInviteFromLocation(), []);
 
   const [status, setStatus] = useState<FlowStatus>(() => initialStatus(invite));
@@ -250,6 +253,20 @@ export function InviteScreen() {
     setErrorMessage('');
 
     async function run(): Promise<void> {
+      let persistedInvite:
+        | { serverId: string; previousServers: RemoteArchiveServer[] }
+        | undefined;
+
+      const rollbackPersistedInvite = async () => {
+        if (!persistedInvite) return;
+        const rollback = persistedInvite;
+        persistedInvite = undefined;
+        await rollbackPersistedInviteServer(
+          rollback.serverId,
+          rollback.previousServers,
+        );
+      };
+
       try {
         // Step 1: Verify / redeem invite
         setActiveStep('verify');
@@ -276,17 +293,19 @@ export function InviteScreen() {
         // token authorized.
         setActiveStep('connect');
         const config = { baseUrl, token };
-        const healthy = await withValidationTimeout(
-          apiClient.healthCheck(config),
-        );
-        if (cancelledRef.current) return;
-        if (!healthy) {
-          setStatus('error');
-          setErrorMessage(intlRef.current.formatMessage(messages.networkError));
-          return;
-        }
-
         try {
+          const healthy = await withValidationTimeout(
+            apiClient.healthCheck(config),
+          );
+          if (cancelledRef.current) return;
+          if (!healthy) {
+            setStatus('error');
+            setErrorMessage(
+              intlRef.current.formatMessage(messages.networkError),
+            );
+            return;
+          }
+
           await withValidationTimeout(apiClient.getProjects(config));
         } catch (error) {
           if (cancelledRef.current) return;
@@ -307,18 +326,18 @@ export function InviteScreen() {
         if (cancelledRef.current) return;
 
         // Step 3: Add server (validation passed)
-        const previousServers = useAuthStore.getState().servers;
+        const previousServers = useAuthStore
+          .getState()
+          .servers.map((server) => ({ ...server }));
         const serverId = await useAuthStore.getState().addServer({
           label: new URL(baseUrl).hostname,
           baseUrl,
           token,
           allowDuplicate: true,
         });
+        persistedInvite = { serverId, previousServers };
         if (cancelledRef.current) {
-          // The screen unmounted while addServer() was pending: roll back
-          // whatever was persisted (new record or token refresh) so a
-          // cancelled invite never leaves a stray server behind.
-          await rollbackPendingAddServer(serverId, previousServers);
+          await rollbackPersistedInvite();
           return;
         }
 
@@ -329,20 +348,32 @@ export function InviteScreen() {
           { baseUrl, token },
           { isCancelled: () => cancelledRef.current },
         );
-        if (cancelledRef.current) return;
+        if (cancelledRef.current) {
+          await rollbackPersistedInvite();
+          return;
+        }
         if (!syncResult || !syncResult.success) {
+          await rollbackPersistedInvite();
           setStatus('error');
-          setErrorMessage(intlRef.current.formatMessage(messages.error));
+          const syncErrorCode =
+            syncResult?.status === 'partial'
+              ? 'partial'
+              : syncResult?.errorCode;
+          let syncErrorMessage = messages.error;
+          if (syncErrorCode === 'authorization') {
+            syncErrorMessage = messages.invalidToken;
+          } else if (syncErrorCode === 'connection') {
+            syncErrorMessage = messages.networkError;
+          } else if (syncErrorCode === 'partial') {
+            syncErrorMessage = messages.partialSync;
+          }
+          setErrorMessage(intlRef.current.formatMessage(syncErrorMessage));
           return;
         }
 
-        // Step 5: Prepare dashboard
+        // The coordinator already invalidated every affected query root.
+        persistedInvite = undefined;
         setActiveStep('prepare');
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['projects'] }),
-          queryClient.invalidateQueries({ queryKey: ['observations'] }),
-          queryClient.invalidateQueries({ queryKey: ['alerts'] }),
-        ]);
         if (cancelledRef.current) return;
 
         setStatus('connected');
@@ -350,6 +381,7 @@ export function InviteScreen() {
           if (!cancelledRef.current) navigate({ to: '/' });
         }, 1500);
       } catch (err) {
+        await rollbackPersistedInvite();
         if (cancelledRef.current) return;
         if (err instanceof InviteApiError) {
           if (err.code === 'INVITE_EXPIRED') {
@@ -376,7 +408,7 @@ export function InviteScreen() {
     }
 
     void run();
-  }, [invite, navigate, queryClient]);
+  }, [invite, navigate]);
 
   useEffect(() => {
     // Reset the cancellation flag so the \"Try Again\" button (which calls

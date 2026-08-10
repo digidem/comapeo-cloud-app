@@ -1,4 +1,8 @@
-import { ApiError, type EndpointSemantics } from '@/lib/api-client';
+import {
+  ApiError,
+  type EndpointSemantics,
+  NetworkError,
+} from '@/lib/api-client';
 import type { Project } from '@/lib/db';
 import { getRemoteServer } from '@/lib/local-repositories';
 import type { ReconciliationCounts } from '@/lib/reconciliation';
@@ -29,6 +33,7 @@ export interface SyncOptions {
 }
 
 export type SyncStatus = 'ready' | 'partial' | 'error';
+export type SyncErrorCode = 'authorization' | 'connection' | 'partial';
 export type SyncResource =
   'observations' | 'alerts' | 'presets' | 'tracks' | 'fields';
 
@@ -40,6 +45,7 @@ export interface ResourceSyncOutcome {
   counts?: ReconciliationCounts;
   warnings?: string[];
   error?: string;
+  errorCode?: Exclude<SyncErrorCode, 'partial'>;
 }
 
 export interface ProjectSyncOutcome {
@@ -57,6 +63,7 @@ export interface SyncResult {
   projects: ProjectSyncOutcome[];
   warnings: string[];
   error?: string;
+  errorCode?: SyncErrorCode;
 }
 
 const activeSyncs = new Map<string, Promise<SyncResult>>();
@@ -83,6 +90,19 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
+function classifySyncError(
+  error: unknown,
+): Exclude<SyncErrorCode, 'partial'> | undefined {
+  if (
+    error instanceof ApiError &&
+    (error.status === 401 || error.status === 403)
+  ) {
+    return 'authorization';
+  }
+  if (error instanceof NetworkError) return 'connection';
+  return undefined;
+}
+
 function isAbortError(error: unknown): boolean {
   return (
     (error instanceof Error || (error !== null && typeof error === 'object')) &&
@@ -100,6 +120,7 @@ function throwIfAborted(signal?: AbortSignal): void {
 }
 
 function resultForFatalError(serverId: string, error: unknown): SyncResult {
+  const errorCode = classifySyncError(error);
   return {
     success: false,
     status: 'error',
@@ -107,6 +128,7 @@ function resultForFatalError(serverId: string, error: unknown): SyncResult {
     projects: [],
     warnings: [],
     error: errorMessage(error) || 'Unknown sync error',
+    ...(errorCode ? { errorCode } : {}),
   };
 }
 
@@ -167,11 +189,13 @@ async function runResource(
         error: error.message,
       };
     }
+    const errorCode = classifySyncError(error);
     return {
       resource,
       critical,
       status: 'error',
       error: errorMessage(error),
+      ...(errorCode ? { errorCode } : {}),
     };
   }
 }
@@ -322,6 +346,20 @@ function summarizeSync(
     status = 'partial';
   }
 
+  const failureCodes = projects.flatMap((project) =>
+    project.resources.flatMap((resource) =>
+      resource.errorCode ? [resource.errorCode] : [],
+    ),
+  );
+  let errorCode: SyncErrorCode | undefined;
+  if (status === 'partial') {
+    errorCode = 'partial';
+  } else if (failureCodes.includes('authorization')) {
+    errorCode = 'authorization';
+  } else if (failureCodes.includes('connection')) {
+    errorCode = 'connection';
+  }
+
   return {
     success: status === 'ready',
     status,
@@ -336,6 +374,7 @@ function summarizeSync(
               ? `Partial sync: ${resourceFailures.join('; ')}`
               : resourceFailures.join('; ') || 'Sync failed',
         }),
+    ...(errorCode ? { errorCode } : {}),
   };
 }
 
