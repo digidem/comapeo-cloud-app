@@ -45,3 +45,5 @@ Keep static review separate from live GitHub verification.
 
 ## Status reporting
 
+Report state transitions, not every poll. Surface when CI moves from pending to failing/terminal, when a reviewer becomes done/failed/attention-required, when the reviewed head or live base tip moves, and when the merge-ready gate changes. A healthy `still_pending` or `still_running` probe should usually remain internal unless the user asks for progress.
+

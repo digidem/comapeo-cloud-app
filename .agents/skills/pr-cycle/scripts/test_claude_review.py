@@ -58,6 +58,20 @@ class VersionTests(unittest.TestCase):
             claude_review.parse_version("Claude Code unknown")
 
 
+class ParserTests(unittest.TestCase):
+    def test_compact_before_subcommand(self) -> None:
+        args = claude_review.build_parser().parse_args(
+            ["--compact", "stop", "--id", "deadbeef"]
+        )
+        self.assertTrue(args.compact)
+
+    def test_compact_after_subcommand(self) -> None:
+        args = claude_review.build_parser().parse_args(
+            ["stop", "--id", "deadbeef", "--compact"]
+        )
+        self.assertTrue(args.compact)
+
+
 class GitGuardTests(unittest.TestCase):
     def test_base_mismatch_fails(self) -> None:
         with mock.patch.object(claude_review, "git_oid", return_value=BASE_B):
@@ -392,6 +406,14 @@ class StateTests(unittest.TestCase):
         )
         self.assertEqual(code, 3)
         self.assertEqual(result["state"], "working")
+
+    def test_queued_state_retries(self) -> None:
+        self.write_state("deadbeef", {"state": "queued", "detail": "waiting"})
+        result, code = claude_review.evaluate_state(
+            "deadbeef", HEAD_A, BASE_A, MERGE_A
+        )
+        self.assertEqual(code, 3)
+        self.assertEqual(result["state"], "queued")
 
     def test_done_uses_linked_transcript(self) -> None:
         transcript = self.write_transcript(json.dumps(valid_review()))

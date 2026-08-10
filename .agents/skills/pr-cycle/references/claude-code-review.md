@@ -88,7 +88,7 @@ The final Claude response must be a single JSON object containing:
 
 The helper rejects inconsistent responses: all three revision SHAs must match the bundle, actionable findings require `not_ready`, and no blocker/should-fix finding requires `ready`.
 
-A Claude verdict is static-review evidence only and is valid for the reviewed **(head SHA, live base-tip SHA, merge-base SHA)** tuple. The bundle itself is generated from the exact head/base-tip commit IDs rather than a moving ref name, so a later local fetch cannot change the contents being reviewed. If the PR head or live target tip moves, the verdict is stale. GitHub CI, mergeability, review-thread state, and live revision coordinates remain independently verified by `pr_snapshot.py` / `pr_wait.py`.
+A Claude verdict is static-review evidence only and is valid for the reviewed **(head SHA, live base-tip SHA, merge-base SHA)** tuple. The bundle itself is generated from the exact head/base-tip commit IDs rather than a moving ref name, so a later local fetch cannot change `diff.patch`. Keep the PR worktree checked out at the reviewed head and do not mutate it until the background review is terminal, because Claude may read surrounding repository context from that worktree. If the PR head or live target tip moves, the verdict is stale. GitHub CI, mergeability, review-thread state, and live revision coordinates remain independently verified by `pr_snapshot.py` / `pr_wait.py`.
 
 ## Foreground fallback
 

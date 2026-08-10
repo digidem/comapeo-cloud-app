@@ -13,7 +13,7 @@ Drive one PR to a defensible merge-ready state without disturbing unrelated work
 - Never merge merely because the PR is ready. Stop and signal the human unless the user explicitly authorizes merge in the current request.
 - Treat explicit language such as "merge when ready" as merge authorization. Do not infer authorization from a prior readiness request.
 - Protect unrelated worktrees and dirty working trees. Never reset, clean, stash, stage, commit, or delete unrelated user work.
-- Evaluate readiness against the exact pushed head SHA. Any new push invalidates the previous final review/readiness verdict.
+- Evaluate readiness against the exact pushed head SHA and the current live target-branch tip. Any new push or base-tip movement invalidates the previous final review/readiness verdict.
 - Treat command timeouts as execution-surface limits, not automatically as test/review failures. Never retry the same broad long-running command unchanged; switch to bounded polling, narrower validation, or a resumable execution surface. See `references/timeout-strategy.md`.
 - Prefer squash merge unless repository policy or the user explicitly requests another strategy.
 

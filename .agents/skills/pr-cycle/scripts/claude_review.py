@@ -26,7 +26,7 @@ from typing import Any
 MIN_BACKGROUND_VERSION = (2, 1, 139)
 BACKGROUND_ID_RE = re.compile(r"backgrounded\s+[·:]\s*([0-9a-fA-F]{8})")
 TERMINAL_FAILURE_STATES = {"failed", "stopped", "error"}
-RUNNING_STATES = {"working", "running", "starting"}
+RUNNING_STATES = {"working", "running", "starting", "queued", "pending", "initializing"}
 READ_ONLY_TOOLS = "Read,Grep,Glob"
 
 
@@ -717,6 +717,13 @@ def build_parser() -> argparse.ArgumentParser:
     stop.add_argument("--id", required=True, help="8-character Claude background session id")
 
     parser.add_argument("--compact", action="store_true", help="emit compact JSON")
+    for subparser in (start, poll, stop):
+        subparser.add_argument(
+            "--compact",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help=argparse.SUPPRESS,
+        )
     return parser
 
 
