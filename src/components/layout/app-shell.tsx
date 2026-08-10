@@ -5,6 +5,7 @@ import { ContextualSubnav } from '@/components/layout/contextual-subnav';
 import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer';
 import { PrimaryNav } from '@/components/layout/primary-nav';
 import { Topbar } from '@/components/layout/topbar';
+import { MapDownloadStatus } from '@/screens/MapScreen/MapDownloadStatus';
 
 interface AppShellProps {
   topbarActions?: ReactNode;
@@ -102,6 +103,7 @@ function AppShell({
           {children}
         </main>
       </div>
+      {!isMapRoute && <MapDownloadStatus />}
       <MobileNavDrawer
         open={mobileMenuOpen}
         onOpenChange={setMobileMenuOpen}

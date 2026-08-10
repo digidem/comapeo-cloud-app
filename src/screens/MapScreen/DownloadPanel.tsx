@@ -12,6 +12,7 @@ import {
   estimateDownloadSize,
   formatBytes,
 } from '@/lib/map/smp-download';
+import { useMapDownloadStore } from '@/stores/map-download-store';
 
 import { mapMessages } from './messages';
 
@@ -50,16 +51,17 @@ function readStoredIncludeGlobalOverview(): boolean {
 export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const intl = useIntl();
   const downloadMap = useDownloadMap();
+  const activeDownload = useMapDownloadStore((state) => state.active);
+  const startDownload = useMapDownloadStore((state) => state.start);
+  const updateDownloadProgress = useMapDownloadStore(
+    (state) => state.updateProgress,
+  );
+  const clearDownload = useMapDownloadStore((state) => state.clear);
+  const activeForMap = activeDownload?.mapId === map.id ? activeDownload : null;
+  const progress = activeForMap?.progress ?? null;
   const abortRef = useRef<AbortController | null>(null);
   const pendingRef = useRef(false); // Guards against React-batched double-clicks
   const isRetryRef = useRef(false); // Marks handleDownload calls from handleRetry
-  const [progress, setProgress] = useState<{
-    downloaded: number;
-    total: number;
-    bytes: number;
-    skipped: number;
-    warning?: boolean;
-  } | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
@@ -115,13 +117,6 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     };
   }, [map.id, map.name, map.status, map.smpSize]);
 
-  // --- Cancel on unmount ---
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-    };
-  }, []);
-
   const estimatedBytes = estimateDownloadSize(
     map.bbox,
     0, // library always downloads from zoom 0 regardless of user minZoom setting
@@ -131,15 +126,21 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const estimatedFormatted = formatBytes(estimatedBytes);
   const isLarge = estimatedBytes > 100 * 1024 * 1024;
 
-  const isDownloading = downloadMap.isPending && progress !== null;
+  const isDownloading = activeForMap !== null && progress !== null;
 
   const handleDownload = useCallback(async () => {
-    if (downloadMap.isPending || pendingRef.current) return; // Double-click guard
+    if (
+      downloadMap.isPending ||
+      pendingRef.current ||
+      activeDownloads.has(map.id)
+    ) {
+      return;
+    }
     setIsStartingRetry(false);
     pendingRef.current = true; // Set BEFORE async quota check to prevent duplicates
 
     // Concurrency policy: only one map download may run at a time
-    if (activeDownloads.size > 0 && !activeDownloads.has(map.id)) {
+    if (activeDownloads.size > 0) {
       pendingRef.current = false;
       isRetryRef.current = false;
       setConcurrencyWarning(true);
@@ -178,11 +179,18 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     // (success or a genuine failure) — a cancelled retry must not count.
     const isRetryAttempt = isRetryRef.current;
     isRetryRef.current = false;
+    startDownload({
+      mapId: map.id,
+      mapName: map.name,
+      cancel: () => controller.abort(),
+    });
 
     try {
       await downloadMap.mutateAsync({
         map,
-        onProgress: setProgress,
+        onProgress: (nextProgress) => {
+          updateDownloadProgress(map.id, nextProgress);
+        },
         signal: controller.signal,
         mapboxAccessToken,
         includeGlobalOverview,
@@ -202,11 +210,12 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       }
     } finally {
       activeDownloads.delete(map.id);
+      clearDownload(map.id);
       pendingRef.current = false;
     }
-    setProgress(null);
     abortRef.current = null;
   }, [
+    clearDownload,
     downloadMap,
     map,
     estimatedBytes,
@@ -214,11 +223,17 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     intl,
     mapboxAccessToken,
     includeGlobalOverview,
+    startDownload,
+    updateDownloadProgress,
   ]);
 
   const handleCancel = useCallback(() => {
+    if (activeForMap) {
+      activeForMap.cancel();
+      return;
+    }
     abortRef.current?.abort();
-  }, []);
+  }, [activeForMap]);
 
   const handleRetry = useCallback(() => {
     if (pendingRef.current) return;
@@ -233,6 +248,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   // ---- Stuck downloading state (recovery after refresh/crash) ----
   if (
     map.status === 'downloading' &&
+    activeForMap === null &&
     !downloadMap.isPending &&
     !isDownloading &&
     !downloadMap.isError &&
@@ -260,7 +276,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   }
 
   // ---- Pending state (mutation started, awaiting first progress) ----
-  if (downloadMap.isPending && !isDownloading) {
+  if ((activeForMap !== null || downloadMap.isPending) && !isDownloading) {
     return (
       <div className="flex flex-col gap-3" data-testid="download-pending">
         <span className="text-sm text-text-muted">{map.name}</span>

@@ -7,6 +7,7 @@ import { useDownloadMap } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import * as smpDownload from '@/lib/map/smp-download';
 import { DownloadPanel } from '@/screens/MapScreen/DownloadPanel';
+import { useMapDownloadStore } from '@/stores/map-download-store';
 
 vi.mock('@/hooks/useMaps', () => ({
   useDownloadMap: vi.fn(),
@@ -34,6 +35,9 @@ function createMockMap(overrides: Partial<SavedMap> = {}): SavedMap {
 
 describe('DownloadPanel', () => {
   beforeEach(() => {
+    mutateAsync.mockReset().mockResolvedValue('map-1');
+    reset.mockReset();
+    useMapDownloadStore.setState({ active: null });
     vi.mocked(useDownloadMap).mockReturnValue({
       error: null,
       isError: false,
@@ -161,37 +165,29 @@ describe('DownloadPanel', () => {
     expect(screen.getByText(/starting download/i)).toBeInTheDocument();
   });
 
-  it('shows progress state with percentage when downloading with progress', () => {
-    vi.mocked(useDownloadMap).mockReturnValue({
-      error: null,
-      isError: false,
-      isPending: true,
-      mutateAsync: vi.fn(),
-      reset,
-    } as unknown as ReturnType<typeof useDownloadMap>);
+  it('shows shared progress after the panel remounts during an active download', () => {
+    const cancel = vi.fn();
+    useMapDownloadStore.getState().start({
+      mapId: 'map-1',
+      mapName: 'Test Map',
+      cancel,
+    });
+    useMapDownloadStore.getState().updateProgress('map-1', {
+      downloaded: 5,
+      total: 10,
+      bytes: 512000,
+      skipped: 0,
+    });
 
     const map = createMockMap();
     render(<DownloadPanel map={map} />);
 
-    // Trigger progress via the mutation's onProgress callback
-    const progressCallback = mutateAsync.mock.calls[0]?.[0]?.onProgress;
-    if (progressCallback) {
-      progressCallback({ downloaded: 5, total: 10, bytes: 512000 });
-    }
-
-    // Simulate the component re-rendering with progress set
-    // We need to directly test the rendering branch by mocking the state
-    vi.mocked(useDownloadMap).mockReturnValue({
-      error: null,
-      isError: false,
-      isPending: true,
-      mutateAsync,
-      reset,
-    } as unknown as ReturnType<typeof useDownloadMap>);
-
-    // Instead, test by directly rendering with progress state via a controlled approach
-    // The isDownloading check is: downloadMap.isPending && progress !== null
-    // We can trigger the download and then manually set progress
+    expect(screen.getByTestId('download-progress')).toBeInTheDocument();
+    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(screen.getByText(/5 of 10 tiles/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /download map/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders ready state when map status is ready', () => {
@@ -227,12 +223,15 @@ describe('DownloadPanel', () => {
     const map = createMockMap();
     render(<DownloadPanel map={map} />);
 
-    const retryButton = screen.getByRole('button', { name: /retry/i });
-    // Click retry multiple times to exhaust retries
+    // Complete each retry cycle before starting the next one, matching the UI
+    // transition through the shared starting state.
     const user = userEvent.setup();
-    await user.click(retryButton);
-    await user.click(retryButton);
-    await user.click(retryButton);
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await user.click(await screen.findByRole('button', { name: /^retry$/i }));
+      await waitFor(() => {
+        expect(failMutateAsync).toHaveBeenCalledTimes(attempt);
+      });
+    }
 
     await waitFor(() => {
       expect(
@@ -290,6 +289,44 @@ describe('DownloadPanel', () => {
     await waitFor(() => {
       expect(reset).toHaveBeenCalled();
     });
+  });
+
+  it('does not abort an active download when the panel unmounts', async () => {
+    const user = userEvent.setup();
+    let resolveDownload: ((mapId: string) => void) | undefined;
+    let signal: AbortSignal | undefined;
+    const pendingMutateAsync = vi.fn(
+      (options: { signal: AbortSignal }) =>
+        new Promise<string>((resolve) => {
+          signal = options.signal;
+          resolveDownload = resolve;
+        }),
+    );
+    vi.mocked(useDownloadMap).mockReturnValue({
+      error: null,
+      isError: false,
+      isPending: false,
+      mutateAsync: pendingMutateAsync,
+      reset,
+    } as unknown as ReturnType<typeof useDownloadMap>);
+    vi.spyOn(smpDownload, 'checkStorageQuota').mockResolvedValue({
+      available: 1_000_000_000,
+      sufficient: true,
+    });
+
+    const map = createMockMap({ maxZoom: 0 });
+    const { unmount } = render(<DownloadPanel map={map} />);
+    await user.click(screen.getByRole('button', { name: /download map/i }));
+
+    await waitFor(() => {
+      expect(pendingMutateAsync).toHaveBeenCalledOnce();
+    });
+    expect(signal).toBeDefined();
+
+    unmount();
+
+    expect(signal?.aborted).toBe(false);
+    resolveDownload?.('map-1');
   });
 
   it('shows confirm dialog for large downloads and cancels', async () => {
@@ -358,16 +395,14 @@ describe('DownloadPanel', () => {
     const map = createMockMap();
     render(<DownloadPanel map={map} />);
 
-    const retryButton = screen.getByRole('button', { name: /retry/i });
     // Retry-and-cancel three times — each cycle rejects with AbortError,
     // simulating the user cancelling a retry before it can fail.
-    await user.click(retryButton);
-    await user.click(retryButton);
-    await user.click(retryButton);
-
-    await waitFor(() => {
-      expect(retryMutateAsync).toHaveBeenCalledTimes(3);
-    });
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await user.click(await screen.findByRole('button', { name: /^retry$/i }));
+      await waitFor(() => {
+        expect(retryMutateAsync).toHaveBeenCalledTimes(attempt);
+      });
+    }
 
     // Retry budget must remain intact — none of these were genuine failures.
     expect(
