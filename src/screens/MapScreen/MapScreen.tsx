@@ -22,6 +22,7 @@ import {
   clampBboxLatitude,
   crossesAntimeridian,
   finalizeBbox,
+  spansAntimeridian,
 } from '@/lib/map/bbox-utils';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { uuid } from '@/lib/uuid';
@@ -207,6 +208,22 @@ export function MapScreen() {
             ) {
               setBbox(DEFAULT_BBOX);
               setAutoFitBbox(DEFAULT_BBOX);
+            }
+            return;
+          }
+
+          // Antimeridian-spanning projects: the camera can render lng > 180,
+          // but the editable/savable bbox cannot (schema requires ±180).
+          // Keep the shifted bbox camera-only; fall back to DEFAULT_BBOX for
+          // the savable bbox and baseline so BoundsEditor shows valid values.
+          if (spansAntimeridian(lngs)) {
+            setProjectBbox(null);
+            if (
+              !hasUserModifiedBboxRef.current &&
+              drawModeRef.current === null
+            ) {
+              setBbox(DEFAULT_BBOX);
+              setAutoFitBbox(finalizedBbox);
             }
             return;
           }

@@ -485,7 +485,22 @@ describe('MapScreen - default project area (issue #153)', () => {
       );
     });
 
-    // Also verify BoundsEditor shows the shifted bbox
+    // Camera should fit to the shifted bbox
+    await waitFor(() => {
+      expect(fitBoundsMock).toHaveBeenLastCalledWith(
+        [
+          [179, 0],
+          [181, 1],
+        ],
+        {
+          padding: { top: 64, bottom: 32, left: 32, right: 32 },
+          duration: 0,
+          maxZoom: 14,
+        },
+      );
+    });
+
+    // BoundsEditor should show DEFAULT_BBOX (since savable bbox must be ±180)
     const user = userEvent.setup();
     await user.click(
       await screen.findByRole('button', { name: 'Map settings' }),
@@ -493,13 +508,13 @@ describe('MapScreen - default project area (issue #153)', () => {
 
     await waitFor(() => {
       const westInput = screen.getByLabelText('West');
-      expect(westInput).toHaveValue(179);
+      expect(westInput).toHaveValue(-75);
       const southInput = screen.getByLabelText('South');
-      expect(southInput).toHaveValue(0);
+      expect(southInput).toHaveValue(-12);
       const eastInput = screen.getByLabelText('East');
-      expect(eastInput).toHaveValue(181);
+      expect(eastInput).toHaveValue(-45);
       const northInput = screen.getByLabelText('North');
-      expect(northInput).toHaveValue(1);
+      expect(northInput).toHaveValue(8);
     });
   });
 });
