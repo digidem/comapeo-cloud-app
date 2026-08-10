@@ -129,6 +129,10 @@ function getDownloadStyleUrl(map: SavedMap): string {
  * Estimate the total compressed tile bytes for a given bbox + zoom range using
  * a tile-count heuristic. Returns 0 when the bbox or zooms are degenerate.
  * Coordinates are clamped to valid tile ranges.
+ *
+ * When `options.includeGlobalOverview` is true, `minZoom` is ignored: the
+ * estimate always covers zooms 0-3 worldwide plus `bbox` from zoom 4 up to
+ * `maxZoom`, matching the two-pass behavior in downloadSmp.
  */
 export function estimateDownloadSize(
   bbox: [number, number, number, number],
