@@ -14,6 +14,7 @@ import {
   validateGeometryDraft,
 } from '@/lib/alert-form-utils';
 import { getProjectPoints } from '@/lib/data-layer';
+import { uuid } from '@/lib/uuid';
 
 const messages = defineMessages({
   typeLabel: {
@@ -138,19 +139,23 @@ export function GeometryPicker({
   useEffect(() => {
     if (!projectLocalId) return;
     let cancelled = false;
-    void getProjectPoints(projectLocalId).then((points) => {
-      if (cancelled || !points?.features.length) return;
-      try {
-        const [minLng, minLat, maxLng, maxLat] = bbox(points);
-        const bounds = [
-          [minLng, minLat],
-          [maxLng, maxLat],
-        ] as [[number, number], [number, number]];
-        setProjectArea({ projectLocalId, bounds });
-      } catch {
-        // Keep the shared Amazon fallback view when project bounds are unavailable.
-      }
-    });
+    void getProjectPoints(projectLocalId)
+      .then((points) => {
+        if (cancelled || !points?.features.length) return;
+        try {
+          const [minLng, minLat, maxLng, maxLat] = bbox(points);
+          const bounds = [
+            [minLng, minLat],
+            [maxLng, maxLat],
+          ] as [[number, number], [number, number]];
+          setProjectArea({ projectLocalId, bounds });
+        } catch {
+          // Keep the shared Amazon fallback view when project bounds are unavailable.
+        }
+      })
+      .catch(() => {
+        // Keep the shared Amazon fallback view when project points cannot be read.
+      });
     return () => {
       cancelled = true;
     };
@@ -187,7 +192,7 @@ export function GeometryPicker({
 
   function addPoint(longitude: number, latitude: number) {
     const vertex: DraftVertex = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       position: [longitude, latitude],
     };
     const next = type === 'Point' ? [vertex] : [...vertices, vertex];

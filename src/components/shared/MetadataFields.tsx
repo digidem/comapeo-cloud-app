@@ -2,6 +2,7 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
 import type { MetadataRow, MetadataValueType } from '@/lib/alert-form-utils';
+import { uuid } from '@/lib/uuid';
 
 const messages = defineMessages({
   title: {
@@ -52,7 +53,7 @@ export function MetadataFields({
           onClick={() =>
             onChange([
               ...rows,
-              { id: crypto.randomUUID(), key: '', value: '', type: 'text' },
+              { id: uuid(), key: '', value: '', type: 'text' },
             ])
           }
         >

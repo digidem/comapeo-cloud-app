@@ -561,5 +561,6 @@
   "theme.dark": "Escuro",
   "theme.light": "Claro",
   "theme.system": "Sistema",
-  "alerts.create.geometryVertexLabel": "Vértice {number}"
+  "alerts.create.geometryVertexLabel": "Vértice {number}",
+  "alerts.create.failed": "Não foi possível criar o alerta. Tente novamente."
 }

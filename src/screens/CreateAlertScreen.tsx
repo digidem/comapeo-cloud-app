@@ -67,6 +67,10 @@ const messages = defineMessages({
     id: 'alerts.create.noProject',
     defaultMessage: 'Select a project first',
   },
+  createFailed: {
+    id: 'alerts.create.failed',
+    defaultMessage: 'Could not create the alert. Try again.',
+  },
   alertsLabel: { id: 'alerts.title', defaultMessage: 'Alerts' },
   untitledProject: {
     id: 'data.untitledProject',
@@ -89,9 +93,26 @@ export function CreateAlertScreen() {
   const projectsQuery = useProjects();
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
-  const [geometry, setGeometry] = useState<AlertGeometry>();
-  const [geometryMessage, setGeometryMessage] = useState<string>();
-  const [geometrySubmitError, setGeometrySubmitError] = useState(false);
+  const [geometryState, setGeometryState] = useState<{
+    projectLocalId: string;
+    value: AlertGeometry;
+  }>();
+  const geometry =
+    geometryState?.projectLocalId === selectedProjectId
+      ? geometryState.value
+      : undefined;
+  const [geometryMessageState, setGeometryMessageState] = useState<{
+    projectLocalId: string;
+    message: string;
+  }>();
+  const geometryMessage =
+    geometryMessageState?.projectLocalId === selectedProjectId
+      ? geometryMessageState.message
+      : undefined;
+  const [geometrySubmitErrorProjectId, setGeometrySubmitErrorProjectId] =
+    useState<string>();
+  const geometrySubmitError =
+    geometrySubmitErrorProjectId === selectedProjectId;
   const [metadataRows, setMetadataRows] = useState<MetadataRow[]>([]);
   const [metadataErrors, setMetadataErrors] = useState<Record<string, string>>(
     {},
@@ -148,7 +169,7 @@ export function CreateAlertScreen() {
   function onSubmit(data: FormData) {
     if (!selectedProjectId) return;
     if (!geometry) {
-      setGeometrySubmitError(true);
+      setGeometrySubmitErrorProjectId(selectedProjectId);
       return;
     }
     const metadata = metadataRowsToRecord(metadataRows);
@@ -186,12 +207,23 @@ export function CreateAlertScreen() {
               {intl.formatMessage(messages.geometryLabel)}
             </h2>
             <GeometryPicker
+              key={selectedProjectId ?? 'no-project'}
               projectLocalId={selectedProjectId ?? undefined}
               onChange={(next) => {
-                setGeometry(next);
-                setGeometrySubmitError(false);
+                setGeometryState(
+                  next && selectedProjectId
+                    ? { projectLocalId: selectedProjectId, value: next }
+                    : undefined,
+                );
+                if (next) setGeometrySubmitErrorProjectId(undefined);
               }}
-              onValidationChange={setGeometryMessage}
+              onValidationChange={(message) =>
+                setGeometryMessageState(
+                  message && selectedProjectId
+                    ? { projectLocalId: selectedProjectId, message }
+                    : undefined,
+                )
+              }
             />
             {geometry && (
               <p className="text-sm text-text-muted">
@@ -244,6 +276,11 @@ export function CreateAlertScreen() {
           {!selectedProjectId && (
             <p role="alert" className="text-sm text-error">
               {intl.formatMessage(messages.noProject)}
+            </p>
+          )}
+          {createAlert.isError && (
+            <p role="alert" className="text-sm text-error">
+              {intl.formatMessage(messages.createFailed)}
             </p>
           )}
           <div className="flex flex-col-reverse gap-3 sm:flex-row">

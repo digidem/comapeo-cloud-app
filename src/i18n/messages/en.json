@@ -74,6 +74,9 @@
   "alerts.create.detectionDateStart": {
     "defaultMessage": "Detection Date Start"
   },
+  "alerts.create.failed": {
+    "defaultMessage": "Could not create the alert. Try again."
+  },
   "alerts.create.geometryClear": {
     "defaultMessage": "Clear"
   },

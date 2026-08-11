@@ -8,6 +8,7 @@ const mockMutate = vi.fn();
 const mockNavigate = vi.fn();
 let mockSelectedProjectId: string | null = 'proj-1';
 let mockIsPending = false;
+let mockIsError = false;
 let mockProjectsIsPending = false;
 
 vi.mock('@/components/layout/shell-slot', () => ({ useShellSlot: vi.fn() }));
@@ -15,6 +16,7 @@ vi.mock('@/hooks/useCreateAlert', () => ({
   useCreateAlert: vi.fn(() => ({
     mutate: mockMutate,
     isPending: mockIsPending,
+    isError: mockIsError,
   })),
 }));
 vi.mock('@/stores/project-store', () => ({
@@ -25,7 +27,10 @@ vi.mock('@/stores/project-store', () => ({
 }));
 vi.mock('@/hooks/useProjects', () => ({
   useProjects: vi.fn(() => ({
-    data: [{ localId: 'proj-1', name: 'Test Project' }],
+    data: [
+      { localId: 'proj-1', name: 'Test Project' },
+      { localId: 'proj-2', name: 'Second Project' },
+    ],
     isPending: mockProjectsIsPending,
   })),
 }));
@@ -70,6 +75,7 @@ describe('CreateAlertScreen', () => {
   beforeEach(() => {
     mockSelectedProjectId = 'proj-1';
     mockIsPending = false;
+    mockIsError = false;
     mockProjectsIsPending = false;
     mockMutate.mockReset();
     mockNavigate.mockReset();
@@ -113,6 +119,29 @@ describe('CreateAlertScreen', () => {
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+
+  it('does not reuse geometry after switching projects', async () => {
+    const user = userEvent.setup();
+    const view = render(<CreateAlertScreen />);
+    await user.click(screen.getByText('Place test point'));
+
+    mockSelectedProjectId = 'proj-2';
+    view.rerender(<CreateAlertScreen />);
+    await user.click(screen.getByText('Create'));
+
+    expect(
+      screen.getByText('Choose a valid alert location or shape.'),
+    ).toBeInTheDocument();
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('shows a visible error when alert creation fails', () => {
+    mockIsError = true;
+    render(<CreateAlertScreen />);
+    expect(
+      screen.getByText('Could not create the alert. Try again.'),
+    ).toBeInTheDocument();
   });
 
   it('navigates to alerts after successful creation', async () => {
