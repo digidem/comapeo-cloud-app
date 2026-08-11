@@ -105,6 +105,27 @@ describe('ImportSmpButton', () => {
     expect(closeSmpReader).toHaveBeenCalled();
   });
 
+  it('schedules the success announcement to dismiss after import', async () => {
+    const timeoutSpy = vi.spyOn(window, 'setTimeout');
+    const user = userEvent.setup();
+    const reader = readerWithStyle({ version: 8, sources: {}, layers: [] });
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(
+      reader as unknown as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+    );
+
+    render(<ImportSmpButton projectLocalId="project-1" />);
+    await user.upload(
+      screen.getByLabelText('Import SMP file'),
+      new File(['valid'], 'success.smp', { type: 'application/zip' }),
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'SMP imported successfully',
+    );
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 4000);
+    timeoutSpy.mockRestore();
+  });
+
   it('prefers SMP metadata bounds over source bounds when available', async () => {
     const user = userEvent.setup();
     const reader = readerWithStyle({
@@ -136,6 +157,52 @@ describe('ImportSmpButton', () => {
     expect(mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ bbox: [-68, -4, -62, 1] }),
     );
+  });
+
+  it('falls back to safe zoom defaults when imported zoom metadata is invalid', async () => {
+    const user = userEvent.setup();
+    const reader = readerWithStyle({
+      version: 8,
+      sources: {
+        raster: {
+          type: 'raster',
+          minzoom: 20,
+          maxzoom: 1e12,
+        },
+      },
+      layers: [],
+    });
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(
+      reader as unknown as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+    );
+
+    render(<ImportSmpButton projectLocalId="project-1" />);
+    await user.upload(
+      screen.getByLabelText('Import SMP file'),
+      new File(['valid'], 'bad-zoom.smp', { type: 'application/zip' }),
+    );
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ minZoom: 0, maxZoom: 14 }),
+    );
+  });
+
+  it('normalizes imported SMP files to an application/zip blob', async () => {
+    const user = userEvent.setup();
+    const reader = readerWithStyle({ version: 8, sources: {}, layers: [] });
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(
+      reader as unknown as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+    );
+
+    render(<ImportSmpButton projectLocalId="project-1" />);
+    const file = new File(['valid'], 'shared-map.smp');
+    await user.upload(screen.getByLabelText('Import SMP file'), file);
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    const savedMap = mutateAsync.mock.calls[0]![0] as { smpBlob: Blob };
+    expect(savedMap.smpBlob).toBeInstanceOf(Blob);
+    expect(savedMap.smpBlob.type).toBe('application/zip');
   });
 
   it('shows an invalid-file error and creates nothing when the reader cannot open', async () => {

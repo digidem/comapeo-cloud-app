@@ -140,6 +140,44 @@ describe('SmpPreviewDialog', () => {
     expect(smpServe.getSmpReader).not.toHaveBeenCalled();
   });
 
+  it('shows loading rather than stale style when the preview target changes', async () => {
+    const firstReader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
+    vi.mocked(smpServe.getSmpReader).mockResolvedValueOnce(firstReader);
+    vi.mocked(smpServe.resolveSmpStyle).mockResolvedValueOnce(style);
+
+    const { rerender } = render(
+      <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
+    );
+    await screen.findByTestId('smp-preview-map');
+
+    const secondMap = {
+      ...map,
+      id: 'map-2',
+      name: 'Second territory',
+      updatedAt: '2026-08-10T01:00:00.000Z',
+    };
+    const secondReader = {} as Awaited<
+      ReturnType<typeof smpServe.getSmpReader>
+    >;
+    let resolveSecondReader!: (value: typeof secondReader) => void;
+    vi.mocked(smpServe.getSmpReader).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSecondReader = resolve;
+      }),
+    );
+    vi.mocked(smpServe.resolveSmpStyle).mockResolvedValueOnce(style);
+
+    rerender(<SmpPreviewDialog open onOpenChange={vi.fn()} map={secondMap} />);
+
+    expect(screen.getByText('Loading map preview…')).toBeInTheDocument();
+    expect(screen.queryByTestId('smp-preview-map')).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSecondReader(secondReader);
+    });
+    expect(await screen.findByTestId('smp-preview-map')).toBeInTheDocument();
+  });
+
   it('reopens the same map in loading state until its reader is ready', async () => {
     const firstReader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
     vi.mocked(smpServe.getSmpReader).mockResolvedValueOnce(firstReader);

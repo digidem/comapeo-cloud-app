@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -195,6 +195,23 @@ describe('DownloadPanel', () => {
     render(<DownloadPanel map={map} />);
     expect(screen.getByTestId('download-ready')).toBeInTheDocument();
     expect(screen.getByText(/downloaded successfully/i)).toBeInTheDocument();
+  });
+
+  it('does not offer regeneration when an imported ready map has lost its blob', async () => {
+    const map = createMockMap({
+      id: 'imported-missing',
+      status: 'ready',
+      type: 'style',
+      styleUrl: '',
+      smpBlob: undefined,
+      smpSize: 100,
+    });
+
+    render(<DownloadPanel map={map} />);
+
+    const missingState = await screen.findByTestId('download-ready-missing');
+    expect(missingState).toBeInTheDocument();
+    expect(within(missingState).queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('renders error state when downloadMap has an error', () => {

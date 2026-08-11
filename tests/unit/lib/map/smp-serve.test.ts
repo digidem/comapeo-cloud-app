@@ -184,6 +184,28 @@ describe('protocol handler', () => {
     expect(result.data.byteLength).toBe(4);
   });
 
+  it('supports preview-prefixed reader ids containing a colon', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response(new ArrayBuffer(4), { status: 200 }));
+    mockCreateServer.mockReturnValue({ fetch: mockFetch });
+
+    const { getSmpReader, registerSmpProtocol } = await importModule();
+    await getSmpReader('preview:map-a', createMockBlob());
+    registerSmpProtocol();
+
+    const handler = mockAddProtocol.mock.calls[0]![1] as (
+      request: Request,
+    ) => Promise<{ data: ArrayBuffer }>;
+
+    const result = await handler(
+      new Request('smp:///preview:map-a/tiles/0/0/0.png'),
+    );
+
+    expect(mockFetch).toHaveBeenCalledOnce();
+    expect(result.data.byteLength).toBe(4);
+  });
+
   it('returns empty ArrayBuffer when handler throws', async () => {
     const mockFetch = vi.fn().mockRejectedValue(new Error('network'));
     mockCreateServer.mockReturnValue({ fetch: mockFetch });

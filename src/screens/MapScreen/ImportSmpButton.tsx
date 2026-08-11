@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,9 @@ type SmpStyle = {
 };
 
 const WORLD_BBOX: SavedMap['bbox'] = [-180, -90, 180, 90];
+const DEFAULT_MIN_ZOOM = 0;
+const DEFAULT_MAX_ZOOM = 14;
+const MAX_IMPORT_ZOOM = 24;
 
 function fileNameWithoutExtension(fileName: string): string {
   return fileName.replace(/\.smp$/i, '') || fileName;
@@ -72,6 +75,16 @@ function extractMetadata(style: SmpStyle, fileName: string) {
         typeof value === 'number' && Number.isFinite(value),
     );
   const metadataName = style.metadata?.name;
+  const minZoom =
+    minZoomValues.length > 0 ? Math.min(...minZoomValues) : DEFAULT_MIN_ZOOM;
+  const maxZoom =
+    maxZoomValues.length > 0 ? Math.max(...maxZoomValues) : DEFAULT_MAX_ZOOM;
+  const hasValidZoomRange =
+    Number.isInteger(minZoom) &&
+    Number.isInteger(maxZoom) &&
+    minZoom >= DEFAULT_MIN_ZOOM &&
+    maxZoom <= MAX_IMPORT_ZOOM &&
+    minZoom <= maxZoom;
 
   return {
     name:
@@ -87,8 +100,8 @@ function extractMetadata(style: SmpStyle, fileName: string) {
       attributions.length > 0
         ? [...new Set(attributions)].join(' · ')
         : undefined,
-    minZoom: minZoomValues.length > 0 ? Math.min(...minZoomValues) : 0,
-    maxZoom: maxZoomValues.length > 0 ? Math.max(...maxZoomValues) : 14,
+    minZoom: hasValidZoomRange ? minZoom : DEFAULT_MIN_ZOOM,
+    maxZoom: hasValidZoomRange ? maxZoom : DEFAULT_MAX_ZOOM,
   };
 }
 
@@ -99,6 +112,12 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+
+  useEffect(() => {
+    if (!success) return;
+    const timer = window.setTimeout(() => setSuccess(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [success]);
 
   async function handleFile(file: File) {
     if (!projectLocalId) return;
@@ -115,9 +134,14 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
         return;
       }
 
+      const smpBlob =
+        file.type === 'application/zip'
+          ? file
+          : new Blob([file], { type: 'application/zip' });
+
       let reader;
       try {
-        reader = await getSmpReader(importId, file);
+        reader = await getSmpReader(importId, smpBlob);
         await reader.opened();
         await reader.getVersion();
       } catch {
@@ -150,8 +174,8 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
         minZoom: metadata.minZoom,
         maxZoom: metadata.maxZoom,
         attribution: metadata.attribution,
-        smpBlob: file,
-        smpSize: file.size,
+        smpBlob,
+        smpSize: smpBlob.size,
         status: 'ready',
         createdAt: now,
         updatedAt: now,

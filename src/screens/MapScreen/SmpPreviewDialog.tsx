@@ -144,11 +144,11 @@ export function SmpPreviewDialog({
               <Dialog.Title className="truncate text-lg font-semibold text-text">
                 {map?.name ?? intl.formatMessage(mapMessages.previewTitle)}
               </Dialog.Title>
-              <p className="text-sm text-text-muted">
-                {map?.status === 'ready'
-                  ? intl.formatMessage(mapMessages.statusReady)
-                  : intl.formatMessage(mapMessages.previewTitle)}
-              </p>
+              {map?.status === 'ready' ? (
+                <p className="text-sm text-text-muted">
+                  {intl.formatMessage(mapMessages.statusReady)}
+                </p>
+              ) : null}
             </div>
             <Dialog.Close asChild>
               <Button type="button" variant="secondary" size="sm">
@@ -158,7 +158,11 @@ export function SmpPreviewDialog({
           </div>
           <div className="min-h-0 flex-1 bg-surface">
             {open && map ? (
-              <PreviewSession map={map} dependencies={dependencies} />
+              <PreviewSession
+                key={`${map.id}:${map.updatedAt}`}
+                map={map}
+                dependencies={dependencies}
+              />
             ) : null}
           </div>
         </Dialog.Content>

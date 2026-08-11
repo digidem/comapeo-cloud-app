@@ -405,9 +405,11 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           <p className="text-sm text-error">
             {intl.formatMessage(mapMessages.downloadMissing)}
           </p>
-          <Button size="sm" className="w-full" onClick={handleDownload}>
-            {intl.formatMessage(mapMessages.downloadRetry)}
-          </Button>
+          {map.styleUrl ? (
+            <Button size="sm" className="w-full" onClick={handleDownload}>
+              {intl.formatMessage(mapMessages.downloadRetry)}
+            </Button>
+          ) : null}
         </div>
       );
     }
