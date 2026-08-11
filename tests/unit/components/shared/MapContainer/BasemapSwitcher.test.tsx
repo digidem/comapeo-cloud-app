@@ -58,14 +58,15 @@ describe('BasemapSwitcher', () => {
   });
 
   it('renders nothing with an empty catalog', () => {
-    const { container } = render(
+    render(
       <BasemapSwitcher
         value="carto-positron"
         onChange={() => {}}
         basemaps={[]}
       />,
     );
-    expect(container.innerHTML).toBe('');
+    // ToastProvider renders an empty notification region; only check BasemapSwitcher content
+    expect(screen.queryByTestId('basemap-switcher')).toBeNull();
   });
 
   it('applies custom className to the wrapper', () => {

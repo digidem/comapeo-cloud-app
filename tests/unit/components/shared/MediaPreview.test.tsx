@@ -24,15 +24,17 @@ vi.mock('@tanstack/react-router', () => ({
 
 describe('MediaPreview', () => {
   it('renders nothing when tags have no photoUrls or audioCount', () => {
-    const { container } = render(
+    render(
       <MediaPreview observationLocalId="obs-1" tags={{ category: 'forest' }} />,
     );
-    expect(container.innerHTML).toBe('');
+    // ToastProvider renders a notification region; MediaPreview should render no children
+    expect(screen.queryByTestId('media-preview')).toBeNull();
   });
 
   it('renders nothing when tags are undefined', () => {
-    const { container } = render(<MediaPreview observationLocalId="obs-1" />);
-    expect(container.innerHTML).toBe('');
+    render(<MediaPreview observationLocalId="obs-1" />);
+    // ToastProvider renders a notification region; MediaPreview should render no children
+    expect(screen.queryByTestId('media-preview')).toBeNull();
   });
 
   it('renders 1 thumbnail when 1 photo URL', () => {
@@ -226,22 +228,23 @@ describe('MediaPreview', () => {
     });
 
     it('renders nothing when photoUrls is an empty string', () => {
-      const { container } = render(
+      render(
         <MediaPreview observationLocalId="obs-1" tags={{ photoUrls: '' }} />,
       );
-      expect(container.innerHTML).toBe('');
+      // ToastProvider renders a notification region; MediaPreview should render no children
+      expect(screen.queryByTestId('media-preview')).toBeNull();
     });
 
     it('handles non-numeric audioCount gracefully', () => {
-      const { container } = render(
+      render(
         <MediaPreview
           observationLocalId="obs-1"
           tags={{ audioCount: 'abc' }}
         />,
       );
       // Number('abc') is NaN — component should handle gracefully
-      // Should not crash; renders nothing or renders safely
-      expect(container.innerHTML).toBeDefined();
+      // Should not crash; renders nothing
+      expect(screen.queryByTestId('media-preview')).toBeNull();
     });
 
     it('ignores negative audioCount values', () => {

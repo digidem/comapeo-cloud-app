@@ -83,7 +83,7 @@ export function MediaPreview({
   const actualRemaining = totalMedia - Math.min(shownItems, 3);
 
   return (
-    <div className="flex items-center gap-1.5 mt-1">
+    <div data-testid="media-preview" className="flex items-center gap-1.5 mt-1">
       {visiblePhotos.map((url, index) => (
         <div
           key={url}

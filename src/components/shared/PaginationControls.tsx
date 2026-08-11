@@ -41,7 +41,10 @@ export function PaginationControls({
   if (totalCount === 0) return null;
 
   return (
-    <div className="flex flex-col items-center gap-3 py-4">
+    <div
+      data-testid="pagination-controls"
+      className="flex flex-col items-center gap-3 py-4"
+    >
       <span className="text-sm text-text-muted" role="status">
         {intl.formatMessage(messages.showing, {
           start: showingStart,

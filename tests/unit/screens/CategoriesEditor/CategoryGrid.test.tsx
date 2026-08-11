@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@tests/mocks/test-utils';
+import { fireEvent, render, screen, within } from '@tests/mocks/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Category } from '@/hooks/useCategories';
@@ -55,7 +55,7 @@ describe('CategoryGrid', () => {
 
   it('renders CategoryIcon with iconRef when available', () => {
     render(<CategoryGrid categories={sampleCategories} />);
-    const icons = document.querySelectorAll('[data-testid="category-icon"]');
+    const icons = screen.getAllByTestId('category-icon');
     expect(icons.length).toBe(3);
     // Mining (index 1) has iconRef
     expect(icons[1]!.getAttribute('data-icon-ref')).toBe('present');
@@ -64,13 +64,14 @@ describe('CategoryGrid', () => {
   });
 
   it('renders nothing when categories is empty', () => {
-    const { container } = render(<CategoryGrid categories={[]} />);
-    expect(container.firstChild).toBeNull();
+    render(<CategoryGrid categories={[]} />);
+    // ToastProvider renders a notification region; CategoryGrid should render no children
+    expect(screen.queryByTestId('category-grid')).toBeNull();
   });
 
   it('category cards are buttons (semantic)', () => {
     render(<CategoryGrid categories={sampleCategories} />);
-    const cards = document.querySelectorAll('[data-testid="category-card"]');
+    const cards = screen.getAllByTestId('category-card');
     for (const card of cards) {
       expect(card.tagName).toBe('BUTTON');
     }
@@ -78,17 +79,17 @@ describe('CategoryGrid', () => {
 
   it('does not render color accent strip', () => {
     render(<CategoryGrid categories={sampleCategories} />);
-    const cards = document.querySelectorAll('[data-testid="category-card"]');
+    const cards = screen.getAllByTestId('category-card');
     for (const card of cards) {
       expect(
-        card.querySelector('[data-testid="color-accent"]'),
+        within(card).queryByTestId('color-accent'),
       ).not.toBeInTheDocument();
     }
   });
 
   it('does not render field count badge', () => {
     render(<CategoryGrid categories={sampleCategories} />);
-    const cards = document.querySelectorAll('[data-testid="category-card"]');
+    const cards = screen.getAllByTestId('category-card');
     for (const card of cards) {
       expect(card.textContent).not.toContain('fields');
     }
@@ -98,7 +99,7 @@ describe('CategoryGrid', () => {
     render(
       <CategoryGrid categories={sampleCategories} selectedCategoryId="cat-2" />,
     );
-    const cards = document.querySelectorAll('[data-testid="category-card"]');
+    const cards = screen.getAllByTestId('category-card');
     expect(cards[1]).toHaveAttribute('aria-pressed', 'true');
     expect(cards[0]).toHaveAttribute('aria-pressed', 'false');
   });
@@ -111,7 +112,7 @@ describe('CategoryGrid', () => {
         onCategorySelect={onSelect}
       />,
     );
-    const cards = document.querySelectorAll('[data-testid="category-card"]');
+    const cards = screen.getAllByTestId('category-card');
     fireEvent.click(cards[0]!);
     expect(onSelect).toHaveBeenCalledWith('cat-1');
   });

@@ -86,7 +86,7 @@ describe('PaginationControls', () => {
   });
 
   it('returns null when totalCount is 0', () => {
-    const { container } = render(
+    render(
       <PaginationControls
         showingStart={0}
         showingEnd={0}
@@ -95,6 +95,7 @@ describe('PaginationControls', () => {
         onLoadMore={vi.fn()}
       />,
     );
-    expect(container.innerHTML).toBe('');
+    // ToastProvider renders a notification region; PaginationControls should render no children
+    expect(screen.queryByTestId('pagination-controls')).toBeNull();
   });
 });
