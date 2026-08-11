@@ -197,6 +197,25 @@ describe('DownloadPanel', () => {
     expect(screen.getByText(/downloaded successfully/i)).toBeInTheDocument();
   });
 
+  it('describes imported ready maps as imported instead of downloaded', () => {
+    const map = createMockMap({
+      status: 'ready',
+      type: 'style',
+      styleUrl: '',
+      smpBlob: new Blob(['smp']),
+      smpSize: 1048576,
+    });
+
+    render(<DownloadPanel map={map} />);
+
+    expect(screen.getByTestId('download-ready')).toHaveTextContent(
+      'Imported map package is ready (1.0 MB)',
+    );
+    expect(
+      screen.queryByText(/downloaded successfully/i),
+    ).not.toBeInTheDocument();
+  });
+
   it('does not offer regeneration when an imported ready map has lost its blob', async () => {
     const map = createMockMap({
       id: 'imported-missing',

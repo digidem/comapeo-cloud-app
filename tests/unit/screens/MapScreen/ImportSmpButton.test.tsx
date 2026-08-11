@@ -118,8 +118,11 @@ describe('ImportSmpButton', () => {
       }),
     );
     const savedMap = mutateAsync.mock.calls[0]![0] as { id: string };
-    expect(smpServe.resolveSmpStyle).toHaveBeenCalledWith(reader, savedMap.id);
-    expect(reader.getStyle).toHaveBeenCalledWith(`smp:///${savedMap.id}/`);
+    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+    expect(readerId).toMatch(/^import:/);
+    expect(readerId).not.toBe(savedMap.id);
+    expect(smpServe.resolveSmpStyle).toHaveBeenCalledWith(reader, readerId);
+    expect(reader.getStyle).toHaveBeenCalledWith(`smp:///${readerId}/`);
     expect(await screen.findByRole('status')).toHaveTextContent(
       'SMP imported successfully',
     );

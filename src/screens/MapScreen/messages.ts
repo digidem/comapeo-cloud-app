@@ -401,6 +401,10 @@ export const mapMessages = defineMessages({
     id: 'map.download.ready',
     defaultMessage: 'Map downloaded successfully ({size})',
   },
+  downloadImportedReady: {
+    id: 'map.download.importedReady',
+    defaultMessage: 'Imported map package is ready ({size})',
+  },
   downloadExport: {
     id: 'map.download.export',
     defaultMessage: 'Download SMP File',

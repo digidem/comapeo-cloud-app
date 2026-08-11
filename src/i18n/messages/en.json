@@ -1316,6 +1316,9 @@
   "map.download.globalOverviewDescription": {
     "defaultMessage": "Include worldwide context at zoom levels 0–3."
   },
+  "map.download.importedReady": {
+    "defaultMessage": "Imported map package is ready ({size})"
+  },
   "map.download.interrupted": {
     "defaultMessage": "A previous download was interrupted. You can try again."
   },

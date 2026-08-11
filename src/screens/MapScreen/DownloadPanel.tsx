@@ -427,9 +427,14 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       >
         <span className="text-sm text-text-muted">{map.name}</span>
         <p className="text-sm text-success">
-          {intl.formatMessage(mapMessages.downloadReady, {
-            size: formatBytes(map.smpSize ?? 0),
-          })}
+          {intl.formatMessage(
+            map.styleUrl
+              ? mapMessages.downloadReady
+              : mapMessages.downloadImportedReady,
+            {
+              size: formatBytes(map.smpSize ?? 0),
+            },
+          )}
         </p>
         <Button
           size="sm"

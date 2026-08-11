@@ -129,6 +129,7 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
     if (!projectLocalId) return;
 
     const importId = uuid();
+    const readerId = `import:${importId}:${uuid()}`;
     setError(null);
     setSuccess(false);
     setIsImporting(true);
@@ -152,7 +153,7 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
 
       let reader;
       try {
-        reader = await getSmpReader(importId, smpBlob);
+        reader = await getSmpReader(readerId, smpBlob);
         await reader.opened();
         await reader.getVersion();
       } catch {
@@ -160,7 +161,7 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
         return;
       }
 
-      const style = await resolveSmpStyle(reader, importId);
+      const style = await resolveSmpStyle(reader, readerId);
       if (!style || !style.sources) {
         setError(intl.formatMessage(mapMessages.importMissingStyle));
         return;
@@ -202,7 +203,7 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
       );
     } finally {
       try {
-        await closeSmpReader(importId);
+        await closeSmpReader(readerId);
       } catch {
         // Reader cleanup must never strand the import control in a loading state.
       } finally {
