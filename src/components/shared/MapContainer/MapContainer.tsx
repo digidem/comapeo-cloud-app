@@ -172,13 +172,15 @@ function MapContainer({
   });
 
   const [smpStyle, setSmpStyle] = useState<StyleSpecification | null>(null);
-  const [smpLoadErrorMapId, setSmpLoadErrorMapId] = useState<string | null>(
-    null,
-  );
+  const [smpLoadErrorAttempt, setSmpLoadErrorAttempt] = useState<{
+    mapId: string;
+    blob: Blob;
+  } | null>(null);
   const isImportedActiveMap = isImportedSmpMap(activeSavedMap);
   const smpLoadError =
     activeSavedMap?.status === 'ready' &&
-    smpLoadErrorMapId === activeSavedMap.id;
+    smpLoadErrorAttempt?.mapId === activeSavedMap.id &&
+    smpLoadErrorAttempt.blob === activeSavedMap.smpBlob;
 
   // Build an ImageryBasemap from the active map's saved style settings
   // so the user sees the same layer/settings across the app immediately
@@ -224,11 +226,16 @@ function MapContainer({
     if (!mapId || !smpBlob || status !== 'ready') return;
 
     let cancelled = false;
+    let readerOpened = false;
     registerSmpProtocol();
     void (async () => {
       try {
         const reader = await getSmpReader(mapId, smpBlob);
-        if (cancelled) return;
+        readerOpened = true;
+        if (cancelled) {
+          await closeSmpReader(mapId);
+          return;
+        }
 
         const style = await resolveSmpStyle(reader, mapId);
         if (cancelled) return;
@@ -239,25 +246,27 @@ function MapContainer({
             : style;
         if (!safeStyle) {
           setSmpStyle(null);
-          setSmpLoadErrorMapId(mapId);
+          setSmpLoadErrorAttempt({ mapId, blob: smpBlob });
           return;
         }
 
-        setSmpLoadErrorMapId(null);
+        setSmpLoadErrorAttempt(null);
         setSmpStyle(safeStyle);
       } catch {
         if (!cancelled) {
           setSmpStyle(null);
-          setSmpLoadErrorMapId(mapId);
+          setSmpLoadErrorAttempt({ mapId, blob: smpBlob });
         }
       }
     })();
 
     return () => {
       cancelled = true;
-      void closeSmpReader(mapId).catch(() => {
-        // Reader cleanup failure must not surface as an unhandled rejection.
-      });
+      if (readerOpened) {
+        void closeSmpReader(mapId).catch(() => {
+          // Reader cleanup failure must not surface as an unhandled rejection.
+        });
+      }
       setSmpStyle(null);
     };
   }, [
@@ -286,8 +295,7 @@ function MapContainer({
     [smpStyle, effectiveBasemap],
   );
 
-  const isOnlineActive =
-    activeMapStyle !== undefined && !smpStyle && !smpLoadError;
+  const isOnlineActive = activeMapStyle !== undefined && !smpStyle;
 
   const handleBasemapChange = (id: BasemapId) => {
     if (onBasemapChange) {
@@ -390,7 +398,11 @@ function MapContainer({
       )}
 
       {smpLoadError && activeSavedMap ? (
-        <div className="absolute bottom-3 left-3 z-20">
+        <div
+          className={`absolute left-3 z-20 ${
+            isOnlineActive ? 'bottom-12' : 'bottom-3'
+          }`}
+        >
           <span
             role="alert"
             data-testid="map-active-map-error"

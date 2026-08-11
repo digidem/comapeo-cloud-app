@@ -17,6 +17,7 @@ const mockResolveSmpStyle = vi.fn().mockResolvedValue({
   layers: [],
 });
 const mockGetSmpReader = vi.fn().mockResolvedValue({});
+const mockCloseSmpReader = vi.fn().mockResolvedValue(undefined);
 const mockRegisterSmpProtocol = vi.fn();
 const mockSanitizeImportedSmpStyle = vi.fn((style) => style);
 
@@ -26,7 +27,7 @@ vi.mock('@/lib/map/smp-serve', () => ({
   registerSmpProtocol: (...args: unknown[]) => mockRegisterSmpProtocol(...args),
   sanitizeImportedSmpStyle: (style: unknown) =>
     mockSanitizeImportedSmpStyle(style),
-  closeSmpReader: vi.fn().mockResolvedValue(undefined),
+  closeSmpReader: (...args: unknown[]) => mockCloseSmpReader(...args),
 }));
 
 const mockDbGet = vi.fn().mockResolvedValue(undefined);
@@ -358,6 +359,55 @@ describe('MapContainer', () => {
     expect(
       screen.queryByTestId('map-online-active-badge'),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps the online-active indicator when an authored map SMP fails', async () => {
+    mockResolveSmpStyle.mockResolvedValueOnce(null);
+    useMapStore.setState({ activeMapId: 'authored-online-fallback' });
+    mockDbGet.mockResolvedValue({
+      id: 'authored-online-fallback',
+      projectLocalId: 'proj-1',
+      name: 'Authored Map',
+      type: 'style',
+      styleUrl: 'https://example.com/style.json',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    render(<MapContainer />);
+
+    expect(await screen.findByTestId('map-active-map-error')).toHaveTextContent(
+      'Offline map unavailable: Authored Map',
+    );
+    expect(screen.getByTestId('map-online-active-badge')).toHaveTextContent(
+      'Active map (online): Authored Map',
+    );
+  });
+
+  it('closes a reader that resolves after the active-map effect is cancelled', async () => {
+    mockCloseSmpReader.mockClear();
+    let resolveReader!: (reader: object) => void;
+    mockGetSmpReader.mockImplementationOnce(
+      () => new Promise<object>((resolve) => (resolveReader = resolve)),
+    );
+    useMapStore.setState({ activeMapId: 'late-map' });
+    mockDbGet.mockResolvedValue({
+      id: 'late-map',
+      projectLocalId: 'proj-1',
+      name: 'Late Map',
+      type: 'style',
+      styleUrl: '',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    const { unmount } = render(<MapContainer />);
+    await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalled());
+    unmount();
+    resolveReader({});
+
+    await waitFor(() => expect(mockCloseSmpReader).toHaveBeenCalledTimes(1));
+    expect(mockCloseSmpReader).toHaveBeenCalledWith('late-map');
   });
 
   it('does not render active offline map badge when no active map', () => {

@@ -35,9 +35,13 @@ function decodeHtmlEntities(value: string): string {
   return parser.parseFromString(value, 'text/html').body.textContent ?? '';
 }
 
+/** Returns plain text only; callers must still HTML-escape before any innerHTML sink. */
 export function sanitizeSmpAttributionText(value: string): string {
-  const withoutTags = value.replace(/<[^>]*>/g, ' ');
-  return decodeHtmlEntities(withoutTags).replace(/\s+/g, ' ').trim();
+  const decoded = decodeHtmlEntities(value);
+  return decoded
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function isOfflineResourceUrl(value: string): boolean {

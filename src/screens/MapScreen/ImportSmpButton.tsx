@@ -198,7 +198,7 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
         intl.formatMessage(
           isQuotaExceeded
             ? mapMessages.importQuotaExceeded
-            : mapMessages.saveError,
+            : mapMessages.importSaveError,
         ),
       );
     } finally {

@@ -1373,6 +1373,9 @@
   "map.import.quotaExceeded": {
     "defaultMessage": "Not enough storage space to import this SMP"
   },
+  "map.import.saveError": {
+    "defaultMessage": "Could not import this SMP. Please try again."
+  },
   "map.import.success": {
     "defaultMessage": "SMP imported successfully"
   },

@@ -360,7 +360,7 @@ describe('ImportSmpButton', () => {
     );
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Could not save map. Please try again.',
+      'Could not import this SMP. Please try again.',
     );
     expect(closeSmpReader).toHaveBeenCalled();
   });

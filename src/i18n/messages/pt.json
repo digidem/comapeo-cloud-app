@@ -429,6 +429,7 @@
   "map.import.missingStyle": "O SMP não tem um estilo de mapa",
   "map.import.offlineOnly": "Este SMP contém recursos de mapa que não estão incluídos para uso offline",
   "map.import.quotaExceeded": "Não há espaço de armazenamento suficiente para importar este SMP",
+  "map.import.saveError": "Não foi possível importar este SMP. Tente novamente.",
   "map.import.success": "SMP importado com sucesso",
   "map.nameDialog.cancel": "Cancelar",
   "map.nameDialog.description": "Salve esta configuração de mapa como rascunho. Depois você pode baixá-lo como um arquivo .smp.",

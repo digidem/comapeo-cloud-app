@@ -114,6 +114,10 @@ export const mapMessages = defineMessages({
     id: 'map.import.quotaExceeded',
     defaultMessage: 'Not enough storage space to import this SMP',
   },
+  importSaveError: {
+    id: 'map.import.saveError',
+    defaultMessage: 'Could not import this SMP. Please try again.',
+  },
   rename: {
     id: 'map.saved.rename',
     defaultMessage: 'Rename',

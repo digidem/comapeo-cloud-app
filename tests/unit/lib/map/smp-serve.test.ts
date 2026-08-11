@@ -234,6 +234,9 @@ describe('sanitizeSmpStyleAttributions', () => {
     expect(
       sanitizeSmpAttributionText('&copy; <a href="https://osm.org">OSM</a>'),
     ).toBe('© OSM');
+    expect(
+      sanitizeSmpAttributionText('&lt;img src=x onerror=alert(1)&gt; Safe'),
+    ).toBe('Safe');
   });
 
   it('converts untrusted source attribution markup to escaped plain text', async () => {

@@ -37,19 +37,21 @@ async function buildSyntheticSmp(): Promise<Blob> {
 }
 
 describe('SMP reader integration', () => {
-  it('resolves a synthetic packaged SMP into an offline-safe render style', async () => {
-    const mapId = 'synthetic-import';
-    const reader = await getSmpReader(mapId, await buildSyntheticSmp());
+  it.each(['synthetic-import', 'import:synthetic-map:reader-1'])(
+    'resolves a synthetic packaged SMP into an offline-safe render style for reader id %s',
+    async (mapId) => {
+      const reader = await getSmpReader(mapId, await buildSyntheticSmp());
 
-    try {
-      const style = await resolveSmpStyle(reader, mapId);
-      expect(style).not.toBeNull();
-      expect(sanitizeImportedSmpStyle(style!)).not.toBeNull();
-      expect(
-        (style!.sources.raster as { tiles?: string[] }).tiles?.[0],
-      ).toMatch(/^smp:\/\/\/synthetic-import\//);
-    } finally {
-      await closeSmpReader(mapId);
-    }
-  });
+      try {
+        const style = await resolveSmpStyle(reader, mapId);
+        expect(style).not.toBeNull();
+        expect(sanitizeImportedSmpStyle(style!)).not.toBeNull();
+        expect((style!.sources.raster as { tiles?: string[] }).tiles?.[0]).toBe(
+          `smp:///${mapId}/s/0/{z}/{x}/{y}.png`,
+        );
+      } finally {
+        await closeSmpReader(mapId);
+      }
+    },
+  );
 });
