@@ -282,9 +282,15 @@ test.describe('Critical User Flows', () => {
       page.getByRole('heading', { level: 1, name: /create alert/i }),
     ).toBeVisible();
     await expect(page.getByTestId('map-container')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Point', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Line', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Polygon', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Point', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Line', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Polygon', exact: true }),
+    ).toBeVisible();
   });
 
   // -------------------------------------------------------------------------
