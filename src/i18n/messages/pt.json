@@ -29,6 +29,7 @@
   "alerts.create.geometryPolygon": "Polígono",
   "alerts.create.geometryPolygonPoints": "Um polígono precisa de pelo menos 3 pontos.",
   "alerts.create.geometryRequired": "Escolha uma localização ou forma válida para o alerta.",
+  "alerts.create.geometrySelected": "Geometria selecionada: {type}",
   "alerts.create.geometryType": "Tipo de geometria",
   "alerts.create.geometryUndo": "Desfazer último ponto",
   "alerts.create.metadataAdd": "Adicionar campo",

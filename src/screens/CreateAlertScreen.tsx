@@ -32,6 +32,10 @@ const messages = defineMessages({
     id: 'alerts.create.geometryRequired',
     defaultMessage: 'Choose a valid alert location or shape.',
   },
+  geometrySelected: {
+    id: 'alerts.create.geometrySelected',
+    defaultMessage: 'Selected geometry: {type}',
+  },
   metadataKeyRequired: {
     id: 'alerts.create.metadataKeyRequired',
     defaultMessage: 'Field name is required.',
@@ -188,6 +192,13 @@ export function CreateAlertScreen() {
               }}
               onValidationChange={setGeometryMessage}
             />
+            {geometry && (
+              <p className="text-sm text-text-muted">
+                {intl.formatMessage(messages.geometrySelected, {
+                  type: geometry.type,
+                })}
+              </p>
+            )}
             {(geometrySubmitError || geometryMessage) && (
               <p role="alert" className="text-sm text-error">
                 {geometryMessage ??

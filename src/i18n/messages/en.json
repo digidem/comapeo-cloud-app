@@ -119,6 +119,9 @@
   "alerts.create.geometryRequired": {
     "defaultMessage": "Choose a valid alert location or shape."
   },
+  "alerts.create.geometrySelected": {
+    "defaultMessage": "Selected geometry: {type}"
+  },
   "alerts.create.geometryType": {
     "defaultMessage": "Geometry type"
   },

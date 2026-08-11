@@ -62,6 +62,11 @@ interface GeometryPickerProps {
   onValidationChange?: (message: string | undefined) => void;
 }
 
+interface DraftVertex {
+  id: string;
+  position: Position;
+}
+
 function draftFeature(type: AlertGeometryType, vertices: Position[]) {
   if (type === 'Point' || vertices.length === 0) return undefined;
   if (type === 'LineString') {
@@ -89,21 +94,32 @@ export function GeometryPicker({
 }: GeometryPickerProps) {
   const intl = useIntl();
   const [type, setType] = useState<AlertGeometryType>('Point');
-  const [vertices, setVertices] = useState<Position[]>([]);
+  const [vertices, setVertices] = useState<DraftVertex[]>([]);
   const [showError, setShowError] = useState(false);
-  const feature = useMemo(() => draftFeature(type, vertices), [type, vertices]);
+  const positions = useMemo(
+    () => vertices.map((vertex) => vertex.position),
+    [vertices],
+  );
+  const feature = useMemo(
+    () => draftFeature(type, positions),
+    [type, positions],
+  );
 
   function validationMessage(nextVertices = vertices, nextType = type) {
-    const key = validateGeometryDraft(nextType, nextVertices);
+    const key = validateGeometryDraft(
+      nextType,
+      nextVertices.map((vertex) => vertex.position),
+    );
     return key
       ? intl.formatMessage(messages[key as keyof typeof messages])
       : undefined;
   }
 
-  function commit(nextVertices: Position[], nextType = type) {
+  function commit(nextVertices: DraftVertex[], nextType = type) {
     const error = validationMessage(nextVertices, nextType);
     onValidationChange?.(error);
-    if (!error) onChange(geometryFromVertices(nextType, nextVertices));
+    const nextPositions = nextVertices.map((vertex) => vertex.position);
+    if (!error) onChange(geometryFromVertices(nextType, nextPositions));
     else onChange(undefined);
   }
 
@@ -116,10 +132,11 @@ export function GeometryPicker({
   }
 
   function addPoint(longitude: number, latitude: number) {
-    const next: Position[] =
-      type === 'Point'
-        ? [[longitude, latitude]]
-        : [...vertices, [longitude, latitude]];
+    const vertex: DraftVertex = {
+      id: crypto.randomUUID(),
+      position: [longitude, latitude],
+    };
+    const next = type === 'Point' ? [vertex] : [...vertices, vertex];
     setVertices(next);
     setShowError(false);
     if (type === 'Point') commit(next);
@@ -186,30 +203,36 @@ export function GeometryPicker({
             />
           </Source>
         )}
-        {vertices.map(([longitude, latitude], index) => (
-          <Marker
-            key={`${longitude}-${latitude}-${index}`}
-            longitude={longitude}
-            latitude={latitude}
-            draggable={type === 'Point'}
-            onDragEnd={
-              type === 'Point'
-                ? (event) => {
-                    const next: Position[] = [
-                      [event.lngLat.lng, event.lngLat.lat],
-                    ];
-                    setVertices(next);
-                    commit(next);
-                  }
-                : undefined
-            }
-          >
-            <div
-              className="h-4 w-4 rounded-full border-2 border-white bg-primary shadow"
-              aria-label={`Vertex ${index + 1}`}
-            />
-          </Marker>
-        ))}
+        {vertices.map((vertex, index) => {
+          const [longitude, latitude] = vertex.position;
+          return (
+            <Marker
+              key={vertex.id}
+              longitude={longitude}
+              latitude={latitude}
+              draggable={type === 'Point'}
+              onDragEnd={
+                type === 'Point'
+                  ? (event) => {
+                      const next: DraftVertex[] = [
+                        {
+                          ...vertex,
+                          position: [event.lngLat.lng, event.lngLat.lat],
+                        },
+                      ];
+                      setVertices(next);
+                      commit(next);
+                    }
+                  : undefined
+              }
+            >
+              <div
+                className="h-4 w-4 rounded-full border-2 border-white bg-primary shadow"
+                aria-label={`Vertex ${index + 1}`}
+              />
+            </Marker>
+          );
+        })}
       </MapContainer>
 
       <div className="flex flex-wrap gap-2">
