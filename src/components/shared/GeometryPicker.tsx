@@ -55,6 +55,10 @@ const messages = defineMessages({
     id: 'alerts.create.geometryInvalid',
     defaultMessage: 'This geometry is not valid.',
   },
+  vertexLabel: {
+    id: 'alerts.create.geometryVertexLabel',
+    defaultMessage: 'Vertex {number}',
+  },
 });
 
 interface GeometryPickerProps {
@@ -139,7 +143,12 @@ export function GeometryPicker({
     const next = type === 'Point' ? [vertex] : [...vertices, vertex];
     setVertices(next);
     setShowError(false);
-    if (type === 'Point') commit(next);
+    if (type === 'Point') {
+      commit(next);
+    } else {
+      onChange(undefined);
+      onValidationChange?.(undefined);
+    }
   }
 
   function finish() {
@@ -228,7 +237,9 @@ export function GeometryPicker({
             >
               <div
                 className="h-4 w-4 rounded-full border-2 border-white bg-primary shadow"
-                aria-label={`Vertex ${index + 1}`}
+                aria-label={intl.formatMessage(messages.vertexLabel, {
+                  number: index + 1,
+                })}
               />
             </Marker>
           );

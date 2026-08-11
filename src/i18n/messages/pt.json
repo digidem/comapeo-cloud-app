@@ -560,5 +560,6 @@
   "theme.ariaSetSystem": "Usar tema do sistema",
   "theme.dark": "Escuro",
   "theme.light": "Claro",
-  "theme.system": "Sistema"
+  "theme.system": "Sistema",
+  "alerts.create.geometryVertexLabel": "Vértice {number}"
 }
