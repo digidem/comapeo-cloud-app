@@ -108,6 +108,128 @@ function draftFeature(type: AlertGeometryType, vertices: Position[]) {
   };
 }
 
+function GeometryTypePicker({
+  type,
+  onChange,
+}: {
+  type: AlertGeometryType;
+  onChange: (type: AlertGeometryType) => void;
+}) {
+  const intl = useIntl();
+  return (
+    <fieldset className="flex flex-wrap gap-2">
+      <legend className="mb-2 text-sm font-medium text-text">
+        {intl.formatMessage(messages.typeLabel)}
+      </legend>
+      {(
+        [
+          ['Point', messages.point],
+          ['LineString', messages.line],
+          ['Polygon', messages.polygon],
+        ] as const
+      ).map(([geometryType, label]) => (
+        <Button
+          key={geometryType}
+          type="button"
+          variant={type === geometryType ? 'primary' : 'secondary'}
+          onClick={() => onChange(geometryType)}
+          aria-pressed={type === geometryType}
+        >
+          {intl.formatMessage(label)}
+        </Button>
+      ))}
+    </fieldset>
+  );
+}
+
+function CoordinateEntry({
+  longitude,
+  latitude,
+  onLongitudeChange,
+  onLatitudeChange,
+  onAdd,
+}: {
+  longitude: string;
+  latitude: string;
+  onLongitudeChange: (value: string) => void;
+  onLatitudeChange: (value: string) => void;
+  onAdd: () => void;
+}) {
+  const intl = useIntl();
+  return (
+    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+      <label className="flex flex-col gap-1 text-sm font-medium text-text">
+        {intl.formatMessage(messages.longitude)}
+        <input
+          type="number"
+          min={-180}
+          max={180}
+          step="any"
+          value={longitude}
+          onChange={(event) => onLongitudeChange(event.target.value)}
+          className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-medium text-text">
+        {intl.formatMessage(messages.latitude)}
+        <input
+          type="number"
+          min={-90}
+          max={90}
+          step="any"
+          value={latitude}
+          onChange={(event) => onLatitudeChange(event.target.value)}
+          className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
+        />
+      </label>
+      <Button type="button" variant="secondary" onClick={onAdd}>
+        {intl.formatMessage(messages.addCoordinates)}
+      </Button>
+    </div>
+  );
+}
+
+function GeometryActions({
+  type,
+  hasVertices,
+  onFinish,
+  onUndo,
+  onClear,
+}: {
+  type: AlertGeometryType;
+  hasVertices: boolean;
+  onFinish: () => void;
+  onUndo: () => void;
+  onClear: () => void;
+}) {
+  const intl = useIntl();
+  return (
+    <div className="flex flex-wrap gap-2">
+      {type !== 'Point' && (
+        <Button type="button" variant="primary" onClick={onFinish}>
+          {intl.formatMessage(messages.finish)}
+        </Button>
+      )}
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={!hasVertices}
+        onClick={onUndo}
+      >
+        {intl.formatMessage(messages.undo)}
+      </Button>
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={!hasVertices}
+        onClick={onClear}
+      >
+        {intl.formatMessage(messages.clear)}
+      </Button>
+    </div>
+  );
+}
+
 export function GeometryPicker({
   projectLocalId,
   onChange,
@@ -268,28 +390,7 @@ export function GeometryPicker({
 
   return (
     <div className="flex flex-col gap-3">
-      <fieldset className="flex flex-wrap gap-2">
-        <legend className="mb-2 text-sm font-medium text-text">
-          {intl.formatMessage(messages.typeLabel)}
-        </legend>
-        {(
-          [
-            ['Point', messages.point],
-            ['LineString', messages.line],
-            ['Polygon', messages.polygon],
-          ] as const
-        ).map(([geometryType, label]) => (
-          <Button
-            key={geometryType}
-            type="button"
-            variant={type === geometryType ? 'primary' : 'secondary'}
-            onClick={() => chooseType(geometryType)}
-            aria-pressed={type === geometryType}
-          >
-            {intl.formatMessage(label)}
-          </Button>
-        ))}
-      </fieldset>
+      <GeometryTypePicker type={type} onChange={chooseType} />
 
       <p className="text-sm text-text-muted">{intl.formatMessage(hint)}</p>
       <MapContainer
@@ -354,67 +455,29 @@ export function GeometryPicker({
         })}
       </MapContainer>
 
-      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-        <label className="flex flex-col gap-1 text-sm font-medium text-text">
-          {intl.formatMessage(messages.longitude)}
-          <input
-            type="number"
-            min={-180}
-            max={180}
-            step="any"
-            value={manualLongitude}
-            onChange={(event) => setManualLongitude(event.target.value)}
-            className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm font-medium text-text">
-          {intl.formatMessage(messages.latitude)}
-          <input
-            type="number"
-            min={-90}
-            max={90}
-            step="any"
-            value={manualLatitude}
-            onChange={(event) => setManualLatitude(event.target.value)}
-            className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
-          />
-        </label>
-        <Button type="button" variant="secondary" onClick={addManualPoint}>
-          {intl.formatMessage(messages.addCoordinates)}
-        </Button>
-      </div>
+      <CoordinateEntry
+        longitude={manualLongitude}
+        latitude={manualLatitude}
+        onLongitudeChange={setManualLongitude}
+        onLatitudeChange={setManualLatitude}
+        onAdd={addManualPoint}
+      />
 
-      <div className="flex flex-wrap gap-2">
-        {type !== 'Point' && (
-          <Button type="button" variant="primary" onClick={finish}>
-            {intl.formatMessage(messages.finish)}
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={vertices.length === 0}
-          onClick={() => {
-            const next = vertices.slice(0, -1);
-            setVertices(next);
-            commit(next);
-          }}
-        >
-          {intl.formatMessage(messages.undo)}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={vertices.length === 0}
-          onClick={() => {
-            setVertices([]);
-            onChange(undefined);
-            onValidationChange?.(undefined);
-          }}
-        >
-          {intl.formatMessage(messages.clear)}
-        </Button>
-      </div>
+      <GeometryActions
+        type={type}
+        hasVertices={vertices.length > 0}
+        onFinish={finish}
+        onUndo={() => {
+          const next = vertices.slice(0, -1);
+          setVertices(next);
+          commit(next);
+        }}
+        onClear={() => {
+          setVertices([]);
+          onChange(undefined);
+          onValidationChange?.(undefined);
+        }}
+      />
     </div>
   );
 }
