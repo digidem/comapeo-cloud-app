@@ -93,6 +93,11 @@ export const mapMessages = defineMessages({
     id: 'map.import.fileLabel',
     defaultMessage: 'Import SMP file',
   },
+  importOfflineOnly: {
+    id: 'map.import.offlineOnly',
+    defaultMessage:
+      'This SMP contains map resources that are not packaged for offline use',
+  },
   importInvalidFile: {
     id: 'map.import.invalidFile',
     defaultMessage: 'This file is not a valid SMP',

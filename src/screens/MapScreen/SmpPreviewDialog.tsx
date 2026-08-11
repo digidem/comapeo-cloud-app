@@ -8,6 +8,7 @@ import Map from 'react-map-gl/maplibre';
 
 import { Button } from '@/components/ui/button';
 import type { SavedMap } from '@/lib/db';
+import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
 import {
   closeSmpReader,
   getSmpReader,
@@ -74,10 +75,9 @@ function PreviewSession({
         const resolved = await resolveStyle(reader, readerId);
         if (!cancelled) {
           if (resolved) {
-            const safeStyle =
-              map.styleUrl === ''
-                ? sanitizeImportedSmpStyle(resolved)
-                : resolved;
+            const safeStyle = isImportedSmpMap(map)
+              ? sanitizeImportedSmpStyle(resolved)
+              : resolved;
             if (safeStyle) setStyle(safeStyle);
             else setError(true);
           } else {

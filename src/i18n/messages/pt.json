@@ -422,6 +422,7 @@
   "map.download.unknownError": "Erro desconhecido",
   "map.import.button": "Importar SMP",
   "map.import.fileLabel": "Importar arquivo SMP",
+  "map.import.offlineOnly": "Este SMP contém recursos de mapa que não estão incluídos para uso offline",
   "map.import.invalidFile": "Este arquivo não é um SMP válido",
   "map.import.missingStyle": "O SMP não tem um estilo de mapa",
   "map.import.quotaExceeded": "Não há espaço de armazenamento suficiente para importar este SMP",

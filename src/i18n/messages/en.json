@@ -1358,6 +1358,9 @@
   "map.import.missingStyle": {
     "defaultMessage": "SMP has no map style"
   },
+  "map.import.offlineOnly": {
+    "defaultMessage": "This SMP contains map resources that are not packaged for offline use"
+  },
   "map.import.quotaExceeded": {
     "defaultMessage": "Not enough storage space to import this SMP"
   },

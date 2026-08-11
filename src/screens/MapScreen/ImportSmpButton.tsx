@@ -1,3 +1,5 @@
+import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
+
 import { useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 
@@ -8,6 +10,7 @@ import { checkStorageQuota } from '@/lib/map/smp-download';
 import {
   closeSmpReader,
   getSmpReader,
+  sanitizeImportedSmpStyle,
   sanitizeSmpAttributionText,
 } from '@/lib/map/smp-serve';
 import { uuid } from '@/lib/uuid';
@@ -168,6 +171,11 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
 
       if (!style || typeof style !== 'object' || !style.sources) {
         setError(intl.formatMessage(mapMessages.importMissingStyle));
+        return;
+      }
+
+      if (!sanitizeImportedSmpStyle(style as StyleSpecification)) {
+        setError(intl.formatMessage(mapMessages.importOfflineOnly));
         return;
       }
 

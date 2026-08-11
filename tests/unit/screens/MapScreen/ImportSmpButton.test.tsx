@@ -20,6 +20,7 @@ vi.mock('@/hooks/useMaps', async (importOriginal) => {
 vi.mock('@/lib/map/smp-serve', () => ({
   getSmpReader: vi.fn(),
   closeSmpReader: (...args: unknown[]) => closeSmpReader(...args),
+  sanitizeImportedSmpStyle: vi.fn((style) => style),
   sanitizeSmpAttributionText: (value: string) =>
     value
       .replace(/<[^>]*>/g, ' ')
@@ -118,7 +119,7 @@ describe('ImportSmpButton', () => {
         raster: {
           type: 'raster',
           attribution:
-            '<a href="https://example.com" onclick="alert(1)">Community Map</a>',
+            '<a href="https://example.com" onclick="alert(1)">Community & Forest</a>',
         },
       },
       layers: [],
@@ -135,7 +136,7 @@ describe('ImportSmpButton', () => {
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
     expect(mutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ attribution: 'Community Map' }),
+      expect.objectContaining({ attribution: 'Community & Forest' }),
     );
   });
 
@@ -251,6 +252,37 @@ describe('ImportSmpButton', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This file is not a valid SMP',
+    );
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('rejects an SMP that depends on resources outside the package', async () => {
+    const user = userEvent.setup();
+    const reader = readerWithStyle({
+      version: 8,
+      sources: {
+        raster: {
+          type: 'raster',
+          tiles: ['https://tracker.example/{z}/{x}/{y}.png'],
+        },
+      },
+      layers: [],
+    });
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(
+      reader as unknown as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+    );
+    vi.mocked(smpServe.sanitizeImportedSmpStyle).mockReturnValueOnce(null);
+
+    render(<ImportSmpButton projectLocalId="project-1" />);
+    await user.upload(
+      screen.getByLabelText('Import SMP file'),
+      new File(['valid'], 'remote-resources.smp', {
+        type: 'application/zip',
+      }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This SMP contains map resources that are not packaged for offline use',
     );
     expect(mutateAsync).not.toHaveBeenCalled();
   });

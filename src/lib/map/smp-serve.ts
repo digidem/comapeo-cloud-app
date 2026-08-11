@@ -31,11 +31,10 @@ function escapeHtml(value: string): string {
 }
 
 export function sanitizeSmpAttributionText(value: string): string {
-  const plainText = value
+  return value
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return escapeHtml(plainText);
 }
 
 function isOfflineResourceUrl(value: string): boolean {
@@ -72,6 +71,9 @@ function styleUsesExternalResources(style: StyleSpecification): boolean {
     return true;
   }
 
+  // MapLibre GL 5.x does not currently expose style imports in its bundled
+  // StyleSpecification type. Keep this runtime guard for forward compatibility
+  // so future import support cannot silently introduce network fetches.
   const imports = styleWithResources.imports;
   if (
     Array.isArray(imports) &&
@@ -145,7 +147,9 @@ export function sanitizeSmpStyleAttributions(
         id,
         {
           ...source,
-          attribution: sanitizeSmpAttributionText(source.attribution),
+          attribution: escapeHtml(
+            sanitizeSmpAttributionText(source.attribution),
+          ),
         },
       ];
     }),

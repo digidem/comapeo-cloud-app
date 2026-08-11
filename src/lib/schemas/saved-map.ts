@@ -99,12 +99,19 @@ const rasterSchema = v.pipe(
   v.check((value) => value.maxZoom >= value.minZoom, zoomOrderMessage),
 );
 
+// `smpBlob` is intentionally outside this scalar schema, so the strongest
+// import invariant available here is ready + empty styleUrl. Runtime consumers
+// additionally use `isImportedSmpMap`, which requires the actual SMP blob.
 const styleSchema = v.pipe(
   v.object({
     ...baseFields,
     type: v.literal('style'),
     styleUrl: v.string(),
   }),
+  v.check(
+    (value) => value.styleUrl.length > 0 || value.status === 'ready',
+    'empty styleUrl is only valid for ready imported SMP maps',
+  ),
   v.check((value) => value.maxZoom >= value.minZoom, zoomOrderMessage),
 );
 

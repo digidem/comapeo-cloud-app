@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { type SavedMap, getDb } from '@/lib/db';
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { BASEMAP_CATALOG, findBasemap } from '@/lib/map/basemaps';
+import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
 import {
   closeSmpReader,
   getSmpReader,
@@ -167,6 +168,7 @@ function MapContainer({
   });
 
   const [smpStyle, setSmpStyle] = useState<StyleSpecification | null>(null);
+  const isImportedActiveMap = isImportedSmpMap(activeSavedMap);
 
   // Build an ImageryBasemap from the active map's saved style settings
   // so the user sees the same layer/settings across the app immediately
@@ -208,7 +210,6 @@ function MapContainer({
     const mapId = activeSavedMap?.id;
     const smpBlob = activeSavedMap?.smpBlob;
     const status = activeSavedMap?.status;
-    const styleUrl = activeSavedMap?.styleUrl;
 
     if (!mapId || !smpBlob || status !== 'ready') return;
 
@@ -219,7 +220,9 @@ function MapContainer({
       resolveSmpStyle(reader, mapId).then((style) => {
         if (cancelled) return;
         setSmpStyle(
-          style && styleUrl === '' ? sanitizeImportedSmpStyle(style) : style,
+          style && isImportedActiveMap
+            ? sanitizeImportedSmpStyle(style)
+            : style,
         );
       });
     });
@@ -232,7 +235,7 @@ function MapContainer({
     activeSavedMap?.id,
     activeSavedMap?.smpBlob,
     activeSavedMap?.status,
-    activeSavedMap?.styleUrl,
+    isImportedActiveMap,
   ]);
 
   // Controlled basemapId takes priority; uncontrolled uses the store
