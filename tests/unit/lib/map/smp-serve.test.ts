@@ -106,6 +106,18 @@ describe('closeSmpReader', () => {
     expect(MockReader).toHaveBeenCalledTimes(2);
   });
 
+  it('evicts the cached reader even when close rejects', async () => {
+    const { getSmpReader, closeSmpReader } = await importModule();
+    const first = await getSmpReader('map-a', createMockBlob());
+    vi.mocked(first.close).mockRejectedValueOnce(new Error('close failed'));
+
+    await expect(closeSmpReader('map-a')).rejects.toThrow('close failed');
+    const second = await getSmpReader('map-a', createMockBlob());
+
+    expect(first).not.toBe(second);
+    expect(MockReader).toHaveBeenCalledTimes(2);
+  });
+
   it('is a no-op for an unknown mapId', async () => {
     const { closeSmpReader } = await importModule();
     await expect(closeSmpReader('nonexistent')).resolves.toBeUndefined();

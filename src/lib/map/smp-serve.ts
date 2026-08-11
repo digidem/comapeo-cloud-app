@@ -191,8 +191,11 @@ export async function getSmpReader(mapId: string, blob: Blob): Promise<Reader> {
 
 export async function closeSmpReader(mapId: string): Promise<void> {
   const reader = readerCache.get(mapId);
-  if (reader) {
+  if (!reader) return;
+
+  try {
     await reader.close();
+  } finally {
     readerCache.delete(mapId);
   }
 }
