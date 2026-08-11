@@ -194,11 +194,11 @@
   "alerts.create.noProject": {
     "defaultMessage": "Select a project first"
   },
-  "alerts.create.sourceId": {
-    "defaultMessage": "Source ID"
-  },
   "alerts.create.requiredField": {
     "defaultMessage": "This field is required."
+  },
+  "alerts.create.sourceId": {
+    "defaultMessage": "Source ID"
   },
   "alerts.create.submit": {
     "defaultMessage": "Create"
