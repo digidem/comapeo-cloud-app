@@ -29,6 +29,7 @@ import {
   sanitizeImportedSmpStyle,
 } from '@/lib/map/smp-serve';
 import type { BasemapId, ImageryBasemap } from '@/lib/schemas/imagery-source';
+import { uuid } from '@/lib/uuid';
 import { useMapStore } from '@/stores/map-store';
 
 import { BasemapSwitcher } from './BasemapSwitcher';
@@ -225,19 +226,20 @@ function MapContainer({
 
     if (!mapId || !smpBlob || status !== 'ready') return;
 
+    const readerId = `active:${mapId}:${uuid()}`;
     let cancelled = false;
     let readerOpened = false;
     registerSmpProtocol();
     void (async () => {
       try {
-        const reader = await getSmpReader(mapId, smpBlob);
+        const reader = await getSmpReader(readerId, smpBlob);
         readerOpened = true;
         if (cancelled) {
-          await closeSmpReader(mapId);
+          await closeSmpReader(readerId);
           return;
         }
 
-        const style = await resolveSmpStyle(reader, mapId);
+        const style = await resolveSmpStyle(reader, readerId);
         if (cancelled) return;
 
         const safeStyle =
@@ -263,7 +265,7 @@ function MapContainer({
     return () => {
       cancelled = true;
       if (readerOpened) {
-        void closeSmpReader(mapId).catch(() => {
+        void closeSmpReader(readerId).catch(() => {
           // Reader cleanup failure must not surface as an unhandled rejection.
         });
       }

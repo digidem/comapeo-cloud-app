@@ -1,6 +1,8 @@
 import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { focusManager } from '@tanstack/react-query';
+
 import { MapContainer } from '@/components/shared/MapContainer/MapContainer';
 import { useMapStore } from '@/stores/map-store';
 
@@ -403,11 +405,52 @@ describe('MapContainer', () => {
 
     const { unmount } = render(<MapContainer />);
     await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalled());
+    const readerId = mockGetSmpReader.mock.calls[0]![0] as string;
+    expect(readerId).toMatch(/^active:late-map:/);
     unmount();
     resolveReader({});
 
     await waitFor(() => expect(mockCloseSmpReader).toHaveBeenCalledTimes(1));
-    expect(mockCloseSmpReader).toHaveBeenCalledWith('late-map');
+    expect(mockCloseSmpReader).toHaveBeenCalledWith(readerId);
+  });
+
+  it('uses independent reader keys when the same active map refetches with a new blob', async () => {
+    mockGetSmpReader.mockResolvedValue({});
+    mockCloseSmpReader.mockClear();
+    focusManager.setFocused(false);
+
+    const firstBlob = new Blob(['first']);
+    const secondBlob = new Blob(['second']);
+    const mapRecord = {
+      id: 'refetched-map',
+      projectLocalId: 'proj-1',
+      name: 'Refetched Map',
+      type: 'style' as const,
+      styleUrl: '',
+      status: 'ready' as const,
+    };
+    mockDbGet
+      .mockResolvedValueOnce({ ...mapRecord, smpBlob: firstBlob })
+      .mockResolvedValue({ ...mapRecord, smpBlob: secondBlob });
+    useMapStore.setState({ activeMapId: mapRecord.id });
+
+    render(<MapContainer />);
+
+    await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(1));
+    const firstReaderId = mockGetSmpReader.mock.calls[0]![0] as string;
+    expect(firstReaderId).toMatch(/^active:refetched-map:/);
+
+    focusManager.setFocused(true);
+    await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(2));
+    const secondReaderId = mockGetSmpReader.mock.calls[1]![0] as string;
+    expect(secondReaderId).toMatch(/^active:refetched-map:/);
+    expect(secondReaderId).not.toBe(firstReaderId);
+    await waitFor(() =>
+      expect(mockCloseSmpReader).toHaveBeenCalledWith(firstReaderId),
+    );
+    expect(mockCloseSmpReader).not.toHaveBeenCalledWith(secondReaderId);
+
+    focusManager.setFocused(undefined);
   });
 
   it('does not render active offline map badge when no active map', () => {
