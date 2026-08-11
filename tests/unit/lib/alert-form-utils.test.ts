@@ -55,6 +55,10 @@ describe('alert form utilities', () => {
     expect(validateGeometryDraft('Point', [[10, 91]])).toBe('coordinates');
   });
 
+  it('returns an empty metadata object when no rows are configured', () => {
+    expect(metadataRowsToRecord([])).toEqual({ value: {}, errors: {} });
+  });
+
   it('serializes typed metadata rows into a record', () => {
     const result = metadataRowsToRecord([
       { id: 'a', key: 'label', value: 'fire', type: 'text' },

@@ -61,6 +61,10 @@ const messages = defineMessages({
     defaultMessage: 'Detection Date End',
   },
   sourceIdLabel: { id: 'alerts.create.sourceId', defaultMessage: 'Source ID' },
+  requiredField: {
+    id: 'alerts.create.requiredField',
+    defaultMessage: 'This field is required.',
+  },
   submit: { id: 'alerts.create.submit', defaultMessage: 'Create' },
   cancel: { id: 'alerts.create.cancel', defaultMessage: 'Cancel' },
   noProject: {
@@ -78,12 +82,21 @@ const messages = defineMessages({
   },
 });
 
+const dateInput = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.regex(/^\d{4}-\d{2}-\d{2}$/),
+);
 const formSchema = v.object({
-  detectionDateStart: v.string(),
-  detectionDateEnd: v.string(),
-  sourceId: v.string(),
+  detectionDateStart: dateInput,
+  detectionDateEnd: dateInput,
+  sourceId: v.pipe(v.string(), v.trim(), v.minLength(1)),
 });
-type FormData = v.InferInput<typeof formSchema>;
+type FormData = v.InferOutput<typeof formSchema>;
+
+function dateInputToIso(date: string, endOfDay = false) {
+  return `${date}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`;
+}
 
 export function CreateAlertScreen() {
   const intl = useIntl();
@@ -129,7 +142,11 @@ export function CreateAlertScreen() {
   );
   useShellSlot(shellSlot);
 
-  const { register, handleSubmit } = useForm<FormData>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors: formErrors },
+  } = useForm<FormData>({
     resolver: valibotResolver(formSchema),
     defaultValues: {
       detectionDateStart: '',
@@ -183,9 +200,9 @@ export function CreateAlertScreen() {
         projectLocalId: selectedProjectId,
         geometry,
         metadata: metadata.value,
-        detectionDateStart: data.detectionDateStart || undefined,
-        detectionDateEnd: data.detectionDateEnd || undefined,
-        sourceId: data.sourceId || undefined,
+        detectionDateStart: dateInputToIso(data.detectionDateStart),
+        detectionDateEnd: dateInputToIso(data.detectionDateEnd, true),
+        sourceId: data.sourceId,
       },
       { onSuccess: () => void navigate({ to: '/alerts' }) },
     );
@@ -245,24 +262,42 @@ export function CreateAlertScreen() {
               <input
                 type="date"
                 {...register('detectionDateStart')}
+                aria-invalid={!!formErrors.detectionDateStart}
                 className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
               />
+              {formErrors.detectionDateStart && (
+                <span className="text-xs text-error">
+                  {intl.formatMessage(messages.requiredField)}
+                </span>
+              )}
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-text">
               {intl.formatMessage(messages.detectionDateEndLabel)}
               <input
                 type="date"
                 {...register('detectionDateEnd')}
+                aria-invalid={!!formErrors.detectionDateEnd}
                 className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
               />
+              {formErrors.detectionDateEnd && (
+                <span className="text-xs text-error">
+                  {intl.formatMessage(messages.requiredField)}
+                </span>
+              )}
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-text">
               {intl.formatMessage(messages.sourceIdLabel)}
               <input
                 type="text"
                 {...register('sourceId')}
+                aria-invalid={!!formErrors.sourceId}
                 className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
               />
+              {formErrors.sourceId && (
+                <span className="text-xs text-error">
+                  {intl.formatMessage(messages.requiredField)}
+                </span>
+              )}
             </label>
           </div>
           <MetadataFields

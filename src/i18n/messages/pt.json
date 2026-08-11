@@ -50,6 +50,7 @@
   "alerts.create.metadataValue": "Valor",
   "alerts.create.noProject": "Selecione um projeto primeiro",
   "alerts.create.sourceId": "ID da fonte",
+  "alerts.create.requiredField": "Este campo é obrigatório.",
   "alerts.create.submit": "Criar",
   "alerts.create.title": "Criar Alerta",
   "alerts.loading": "Carregando...",

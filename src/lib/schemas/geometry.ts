@@ -1,6 +1,10 @@
 import * as v from 'valibot';
 
-const position = v.pipe(v.array(v.number()), v.minLength(2));
+const longitude = v.pipe(v.number(), v.minValue(-180), v.maxValue(180));
+const latitude = v.pipe(v.number(), v.minValue(-90), v.maxValue(90));
+const position = v.tuple([longitude, latitude]);
+const line = v.pipe(v.array(position), v.minLength(2));
+const linearRing = v.pipe(v.array(position), v.minLength(4));
 
 export const geometrySchema: v.GenericSchema<{
   type: string;
@@ -17,19 +21,19 @@ export const geometrySchema: v.GenericSchema<{
     }),
     v.object({
       type: v.literal('LineString'),
-      coordinates: v.array(position),
+      coordinates: line,
     }),
     v.object({
       type: v.literal('MultiLineString'),
-      coordinates: v.array(v.array(position)),
+      coordinates: v.array(line),
     }),
     v.object({
       type: v.literal('Polygon'),
-      coordinates: v.array(v.array(position)),
+      coordinates: v.array(linearRing),
     }),
     v.object({
       type: v.literal('MultiPolygon'),
-      coordinates: v.array(v.array(v.array(position))),
+      coordinates: v.array(v.array(linearRing)),
     }),
   ]),
 );

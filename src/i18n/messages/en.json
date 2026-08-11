@@ -197,6 +197,9 @@
   "alerts.create.sourceId": {
     "defaultMessage": "Source ID"
   },
+  "alerts.create.requiredField": {
+    "defaultMessage": "This field is required."
+  },
   "alerts.create.submit": {
     "defaultMessage": "Create"
   },

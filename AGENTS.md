@@ -139,7 +139,7 @@ Managed by Prettier via `@trivago/prettier-plugin-sort-imports`:
 | GET | `/projects/:id` | Bearer | `{ data: { projectId, name? } }` |
 | GET | `/projects/:id/observations` | Bearer | `{ data: [{ docId, createdAt, updatedAt, deleted, lat?, lon?, attachments, tags }] }` |
 | GET | `/projects/:id/remoteDetectionAlerts` | Bearer | `{ data: [{ docId, createdAt, updatedAt, deleted, detectionDateStart, detectionDateEnd, sourceId, metadata, geometry }] }` |
-| POST | `/projects/:id/remoteDetectionAlerts` | Bearer | Body: `{ geometry, metadata?, detectionDateStart?, detectionDateEnd? }` -> 201 empty |
+| POST | `/projects/:id/remoteDetectionAlerts` | Bearer | Body: `{ detectionDateStart, detectionDateEnd, sourceId, metadata, geometry }` (all required; dates are ISO date-time, sourceId non-empty, metadata may be `{}`) -> 201 empty |
 | POST | `/api/invites/encrypt` | None (first-party) | Body: `{ url, token, ttlHours? }` -> `{ code }`; uses Cloudflare Pages Function with `INVITE_KEY` |
 | POST | `/api/invites/decrypt` | None (first-party) | Body: `{ code }` -> `{ url, token }`; 410 if expired |
 

@@ -185,7 +185,14 @@ describe('apiClient', () => {
       error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' },
     };
     const alertBody = {
-      geometry: { type: 'Point' as const, coordinates: [0, 0] },
+      detectionDateStart: '2025-01-01T00:00:00Z',
+      detectionDateEnd: '2025-01-01T23:59:59Z',
+      sourceId: 'test-source',
+      metadata: {},
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [0, 0] as [number, number],
+      },
     };
     const otherConfig = {
       baseUrl: 'https://other.example.com',

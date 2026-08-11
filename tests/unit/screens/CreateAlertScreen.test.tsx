@@ -71,6 +71,12 @@ vi.mock('@/components/shared/MetadataFields', () => ({
   ),
 }));
 
+async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText('Detection Date Start'), '2025-01-01');
+  await user.type(screen.getByLabelText('Detection Date End'), '2025-01-02');
+  await user.type(screen.getByLabelText('Source ID'), 'GLAD-S2');
+}
+
 describe('CreateAlertScreen', () => {
   beforeEach(() => {
     mockSelectedProjectId = 'proj-1';
@@ -93,6 +99,7 @@ describe('CreateAlertScreen', () => {
   it('requires geometry before submitting', async () => {
     const user = userEvent.setup();
     render(<CreateAlertScreen />);
+    await fillRequiredFields(user);
     await user.click(screen.getByText('Create'));
     expect(
       screen.getByText('Choose a valid alert location or shape.'),
@@ -105,7 +112,7 @@ describe('CreateAlertScreen', () => {
     render(<CreateAlertScreen />);
     await user.click(screen.getByText('Place test point'));
     await user.click(screen.getByText('Add test metadata'));
-    await user.type(screen.getByLabelText('Source ID'), 'GLAD-S2');
+    await fillRequiredFields(user);
     await user.click(screen.getByText('Create'));
 
     expect(mockMutate).toHaveBeenCalledWith(
@@ -113,8 +120,8 @@ describe('CreateAlertScreen', () => {
         projectLocalId: 'proj-1',
         geometry: { type: 'Point', coordinates: [10, 20] },
         metadata: { severity: 'high', confidence: 0.9 },
-        detectionDateStart: undefined,
-        detectionDateEnd: undefined,
+        detectionDateStart: '2025-01-01T00:00:00.000Z',
+        detectionDateEnd: '2025-01-02T23:59:59.999Z',
         sourceId: 'GLAD-S2',
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
@@ -125,6 +132,7 @@ describe('CreateAlertScreen', () => {
     const user = userEvent.setup();
     const view = render(<CreateAlertScreen />);
     await user.click(screen.getByText('Place test point'));
+    await fillRequiredFields(user);
 
     mockSelectedProjectId = 'proj-2';
     view.rerender(<CreateAlertScreen />);
@@ -149,6 +157,7 @@ describe('CreateAlertScreen', () => {
     mockMutate.mockImplementationOnce((_input, options) => options.onSuccess());
     render(<CreateAlertScreen />);
     await user.click(screen.getByText('Place test point'));
+    await fillRequiredFields(user);
     await user.click(screen.getByText('Create'));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/alerts' });
   });

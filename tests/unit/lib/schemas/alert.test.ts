@@ -17,6 +17,10 @@ const validAlert = {
   createdAt: '2025-01-01T00:00:00Z',
   updatedAt: '2025-01-01T00:00:00Z',
   deleted: false,
+  detectionDateStart: '2025-01-01T00:00:00Z',
+  detectionDateEnd: '2025-01-31T23:59:59Z',
+  sourceId: 'source-1',
+  metadata: { severity: 'high', confidence: 0.95 },
   geometry: pointGeometry,
 };
 
@@ -41,12 +45,15 @@ describe('alertSchema', () => {
     expect(result.metadata).toEqual({ severity: 'high', confidence: 0.95 });
   });
 
-  it('parses alert without optional fields', () => {
-    const result = v.parse(alertSchema, validAlert);
-    expect(result.detectionDateStart).toBeUndefined();
-    expect(result.detectionDateEnd).toBeUndefined();
-    expect(result.sourceId).toBeUndefined();
-    expect(result.metadata).toBeUndefined();
+  it.each([
+    'detectionDateStart',
+    'detectionDateEnd',
+    'sourceId',
+    'metadata',
+    'geometry',
+  ] as const)('rejects missing required %s', (key) => {
+    const { [key]: _missing, ...data } = validAlert;
+    expect(() => v.parse(alertSchema, data)).toThrow();
   });
 
   it('parses alert with Polygon geometry', () => {
@@ -143,58 +150,68 @@ describe('alertsResponseSchema', () => {
 });
 
 describe('createAlertBodySchema', () => {
-  it('parses valid body with only required geometry', () => {
-    const result = v.parse(createAlertBodySchema, {
-      geometry: pointGeometry,
-    });
-    expect(result.geometry).toEqual(pointGeometry);
+  const validBody = {
+    geometry: pointGeometry,
+    detectionDateStart: '2025-01-01T00:00:00Z',
+    detectionDateEnd: '2025-01-31T23:59:59Z',
+    sourceId: 'source-1',
+    metadata: { type: 'deforestation', confidence: 0.9 },
+  };
+
+  it('parses the comapeo-cloud alert contract', () => {
+    expect(v.parse(createAlertBodySchema, validBody)).toEqual(validBody);
   });
 
-  it('parses valid body with all optional fields', () => {
-    const data = {
-      geometry: pointGeometry,
-      detectionDateStart: '2025-01-01T00:00:00Z',
-      detectionDateEnd: '2025-01-31T23:59:59Z',
-      sourceId: 'source-1',
-      metadata: { type: 'deforestation' },
-    };
-    const result = v.parse(createAlertBodySchema, data);
-    expect(result.detectionDateStart).toBe('2025-01-01T00:00:00Z');
-    expect(result.detectionDateEnd).toBe('2025-01-31T23:59:59Z');
-    expect(result.sourceId).toBe('source-1');
-    expect(result.metadata).toEqual({ type: 'deforestation' });
+  it.each([
+    'detectionDateStart',
+    'detectionDateEnd',
+    'sourceId',
+    'metadata',
+    'geometry',
+  ] as const)('rejects missing required %s', (key) => {
+    const { [key]: _missing, ...body } = validBody;
+    expect(() => v.parse(createAlertBodySchema, body)).toThrow();
   });
 
-  it('rejects missing geometry', () => {
+  it('rejects invalid date-time values', () => {
     expect(() =>
       v.parse(createAlertBodySchema, {
-        detectionDateStart: '2025-01-01T00:00:00Z',
+        ...validBody,
+        detectionDateStart: '2025-01-01',
       }),
     ).toThrow();
   });
 
-  it('rejects invalid geometry', () => {
+  it('rejects empty sourceId', () => {
+    expect(() =>
+      v.parse(createAlertBodySchema, { ...validBody, sourceId: '' }),
+    ).toThrow();
+  });
+
+  it('rejects metadata values outside the server contract', () => {
     expect(() =>
       v.parse(createAlertBodySchema, {
-        geometry: { type: 'Invalid', coordinates: [0] },
+        ...validBody,
+        metadata: { nested: { unsupported: true } },
       }),
     ).toThrow();
   });
 
-  it('allows empty body with just geometry', () => {
-    const result = v.parse(createAlertBodySchema, {
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [0, 0],
-          [1, 1],
-        ],
-      },
-    });
-    expect(result.geometry.type).toBe('LineString');
-    expect(result.detectionDateStart).toBeUndefined();
-    expect(result.detectionDateEnd).toBeUndefined();
-    expect(result.sourceId).toBeUndefined();
-    expect(result.metadata).toBeUndefined();
+  it('rejects coordinates outside server bounds', () => {
+    expect(() =>
+      v.parse(createAlertBodySchema, {
+        ...validBody,
+        geometry: { type: 'Point', coordinates: [181, 0] },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects lines with fewer than two positions', () => {
+    expect(() =>
+      v.parse(createAlertBodySchema, {
+        ...validBody,
+        geometry: { type: 'LineString', coordinates: [[0, 0]] },
+      }),
+    ).toThrow();
   });
 });

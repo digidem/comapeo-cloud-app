@@ -58,7 +58,7 @@ export function validateGeometryDraft(
 }
 
 export function metadataRowsToRecord(rows: MetadataRow[]): {
-  value?: Record<string, unknown>;
+  value: Record<string, unknown>;
   errors: Record<string, string>;
 } {
   const output: Record<string, unknown> = {};
@@ -93,7 +93,7 @@ export function metadataRowsToRecord(rows: MetadataRow[]): {
   }
 
   return {
-    value: Object.keys(output).length > 0 ? output : undefined,
+    value: output,
     errors,
   };
 }
