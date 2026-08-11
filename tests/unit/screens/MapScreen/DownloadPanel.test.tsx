@@ -214,6 +214,22 @@ describe('DownloadPanel', () => {
     expect(within(missingState).queryByRole('button')).not.toBeInTheDocument();
   });
 
+  it('keeps regeneration available for authored ready maps with a missing blob', async () => {
+    const map = createMockMap({
+      id: 'authored-missing',
+      status: 'ready',
+      smpBlob: undefined,
+      smpSize: 100,
+    });
+
+    render(<DownloadPanel map={map} />);
+
+    const missingState = await screen.findByTestId('download-ready-missing');
+    expect(
+      within(missingState).getByRole('button', { name: 'Retry' }),
+    ).toBeInTheDocument();
+  });
+
   it('renders error state when downloadMap has an error', () => {
     vi.mocked(useDownloadMap).mockReturnValue({
       error: new Error('Network timeout'),

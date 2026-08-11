@@ -14,6 +14,7 @@ import {
   registerSmpProtocol,
   resolveSmpStyle,
 } from '@/lib/map/smp-serve';
+import { uuid } from '@/lib/uuid';
 
 import { mapMessages } from './messages';
 
@@ -48,7 +49,7 @@ function PreviewSession({
   const intl = useIntl();
   const [style, setStyle] = useState<StyleSpecification | null>(null);
   const [error, setError] = useState(false);
-  const readerId = `preview:${map.id}`;
+  const [readerId] = useState(() => `preview:${map.id}:${uuid()}`);
   const { registerProtocol, getReader, resolveStyle, closeReader } =
     dependencies;
 
@@ -109,6 +110,7 @@ function PreviewSession({
     <Map
       data-testid="smp-preview-map"
       mapStyle={style}
+      attributionControl={false}
       style={{ width: '100%', height: '100%' }}
       onLoad={(event) => {
         event.target.fitBounds(

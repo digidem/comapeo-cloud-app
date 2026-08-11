@@ -191,7 +191,7 @@ describe('protocol handler', () => {
     mockCreateServer.mockReturnValue({ fetch: mockFetch });
 
     const { getSmpReader, registerSmpProtocol } = await importModule();
-    await getSmpReader('preview:map-a', createMockBlob());
+    await getSmpReader('preview:map-a:session-1', createMockBlob());
     registerSmpProtocol();
 
     const handler = mockAddProtocol.mock.calls[0]![1] as (
@@ -199,7 +199,7 @@ describe('protocol handler', () => {
     ) => Promise<{ data: ArrayBuffer }>;
 
     const result = await handler(
-      new Request('smp:///preview:map-a/tiles/0/0/0.png'),
+      new Request('smp:///preview:map-a:session-1/tiles/0/0/0.png'),
     );
 
     expect(mockFetch).toHaveBeenCalledOnce();

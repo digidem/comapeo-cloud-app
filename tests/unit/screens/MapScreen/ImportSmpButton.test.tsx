@@ -282,6 +282,28 @@ describe('ImportSmpButton', () => {
     );
   });
 
+  it('recovers the import button when transient reader cleanup fails', async () => {
+    const user = userEvent.setup();
+    const reader = readerWithStyle({ version: 8, sources: {}, layers: [] });
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(
+      reader as unknown as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+    );
+    closeSmpReader.mockRejectedValueOnce(new Error('close failed'));
+
+    render(<ImportSmpButton projectLocalId="project-1" />);
+    await user.upload(
+      screen.getByLabelText('Import SMP file'),
+      new File(['valid'], 'valid.smp', { type: 'application/zip' }),
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'SMP imported successfully',
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Import SMP' })).toBeEnabled();
+    });
+  });
+
   it('shows a missing-style error and creates nothing when the SMP has no style', async () => {
     const user = userEvent.setup();
     const reader = {

@@ -10,11 +10,18 @@ const fitBounds = vi.fn();
 vi.mock('react-map-gl/maplibre', () => ({
   default: ({
     onLoad,
+    attributionControl,
   }: {
     onLoad?: (event: { target: { fitBounds: typeof fitBounds } }) => void;
+    attributionControl?: boolean;
   }) => {
     onLoad?.({ target: { fitBounds } });
-    return <div data-testid="smp-preview-map" />;
+    return (
+      <div
+        data-testid="smp-preview-map"
+        data-attribution-control={String(attributionControl)}
+      />
+    );
   },
 }));
 
@@ -59,16 +66,14 @@ describe('SmpPreviewDialog', () => {
 
     render(<SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />);
 
-    expect(await screen.findByTestId('smp-preview-map')).toBeInTheDocument();
+    const previewMap = await screen.findByTestId('smp-preview-map');
+    expect(previewMap).toBeInTheDocument();
+    expect(previewMap).toHaveAttribute('data-attribution-control', 'false');
     expect(smpServe.registerSmpProtocol).toHaveBeenCalled();
-    expect(smpServe.getSmpReader).toHaveBeenCalledWith(
-      'preview:map-1',
-      map.smpBlob,
-    );
-    expect(smpServe.resolveSmpStyle).toHaveBeenCalledWith(
-      reader,
-      'preview:map-1',
-    );
+    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+    expect(readerId).toMatch(/^preview:map-1:/);
+    expect(smpServe.getSmpReader).toHaveBeenCalledWith(readerId, map.smpBlob);
+    expect(smpServe.resolveSmpStyle).toHaveBeenCalledWith(reader, readerId);
     expect(fitBounds).toHaveBeenCalledWith(
       [
         [-70, -5],
@@ -87,13 +92,14 @@ describe('SmpPreviewDialog', () => {
       <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
     );
     await screen.findByTestId('smp-preview-map');
+    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
 
     rerender(
       <SmpPreviewDialog open={false} onOpenChange={vi.fn()} map={map} />,
     );
 
     await waitFor(() => {
-      expect(smpServe.closeSmpReader).toHaveBeenCalledWith('preview:map-1');
+      expect(smpServe.closeSmpReader).toHaveBeenCalledWith(readerId);
     });
   });
 
@@ -110,6 +116,7 @@ describe('SmpPreviewDialog', () => {
       <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
     );
     expect(screen.getByText('Loading map preview…')).toBeInTheDocument();
+    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
 
     rerender(
       <SmpPreviewDialog open={false} onOpenChange={vi.fn()} map={map} />,
@@ -120,9 +127,47 @@ describe('SmpPreviewDialog', () => {
     });
 
     await waitFor(() => {
-      expect(smpServe.closeSmpReader).toHaveBeenCalledWith('preview:map-1');
+      expect(smpServe.closeSmpReader).toHaveBeenCalledWith(readerId);
     });
     expect(smpServe.resolveSmpStyle).not.toHaveBeenCalled();
+  });
+
+  it('uses a new reader cache key when reopened before the prior reader finishes', async () => {
+    const firstReader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
+    let resolveFirstReader!: (value: typeof firstReader) => void;
+    vi.mocked(smpServe.getSmpReader)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirstReader = resolve;
+        }),
+      )
+      .mockResolvedValueOnce(
+        {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+      );
+    vi.mocked(smpServe.resolveSmpStyle).mockResolvedValue(style);
+
+    const { rerender } = render(
+      <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
+    );
+    const firstReaderId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+
+    rerender(
+      <SmpPreviewDialog open={false} onOpenChange={vi.fn()} map={map} />,
+    );
+    rerender(<SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />);
+
+    expect(await screen.findByTestId('smp-preview-map')).toBeInTheDocument();
+    const secondReaderId = vi.mocked(smpServe.getSmpReader).mock.calls[1]![0];
+    expect(secondReaderId).not.toBe(firstReaderId);
+
+    await act(async () => {
+      resolveFirstReader(firstReader);
+    });
+
+    await waitFor(() => {
+      expect(smpServe.closeSmpReader).toHaveBeenCalledWith(firstReaderId);
+    });
+    expect(smpServe.closeSmpReader).not.toHaveBeenCalledWith(secondReaderId);
   });
 
   it('shows an error instead of loading forever when a ready map has no SMP blob', async () => {

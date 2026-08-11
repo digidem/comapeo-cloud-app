@@ -192,8 +192,13 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
         ),
       );
     } finally {
-      await closeSmpReader(importId);
-      setIsImporting(false);
+      try {
+        await closeSmpReader(importId);
+      } catch {
+        // Reader cleanup must never strand the import control in a loading state.
+      } finally {
+        setIsImporting(false);
+      }
     }
   }
 
