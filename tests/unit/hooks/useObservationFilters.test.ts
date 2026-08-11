@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import { useObservationFilters } from '@/hooks/useObservationFilters';
 import type { Observation } from '@/lib/db';
-import { DEFAULT_FILTERS } from '@/lib/observation-filters';
+import {
+  type CategoryResolver,
+  DEFAULT_FILTERS,
+} from '@/lib/observation-filters';
 
 // --- Helpers ---
 
@@ -215,5 +218,46 @@ describe('useObservationFilters', () => {
     rerender({ projectId: 'proj-2' });
     expect(result.current.filters).toEqual(DEFAULT_FILTERS);
     expect(result.current.isFiltering).toBe(false);
+  });
+
+  it('availableCategories uses resolved names via resolveCategory', () => {
+    const resolverObs = [
+      makeObs({ localId: '1', tags: { presetRef: 'p1' } }),
+      makeObs({ localId: '2', tags: { presetRef: 'p2' } }),
+    ];
+    const resolver: CategoryResolver = (obs) => {
+      if (obs.localId === '1') return 'Deforestation';
+      if (obs.localId === '2') return 'Wildlife';
+      return undefined;
+    };
+    const { result } = renderHook(() =>
+      useObservationFilters(resolverObs, undefined, resolver),
+    );
+    expect(result.current.availableCategories).toEqual([
+      'Deforestation',
+      'Wildlife',
+    ]);
+  });
+
+  it('category filtering works with resolved names via resolveCategory', () => {
+    const resolverObs = [
+      makeObs({ localId: '1', tags: { presetRef: 'p1' } }),
+      makeObs({ localId: '2', tags: { presetRef: 'p2' } }),
+    ];
+    const resolver: CategoryResolver = (obs) => {
+      if (obs.localId === '1') return 'Deforestation';
+      if (obs.localId === '2') return 'Wildlife';
+      return undefined;
+    };
+    const { result } = renderHook(() =>
+      useObservationFilters(resolverObs, undefined, resolver),
+    );
+    act(() => {
+      result.current.toggleCategory('Deforestation');
+    });
+    expect(result.current.filters.categories).toEqual(['Deforestation']);
+    expect(result.current.filteredObservations.map((o) => o.localId)).toEqual([
+      '1',
+    ]);
   });
 });

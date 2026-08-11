@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -23,6 +23,7 @@ import { usePaginatedItems } from '@/hooks/usePaginatedItems';
 import { useProjects } from '@/hooks/useProjects';
 import { useResponsivePageSize } from '@/hooks/useResponsivePageSize';
 import type { Field } from '@/lib/data-layer';
+import type { CategoryResolver } from '@/lib/observation-filters';
 import { resolveObservationListItemName } from '@/lib/observation-list-item';
 import { useProjectStore } from '@/stores/project-store';
 import { useViewModeStore } from '@/stores/view-mode-store';
@@ -96,17 +97,32 @@ export function DataScreen() {
   const fieldsQuery = useFields(selectedProjectId);
   const viewMode = useViewModeStore((s) => s.viewMode);
   const setViewMode = useViewModeStore((s) => s.setViewMode);
+  const projects = projectsQuery.data ?? [];
+  const selectedProject = projects.find((p) => p.localId === selectedProjectId);
+
+  // Category metadata must be computed before useObservationFilters so a
+  // preset-based category resolver can be threaded through the filter hook.
+  // Real synced observations carry a presetRef rather than a tags.category
+  // value, so the raw-tag fallback would leave the category filter empty.
+  const categoryMetadata = useObservationCategoryMetadata({
+    observations: observationsQuery.data ?? [],
+    projectLocalId: selectedProjectId,
+    projectRemoteId: selectedProject?.remoteId,
+    serverUrl: selectedProject?.serverUrl,
+  });
+  const resolveCategory: CategoryResolver = useCallback(
+    (obs) => categoryMetadata.categoryByObservationId.get(obs.localId)?.name,
+    [categoryMetadata.categoryByObservationId],
+  );
 
   // Call unconditionally (hooks must not be conditional)
   const obsFilters = useObservationFilters(
     observationsQuery.data ?? [],
     selectedProjectId ?? undefined,
+    resolveCategory,
   );
 
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
-
-  const projects = projectsQuery.data ?? [];
-  const selectedProject = projects.find((p) => p.localId === selectedProjectId);
 
   // Inject project name + mode label into topbar (same pattern as HomeScreen)
   const topbarWorkspaceName =
@@ -157,12 +173,6 @@ export function DataScreen() {
     deps: filterDeps,
   });
 
-  const categoryMetadata = useObservationCategoryMetadata({
-    observations: observationsQuery.data ?? [],
-    projectLocalId: selectedProjectId,
-    projectRemoteId: selectedProject?.remoteId,
-    serverUrl: selectedProject?.serverUrl,
-  });
   const displayNames = categoryMetadata.displayNamesByObservationId;
   const categoryByObservationId = categoryMetadata.categoryByObservationId;
   const attachments = attachmentsQuery.data;
@@ -401,6 +411,7 @@ export function DataScreen() {
             <FilterSheet
               open={filterDrawerOpen}
               onOpenChange={setFilterDrawerOpen}
+              categoriesLoading={categoryMetadata.isLoading}
               filters={obsFilters.filters}
               availableCategories={obsFilters.availableCategories}
               resultCount={filteredObs.length}
@@ -410,6 +421,9 @@ export function DataScreen() {
               onEndDateChange={obsFilters.setEndDate}
               onCategoryToggle={obsFilters.toggleCategory}
               onCategoriesClear={() => obsFilters.setCategories([])}
+              onCategoriesSelectAll={() =>
+                obsFilters.setCategories(obsFilters.availableCategories)
+              }
               onSortChange={obsFilters.setSort}
               showSort={false}
               onClear={obsFilters.reset}
@@ -558,6 +572,7 @@ export function DataScreen() {
               <FilterSheet
                 open={filterDrawerOpen}
                 onOpenChange={setFilterDrawerOpen}
+                categoriesLoading={categoryMetadata.isLoading}
                 filters={obsFilters.filters}
                 availableCategories={obsFilters.availableCategories}
                 resultCount={filteredObs.length}
@@ -567,6 +582,9 @@ export function DataScreen() {
                 onEndDateChange={obsFilters.setEndDate}
                 onCategoryToggle={obsFilters.toggleCategory}
                 onCategoriesClear={() => obsFilters.setCategories([])}
+                onCategoriesSelectAll={() =>
+                  obsFilters.setCategories(obsFilters.availableCategories)
+                }
                 onSortChange={obsFilters.setSort}
                 onClear={obsFilters.reset}
               />

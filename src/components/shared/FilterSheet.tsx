@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { CategoryFilterSheet } from '@/components/shared/CategoryFilterSheet';
 import { ObservationFilterBar } from '@/components/shared/ObservationFilterBar';
 import type { ObservationFilterBarProps } from '@/components/shared/ObservationFilterBar';
 import { Button } from '@/components/ui/button';
@@ -21,25 +22,52 @@ const messages = defineMessages({
     id: 'data.filterSheetClose',
     defaultMessage: 'Close filters',
   },
+  categorySheetTitle: {
+    id: 'data.filters.categorySheetTitle',
+    defaultMessage: 'Categories',
+  },
+  categoryAll: {
+    id: 'data.filters.categoryAll',
+    defaultMessage: 'All categories',
+  },
+  categorySelected: {
+    id: 'data.filters.categoryHiddenSelected',
+    defaultMessage: '{count} selected',
+  },
 });
 
 interface FilterSheetProps extends ObservationFilterBarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCategoriesSelectAll: () => void;
+  categoriesLoading?: boolean;
 }
 
-function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
+function FilterSheet({
+  open,
+  onOpenChange,
+  onCategoriesSelectAll,
+  categoriesLoading,
+  ...filterProps
+}: FilterSheetProps) {
   const intl = useIntl();
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(
     null,
   );
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false);
+
+  function handleOpenChange(next: boolean) {
+    if (!next) setCategorySheetOpen(false);
+    onOpenChange(next);
+  }
 
   function handleApply() {
+    setCategorySheetOpen(false);
     onOpenChange(false);
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay
           style={{
@@ -103,8 +131,34 @@ function FilterSheet({ open, onOpenChange, ...filterProps }: FilterSheetProps) {
 
           {/* Filter controls */}
           <div className="overflow-y-auto p-4">
+            <CategoryFilterSheet
+              open={categorySheetOpen}
+              onOpenChange={setCategorySheetOpen}
+              categories={filterProps.availableCategories}
+              selected={filterProps.filters.categories}
+              onToggle={filterProps.onCategoryToggle}
+              onSelectAll={onCategoriesSelectAll}
+              onDeselectAll={filterProps.onCategoriesClear}
+              categoriesLoading={categoriesLoading}
+              trigger={
+                <button
+                  type="button"
+                  className="mb-3 flex w-full min-h-[44px] items-center justify-between rounded-btn border border-border bg-surface px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  style={{ touchAction: 'manipulation' }}
+                >
+                  <span>{intl.formatMessage(messages.categorySheetTitle)}</span>
+                  <span className="text-sm text-text-muted">
+                    {filterProps.filters.categories.length === 0
+                      ? intl.formatMessage(messages.categoryAll)
+                      : intl.formatMessage(messages.categorySelected, {
+                          count: filterProps.filters.categories.length,
+                        })}
+                  </span>
+                </button>
+              }
+            />
             <SelectPortalProvider container={portalContainer}>
-              <ObservationFilterBar {...filterProps} />
+              <ObservationFilterBar {...filterProps} hideCategories />
             </SelectPortalProvider>
           </div>
 

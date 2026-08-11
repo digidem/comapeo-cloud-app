@@ -81,6 +81,7 @@ function FilterSheetDemo({
       <FilterSheet
         open={open}
         onOpenChange={setOpen}
+        onCategoriesSelectAll={noop}
         {...defaultFilterProps}
         {...filterProps}
       />

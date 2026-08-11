@@ -14,6 +14,13 @@ export interface ObservationFilters {
   sort: ObservationSort;
 }
 
+/**
+ * Optional resolver that maps an observation to its canonical category name,
+ * typically derived from preset metadata (see buildObservationCategoryMetadata).
+ * When omitted, category logic falls back to the raw `tags.category` value.
+ */
+export type CategoryResolver = (obs: Observation) => string | undefined;
+
 export const DEFAULT_FILTERS: ObservationFilters = {
   search: '',
   startDate: null,
@@ -30,10 +37,13 @@ export const DEFAULT_FILTERS: ObservationFilters = {
  * Returns distinct, sorted, non-empty `tags.category` values across all
  * observations. Sort is case-insensitive alphabetical.
  */
-export function extractCategories(observations: Observation[]): string[] {
+export function extractCategories(
+  observations: Observation[],
+  resolveCategory?: CategoryResolver,
+): string[] {
   const seen = new Set<string>();
   for (const obs of observations) {
-    const cat = obs.tags?.category;
+    const cat = resolveCategory ? resolveCategory(obs) : obs.tags?.category;
     if (cat && cat.trim() !== '') {
       seen.add(cat.trim());
     }
@@ -81,9 +91,15 @@ function matchesDateRange(
   return true;
 }
 
-function matchesCategory(obs: Observation, categories: string[]): boolean {
+function matchesCategory(
+  obs: Observation,
+  categories: string[],
+  resolveCategory?: CategoryResolver,
+): boolean {
   if (categories.length === 0) return true;
-  const obsCategory = obs.tags?.category?.trim() ?? null;
+  const obsCategory =
+    (resolveCategory ? resolveCategory(obs) : obs.tags?.category)?.trim() ??
+    null;
   if (obsCategory === null) return false;
   return categories.includes(obsCategory);
 }
@@ -91,6 +107,7 @@ function matchesCategory(obs: Observation, categories: string[]): boolean {
 function sortObservations(
   obs: Observation[],
   sort: ObservationSort,
+  resolveCategory?: CategoryResolver,
 ): Observation[] {
   const sorted = [...obs];
   switch (sort) {
@@ -116,8 +133,10 @@ function sortObservations(
       break;
     case 'category':
       sorted.sort((a, b) => {
-        const catA = a.tags?.category ?? '';
-        const catB = b.tags?.category ?? '';
+        const catA =
+          (resolveCategory ? resolveCategory(a) : a.tags?.category) ?? '';
+        const catB =
+          (resolveCategory ? resolveCategory(b) : b.tags?.category) ?? '';
         // Empty categories sort last
         if (catA === '' && catB !== '') return 1;
         if (catA !== '' && catB === '') return -1;
@@ -145,6 +164,7 @@ function sortObservations(
 export function filterObservations(
   observations: Observation[],
   filters: ObservationFilters,
+  resolveCategory?: CategoryResolver,
 ): Observation[] {
   let result = observations;
 
@@ -163,9 +183,11 @@ export function filterObservations(
 
   // Category filter
   if (filters.categories.length > 0) {
-    result = result.filter((obs) => matchesCategory(obs, filters.categories));
+    result = result.filter((obs) =>
+      matchesCategory(obs, filters.categories, resolveCategory),
+    );
   }
 
   // Sort
-  return sortObservations(result, filters.sort);
+  return sortObservations(result, filters.sort, resolveCategory);
 }
