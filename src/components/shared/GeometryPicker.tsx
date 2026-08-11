@@ -99,7 +99,6 @@ export function GeometryPicker({
   const intl = useIntl();
   const [type, setType] = useState<AlertGeometryType>('Point');
   const [vertices, setVertices] = useState<DraftVertex[]>([]);
-  const [showError, setShowError] = useState(false);
   const positions = useMemo(
     () => vertices.map((vertex) => vertex.position),
     [vertices],
@@ -130,7 +129,6 @@ export function GeometryPicker({
   function chooseType(nextType: AlertGeometryType) {
     setType(nextType);
     setVertices([]);
-    setShowError(false);
     onChange(undefined);
     onValidationChange?.(undefined);
   }
@@ -142,7 +140,6 @@ export function GeometryPicker({
     };
     const next = type === 'Point' ? [vertex] : [...vertices, vertex];
     setVertices(next);
-    setShowError(false);
     if (type === 'Point') {
       commit(next);
     } else {
@@ -152,11 +149,9 @@ export function GeometryPicker({
   }
 
   function finish() {
-    setShowError(true);
     commit(vertices);
   }
 
-  const error = showError ? validationMessage() : undefined;
   let hint = messages.hintPolygon;
   if (type === 'Point') {
     hint = messages.hintPoint;
@@ -259,7 +254,6 @@ export function GeometryPicker({
           onClick={() => {
             const next = vertices.slice(0, -1);
             setVertices(next);
-            setShowError(false);
             commit(next);
           }}
         >
@@ -271,7 +265,6 @@ export function GeometryPicker({
           disabled={vertices.length === 0}
           onClick={() => {
             setVertices([]);
-            setShowError(false);
             onChange(undefined);
             onValidationChange?.(undefined);
           }}
@@ -279,11 +272,6 @@ export function GeometryPicker({
           {intl.formatMessage(messages.clear)}
         </Button>
       </div>
-      {error && (
-        <p role="alert" className="text-sm text-error">
-          {error}
-        </p>
-      )}
     </div>
   );
 }

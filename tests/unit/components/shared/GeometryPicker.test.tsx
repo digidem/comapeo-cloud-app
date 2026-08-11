@@ -65,16 +65,22 @@ describe('GeometryPicker', () => {
     expect(onChange).toHaveBeenLastCalledWith(undefined);
   });
 
-  it('shows a specific validation error for an unfinished polygon', async () => {
+  it('reports a specific validation error for an unfinished polygon', async () => {
     const user = userEvent.setup();
-    render(<GeometryPicker onChange={vi.fn()} />);
+    const onValidationChange = vi.fn();
+    render(
+      <GeometryPicker
+        onChange={vi.fn()}
+        onValidationChange={onValidationChange}
+      />,
+    );
 
     await user.click(screen.getByRole('button', { name: /^Polygon$/ }));
     await user.click(screen.getByText('Map click'));
     await user.click(screen.getByRole('button', { name: 'Finish' }));
 
-    expect(
-      screen.getByText('A polygon needs at least 3 points.'),
-    ).toBeInTheDocument();
+    expect(onValidationChange).toHaveBeenLastCalledWith(
+      'A polygon needs at least 3 points.',
+    );
   });
 });
