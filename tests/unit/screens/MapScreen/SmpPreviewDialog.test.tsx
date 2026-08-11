@@ -19,7 +19,9 @@ vi.mock('react-map-gl/maplibre', () => ({
     return (
       <div
         data-testid="smp-preview-map"
-        data-attribution-control={attributionControl === false ? 'false' : 'true'}
+        data-attribution-control={
+          attributionControl === false ? 'false' : 'true'
+        }
       />
     );
   },
