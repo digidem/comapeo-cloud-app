@@ -334,6 +334,32 @@ describe('MapContainer', () => {
     });
   });
 
+  it('shows an error when an active imported SMP cannot be rendered safely', async () => {
+    mockSanitizeImportedSmpStyle.mockReturnValueOnce(null);
+    useMapStore.setState({ activeMapId: 'unsafe-imported-map' });
+    mockDbGet.mockResolvedValue({
+      id: 'unsafe-imported-map',
+      projectLocalId: 'proj-1',
+      name: 'Unsafe Imported Map',
+      type: 'style',
+      styleUrl: '',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    render(<MapContainer />);
+
+    expect(await screen.findByTestId('map-active-map-error')).toHaveTextContent(
+      'Offline map unavailable: Unsafe Imported Map',
+    );
+    expect(
+      screen.queryByTestId('map-active-map-badge'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('map-online-active-badge'),
+    ).not.toBeInTheDocument();
+  });
+
   it('does not render active offline map badge when no active map', () => {
     useMapStore.setState({ activeMapId: null });
     render(<MapContainer />);

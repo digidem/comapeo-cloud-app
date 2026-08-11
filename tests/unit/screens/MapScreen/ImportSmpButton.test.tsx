@@ -20,6 +20,18 @@ vi.mock('@/hooks/useMaps', async (importOriginal) => {
 vi.mock('@/lib/map/smp-serve', () => ({
   getSmpReader: vi.fn(),
   closeSmpReader: (...args: unknown[]) => closeSmpReader(...args),
+  resolveSmpStyle: vi.fn(
+    async (
+      reader: { getStyle: (baseUrl?: string) => Promise<unknown> },
+      mapId: string,
+    ) => {
+      try {
+        return await reader.getStyle(`smp:///${mapId}/`);
+      } catch {
+        return null;
+      }
+    },
+  ),
   sanitizeImportedSmpStyle: vi.fn((style) => style),
   sanitizeSmpAttributionText: (value: string) =>
     value
@@ -105,6 +117,9 @@ describe('ImportSmpButton', () => {
         smpSize: file.size,
       }),
     );
+    const savedMap = mutateAsync.mock.calls[0]![0] as { id: string };
+    expect(smpServe.resolveSmpStyle).toHaveBeenCalledWith(reader, savedMap.id);
+    expect(reader.getStyle).toHaveBeenCalledWith(`smp:///${savedMap.id}/`);
     expect(await screen.findByRole('status')).toHaveTextContent(
       'SMP imported successfully',
     );

@@ -1,5 +1,3 @@
-import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-
 import { useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 
@@ -10,6 +8,7 @@ import { checkStorageQuota } from '@/lib/map/smp-download';
 import {
   closeSmpReader,
   getSmpReader,
+  resolveSmpStyle,
   sanitizeImportedSmpStyle,
   sanitizeSmpAttributionText,
 } from '@/lib/map/smp-serve';
@@ -161,25 +160,18 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
         return;
       }
 
-      let style: SmpStyle;
-      try {
-        style = (await reader.getStyle()) as SmpStyle;
-      } catch {
+      const style = await resolveSmpStyle(reader, importId);
+      if (!style || !style.sources) {
         setError(intl.formatMessage(mapMessages.importMissingStyle));
         return;
       }
 
-      if (!style || typeof style !== 'object' || !style.sources) {
-        setError(intl.formatMessage(mapMessages.importMissingStyle));
-        return;
-      }
-
-      if (!sanitizeImportedSmpStyle(style as StyleSpecification)) {
+      if (!sanitizeImportedSmpStyle(style)) {
         setError(intl.formatMessage(mapMessages.importOfflineOnly));
         return;
       }
 
-      const metadata = extractMetadata(style, file.name);
+      const metadata = extractMetadata(style as unknown as SmpStyle, file.name);
       const now = new Date().toISOString();
       await createMap.mutateAsync({
         id: importId,

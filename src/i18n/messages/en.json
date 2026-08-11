@@ -1208,6 +1208,9 @@
   "map.activeMap.badge": {
     "defaultMessage": "Active offline map: {name}"
   },
+  "map.activeMap.errorBadge": {
+    "defaultMessage": "Offline map unavailable: {name}"
+  },
   "map.activeMap.onlineBadge": {
     "defaultMessage": "Active map (online): {name}"
   },

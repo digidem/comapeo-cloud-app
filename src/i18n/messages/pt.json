@@ -374,6 +374,7 @@
   "invite.progress.partialSync": "Conectado, mas alguns dados do arquivo não puderam ser sincronizados. Tente novamente.",
   "invite.progress.redirecting": "Redirecionando...",
   "map.activeMap.badge": "Mapa offline ativo: {name}",
+  "map.activeMap.errorBadge": "Mapa offline indisponível: {name}",
   "map.activeMap.onlineBadge": "Mapa ativo (online): {name}",
   "map.basemap.label": "Mapa base",
   "map.basemapSwitcher.disabledHint": "Mapa base usado quando o mapa offline está desativado",

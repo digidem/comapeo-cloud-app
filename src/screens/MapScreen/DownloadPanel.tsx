@@ -405,6 +405,9 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           <p className="text-sm text-error">
             {intl.formatMessage(mapMessages.downloadMissing)}
           </p>
+          {/* A missing blob makes isImportedSmpMap false by definition. Empty
+              styleUrl is therefore the persisted origin marker we can still
+              use here: imported packages cannot be regenerated from network. */}
           {map.styleUrl ? (
             <Button size="sm" className="w-full" onClick={handleDownload}>
               {intl.formatMessage(mapMessages.downloadRetry)}

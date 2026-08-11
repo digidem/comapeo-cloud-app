@@ -46,6 +46,10 @@ const messages = defineMessages({
     id: 'map.activeMap.onlineBadge',
     defaultMessage: 'Active map (online): {name}',
   },
+  activeMapErrorBadge: {
+    id: 'map.activeMap.errorBadge',
+    defaultMessage: 'Offline map unavailable: {name}',
+  },
   basemapDisabledHint: {
     id: 'map.basemapSwitcher.disabledHint',
     defaultMessage: 'Basemap used when offline map is turned off',
@@ -168,7 +172,11 @@ function MapContainer({
   });
 
   const [smpStyle, setSmpStyle] = useState<StyleSpecification | null>(null);
+  const [smpLoadErrorMapId, setSmpLoadErrorMapId] = useState<string | null>(
+    null,
+  );
   const isImportedActiveMap = isImportedSmpMap(activeSavedMap);
+  const smpLoadError = smpLoadErrorMapId === activeSavedMap?.id;
 
   // Build an ImageryBasemap from the active map's saved style settings
   // so the user sees the same layer/settings across the app immediately
@@ -215,20 +223,39 @@ function MapContainer({
 
     let cancelled = false;
     registerSmpProtocol();
-    getSmpReader(mapId, smpBlob).then((reader) => {
-      if (cancelled) return;
-      resolveSmpStyle(reader, mapId).then((style) => {
+    void (async () => {
+      try {
+        const reader = await getSmpReader(mapId, smpBlob);
         if (cancelled) return;
-        setSmpStyle(
+
+        const style = await resolveSmpStyle(reader, mapId);
+        if (cancelled) return;
+
+        const safeStyle =
           style && isImportedActiveMap
             ? sanitizeImportedSmpStyle(style)
-            : style,
-        );
-      });
-    });
+            : style;
+        if (!safeStyle) {
+          setSmpStyle(null);
+          setSmpLoadErrorMapId(mapId);
+          return;
+        }
+
+        setSmpLoadErrorMapId(null);
+        setSmpStyle(safeStyle);
+      } catch {
+        if (!cancelled) {
+          setSmpStyle(null);
+          setSmpLoadErrorMapId(mapId);
+        }
+      }
+    })();
+
     return () => {
       cancelled = true;
-      closeSmpReader(mapId);
+      void closeSmpReader(mapId).catch(() => {
+        // Reader cleanup failure must not surface as an unhandled rejection.
+      });
       setSmpStyle(null);
     };
   }, [
@@ -257,7 +284,8 @@ function MapContainer({
     [smpStyle, effectiveBasemap],
   );
 
-  const isOnlineActive = activeMapStyle !== undefined && !smpStyle;
+  const isOnlineActive =
+    activeMapStyle !== undefined && !smpStyle && !smpLoadError;
 
   const handleBasemapChange = (id: BasemapId) => {
     if (onBasemapChange) {
@@ -358,6 +386,20 @@ function MapContainer({
           </span>
         </div>
       )}
+
+      {smpLoadError && activeSavedMap ? (
+        <div className="absolute bottom-3 left-3 z-20">
+          <span
+            role="alert"
+            data-testid="map-active-map-error"
+            className="inline-flex items-center rounded-full bg-surface-card px-2.5 py-1 text-xs font-medium text-error shadow-[0_8px_24px_rgba(9,30,66,0.08)]"
+          >
+            {intl.formatMessage(messages.activeMapErrorBadge, {
+              name: activeSavedMap.name,
+            })}
+          </span>
+        </div>
+      ) : null}
 
       {/* Active offline map badge — bottom-left, visible when SMP tiles are active */}
       {smpStyle && (

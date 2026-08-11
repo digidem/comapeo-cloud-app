@@ -374,6 +374,7 @@
   "invite.progress.partialSync": "Conectado, pero algunos datos del archivo no pudieron sincronizarse. Inténtalo de nuevo.",
   "invite.progress.redirecting": "Redirigiendo...",
   "map.activeMap.badge": "Mapa sin conexión activo: {name}",
+  "map.activeMap.errorBadge": "Mapa sin conexión no disponible: {name}",
   "map.activeMap.onlineBadge": "Mapa activo (en línea): {name}",
   "map.basemap.label": "Mapa base",
   "map.basemapSwitcher.disabledHint": "Mapa base usado cuando el mapa sin conexión está desactivado",
