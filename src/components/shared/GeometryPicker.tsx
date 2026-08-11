@@ -373,6 +373,7 @@ export function GeometryPicker({
       latitude < -90 ||
       latitude > 90
     ) {
+      onChange(undefined);
       onValidationChange?.(intl.formatMessage(messages.coordinates));
       return;
     }
@@ -470,7 +471,12 @@ export function GeometryPicker({
         onUndo={() => {
           const next = vertices.slice(0, -1);
           setVertices(next);
-          commit(next);
+          if (type === 'Point') {
+            commit(next);
+          } else {
+            onChange(undefined);
+            onValidationChange?.(undefined);
+          }
         }}
         onClear={() => {
           setVertices([]);

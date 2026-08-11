@@ -153,6 +153,57 @@ describe('GeometryPicker', () => {
     expect(screen.getByRole('img', { name: 'Vertex 1' })).toBeInTheDocument();
   });
 
+  it('invalidates committed geometry when manual coordinates are invalid', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<GeometryPicker onChange={onChange} />);
+
+    await user.click(screen.getByText('Map click'));
+    expect(onChange).toHaveBeenLastCalledWith({
+      type: 'Point',
+      coordinates: [10, 20],
+    });
+
+    await user.type(screen.getByLabelText('Longitude'), '200');
+    await user.type(screen.getByLabelText('Latitude'), '10');
+    await user.click(screen.getByRole('button', { name: 'Add point' }));
+
+    expect(onChange).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it('keeps an edited line as a draft after undo until Finish is pressed again', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<GeometryPicker onChange={onChange} />);
+
+    await user.click(screen.getByRole('button', { name: /^Line$/ }));
+    await user.click(screen.getByText('Map click'));
+    await user.click(screen.getByText('Map click'));
+    await user.click(screen.getByText('Map click'));
+    await user.click(screen.getByRole('button', { name: 'Finish' }));
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      type: 'LineString',
+      coordinates: [
+        [10, 20],
+        [10, 20],
+        [10, 20],
+      ],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Undo last point' }));
+    expect(onChange).toHaveBeenLastCalledWith(undefined);
+
+    await user.click(screen.getByRole('button', { name: 'Finish' }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      type: 'LineString',
+      coordinates: [
+        [10, 20],
+        [10, 20],
+      ],
+    });
+  });
+
   it('invalidates a finished line when another vertex is added', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
