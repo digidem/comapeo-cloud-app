@@ -237,6 +237,7 @@ describe('sanitizeSmpStyleAttributions', () => {
     expect(
       sanitizeSmpAttributionText('&lt;img src=x onerror=alert(1)&gt; Safe'),
     ).toBe('Safe');
+    expect(sanitizeSmpAttributionText('&lt;img src=x Safe')).toBe('');
   });
 
   it('converts untrusted source attribution markup to escaped plain text', async () => {

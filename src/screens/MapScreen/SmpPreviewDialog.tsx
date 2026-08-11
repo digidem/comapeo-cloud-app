@@ -89,7 +89,11 @@ function PreviewSession({ map }: { map: SavedMap }) {
 
   if (!style) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-sm text-text-muted">
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex h-full items-center justify-center p-6 text-sm text-text-muted"
+      >
         {intl.formatMessage(mapMessages.previewLoading)}
       </div>
     );

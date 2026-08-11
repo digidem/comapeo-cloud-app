@@ -149,7 +149,7 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
       const smpBlob =
         file.type === 'application/zip'
           ? file
-          : new Blob([file], { type: 'application/zip' });
+          : file.slice(0, file.size, 'application/zip');
 
       let reader;
       try {

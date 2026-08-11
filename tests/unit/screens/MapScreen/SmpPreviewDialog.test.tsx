@@ -136,7 +136,9 @@ describe('SmpPreviewDialog', () => {
     const { rerender } = render(
       <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
     );
-    expect(screen.getByText('Loading map preview…')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading map preview…',
+    );
     const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
 
     rerender(

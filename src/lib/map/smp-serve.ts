@@ -39,7 +39,7 @@ function decodeHtmlEntities(value: string): string {
 export function sanitizeSmpAttributionText(value: string): string {
   const decoded = decodeHtmlEntities(value);
   return decoded
-    .replace(/<[^>]*>/g, ' ')
+    .replace(/<\/?[A-Za-z][^>]*(?:>|$)/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
