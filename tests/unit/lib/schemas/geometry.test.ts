@@ -108,12 +108,13 @@ describe('geometrySchema', () => {
     expect(result.coordinates).toHaveLength(2);
   });
 
-  it('parses a Point with 3D coordinates', () => {
-    const result = v.parse(geometrySchema, {
-      type: 'Point',
-      coordinates: [102.0, 0.5, 100.0],
-    });
-    expect(result.coordinates).toHaveLength(3);
+  it('rejects a Point with extra coordinate elements', () => {
+    expect(() =>
+      v.parse(geometrySchema, {
+        type: 'Point',
+        coordinates: [102.0, 0.5, 100.0],
+      }),
+    ).toThrow();
   });
 
   it('rejects an invalid geometry type', () => {

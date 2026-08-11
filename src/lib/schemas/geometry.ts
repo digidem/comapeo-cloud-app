@@ -2,7 +2,7 @@ import * as v from 'valibot';
 
 const longitude = v.pipe(v.number(), v.minValue(-180), v.maxValue(180));
 const latitude = v.pipe(v.number(), v.minValue(-90), v.maxValue(90));
-const position = v.tuple([longitude, latitude]);
+const position = v.strictTuple([longitude, latitude]);
 const line = v.pipe(v.array(position), v.minLength(2));
 const linearRing = v.pipe(v.array(position), v.minLength(4));
 
