@@ -84,7 +84,43 @@ describe('GeometryPicker', () => {
         [-50, -4],
         [-48, -2],
       ],
-      { padding: 50, maxZoom: 14, duration: 800 },
+      {
+        padding: { top: 64, bottom: 32, left: 32, right: 32 },
+        maxZoom: 14,
+        duration: 0,
+      },
+    );
+  });
+
+  it('uses the shared project bbox behavior for a single focused point', async () => {
+    mockGetProjectPoints.mockResolvedValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'Point', coordinates: [-50, -4] },
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<GeometryPicker projectLocalId="proj-1" onChange={vi.fn()} />);
+
+    await waitFor(() =>
+      expect(mockGetProjectPoints).toHaveBeenCalledWith('proj-1'),
+    );
+    await user.click(screen.getByText('Map load'));
+
+    expect(mockFitBounds).toHaveBeenCalledWith(
+      [
+        [-50, -4],
+        [-49.99, -3.99],
+      ],
+      {
+        padding: { top: 64, bottom: 32, left: 32, right: 32 },
+        maxZoom: 14,
+        duration: 0,
+      },
     );
   });
 

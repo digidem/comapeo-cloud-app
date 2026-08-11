@@ -1,5 +1,3 @@
-import bbox from '@turf/bbox';
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import { Layer, type MapRef, Marker, Source } from 'react-map-gl/maplibre';
@@ -14,6 +12,7 @@ import {
   validateGeometryDraft,
 } from '@/lib/alert-form-utils';
 import { getProjectPoints } from '@/lib/data-layer';
+import { finalizeBbox } from '@/lib/map/bbox-utils';
 import { uuid } from '@/lib/uuid';
 
 const messages = defineMessages({
@@ -142,9 +141,9 @@ export function GeometryPicker({
     (bounds = projectBounds) => {
       if (!bounds || !mapLoadedRef.current || !mapRef.current) return;
       mapRef.current.fitBounds(bounds, {
-        padding: 50,
+        padding: { top: 64, bottom: 32, left: 32, right: 32 },
         maxZoom: 14,
-        duration: 800,
+        duration: 0,
       });
     },
     [projectBounds],
@@ -156,16 +155,32 @@ export function GeometryPicker({
     void getProjectPoints(projectLocalId)
       .then((points) => {
         if (cancelled || !points?.features.length) return;
-        try {
-          const [minLng, minLat, maxLng, maxLat] = bbox(points);
-          const bounds = [
-            [minLng, minLat],
-            [maxLng, maxLat],
-          ] as [[number, number], [number, number]];
-          setProjectArea({ projectLocalId, bounds });
-        } catch {
-          // Keep the shared Amazon fallback view when project bounds are unavailable.
-        }
+        const coordinates = points.features.flatMap((feature) => {
+          if (
+            feature.geometry?.type !== 'Point' ||
+            !Array.isArray(feature.geometry.coordinates) ||
+            feature.geometry.coordinates.length !== 2
+          ) {
+            return [];
+          }
+          const [longitude, latitude] = feature.geometry.coordinates;
+          return Number.isFinite(longitude) && Number.isFinite(latitude)
+            ? ([[longitude, latitude]] as [number, number][])
+            : [];
+        });
+        if (coordinates.length === 0) return;
+        const bounds = finalizeBbox(
+          coordinates.map(([longitude]) => longitude),
+          coordinates.map(([, latitude]) => latitude),
+        );
+        if (!bounds) return;
+        setProjectArea({
+          projectLocalId,
+          bounds: [
+            [bounds[0], bounds[1]],
+            [bounds[2], bounds[3]],
+          ],
+        });
       })
       .catch(() => {
         // Keep the shared Amazon fallback view when project points cannot be read.
