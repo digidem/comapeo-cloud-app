@@ -124,6 +124,10 @@ describe('FilterSheet', () => {
       screen.getByRole('checkbox', { name: 'Wildlife' }),
     ).toBeInTheDocument();
 
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close filters', hidden: true }),
+    );
+    expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
     rerender(<FilterSheet {...defaultProps} open={false} />);
     rerender(<FilterSheet {...defaultProps} open />);
 

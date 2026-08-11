@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { CategoryFilterSheet } from '@/components/shared/CategoryFilterSheet';
@@ -56,11 +56,10 @@ function FilterSheet({
   );
   const [categorySheetOpen, setCategorySheetOpen] = useState(false);
 
-  useEffect(() => {
-    // Reset nested controlled state when the parent closes externally.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!open) setCategorySheetOpen(false);
-  }, [open]);
+  function handleOpenChange(next: boolean) {
+    if (!next) setCategorySheetOpen(false);
+    onOpenChange(next);
+  }
 
   function handleApply() {
     setCategorySheetOpen(false);
@@ -68,7 +67,7 @@ function FilterSheet({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay
           style={{
