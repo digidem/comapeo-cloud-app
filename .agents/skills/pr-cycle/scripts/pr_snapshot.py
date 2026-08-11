@@ -12,6 +12,7 @@ import json
 import subprocess
 import sys
 from typing import Any
+from urllib.parse import quote
 
 
 PASSING_CHECK_CONCLUSIONS = {"SUCCESS"}
@@ -80,6 +81,22 @@ def fetch_pr(repo: str, pr: int) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise SnapshotError("pull request response was not an object")
     return data
+
+
+def fetch_branch_tip(repo: str, branch: str) -> str:
+    if not branch:
+        raise SnapshotError("base branch name was missing")
+    encoded = quote(branch, safe="")
+    data = run_gh_json(["api", f"repos/{repo}/git/ref/heads/{encoded}"])
+    if not isinstance(data, dict):
+        raise SnapshotError("base branch ref response was not an object")
+    obj = data.get("object")
+    sha = obj.get("sha") if isinstance(obj, dict) else None
+    if not isinstance(sha, str) or len(sha) != 40 or any(
+        char not in "0123456789abcdefABCDEF" for char in sha
+    ):
+        raise SnapshotError("base branch tip SHA was missing or invalid")
+    return sha.lower()
 
 
 def fetch_review_threads(repo: str, pr: int) -> list[dict[str, Any]]:
@@ -294,25 +311,41 @@ def compact_threads(threads: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def normalize_expected_head(expected_head: str | None) -> str | None:
-    if expected_head is None:
+def normalize_expected_sha(value: str | None, flag: str) -> str | None:
+    if value is None:
         return None
-    normalized = expected_head.strip().lower()
+    normalized = value.strip().lower()
     if not 7 <= len(normalized) <= 40 or any(
         char not in "0123456789abcdef" for char in normalized
     ):
-        raise SnapshotError("--expect-head must be a 7-40 character hexadecimal SHA")
+        raise SnapshotError(f"{flag} must be a 7-40 character hexadecimal SHA")
     return normalized
 
 
+def normalize_expected_head(expected_head: str | None) -> str | None:
+    return normalize_expected_sha(expected_head, "--expect-head")
+
+
+def normalize_expected_base_tip(expected_base_tip: str | None) -> str | None:
+    return normalize_expected_sha(expected_base_tip, "--expect-base-tip")
+
+
+def sha_matches(expected: str | None, actual: str) -> bool:
+    return expected is None or actual.lower().startswith(expected)
+
+
 def head_matches(expected_head: str | None, actual_head: str) -> bool:
-    return expected_head is None or actual_head.lower().startswith(expected_head)
+    return sha_matches(expected_head, actual_head)
 
 
 def build_snapshot(
-    repo: str, pr_number: int, expected_head: str | None = None
+    repo: str,
+    pr_number: int,
+    expected_head: str | None = None,
+    expected_base_tip: str | None = None,
 ) -> dict[str, Any]:
     expected_head = normalize_expected_head(expected_head)
+    expected_base_tip = normalize_expected_base_tip(expected_base_tip)
     pr_before = fetch_pr(repo, pr_number)
     head_before = pr_before.get("headRefOid")
     if not isinstance(head_before, str) or not head_before:
@@ -320,6 +353,15 @@ def build_snapshot(
     if not head_matches(expected_head, head_before):
         raise SnapshotError(
             f"pull request head does not match expected {expected_head}: found {head_before}"
+        )
+
+    base_branch = pr_before.get("baseRefName")
+    if not isinstance(base_branch, str) or not base_branch:
+        raise SnapshotError("pull request base branch was missing")
+    base_tip_before = fetch_branch_tip(repo, base_branch)
+    if not sha_matches(expected_base_tip, base_tip_before):
+        raise SnapshotError(
+            f"base branch tip does not match expected {expected_base_tip}: found {base_tip_before}"
         )
 
     threads = fetch_review_threads(repo, pr_number)
@@ -332,6 +374,19 @@ def build_snapshot(
     if not isinstance(head_after, str) or not head_matches(expected_head, head_after):
         raise SnapshotError(
             f"pull request head does not match expected {expected_head}: found {head_after}"
+        )
+    if pr.get("baseRefName") != base_branch:
+        raise SnapshotError(
+            f"pull request base branch changed during snapshot: {base_branch} -> {pr.get('baseRefName')}"
+        )
+    base_tip_after = fetch_branch_tip(repo, base_branch)
+    if base_tip_after != base_tip_before:
+        raise SnapshotError(
+            f"base branch tip changed during snapshot: {base_tip_before} -> {base_tip_after}"
+        )
+    if not sha_matches(expected_base_tip, base_tip_after):
+        raise SnapshotError(
+            f"base branch tip does not match expected {expected_base_tip}: found {base_tip_after}"
         )
 
     review_decision = pr.get("reviewDecision")
@@ -359,6 +414,7 @@ def build_snapshot(
             "state": pr.get("state"),
             "is_draft": pr.get("isDraft"),
             "base_branch": pr.get("baseRefName"),
+            "base_tip_sha": base_tip_after,
             "head_branch": pr.get("headRefName"),
             "head_sha": pr.get("headRefOid"),
             "mergeable": pr.get("mergeable"),
@@ -373,7 +429,7 @@ def build_snapshot(
         "merge_ready": False,
         "merge_ready_note": (
             "This helper cannot decide whether unresolved threads are actionable or whether "
-            "an independent reviewer has approved the exact head. Apply the SKILL.md gate."
+            "an independent reviewer has approved the exact head/base-tip pair. Apply the SKILL.md gate."
         ),
     }
 
@@ -386,6 +442,10 @@ def parse_args() -> argparse.Namespace:
         "--expect-head",
         help="Fail unless the PR head SHA equals this exact reviewed/pushed SHA",
     )
+    parser.add_argument(
+        "--expect-base-tip",
+        help="Fail unless the current base-branch tip equals this reviewed SHA",
+    )
     parser.add_argument("--compact", action="store_true", help="Emit compact JSON")
     return parser.parse_args()
 
@@ -394,7 +454,12 @@ def main() -> int:
     args = parse_args()
     try:
         repo = resolve_repo(args.repo)
-        snapshot = build_snapshot(repo, args.pr, args.expect_head)
+        snapshot = build_snapshot(
+            repo,
+            args.pr,
+            args.expect_head,
+            args.expect_base_tip,
+        )
     except SnapshotError as exc:
         error = {"complete": False, "error": str(exc), "merge_ready": False}
         json.dump(error, sys.stdout, indent=None if args.compact else 2, sort_keys=True)

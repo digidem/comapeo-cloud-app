@@ -42,6 +42,21 @@ jobs:
           extra_args: --results=verified,unknown
 
   # -----------------------------------------------------------------------
+  # Agent skill helper tests (stdlib-only, no dependency install required)
+  # -----------------------------------------------------------------------
+  pr-cycle-skill-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: PR cycle helper tests
+        run: |
+          python3 .agents/skills/pr-cycle/scripts/test_pr_snapshot.py
+          python3 .agents/skills/pr-cycle/scripts/test_pr_wait.py
+          python3 .agents/skills/pr-cycle/scripts/test_claude_review.py
+
+  # -----------------------------------------------------------------------
   # Lint (parallel)
   # -----------------------------------------------------------------------
   lint:

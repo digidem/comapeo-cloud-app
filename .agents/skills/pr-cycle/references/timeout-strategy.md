@@ -1,0 +1,49 @@
+# Bounded execution strategy
+
+Use this when the PR cycle runs through a tool surface with a hard per-command ceiling. CodexPro currently allows at most 180 seconds for one shell invocation.
+
+## General rule
+
+A shell timeout means the invocation was cut off. It does not prove the underlying test, CI job, reviewer, or GitHub operation failed.
+
+Never repeat an identical command that already exceeded the ceiling. Change the execution shape.
+
+## CI waiting
+
+- Do not use long-running watch commands through a bounded shell.
+- Use `scripts/pr_wait.py` with a 60–120 second window, then rerun it if the result is `still_pending`.
+- Treat a head-SHA change as an immediate hard stop; all prior review/readiness evidence is stale.
+- When a run fails, start with failed-job logs rather than downloading the complete run log.
+
+## Local validation
+
+- Run focused tests for changed behavior first.
+- Split lint, typecheck, tests, build, and browser checks into separate commands so each gets its own timeout budget.
+- If the complete suite normally exceeds the shell ceiling and GitHub CI runs it, rely on CI for the complete signal after focused local checks.
+- Do not weaken validation just to fit the timer.
+
+## Hooks
+
+If a hook duplicates a full validation that exceeds the shell ceiling, bypass it only after the same required validation has already been run independently. Never use a hook bypass to hide an unrun or failing required check.
+
+For post-merge remote branch deletion, bypassing a source-validation pre-push hook is appropriate because deleting a remote branch does not publish source changes.
+
+## Independent model reviews
+
+Keep static review separate from live GitHub verification.
+
+- Prefer a reviewer-native detached/resumable execution surface over forcing the review under the shell timeout.
+- For Claude Code 2.1.139+, use `scripts/claude_review.py` and the supervisor-backed `--bg` path described in `claude-code-review.md`. Dispatch should return in seconds; review wall-clock time is then independent of CodexPro's shell ceiling.
+- Use Claude `--safe-mode` on the subscription-backed reviewer path to disable hooks/plugins/MCP/CLAUDE.md/custom startup state while preserving OAuth/keychain authentication. Do not use `--bare` by default because bare mode intentionally skips OAuth/keychain reads and expects API-key-style auth.
+- Bind every reviewer run to the exact pushed HEAD SHA and the **current live target-branch tip**, compute the merge-base from those refs, and require a clean PR worktree before dispatch. Do not treat PR `baseRefOid` / REST `base.sha` as the live target tip; they can lag when the base branch advances.
+- Ask for blockers, should-fix issues, and nits; do not ask the reviewer to poll CI or own live GitHub verification.
+- Poll reviewer state in short bounded windows. `still_running` is normal; a shell timeout around a poll is not a reviewer verdict.
+- Fail closed on malformed output, wrong-SHA output, failed/stopped sessions, or sessions needing input.
+- Use synchronous print mode only as fallback when detached execution is unavailable. Make that path structured/resumable with `--session-id`, `--output-format json`, and `--json-schema` when supported.
+- If the user explicitly required a named reviewer/model, do not silently substitute another reviewer.
+- Do not use Ultrareview in this workflow; it is outside the intended subscription review path.
+
+## Status reporting
+
+Report state transitions, not every poll. Surface when CI moves from pending to failing/terminal, when a reviewer becomes done/failed/attention-required, when the reviewed head or live base tip moves, and when the merge-ready gate changes. A healthy `still_pending` or `still_running` probe should usually remain internal unless the user asks for progress.
+
