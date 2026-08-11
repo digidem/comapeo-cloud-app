@@ -25,7 +25,7 @@ import {
   getSmpReader,
   registerSmpProtocol,
   resolveSmpStyle,
-  sanitizeSmpStyleAttributions,
+  sanitizeImportedSmpStyle,
 } from '@/lib/map/smp-serve';
 import type { BasemapId, ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { useMapStore } from '@/stores/map-store';
@@ -219,9 +219,7 @@ function MapContainer({
       resolveSmpStyle(reader, mapId).then((style) => {
         if (cancelled) return;
         setSmpStyle(
-          style && styleUrl === ''
-            ? sanitizeSmpStyleAttributions(style)
-            : style,
+          style && styleUrl === '' ? sanitizeImportedSmpStyle(style) : style,
         );
       });
     });

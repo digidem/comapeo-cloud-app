@@ -31,7 +31,7 @@ vi.mock('@/lib/map/smp-serve', () => ({
   registerSmpProtocol: vi.fn(),
   getSmpReader: vi.fn(),
   resolveSmpStyle: vi.fn(),
-  sanitizeSmpStyleAttributions: vi.fn((style) => style),
+  sanitizeImportedSmpStyle: vi.fn((style) => style),
   closeSmpReader: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -80,6 +80,7 @@ describe('SmpPreviewDialog', () => {
     expect(readerId).toMatch(/^preview:map-1:/);
     expect(smpServe.getSmpReader).toHaveBeenCalledWith(readerId, map.smpBlob);
     expect(smpServe.resolveSmpStyle).toHaveBeenCalledWith(reader, readerId);
+    expect(smpServe.sanitizeImportedSmpStyle).toHaveBeenCalledWith(style);
     expect(fitBounds).toHaveBeenCalledWith(
       [
         [-70, -5],
@@ -87,6 +88,20 @@ describe('SmpPreviewDialog', () => {
       ],
       { padding: 50, duration: 0 },
     );
+  });
+
+  it('shows an error when an imported style is not safe for offline rendering', async () => {
+    const reader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(reader);
+    vi.mocked(smpServe.resolveSmpStyle).mockResolvedValue(style);
+    vi.mocked(smpServe.sanitizeImportedSmpStyle).mockReturnValueOnce(null);
+
+    render(<SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not preview this SMP.',
+    );
+    expect(screen.queryByTestId('smp-preview-map')).not.toBeInTheDocument();
   });
 
   it('closes the transient reader when the dialog closes', async () => {

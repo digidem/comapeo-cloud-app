@@ -30,12 +30,99 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-function attributionToSafeText(value: string): string {
+export function sanitizeSmpAttributionText(value: string): string {
   const plainText = value
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return escapeHtml(plainText);
+}
+
+function isOfflineResourceUrl(value: string): boolean {
+  return /^(?:smp|data|blob):/i.test(value);
+}
+
+function styleUsesExternalResources(style: StyleSpecification): boolean {
+  const styleWithResources = style as StyleSpecification & {
+    glyphs?: unknown;
+    sprite?: unknown;
+    imports?: unknown;
+  };
+
+  if (
+    typeof styleWithResources.glyphs === 'string' &&
+    !isOfflineResourceUrl(styleWithResources.glyphs)
+  ) {
+    return true;
+  }
+
+  const sprite = styleWithResources.sprite;
+  if (typeof sprite === 'string' && !isOfflineResourceUrl(sprite)) return true;
+  if (
+    Array.isArray(sprite) &&
+    sprite.some(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        'url' in entry &&
+        typeof entry.url === 'string' &&
+        !isOfflineResourceUrl(entry.url),
+    )
+  ) {
+    return true;
+  }
+
+  const imports = styleWithResources.imports;
+  if (
+    Array.isArray(imports) &&
+    imports.some(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        'url' in entry &&
+        typeof entry.url === 'string' &&
+        !isOfflineResourceUrl(entry.url),
+    )
+  ) {
+    return true;
+  }
+
+  return Object.values(style.sources).some((source) => {
+    const resourceSource = source as typeof source & {
+      url?: unknown;
+      urls?: unknown;
+      tiles?: unknown;
+      data?: unknown;
+    };
+
+    if (
+      typeof resourceSource.url === 'string' &&
+      !isOfflineResourceUrl(resourceSource.url)
+    ) {
+      return true;
+    }
+    if (
+      Array.isArray(resourceSource.urls) &&
+      resourceSource.urls.some(
+        (url) => typeof url === 'string' && !isOfflineResourceUrl(url),
+      )
+    ) {
+      return true;
+    }
+    if (
+      Array.isArray(resourceSource.tiles) &&
+      resourceSource.tiles.some(
+        (url) => typeof url === 'string' && !isOfflineResourceUrl(url),
+      )
+    ) {
+      return true;
+    }
+    return (
+      resourceSource.type === 'geojson' &&
+      typeof resourceSource.data === 'string' &&
+      !isOfflineResourceUrl(resourceSource.data)
+    );
+  });
 }
 
 /**
@@ -56,12 +143,27 @@ export function sanitizeSmpStyleAttributions(
       }
       return [
         id,
-        { ...source, attribution: attributionToSafeText(source.attribution) },
+        {
+          ...source,
+          attribution: sanitizeSmpAttributionText(source.attribution),
+        },
       ];
     }),
   ) as StyleSpecification['sources'];
 
   return { ...style, sources };
+}
+
+/**
+ * Imported SMP packages are expected to be self-contained. Reject styles that
+ * would make MapLibre fetch resources from the network, then sanitize source
+ * attribution before rendering it through MapLibre's HTML attribution UI.
+ */
+export function sanitizeImportedSmpStyle(
+  style: StyleSpecification,
+): StyleSpecification | null {
+  if (styleUsesExternalResources(style)) return null;
+  return sanitizeSmpStyleAttributions(style);
 }
 
 export async function getSmpReader(mapId: string, blob: Blob): Promise<Reader> {

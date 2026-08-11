@@ -20,6 +20,11 @@ vi.mock('@/hooks/useMaps', async (importOriginal) => {
 vi.mock('@/lib/map/smp-serve', () => ({
   getSmpReader: vi.fn(),
   closeSmpReader: (...args: unknown[]) => closeSmpReader(...args),
+  sanitizeSmpAttributionText: (value: string) =>
+    value
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
 }));
 
 vi.mock('@/lib/map/smp-download', async (importOriginal) => {
@@ -103,6 +108,35 @@ describe('ImportSmpButton', () => {
       'SMP imported successfully',
     );
     expect(closeSmpReader).toHaveBeenCalled();
+  });
+
+  it('sanitizes imported attribution before persisting the SavedMap', async () => {
+    const user = userEvent.setup();
+    const reader = readerWithStyle({
+      version: 8,
+      sources: {
+        raster: {
+          type: 'raster',
+          attribution:
+            '<a href="https://example.com" onclick="alert(1)">Community Map</a>',
+        },
+      },
+      layers: [],
+    });
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(
+      reader as unknown as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+    );
+
+    render(<ImportSmpButton projectLocalId="project-1" />);
+    await user.upload(
+      screen.getByLabelText('Import SMP file'),
+      new File(['valid'], 'attribution.smp', { type: 'application/zip' }),
+    );
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ attribution: 'Community Map' }),
+    );
   });
 
   it('schedules the success announcement to dismiss after import', async () => {

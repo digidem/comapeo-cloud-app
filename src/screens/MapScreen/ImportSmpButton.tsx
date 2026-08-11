@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button';
 import { useCreateMap } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import { checkStorageQuota } from '@/lib/map/smp-download';
-import { closeSmpReader, getSmpReader } from '@/lib/map/smp-serve';
+import {
+  closeSmpReader,
+  getSmpReader,
+  sanitizeSmpAttributionText,
+} from '@/lib/map/smp-serve';
 import { uuid } from '@/lib/uuid';
 
 import { mapMessages } from './messages';
@@ -98,7 +102,7 @@ function extractMetadata(style: SmpStyle, fileName: string) {
         : WORLD_BBOX),
     attribution:
       attributions.length > 0
-        ? [...new Set(attributions)].join(' · ')
+        ? sanitizeSmpAttributionText([...new Set(attributions)].join(' · '))
         : undefined,
     minZoom: hasValidZoomRange ? minZoom : DEFAULT_MIN_ZOOM,
     maxZoom: hasValidZoomRange ? maxZoom : DEFAULT_MAX_ZOOM,

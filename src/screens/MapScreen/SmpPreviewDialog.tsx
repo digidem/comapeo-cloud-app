@@ -13,7 +13,7 @@ import {
   getSmpReader,
   registerSmpProtocol,
   resolveSmpStyle,
-  sanitizeSmpStyleAttributions,
+  sanitizeImportedSmpStyle,
 } from '@/lib/map/smp-serve';
 import { uuid } from '@/lib/uuid';
 
@@ -74,11 +74,12 @@ function PreviewSession({
         const resolved = await resolveStyle(reader, readerId);
         if (!cancelled) {
           if (resolved) {
-            setStyle(
+            const safeStyle =
               map.styleUrl === ''
-                ? sanitizeSmpStyleAttributions(resolved)
-                : resolved,
-            );
+                ? sanitizeImportedSmpStyle(resolved)
+                : resolved;
+            if (safeStyle) setStyle(safeStyle);
+            else setError(true);
           } else {
             setError(true);
           }

@@ -18,14 +18,14 @@ const mockResolveSmpStyle = vi.fn().mockResolvedValue({
 });
 const mockGetSmpReader = vi.fn().mockResolvedValue({});
 const mockRegisterSmpProtocol = vi.fn();
-const mockSanitizeSmpStyleAttributions = vi.fn((style) => style);
+const mockSanitizeImportedSmpStyle = vi.fn((style) => style);
 
 vi.mock('@/lib/map/smp-serve', () => ({
   resolveSmpStyle: (...args: unknown[]) => mockResolveSmpStyle(...args),
   getSmpReader: (...args: unknown[]) => mockGetSmpReader(...args),
   registerSmpProtocol: (...args: unknown[]) => mockRegisterSmpProtocol(...args),
-  sanitizeSmpStyleAttributions: (style: unknown) =>
-    mockSanitizeSmpStyleAttributions(style),
+  sanitizeImportedSmpStyle: (style: unknown) =>
+    mockSanitizeImportedSmpStyle(style),
   closeSmpReader: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -313,7 +313,7 @@ describe('MapContainer', () => {
   });
 
   it('sanitizes an imported SMP style before rendering it as the active map', async () => {
-    mockSanitizeSmpStyleAttributions.mockClear();
+    mockSanitizeImportedSmpStyle.mockClear();
     useMapStore.setState({ activeMapId: 'imported-map' });
     mockDbGet.mockResolvedValue({
       id: 'imported-map',
@@ -328,7 +328,7 @@ describe('MapContainer', () => {
     render(<MapContainer />);
 
     await waitFor(() => {
-      expect(mockSanitizeSmpStyleAttributions).toHaveBeenCalledWith(
+      expect(mockSanitizeImportedSmpStyle).toHaveBeenCalledWith(
         expect.objectContaining({ version: 8 }),
       );
     });

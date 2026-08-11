@@ -248,6 +248,61 @@ describe('sanitizeSmpStyleAttributions', () => {
   });
 });
 
+describe('sanitizeImportedSmpStyle', () => {
+  it('keeps packaged resources and sanitizes attribution', async () => {
+    const { sanitizeImportedSmpStyle } = await importModule();
+    const result = sanitizeImportedSmpStyle({
+      version: 8,
+      glyphs: 'smp:///map-a/fonts/{fontstack}/{range}.pbf',
+      sources: {
+        raster: {
+          type: 'raster',
+          tiles: ['smp:///map-a/tiles/{z}/{x}/{y}.png'],
+          attribution: '<strong>Community Map</strong>',
+        },
+      },
+      layers: [],
+    });
+
+    expect(result).not.toBeNull();
+    expect(
+      (result!.sources.raster as { attribution?: string }).attribution,
+    ).toBe('Community Map');
+  });
+
+  it('rejects imported styles that would fetch network resources', async () => {
+    const { sanitizeImportedSmpStyle } = await importModule();
+    const result = sanitizeImportedSmpStyle({
+      version: 8,
+      sources: {
+        raster: {
+          type: 'raster',
+          tiles: ['https://tracker.example/{z}/{x}/{y}.png'],
+        },
+      },
+      layers: [],
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('rejects remote GeoJSON data URLs', async () => {
+    const { sanitizeImportedSmpStyle } = await importModule();
+    const result = sanitizeImportedSmpStyle({
+      version: 8,
+      sources: {
+        observations: {
+          type: 'geojson',
+          data: 'https://tracker.example/data.geojson',
+        },
+      },
+      layers: [],
+    });
+
+    expect(result).toBeNull();
+  });
+});
+
 describe('resolveSmpStyle', () => {
   it('returns the style from reader.getStyle with smp:// URL', async () => {
     const mockStyle = { version: 8, sources: {}, layers: [] };
