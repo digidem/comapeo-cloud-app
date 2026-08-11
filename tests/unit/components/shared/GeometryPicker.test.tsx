@@ -101,6 +101,22 @@ describe('GeometryPicker', () => {
     });
   });
 
+  it('allows keyboard users to add a point with coordinates', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<GeometryPicker onChange={onChange} />);
+
+    await user.type(screen.getByLabelText('Longitude'), '-51.25');
+    await user.type(screen.getByLabelText('Latitude'), '-3.75');
+    await user.click(screen.getByRole('button', { name: 'Add point' }));
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      type: 'Point',
+      coordinates: [-51.25, -3.75],
+    });
+    expect(screen.getByRole('img', { name: 'Vertex 1' })).toBeInTheDocument();
+  });
+
   it('invalidates a finished line when another vertex is added', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

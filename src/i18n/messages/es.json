@@ -562,5 +562,8 @@
   "theme.light": "Claro",
   "theme.system": "Sistema",
   "alerts.create.geometryVertexLabel": "Vértice {number}",
-  "alerts.create.failed": "No se pudo crear la alerta. Inténtalo de nuevo."
+  "alerts.create.failed": "No se pudo crear la alerta. Inténtalo de nuevo.",
+  "alerts.create.geometryLongitude": "Longitud",
+  "alerts.create.geometryLatitude": "Latitud",
+  "alerts.create.geometryAddCoordinates": "Añadir punto"
 }

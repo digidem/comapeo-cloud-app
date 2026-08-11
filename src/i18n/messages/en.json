@@ -77,6 +77,9 @@
   "alerts.create.failed": {
     "defaultMessage": "Could not create the alert. Try again."
   },
+  "alerts.create.geometryAddCoordinates": {
+    "defaultMessage": "Add point"
+  },
   "alerts.create.geometryClear": {
     "defaultMessage": "Clear"
   },
@@ -101,11 +104,17 @@
   "alerts.create.geometryLabel": {
     "defaultMessage": "Location and shape"
   },
+  "alerts.create.geometryLatitude": {
+    "defaultMessage": "Latitude"
+  },
   "alerts.create.geometryLine": {
     "defaultMessage": "Line"
   },
   "alerts.create.geometryLinePoints": {
     "defaultMessage": "A line needs at least 2 points."
+  },
+  "alerts.create.geometryLongitude": {
+    "defaultMessage": "Longitude"
   },
   "alerts.create.geometryPoint": {
     "defaultMessage": "Point"

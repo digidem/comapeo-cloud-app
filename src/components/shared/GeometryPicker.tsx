@@ -63,6 +63,18 @@ const messages = defineMessages({
     id: 'alerts.create.geometryVertexLabel',
     defaultMessage: 'Vertex {number}',
   },
+  longitude: {
+    id: 'alerts.create.geometryLongitude',
+    defaultMessage: 'Longitude',
+  },
+  latitude: {
+    id: 'alerts.create.geometryLatitude',
+    defaultMessage: 'Latitude',
+  },
+  addCoordinates: {
+    id: 'alerts.create.geometryAddCoordinates',
+    defaultMessage: 'Add point',
+  },
 });
 
 interface GeometryPickerProps {
@@ -115,6 +127,8 @@ export function GeometryPicker({
       : undefined;
   const [type, setType] = useState<AlertGeometryType>('Point');
   const [vertices, setVertices] = useState<DraftVertex[]>([]);
+  const [manualLongitude, setManualLongitude] = useState('');
+  const [manualLatitude, setManualLatitude] = useState('');
   const positions = useMemo(
     () => vertices.map((vertex) => vertex.position),
     [vertices],
@@ -209,6 +223,27 @@ export function GeometryPicker({
     commit(vertices);
   }
 
+  function addManualPoint() {
+    const longitude = Number(manualLongitude);
+    const latitude = Number(manualLatitude);
+    if (
+      manualLongitude.trim() === '' ||
+      manualLatitude.trim() === '' ||
+      !Number.isFinite(longitude) ||
+      !Number.isFinite(latitude) ||
+      longitude < -180 ||
+      longitude > 180 ||
+      latitude < -90 ||
+      latitude > 90
+    ) {
+      onValidationChange?.(intl.formatMessage(messages.coordinates));
+      return;
+    }
+    addPoint(longitude, latitude);
+    setManualLongitude('');
+    setManualLatitude('');
+  }
+
   let hint = messages.hintPolygon;
   if (type === 'Point') {
     hint = messages.hintPoint;
@@ -293,6 +328,7 @@ export function GeometryPicker({
               }
             >
               <div
+                role="img"
                 className="h-4 w-4 rounded-full border-2 border-white bg-primary shadow"
                 aria-label={intl.formatMessage(messages.vertexLabel, {
                   number: index + 1,
@@ -302,6 +338,36 @@ export function GeometryPicker({
           );
         })}
       </MapContainer>
+
+      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <label className="flex flex-col gap-1 text-sm font-medium text-text">
+          {intl.formatMessage(messages.longitude)}
+          <input
+            type="number"
+            min={-180}
+            max={180}
+            step="any"
+            value={manualLongitude}
+            onChange={(event) => setManualLongitude(event.target.value)}
+            className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-medium text-text">
+          {intl.formatMessage(messages.latitude)}
+          <input
+            type="number"
+            min={-90}
+            max={90}
+            step="any"
+            value={manualLatitude}
+            onChange={(event) => setManualLatitude(event.target.value)}
+            className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
+          />
+        </label>
+        <Button type="button" variant="secondary" onClick={addManualPoint}>
+          {intl.formatMessage(messages.addCoordinates)}
+        </Button>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         {type !== 'Point' && (
