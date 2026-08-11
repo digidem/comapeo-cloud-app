@@ -224,6 +224,30 @@ describe('protocol handler', () => {
   });
 });
 
+describe('sanitizeSmpStyleAttributions', () => {
+  it('converts untrusted source attribution markup to escaped plain text', async () => {
+    const { sanitizeSmpStyleAttributions } = await importModule();
+    const original = {
+      version: 8 as const,
+      sources: {
+        raster: {
+          type: 'raster' as const,
+          tiles: ['https://example.com/{z}/{x}/{y}.png'],
+          attribution:
+            '<a href="https://example.com" onclick="alert(1)">Community Map</a><img src=x onerror=alert(1)>',
+        },
+      },
+      layers: [],
+    };
+
+    const result = sanitizeSmpStyleAttributions(original);
+    const source = result.sources.raster as { attribution?: string };
+
+    expect(source.attribution).toBe('Community Map');
+    expect(original.sources.raster.attribution).toContain('<a');
+  });
+});
+
 describe('resolveSmpStyle', () => {
   it('returns the style from reader.getStyle with smp:// URL', async () => {
     const mockStyle = { version: 8, sources: {}, layers: [] };

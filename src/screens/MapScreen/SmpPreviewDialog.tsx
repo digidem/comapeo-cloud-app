@@ -13,6 +13,7 @@ import {
   getSmpReader,
   registerSmpProtocol,
   resolveSmpStyle,
+  sanitizeSmpStyleAttributions,
 } from '@/lib/map/smp-serve';
 import { uuid } from '@/lib/uuid';
 
@@ -72,8 +73,15 @@ function PreviewSession({
 
         const resolved = await resolveStyle(reader, readerId);
         if (!cancelled) {
-          if (resolved) setStyle(resolved);
-          else setError(true);
+          if (resolved) {
+            setStyle(
+              map.styleUrl === ''
+                ? sanitizeSmpStyleAttributions(resolved)
+                : resolved,
+            );
+          } else {
+            setError(true);
+          }
         }
       } catch {
         if (!cancelled) setError(true);
@@ -82,7 +90,11 @@ function PreviewSession({
 
     return () => {
       cancelled = true;
-      if (readerOpened) void closeReader(readerId);
+      if (readerOpened) {
+        void closeReader(readerId).catch(() => {
+          // Cleanup failure must not surface as an unhandled rejection.
+        });
+      }
     };
   }, [closeReader, getReader, map, readerId, registerProtocol, resolveStyle]);
 
@@ -107,21 +119,27 @@ function PreviewSession({
 
   const [west, south, east, north] = map.bbox;
   return (
-    <Map
-      data-testid="smp-preview-map"
-      mapStyle={style}
-      attributionControl={false}
-      style={{ width: '100%', height: '100%' }}
-      onLoad={(event) => {
-        event.target.fitBounds(
-          [
-            [west, south],
-            [east, north],
-          ],
-          { padding: 50, duration: 0 },
-        );
-      }}
-    />
+    <div
+      role="region"
+      aria-label={intl.formatMessage(mapMessages.previewTitle)}
+      className="h-full w-full"
+    >
+      <Map
+        data-testid="smp-preview-map"
+        mapStyle={style}
+        attributionControl={{}}
+        style={{ width: '100%', height: '100%' }}
+        onLoad={(event) => {
+          event.target.fitBounds(
+            [
+              [west, south],
+              [east, north],
+            ],
+            { padding: 50, duration: 0 },
+          );
+        }}
+      />
+    </div>
   );
 }
 

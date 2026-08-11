@@ -221,6 +221,26 @@ describe('ImportSmpButton', () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
+  it('continues validation when the storage quota probe itself fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(smpDownload.checkStorageQuota).mockRejectedValue(
+      new Error('storage estimate unavailable'),
+    );
+    const reader = readerWithStyle({ version: 8, sources: {}, layers: [] });
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(
+      reader as unknown as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+    );
+
+    render(<ImportSmpButton projectLocalId="project-1" />);
+    await user.upload(
+      screen.getByLabelText('Import SMP file'),
+      new File(['valid'], 'quota-unknown.smp', { type: 'application/zip' }),
+    );
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('rejects an SMP that would exceed available storage', async () => {
     const user = userEvent.setup();
     vi.mocked(smpDownload.checkStorageQuota).mockResolvedValue({

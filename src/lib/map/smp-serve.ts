@@ -21,6 +21,49 @@ function blobToRandomAccessSource(blob: Blob) {
   };
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function attributionToSafeText(value: string): string {
+  const plainText = value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return escapeHtml(plainText);
+}
+
+/**
+ * Imported SMP files are untrusted input. MapLibre renders source attribution
+ * via innerHTML, so convert any embedded markup to escaped plain text before
+ * passing an imported style to the map renderer.
+ */
+export function sanitizeSmpStyleAttributions(
+  style: StyleSpecification,
+): StyleSpecification {
+  const sources = Object.fromEntries(
+    Object.entries(style.sources).map(([id, source]) => {
+      if (
+        !('attribution' in source) ||
+        typeof source.attribution !== 'string'
+      ) {
+        return [id, source];
+      }
+      return [
+        id,
+        { ...source, attribution: attributionToSafeText(source.attribution) },
+      ];
+    }),
+  ) as StyleSpecification['sources'];
+
+  return { ...style, sources };
+}
+
 export async function getSmpReader(mapId: string, blob: Blob): Promise<Reader> {
   const cached = readerCache.get(mapId);
   if (cached) return cached;

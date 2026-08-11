@@ -25,6 +25,7 @@ import {
   getSmpReader,
   registerSmpProtocol,
   resolveSmpStyle,
+  sanitizeSmpStyleAttributions,
 } from '@/lib/map/smp-serve';
 import type { BasemapId, ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { useMapStore } from '@/stores/map-store';
@@ -207,6 +208,7 @@ function MapContainer({
     const mapId = activeSavedMap?.id;
     const smpBlob = activeSavedMap?.smpBlob;
     const status = activeSavedMap?.status;
+    const styleUrl = activeSavedMap?.styleUrl;
 
     if (!mapId || !smpBlob || status !== 'ready') return;
 
@@ -216,7 +218,11 @@ function MapContainer({
       if (cancelled) return;
       resolveSmpStyle(reader, mapId).then((style) => {
         if (cancelled) return;
-        setSmpStyle(style);
+        setSmpStyle(
+          style && styleUrl === ''
+            ? sanitizeSmpStyleAttributions(style)
+            : style,
+        );
       });
     });
     return () => {
@@ -224,7 +230,12 @@ function MapContainer({
       closeSmpReader(mapId);
       setSmpStyle(null);
     };
-  }, [activeSavedMap?.id, activeSavedMap?.smpBlob, activeSavedMap?.status]);
+  }, [
+    activeSavedMap?.id,
+    activeSavedMap?.smpBlob,
+    activeSavedMap?.status,
+    activeSavedMap?.styleUrl,
+  ]);
 
   // Controlled basemapId takes priority; uncontrolled uses the store
   const activeBasemapId = controlledBasemapId ?? storeBasemapId;

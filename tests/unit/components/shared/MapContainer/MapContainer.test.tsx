@@ -18,11 +18,14 @@ const mockResolveSmpStyle = vi.fn().mockResolvedValue({
 });
 const mockGetSmpReader = vi.fn().mockResolvedValue({});
 const mockRegisterSmpProtocol = vi.fn();
+const mockSanitizeSmpStyleAttributions = vi.fn((style) => style);
 
 vi.mock('@/lib/map/smp-serve', () => ({
   resolveSmpStyle: (...args: unknown[]) => mockResolveSmpStyle(...args),
   getSmpReader: (...args: unknown[]) => mockGetSmpReader(...args),
   registerSmpProtocol: (...args: unknown[]) => mockRegisterSmpProtocol(...args),
+  sanitizeSmpStyleAttributions: (style: unknown) =>
+    mockSanitizeSmpStyleAttributions(style),
   closeSmpReader: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -307,6 +310,28 @@ describe('MapContainer', () => {
       expect(screen.getByTestId('map-active-map-badge')).toBeInTheDocument();
     });
     expect(screen.getByText(/Active offline map/)).toBeInTheDocument();
+  });
+
+  it('sanitizes an imported SMP style before rendering it as the active map', async () => {
+    mockSanitizeSmpStyleAttributions.mockClear();
+    useMapStore.setState({ activeMapId: 'imported-map' });
+    mockDbGet.mockResolvedValue({
+      id: 'imported-map',
+      projectLocalId: 'proj-1',
+      name: 'Imported Map',
+      type: 'style',
+      styleUrl: '',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    render(<MapContainer />);
+
+    await waitFor(() => {
+      expect(mockSanitizeSmpStyleAttributions).toHaveBeenCalledWith(
+        expect.objectContaining({ version: 8 }),
+      );
+    });
   });
 
   it('does not render active offline map badge when no active map', () => {

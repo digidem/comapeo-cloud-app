@@ -19,7 +19,7 @@ vi.mock('react-map-gl/maplibre', () => ({
     return (
       <div
         data-testid="smp-preview-map"
-        data-attribution-control={String(attributionControl)}
+        data-attribution-control={attributionControl === false ? 'false' : 'true'}
       />
     );
   },
@@ -29,7 +29,8 @@ vi.mock('@/lib/map/smp-serve', () => ({
   registerSmpProtocol: vi.fn(),
   getSmpReader: vi.fn(),
   resolveSmpStyle: vi.fn(),
-  closeSmpReader: vi.fn(),
+  sanitizeSmpStyleAttributions: vi.fn((style) => style),
+  closeSmpReader: vi.fn().mockResolvedValue(undefined),
 }));
 
 const map: SavedMap = {
@@ -68,7 +69,10 @@ describe('SmpPreviewDialog', () => {
 
     const previewMap = await screen.findByTestId('smp-preview-map');
     expect(previewMap).toBeInTheDocument();
-    expect(previewMap).toHaveAttribute('data-attribution-control', 'false');
+    expect(previewMap).toHaveAttribute('data-attribution-control', 'true');
+    expect(
+      screen.getByRole('region', { name: 'Preview map' }),
+    ).toBeInTheDocument();
     expect(smpServe.registerSmpProtocol).toHaveBeenCalled();
     const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
     expect(readerId).toMatch(/^preview:map-1:/);
@@ -130,6 +134,29 @@ describe('SmpPreviewDialog', () => {
       expect(smpServe.closeSmpReader).toHaveBeenCalledWith(readerId);
     });
     expect(smpServe.resolveSmpStyle).not.toHaveBeenCalled();
+  });
+
+  it('swallows reader cleanup failures when the dialog closes', async () => {
+    const reader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(reader);
+    vi.mocked(smpServe.resolveSmpStyle).mockResolvedValue(style);
+    vi.mocked(smpServe.closeSmpReader).mockRejectedValueOnce(
+      new Error('close failed'),
+    );
+
+    const { rerender } = render(
+      <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
+    );
+    await screen.findByTestId('smp-preview-map');
+    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+
+    rerender(
+      <SmpPreviewDialog open={false} onOpenChange={vi.fn()} map={map} />,
+    );
+
+    await waitFor(() => {
+      expect(smpServe.closeSmpReader).toHaveBeenCalledWith(readerId);
+    });
   });
 
   it('uses a new reader cache key when reopened before the prior reader finishes', async () => {

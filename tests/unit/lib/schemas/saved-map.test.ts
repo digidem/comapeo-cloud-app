@@ -50,10 +50,21 @@ describe('savedMapSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects an empty styleUrl', () => {
+  it('rejects an empty styleUrl for raster maps', () => {
     expect(
       v.safeParse(savedMapSchema, { ...validRaster, styleUrl: '' }).success,
     ).toBe(false);
+  });
+
+  it('allows an empty styleUrl for imported style maps backed by an SMP blob', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        type: 'style',
+        scheme: undefined,
+        styleUrl: '',
+      }).success,
+    ).toBe(true);
   });
 
   it('rejects a bbox with an extra entry (strictTuple)', () => {

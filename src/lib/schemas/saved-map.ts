@@ -72,7 +72,6 @@ const baseFields = {
   id: v.string(),
   projectLocalId: v.string(),
   name: v.pipe(v.string(), v.minLength(1)),
-  styleUrl: v.pipe(v.string(), v.minLength(1)),
   bbox: bboxSchema,
   minZoom: zoomSchema,
   maxZoom: zoomSchema,
@@ -94,6 +93,7 @@ const rasterSchema = v.pipe(
   v.object({
     ...baseFields,
     type: v.literal('raster'),
+    styleUrl: v.pipe(v.string(), v.minLength(1)),
     scheme: v.optional(v.union([v.literal('xyz'), v.literal('tms')])),
   }),
   v.check((value) => value.maxZoom >= value.minZoom, zoomOrderMessage),
@@ -103,6 +103,7 @@ const styleSchema = v.pipe(
   v.object({
     ...baseFields,
     type: v.literal('style'),
+    styleUrl: v.string(),
   }),
   v.check((value) => value.maxZoom >= value.minZoom, zoomOrderMessage),
 );

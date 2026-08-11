@@ -22,7 +22,7 @@ type SmpStyle = {
 const WORLD_BBOX: SavedMap['bbox'] = [-180, -90, 180, 90];
 const DEFAULT_MIN_ZOOM = 0;
 const DEFAULT_MAX_ZOOM = 14;
-const MAX_IMPORT_ZOOM = 24;
+const MAX_IMPORT_ZOOM = 22;
 
 function fileNameWithoutExtension(fileName: string): string {
   return fileName.replace(/\.smp$/i, '') || fileName;
@@ -128,8 +128,13 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
     setIsImporting(true);
 
     try {
-      const quota = await checkStorageQuota(file.size);
-      if (!quota.sufficient) {
+      let quota: Awaited<ReturnType<typeof checkStorageQuota>> | null = null;
+      try {
+        quota = await checkStorageQuota(file.size);
+      } catch {
+        // A failed estimate is not proof that storage is insufficient.
+      }
+      if (quota && !quota.sufficient) {
         setError(intl.formatMessage(mapMessages.importQuotaExceeded));
         return;
       }
