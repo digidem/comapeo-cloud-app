@@ -231,6 +231,9 @@ describe('sanitizeSmpStyleAttributions', () => {
     expect(sanitizeSmpAttributionText('<strong>Acme & Co</strong>')).toBe(
       'Acme & Co',
     );
+    expect(
+      sanitizeSmpAttributionText('&copy; <a href="https://osm.org">OSM</a>'),
+    ).toBe('© OSM');
   });
 
   it('converts untrusted source attribution markup to escaped plain text', async () => {
@@ -334,6 +337,15 @@ describe('sanitizeImportedSmpStyle', () => {
       {
         version: 8,
         sprite: [{ id: 'default', url: 'https://tracker.example/sprite' }],
+        sources: {},
+        layers: [],
+      },
+    ],
+    [
+      'style import',
+      {
+        version: 8,
+        imports: [{ id: 'remote', url: 'https://tracker.example/style.json' }],
         sources: {},
         layers: [],
       },

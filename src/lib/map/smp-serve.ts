@@ -30,11 +30,14 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
+function decodeHtmlEntities(value: string): string {
+  const parser = new DOMParser();
+  return parser.parseFromString(value, 'text/html').body.textContent ?? '';
+}
+
 export function sanitizeSmpAttributionText(value: string): string {
-  return value
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const withoutTags = value.replace(/<[^>]*>/g, ' ');
+  return decodeHtmlEntities(withoutTags).replace(/\s+/g, ' ').trim();
 }
 
 function isOfflineResourceUrl(value: string): boolean {
