@@ -1325,6 +1325,9 @@
   "map.download.missing": {
     "defaultMessage": "The saved map package is missing or unreadable. You can regenerate it."
   },
+  "map.download.missingImported": {
+    "defaultMessage": "The imported map package is missing or unreadable. Import the original SMP file again."
+  },
   "map.download.progress": {
     "defaultMessage": "Downloading… {downloaded} of {total} tiles ({bytes})"
   },

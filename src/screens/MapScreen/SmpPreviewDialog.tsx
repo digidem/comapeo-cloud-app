@@ -20,59 +20,36 @@ import { uuid } from '@/lib/uuid';
 
 import { mapMessages } from './messages';
 
-interface SmpPreviewDependencies {
-  registerProtocol: typeof registerSmpProtocol;
-  getReader: typeof getSmpReader;
-  resolveStyle: typeof resolveSmpStyle;
-  closeReader: typeof closeSmpReader;
-}
-
 interface SmpPreviewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   map: SavedMap | null;
-  dependencies?: SmpPreviewDependencies;
 }
 
-const defaultDependencies: SmpPreviewDependencies = {
-  registerProtocol: registerSmpProtocol,
-  getReader: getSmpReader,
-  resolveStyle: resolveSmpStyle,
-  closeReader: closeSmpReader,
-};
-
-function PreviewSession({
-  map,
-  dependencies,
-}: {
-  map: SavedMap;
-  dependencies: SmpPreviewDependencies;
-}) {
+function PreviewSession({ map }: { map: SavedMap }) {
   const intl = useIntl();
   const [style, setStyle] = useState<StyleSpecification | null>(null);
   const [error, setError] = useState(false);
   const [readerId] = useState(() => `preview:${map.id}:${uuid()}`);
-  const { registerProtocol, getReader, resolveStyle, closeReader } =
-    dependencies;
 
   useEffect(() => {
     if (map.status !== 'ready' || !map.smpBlob) return;
 
     let cancelled = false;
     let readerOpened = false;
-    registerProtocol();
+    registerSmpProtocol();
 
     void (async () => {
       try {
-        const reader = await getReader(readerId, map.smpBlob!);
+        const reader = await getSmpReader(readerId, map.smpBlob!);
         readerOpened = true;
 
         if (cancelled) {
-          await closeReader(readerId);
+          await closeSmpReader(readerId);
           return;
         }
 
-        const resolved = await resolveStyle(reader, readerId);
+        const resolved = await resolveSmpStyle(reader, readerId);
         if (!cancelled) {
           if (resolved) {
             const safeStyle = isImportedSmpMap(map)
@@ -92,12 +69,12 @@ function PreviewSession({
     return () => {
       cancelled = true;
       if (readerOpened) {
-        void closeReader(readerId).catch(() => {
+        void closeSmpReader(readerId).catch(() => {
           // Cleanup failure must not surface as an unhandled rejection.
         });
       }
     };
-  }, [closeReader, getReader, map, readerId, registerProtocol, resolveStyle]);
+  }, [map, readerId]);
 
   if (map.status !== 'ready' || !map.smpBlob || error) {
     return (
@@ -148,7 +125,6 @@ export function SmpPreviewDialog({
   open,
   onOpenChange,
   map,
-  dependencies = defaultDependencies,
 }: SmpPreviewDialogProps) {
   const intl = useIntl();
 
@@ -179,11 +155,7 @@ export function SmpPreviewDialog({
           </div>
           <div className="min-h-0 flex-1 bg-surface">
             {open && map ? (
-              <PreviewSession
-                key={`${map.id}:${map.updatedAt}`}
-                map={map}
-                dependencies={dependencies}
-              />
+              <PreviewSession key={`${map.id}:${map.updatedAt}`} map={map} />
             ) : null}
           </div>
         </Dialog.Content>
@@ -192,4 +164,4 @@ export function SmpPreviewDialog({
   );
 }
 
-export type { SmpPreviewDependencies, SmpPreviewDialogProps };
+export type { SmpPreviewDialogProps };

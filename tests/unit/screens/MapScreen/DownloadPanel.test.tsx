@@ -211,6 +211,10 @@ describe('DownloadPanel', () => {
 
     const missingState = await screen.findByTestId('download-ready-missing');
     expect(missingState).toBeInTheDocument();
+    expect(missingState).toHaveTextContent(
+      'The imported map package is missing or unreadable. Import the original SMP file again.',
+    );
+    expect(missingState).not.toHaveTextContent('You can regenerate it.');
     expect(within(missingState).queryByRole('button')).not.toBeInTheDocument();
   });
 

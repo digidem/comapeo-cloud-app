@@ -446,6 +446,11 @@ export const mapMessages = defineMessages({
     defaultMessage:
       'The saved map package is missing or unreadable. You can regenerate it.',
   },
+  downloadMissingImported: {
+    id: 'map.download.missingImported',
+    defaultMessage:
+      'The imported map package is missing or unreadable. Import the original SMP file again.',
+  },
   downloadUnknownError: {
     id: 'map.download.unknownError',
     defaultMessage: 'Unknown error',

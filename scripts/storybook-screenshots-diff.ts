@@ -138,6 +138,10 @@ const PIXEL_THRESHOLD_OVERRIDES: ReadonlyArray<{
   // still catches a real layout/colour regression on the rest of the
   // canvas.
   { match: 'observationsmap', threshold: 0.15 },
+  // SMP preview renders a live MapLibre canvas. Its empty packaged style is
+  // visually simple, but the canvas rasterisation itself can still vary across
+  // headless Chromium environments.
+  { match: 'smppreviewdialog', threshold: 0.15 },
   // MapContainer shares the same tile-rendering path; the desktop
   // non-interactive story includes a badge overlay that adds extra
   // pixel variance on top of tile rasterisation noise.

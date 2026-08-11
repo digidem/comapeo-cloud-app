@@ -176,7 +176,9 @@ function MapContainer({
     null,
   );
   const isImportedActiveMap = isImportedSmpMap(activeSavedMap);
-  const smpLoadError = smpLoadErrorMapId === activeSavedMap?.id;
+  const smpLoadError =
+    activeSavedMap?.status === 'ready' &&
+    smpLoadErrorMapId === activeSavedMap.id;
 
   // Build an ImageryBasemap from the active map's saved style settings
   // so the user sees the same layer/settings across the app immediately
