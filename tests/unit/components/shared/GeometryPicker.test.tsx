@@ -1,15 +1,22 @@
-import { render, screen, userEvent } from '@tests/mocks/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeometryPicker } from '@/components/shared/GeometryPicker';
+
+const mockFitBounds = vi.fn();
+const mockGetProjectPoints = vi.fn();
 
 vi.mock('@/components/shared/MapContainer/MapContainer', () => ({
   MapContainer: ({
     children,
+    mapRef,
     onClick,
+    onLoad,
   }: {
     children: React.ReactNode;
+    mapRef?: React.MutableRefObject<unknown>;
     onClick?: (event: { lngLat: { lng: number; lat: number } }) => void;
+    onLoad?: () => void;
   }) => (
     <div>
       <button
@@ -18,9 +25,22 @@ vi.mock('@/components/shared/MapContainer/MapContainer', () => ({
       >
         Map click
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (mapRef) mapRef.current = { fitBounds: mockFitBounds };
+          onLoad?.();
+        }}
+      >
+        Map load
+      </button>
       {children}
     </div>
   ),
+}));
+
+vi.mock('@/lib/data-layer', () => ({
+  getProjectPoints: (...args: unknown[]) => mockGetProjectPoints(...args),
 }));
 
 vi.mock('react-map-gl/maplibre', () => ({
@@ -30,6 +50,44 @@ vi.mock('react-map-gl/maplibre', () => ({
 }));
 
 describe('GeometryPicker', () => {
+  beforeEach(() => {
+    mockFitBounds.mockReset();
+    mockGetProjectPoints.mockReset();
+  });
+
+  it('fits the map to the monitored project area', async () => {
+    mockGetProjectPoints.mockResolvedValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'Point', coordinates: [-50, -4] },
+        },
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'Point', coordinates: [-48, -2] },
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<GeometryPicker projectLocalId="proj-1" onChange={vi.fn()} />);
+
+    await waitFor(() =>
+      expect(mockGetProjectPoints).toHaveBeenCalledWith('proj-1'),
+    );
+    await user.click(screen.getByText('Map load'));
+
+    expect(mockFitBounds).toHaveBeenCalledWith(
+      [
+        [-50, -4],
+        [-48, -2],
+      ],
+      { padding: 50, maxZoom: 14, duration: 800 },
+    );
+  });
+
   it('commits a point immediately', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

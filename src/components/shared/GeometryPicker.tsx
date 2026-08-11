@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import bbox from '@turf/bbox';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
-import { Layer, Marker, Source } from 'react-map-gl/maplibre';
+import { Layer, type MapRef, Marker, Source } from 'react-map-gl/maplibre';
 
 import { MapContainer } from '@/components/shared/MapContainer/MapContainer';
 import { Button } from '@/components/ui/button';
@@ -11,6 +13,7 @@ import {
   geometryFromVertices,
   validateGeometryDraft,
 } from '@/lib/alert-form-utils';
+import { getProjectPoints } from '@/lib/data-layer';
 
 const messages = defineMessages({
   typeLabel: {
@@ -62,6 +65,7 @@ const messages = defineMessages({
 });
 
 interface GeometryPickerProps {
+  projectLocalId?: string;
   onChange: (value: AlertGeometry | undefined) => void;
   onValidationChange?: (message: string | undefined) => void;
 }
@@ -93,10 +97,21 @@ function draftFeature(type: AlertGeometryType, vertices: Position[]) {
 }
 
 export function GeometryPicker({
+  projectLocalId,
   onChange,
   onValidationChange,
 }: GeometryPickerProps) {
   const intl = useIntl();
+  const mapRef = useRef<MapRef>(null);
+  const mapLoadedRef = useRef(false);
+  const [projectArea, setProjectArea] = useState<{
+    projectLocalId: string;
+    bounds: [[number, number], [number, number]];
+  }>();
+  const projectBounds =
+    projectArea && projectArea.projectLocalId === projectLocalId
+      ? projectArea.bounds
+      : undefined;
   const [type, setType] = useState<AlertGeometryType>('Point');
   const [vertices, setVertices] = useState<DraftVertex[]>([]);
   const positions = useMemo(
@@ -107,6 +122,43 @@ export function GeometryPicker({
     () => draftFeature(type, positions),
     [type, positions],
   );
+
+  const fitProjectArea = useCallback(
+    (bounds = projectBounds) => {
+      if (!bounds || !mapLoadedRef.current || !mapRef.current) return;
+      mapRef.current.fitBounds(bounds, {
+        padding: 50,
+        maxZoom: 14,
+        duration: 800,
+      });
+    },
+    [projectBounds],
+  );
+
+  useEffect(() => {
+    if (!projectLocalId) return;
+    let cancelled = false;
+    void getProjectPoints(projectLocalId).then((points) => {
+      if (cancelled || !points?.features.length) return;
+      try {
+        const [minLng, minLat, maxLng, maxLat] = bbox(points);
+        const bounds = [
+          [minLng, minLat],
+          [maxLng, maxLat],
+        ] as [[number, number], [number, number]];
+        setProjectArea({ projectLocalId, bounds });
+      } catch {
+        // Keep the shared Amazon fallback view when project bounds are unavailable.
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectLocalId]);
+
+  useEffect(() => {
+    fitProjectArea();
+  }, [fitProjectArea]);
 
   function validationMessage(nextVertices = vertices, nextType = type) {
     const key = validateGeometryDraft(
@@ -186,9 +238,14 @@ export function GeometryPicker({
 
       <p className="text-sm text-text-muted">{intl.formatMessage(hint)}</p>
       <MapContainer
+        mapRef={mapRef}
         height={360}
         className="rounded-card"
-        initialViewState={{ longitude: -52.5, latitude: -3.5, zoom: 3 }}
+        initialViewState={{ longitude: -60, latitude: -3, zoom: 4 }}
+        onLoad={() => {
+          mapLoadedRef.current = true;
+          fitProjectArea();
+        }}
         onClick={(event) => addPoint(event.lngLat.lng, event.lngLat.lat)}
       >
         {feature && (

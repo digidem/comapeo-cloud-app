@@ -186,6 +186,7 @@ export function CreateAlertScreen() {
               {intl.formatMessage(messages.geometryLabel)}
             </h2>
             <GeometryPicker
+              projectLocalId={selectedProjectId ?? undefined}
               onChange={(next) => {
                 setGeometry(next);
                 setGeometrySubmitError(false);
