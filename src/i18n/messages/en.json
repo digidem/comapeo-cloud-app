@@ -1346,6 +1346,24 @@
   "map.download.unknownError": {
     "defaultMessage": "Unknown error"
   },
+  "map.import.button": {
+    "defaultMessage": "Import SMP"
+  },
+  "map.import.fileLabel": {
+    "defaultMessage": "Import SMP file"
+  },
+  "map.import.invalidFile": {
+    "defaultMessage": "This file is not a valid SMP"
+  },
+  "map.import.missingStyle": {
+    "defaultMessage": "SMP has no map style"
+  },
+  "map.import.quotaExceeded": {
+    "defaultMessage": "Not enough storage space to import this SMP"
+  },
+  "map.import.success": {
+    "defaultMessage": "SMP imported successfully"
+  },
   "map.nameDialog.cancel": {
     "defaultMessage": "Cancel"
   },
@@ -1369,6 +1387,21 @@
   },
   "map.nameDialog.title": {
     "defaultMessage": "Save map"
+  },
+  "map.preview.action": {
+    "defaultMessage": "Preview"
+  },
+  "map.preview.close": {
+    "defaultMessage": "Close"
+  },
+  "map.preview.error": {
+    "defaultMessage": "Could not preview this SMP."
+  },
+  "map.preview.loading": {
+    "defaultMessage": "Loading map preview…"
+  },
+  "map.preview.title": {
+    "defaultMessage": "Preview map"
   },
   "map.saved.activeError": {
     "defaultMessage": "Could not update active map. Please try again."

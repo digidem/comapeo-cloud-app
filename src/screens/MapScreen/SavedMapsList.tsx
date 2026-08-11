@@ -14,6 +14,7 @@ import {
 import type { SavedMap } from '@/lib/db';
 import { useMapStore } from '@/stores/map-store';
 
+import { SmpPreviewDialog } from './SmpPreviewDialog';
 import { mapMessages } from './messages';
 
 interface SavedMapsListProps {
@@ -51,6 +52,7 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const [activeError, setActiveError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SavedMap | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<SavedMap | null>(null);
 
   const maps = mapsQuery.data ?? [];
   const hasPendingAction = pendingAction !== null;
@@ -194,6 +196,16 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                     isActive ? mapMessages.removeActive : mapMessages.setActive,
                   )}
                 </Button>
+                {map.status === 'ready' ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setPreviewTarget(map)}
+                    disabled={hasPendingAction}
+                  >
+                    {intl.formatMessage(mapMessages.previewAction)}
+                  </Button>
+                ) : null}
                 <Button
                   size="sm"
                   variant="secondary"
@@ -257,6 +269,14 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
           </div>
         </form>
       </Modal>
+
+      <SmpPreviewDialog
+        open={previewTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewTarget(null);
+        }}
+        map={previewTarget}
+      />
 
       <Modal
         open={deleteTarget !== null}

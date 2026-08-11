@@ -65,6 +65,50 @@ export const mapMessages = defineMessages({
     id: 'map.saved.removeActive',
     defaultMessage: 'Remove active',
   },
+  previewAction: {
+    id: 'map.preview.action',
+    defaultMessage: 'Preview',
+  },
+  previewTitle: {
+    id: 'map.preview.title',
+    defaultMessage: 'Preview map',
+  },
+  previewClose: {
+    id: 'map.preview.close',
+    defaultMessage: 'Close',
+  },
+  previewLoading: {
+    id: 'map.preview.loading',
+    defaultMessage: 'Loading map preview…',
+  },
+  previewError: {
+    id: 'map.preview.error',
+    defaultMessage: 'Could not preview this SMP.',
+  },
+  importButton: {
+    id: 'map.import.button',
+    defaultMessage: 'Import SMP',
+  },
+  importFileLabel: {
+    id: 'map.import.fileLabel',
+    defaultMessage: 'Import SMP file',
+  },
+  importInvalidFile: {
+    id: 'map.import.invalidFile',
+    defaultMessage: 'This file is not a valid SMP',
+  },
+  importMissingStyle: {
+    id: 'map.import.missingStyle',
+    defaultMessage: 'SMP has no map style',
+  },
+  importSuccess: {
+    id: 'map.import.success',
+    defaultMessage: 'SMP imported successfully',
+  },
+  importQuotaExceeded: {
+    id: 'map.import.quotaExceeded',
+    defaultMessage: 'Not enough storage space to import this SMP',
+  },
   rename: {
     id: 'map.saved.rename',
     defaultMessage: 'Rename',

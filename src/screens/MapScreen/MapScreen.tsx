@@ -31,6 +31,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { BoundsEditor } from './BoundsEditor';
 import { DownloadPanel } from './DownloadPanel';
 import { DrawBoundsControl } from './DrawBoundsControl';
+import { ImportSmpButton } from './ImportSmpButton';
 import { MapAuthoringCanvas } from './MapAuthoringCanvas';
 import { SavedMapsList } from './SavedMapsList';
 import { StylePicker } from './StylePicker';
@@ -437,6 +438,7 @@ export function MapScreen() {
           {intl.formatMessage(mapMessages.zoomDownloadNote)}
         </p>
         <SavedMapsList projectLocalId={selectedProjectId} />
+        <ImportSmpButton projectLocalId={selectedProjectId} />
         {(() => {
           const maps = mapsQuery.data ?? [];
           const downloadableMaps = maps.filter(
