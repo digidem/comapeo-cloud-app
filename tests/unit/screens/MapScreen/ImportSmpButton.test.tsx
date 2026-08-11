@@ -42,6 +42,8 @@ function readerWithStyle(style: Record<string, unknown>) {
 describe('ImportSmpButton', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mutateAsync.mockReset();
+    mutateAsync.mockResolvedValue(undefined);
     vi.mocked(useMaps.useCreateMap).mockReturnValue({
       mutateAsync,
       isPending: false,
@@ -75,6 +77,7 @@ describe('ImportSmpButton', () => {
 
     render(<ImportSmpButton projectLocalId="project-1" />);
     const input = screen.getByLabelText('Import SMP file');
+    expect(input).toHaveAttribute('tabindex', '-1');
     const file = new File(['valid'], 'shared-map.smp', {
       type: 'application/zip',
     });
@@ -100,6 +103,39 @@ describe('ImportSmpButton', () => {
       'SMP imported successfully',
     );
     expect(closeSmpReader).toHaveBeenCalled();
+  });
+
+  it('prefers SMP metadata bounds over source bounds when available', async () => {
+    const user = userEvent.setup();
+    const reader = readerWithStyle({
+      version: 8,
+      metadata: {
+        name: 'Round trip',
+        'smp:bounds': [-180, -90, 180, 90],
+        'smp:regionalBounds': [-68, -4, -62, 1],
+      },
+      sources: {
+        raster: {
+          type: 'raster',
+          bounds: [-70, -5, -60, 2],
+        },
+      },
+      layers: [],
+    });
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(
+      reader as unknown as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+    );
+
+    render(<ImportSmpButton projectLocalId="project-1" />);
+    await user.upload(
+      screen.getByLabelText('Import SMP file'),
+      new File(['valid'], 'round-trip.smp', { type: 'application/zip' }),
+    );
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ bbox: [-68, -4, -62, 1] }),
+    );
   });
 
   it('shows an invalid-file error and creates nothing when the reader cannot open', async () => {
@@ -136,6 +172,47 @@ describe('ImportSmpButton', () => {
     );
     expect(smpServe.getSmpReader).not.toHaveBeenCalled();
     expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('shows a save error instead of calling a valid SMP invalid when persistence fails', async () => {
+    const user = userEvent.setup();
+    const reader = readerWithStyle({ version: 8, sources: {}, layers: [] });
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(
+      reader as unknown as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+    );
+    mutateAsync.mockRejectedValueOnce(new Error('IndexedDB write failed'));
+
+    render(<ImportSmpButton projectLocalId="project-1" />);
+    await user.upload(
+      screen.getByLabelText('Import SMP file'),
+      new File(['valid'], 'valid.smp', { type: 'application/zip' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not save map. Please try again.',
+    );
+    expect(closeSmpReader).toHaveBeenCalled();
+  });
+
+  it('shows quota-exceeded when IndexedDB rejects the final save for quota', async () => {
+    const user = userEvent.setup();
+    const reader = readerWithStyle({ version: 8, sources: {}, layers: [] });
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(
+      reader as unknown as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+    );
+    const quotaError = new Error('quota');
+    quotaError.name = 'QuotaExceededError';
+    mutateAsync.mockRejectedValueOnce(quotaError);
+
+    render(<ImportSmpButton projectLocalId="project-1" />);
+    await user.upload(
+      screen.getByLabelText('Import SMP file'),
+      new File(['valid'], 'valid.smp', { type: 'application/zip' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Not enough storage space to import this SMP',
+    );
   });
 
   it('shows a missing-style error and creates nothing when the SMP has no style', async () => {

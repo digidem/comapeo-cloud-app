@@ -38,62 +38,55 @@ const defaultDependencies: SmpPreviewDependencies = {
   closeReader: closeSmpReader,
 };
 
-export function SmpPreviewDialog({
-  open,
-  onOpenChange,
+function PreviewSession({
   map,
-  dependencies = defaultDependencies,
-}: SmpPreviewDialogProps) {
+  dependencies,
+}: {
+  map: SavedMap;
+  dependencies: SmpPreviewDependencies;
+}) {
   const intl = useIntl();
-  const [previewState, setPreviewState] = useState<{
-    readerId: string;
-    style: StyleSpecification | null;
-    error: boolean;
-  } | null>(null);
-  const readerId = map ? `preview:${map.id}` : null;
+  const [style, setStyle] = useState<StyleSpecification | null>(null);
+  const [error, setError] = useState(false);
+  const readerId = `preview:${map.id}`;
+  const { registerProtocol, getReader, resolveStyle, closeReader } =
+    dependencies;
 
   useEffect(() => {
-    if (!open || !map?.smpBlob || map.status !== 'ready' || !readerId) return;
+    if (map.status !== 'ready' || !map.smpBlob) return;
 
     let cancelled = false;
-    dependencies.registerProtocol();
+    let readerOpened = false;
+    registerProtocol();
 
     void (async () => {
       try {
-        const reader = await dependencies.getReader(readerId, map.smpBlob!);
-        const resolved = await dependencies.resolveStyle(reader, readerId);
+        const reader = await getReader(readerId, map.smpBlob!);
+        readerOpened = true;
+
+        if (cancelled) {
+          await closeReader(readerId);
+          return;
+        }
+
+        const resolved = await resolveStyle(reader, readerId);
         if (!cancelled) {
-          setPreviewState({
-            readerId,
-            style: resolved,
-            error: resolved === null,
-          });
+          if (resolved) setStyle(resolved);
+          else setError(true);
         }
       } catch {
-        if (!cancelled) {
-          setPreviewState({ readerId, style: null, error: true });
-        }
+        if (!cancelled) setError(true);
       }
     })();
 
     return () => {
       cancelled = true;
-      void dependencies.closeReader(readerId);
+      if (readerOpened) void closeReader(readerId);
     };
-  }, [dependencies, map, open, readerId]);
+  }, [closeReader, getReader, map, readerId, registerProtocol, resolveStyle]);
 
-  const bbox = map?.bbox;
-  const currentPreview =
-    readerId && previewState?.readerId === readerId ? previewState : null;
-
-  let previewContent = (
-    <div className="flex h-full items-center justify-center p-6 text-sm text-text-muted">
-      {intl.formatMessage(mapMessages.previewLoading)}
-    </div>
-  );
-
-  if (currentPreview?.error) {
-    previewContent = (
+  if (map.status !== 'ready' || !map.smpBlob || error) {
+    return (
       <div
         className="flex h-full items-center justify-center p-6 text-sm text-error"
         role="alert"
@@ -101,24 +94,42 @@ export function SmpPreviewDialog({
         {intl.formatMessage(mapMessages.previewError)}
       </div>
     );
-  } else if (currentPreview?.style && bbox) {
-    previewContent = (
-      <Map
-        data-testid="smp-preview-map"
-        mapStyle={currentPreview.style}
-        style={{ width: '100%', height: '100%' }}
-        onLoad={(event) => {
-          event.target.fitBounds(
-            [
-              [bbox[0], bbox[1]],
-              [bbox[2], bbox[3]],
-            ],
-            { padding: 50, duration: 0 },
-          );
-        }}
-      />
+  }
+
+  if (!style) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-sm text-text-muted">
+        {intl.formatMessage(mapMessages.previewLoading)}
+      </div>
     );
   }
+
+  const [west, south, east, north] = map.bbox;
+  return (
+    <Map
+      data-testid="smp-preview-map"
+      mapStyle={style}
+      style={{ width: '100%', height: '100%' }}
+      onLoad={(event) => {
+        event.target.fitBounds(
+          [
+            [west, south],
+            [east, north],
+          ],
+          { padding: 50, duration: 0 },
+        );
+      }}
+    />
+  );
+}
+
+export function SmpPreviewDialog({
+  open,
+  onOpenChange,
+  map,
+  dependencies = defaultDependencies,
+}: SmpPreviewDialogProps) {
+  const intl = useIntl();
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -134,7 +145,9 @@ export function SmpPreviewDialog({
                 {map?.name ?? intl.formatMessage(mapMessages.previewTitle)}
               </Dialog.Title>
               <p className="text-sm text-text-muted">
-                {intl.formatMessage(mapMessages.statusReady)}
+                {map?.status === 'ready'
+                  ? intl.formatMessage(mapMessages.statusReady)
+                  : intl.formatMessage(mapMessages.previewTitle)}
               </p>
             </div>
             <Dialog.Close asChild>
@@ -143,7 +156,11 @@ export function SmpPreviewDialog({
               </Button>
             </Dialog.Close>
           </div>
-          <div className="min-h-0 flex-1 bg-surface">{previewContent}</div>
+          <div className="min-h-0 flex-1 bg-surface">
+            {open && map ? (
+              <PreviewSession map={map} dependencies={dependencies} />
+            ) : null}
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

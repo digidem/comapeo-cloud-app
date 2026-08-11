@@ -6,6 +6,7 @@ import { useCreateMap } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import { checkStorageQuota } from '@/lib/map/smp-download';
 import { closeSmpReader, getSmpReader } from '@/lib/map/smp-serve';
+import { uuid } from '@/lib/uuid';
 
 import { mapMessages } from './messages';
 
@@ -25,16 +26,34 @@ function fileNameWithoutExtension(fileName: string): string {
 }
 
 function isBbox(value: unknown): value is SavedMap['bbox'] {
+  if (
+    !Array.isArray(value) ||
+    value.length !== 4 ||
+    !value.every((item) => typeof item === 'number' && Number.isFinite(item))
+  ) {
+    return false;
+  }
+
+  const [west, south, east, north] = value;
   return (
-    Array.isArray(value) &&
-    value.length === 4 &&
-    value.every((item) => typeof item === 'number' && Number.isFinite(item))
+    west >= -180 &&
+    east <= 180 &&
+    south >= -90 &&
+    north <= 90 &&
+    west < east &&
+    south < north
   );
 }
 
 function extractMetadata(style: SmpStyle, fileName: string) {
   const sources = Object.values(style.sources ?? {});
   const sourceWithBounds = sources.find((source) => isBbox(source.bounds));
+  let metadataBounds: SavedMap['bbox'] | undefined;
+  if (isBbox(style.metadata?.['smp:regionalBounds'])) {
+    metadataBounds = style.metadata['smp:regionalBounds'];
+  } else if (isBbox(style.metadata?.['smp:bounds'])) {
+    metadataBounds = style.metadata['smp:bounds'];
+  }
   const attributions = sources
     .map((source) => source.attribution)
     .filter(
@@ -60,9 +79,10 @@ function extractMetadata(style: SmpStyle, fileName: string) {
         ? metadataName.trim()
         : fileNameWithoutExtension(fileName),
     bbox:
-      sourceWithBounds && isBbox(sourceWithBounds.bounds)
+      metadataBounds ??
+      (sourceWithBounds && isBbox(sourceWithBounds.bounds)
         ? sourceWithBounds.bounds
-        : WORLD_BBOX,
+        : WORLD_BBOX),
     attribution:
       attributions.length > 0
         ? [...new Set(attributions)].join(' · ')
@@ -83,7 +103,7 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
   async function handleFile(file: File) {
     if (!projectLocalId) return;
 
-    const importId = crypto.randomUUID();
+    const importId = uuid();
     setError(null);
     setSuccess(false);
     setIsImporting(true);
@@ -137,8 +157,16 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
         updatedAt: now,
       });
       setSuccess(true);
-    } catch {
-      setError(intl.formatMessage(mapMessages.importInvalidFile));
+    } catch (caught) {
+      const isQuotaExceeded =
+        caught instanceof Error && caught.name === 'QuotaExceededError';
+      setError(
+        intl.formatMessage(
+          isQuotaExceeded
+            ? mapMessages.importQuotaExceeded
+            : mapMessages.saveError,
+        ),
+      );
     } finally {
       await closeSmpReader(importId);
       setIsImporting(false);
@@ -152,6 +180,7 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
         type="file"
         accept=".smp,application/zip"
         className="sr-only"
+        tabIndex={-1}
         aria-label={intl.formatMessage(mapMessages.importFileLabel)}
         onChange={(event) => {
           const file = event.target.files?.[0];
