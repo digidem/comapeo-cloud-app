@@ -26,12 +26,17 @@ const messages = defineMessages({
     id: 'data.filters.categorySheetEmpty',
     defaultMessage: 'No categories available',
   },
+  loading: {
+    id: 'data.filters.categorySheetLoading',
+    defaultMessage: 'Loading categories…',
+  },
 });
 
 export interface CategoryFilterSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: string[];
+  categoriesLoading?: boolean;
   selected: string[];
   onToggle: (category: string) => void;
   onSelectAll: () => void;
@@ -43,6 +48,7 @@ function CategoryFilterSheet({
   open,
   onOpenChange,
   categories,
+  categoriesLoading = false,
   selected,
   onToggle,
   onSelectAll,
@@ -143,10 +149,16 @@ function CategoryFilterSheet({
         <div className="overflow-y-auto p-4">
           {categories.length === 0 ? (
             <span className="block text-sm text-text-muted">
-              {intl.formatMessage(messages.empty)}
+              {intl.formatMessage(
+                categoriesLoading ? messages.loading : messages.empty,
+              )}
             </span>
           ) : (
-            <ul className="flex flex-col">
+            <ul
+              className="flex flex-col"
+              role="group"
+              aria-label={intl.formatMessage(messages.sheetTitle)}
+            >
               {categories.map((category) => {
                 const isSelected = selected.includes(category);
                 return (

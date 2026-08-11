@@ -115,6 +115,14 @@ describe('CategoryFilterSheet', () => {
     expect(screen.getByText('No categories available')).toBeInTheDocument();
   });
 
+  it('renders a loading state instead of the empty state while categories load', () => {
+    renderSheet({ categories: [], categoriesLoading: true });
+    expect(screen.getByText('Loading categories…')).toBeInTheDocument();
+    expect(
+      screen.queryByText('No categories available'),
+    ).not.toBeInTheDocument();
+  });
+
   it('does not render dialog content when open is false', () => {
     renderSheet({ open: false });
     expect(screen.queryByText('Categories')).not.toBeInTheDocument();

@@ -362,10 +362,10 @@
   "data.filters.categorySheetEmpty": {
     "defaultMessage": "No categories available"
   },
-  "data.filters.categorySheetTitle": {
-    "defaultMessage": "Categories"
+  "data.filters.categorySheetLoading": {
+    "defaultMessage": "Loading categories…"
   },
-  "data.filters.categorySheetTrigger": {
+  "data.filters.categorySheetTitle": {
     "defaultMessage": "Categories"
   },
   "data.filters.categoryShowLess": {

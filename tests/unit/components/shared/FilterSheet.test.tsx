@@ -37,7 +37,7 @@ const defaultProps: FilterSheetProps = {
 };
 
 function renderSheet(overrides: Partial<FilterSheetProps> = {}) {
-  render(<FilterSheet {...defaultProps} {...overrides} />);
+  return render(<FilterSheet {...defaultProps} {...overrides} />);
 }
 
 describe('FilterSheet', () => {
@@ -114,6 +114,26 @@ describe('FilterSheet', () => {
     expect(
       screen.queryByRole('checkbox', { name: 'Wildlife' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('resets the category sheet after the outer sheet closes', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderSheet();
+    await user.click(screen.getByRole('button', { name: /Categories/ }));
+    expect(
+      screen.getByRole('checkbox', { name: 'Wildlife' }),
+    ).toBeInTheDocument();
+
+    rerender(<FilterSheet {...defaultProps} open={false} />);
+    rerender(<FilterSheet {...defaultProps} open />);
+
+    expect(
+      screen.queryByRole('checkbox', { name: 'Wildlife' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Categories/ }));
+    expect(
+      screen.getByRole('checkbox', { name: 'Wildlife' }),
+    ).toBeInTheDocument();
   });
 
   it('hides the inline category multi-select chips', () => {

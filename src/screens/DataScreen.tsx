@@ -411,6 +411,7 @@ export function DataScreen() {
             <FilterSheet
               open={filterDrawerOpen}
               onOpenChange={setFilterDrawerOpen}
+              categoriesLoading={categoryMetadata.isLoading}
               filters={obsFilters.filters}
               availableCategories={obsFilters.availableCategories}
               resultCount={filteredObs.length}
@@ -571,6 +572,7 @@ export function DataScreen() {
               <FilterSheet
                 open={filterDrawerOpen}
                 onOpenChange={setFilterDrawerOpen}
+                categoriesLoading={categoryMetadata.isLoading}
                 filters={obsFilters.filters}
                 availableCategories={obsFilters.availableCategories}
                 resultCount={filteredObs.length}
