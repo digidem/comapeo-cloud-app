@@ -18,7 +18,7 @@ vi.mock('react-map-gl/maplibre', () => ({
     onLoad?.({ target: { fitBounds } });
     return (
       <div
-        data-testid="smp-preview-map"
+        data-testid="mock-maplibre"
         data-attribution-control={
           attributionControl === false ? 'false' : 'true'
         }
@@ -71,7 +71,11 @@ describe('SmpPreviewDialog', () => {
 
     const previewMap = await screen.findByTestId('smp-preview-map');
     expect(previewMap).toBeInTheDocument();
-    expect(previewMap).toHaveAttribute('data-attribution-control', 'true');
+    expect(previewMap).toHaveAttribute('role', 'region');
+    expect(screen.getByTestId('mock-maplibre')).toHaveAttribute(
+      'data-attribution-control',
+      'true',
+    );
     expect(
       screen.getByRole('region', { name: 'Preview map' }),
     ).toBeInTheDocument();

@@ -30,11 +30,11 @@ function PreviewSession({ map }: { map: SavedMap }) {
   const intl = useIntl();
   const [style, setStyle] = useState<StyleSpecification | null>(null);
   const [error, setError] = useState(false);
-  const [readerId] = useState(() => `preview:${map.id}:${uuid()}`);
 
   useEffect(() => {
     if (map.status !== 'ready' || !map.smpBlob) return;
 
+    const readerId = `preview:${map.id}:${uuid()}`;
     let cancelled = false;
     let readerOpened = false;
     registerSmpProtocol();
@@ -74,7 +74,7 @@ function PreviewSession({ map }: { map: SavedMap }) {
         });
       }
     };
-  }, [map, readerId]);
+  }, [map]);
 
   if (map.status !== 'ready' || !map.smpBlob || error) {
     return (
@@ -104,10 +104,10 @@ function PreviewSession({ map }: { map: SavedMap }) {
     <div
       role="region"
       aria-label={intl.formatMessage(mapMessages.previewTitle)}
+      data-testid="smp-preview-map"
       className="h-full w-full"
     >
       <Map
-        data-testid="smp-preview-map"
         mapStyle={style}
         attributionControl={{}}
         style={{ width: '100%', height: '100%' }}

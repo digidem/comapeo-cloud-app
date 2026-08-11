@@ -4,7 +4,6 @@ import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
-import { closeSmpReader } from '@/lib/map/smp-serve';
 import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
@@ -72,7 +71,6 @@ export function useDeleteMap(projectLocalId: string | null) {
         downloadState.clear(mapId);
       }
 
-      await closeSmpReader(mapId);
       const db = getDb();
       const updatedAt = new Date().toISOString();
       await db.transaction('rw', [db.maps, db.projects], async () => {
@@ -110,14 +108,7 @@ export function useSetActiveMapMutation(projectLocalId: string | null) {
     mutationFn: async (mapId: string | null) => {
       if (!projectLocalId) return;
 
-      const previousMapId =
-        mapId === null ? useMapStore.getState().activeMapId : null;
-
       await useMapStore.getState().setActiveMap(projectLocalId, mapId);
-
-      if (previousMapId !== null) {
-        await closeSmpReader(previousMapId);
-      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['projects'] });

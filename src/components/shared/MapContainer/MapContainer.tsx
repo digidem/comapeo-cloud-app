@@ -173,15 +173,13 @@ function MapContainer({
   });
 
   const [smpStyle, setSmpStyle] = useState<StyleSpecification | null>(null);
-  const [smpLoadErrorAttempt, setSmpLoadErrorAttempt] = useState<{
-    mapId: string;
-    blob: Blob;
-  } | null>(null);
+  const [smpLoadErrorMapId, setSmpLoadErrorMapId] = useState<string | null>(
+    null,
+  );
   const isImportedActiveMap = isImportedSmpMap(activeSavedMap);
   const smpLoadError =
     activeSavedMap?.status === 'ready' &&
-    smpLoadErrorAttempt?.mapId === activeSavedMap.id &&
-    smpLoadErrorAttempt.blob === activeSavedMap.smpBlob;
+    smpLoadErrorMapId === activeSavedMap.id;
 
   // Build an ImageryBasemap from the active map's saved style settings
   // so the user sees the same layer/settings across the app immediately
@@ -248,16 +246,16 @@ function MapContainer({
             : style;
         if (!safeStyle) {
           setSmpStyle(null);
-          setSmpLoadErrorAttempt({ mapId, blob: smpBlob });
+          setSmpLoadErrorMapId(mapId);
           return;
         }
 
-        setSmpLoadErrorAttempt(null);
+        setSmpLoadErrorMapId(null);
         setSmpStyle(safeStyle);
       } catch {
         if (!cancelled) {
           setSmpStyle(null);
-          setSmpLoadErrorAttempt({ mapId, blob: smpBlob });
+          setSmpLoadErrorMapId(mapId);
         }
       }
     })();

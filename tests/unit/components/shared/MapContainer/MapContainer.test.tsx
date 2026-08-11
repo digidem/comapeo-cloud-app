@@ -419,38 +419,40 @@ describe('MapContainer', () => {
     mockCloseSmpReader.mockClear();
     focusManager.setFocused(false);
 
-    const firstBlob = new Blob(['first']);
-    const secondBlob = new Blob(['second']);
-    const mapRecord = {
-      id: 'refetched-map',
-      projectLocalId: 'proj-1',
-      name: 'Refetched Map',
-      type: 'style' as const,
-      styleUrl: '',
-      status: 'ready' as const,
-    };
-    mockDbGet
-      .mockResolvedValueOnce({ ...mapRecord, smpBlob: firstBlob })
-      .mockResolvedValue({ ...mapRecord, smpBlob: secondBlob });
-    useMapStore.setState({ activeMapId: mapRecord.id });
+    try {
+      const firstBlob = new Blob(['first']);
+      const secondBlob = new Blob(['second']);
+      const mapRecord = {
+        id: 'refetched-map',
+        projectLocalId: 'proj-1',
+        name: 'Refetched Map',
+        type: 'style' as const,
+        styleUrl: '',
+        status: 'ready' as const,
+      };
+      mockDbGet
+        .mockResolvedValueOnce({ ...mapRecord, smpBlob: firstBlob })
+        .mockResolvedValue({ ...mapRecord, smpBlob: secondBlob });
+      useMapStore.setState({ activeMapId: mapRecord.id });
 
-    render(<MapContainer />);
+      render(<MapContainer />);
 
-    await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(1));
-    const firstReaderId = mockGetSmpReader.mock.calls[0]![0] as string;
-    expect(firstReaderId).toMatch(/^active:refetched-map:/);
+      await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(1));
+      const firstReaderId = mockGetSmpReader.mock.calls[0]![0] as string;
+      expect(firstReaderId).toMatch(/^active:refetched-map:/);
 
-    focusManager.setFocused(true);
-    await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(2));
-    const secondReaderId = mockGetSmpReader.mock.calls[1]![0] as string;
-    expect(secondReaderId).toMatch(/^active:refetched-map:/);
-    expect(secondReaderId).not.toBe(firstReaderId);
-    await waitFor(() =>
-      expect(mockCloseSmpReader).toHaveBeenCalledWith(firstReaderId),
-    );
-    expect(mockCloseSmpReader).not.toHaveBeenCalledWith(secondReaderId);
-
-    focusManager.setFocused(undefined);
+      focusManager.setFocused(true);
+      await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(2));
+      const secondReaderId = mockGetSmpReader.mock.calls[1]![0] as string;
+      expect(secondReaderId).toMatch(/^active:refetched-map:/);
+      expect(secondReaderId).not.toBe(firstReaderId);
+      await waitFor(() =>
+        expect(mockCloseSmpReader).toHaveBeenCalledWith(firstReaderId),
+      );
+      expect(mockCloseSmpReader).not.toHaveBeenCalledWith(secondReaderId);
+    } finally {
+      focusManager.setFocused(undefined);
+    }
   });
 
   it('does not render active offline map badge when no active map', () => {

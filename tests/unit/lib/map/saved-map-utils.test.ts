@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
-import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
+import {
+  isImportedSmpMap,
+  isImportedSmpRecord,
+} from '@/lib/map/saved-map-utils';
 
 const importedMap: SavedMap = {
   id: 'imported-map',
@@ -18,6 +21,23 @@ const importedMap: SavedMap = {
   createdAt: '2026-08-11T00:00:00.000Z',
   updatedAt: '2026-08-11T00:00:00.000Z',
 };
+
+describe('isImportedSmpRecord', () => {
+  it('recognizes imported origin even when the packaged blob is missing', () => {
+    expect(isImportedSmpRecord({ ...importedMap, smpBlob: undefined })).toBe(
+      true,
+    );
+  });
+
+  it('rejects authored style records', () => {
+    expect(
+      isImportedSmpRecord({
+        ...importedMap,
+        styleUrl: 'https://example.com/style.json',
+      }),
+    ).toBe(false);
+  });
+});
 
 describe('isImportedSmpMap', () => {
   it('recognizes self-contained ready imported style maps', () => {
