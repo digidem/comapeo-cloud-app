@@ -155,48 +155,49 @@ function CategoryFilterSheet({
               )}
             </span>
           ) : (
-            <ul
-              className="flex flex-col"
+            <div
               role="group"
               aria-label={intl.formatMessage(messages.sheetTitle)}
             >
-              {categories.map((category) => {
-                const isSelected = selectedSet.has(category);
-                return (
-                  <li key={category}>
-                    <button
-                      type="button"
-                      role="checkbox"
-                      aria-checked={isSelected}
-                      onClick={() => onToggle(category)}
-                      className="flex w-full min-h-[44px] items-center gap-3 rounded-btn px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      style={{ touchAction: 'manipulation' }}
-                    >
-                      {isSelected && (
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          aria-hidden="true"
-                          className="shrink-0 text-primary"
-                        >
-                          <path
-                            d="M5 12.5l5 5 9-9"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      )}
-                      <span>{category}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+              <ul className="flex flex-col">
+                {categories.map((category) => {
+                  const isSelected = selectedSet.has(category);
+                  return (
+                    <li key={category}>
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        onClick={() => onToggle(category)}
+                        className="flex w-full min-h-[44px] items-center gap-3 rounded-btn px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        style={{ touchAction: 'manipulation' }}
+                      >
+                        {isSelected && (
+                          <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            aria-hidden="true"
+                            className="shrink-0 text-primary"
+                          >
+                            <path
+                              d="M5 12.5l5 5 9-9"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                        <span>{category}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </div>
       </Dialog.Content>
