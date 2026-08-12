@@ -49,10 +49,10 @@ export function CategoryMultiSelect({
   const visibleCategories = expanded
     ? categories
     : categories.slice(0, MAX_VISIBLE);
-  const visibleCategorySet = new Set(visibleCategories);
+  const visibleCategorySet = expanded ? null : new Set(visibleCategories);
   const selectedSet = new Set(selected);
   const remainingCount = categories.length - MAX_VISIBLE;
-  const hiddenSelected = !expanded
+  const hiddenSelected = visibleCategorySet
     ? selected.filter((c) => !visibleCategorySet.has(c)).length
     : 0;
 

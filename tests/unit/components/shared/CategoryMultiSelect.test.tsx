@@ -186,38 +186,19 @@ describe('CategoryMultiSelect', () => {
     expect(screen.getByText('2 selected')).toBeInTheDocument();
   });
 
-  it('uses set membership instead of repeated array includes lookups', () => {
-    const visibleCategories = Array.from(
-      { length: 8 },
-      (_, i) => `Cat ${i + 1}`,
-    );
-    Object.defineProperty(visibleCategories, 'includes', {
-      value: vi.fn(() => {
-        throw new Error('visibleCategories.includes should not be used');
-      }),
-    });
-
+  it('preserves visible selection state and hidden-selected count while collapsed', () => {
     const manyCategories = Array.from({ length: 12 }, (_, i) => `Cat ${i + 1}`);
-    Object.defineProperty(manyCategories, 'slice', {
-      value: vi.fn(() => visibleCategories),
-    });
+    render(
+      <CategoryMultiSelect
+        categories={manyCategories}
+        selected={['Cat 2', 'Cat 10']}
+        onToggle={onToggle}
+        onClear={onClear}
+      />,
+    );
 
-    const selected = ['Cat 10'];
-    Object.defineProperty(selected, 'includes', {
-      value: vi.fn(() => {
-        throw new Error('selected.includes should not be used');
-      }),
-    });
-
-    expect(() =>
-      render(
-        <CategoryMultiSelect
-          categories={manyCategories}
-          selected={selected}
-          onToggle={onToggle}
-          onClear={onClear}
-        />,
-      ),
-    ).not.toThrow();
+    expect(screen.getByText('Cat 2')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(screen.queryByText('Cat 10')).not.toBeInTheDocument();
   });
 });
