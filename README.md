@@ -66,7 +66,7 @@ git clone https://github.com/digidem/comapeo-cloud-app.git
 cd comapeo-cloud-app
 # Bun is the required package manager — pinned in package.json as bun@1.3.14
 bun install
-npm run dev
+bun run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) and point the app at your CoMapeo Cloud server URL.
