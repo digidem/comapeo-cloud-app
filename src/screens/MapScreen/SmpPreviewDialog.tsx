@@ -2,7 +2,7 @@ import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import * as Dialog from '@radix-ui/react-dialog';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useIntl } from 'react-intl';
 import Map from 'react-map-gl/maplibre';
 
@@ -26,26 +26,26 @@ interface SmpPreviewDialogProps {
   map: SavedMap | null;
 }
 
-function PreviewSession({ map }: { map: SavedMap }) {
+const PreviewSession = memo(function PreviewSession({
+  map,
+}: {
+  map: SavedMap;
+}) {
   const intl = useIntl();
-  // SmpPreviewDialog keys this component by map id + updatedAt. Freeze that
-  // version for the lifetime of the session so identity-only query refetches do
-  // not tear down and reopen the packaged reader mid-preview.
-  const [sessionMap] = useState(map);
   const [style, setStyle] = useState<StyleSpecification | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (sessionMap.status !== 'ready' || !sessionMap.smpBlob) return;
+    if (map.status !== 'ready' || !map.smpBlob) return;
 
-    const readerId = `preview:${sessionMap.id}:${uuid()}`;
+    const readerId = `preview:${map.id}:${uuid()}`;
     let cancelled = false;
     let readerOpened = false;
     registerSmpProtocol();
 
     void (async () => {
       try {
-        const reader = await getSmpReader(readerId, sessionMap.smpBlob!);
+        const reader = await getSmpReader(readerId, map.smpBlob!);
         readerOpened = true;
 
         if (cancelled) {
@@ -56,7 +56,7 @@ function PreviewSession({ map }: { map: SavedMap }) {
         const resolved = await resolveSmpStyle(reader, readerId);
         if (!cancelled) {
           if (resolved) {
-            const safeStyle = isImportedSmpMap(sessionMap)
+            const safeStyle = isImportedSmpMap(map)
               ? sanitizeImportedSmpStyle(resolved)
               : resolved;
             if (safeStyle) setStyle(safeStyle);
@@ -78,9 +78,9 @@ function PreviewSession({ map }: { map: SavedMap }) {
         });
       }
     };
-  }, [sessionMap]);
+  }, [map]);
 
-  if (sessionMap.status !== 'ready' || !sessionMap.smpBlob || error) {
+  if (map.status !== 'ready' || !map.smpBlob || error) {
     return (
       <div
         className="flex h-full items-center justify-center p-6 text-sm text-error"
@@ -103,7 +103,7 @@ function PreviewSession({ map }: { map: SavedMap }) {
     );
   }
 
-  const [west, south, east, north] = sessionMap.bbox;
+  const [west, south, east, north] = map.bbox;
   return (
     <div
       role="region"
@@ -126,6 +126,16 @@ function PreviewSession({ map }: { map: SavedMap }) {
         }}
       />
     </div>
+  );
+}, areSamePreviewVersion);
+
+function areSamePreviewVersion(
+  previous: { map: SavedMap },
+  next: { map: SavedMap },
+) {
+  return (
+    previous.map.id === next.map.id &&
+    previous.map.updatedAt === next.map.updatedAt
   );
 }
 
