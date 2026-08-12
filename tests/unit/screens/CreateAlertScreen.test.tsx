@@ -63,6 +63,7 @@ vi.mock('@/components/shared/MetadataFields', () => ({
         onChange([
           { id: 'a', key: 'severity', value: 'high', type: 'text' },
           { id: 'b', key: 'confidence', value: '0.9', type: 'number' },
+          { id: 'c', key: 'alert_type', value: 'generic-value', type: 'text' },
         ])
       }
     >
@@ -75,6 +76,7 @@ async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Detection Date Start'), '2025-01-01');
   await user.type(screen.getByLabelText('Detection Date End'), '2025-01-02');
   await user.type(screen.getByLabelText('Source ID'), 'GLAD-S2');
+  await user.type(screen.getByLabelText('Alert Type'), 'fire');
 }
 
 describe('CreateAlertScreen', () => {
@@ -92,6 +94,7 @@ describe('CreateAlertScreen', () => {
     expect(screen.getByText('Create Alert')).toBeInTheDocument();
     expect(screen.getByText('Location and shape')).toBeInTheDocument();
     expect(screen.getByLabelText('Source ID')).toBeInTheDocument();
+    expect(screen.getByLabelText('Alert Type')).toBeInTheDocument();
     expect(screen.queryByText(/GeoJSON/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Metadata \(JSON/i)).not.toBeInTheDocument();
   });
@@ -119,7 +122,7 @@ describe('CreateAlertScreen', () => {
       {
         projectLocalId: 'proj-1',
         geometry: { type: 'Point', coordinates: [10, 20] },
-        metadata: { severity: 'high', confidence: 0.9 },
+        metadata: { severity: 'high', confidence: 0.9, alert_type: 'fire' },
         detectionDateStart: '2025-01-01T00:00:00.000Z',
         detectionDateEnd: '2025-01-02T23:59:59.999Z',
         sourceId: 'GLAD-S2',

@@ -65,6 +65,9 @@
   "alerts.alertsError": {
     "defaultMessage": "Failed to load alerts. Please try again."
   },
+  "alerts.create.alertType": {
+    "defaultMessage": "Alert Type"
+  },
   "alerts.create.cancel": {
     "defaultMessage": "Cancel"
   },

@@ -411,13 +411,13 @@ export function GeometryPicker({
               <Layer
                 id="alert-geometry-fill"
                 type="fill"
-                paint={{ 'fill-color': '#1F6FFF', 'fill-opacity': 0.18 }}
+                paint={{ 'fill-color': '#dc2626', 'fill-opacity': 0.18 }}
               />
             )}
             <Layer
               id="alert-geometry-line"
               type="line"
-              paint={{ 'line-color': '#1F6FFF', 'line-width': 3 }}
+              paint={{ 'line-color': '#dc2626', 'line-width': 3 }}
             />
           </Source>
         )}
@@ -446,7 +446,7 @@ export function GeometryPicker({
             >
               <div
                 role="img"
-                className="h-4 w-4 rounded-full border-2 border-white bg-primary shadow"
+                className="h-4 w-4 rounded-full border-2 border-white bg-error shadow"
                 aria-label={intl.formatMessage(messages.vertexLabel, {
                   number: index + 1,
                 })}

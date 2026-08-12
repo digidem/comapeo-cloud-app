@@ -137,6 +137,20 @@ describe('GeometryPicker', () => {
     });
   });
 
+  it('renders alert vertices as red markers', async () => {
+    const user = userEvent.setup();
+    render(<GeometryPicker onChange={vi.fn()} />);
+
+    await user.click(screen.getByText('Map click'));
+
+    expect(screen.getByRole('img', { name: 'Vertex 1' })).toHaveClass(
+      'bg-error',
+    );
+    expect(screen.getByRole('img', { name: 'Vertex 1' })).not.toHaveClass(
+      'bg-primary',
+    );
+  });
+
   it('allows keyboard users to add a point with coordinates', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

@@ -61,6 +61,10 @@ const messages = defineMessages({
     defaultMessage: 'Detection Date End',
   },
   sourceIdLabel: { id: 'alerts.create.sourceId', defaultMessage: 'Source ID' },
+  alertTypeLabel: {
+    id: 'alerts.create.alertType',
+    defaultMessage: 'Alert Type',
+  },
   requiredField: {
     id: 'alerts.create.requiredField',
     defaultMessage: 'This field is required.',
@@ -91,6 +95,7 @@ const formSchema = v.object({
   detectionDateStart: dateInput,
   detectionDateEnd: dateInput,
   sourceId: v.pipe(v.string(), v.trim(), v.minLength(1)),
+  alertType: v.pipe(v.string(), v.trim(), v.minLength(1)),
 });
 type FormData = v.InferOutput<typeof formSchema>;
 
@@ -152,6 +157,7 @@ export function CreateAlertScreen() {
       detectionDateStart: '',
       detectionDateEnd: '',
       sourceId: '',
+      alertType: '',
     },
   });
 
@@ -199,7 +205,7 @@ export function CreateAlertScreen() {
       {
         projectLocalId: selectedProjectId,
         geometry,
-        metadata: metadata.value,
+        metadata: { ...metadata.value, ['alert_type']: data.alertType },
         detectionDateStart: dateInputToIso(data.detectionDateStart),
         detectionDateEnd: dateInputToIso(data.detectionDateEnd, true),
         sourceId: data.sourceId,
@@ -256,7 +262,7 @@ export function CreateAlertScreen() {
               </p>
             )}
           </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             <label className="flex flex-col gap-1 text-sm font-medium text-text">
               {intl.formatMessage(messages.detectionDateStartLabel)}
               <input
@@ -294,6 +300,20 @@ export function CreateAlertScreen() {
                 className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
               />
               {formErrors.sourceId && (
+                <span className="text-xs text-error">
+                  {intl.formatMessage(messages.requiredField)}
+                </span>
+              )}
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-text">
+              {intl.formatMessage(messages.alertTypeLabel)}
+              <input
+                type="text"
+                {...register('alertType')}
+                aria-invalid={!!formErrors.alertType}
+                className="rounded-input border border-border bg-surface-card px-3 py-2 text-sm"
+              />
+              {formErrors.alertType && (
                 <span className="text-xs text-error">
                   {intl.formatMessage(messages.requiredField)}
                 </span>
