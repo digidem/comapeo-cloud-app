@@ -82,8 +82,8 @@ describe('PhotoGallery', () => {
 
     // Preview dialog should appear
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    // Preview should contain a larger image with original variant
-    const previewImg = screen.getByAltText('photo1.jpg preview');
+    // Preview should contain a larger image with the new accessible label format
+    const previewImg = screen.getByAltText('Photo 1');
     expect(previewImg).toBeInTheDocument();
   });
 

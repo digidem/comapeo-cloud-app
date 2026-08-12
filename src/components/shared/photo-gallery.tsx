@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { AuthImg } from '@/components/shared/auth-img';
-import { Button } from '@/components/ui/button';
+import { MediaLightbox } from '@/components/shared/media-lightbox';
 import { getAttachmentUrl } from '@/lib/api-client';
 
 interface Photo {
@@ -17,12 +17,41 @@ interface PhotoGalleryProps {
 
 export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const openedThumbnailRef = useRef<HTMLButtonElement | null>(null);
+
+  const imageUrls = photos.map((photo) =>
+    getAttachmentUrl(
+      projectId,
+      photo.driveId,
+      photo.type,
+      photo.name,
+      'original',
+    ),
+  );
+
+  const handleThumbnailClick = useCallback((index: number) => {
+    // Store reference to the thumbnail that opened the preview for focus restoration
+    openedThumbnailRef.current = thumbnailRefs.current[index] ?? null;
+    setPreviewIndex(index);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    // Restore focus to the thumbnail that opened the preview
+    openedThumbnailRef.current?.focus();
+    openedThumbnailRef.current = null;
+    setPreviewIndex(null);
+  }, []);
+
+  const handleNavigate = useCallback((index: number) => {
+    // Update the stored thumbnail reference when navigating
+    openedThumbnailRef.current = thumbnailRefs.current[index] ?? null;
+    setPreviewIndex(index);
+  }, []);
 
   if (photos.length === 0) {
     return <p>No photos</p>;
   }
-
-  const selectedPhoto = previewIndex !== null ? photos[previewIndex] : null;
 
   return (
     <div>
@@ -30,9 +59,13 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
         {photos.map((photo, index) => (
           <button
             key={photo.driveId}
+            ref={(el) => {
+              thumbnailRefs.current[index] = el;
+            }}
             type="button"
-            onClick={() => setPreviewIndex(index)}
+            onClick={() => handleThumbnailClick(index)}
             className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-card"
+            aria-label={`View ${photo.name}`}
           >
             <AuthImg
               src={getAttachmentUrl(
@@ -49,34 +82,13 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
         ))}
       </div>
 
-      {selectedPhoto && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
-        >
-          <AuthImg
-            src={getAttachmentUrl(
-              projectId,
-              selectedPhoto.driveId,
-              selectedPhoto.type,
-              selectedPhoto.name,
-              'original',
-            )}
-            alt={`${selectedPhoto.name} preview`}
-            className="rounded-card shadow-modal overflow-hidden max-h-[90vh] max-w-[90vw]"
-          />
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setPreviewIndex(null)}
-            aria-label="Close preview"
-            className="absolute top-4 right-4"
-          >
-            Close
-          </Button>
-        </div>
+      {previewIndex !== null && (
+        <MediaLightbox
+          images={imageUrls}
+          currentIndex={previewIndex}
+          onClose={handleClose}
+          onNavigate={handleNavigate}
+        />
       )}
     </div>
   );

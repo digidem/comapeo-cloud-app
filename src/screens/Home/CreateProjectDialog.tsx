@@ -198,13 +198,14 @@ function CreateProjectDialog({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-text">
+          <label id="archive-label" className="text-sm font-medium text-text">
             {intl.formatMessage(messages.archiveLabel)}
           </label>
           <Select
             value={selectedServerUrl}
             onValueChange={(value) => setValue('serverUrl', value)}
             placeholder={intl.formatMessage(messages.archivePlaceholder)}
+            ariaLabelledBy="archive-label"
           >
             <Select.Item value={LOCAL_SERVER_VALUE}>
               {intl.formatMessage(messages.archiveOptionLocal)}
