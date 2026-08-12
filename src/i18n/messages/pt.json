@@ -11,9 +11,7 @@
   "alertDetail.tryAgain": "Tente novamente mais tarde.",
   "alerts.addAlert": "Adicionar Alerta",
   "alerts.alertsError": "Falha ao carregar alertas. Tente novamente.",
-  "alerts.create.alertType": {
-    "defaultMessage": "Tipo de alerta"
-  },
+  "alerts.create.alertType": "Tipo de alerta",
   "alerts.create.cancel": "Cancelar",
   "alerts.create.detectionDateEnd": "Data de Detecção Fim",
   "alerts.create.detectionDateStart": "Data de Detecção Início",
