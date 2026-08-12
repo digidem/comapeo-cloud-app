@@ -112,7 +112,7 @@
     "@eslint/js": "^10.0.1",
     "@formatjs/cli": "^6.16.6",
     "@playwright/test": "^1.60.0",
-    "@sentry/cli": "^3.4.3",
+    "@sentry/cli": "^3.6.2",
     "@storybook/addon-a11y": "^10.4.1",
     "@storybook/addon-docs": "^10.4.1",
     "@storybook/addon-mcp": "^0.6.0",
