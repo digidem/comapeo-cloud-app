@@ -8,7 +8,6 @@ interface ContextualSubnavProps {
 function ContextualSubnav({ title, children }: ContextualSubnavProps) {
   return (
     <aside
-      role="complementary"
       aria-label={title}
       className="hidden w-[268px] shrink-0 flex-col border-r border-border bg-white md:flex"
     >

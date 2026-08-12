@@ -49,9 +49,11 @@ export function CategoryMultiSelect({
   const visibleCategories = expanded
     ? categories
     : categories.slice(0, MAX_VISIBLE);
+  const visibleCategorySet = expanded ? null : new Set(visibleCategories);
+  const selectedSet = new Set(selected);
   const remainingCount = categories.length - MAX_VISIBLE;
-  const hiddenSelected = !expanded
-    ? selected.filter((c) => !visibleCategories.includes(c)).length
+  const hiddenSelected = visibleCategorySet
+    ? selected.filter((c) => !visibleCategorySet.has(c)).length
     : 0;
 
   if (categories.length === 0) {
@@ -85,7 +87,7 @@ export function CategoryMultiSelect({
 
         {/* Category chips */}
         {visibleCategories.map((category) => {
-          const isSelected = selected.includes(category);
+          const isSelected = selectedSet.has(category);
           return (
             <button
               key={category}

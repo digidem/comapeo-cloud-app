@@ -161,7 +161,6 @@ function ConnectionProgress({
           return (
             <li
               key={step.id}
-              role="listitem"
               className={`flex items-center gap-3 rounded-lg p-2 transition-colors ${getStepVariant(
                 isActive,
                 isError,

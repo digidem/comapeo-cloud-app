@@ -185,4 +185,20 @@ describe('CategoryMultiSelect', () => {
     );
     expect(screen.getByText('2 selected')).toBeInTheDocument();
   });
+
+  it('preserves visible selection state and hidden-selected count while collapsed', () => {
+    const manyCategories = Array.from({ length: 12 }, (_, i) => `Cat ${i + 1}`);
+    render(
+      <CategoryMultiSelect
+        categories={manyCategories}
+        selected={['Cat 2', 'Cat 10']}
+        onToggle={onToggle}
+        onClear={onClear}
+      />,
+    );
+
+    expect(screen.getByText('Cat 2')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(screen.queryByText('Cat 10')).not.toBeInTheDocument();
+  });
 });
