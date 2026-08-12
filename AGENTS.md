@@ -26,7 +26,7 @@ For long-running implementation, multi-agent missions, or work where premature c
 Claude Code:
 
 ```text
-First read .claude/orchestrator_prompt.md and treat it as your primary role, then use Zenith to run this mission.
+If a project-scoped .claude/orchestrator_prompt.md or .codex/orchestrator_prompt.md exists, read it as your primary role; otherwise proceed with this AGENTS.md as your role, then use Zenith to run this mission.
 
 <task>
 ```
@@ -34,7 +34,7 @@ First read .claude/orchestrator_prompt.md and treat it as your primary role, the
 Codex:
 
 ```text
-First read .codex/orchestrator_prompt.md and treat it as your primary role, then use Zenith to run this mission.
+If a project-scoped .claude/orchestrator_prompt.md or .codex/orchestrator_prompt.md exists, read it as your primary role; otherwise proceed with this AGENTS.md as your role, then use Zenith to run this mission.
 
 <task>
 ```
@@ -289,13 +289,13 @@ The `/api/invites/{encrypt,decrypt}` Pages Functions require a 32-byte AES-GCM k
 - Local dev: add `INVITE_KEY=<base64>` to `.dev.vars` (gitignored).
 - Rotation: bump the version prefix in `src/lib/invite-crypto.ts` (currently `v1.`) AND add a parallel decrypt path that still accepts the old prefix. Keep the old prefix alive for at least one TTL window (24h) before removing it, so in-flight invites aren't invalidated mid-use.
 
-## Dev Server + Cloudflare Tunnel (MANDATORY)
+## Dev Server + Cloudflare Tunnel (when remote preview is needed)
 
-Every time you start development work in any worktree, ALWAYS:
+Start the Vite dev server for every development session. Exposing a Cloudflare Tunnel is **optional** and only needed when the task requires a remote preview (e.g. sharing the live UI with a reviewer). For local-only work — unit tests, running the app in a local browser, type-checking — just run `npm run dev` and skip the tunnel.
 
-1. **Kill any stale dev servers** - `pkill -f "vite"` or kill old PID
+1. **Kill this worktree's stale dev server** — port-scoped (worktrees use distinct ports): `kill "$(lsof -t -i:5173)" 2>/dev/null || true`
 2. **Start the Vite dev server** - `npm run dev` (runs on port 5173)
-3. **Expose via Cloudflare Tunnel** - `cloudflared tunnel --url http://localhost:5173`
+3. **Expose via Cloudflare Tunnel** — only when a remote preview is needed: `cloudflared tunnel --url http://localhost:5173`
 4. **Capture the tunnel URL** - look for `https://*.trycloudflare.com` in the output
 5. **Share the URL with the user** so they have immediate access to the latest UI even before CI/PR previews finish
 

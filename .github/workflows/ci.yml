@@ -13,8 +13,6 @@ concurrency:
 
 permissions:
   contents: read
-  deployments: write
-  pull-requests: write
 
 env:
   # Opt into Node.js 24 for all JavaScript-based actions now, ahead of the
@@ -408,6 +406,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      # Advisory: screenshot visual regression failures do NOT block CI but must be triaged before merge
       - name: Run visual regression screenshots
         continue-on-error: true
         run: npm run test:screenshots:ci
@@ -558,6 +557,10 @@ jobs:
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
     outputs:
       preview-url: ${{ steps.deploy.outputs.pages-deployment-alias-url || steps.deploy.outputs.deployment-url }}
     steps:
@@ -603,6 +606,7 @@ jobs:
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           command: pages deploy dist/ --project-name=comapeo-cloud-app --branch=${{ github.head_ref }}
 
+      # Advisory: PR preview comment failures do NOT block CI but must be triaged before merge
       - name: Comment preview URL on PR
         continue-on-error: true
         uses: actions/github-script@v9
@@ -723,6 +727,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      # Advisory: preview smoke test failures do NOT block CI but must be triaged before merge
       - name: Run smoke-level E2E against preview
         continue-on-error: true
         run: npx playwright test --project=chromium --reporter=list
@@ -737,6 +742,9 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      deployments: write
     outputs:
       deployment-url: ${{ steps.deploy.outputs.deployment-url }}
     steps:
@@ -805,6 +813,9 @@ jobs:
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      deployments: write
     outputs:
       deployment-url: ${{ steps.deploy.outputs.deployment-url }}
     steps:
