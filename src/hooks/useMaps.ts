@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
 import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
 import { useMapDownloadStore } from '@/stores/map-download-store';
@@ -11,6 +12,21 @@ export const mapsQueryKey = (projectLocalId: string | null) => [
   'maps',
   projectLocalId,
 ];
+
+function assertValidNewMapOrigin(map: SavedMap): void {
+  if (map.origin === 'imported') {
+    if (!isImportedSmpMap(map)) {
+      throw new Error(
+        'Imported maps must be ready self-contained style packages',
+      );
+    }
+    return;
+  }
+
+  if (map.origin !== 'authored' || map.styleUrl.length === 0) {
+    throw new Error('Authored maps require an explicit origin and style URL');
+  }
+}
 
 export function useMaps(projectLocalId: string | null) {
   return useQuery({
@@ -32,6 +48,7 @@ export function useCreateMap() {
 
   return useMutation({
     mutationFn: async (map: SavedMap) => {
+      assertValidNewMapOrigin(map);
       await getDb().maps.add(map);
       return map;
     },

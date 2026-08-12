@@ -62,10 +62,36 @@ describe('savedMapSchema', () => {
         ...validRaster,
         type: 'style',
         scheme: undefined,
+        origin: 'imported',
         styleUrl: '',
         status: 'ready',
       }).success,
     ).toBe(true);
+  });
+
+  it('rejects a ready empty styleUrl without explicit imported origin', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        type: 'style',
+        scheme: undefined,
+        styleUrl: '',
+        status: 'ready',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects imported origin with a network styleUrl', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        type: 'style',
+        scheme: undefined,
+        origin: 'imported',
+        styleUrl: 'https://example.com/style.json',
+        status: 'ready',
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects an empty styleUrl for non-ready style maps', () => {

@@ -52,9 +52,12 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const [activeError, setActiveError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SavedMap | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [previewTarget, setPreviewTarget] = useState<SavedMap | null>(null);
+  const [previewTargetId, setPreviewTargetId] = useState<string | null>(null);
 
   const maps = mapsQuery.data ?? [];
+  const previewTarget = previewTargetId
+    ? (maps.find((map) => map.id === previewTargetId) ?? null)
+    : null;
   const hasPendingAction = pendingAction !== null;
 
   async function runPendingAction(
@@ -124,6 +127,7 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
       await runPendingAction({ type: 'delete', mapId: deleteTarget.id }, () =>
         deleteMap.mutateAsync(deleteTarget.id),
       );
+      if (previewTargetId === deleteTarget.id) setPreviewTargetId(null);
       setDeleteTarget(null);
       setDeleteError(null);
     } catch {
@@ -200,7 +204,7 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() => setPreviewTarget(map)}
+                    onClick={() => setPreviewTargetId(map.id)}
                     disabled={hasPendingAction}
                   >
                     {intl.formatMessage(mapMessages.previewAction)}
@@ -273,7 +277,7 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
       <SmpPreviewDialog
         open={previewTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setPreviewTarget(null);
+          if (!open) setPreviewTargetId(null);
         }}
         map={previewTarget}
       />

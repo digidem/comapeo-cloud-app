@@ -140,6 +140,16 @@ const POSITION_CLASSES: Record<SwitcherPosition, string> = {
   'bottom-left': 'bottom-3 left-3',
 };
 
+const smpBlobTokens = new WeakMap<Blob, string>();
+
+function getSmpBlobToken(blob: Blob): string {
+  const existing = smpBlobTokens.get(blob);
+  if (existing) return existing;
+  const token = uuid();
+  smpBlobTokens.set(blob, token);
+  return token;
+}
+
 function MapContainer({
   initialViewState,
   interactive = true,
@@ -173,13 +183,18 @@ function MapContainer({
   });
 
   const [smpStyle, setSmpStyle] = useState<StyleSpecification | null>(null);
-  const [smpLoadErrorMapId, setSmpLoadErrorMapId] = useState<string | null>(
-    null,
-  );
+  const [smpLoadErrorAttempt, setSmpLoadErrorAttempt] = useState<{
+    mapId: string;
+    blobToken: string;
+  } | null>(null);
   const isImportedActiveMap = isImportedSmpMap(activeSavedMap);
+  const activeBlobToken = activeSavedMap?.smpBlob
+    ? getSmpBlobToken(activeSavedMap.smpBlob)
+    : null;
   const smpLoadError =
     activeSavedMap?.status === 'ready' &&
-    smpLoadErrorMapId === activeSavedMap.id;
+    smpLoadErrorAttempt?.mapId === activeSavedMap.id &&
+    smpLoadErrorAttempt.blobToken === activeBlobToken;
 
   // Build an ImageryBasemap from the active map's saved style settings
   // so the user sees the same layer/settings across the app immediately
@@ -224,6 +239,7 @@ function MapContainer({
 
     if (!mapId || !smpBlob || status !== 'ready') return;
 
+    const blobToken = getSmpBlobToken(smpBlob);
     const readerId = `active:${mapId}:${uuid()}`;
     let cancelled = false;
     let readerOpened = false;
@@ -246,16 +262,16 @@ function MapContainer({
             : style;
         if (!safeStyle) {
           setSmpStyle(null);
-          setSmpLoadErrorMapId(mapId);
+          setSmpLoadErrorAttempt({ mapId, blobToken });
           return;
         }
 
-        setSmpLoadErrorMapId(null);
+        setSmpLoadErrorAttempt(null);
         setSmpStyle(safeStyle);
       } catch {
         if (!cancelled) {
           setSmpStyle(null);
-          setSmpLoadErrorMapId(mapId);
+          setSmpLoadErrorAttempt({ mapId, blobToken });
         }
       }
     })();

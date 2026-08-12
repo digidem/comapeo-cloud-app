@@ -228,6 +228,7 @@ export interface SavedMap {
   projectLocalId: string; // Origin project
   name: string; // Non-empty after validation
   type: 'raster' | 'style';
+  origin?: 'authored' | 'imported'; // Optional for backwards compatibility
   styleUrl: string;
   bbox: [number, number, number, number]; // [west, south, east, north]
   minZoom: number; // Default 0

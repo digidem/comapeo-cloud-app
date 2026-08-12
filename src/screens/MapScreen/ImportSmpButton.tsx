@@ -179,6 +179,7 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
         projectLocalId,
         name: metadata.name,
         type: 'style',
+        origin: 'imported',
         styleUrl: '',
         bbox: metadata.bbox,
         minZoom: metadata.minZoom,

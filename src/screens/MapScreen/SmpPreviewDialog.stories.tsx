@@ -23,6 +23,7 @@ const map: SavedMap = {
   projectLocalId: 'storybook-project',
   name: 'Community territory map',
   type: 'style',
+  origin: 'imported',
   styleUrl: '',
   bbox: [-70, -5, -60, 2],
   minZoom: 0,

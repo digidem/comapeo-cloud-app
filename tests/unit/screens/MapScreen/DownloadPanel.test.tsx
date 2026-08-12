@@ -201,6 +201,7 @@ describe('DownloadPanel', () => {
     const map = createMockMap({
       status: 'ready',
       type: 'style',
+      origin: 'imported',
       styleUrl: '',
       smpBlob: new Blob(['smp']),
       smpSize: 1048576,
@@ -221,6 +222,7 @@ describe('DownloadPanel', () => {
       id: 'imported-missing',
       status: 'ready',
       type: 'style',
+      origin: 'imported',
       styleUrl: '',
       smpBlob: undefined,
       smpSize: 100,

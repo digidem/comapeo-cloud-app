@@ -91,7 +91,18 @@ vi.mock('react-map-gl/maplibre', () => {
 beforeEach(() => {
   mapProps.length = 0;
   localStorage.clear();
-  useMapStore.setState({ basemapId: 'carto-positron' });
+  focusManager.setFocused(undefined);
+  mockResolveSmpStyle.mockReset().mockResolvedValue({
+    version: 8,
+    sources: {},
+    layers: [],
+  });
+  mockGetSmpReader.mockReset().mockResolvedValue({});
+  mockCloseSmpReader.mockReset().mockResolvedValue(undefined);
+  mockRegisterSmpProtocol.mockReset();
+  mockSanitizeImportedSmpStyle.mockReset().mockImplementation((style) => style);
+  mockDbGet.mockReset().mockResolvedValue(undefined);
+  useMapStore.setState({ basemapId: 'carto-positron', activeMapId: null });
 });
 
 beforeAll(() => {
@@ -323,6 +334,7 @@ describe('MapContainer', () => {
       projectLocalId: 'proj-1',
       name: 'Imported Map',
       type: 'style',
+      origin: 'imported',
       styleUrl: '',
       status: 'ready',
       smpBlob: new Blob(),
@@ -345,6 +357,7 @@ describe('MapContainer', () => {
       projectLocalId: 'proj-1',
       name: 'Unsafe Imported Map',
       type: 'style',
+      origin: 'imported',
       styleUrl: '',
       status: 'ready',
       smpBlob: new Blob(),
@@ -363,6 +376,54 @@ describe('MapContainer', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('hides a stale SMP error while the same map refetches with a fresh blob', async () => {
+    focusManager.setFocused(false);
+    const firstBlob = new Blob(['first']);
+    const secondBlob = new Blob(['second']);
+    const mapRecord = {
+      id: 'retry-map',
+      projectLocalId: 'proj-1',
+      name: 'Retry Map',
+      type: 'style' as const,
+      origin: 'imported' as const,
+      styleUrl: '',
+      status: 'ready' as const,
+    };
+    let resolveSecondReader!: (reader: object) => void;
+    mockDbGet
+      .mockResolvedValueOnce({ ...mapRecord, smpBlob: firstBlob })
+      .mockResolvedValue({ ...mapRecord, smpBlob: secondBlob });
+    mockSanitizeImportedSmpStyle.mockReturnValueOnce(null);
+    mockGetSmpReader
+      .mockResolvedValueOnce({})
+      .mockImplementationOnce(
+        () => new Promise<object>((resolve) => (resolveSecondReader = resolve)),
+      );
+    useMapStore.setState({ activeMapId: mapRecord.id });
+
+    try {
+      render(<MapContainer />);
+      expect(
+        await screen.findByTestId('map-active-map-error'),
+      ).toBeInTheDocument();
+
+      focusManager.setFocused(true);
+      await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(
+          screen.queryByTestId('map-active-map-error'),
+        ).not.toBeInTheDocument(),
+      );
+
+      resolveSecondReader({});
+      expect(
+        await screen.findByTestId('map-active-map-badge'),
+      ).toBeInTheDocument();
+    } finally {
+      focusManager.setFocused(undefined);
+    }
+  });
+
   it('keeps the online-active indicator when an authored map SMP fails', async () => {
     mockResolveSmpStyle.mockResolvedValueOnce(null);
     useMapStore.setState({ activeMapId: 'authored-online-fallback' });
@@ -371,6 +432,7 @@ describe('MapContainer', () => {
       projectLocalId: 'proj-1',
       name: 'Authored Map',
       type: 'style',
+      origin: 'authored',
       styleUrl: 'https://example.com/style.json',
       status: 'ready',
       smpBlob: new Blob(),
@@ -398,6 +460,7 @@ describe('MapContainer', () => {
       projectLocalId: 'proj-1',
       name: 'Late Map',
       type: 'style',
+      origin: 'imported',
       styleUrl: '',
       status: 'ready',
       smpBlob: new Blob(),
@@ -427,6 +490,7 @@ describe('MapContainer', () => {
         projectLocalId: 'proj-1',
         name: 'Refetched Map',
         type: 'style' as const,
+        origin: 'imported' as const,
         styleUrl: '',
         status: 'ready' as const,
       };

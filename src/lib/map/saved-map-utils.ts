@@ -2,6 +2,7 @@ import type { SavedMap } from '@/lib/db';
 
 export type ImportedSmpRecord = SavedMap & {
   type: 'style';
+  origin: 'imported';
   styleUrl: '';
 };
 
@@ -10,11 +11,16 @@ export type ImportedSmpMap = ImportedSmpRecord & {
   smpBlob: Blob;
 };
 
-/** Imported SMP records are style maps with no network style URL. */
+/** Imported SMP records carry an explicit origin marker and no network style URL. */
 export function isImportedSmpRecord(
   map: SavedMap | null | undefined,
 ): map is ImportedSmpRecord {
-  return Boolean(map && map.type === 'style' && map.styleUrl === '');
+  return Boolean(
+    map &&
+    map.origin === 'imported' &&
+    map.type === 'style' &&
+    map.styleUrl === '',
+  );
 }
 
 /** A renderable imported SMP additionally has a ready packaged blob. */

@@ -108,6 +108,7 @@ describe('ImportSmpButton', () => {
         projectLocalId: 'project-1',
         name: 'Shared territory',
         type: 'style',
+        origin: 'imported',
         bbox: [-70, -5, -60, 2],
         minZoom: 2,
         maxZoom: 12,

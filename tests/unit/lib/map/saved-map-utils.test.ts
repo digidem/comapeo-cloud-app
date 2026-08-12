@@ -11,6 +11,7 @@ const importedMap: SavedMap = {
   projectLocalId: 'project-1',
   name: 'Imported map',
   type: 'style',
+  origin: 'imported',
   styleUrl: '',
   bbox: [-70, -5, -60, 2],
   minZoom: 0,
@@ -33,6 +34,7 @@ describe('isImportedSmpRecord', () => {
     expect(
       isImportedSmpRecord({
         ...importedMap,
+        origin: 'authored',
         styleUrl: 'https://example.com/style.json',
       }),
     ).toBe(false);

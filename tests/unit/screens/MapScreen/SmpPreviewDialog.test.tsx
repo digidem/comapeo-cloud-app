@@ -40,6 +40,7 @@ const map: SavedMap = {
   projectLocalId: 'project-1',
   name: 'Imported territory',
   type: 'style',
+  origin: 'imported',
   styleUrl: '',
   bbox: [-70, -5, -60, 2],
   minZoom: 0,

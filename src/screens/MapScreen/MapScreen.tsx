@@ -372,6 +372,7 @@ export function MapScreen() {
       projectLocalId: selectedProjectId,
       name: trimmedName,
       type: selectedStyle.type,
+      origin: 'authored',
       styleUrl: selectedStyle.url,
       bbox,
       minZoom: zoomRange.minZoom,

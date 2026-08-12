@@ -5,7 +5,11 @@ import type { ReactNode } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { useDeleteMap, useSetActiveMapMutation } from '@/hooks/useMaps';
+import {
+  useCreateMap,
+  useDeleteMap,
+  useSetActiveMapMutation,
+} from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import { getDb, resetDb } from '@/lib/db';
 import { useMapDownloadStore } from '@/stores/map-download-store';
@@ -27,6 +31,7 @@ function createMap(overrides: Partial<SavedMap> = {}): SavedMap {
     projectLocalId: 'project-1',
     name: 'Territory draft',
     type: 'raster',
+    origin: 'authored',
     styleUrl: 'https://example.com/{z}/{x}/{y}.png',
     bbox: [-70, -5, -60, 2],
     minZoom: 0,
@@ -51,6 +56,67 @@ async function addProject(localId: string, activeMapId?: string | null) {
     deleted: false,
   });
 }
+
+describe('useCreateMap', () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it('persists authored maps with an explicit origin', async () => {
+    const map = createMap();
+    const { result } = renderHook(() => useCreateMap(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync(map);
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(await getDb().maps.get(map.id)).toEqual(map);
+  });
+
+  it('rejects new maps that omit the origin marker', async () => {
+    const map = createMap({ origin: undefined });
+    const { result } = renderHook(() => useCreateMap(), { wrapper });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync(map)).rejects.toThrow(
+        'Authored maps require an explicit origin and style URL',
+      );
+    });
+
+    expect(await getDb().maps.get(map.id)).toBeUndefined();
+  });
+
+  it('persists ready imported SMP records with an explicit imported origin', async () => {
+    const map = createMap({
+      id: 'imported-map',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      scheme: undefined,
+      status: 'ready',
+      smpBlob: new Blob(['smp']),
+      smpSize: 3,
+    });
+    const { result } = renderHook(() => useCreateMap(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync(map);
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(await getDb().maps.get(map.id)).toEqual(
+      expect.objectContaining({
+        id: map.id,
+        origin: 'imported',
+        type: 'style',
+        styleUrl: '',
+        status: 'ready',
+        smpSize: 3,
+      }),
+    );
+  });
+});
 
 describe('useDeleteMap', () => {
   beforeEach(async () => {
@@ -172,6 +238,7 @@ describe('useSetActiveMapMutation', () => {
         'Project not found: missing-project',
       );
     });
+    await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(useMapStore.getState().activeProjectLocalId).toBe('missing-project');
     expect(useMapStore.getState().activeMapId).toBe('map-before');
