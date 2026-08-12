@@ -13,6 +13,12 @@ export const mapsQueryKey = (projectLocalId: string | null) => [
   projectLocalId,
 ];
 
+export const allMapsQueryKey = ['maps', 'all-projects'] as const;
+
+function sortMapsNewestFirst(maps: SavedMap[]): SavedMap[] {
+  return maps.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
 function assertValidNewMapOrigin(map: SavedMap): void {
   if (map.origin === 'imported') {
     if (!isImportedSmpMap(map)) {
@@ -37,9 +43,16 @@ export function useMaps(projectLocalId: string | null) {
         .where('projectLocalId')
         .equals(projectLocalId!)
         .toArray();
-      return maps.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return sortMapsNewestFirst(maps);
     },
     enabled: projectLocalId !== null,
+  });
+}
+
+export function useAllMaps() {
+  return useQuery({
+    queryKey: allMapsQueryKey,
+    queryFn: async () => sortMapsNewestFirst(await getDb().maps.toArray()),
   });
 }
 
@@ -52,15 +65,13 @@ export function useCreateMap() {
       await getDb().maps.add(map);
       return map;
     },
-    onSuccess: (map) => {
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(map.projectLocalId),
-      });
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
     },
   });
 }
 
-export function useRenameMap(projectLocalId: string | null) {
+export function useRenameMap() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -69,9 +80,7 @@ export function useRenameMap(projectLocalId: string | null) {
       await getDb().maps.update(mapId, { name, updatedAt });
     },
     onSuccess: (_data, { mapId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(projectLocalId),
-      });
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
       void queryClient.invalidateQueries({ queryKey: ['map', mapId] });
     },
   });
@@ -109,29 +118,29 @@ export function useDeleteMap(projectLocalId: string | null) {
       }
     },
     onSuccess: (_data, mapId) => {
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(projectLocalId),
-      });
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
       void queryClient.invalidateQueries({ queryKey: ['map', mapId] });
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }
 
-export function useSetActiveMapMutation(projectLocalId: string | null) {
+export function useSetActiveMapMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (mapId: string | null) => {
-      if (!projectLocalId) return;
-
-      await useMapStore.getState().setActiveMap(projectLocalId, mapId);
+    mutationFn: async ({
+      targetProjectLocalId,
+      mapId,
+    }: {
+      targetProjectLocalId: string;
+      mapId: string | null;
+    }) => {
+      await useMapStore.getState().setActiveMap(targetProjectLocalId, mapId);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(projectLocalId),
-      });
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
     },
   });
 }
@@ -162,15 +171,11 @@ export function useDownloadMap() {
       });
     },
     onSuccess: (_mapId, { map }) => {
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(map.projectLocalId),
-      });
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
       void queryClient.invalidateQueries({ queryKey: ['map', map.id] });
     },
-    onError: (_error, { map }) => {
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(map.projectLocalId),
-      });
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
     },
   });
 }

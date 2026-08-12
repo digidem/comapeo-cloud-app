@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 
 import { Button } from '@/components/ui/button';
@@ -6,11 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  useAllMaps,
   useDeleteMap,
   useMaps,
   useRenameMap,
   useSetActiveMapMutation,
 } from '@/hooks/useMaps';
+import { useProjects } from '@/hooks/useProjects';
 import type { SavedMap } from '@/lib/db';
 import { useMapStore } from '@/stores/map-store';
 
@@ -39,9 +41,12 @@ const STATUS_MESSAGE_BY_STATUS: Record<
 export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const intl = useIntl();
   const activeMapId = useMapStore((state) => state.activeMapId);
-  const mapsQuery = useMaps(projectLocalId);
-  const setActiveMap = useSetActiveMapMutation(projectLocalId);
-  const renameMap = useRenameMap(projectLocalId);
+  const [scope, setScope] = useState<'project' | 'all'>('project');
+  const projectMapsQuery = useMaps(projectLocalId);
+  const allMapsQuery = useAllMaps();
+  const projectsQuery = useProjects();
+  const setActiveMap = useSetActiveMapMutation();
+  const renameMap = useRenameMap();
   const deleteMap = useDeleteMap(projectLocalId);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(
     null,
@@ -54,7 +59,21 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [previewTargetId, setPreviewTargetId] = useState<string | null>(null);
 
+  const mapsQuery = scope === 'all' ? allMapsQuery : projectMapsQuery;
   const maps = mapsQuery.data ?? [];
+  const isMapsPending =
+    mapsQuery.isPending || (scope === 'all' && projectsQuery.isPending);
+  const originProjectNameById = useMemo(() => {
+    return new Map(
+      (projectsQuery.data ?? [])
+        .filter((project) => !project.deleted)
+        .map((project) => [
+          project.localId,
+          project.name?.trim() ||
+            intl.formatMessage(mapMessages.untitledProject),
+        ]),
+    );
+  }, [intl, projectsQuery.data]);
   const previewTarget = previewTargetId
     ? (maps.find((map) => map.id === previewTargetId) ?? null)
     : null;
@@ -87,10 +106,15 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
 
   async function handleActiveToggle(mapId: string, isActive: boolean) {
     setActiveError(null);
+    const targetProjectLocalId = projectLocalId;
+    if (!targetProjectLocalId) return;
 
     try {
       await runPendingAction({ type: 'active', mapId }, () =>
-        setActiveMap.mutateAsync(isActive ? null : mapId),
+        setActiveMap.mutateAsync({
+          targetProjectLocalId,
+          mapId: isActive ? null : mapId,
+        }),
       );
     } catch {
       setActiveError(intl.formatMessage(mapMessages.activeError));
@@ -145,20 +169,45 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
         {intl.formatMessage(mapMessages.savedMaps)}
       </h2>
 
+      <div
+        role="group"
+        aria-label={intl.formatMessage(mapMessages.savedMapsScopeLabel)}
+        className="flex flex-wrap gap-2"
+      >
+        <Button
+          size="sm"
+          variant={scope === 'project' ? 'primary' : 'secondary'}
+          aria-pressed={scope === 'project'}
+          onClick={() => setScope('project')}
+          disabled={hasPendingAction}
+        >
+          {intl.formatMessage(mapMessages.savedMapsThisProject)}
+        </Button>
+        <Button
+          size="sm"
+          variant={scope === 'all' ? 'primary' : 'secondary'}
+          aria-pressed={scope === 'all'}
+          onClick={() => setScope('all')}
+          disabled={hasPendingAction}
+        >
+          {intl.formatMessage(mapMessages.savedMapsAllProjects)}
+        </Button>
+      </div>
+
       {activeError ? (
         <p role="alert" className="text-sm text-error">
           {activeError}
         </p>
       ) : null}
 
-      {mapsQuery.isPending ? (
+      {isMapsPending ? (
         <div className="flex flex-col gap-2">
           <Skeleton height={80} className="rounded-card" />
           <Skeleton height={80} className="rounded-card" />
         </div>
       ) : null}
 
-      {!mapsQuery.isPending && maps.length === 0 ? (
+      {!isMapsPending && maps.length === 0 ? (
         <p className="rounded-card bg-surface p-4 text-sm text-text-muted">
           {intl.formatMessage(mapMessages.savedMapsEmpty)}
         </p>
@@ -178,6 +227,19 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                   <h3 className="truncate text-sm font-semibold text-text">
                     {map.name}
                   </h3>
+                  {scope === 'all' ? (
+                    <p className="mt-1 text-xs text-text-muted">
+                      {originProjectNameById.has(map.projectLocalId)
+                        ? intl.formatMessage(mapMessages.savedMapOrigin, {
+                            project: originProjectNameById.get(
+                              map.projectLocalId,
+                            ),
+                          })
+                        : intl.formatMessage(
+                            mapMessages.savedMapOriginUnavailable,
+                          )}
+                    </p>
+                  ) : null}
                   <span className="mt-1 inline-flex rounded-full bg-surface-card px-2 py-0.5 text-xs font-semibold capitalize text-text-muted">
                     {intl.formatMessage(
                       mapMessages[STATUS_MESSAGE_BY_STATUS[map.status]],

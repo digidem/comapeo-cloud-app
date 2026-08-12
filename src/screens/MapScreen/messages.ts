@@ -41,6 +41,26 @@ export const mapMessages = defineMessages({
     id: 'map.saved.empty',
     defaultMessage: 'No saved maps yet',
   },
+  savedMapsScopeLabel: {
+    id: 'map.saved.scope.label',
+    defaultMessage: 'Saved maps scope',
+  },
+  savedMapsThisProject: {
+    id: 'map.saved.scope.thisProject',
+    defaultMessage: 'This project',
+  },
+  savedMapsAllProjects: {
+    id: 'map.saved.scope.allProjects',
+    defaultMessage: 'All projects',
+  },
+  savedMapOrigin: {
+    id: 'map.saved.origin',
+    defaultMessage: 'Origin: {project}',
+  },
+  savedMapOriginUnavailable: {
+    id: 'map.saved.originUnavailable',
+    defaultMessage: 'Origin project unavailable',
+  },
   statusDraft: {
     id: 'map.saved.statusDraft',
     defaultMessage: 'Draft',

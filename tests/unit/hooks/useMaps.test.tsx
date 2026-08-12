@@ -226,17 +226,15 @@ describe('useSetActiveMapMutation', () => {
   it('rejects and rolls back the store when the project update touches zero rows', async () => {
     useMapStore.getState().hydrateActiveMap('missing-project', 'map-before');
 
-    const { result } = renderHook(
-      () => useSetActiveMapMutation('missing-project'),
-      {
-        wrapper,
-      },
-    );
+    const { result } = renderHook(() => useSetActiveMapMutation(), { wrapper });
 
     await act(async () => {
-      await expect(result.current.mutateAsync('map-after')).rejects.toThrow(
-        'Project not found: missing-project',
-      );
+      await expect(
+        result.current.mutateAsync({
+          targetProjectLocalId: 'missing-project',
+          mapId: 'map-after',
+        }),
+      ).rejects.toThrow('Project not found: missing-project');
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
 

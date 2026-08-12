@@ -31,11 +31,16 @@ function createMap(overrides: Partial<SavedMap> = {}): SavedMap {
   };
 }
 
-async function addProject(localId: string, activeMapId?: string | null) {
+async function addProject(
+  localId: string,
+  activeMapId?: string | null,
+  name?: string,
+) {
   await getDb().projects.add({
     localId,
     sourceType: 'local',
     sourceId: 'local',
+    name,
     activeMapId,
     createdAt: '2026-06-29T00:00:00.000Z',
     updatedAt: '2026-06-29T00:00:00.000Z',
@@ -83,6 +88,57 @@ describe('SavedMapsList', () => {
     expect(rows[1]).toHaveTextContent('Older map');
   });
 
+  it('switches between this-project and all-project saved maps with origin labels', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1', null, 'Current territory');
+    await addProject('project-2', null, 'Neighbor territory');
+    await getDb().maps.bulkAdd([
+      createMap({
+        id: 'current-map',
+        name: 'Current project map',
+        projectLocalId: 'project-1',
+        updatedAt: '2026-06-29T09:00:00.000Z',
+      }),
+      createMap({
+        id: 'other-map',
+        name: 'Other project map',
+        projectLocalId: 'project-2',
+        updatedAt: '2026-06-29T12:00:00.000Z',
+      }),
+    ]);
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    expect(await screen.findByText('Current project map')).toBeInTheDocument();
+    expect(screen.queryByText('Other project map')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+
+    const rows = await screen.findAllByTestId('saved-map-row');
+    expect(rows[0]).toHaveTextContent('Other project map');
+    expect(rows[0]).toHaveTextContent('Origin: Neighbor territory');
+    expect(rows[1]).toHaveTextContent('Current project map');
+    expect(rows[1]).toHaveTextContent('Origin: Current territory');
+  });
+
+  it('renders a safe origin fallback when an all-project map has no resolvable project', async () => {
+    const user = userEvent.setup();
+    await getDb().maps.add(
+      createMap({
+        id: 'orphan-map',
+        name: 'Orphaned map',
+        projectLocalId: 'deleted-project',
+      }),
+    );
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+
+    const row = await screen.findByTestId('saved-map-row');
+    expect(row).toHaveTextContent('Orphaned map');
+    expect(row).toHaveTextContent('Origin project unavailable');
+  });
+
   it('sets a saved map as active for the current project', async () => {
     const user = userEvent.setup();
     await addProject('project-1');
@@ -97,6 +153,68 @@ describe('SavedMapsList', () => {
       expect(project?.activeMapId).toBe('map-1');
     });
     expect(useMapStore.getState().activeMapId).toBe('map-1');
+  });
+
+  it('activates a map from another origin project on the currently selected target project', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1');
+    await addProject('project-2');
+    await getDb().maps.add(
+      createMap({ projectLocalId: 'project-2', name: 'Shared local map' }),
+    );
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+
+    await waitFor(async () => {
+      expect((await getDb().projects.get('project-1'))?.activeMapId).toBe(
+        'map-1',
+      );
+    });
+    expect(
+      (await getDb().projects.get('project-2'))?.activeMapId,
+    ).toBeUndefined();
+  });
+
+  it('keeps the activation write bound to the project selected when the mutation starts', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1');
+    await addProject('project-2');
+    await getDb().maps.add(
+      createMap({ projectLocalId: 'project-2', name: 'Cross-project map' }),
+    );
+
+    const projectsTable = getDb().projects;
+    const originalUpdate = projectsTable.update.bind(projectsTable);
+    let releaseWrite: (() => void) | undefined;
+    vi.spyOn(projectsTable, 'update').mockImplementation((...args) => {
+      const pendingUpdate = (async () => {
+        await new Promise<void>((resolve) => {
+          releaseWrite = resolve;
+        });
+        return originalUpdate(...args);
+      })();
+      return pendingUpdate as unknown as ReturnType<
+        typeof projectsTable.update
+      >;
+    });
+
+    const { rerender } = render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+
+    rerender(<SavedMapsList projectLocalId="project-2" />);
+    releaseWrite?.();
+
+    await waitFor(async () => {
+      expect((await getDb().projects.get('project-1'))?.activeMapId).toBe(
+        'map-1',
+      );
+    });
+    expect(
+      (await getDb().projects.get('project-2'))?.activeMapId,
+    ).toBeUndefined();
   });
 
   it('shows an error and rolls back when setting the active map fails', async () => {
