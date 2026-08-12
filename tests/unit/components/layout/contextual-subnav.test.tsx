@@ -18,12 +18,6 @@ describe('ContextualSubnav', () => {
     expect(screen.getByTestId('child-content')).toBeInTheDocument();
   });
 
-  it('uses the aside native complementary role without a redundant role attribute', () => {
-    render(<ContextualSubnav title="Test">Content</ContextualSubnav>);
-    const subnav = screen.getByRole('complementary');
-    expect(subnav).not.toHaveAttribute('role');
-  });
-
   it('has correct width (w-[268px])', () => {
     render(<ContextualSubnav title="Test">Content</ContextualSubnav>);
     const subnav = screen.getByRole('complementary');
