@@ -96,7 +96,7 @@ describe('CategoryMultiSelect', () => {
   });
 
   it('returns null when categories array is empty', () => {
-    const { container } = render(
+    render(
       <CategoryMultiSelect
         categories={[]}
         selected={[]}
@@ -104,7 +104,8 @@ describe('CategoryMultiSelect', () => {
         onClear={onClear}
       />,
     );
-    expect(container.innerHTML).toBe('');
+    // ToastProvider renders a notification region; CategoryMultiSelect should render no children
+    expect(screen.queryByTestId('category-multiselect')).toBeNull();
   });
 
   it('shows "+N more" when more than 8 categories', () => {

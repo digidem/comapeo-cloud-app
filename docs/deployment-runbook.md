@@ -95,7 +95,7 @@ To verify or update the custom domain:
 ### Build fails in CI
 
 1. Check the GitHub Actions log for the failing step
-2. Reproduce locally: `npm ci && npm run build`
+2. Reproduce locally: `bun install --frozen-lockfile && bun run build` (Bun is the pinned package manager; `package-lock.json` is not used — CI installs from `bun.lock`)
 3. Common issues: missing env vars, type errors, lint violations
 
 ### Deployment succeeds but app is broken

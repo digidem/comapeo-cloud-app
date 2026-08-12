@@ -106,7 +106,7 @@ function FieldViewer({ fields }: FieldViewerProps) {
   }
 
   return (
-    <ul className="flex flex-col gap-4">
+    <ul data-testid="field-viewer" className="flex flex-col gap-4">
       {fields.map((field) => (
         <FieldItem key={field.docId} field={field} />
       ))}

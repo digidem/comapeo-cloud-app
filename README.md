@@ -64,8 +64,9 @@ CoMapeo mobile users collect observations in disconnected field environments. Th
 ```bash
 git clone https://github.com/digidem/comapeo-cloud-app.git
 cd comapeo-cloud-app
-npm install
-npm run dev
+# Bun is the required package manager — pinned in package.json as bun@1.3.14
+bun install
+bun run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) and point the app at your CoMapeo Cloud server URL.

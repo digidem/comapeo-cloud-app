@@ -59,7 +59,7 @@ export function CategoryMultiSelect({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div data-testid="category-multiselect" className="flex flex-col gap-2">
       <div
         className="flex flex-wrap gap-2"
         role="group"

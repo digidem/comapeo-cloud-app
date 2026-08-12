@@ -1,4 +1,4 @@
-import { render, screen } from '@tests/mocks/test-utils';
+import { render, screen, within } from '@tests/mocks/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import type { NormalizedField } from '@/lib/fields/normalize';
@@ -152,22 +152,24 @@ describe('FieldViewer', () => {
 
   it('uses accessible list markup', () => {
     render(<FieldViewer fields={[textField, dateField]} />);
-    const list = screen.getByRole('list');
+    const list = screen.getByTestId('field-viewer');
     expect(list).toBeInTheDocument();
-    const items = screen.getAllByRole('listitem');
+    const items = within(list).queryAllByRole('listitem');
     expect(items.length).toBe(2);
   });
 
   it('each field item has an accessible label', () => {
     render(<FieldViewer fields={[textField, selectOneField]} />);
     const items = screen.getAllByRole('listitem');
+    expect(items.length).toBe(2);
     expect(items[0]).toHaveAccessibleName('Species Name');
     expect(items[1]).toHaveAccessibleName('Threat Level');
   });
 
   it('renders nothing when fields array is empty', () => {
-    const { container } = render(<FieldViewer fields={[]} />);
-    expect(container.firstChild).toBeNull();
+    render(<FieldViewer fields={[]} />);
+    // ToastProvider renders a notification region; FieldViewer should render no children
+    expect(screen.queryByTestId('field-viewer')).toBeNull();
   });
 
   it('shows Field unavailable for empty label', () => {

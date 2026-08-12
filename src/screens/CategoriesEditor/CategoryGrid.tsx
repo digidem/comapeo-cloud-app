@@ -21,7 +21,10 @@ function CategoryGrid({
   }
 
   return (
-    <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-3">
+    <div
+      data-testid="category-grid"
+      className="grid w-full grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-3"
+    >
       {categories.map((category) => (
         <CategoryCard
           key={category.docId}
