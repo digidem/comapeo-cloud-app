@@ -337,6 +337,8 @@ export function GeometryPicker({
   function chooseType(nextType: AlertGeometryType) {
     setType(nextType);
     setVertices([]);
+    setManualLongitude('');
+    setManualLatitude('');
     onChange(undefined);
     onValidationChange?.(undefined);
   }
@@ -349,6 +351,8 @@ export function GeometryPicker({
     const next = type === 'Point' ? [vertex] : [...vertices, vertex];
     setVertices(next);
     if (type === 'Point') {
+      setManualLongitude(String(longitude));
+      setManualLatitude(String(latitude));
       commit(next);
     } else {
       onChange(undefined);
@@ -378,8 +382,10 @@ export function GeometryPicker({
       return;
     }
     addPoint(longitude, latitude);
-    setManualLongitude('');
-    setManualLatitude('');
+    if (type !== 'Point') {
+      setManualLongitude('');
+      setManualLatitude('');
+    }
   }
 
   let hint = messages.hintPolygon;
@@ -439,6 +445,8 @@ export function GeometryPicker({
                         },
                       ];
                       setVertices(next);
+                      setManualLongitude(String(event.lngLat.lng));
+                      setManualLatitude(String(event.lngLat.lat));
                       commit(next);
                     }
                   : undefined
@@ -472,6 +480,8 @@ export function GeometryPicker({
           const next = vertices.slice(0, -1);
           setVertices(next);
           if (type === 'Point') {
+            setManualLongitude('');
+            setManualLatitude('');
             commit(next);
           } else {
             onChange(undefined);
@@ -480,6 +490,8 @@ export function GeometryPicker({
         }}
         onClear={() => {
           setVertices([]);
+          setManualLongitude('');
+          setManualLatitude('');
           onChange(undefined);
           onValidationChange?.(undefined);
         }}

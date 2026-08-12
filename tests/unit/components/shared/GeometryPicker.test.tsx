@@ -124,7 +124,7 @@ describe('GeometryPicker', () => {
     );
   });
 
-  it('commits a point immediately', async () => {
+  it('commits a point immediately and mirrors map coordinates into the inputs', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<GeometryPicker onChange={onChange} />);
@@ -135,6 +135,8 @@ describe('GeometryPicker', () => {
       type: 'Point',
       coordinates: [10, 20],
     });
+    expect(screen.getByLabelText('Longitude')).toHaveValue(10);
+    expect(screen.getByLabelText('Latitude')).toHaveValue(20);
   });
 
   it('renders alert vertices as red markers', async () => {
