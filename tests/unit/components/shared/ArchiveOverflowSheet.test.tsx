@@ -47,6 +47,13 @@ describe('ArchiveOverflowSheet', () => {
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
 
+  it('keeps close-icon SVG path precision to at most two decimal places', () => {
+    render(<ArchiveOverflowSheet {...defaultProps} />);
+    const closeButton = screen.getByRole('button', { name: 'Close' });
+    const pathData = closeButton.querySelector('path')?.getAttribute('d') ?? '';
+    expect(pathData).not.toMatch(/\.\d{3,}/);
+  });
+
   it('calls onViewDetails and closes when "View Details" clicked', async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();

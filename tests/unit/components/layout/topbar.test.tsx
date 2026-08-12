@@ -33,6 +33,12 @@ describe('Topbar', () => {
     expect(topbar.className).toContain('bg-surface-card');
   });
 
+  it('uses the header native banner role without a redundant role attribute', () => {
+    render(<Topbar />);
+    const topbar = screen.getByRole('banner');
+    expect(topbar).not.toHaveAttribute('role');
+  });
+
   it('renders workspace name as h1 heading with semantic classes', () => {
     render(<Topbar workspaceName="My Workspace" />);
     const heading = screen.getByRole('heading', {

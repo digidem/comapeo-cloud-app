@@ -79,6 +79,13 @@ describe('ConnectionProgress', () => {
     expect(screen.getByText('4')).toBeInTheDocument();
   });
 
+  it('uses li native listitem semantics without redundant role attributes', () => {
+    render(<ConnectionProgress steps={DEFAULT_STEPS} />);
+    for (const row of screen.getAllByRole('listitem')) {
+      expect(row).not.toHaveAttribute('role');
+    }
+  });
+
   it('shows error icon for errored steps', () => {
     const steps: ConnectionStep[] = [
       { id: 'verify', label: 'Step 1', status: 'error' },

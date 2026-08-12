@@ -98,4 +98,10 @@ describe('PrimaryNav', () => {
     const nav = screen.getByRole('navigation');
     expect(nav.className).toContain('w-[76px]');
   });
+
+  it('uses the nav native navigation role without a redundant role attribute', () => {
+    render(<PrimaryNav items={navItems} activePath="/dashboard" />);
+    const nav = screen.getByRole('navigation');
+    expect(nav).not.toHaveAttribute('role');
+  });
 });

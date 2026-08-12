@@ -16,7 +16,6 @@ interface PrimaryNavProps {
 function PrimaryNav({ items, activePath }: PrimaryNavProps) {
   return (
     <nav
-      role="navigation"
       aria-label="Primary navigation"
       className="hidden w-[76px] flex-col items-center border-r border-white/10 bg-primary-navy pt-4 lg:flex"
     >
