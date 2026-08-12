@@ -121,26 +121,20 @@ function ImportDataButton({
       className="sr-only"
       onChange={handleFileChange}
       aria-hidden="true"
+      tabIndex={-1}
     />
   );
 
-  // Icon-only mode: renders as a small icon button with no text/state feedback
+  // Icon-only mode: renders as a native button with no text/state feedback
   if (iconOnly) {
     return (
       <>
         {fileInput}
-        <span
-          role="button"
-          tabIndex={0}
+        <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             handleButtonClick();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.stopPropagation();
-              handleButtonClick();
-            }
           }}
           className="h-6 w-6 rounded-full text-text-muted hover:text-text hover:bg-surface inline-flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label={`Import data into ${projectName ?? 'project'}`}
@@ -160,7 +154,7 @@ function ImportDataButton({
             <polyline points="17 8 12 3 7 8" />
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
-        </span>
+        </button>
       </>
     );
   }

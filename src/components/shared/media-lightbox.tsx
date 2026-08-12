@@ -42,6 +42,8 @@ interface MediaLightboxProps {
   onClose: () => void;
   /** Called to navigate to a different index */
   onNavigate: (index: number) => void;
+  /** Element to restore focus to when closing (typically the thumbnail that opened the lightbox) */
+  focusOnClose?: HTMLElement | null;
 }
 
 /**
@@ -60,6 +62,7 @@ function MediaLightbox({
   currentIndex,
   onClose,
   onNavigate,
+  focusOnClose,
 }: MediaLightboxProps) {
   const intl = useIntl();
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -80,8 +83,12 @@ function MediaLightbox({
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = original;
+      // Restore focus to the element that opened the lightbox
+      if (focusOnClose) {
+        focusOnClose.focus();
+      }
     };
-  }, []);
+  }, [focusOnClose]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
