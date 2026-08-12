@@ -236,6 +236,30 @@ describe('SmpPreviewDialog', () => {
     expect(smpServe.getSmpReader).not.toHaveBeenCalled();
   });
 
+  it('keeps the current reader when an equivalent map record is refetched', async () => {
+    const reader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
+    vi.mocked(smpServe.getSmpReader).mockResolvedValue(reader);
+    vi.mocked(smpServe.resolveSmpStyle).mockResolvedValue(style);
+
+    const { rerender } = render(
+      <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
+    );
+    await screen.findByTestId('smp-preview-map');
+    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+
+    rerender(
+      <SmpPreviewDialog
+        open
+        onOpenChange={vi.fn()}
+        map={{ ...map, smpBlob: new Blob(['smp']) }}
+      />,
+    );
+
+    expect(screen.getByTestId('smp-preview-map')).toBeInTheDocument();
+    expect(smpServe.getSmpReader).toHaveBeenCalledTimes(1);
+    expect(smpServe.closeSmpReader).not.toHaveBeenCalledWith(readerId);
+  });
+
   it('shows loading rather than stale style when the preview target changes', async () => {
     const firstReader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
     vi.mocked(smpServe.getSmpReader).mockResolvedValueOnce(firstReader);
