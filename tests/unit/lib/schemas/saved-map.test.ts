@@ -50,9 +50,58 @@ describe('savedMapSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects an empty styleUrl', () => {
+  it('rejects an empty styleUrl for raster maps', () => {
     expect(
       v.safeParse(savedMapSchema, { ...validRaster, styleUrl: '' }).success,
+    ).toBe(false);
+  });
+
+  it('allows an empty styleUrl only for ready imported-style records', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        type: 'style',
+        scheme: undefined,
+        origin: 'imported',
+        styleUrl: '',
+        status: 'ready',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a ready empty styleUrl without explicit imported origin', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        type: 'style',
+        scheme: undefined,
+        styleUrl: '',
+        status: 'ready',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects imported origin with a network styleUrl', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        type: 'style',
+        scheme: undefined,
+        origin: 'imported',
+        styleUrl: 'https://example.com/style.json',
+        status: 'ready',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an empty styleUrl for non-ready style maps', () => {
+    expect(
+      v.safeParse(savedMapSchema, {
+        ...validRaster,
+        type: 'style',
+        scheme: undefined,
+        styleUrl: '',
+      }).success,
     ).toBe(false);
   });
 

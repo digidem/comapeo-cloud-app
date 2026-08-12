@@ -177,6 +177,16 @@ async function captureViewport(
           .waitForLoadState('networkidle', { timeout: 10_000 })
           .catch(() => {});
 
+        // SMP preview opens its packaged reader asynchronously after mount. Do
+        // not let the generic "no map on this story" fast-path capture the
+        // loading state before the MapLibre canvas exists.
+        if (story.id === 'map-smppreviewdialog--default') {
+          await page.waitForSelector('.maplibregl-canvas', {
+            state: 'visible',
+            timeout: 10_000,
+          });
+        }
+
         // For stories that mount a MapLibre map, networkidle can fire a frame
         // or two before the WebGL canvas composites the freshly-fetched tiles.
         // Wait (best-effort, bounded) for the canvas to have a real rendered

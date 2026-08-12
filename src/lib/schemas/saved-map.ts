@@ -72,11 +72,11 @@ const baseFields = {
   id: v.string(),
   projectLocalId: v.string(),
   name: v.pipe(v.string(), v.minLength(1)),
-  styleUrl: v.pipe(v.string(), v.minLength(1)),
   bbox: bboxSchema,
   minZoom: zoomSchema,
   maxZoom: zoomSchema,
   attribution: v.optional(v.string()),
+  origin: v.optional(v.union([v.literal('authored'), v.literal('imported')])),
   status: statusSchema,
   errorMessage: v.optional(v.string()),
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
@@ -94,16 +94,33 @@ const rasterSchema = v.pipe(
   v.object({
     ...baseFields,
     type: v.literal('raster'),
+    styleUrl: v.pipe(v.string(), v.minLength(1)),
     scheme: v.optional(v.union([v.literal('xyz'), v.literal('tms')])),
   }),
+  v.check(
+    (value) => value.origin !== 'imported',
+    'imported SMP records must use style map type',
+  ),
   v.check((value) => value.maxZoom >= value.minZoom, zoomOrderMessage),
 );
 
+// `smpBlob` is intentionally outside this scalar schema. Imported records are
+// identified explicitly by origin and must be ready with an empty styleUrl;
+// runtime consumers additionally use `isImportedSmpMap`, which requires the
+// actual SMP blob.
 const styleSchema = v.pipe(
   v.object({
     ...baseFields,
     type: v.literal('style'),
+    styleUrl: v.string(),
   }),
+  v.check(
+    (value) =>
+      value.origin === 'imported'
+        ? value.styleUrl.length === 0 && value.status === 'ready'
+        : value.styleUrl.length > 0,
+    'imported SMP records must be ready with an empty styleUrl; authored style maps require a styleUrl',
+  ),
   v.check((value) => value.maxZoom >= value.minZoom, zoomOrderMessage),
 );
 

@@ -1,6 +1,8 @@
 import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { focusManager } from '@tanstack/react-query';
+
 import { MapContainer } from '@/components/shared/MapContainer/MapContainer';
 import { useMapStore } from '@/stores/map-store';
 
@@ -17,13 +19,17 @@ const mockResolveSmpStyle = vi.fn().mockResolvedValue({
   layers: [],
 });
 const mockGetSmpReader = vi.fn().mockResolvedValue({});
+const mockCloseSmpReader = vi.fn().mockResolvedValue(undefined);
 const mockRegisterSmpProtocol = vi.fn();
+const mockSanitizeImportedSmpStyle = vi.fn((style) => style);
 
 vi.mock('@/lib/map/smp-serve', () => ({
   resolveSmpStyle: (...args: unknown[]) => mockResolveSmpStyle(...args),
   getSmpReader: (...args: unknown[]) => mockGetSmpReader(...args),
   registerSmpProtocol: (...args: unknown[]) => mockRegisterSmpProtocol(...args),
-  closeSmpReader: vi.fn().mockResolvedValue(undefined),
+  sanitizeImportedSmpStyle: (style: unknown) =>
+    mockSanitizeImportedSmpStyle(style),
+  closeSmpReader: (...args: unknown[]) => mockCloseSmpReader(...args),
 }));
 
 const mockDbGet = vi.fn().mockResolvedValue(undefined);
@@ -85,7 +91,18 @@ vi.mock('react-map-gl/maplibre', () => {
 beforeEach(() => {
   mapProps.length = 0;
   localStorage.clear();
-  useMapStore.setState({ basemapId: 'carto-positron' });
+  focusManager.setFocused(undefined);
+  mockResolveSmpStyle.mockReset().mockResolvedValue({
+    version: 8,
+    sources: {},
+    layers: [],
+  });
+  mockGetSmpReader.mockReset().mockResolvedValue({});
+  mockCloseSmpReader.mockReset().mockResolvedValue(undefined);
+  mockRegisterSmpProtocol.mockReset();
+  mockSanitizeImportedSmpStyle.mockReset().mockImplementation((style) => style);
+  mockDbGet.mockReset().mockResolvedValue(undefined);
+  useMapStore.setState({ basemapId: 'carto-positron', activeMapId: null });
 });
 
 beforeAll(() => {
@@ -307,6 +324,199 @@ describe('MapContainer', () => {
       expect(screen.getByTestId('map-active-map-badge')).toBeInTheDocument();
     });
     expect(screen.getByText(/Active offline map/)).toBeInTheDocument();
+  });
+
+  it('sanitizes an imported SMP style before rendering it as the active map', async () => {
+    mockSanitizeImportedSmpStyle.mockClear();
+    useMapStore.setState({ activeMapId: 'imported-map' });
+    mockDbGet.mockResolvedValue({
+      id: 'imported-map',
+      projectLocalId: 'proj-1',
+      name: 'Imported Map',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    render(<MapContainer />);
+
+    await waitFor(() => {
+      expect(mockSanitizeImportedSmpStyle).toHaveBeenCalledWith(
+        expect.objectContaining({ version: 8 }),
+      );
+    });
+  });
+
+  it('shows an error when an active imported SMP cannot be rendered safely', async () => {
+    mockSanitizeImportedSmpStyle.mockReturnValueOnce(null);
+    useMapStore.setState({ activeMapId: 'unsafe-imported-map' });
+    mockDbGet.mockResolvedValue({
+      id: 'unsafe-imported-map',
+      projectLocalId: 'proj-1',
+      name: 'Unsafe Imported Map',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    render(<MapContainer />);
+
+    expect(await screen.findByTestId('map-active-map-error')).toHaveTextContent(
+      'Offline map unavailable: Unsafe Imported Map',
+    );
+    expect(
+      screen.queryByTestId('map-active-map-badge'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('map-online-active-badge'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides a stale SMP error while the same map refetches with a fresh blob', async () => {
+    focusManager.setFocused(false);
+    const firstBlob = new Blob(['first']);
+    const secondBlob = new Blob(['second']);
+    const mapRecord = {
+      id: 'retry-map',
+      projectLocalId: 'proj-1',
+      name: 'Retry Map',
+      type: 'style' as const,
+      origin: 'imported' as const,
+      styleUrl: '',
+      status: 'ready' as const,
+    };
+    let resolveSecondReader!: (reader: object) => void;
+    mockDbGet
+      .mockResolvedValueOnce({ ...mapRecord, smpBlob: firstBlob })
+      .mockResolvedValue({ ...mapRecord, smpBlob: secondBlob });
+    mockSanitizeImportedSmpStyle.mockReturnValueOnce(null);
+    mockGetSmpReader
+      .mockResolvedValueOnce({})
+      .mockImplementationOnce(
+        () => new Promise<object>((resolve) => (resolveSecondReader = resolve)),
+      );
+    useMapStore.setState({ activeMapId: mapRecord.id });
+
+    try {
+      render(<MapContainer />);
+      expect(
+        await screen.findByTestId('map-active-map-error'),
+      ).toBeInTheDocument();
+
+      focusManager.setFocused(true);
+      await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(
+          screen.queryByTestId('map-active-map-error'),
+        ).not.toBeInTheDocument(),
+      );
+
+      resolveSecondReader({});
+      expect(
+        await screen.findByTestId('map-active-map-badge'),
+      ).toBeInTheDocument();
+    } finally {
+      focusManager.setFocused(undefined);
+    }
+  });
+
+  it('keeps the online-active indicator when an authored map SMP fails', async () => {
+    mockResolveSmpStyle.mockResolvedValueOnce(null);
+    useMapStore.setState({ activeMapId: 'authored-online-fallback' });
+    mockDbGet.mockResolvedValue({
+      id: 'authored-online-fallback',
+      projectLocalId: 'proj-1',
+      name: 'Authored Map',
+      type: 'style',
+      origin: 'authored',
+      styleUrl: 'https://example.com/style.json',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    render(<MapContainer />);
+
+    expect(await screen.findByTestId('map-active-map-error')).toHaveTextContent(
+      'Offline map unavailable: Authored Map',
+    );
+    expect(screen.getByTestId('map-online-active-badge')).toHaveTextContent(
+      'Active map (online): Authored Map',
+    );
+  });
+
+  it('closes a reader that resolves after the active-map effect is cancelled', async () => {
+    mockCloseSmpReader.mockClear();
+    let resolveReader!: (reader: object) => void;
+    mockGetSmpReader.mockImplementationOnce(
+      () => new Promise<object>((resolve) => (resolveReader = resolve)),
+    );
+    useMapStore.setState({ activeMapId: 'late-map' });
+    mockDbGet.mockResolvedValue({
+      id: 'late-map',
+      projectLocalId: 'proj-1',
+      name: 'Late Map',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    const { unmount } = render(<MapContainer />);
+    await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalled());
+    const readerId = mockGetSmpReader.mock.calls[0]![0] as string;
+    expect(readerId).toMatch(/^active:late-map:/);
+    unmount();
+    resolveReader({});
+
+    await waitFor(() => expect(mockCloseSmpReader).toHaveBeenCalledTimes(1));
+    expect(mockCloseSmpReader).toHaveBeenCalledWith(readerId);
+  });
+
+  it('uses independent reader keys when the same active map refetches with a new blob', async () => {
+    mockGetSmpReader.mockResolvedValue({});
+    mockCloseSmpReader.mockClear();
+    focusManager.setFocused(false);
+
+    try {
+      const firstBlob = new Blob(['first']);
+      const secondBlob = new Blob(['second']);
+      const mapRecord = {
+        id: 'refetched-map',
+        projectLocalId: 'proj-1',
+        name: 'Refetched Map',
+        type: 'style' as const,
+        origin: 'imported' as const,
+        styleUrl: '',
+        status: 'ready' as const,
+      };
+      mockDbGet
+        .mockResolvedValueOnce({ ...mapRecord, smpBlob: firstBlob })
+        .mockResolvedValue({ ...mapRecord, smpBlob: secondBlob });
+      useMapStore.setState({ activeMapId: mapRecord.id });
+
+      render(<MapContainer />);
+
+      await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(1));
+      const firstReaderId = mockGetSmpReader.mock.calls[0]![0] as string;
+      expect(firstReaderId).toMatch(/^active:refetched-map:/);
+
+      focusManager.setFocused(true);
+      await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(2));
+      const secondReaderId = mockGetSmpReader.mock.calls[1]![0] as string;
+      expect(secondReaderId).toMatch(/^active:refetched-map:/);
+      expect(secondReaderId).not.toBe(firstReaderId);
+      await waitFor(() =>
+        expect(mockCloseSmpReader).toHaveBeenCalledWith(firstReaderId),
+      );
+      expect(mockCloseSmpReader).not.toHaveBeenCalledWith(secondReaderId);
+    } finally {
+      focusManager.setFocused(undefined);
+    }
   });
 
   it('does not render active offline map badge when no active map', () => {

@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { useDownloadMap } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import {
   checkStorageQuota,
   estimateDownloadSize,
@@ -58,6 +59,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   );
   const clearDownload = useMapDownloadStore((state) => state.clear);
   const activeForMap = activeDownload?.mapId === map.id ? activeDownload : null;
+  const isImportedRecord = isImportedSmpRecord(map);
   const progress = activeForMap?.progress ?? null;
   const abortRef = useRef<AbortController | null>(null);
   const pendingRef = useRef(false); // Guards against React-batched double-clicks
@@ -403,11 +405,17 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         >
           <span className="text-sm text-text-muted">{map.name}</span>
           <p className="text-sm text-error">
-            {intl.formatMessage(mapMessages.downloadMissing)}
+            {intl.formatMessage(
+              isImportedRecord
+                ? mapMessages.downloadMissingImported
+                : mapMessages.downloadMissing,
+            )}
           </p>
-          <Button size="sm" className="w-full" onClick={handleDownload}>
-            {intl.formatMessage(mapMessages.downloadRetry)}
-          </Button>
+          {!isImportedRecord ? (
+            <Button size="sm" className="w-full" onClick={handleDownload}>
+              {intl.formatMessage(mapMessages.downloadRetry)}
+            </Button>
+          ) : null}
         </div>
       );
     }
@@ -418,9 +426,14 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       >
         <span className="text-sm text-text-muted">{map.name}</span>
         <p className="text-sm text-success">
-          {intl.formatMessage(mapMessages.downloadReady, {
-            size: formatBytes(map.smpSize ?? 0),
-          })}
+          {intl.formatMessage(
+            isImportedRecord
+              ? mapMessages.downloadImportedReady
+              : mapMessages.downloadReady,
+            {
+              size: formatBytes(map.smpSize ?? 0),
+            },
+          )}
         </p>
         <Button
           size="sm"

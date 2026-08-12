@@ -14,6 +14,7 @@ import {
 import type { SavedMap } from '@/lib/db';
 import { useMapStore } from '@/stores/map-store';
 
+import { SmpPreviewDialog } from './SmpPreviewDialog';
 import { mapMessages } from './messages';
 
 interface SavedMapsListProps {
@@ -51,8 +52,12 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const [activeError, setActiveError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SavedMap | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [previewTargetId, setPreviewTargetId] = useState<string | null>(null);
 
   const maps = mapsQuery.data ?? [];
+  const previewTarget = previewTargetId
+    ? (maps.find((map) => map.id === previewTargetId) ?? null)
+    : null;
   const hasPendingAction = pendingAction !== null;
 
   async function runPendingAction(
@@ -122,6 +127,7 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
       await runPendingAction({ type: 'delete', mapId: deleteTarget.id }, () =>
         deleteMap.mutateAsync(deleteTarget.id),
       );
+      if (previewTargetId === deleteTarget.id) setPreviewTargetId(null);
       setDeleteTarget(null);
       setDeleteError(null);
     } catch {
@@ -194,6 +200,16 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
                     isActive ? mapMessages.removeActive : mapMessages.setActive,
                   )}
                 </Button>
+                {map.status === 'ready' ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setPreviewTargetId(map.id)}
+                    disabled={hasPendingAction}
+                  >
+                    {intl.formatMessage(mapMessages.previewAction)}
+                  </Button>
+                ) : null}
                 <Button
                   size="sm"
                   variant="secondary"
@@ -257,6 +273,14 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
           </div>
         </form>
       </Modal>
+
+      <SmpPreviewDialog
+        open={previewTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewTargetId(null);
+        }}
+        map={previewTarget}
+      />
 
       <Modal
         open={deleteTarget !== null}

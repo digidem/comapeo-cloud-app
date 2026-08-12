@@ -65,6 +65,59 @@ export const mapMessages = defineMessages({
     id: 'map.saved.removeActive',
     defaultMessage: 'Remove active',
   },
+  previewAction: {
+    id: 'map.preview.action',
+    defaultMessage: 'Preview',
+  },
+  previewTitle: {
+    id: 'map.preview.title',
+    defaultMessage: 'Preview map',
+  },
+  previewClose: {
+    id: 'map.preview.close',
+    defaultMessage: 'Close',
+  },
+  previewLoading: {
+    id: 'map.preview.loading',
+    defaultMessage: 'Loading map preview…',
+  },
+  previewError: {
+    id: 'map.preview.error',
+    defaultMessage: 'Could not preview this SMP.',
+  },
+  importButton: {
+    id: 'map.import.button',
+    defaultMessage: 'Import SMP',
+  },
+  importFileLabel: {
+    id: 'map.import.fileLabel',
+    defaultMessage: 'Import SMP file',
+  },
+  importOfflineOnly: {
+    id: 'map.import.offlineOnly',
+    defaultMessage:
+      'This SMP contains map resources that are not packaged for offline use',
+  },
+  importInvalidFile: {
+    id: 'map.import.invalidFile',
+    defaultMessage: 'This file is not a valid SMP',
+  },
+  importMissingStyle: {
+    id: 'map.import.missingStyle',
+    defaultMessage: 'SMP has no map style',
+  },
+  importSuccess: {
+    id: 'map.import.success',
+    defaultMessage: 'SMP imported successfully',
+  },
+  importQuotaExceeded: {
+    id: 'map.import.quotaExceeded',
+    defaultMessage: 'Not enough storage space to import this SMP',
+  },
+  importSaveError: {
+    id: 'map.import.saveError',
+    defaultMessage: 'Could not import this SMP. Please try again.',
+  },
   rename: {
     id: 'map.saved.rename',
     defaultMessage: 'Rename',
@@ -352,6 +405,10 @@ export const mapMessages = defineMessages({
     id: 'map.download.ready',
     defaultMessage: 'Map downloaded successfully ({size})',
   },
+  downloadImportedReady: {
+    id: 'map.download.importedReady',
+    defaultMessage: 'Imported map package is ready ({size})',
+  },
   downloadExport: {
     id: 'map.download.export',
     defaultMessage: 'Download SMP File',
@@ -396,6 +453,11 @@ export const mapMessages = defineMessages({
     id: 'map.download.missing',
     defaultMessage:
       'The saved map package is missing or unreadable. You can regenerate it.',
+  },
+  downloadMissingImported: {
+    id: 'map.download.missingImported',
+    defaultMessage:
+      'The imported map package is missing or unreadable. Import the original SMP file again.',
   },
   downloadUnknownError: {
     id: 'map.download.unknownError',

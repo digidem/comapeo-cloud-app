@@ -272,6 +272,36 @@ describe('SavedMapsList', () => {
     });
   });
 
+  it('shows Preview only for ready maps', async () => {
+    await getDb().maps.bulkAdd([
+      createMap({ id: 'draft-map', name: 'Draft map', status: 'draft' }),
+      createMap({
+        id: 'ready-map',
+        name: 'Ready map',
+        status: 'ready',
+        smpBlob: new Blob(['smp']),
+        smpSize: 3,
+      }),
+    ]);
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    const rows = await screen.findAllByTestId('saved-map-row');
+    const readyRow = rows.find((row) =>
+      row.textContent?.includes('Ready map'),
+    )!;
+    const draftRow = rows.find((row) =>
+      row.textContent?.includes('Draft map'),
+    )!;
+
+    expect(
+      within(readyRow).getByRole('button', { name: 'Preview' }),
+    ).toBeInTheDocument();
+    expect(
+      within(draftRow).queryByRole('button', { name: 'Preview' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows a delete error, keeps the dialog open, and leaves the map when deletion fails', async () => {
     const user = userEvent.setup();
     await getDb().maps.add(createMap());

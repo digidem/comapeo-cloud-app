@@ -2,9 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
 import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
-import { closeSmpReader } from '@/lib/map/smp-serve';
 import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
@@ -12,6 +12,21 @@ export const mapsQueryKey = (projectLocalId: string | null) => [
   'maps',
   projectLocalId,
 ];
+
+function assertValidNewMapOrigin(map: SavedMap): void {
+  if (map.origin === 'imported') {
+    if (!isImportedSmpMap(map)) {
+      throw new Error(
+        'Imported maps must be ready self-contained style packages',
+      );
+    }
+    return;
+  }
+
+  if (map.origin !== 'authored' || map.styleUrl.length === 0) {
+    throw new Error('Authored maps require an explicit origin and style URL');
+  }
+}
 
 export function useMaps(projectLocalId: string | null) {
   return useQuery({
@@ -33,6 +48,7 @@ export function useCreateMap() {
 
   return useMutation({
     mutationFn: async (map: SavedMap) => {
+      assertValidNewMapOrigin(map);
       await getDb().maps.add(map);
       return map;
     },
@@ -72,7 +88,6 @@ export function useDeleteMap(projectLocalId: string | null) {
         downloadState.clear(mapId);
       }
 
-      await closeSmpReader(mapId);
       const db = getDb();
       const updatedAt = new Date().toISOString();
       await db.transaction('rw', [db.maps, db.projects], async () => {
@@ -110,14 +125,7 @@ export function useSetActiveMapMutation(projectLocalId: string | null) {
     mutationFn: async (mapId: string | null) => {
       if (!projectLocalId) return;
 
-      const previousMapId =
-        mapId === null ? useMapStore.getState().activeMapId : null;
-
       await useMapStore.getState().setActiveMap(projectLocalId, mapId);
-
-      if (previousMapId !== null) {
-        await closeSmpReader(previousMapId);
-      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['projects'] });

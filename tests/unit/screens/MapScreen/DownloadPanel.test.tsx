@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -195,6 +195,64 @@ describe('DownloadPanel', () => {
     render(<DownloadPanel map={map} />);
     expect(screen.getByTestId('download-ready')).toBeInTheDocument();
     expect(screen.getByText(/downloaded successfully/i)).toBeInTheDocument();
+  });
+
+  it('describes imported ready maps as imported instead of downloaded', () => {
+    const map = createMockMap({
+      status: 'ready',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      smpBlob: new Blob(['smp']),
+      smpSize: 1048576,
+    });
+
+    render(<DownloadPanel map={map} />);
+
+    expect(screen.getByTestId('download-ready')).toHaveTextContent(
+      'Imported map package is ready (1.0 MB)',
+    );
+    expect(
+      screen.queryByText(/downloaded successfully/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not offer regeneration when an imported ready map has lost its blob', async () => {
+    const map = createMockMap({
+      id: 'imported-missing',
+      status: 'ready',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      smpBlob: undefined,
+      smpSize: 100,
+    });
+
+    render(<DownloadPanel map={map} />);
+
+    const missingState = await screen.findByTestId('download-ready-missing');
+    expect(missingState).toBeInTheDocument();
+    expect(missingState).toHaveTextContent(
+      'The imported map package is missing or unreadable. Import the original SMP file again.',
+    );
+    expect(missingState).not.toHaveTextContent('You can regenerate it.');
+    expect(within(missingState).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('keeps regeneration available for authored ready maps with a missing blob', async () => {
+    const map = createMockMap({
+      id: 'authored-missing',
+      status: 'ready',
+      smpBlob: undefined,
+      smpSize: 100,
+    });
+
+    render(<DownloadPanel map={map} />);
+
+    const missingState = await screen.findByTestId('download-ready-missing');
+    expect(
+      within(missingState).getByRole('button', { name: 'Retry' }),
+    ).toBeInTheDocument();
   });
 
   it('renders error state when downloadMap has an error', () => {

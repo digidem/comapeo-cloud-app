@@ -106,6 +106,18 @@ describe('closeSmpReader', () => {
     expect(MockReader).toHaveBeenCalledTimes(2);
   });
 
+  it('evicts the cached reader even when close rejects', async () => {
+    const { getSmpReader, closeSmpReader } = await importModule();
+    const first = await getSmpReader('map-a', createMockBlob());
+    vi.mocked(first.close).mockRejectedValueOnce(new Error('close failed'));
+
+    await expect(closeSmpReader('map-a')).rejects.toThrow('close failed');
+    const second = await getSmpReader('map-a', createMockBlob());
+
+    expect(first).not.toBe(second);
+    expect(MockReader).toHaveBeenCalledTimes(2);
+  });
+
   it('is a no-op for an unknown mapId', async () => {
     const { closeSmpReader } = await importModule();
     await expect(closeSmpReader('nonexistent')).resolves.toBeUndefined();
@@ -184,6 +196,28 @@ describe('protocol handler', () => {
     expect(result.data.byteLength).toBe(4);
   });
 
+  it('supports preview-prefixed reader ids containing a colon', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response(new ArrayBuffer(4), { status: 200 }));
+    mockCreateServer.mockReturnValue({ fetch: mockFetch });
+
+    const { getSmpReader, registerSmpProtocol } = await importModule();
+    await getSmpReader('preview:map-a:session-1', createMockBlob());
+    registerSmpProtocol();
+
+    const handler = mockAddProtocol.mock.calls[0]![1] as (
+      request: Request,
+    ) => Promise<{ data: ArrayBuffer }>;
+
+    const result = await handler(
+      new Request('smp:///preview:map-a:session-1/tiles/0/0/0.png'),
+    );
+
+    expect(mockFetch).toHaveBeenCalledOnce();
+    expect(result.data.byteLength).toBe(4);
+  });
+
   it('returns empty ArrayBuffer when handler throws', async () => {
     const mockFetch = vi.fn().mockRejectedValue(new Error('network'));
     mockCreateServer.mockReturnValue({ fetch: mockFetch });
@@ -199,6 +233,178 @@ describe('protocol handler', () => {
     const result = await handler(new Request('smp:///map-a/tiles/0/0/0.png'));
 
     expect(result.data.byteLength).toBe(0);
+  });
+});
+
+describe('sanitizeSmpStyleAttributions', () => {
+  it('normalizes attribution to plain text for persistence without HTML escaping', async () => {
+    const { sanitizeSmpAttributionText } = await importModule();
+
+    expect(sanitizeSmpAttributionText('<strong>Acme & Co</strong>')).toBe(
+      'Acme & Co',
+    );
+    expect(
+      sanitizeSmpAttributionText('&copy; <a href="https://osm.org">OSM</a>'),
+    ).toBe('© OSM');
+    expect(
+      sanitizeSmpAttributionText('&lt;img src=x onerror=alert(1)&gt; Safe'),
+    ).toBe('Safe');
+    expect(sanitizeSmpAttributionText('&lt;img src=x Safe')).toBe('');
+  });
+
+  it('converts untrusted source attribution markup to escaped plain text', async () => {
+    const { sanitizeSmpStyleAttributions } = await importModule();
+    const original = {
+      version: 8 as const,
+      sources: {
+        raster: {
+          type: 'raster' as const,
+          tiles: ['https://example.com/{z}/{x}/{y}.png'],
+          attribution:
+            '<a href="https://example.com" onclick="alert(1)">Community & Map</a><img src=x onerror=alert(1)>',
+        },
+      },
+      layers: [],
+    };
+
+    const result = sanitizeSmpStyleAttributions(original);
+    const source = result.sources.raster as { attribution?: string };
+
+    expect(source.attribution).toBe('Community &amp; Map');
+    expect(original.sources.raster.attribution).toContain('<a');
+  });
+});
+
+describe('sanitizeImportedSmpStyle', () => {
+  it('keeps packaged resources and sanitizes attribution', async () => {
+    const { sanitizeImportedSmpStyle } = await importModule();
+    const result = sanitizeImportedSmpStyle({
+      version: 8,
+      glyphs: 'smp:///map-a/fonts/{fontstack}/{range}.pbf',
+      sources: {
+        raster: {
+          type: 'raster',
+          tiles: ['smp:///map-a/tiles/{z}/{x}/{y}.png'],
+          attribution: '<strong>Community Map</strong>',
+        },
+      },
+      layers: [],
+    });
+
+    expect(result).not.toBeNull();
+    expect(
+      (result!.sources.raster as { attribution?: string }).attribution,
+    ).toBe('Community Map');
+  });
+
+  it('rejects imported styles that would fetch network resources', async () => {
+    const { sanitizeImportedSmpStyle } = await importModule();
+    const result = sanitizeImportedSmpStyle({
+      version: 8,
+      sources: {
+        raster: {
+          type: 'raster',
+          tiles: ['https://tracker.example/{z}/{x}/{y}.png'],
+        },
+      },
+      layers: [],
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('rejects remote GeoJSON data URLs', async () => {
+    const { sanitizeImportedSmpStyle } = await importModule();
+    const result = sanitizeImportedSmpStyle({
+      version: 8,
+      sources: {
+        observations: {
+          type: 'geojson',
+          data: 'https://tracker.example/data.geojson',
+        },
+      },
+      layers: [],
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it.each([
+    [
+      'glyphs',
+      {
+        version: 8,
+        glyphs: 'https://tracker.example/{fontstack}/{range}.pbf',
+        sources: {},
+        layers: [],
+      },
+    ],
+    [
+      'sprite string',
+      {
+        version: 8,
+        sprite: 'https://tracker.example/sprite',
+        sources: {},
+        layers: [],
+      },
+    ],
+    [
+      'sprite array',
+      {
+        version: 8,
+        sprite: [{ id: 'default', url: 'https://tracker.example/sprite' }],
+        sources: {},
+        layers: [],
+      },
+    ],
+    [
+      'style import',
+      {
+        version: 8,
+        imports: [{ id: 'remote', url: 'https://tracker.example/style.json' }],
+        sources: {},
+        layers: [],
+      },
+    ],
+    [
+      'source url',
+      {
+        version: 8,
+        sources: {
+          vector: {
+            type: 'vector',
+            url: 'https://tracker.example/source.json',
+          },
+        },
+        layers: [],
+      },
+    ],
+    [
+      'source urls',
+      {
+        version: 8,
+        sources: {
+          video: {
+            type: 'video',
+            urls: ['https://tracker.example/video.mp4'],
+            coordinates: [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 1],
+            ],
+          },
+        },
+        layers: [],
+      },
+    ],
+  ])('rejects remote %s resources', async (_label, style) => {
+    const { sanitizeImportedSmpStyle } = await importModule();
+    const result = sanitizeImportedSmpStyle(
+      style as Parameters<typeof sanitizeImportedSmpStyle>[0],
+    );
+
+    expect(result).toBeNull();
   });
 });
 
