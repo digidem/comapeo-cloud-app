@@ -31,6 +31,10 @@ export async function getObservations(
   return [];
 }
 
+export async function getProjectPoints(_projectLocalId: string) {
+  return { type: 'FeatureCollection' as const, features: [] };
+}
+
 export async function getPresets(_projectLocalId: string): Promise<never[]> {
   return [];
 }

@@ -8,10 +8,11 @@ export function useCreateAlert() {
   return useMutation({
     mutationFn: (input: {
       projectLocalId: string;
-      geometry?: { type: string; coordinates: unknown };
-      metadata?: Record<string, unknown>;
-      detectionDateStart?: string;
-      detectionDateEnd?: string;
+      geometry: { type: string; coordinates: unknown };
+      metadata: Record<string, unknown>;
+      detectionDateStart: string;
+      detectionDateEnd: string;
+      sourceId: string;
     }) => createAlert(input),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({

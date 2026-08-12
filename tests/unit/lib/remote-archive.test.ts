@@ -45,6 +45,10 @@ const ALERTS_RESPONSE = {
       createdAt: '2024-01-01T00:00:00Z',
       updatedAt: '2024-01-01T00:00:00Z',
       deleted: false,
+      detectionDateStart: '2024-01-01T00:00:00Z',
+      detectionDateEnd: '2024-01-01T23:59:59Z',
+      sourceId: 'alert-source',
+      metadata: {},
       geometry: { type: 'Point', coordinates: [0, 0] },
     },
   ],
@@ -336,11 +340,11 @@ describe('remote-archive', () => {
     expect(stored!.sourceId).toBe('server-1');
   });
 
-  it('pullAlerts tolerates alerts without optional fields', async () => {
-    const minimalAlertResponse = {
+  it('pullAlerts rejects responses missing backend-required alert fields', async () => {
+    const invalidAlertResponse = {
       data: [
         {
-          docId: 'alert-minimal',
+          docId: 'alert-invalid',
           createdAt: '2024-01-01T00:00:00Z',
           updatedAt: '2024-01-01T00:00:00Z',
           deleted: false,
@@ -352,29 +356,13 @@ describe('remote-archive', () => {
     server.use(
       http.get(
         `${archiveConfig.baseUrl}/projects/proj-1/remoteDetectionAlerts`,
-        () => HttpResponse.json(minimalAlertResponse),
+        () => HttpResponse.json(invalidAlertResponse),
       ),
     );
 
-    const alerts = await pullAlerts(
-      'server-1',
-      'proj-1',
-      'local-proj-1',
-      archiveConfig,
-    );
-
-    expect(alerts).toHaveLength(1);
-    const alert = alerts[0]!;
-
-    // Must not throw when optional fields are absent
-    expect(alert.metadata).toBeUndefined();
-    expect(alert.detectionDateStart).toBeUndefined();
-    expect(alert.detectionDateEnd).toBeUndefined();
-    expect(
-      (alert as unknown as Record<string, unknown>).remoteSourceId,
-    ).toBeUndefined();
-    // Geometry is required by schema, so it must be present
-    expect(alert.geometry).toEqual({ type: 'Point', coordinates: [0, 0] });
+    await expect(
+      pullAlerts('server-1', 'proj-1', 'local-proj-1', archiveConfig),
+    ).rejects.toThrow();
   });
 
   it('throws when archive returns error', async () => {
@@ -1961,6 +1949,10 @@ describe('tombstone handling across data types', () => {
                 createdAt: '2024-01-01T00:00:00Z',
                 updatedAt: '2024-01-01T00:00:00Z',
                 deleted: true,
+                detectionDateStart: '2024-01-01T00:00:00Z',
+                detectionDateEnd: '2024-01-01T23:59:59Z',
+                sourceId: 'deleted-alert-source',
+                metadata: {},
                 geometry: { type: 'Point', coordinates: [0, 0] },
               },
             ],

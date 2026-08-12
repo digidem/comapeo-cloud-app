@@ -217,6 +217,7 @@ export interface CreateAlertInput {
   metadata?: Record<string, unknown>;
   detectionDateStart?: string;
   detectionDateEnd?: string;
+  sourceId?: string;
 }
 
 export async function createAlert(input: CreateAlertInput): Promise<Alert> {
@@ -237,6 +238,7 @@ export async function createAlert(input: CreateAlertInput): Promise<Alert> {
       metadata: input.metadata,
       detectionDateStart: input.detectionDateStart,
       detectionDateEnd: input.detectionDateEnd,
+      remoteSourceId: input.sourceId,
     };
     await db.alerts.add(alert);
     return alert;

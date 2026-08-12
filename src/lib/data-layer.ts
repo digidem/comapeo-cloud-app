@@ -208,6 +208,7 @@ export async function createAlert(input: {
   metadata?: Record<string, unknown>;
   detectionDateStart?: string;
   detectionDateEnd?: string;
+  sourceId?: string;
 }) {
   return repoCreateAlert(input);
 }

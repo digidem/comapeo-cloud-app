@@ -44,6 +44,7 @@ describe('useCreateAlert', () => {
       metadata: { severity: 'high' },
       detectionDateStart: '2024-01-01T00:00:00Z',
       detectionDateEnd: '2024-01-31T00:00:00Z',
+      sourceId: 'source-1',
     };
 
     const { result } = renderHook(() => useCreateAlert(), { wrapper });
@@ -74,9 +75,10 @@ describe('useCreateAlert', () => {
           ],
         ],
       },
-      metadata: undefined,
-      detectionDateStart: undefined,
-      detectionDateEnd: undefined,
+      metadata: {},
+      detectionDateStart: '2024-02-01T00:00:00Z',
+      detectionDateEnd: '2024-02-02T23:59:59Z',
+      sourceId: 'source-2',
     };
 
     const { result } = renderHook(() => useCreateAlert(), { wrapper });

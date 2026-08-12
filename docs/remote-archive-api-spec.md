@@ -224,7 +224,22 @@ Returns track data with `presetRef` and `observationRefs` expanded with URLs. No
 
 ### `POST /projects/:id/remoteDetectionAlerts` — Create alert
 
-**Request body:** `{ geometry, metadata?, detectionDateStart?, detectionDateEnd? }`
+**Request body:** all fields are required. `detectionDateStart` and `detectionDateEnd` must be ISO date-time strings, `sourceId` must be non-empty, and `metadata` may be an empty object.
+
+```json
+{
+  "detectionDateStart": "2025-04-30T12:44:00.000Z",
+  "detectionDateEnd": "2025-04-30T13:44:00.000Z",
+  "sourceId": "glad-s2-123",
+  "metadata": {},
+  "geometry": {
+    "type": "Point",
+    "coordinates": [-46.382854, -5.064616]
+  }
+}
+```
+
+Geometry positions are `[longitude, latitude]`; longitude must be between -180 and 180 and latitude between -90 and 90. Line strings require at least 2 positions and polygon rings at least 4 positions.
 
 **Response:** HTTP 201, empty body.
 

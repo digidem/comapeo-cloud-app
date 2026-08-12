@@ -142,6 +142,10 @@ const PIXEL_THRESHOLD_OVERRIDES: ReadonlyArray<{
   // non-interactive story includes a badge overlay that adds extra
   // pixel variance on top of tile rasterisation noise.
   { match: 'mapcontainer', threshold: 0.25 },
+  // Create Alert embeds MapContainer, so its screenshot inherits the same
+  // cross-environment MapLibre tile/rasterisation variance. Keep this override
+  // narrowly scoped to these stories; CI has observed ~25% variance on desktop.
+  { match: 'screens-createalert', threshold: 0.3 },
   // FilterSheet stories have minor cross-environment rendering noise
   // (~1.6% differ between local and CI Chromium). 2% absorbs this with a
   // small margin while tightening detection of real layout regressions.
