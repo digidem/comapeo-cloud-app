@@ -134,4 +134,17 @@ describe('SelectPortalProvider', () => {
 
     document.body.removeChild(container);
   });
+
+  it('associates with label via aria-labelledby', () => {
+    render(
+      <div>
+        <label id="test-label">Test Label</label>
+        <Select ariaLabelledBy="test-label" placeholder="Pick one">
+          <Select.Item value="a">Option A</Select.Item>
+        </Select>
+      </div>,
+    );
+    const trigger = screen.getByRole('combobox');
+    expect(trigger).toHaveAttribute('aria-labelledby', 'test-label');
+  });
 });

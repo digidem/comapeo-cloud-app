@@ -68,6 +68,7 @@ function MediaLightbox({
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const touchStartXRef = useRef<number | null>(null);
+  const focusOnCloseRef = useRef<HTMLElement | null>(focusOnClose);
   const hasMultiple = images.length > 1;
   const safeIndex = Math.min(Math.max(currentIndex, 0), images.length - 1);
   const currentImage = images[safeIndex];
@@ -78,17 +79,26 @@ function MediaLightbox({
     closeButtonRef.current?.focus();
   }, []);
 
+  // Keep the ref in sync with the prop (for unmount-time access)
+  useEffect(() => {
+    focusOnCloseRef.current = focusOnClose ?? null;
+  }, [focusOnClose]);
+
   useEffect(() => {
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = original;
-      // Restore focus to the element that opened the lightbox
-      if (focusOnClose) {
-        focusOnClose.focus();
-      }
     };
-  }, [focusOnClose]);
+  }, []);
+
+  // Separate unmount-only effect for focus restoration
+  useEffect(() => {
+    return () => {
+      // Restore focus to the element that opened the lightbox
+      focusOnCloseRef.current?.focus();
+    };
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
