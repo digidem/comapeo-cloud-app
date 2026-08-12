@@ -2,7 +2,7 @@ import type { SVGProps } from 'react';
 
 interface CloseIconProps extends Omit<
   SVGProps<SVGSVGElement>,
-  'width' | 'height'
+  'width' | 'height' | 'viewBox' | 'fill' | 'xmlns' | 'aria-hidden' | 'children'
 > {
   size?: number;
 }
