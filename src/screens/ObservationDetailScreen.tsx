@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import { Marker } from 'react-map-gl/maplibre';
 
@@ -95,6 +95,11 @@ export function ObservationDetailScreen() {
 
   // Lightbox state
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const openedThumbnailRef = useRef<HTMLButtonElement | null>(null);
+  const [focusOnClose, setFocusOnClose] = useState<HTMLButtonElement | null>(
+    null,
+  );
 
   // Inject project name + mode label into topbar (same pattern as HomeScreen)
   const topbarWorkspaceName =
@@ -212,8 +217,16 @@ export function ObservationDetailScreen() {
             {photoList.map((url, index) => (
               <button
                 key={`${url}-${index}`}
+                ref={(el) => {
+                  thumbnailRefs.current[index] = el;
+                }}
                 type="button"
-                onClick={() => setLightboxIndex(index)}
+                onClick={() => {
+                  openedThumbnailRef.current =
+                    thumbnailRefs.current[index] ?? null;
+                  setFocusOnClose(openedThumbnailRef.current);
+                  setLightboxIndex(index);
+                }}
                 className="h-20 w-20 overflow-hidden rounded-md bg-surface-container-low transition-all hover:ring-2 hover:ring-primary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-safe:hover:scale-105 motion-safe:active:scale-95"
                 aria-label={`Photo ${index + 1}`}
               >
@@ -230,8 +243,17 @@ export function ObservationDetailScreen() {
             <MediaLightbox
               images={photoList}
               currentIndex={lightboxIndex}
-              onClose={() => setLightboxIndex(null)}
-              onNavigate={setLightboxIndex}
+              onClose={() => {
+                setFocusOnClose(null);
+                setLightboxIndex(null);
+              }}
+              onNavigate={(index) => {
+                openedThumbnailRef.current =
+                  thumbnailRefs.current[index] ?? null;
+                setFocusOnClose(openedThumbnailRef.current);
+                setLightboxIndex(index);
+              }}
+              focusOnClose={focusOnClose}
             />
           )}
         </Card>

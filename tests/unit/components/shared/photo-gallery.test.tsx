@@ -113,4 +113,20 @@ describe('PhotoGallery', () => {
     await user.click(closeButton);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+
+  it('restores focus to thumbnail when preview closes', async () => {
+    const user = userEvent.setup();
+    render(<PhotoGallery photos={photos} projectId={projectId} />);
+
+    const firstThumb = screen.getByRole('button', { name: 'View photo1.jpg' });
+    await user.click(firstThumb);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    const closeButton = screen.getByRole('button', { name: 'Close preview' });
+    await user.click(closeButton);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Focus should be restored to the thumbnail
+    expect(document.activeElement).toBe(firstThumb);
+  });
 });

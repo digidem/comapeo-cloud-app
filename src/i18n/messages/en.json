@@ -1694,6 +1694,9 @@
   "pagination.showing": {
     "defaultMessage": "Showing {start}–{end} of {total} {itemLabel}"
   },
+  "photoGallery.viewPhoto": {
+    "defaultMessage": "View {photoName}"
+  },
   "settings.backup.description": {
     "defaultMessage": "Export your local settings to a JSON file, or import a previously exported backup."
   },
