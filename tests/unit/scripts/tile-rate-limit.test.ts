@@ -247,5 +247,38 @@ describe('tile rate limit operations', () => {
         falsePositiveValidationConfirmed: true,
       }),
     ).toThrow(/observed legitimate burst/i);
+
+    const inconsistentReport = {
+      ...report,
+      observedMaxRequestsPerWindow: 1,
+      recommendedRequestsPerPeriod: 2,
+    };
+    expect(() =>
+      validateEnforcementReadiness({
+        report: inconsistentReport,
+        host: 'app.comapeo.cloud',
+        requestsPerPeriod: 2,
+        periodSeconds: 60,
+        falsePositiveValidationConfirmed: true,
+      }),
+    ).toThrow(/samples|inconsistent|observed legitimate burst/i);
+
+    const malformedSampleReport = {
+      ...report,
+      samples: report.samples.map((sample) =>
+        sample.kind === 'small'
+          ? { ...sample, requestCount: 10, maxRequestsPerWindow: 100 }
+          : sample,
+      ),
+    };
+    expect(() =>
+      validateEnforcementReadiness({
+        report: malformedSampleReport,
+        host: 'app.comapeo.cloud',
+        requestsPerPeriod: 1350,
+        periodSeconds: 60,
+        falsePositiveValidationConfirmed: true,
+      }),
+    ).toThrow(/burst larger than its request count/i);
   });
 });

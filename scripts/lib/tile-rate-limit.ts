@@ -326,6 +326,78 @@ export function validateProductionMeasurementTarget(
   }
 }
 
+function validateReportSamples(report: MeasurementReport): number {
+  if (!Array.isArray(report.samples)) {
+    throw new Error('Measurement report samples must be an array');
+  }
+
+  const kinds = new Set<SampleKind>();
+  let observedMaxRequestsPerWindow = 0;
+
+  for (const sample of report.samples) {
+    if (!sample || typeof sample !== 'object') {
+      throw new Error('Measurement report contains an invalid sample');
+    }
+    if (sample.kind !== 'small' && sample.kind !== 'large') {
+      throw new Error(
+        `Measurement report contains invalid sample kind: ${String(sample.kind)}`,
+      );
+    }
+    if (typeof sample.name !== 'string' || sample.name.length === 0) {
+      throw new Error('Measurement report sample name must be non-empty');
+    }
+    assertPositiveInteger(sample.requestCount, `${sample.name} requestCount`);
+    assertPositiveInteger(
+      sample.maxRequestsPerWindow,
+      `${sample.name} maxRequestsPerWindow`,
+    );
+    if (sample.maxRequestsPerWindow > sample.requestCount) {
+      throw new Error(
+        `Measurement report sample ${sample.name} has a burst larger than its request count`,
+      );
+    }
+    if (!Number.isSafeInteger(sample.durationMs) || sample.durationMs < 0) {
+      throw new Error(
+        `Measurement report sample ${sample.name} durationMs must be a non-negative integer`,
+      );
+    }
+
+    const firstRequestAt = Date.parse(sample.firstRequestAt);
+    const lastRequestAt = Date.parse(sample.lastRequestAt);
+    if (
+      Number.isNaN(firstRequestAt) ||
+      Number.isNaN(lastRequestAt) ||
+      lastRequestAt < firstRequestAt ||
+      sample.durationMs !== lastRequestAt - firstRequestAt
+    ) {
+      throw new Error(
+        `Measurement report sample ${sample.name} has inconsistent request timestamps`,
+      );
+    }
+
+    kinds.add(sample.kind);
+    observedMaxRequestsPerWindow = Math.max(
+      observedMaxRequestsPerWindow,
+      sample.maxRequestsPerWindow,
+    );
+  }
+
+  if (!kinds.has('small') || !kinds.has('large')) {
+    throw new Error('Measurement report must contain small and large samples');
+  }
+  assertPositiveInteger(
+    report.observedMaxRequestsPerWindow,
+    'observedMaxRequestsPerWindow',
+  );
+  if (report.observedMaxRequestsPerWindow !== observedMaxRequestsPerWindow) {
+    throw new Error(
+      `Measurement report observed burst is inconsistent with samples: stored ${report.observedMaxRequestsPerWindow}, recomputed ${observedMaxRequestsPerWindow}`,
+    );
+  }
+
+  return observedMaxRequestsPerWindow;
+}
+
 export function validateEnforcementReadiness(options: {
   report: MeasurementReport;
   host: string;
@@ -354,15 +426,10 @@ export function validateEnforcementReadiness(options: {
     );
   }
 
-  const kinds = new Set(options.report.samples.map((sample) => sample.kind));
-  if (!kinds.has('small') || !kinds.has('large')) {
-    throw new Error('Measurement report must contain small and large samples');
-  }
-  if (
-    options.requestsPerPeriod <= options.report.observedMaxRequestsPerWindow
-  ) {
+  const observedMaxRequestsPerWindow = validateReportSamples(options.report);
+  if (options.requestsPerPeriod <= observedMaxRequestsPerWindow) {
     throw new Error(
-      `Configured threshold (${options.requestsPerPeriod}) must exceed the observed legitimate burst (${options.report.observedMaxRequestsPerWindow})`,
+      `Configured threshold (${options.requestsPerPeriod}) must exceed the observed legitimate burst (${observedMaxRequestsPerWindow})`,
     );
   }
   if (!options.falsePositiveValidationConfirmed) {
