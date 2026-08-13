@@ -262,7 +262,9 @@ test.describe('Critical User Flows', () => {
   // -------------------------------------------------------------------------
   // Flow 3: Alerts → Add Alert
   // -------------------------------------------------------------------------
-  test('user can navigate to create alert form', async ({ page }) => {
+  test('user can start inline alert creation and still use the full route', async ({
+    page,
+  }) => {
     await seedProjectWithObservations(page, 'Test Project');
 
     // Navigate to /alerts via the nav link
@@ -274,23 +276,24 @@ test.describe('Critical User Flows', () => {
     // "No alerts yet" is visible
     await expect(page.getByText(/no alerts yet/i)).toBeVisible();
 
-    // Click "Add Alert" link
-    await page.getByRole('link', { name: /add alert/i }).click();
-
-    // Create Alert screen renders
+    // Map-view creation opens inline without leaving Alerts.
+    await page.getByRole('button', { name: /add alert/i }).click();
+    const dialog = page.getByRole('dialog', { name: /create alert/i });
+    await expect(dialog).toBeVisible();
     await expect(
-      page.getByRole('heading', { level: 1, name: /create alert/i }),
+      page.getByRole('heading', { level: 1, name: 'Alerts' }),
     ).toBeVisible();
     await expect(page.getByTestId('map-container')).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Point', exact: true }),
+      dialog.getByRole('button', { name: 'Point', exact: true }),
     ).toBeVisible();
+
+    // Cancel restores browse mode; grid view still exposes the full-page route.
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('button', { name: /Switch to grid view/i }).click();
     await expect(
-      page.getByRole('button', { name: 'Line', exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'Polygon', exact: true }),
-    ).toBeVisible();
+      page.getByRole('link', { name: /add alert/i }),
+    ).toHaveAttribute('href', '/alerts/new');
   });
 
   // -------------------------------------------------------------------------
