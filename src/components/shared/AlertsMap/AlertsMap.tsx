@@ -45,7 +45,7 @@ export function AlertsMap({
   const navigate = useNavigate();
   const mapRef = useRef<MapRef>(null);
   const mapLoadedRef = useRef(false);
-  const hasFitRef = useRef(false);
+  const lastFittedBoundsKeyRef = useRef<string | null>(null);
   const featureCollection = useMemo(
     () => alertsToFeatureCollection(alerts),
     [alerts],
@@ -54,23 +54,25 @@ export function AlertsMap({
     () => getAlertGeometryBounds(featureCollection),
     [featureCollection],
   );
+  const boundsKey = bounds?.flat().join(',') ?? null;
 
   const fitInitialBounds = useCallback(() => {
     if (
       !bounds ||
+      !boundsKey ||
       !mapLoadedRef.current ||
       !mapRef.current ||
-      hasFitRef.current
+      lastFittedBoundsKeyRef.current === boundsKey
     ) {
       return;
     }
-    hasFitRef.current = true;
+    lastFittedBoundsKeyRef.current = boundsKey;
     mapRef.current.fitBounds(bounds, {
       padding: 50,
       maxZoom: 14,
       duration: 800,
     });
-  }, [bounds]);
+  }, [bounds, boundsKey]);
 
   useEffect(() => {
     fitInitialBounds();
