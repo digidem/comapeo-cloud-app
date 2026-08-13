@@ -20,9 +20,10 @@ describe('alert view preference', () => {
 
     expect(useAlertViewModeStore.getState().viewMode).toBe('grid');
     expect(useViewModeStore.getState().viewMode).toBe('map');
-    expect(localStorage.getItem('alert-view-mode-preference')).toContain(
-      'grid',
-    );
+    expect(
+      localStorage.getItem('comapeo-alert-view-mode-preference'),
+    ).toContain('grid');
+    expect(localStorage.getItem('alert-view-mode-preference')).toBeNull();
     expect(localStorage.getItem('view-mode-preference')).toBe(
       dataPreferenceBefore,
     );

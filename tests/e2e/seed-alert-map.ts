@@ -88,7 +88,7 @@ export async function seedAlertMapState(page: Page): Promise<void> {
       JSON.stringify({ state: { selectedProjectId: projectId }, version: 0 }),
     );
     localStorage.setItem(
-      'alert-view-mode-preference',
+      'comapeo-alert-view-mode-preference',
       JSON.stringify({ state: { viewMode: 'map' }, version: 0 }),
     );
     localStorage.setItem(

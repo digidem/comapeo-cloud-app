@@ -214,6 +214,10 @@ describe('importLocalStorageData', () => {
 describe('clearAllStorage', () => {
   it('clears only comapeo-prefixed localStorage entries', async () => {
     localStorage.setItem('comapeo-locale', '"en"');
+    localStorage.setItem(
+      'comapeo-alert-view-mode-preference',
+      JSON.stringify({ state: { viewMode: 'grid' }, version: 0 }),
+    );
     localStorage.setItem('other-key', 'value');
 
     // Prevent actual reload
@@ -225,6 +229,9 @@ describe('clearAllStorage', () => {
     await clearAllStorage();
 
     expect(localStorage.getItem('comapeo-locale')).toBeNull();
+    expect(
+      localStorage.getItem('comapeo-alert-view-mode-preference'),
+    ).toBeNull();
     // Non-comapeo keys should be preserved
     expect(localStorage.getItem('other-key')).toBe('value');
   });

@@ -15,7 +15,7 @@ export const useAlertViewModeStore = create<AlertViewModeState>()(
       setViewMode: (viewMode) => set({ viewMode }),
     }),
     {
-      name: 'alert-view-mode-preference',
+      name: 'comapeo-alert-view-mode-preference',
     },
   ),
 );
