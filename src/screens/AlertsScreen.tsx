@@ -60,6 +60,22 @@ const messages = defineMessages({
     id: 'alerts.create.close',
     defaultMessage: 'Close create alert',
   },
+  selectOnMap: {
+    id: 'alerts.create.selectOnMap',
+    defaultMessage: 'Select on map',
+  },
+  changeOnMap: {
+    id: 'alerts.create.changeOnMap',
+    defaultMessage: 'Change location on map',
+  },
+  tapMapToPlace: {
+    id: 'alerts.create.tapMapToPlace',
+    defaultMessage: 'Tap the map to place the alert point',
+  },
+  backToForm: {
+    id: 'alerts.create.backToForm',
+    defaultMessage: 'Back to form',
+  },
   viewGrid: {
     id: 'alerts.viewGrid',
     defaultMessage: 'Grid view',
@@ -127,6 +143,7 @@ export function AlertsScreen() {
   const viewMode = useAlertViewModeStore((state) => state.viewMode);
   const setViewMode = useAlertViewModeStore((state) => state.setViewMode);
   const [isCreatingInline, setIsCreatingInline] = useState(false);
+  const [isSelectingMapOnMobile, setIsSelectingMapOnMobile] = useState(false);
   const [mapSelectedPoint, setMapSelectedPoint] = useState<[number, number]>();
   const [draftPoint, setDraftPoint] = useState<[number, number]>();
 
@@ -176,6 +193,7 @@ export function AlertsScreen() {
 
   function closeInlineCreation() {
     setIsCreatingInline(false);
+    setIsSelectingMapOnMobile(false);
     setMapSelectedPoint(undefined);
     setDraftPoint(undefined);
   }
@@ -218,6 +236,7 @@ export function AlertsScreen() {
               onClick={() => {
                 setMapSelectedPoint(undefined);
                 setDraftPoint(undefined);
+                setIsSelectingMapOnMobile(false);
                 setIsCreatingInline(true);
               }}
               disabled={isCreatingInline}
@@ -249,6 +268,7 @@ export function AlertsScreen() {
             onMapPointSelect={(point) => {
               setMapSelectedPoint(point);
               setDraftPoint(point);
+              setIsSelectingMapOnMobile(false);
             }}
             draftPoint={draftPoint}
             showEmptyState={
@@ -262,7 +282,10 @@ export function AlertsScreen() {
             <Dialog.Root open modal={false}>
               <Dialog.Content
                 aria-describedby={undefined}
-                className="absolute inset-x-0 bottom-0 z-40 flex max-h-[85%] flex-col rounded-t-card border border-border/20 bg-surface-card shadow-elevated focus:outline-none md:inset-y-3 md:right-3 md:left-auto md:m-0 md:w-[28rem] md:max-h-none md:rounded-card"
+                data-testid="inline-alert-sheet"
+                className={`absolute inset-x-0 bottom-0 z-40 max-h-[85%] flex-col rounded-t-card border border-border/20 bg-surface-card shadow-elevated focus:outline-none md:inset-y-3 md:right-3 md:left-auto md:m-0 md:flex md:w-[28rem] md:max-h-none md:rounded-card ${
+                  isSelectingMapOnMobile ? 'hidden' : 'flex'
+                }`}
                 style={{ animation: 'slideUp 200ms ease-out' }}
               >
                 <div className="flex justify-center pt-3 pb-1 md:hidden">
@@ -286,6 +309,18 @@ export function AlertsScreen() {
                   </button>
                 </div>
                 <div className="overflow-y-auto p-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsSelectingMapOnMobile(true)}
+                    className="mb-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-button border border-border bg-surface px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary md:hidden"
+                    style={{ touchAction: 'manipulation' }}
+                  >
+                    {intl.formatMessage(
+                      mapSelectedPoint
+                        ? messages.changeOnMap
+                        : messages.selectOnMap,
+                    )}
+                  </button>
                   <AlertForm
                     projectLocalId={selectedProjectId}
                     compact
@@ -301,6 +336,21 @@ export function AlertsScreen() {
                 </div>
               </Dialog.Content>
             </Dialog.Root>
+          ) : null}
+
+          {isCreatingInline && isSelectingMapOnMobile ? (
+            <div className="absolute inset-x-3 bottom-3 z-40 flex items-center justify-between gap-3 rounded-card bg-surface-card p-3 shadow-elevated md:hidden">
+              <span className="text-sm font-medium text-text">
+                {intl.formatMessage(messages.tapMapToPlace)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsSelectingMapOnMobile(false)}
+                className="min-h-[44px] shrink-0 rounded-button border border-border bg-surface px-3 py-2 text-sm font-medium text-text"
+              >
+                {intl.formatMessage(messages.backToForm)}
+              </button>
+            </div>
           ) : null}
 
           {!isCreatingInline && alertsQuery.isError ? (

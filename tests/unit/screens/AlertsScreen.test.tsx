@@ -253,6 +253,37 @@ describe('AlertsScreen', () => {
       );
     });
 
+    it('lets mobile users hide the sheet to select a map point and restores it afterward', async () => {
+      const user = userEvent.setup();
+      render(<AlertsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Add Alert' }));
+      const sheet = screen.getByTestId('inline-alert-sheet');
+      expect(sheet).not.toHaveClass('hidden');
+
+      await user.click(screen.getByRole('button', { name: 'Select on map' }));
+      expect(sheet).toHaveClass('hidden');
+      expect(
+        screen.getByText('Tap the map to place the alert point'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Back to form' }),
+      ).toBeInTheDocument();
+
+      await user.click(
+        screen.getByRole('button', { name: 'Select inline map point' }),
+      );
+
+      expect(sheet).not.toHaveClass('hidden');
+      expect(
+        screen.getByRole('button', { name: 'Change location on map' }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('inline-alert-form')).toHaveAttribute(
+        'data-external-point',
+        '-51.25,-3.75',
+      );
+    });
+
     it('feeds map point selection into the shared geometry picker and draft map point', async () => {
       const user = userEvent.setup();
       render(<AlertsScreen />);

@@ -37,6 +37,34 @@ test.describe('Alerts map and grid', () => {
     expect(preferences.data).toContain('map');
   });
 
+  test('mobile sheet exposes map selection and returns to the form after a map tap', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await setupMockServer(page);
+    await seedAlertMapState(page);
+    await page.goto('/alerts');
+
+    await page.getByRole('button', { name: /Add Alert/i }).click();
+    const dialog = page.getByRole('dialog', { name: /Create Alert/i });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Select on map' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(
+      page.getByText('Tap the map to place the alert point', { exact: true }),
+    ).toBeVisible();
+
+    const mapCanvas = page.locator('.maplibregl-canvas').first();
+    await expect(mapCanvas).toBeVisible();
+    await mapCanvas.click({ position: { x: 120, y: 140 } });
+
+    await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByRole('button', { name: 'Change location on map' }),
+    ).toBeVisible();
+  });
+
   test('creates a point alert inline from the map and keeps the Alerts view', async ({
     page,
   }) => {
