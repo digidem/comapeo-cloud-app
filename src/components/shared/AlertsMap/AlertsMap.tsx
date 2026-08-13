@@ -24,6 +24,7 @@ const messages = defineMessages({
 });
 
 const ALERT_COLOR = '#52627A';
+const ALERT_POINT_COLOR = '#DC2626';
 const INTERACTIVE_LAYER_IDS = ['alert-points', 'alert-lines', 'alert-polygons'];
 
 export interface AlertsMapProps {
@@ -152,7 +153,7 @@ export function AlertsMap({
               type="circle"
               filter={['==', ['geometry-type'], 'Point']}
               paint={{
-                'circle-color': ALERT_COLOR,
+                'circle-color': ALERT_POINT_COLOR,
                 'circle-radius': 7,
                 'circle-stroke-color': '#FFFFFF',
                 'circle-stroke-width': 2,

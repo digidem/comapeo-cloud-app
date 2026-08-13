@@ -56,7 +56,9 @@ vi.mock('react-map-gl/maplibre', () => ({
       {children}
     </div>
   ),
-  Layer: ({ id }: { id: string }) => <div data-testid={id} />,
+  Layer: ({ id, paint }: { id: string; paint?: Record<string, unknown> }) => (
+    <div data-testid={id} data-paint={JSON.stringify(paint ?? {})} />
+  ),
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -176,6 +178,10 @@ describe('AlertsMap', () => {
     expect(screen.getByTestId('alert-points')).toBeInTheDocument();
     expect(screen.getByTestId('alert-lines')).toBeInTheDocument();
     expect(screen.getByTestId('alert-polygons')).toBeInTheDocument();
+    expect(screen.getByTestId('alert-points')).toHaveAttribute(
+      'data-paint',
+      expect.stringContaining('"circle-color":"#DC2626"'),
+    );
   });
 
   it('fits the complete valid alert extent when the map initially loads', () => {
