@@ -84,44 +84,39 @@ test.describe('CSP Runtime Verification', () => {
     expect(await readCspViolations(page)).toHaveLength(0);
   });
 
-  test('API proxy passes through requests without x-target-url header', async ({
+  test('API proxy rejects requests without x-target-url header', async ({
     page,
   }) => {
     // Use page.request (bypasses page.route interceptors) so the request
-    // reaches the Vite dev proxy. Requests without x-target-url header
-    // pass through to the Vite dev server (handled by next() in the proxy
-    // middleware — /api/invites/* are handled by Cloudflare Pages Functions).
+    // reaches the active archive proxy (Vite locally, Pages when deployed).
+    // Generic /api/* routes require an explicit x-target-url header.
     const response = await page.request.get('/api/info');
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'ARCHIVE_PROXY_BAD_TARGET' },
+    });
   });
 
   test('API proxy succeeds with valid x-target-url header', async ({
     page,
   }) => {
-    // Navigate first so page.route interceptors are active
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Override setupMockServer's **/info with a specific /api/info intercept.
-    // page.route uses last-wins semantics — this route takes priority.
-    await page.route('**/api/info', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ data: { deviceId: 'mock', name: 'Mock' } }),
-      }),
-    );
-
-    // Use browser-context fetch so page.route can intercept before the
-    // request reaches the Vite proxy (which would fail to connect upstream).
-    const res = await page.evaluate(async () => {
-      const r = await fetch('/api/info', {
-        headers: { 'x-target-url': 'https://archive.example.com' },
-      });
-      return { status: r.status };
+    // Point the archive proxy back at this same app origin. The proxy rewrites
+    // /api/info to /info, so this exercises the real proxy path without an
+    // external archive dependency in either local or deployed-preview E2E.
+    const appOrigin = new URL(page.url()).origin;
+    const directResponse = await page.request.get('/info');
+    const response = await page.request.get('/api/info', {
+      headers: { 'x-target-url': appOrigin },
     });
 
-    expect(res.status).toBe(200);
+    expect(directResponse.status()).toBe(200);
+    expect(directResponse.headers()['cache-control']).not.toBe('no-store');
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('text/html');
+    expect(response.headers()['cache-control']).toBe('no-store');
   });
 
   test('service worker registration does not cause CSP errors', async ({

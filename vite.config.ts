@@ -358,10 +358,16 @@ function archiveApiProxy(): Plugin {
           ? targetHeader[0]
           : targetHeader;
 
-        // If no x-target-url header, this is not an archive proxy request
-        // (e.g. /api/invites/* handled by Pages Functions). Pass through.
+        // Match the deployed Pages Function contract: generic /api/* requests
+        // are archive proxy requests and require an explicit target. Static
+        // routes such as /api/tiles and /api/invites/* were handled above.
         if (!targetValue) {
-          next();
+          writeProxyError(
+            res,
+            400,
+            'ARCHIVE_PROXY_BAD_TARGET',
+            'Missing archive target URL',
+          );
           return;
         }
 
