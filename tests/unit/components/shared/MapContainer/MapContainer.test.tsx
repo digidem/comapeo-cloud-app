@@ -366,6 +366,45 @@ describe('MapContainer', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('never renders a resolved SMP after its active map is cleared', async () => {
+    const oldStyle = {
+      version: 8 as const,
+      sources: {},
+      layers: [{ id: 'cleared-map', type: 'background' as const }],
+    };
+    mockResolveSmpStyle.mockResolvedValueOnce(oldStyle);
+    useProjectStore.setState({ selectedProjectId: 'proj-1' });
+    useMapStore.setState({
+      activeProjectLocalId: 'proj-1',
+      activeMapId: 'old-map',
+    });
+    mockDbGet.mockResolvedValue({
+      id: 'old-map',
+      projectLocalId: 'proj-1',
+      name: 'Old Project Map',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    render(<MapContainer />);
+    await waitFor(() => expect(mapProps.at(-1)?.mapStyle).toEqual(oldStyle));
+    const renderStart = mapProps.length;
+
+    act(() => {
+      useMapStore.setState({ activeMapId: null });
+    });
+
+    expect(
+      mapProps.slice(renderStart).map((props) => props.mapStyle),
+    ).not.toContainEqual(oldStyle);
+    expect(
+      screen.queryByTestId('map-active-map-badge'),
+    ).not.toBeInTheDocument();
+  });
+
   // -------------------------------------------------------------------
   // SMP (Saved Map Package) offline-map tests
   // -------------------------------------------------------------------

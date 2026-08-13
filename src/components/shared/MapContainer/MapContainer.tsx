@@ -193,7 +193,11 @@ function MapContainer({
     enabled: !!activeMapId,
   });
 
-  const [smpStyle, setSmpStyle] = useState<StyleSpecification | null>(null);
+  const [smpStyleAttempt, setSmpStyleAttempt] = useState<{
+    mapId: string;
+    blobToken: string;
+    style: StyleSpecification;
+  } | null>(null);
   const [smpLoadErrorAttempt, setSmpLoadErrorAttempt] = useState<{
     mapId: string;
     blobToken: string;
@@ -202,6 +206,11 @@ function MapContainer({
   const activeBlobToken = activeSavedMap?.smpBlob
     ? getSmpBlobToken(activeSavedMap.smpBlob)
     : null;
+  const smpStyle =
+    smpStyleAttempt?.mapId === activeMapId &&
+    smpStyleAttempt.blobToken === activeBlobToken
+      ? smpStyleAttempt.style
+      : null;
   const smpLoadError =
     activeSavedMap?.status === 'ready' &&
     smpLoadErrorAttempt?.mapId === activeSavedMap.id &&
@@ -282,16 +291,16 @@ function MapContainer({
             ? sanitizeImportedSmpStyle(style)
             : style;
         if (!safeStyle) {
-          setSmpStyle(null);
+          setSmpStyleAttempt(null);
           setSmpLoadErrorAttempt({ mapId, blobToken });
           return;
         }
 
         setSmpLoadErrorAttempt(null);
-        setSmpStyle(safeStyle);
+        setSmpStyleAttempt({ mapId, blobToken, style: safeStyle });
       } catch {
         if (!cancelled) {
-          setSmpStyle(null);
+          setSmpStyleAttempt(null);
           setSmpLoadErrorAttempt({ mapId, blobToken });
         }
       }
@@ -304,7 +313,7 @@ function MapContainer({
           // Reader cleanup failure must not surface as an unhandled rejection.
         });
       }
-      setSmpStyle(null);
+      setSmpStyleAttempt(null);
     };
   }, [
     activeSavedMap?.id,
