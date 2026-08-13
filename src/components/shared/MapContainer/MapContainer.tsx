@@ -31,6 +31,7 @@ import {
 import type { BasemapId, ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { uuid } from '@/lib/uuid';
 import { useMapStore } from '@/stores/map-store';
+import { useProjectStore } from '@/stores/project-store';
 
 import { BasemapSwitcher } from './BasemapSwitcher';
 
@@ -140,6 +141,12 @@ const POSITION_CLASSES: Record<SwitcherPosition, string> = {
   'bottom-left': 'bottom-3 left-3',
 };
 
+const OFFLINE_PENDING_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {},
+  layers: [],
+};
+
 const smpBlobTokens = new WeakMap<Blob, string>();
 
 function getSmpBlobToken(blob: Blob): string {
@@ -173,16 +180,24 @@ function MapContainer({
   const intl = useIntl();
   const storeBasemapId = useMapStore((s) => s.basemapId);
   const storeSetBasemap = useMapStore((s) => s.setBasemap);
+  const activeProjectLocalId = useMapStore((s) => s.activeProjectLocalId);
   const activeMapId = useMapStore((s) => s.activeMapId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
 
-  const { data: activeSavedMap } = useQuery<SavedMap | undefined>({
+  const { data: activeSavedMap, isPending: isActiveMapPending } = useQuery<
+    SavedMap | undefined
+  >({
     queryKey: ['map', activeMapId],
     queryFn: () =>
       activeMapId ? getDb().maps.get(activeMapId) : Promise.resolve(undefined),
     enabled: !!activeMapId,
   });
 
-  const [smpStyle, setSmpStyle] = useState<StyleSpecification | null>(null);
+  const [smpStyleAttempt, setSmpStyleAttempt] = useState<{
+    mapId: string;
+    blobToken: string;
+    style: StyleSpecification;
+  } | null>(null);
   const [smpLoadErrorAttempt, setSmpLoadErrorAttempt] = useState<{
     mapId: string;
     blobToken: string;
@@ -191,10 +206,25 @@ function MapContainer({
   const activeBlobToken = activeSavedMap?.smpBlob
     ? getSmpBlobToken(activeSavedMap.smpBlob)
     : null;
+  const smpStyle =
+    smpStyleAttempt?.mapId === activeMapId &&
+    smpStyleAttempt.blobToken === activeBlobToken
+      ? smpStyleAttempt.style
+      : null;
   const smpLoadError =
     activeSavedMap?.status === 'ready' &&
     smpLoadErrorAttempt?.mapId === activeSavedMap.id &&
     smpLoadErrorAttempt.blobToken === activeBlobToken;
+  const isActiveMapHydrationPending =
+    selectedProjectId !== null && activeProjectLocalId !== selectedProjectId;
+  const isActiveMapRecordPending = activeMapId !== null && isActiveMapPending;
+  const isActiveMapTransitionPending =
+    isActiveMapHydrationPending || isActiveMapRecordPending;
+  const hasReadySmpBlob =
+    activeSavedMap?.status === 'ready' && activeSavedMap.smpBlob !== undefined;
+  const shouldHoldOfflineStyle =
+    isActiveMapTransitionPending ||
+    (hasReadySmpBlob && !smpStyle && (!smpLoadError || isImportedActiveMap));
 
   // Build an ImageryBasemap from the active map's saved style settings
   // so the user sees the same layer/settings across the app immediately
@@ -261,16 +291,16 @@ function MapContainer({
             ? sanitizeImportedSmpStyle(style)
             : style;
         if (!safeStyle) {
-          setSmpStyle(null);
+          setSmpStyleAttempt(null);
           setSmpLoadErrorAttempt({ mapId, blobToken });
           return;
         }
 
         setSmpLoadErrorAttempt(null);
-        setSmpStyle(safeStyle);
+        setSmpStyleAttempt({ mapId, blobToken, style: safeStyle });
       } catch {
         if (!cancelled) {
-          setSmpStyle(null);
+          setSmpStyleAttempt(null);
           setSmpLoadErrorAttempt({ mapId, blobToken });
         }
       }
@@ -283,7 +313,7 @@ function MapContainer({
           // Reader cleanup failure must not surface as an unhandled rejection.
         });
       }
-      setSmpStyle(null);
+      setSmpStyleAttempt(null);
     };
   }, [
     activeSavedMap?.id,
@@ -307,11 +337,15 @@ function MapContainer({
   }, [activeMapStyle, basemap]);
 
   const mapStyle = useMemo(
-    () => smpStyle ?? basemapToMapStyle(effectiveBasemap),
-    [smpStyle, effectiveBasemap],
+    () =>
+      shouldHoldOfflineStyle
+        ? OFFLINE_PENDING_STYLE
+        : (smpStyle ?? basemapToMapStyle(effectiveBasemap)),
+    [smpStyle, shouldHoldOfflineStyle, effectiveBasemap],
   );
 
-  const isOnlineActive = activeMapStyle !== undefined && !smpStyle;
+  const isOnlineActive =
+    activeMapStyle !== undefined && !smpStyle && !shouldHoldOfflineStyle;
 
   const handleBasemapChange = (id: BasemapId) => {
     if (onBasemapChange) {
@@ -413,7 +447,7 @@ function MapContainer({
         </div>
       )}
 
-      {smpLoadError && activeSavedMap ? (
+      {smpLoadError && activeSavedMap && !isActiveMapTransitionPending ? (
         <div
           className={`absolute left-3 z-20 ${
             isOnlineActive ? 'bottom-12' : 'bottom-3'
@@ -432,7 +466,7 @@ function MapContainer({
       ) : null}
 
       {/* Active offline map badge — bottom-left, visible when SMP tiles are active */}
-      {smpStyle && (
+      {smpStyle && !isActiveMapTransitionPending && (
         <div className="absolute bottom-3 left-3 z-20">
           <span
             data-testid="map-active-map-badge"

@@ -1,10 +1,17 @@
-import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
+import {
+  act,
+  render,
+  screen,
+  userEvent,
+  waitFor,
+} from '@tests/mocks/test-utils';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { focusManager } from '@tanstack/react-query';
 
 import { MapContainer } from '@/components/shared/MapContainer/MapContainer';
 import { useMapStore } from '@/stores/map-store';
+import { useProjectStore } from '@/stores/project-store';
 
 // Mock maplibre-gl CSS import
 vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}));
@@ -103,6 +110,7 @@ beforeEach(() => {
   mockSanitizeImportedSmpStyle.mockReset().mockImplementation((style) => style);
   mockDbGet.mockReset().mockResolvedValue(undefined);
   useMapStore.setState({ basemapId: 'carto-positron', activeMapId: null });
+  useProjectStore.setState({ selectedProjectId: null, selectedServerId: null });
 });
 
 beforeAll(() => {
@@ -304,6 +312,97 @@ describe('MapContainer', () => {
     render(<MapContainer />);
     expect(screen.getByText(/OpenStreetMap/)).toBeTruthy();
     expect(screen.getByText(/MapLibre/)).toBeTruthy();
+  });
+
+  it('uses a local style while active-map hydration is pending', () => {
+    useProjectStore.setState({ selectedProjectId: 'proj-1' });
+    useMapStore.setState({ activeProjectLocalId: null, activeMapId: null });
+    render(<MapContainer />);
+    expect(mapProps.at(-1)?.mapStyle).toEqual({
+      version: 8,
+      sources: {},
+      layers: [],
+    });
+  });
+
+  it('hides a resolved SMP while a different project is hydrating', async () => {
+    const oldStyle = {
+      version: 8 as const,
+      sources: {},
+      layers: [{ id: 'old-project', type: 'background' as const }],
+    };
+    mockResolveSmpStyle.mockResolvedValueOnce(oldStyle);
+    useProjectStore.setState({ selectedProjectId: 'proj-1' });
+    useMapStore.setState({
+      activeProjectLocalId: 'proj-1',
+      activeMapId: 'old-map',
+    });
+    mockDbGet.mockResolvedValue({
+      id: 'old-map',
+      projectLocalId: 'proj-1',
+      name: 'Old Project Map',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    render(<MapContainer />);
+    await waitFor(() => expect(mapProps.at(-1)?.mapStyle).toEqual(oldStyle));
+
+    act(() => {
+      useProjectStore.setState({ selectedProjectId: 'proj-2' });
+    });
+    await waitFor(() =>
+      expect(mapProps.at(-1)?.mapStyle).toEqual({
+        version: 8,
+        sources: {},
+        layers: [],
+      }),
+    );
+    expect(
+      screen.queryByTestId('map-active-map-badge'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('never renders a resolved SMP after its active map is cleared', async () => {
+    const oldStyle = {
+      version: 8 as const,
+      sources: {},
+      layers: [{ id: 'cleared-map', type: 'background' as const }],
+    };
+    mockResolveSmpStyle.mockResolvedValueOnce(oldStyle);
+    useProjectStore.setState({ selectedProjectId: 'proj-1' });
+    useMapStore.setState({
+      activeProjectLocalId: 'proj-1',
+      activeMapId: 'old-map',
+    });
+    mockDbGet.mockResolvedValue({
+      id: 'old-map',
+      projectLocalId: 'proj-1',
+      name: 'Old Project Map',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    render(<MapContainer />);
+    await waitFor(() => expect(mapProps.at(-1)?.mapStyle).toEqual(oldStyle));
+    const renderStart = mapProps.length;
+
+    act(() => {
+      useMapStore.setState({ activeMapId: null });
+    });
+
+    expect(
+      mapProps.slice(renderStart).map((props) => props.mapStyle),
+    ).not.toContainEqual(oldStyle);
+    expect(
+      screen.queryByTestId('map-active-map-badge'),
+    ).not.toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------
@@ -537,8 +636,11 @@ describe('MapContainer', () => {
       // no smpBlob
     });
     render(<MapContainer />);
-    const mapEl = screen.getByTestId('mock-map');
-    expect(mapEl.dataset.mapStyle).toContain('cartocdn.com');
+    await waitFor(() =>
+      expect(screen.getByTestId('mock-map').dataset.mapStyle).toContain(
+        'cartocdn.com',
+      ),
+    );
     expect(
       screen.queryByTestId('map-active-map-badge'),
     ).not.toBeInTheDocument();
@@ -554,8 +656,11 @@ describe('MapContainer', () => {
       smpBlob: new Blob(),
     });
     render(<MapContainer />);
-    const mapEl = screen.getByTestId('mock-map');
-    expect(mapEl.dataset.mapStyle).toContain('cartocdn.com');
+    await waitFor(() =>
+      expect(screen.getByTestId('mock-map').dataset.mapStyle).toContain(
+        'cartocdn.com',
+      ),
+    );
     expect(
       screen.queryByTestId('map-active-map-badge'),
     ).not.toBeInTheDocument();
@@ -603,12 +708,10 @@ describe('MapContainer', () => {
       status: 'draft',
     });
     render(<MapContainer />);
-    await waitFor(() => {
-      const mapEl = screen.getByTestId('mock-map');
-      expect(mapEl.dataset.mapStyle).toBe('StyleSpecification');
-    });
+    // The placeholder is also an inline StyleSpecification, so wait for the
+    // final online-active state rather than treating the first object style as ready.
+    const badge = await screen.findByTestId('map-online-active-badge');
     // Should show online active badge with map name
-    const badge = screen.getByTestId('map-online-active-badge');
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveTextContent(/Active map.*online.*Draft Map/);
     // Should show tooltip on basemap switcher
@@ -626,8 +729,11 @@ describe('MapContainer', () => {
       // intentionally no styleUrl
     });
     render(<MapContainer />);
-    const mapEl = screen.getByTestId('mock-map');
-    expect(mapEl.dataset.mapStyle).toContain('cartocdn.com');
+    await waitFor(() =>
+      expect(screen.getByTestId('mock-map').dataset.mapStyle).toContain(
+        'cartocdn.com',
+      ),
+    );
     expect(
       screen.queryByTestId('map-online-active-badge'),
     ).not.toBeInTheDocument();
