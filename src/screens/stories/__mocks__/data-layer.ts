@@ -58,7 +58,7 @@ export async function updateProject(
   throw new Error('Mock: updateProject not implemented for Storybook');
 }
 
-export async function deleteProject(_localId: string): Promise<void> {
+export async function deleteProject(_localId: string): Promise<string[]> {
   throw new Error('Mock: deleteProject not implemented for Storybook');
 }
 

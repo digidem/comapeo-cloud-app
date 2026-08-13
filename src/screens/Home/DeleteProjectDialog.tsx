@@ -1,9 +1,18 @@
 import { useReducer } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
+import { removeMapsFromListCaches } from '@/hooks/useMaps';
 import { deleteProject } from '@/lib/data-layer';
+import {
+  getProjectSavedMapIds,
+  recoverCancelledMapDownload,
+} from '@/lib/map/saved-map-lifecycle';
+import { useMapDownloadStore } from '@/stores/map-download-store';
+import { useMapStore } from '@/stores/map-store';
 
 interface DeleteProjectDialogProps {
   isOpen: boolean;
@@ -69,24 +78,75 @@ function DeleteProjectDialog({
   onDeleted,
 }: DeleteProjectDialogProps) {
   const intl = useIntl();
+  const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
 
   function handleDelete() {
     dispatch({ type: 'submit' });
 
-    deleteProject(projectLocalId).then(
-      () => {
+    void (async () => {
+      let cancelledDownloadMapId: string | null = null;
+
+      try {
+        const projectMapIds = await getProjectSavedMapIds(projectLocalId);
+        const projectMapIdSet = new Set(projectMapIds);
+        const downloadStore = useMapDownloadStore.getState();
+        if (
+          downloadStore.active &&
+          projectMapIdSet.has(downloadStore.active.mapId)
+        ) {
+          cancelledDownloadMapId = downloadStore.active.mapId;
+          downloadStore.active.cancel();
+        }
+
+        const removedMapIds = await deleteProject(projectLocalId);
+        const removedMapIdSet = new Set(removedMapIds);
+        const latestDownloadStore = useMapDownloadStore.getState();
+        const mapStore = useMapStore.getState();
+
+        // Catch a download that started after the pre-delete map lookup.
+        if (
+          latestDownloadStore.active &&
+          removedMapIdSet.has(latestDownloadStore.active.mapId) &&
+          latestDownloadStore.active.mapId !== cancelledDownloadMapId
+        ) {
+          latestDownloadStore.active.cancel();
+          latestDownloadStore.clear(latestDownloadStore.active.mapId);
+        }
+        if (cancelledDownloadMapId) {
+          latestDownloadStore.clear(cancelledDownloadMapId);
+        }
+
+        if (mapStore.activeProjectLocalId === projectLocalId) {
+          mapStore.hydrateActiveMap(null, null);
+        } else if (
+          mapStore.activeMapId !== null &&
+          removedMapIdSet.has(mapStore.activeMapId)
+        ) {
+          mapStore.hydrateActiveMap(mapStore.activeProjectLocalId, null);
+        }
+
+        removeMapsFromListCaches(queryClient, removedMapIds);
+        for (const mapId of removedMapIds) {
+          queryClient.removeQueries({ queryKey: ['map', mapId], exact: true });
+        }
+        void queryClient.invalidateQueries({ queryKey: ['maps'] });
+        void queryClient.invalidateQueries({ queryKey: ['projects'] });
+
         dispatch({ type: 'success' });
         onDeleted();
-      },
-      (err: unknown) => {
+      } catch (err) {
+        if (cancelledDownloadMapId) {
+          await recoverCancelledMapDownload(cancelledDownloadMapId);
+          useMapDownloadStore.getState().clear(cancelledDownloadMapId);
+        }
         const message =
           err instanceof Error
             ? err.message
             : intl.formatMessage(messages.failed);
         dispatch({ type: 'error', message });
-      },
-    );
+      }
+    })();
   }
 
   function handleClose() {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { resetDb } from '@/lib/db';
+import { getDb, resetDb } from '@/lib/db';
 import { DbError } from '@/lib/db-error';
 import {
   createAlert,
@@ -130,6 +130,40 @@ describe('local-repositories functions — projects', () => {
     // Observations/alerts lists should be empty
     expect(await getObservations(project.localId)).toHaveLength(0);
     expect(await getAlerts(project.localId)).toHaveLength(0);
+  });
+
+  it('deleteProject — clears active-map references to maps removed with the origin project', async () => {
+    const originProject = await createProject({ name: 'Origin' });
+    const targetProject = await createProject({ name: 'Target' });
+    const mapId = 'cross-project-map';
+    const timestamp = '2026-08-12T12:00:00.000Z';
+
+    await getDb().maps.add({
+      id: mapId,
+      projectLocalId: originProject.localId,
+      name: 'Cross-project map',
+      type: 'raster',
+      origin: 'authored',
+      styleUrl: 'https://example.com/{z}/{x}/{y}.png',
+      bbox: [-70, -5, -60, 2],
+      minZoom: 0,
+      maxZoom: 14,
+      scheme: 'xyz',
+      status: 'ready',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    await getDb().projects.update(targetProject.localId, {
+      activeMapId: mapId,
+    });
+
+    const removedMapIds = await deleteProject(originProject.localId);
+
+    expect(removedMapIds).toEqual([mapId]);
+    expect(await getDb().maps.get(mapId)).toBeUndefined();
+    expect(
+      (await getDb().projects.get(targetProject.localId))?.activeMapId,
+    ).toBe(null);
   });
 });
 

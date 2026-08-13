@@ -6,12 +6,15 @@ import {
   waitFor,
   within,
 } from '@tests/mocks/test-utils';
+import Dexie from 'dexie';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
 import { getDb, resetDb } from '@/lib/db';
 import { SavedMapsList } from '@/screens/MapScreen/SavedMapsList';
 import { useMapStore } from '@/stores/map-store';
+
+const keepDexieTransactionAlive = Dexie.waitFor.bind(Dexie);
 
 function createMap(overrides: Partial<SavedMap> = {}): SavedMap {
   return {
@@ -31,11 +34,16 @@ function createMap(overrides: Partial<SavedMap> = {}): SavedMap {
   };
 }
 
-async function addProject(localId: string, activeMapId?: string | null) {
+async function addProject(
+  localId: string,
+  activeMapId?: string | null,
+  name?: string,
+) {
   await getDb().projects.add({
     localId,
     sourceType: 'local',
     sourceId: 'local',
+    name,
     activeMapId,
     createdAt: '2026-06-29T00:00:00.000Z',
     updatedAt: '2026-06-29T00:00:00.000Z',
@@ -83,6 +91,93 @@ describe('SavedMapsList', () => {
     expect(rows[1]).toHaveTextContent('Older map');
   });
 
+  it('switches between this-project and all-project saved maps with origin labels', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1', null, 'Current territory');
+    await addProject('project-2', null, 'Neighbor territory');
+    await getDb().maps.bulkAdd([
+      createMap({
+        id: 'current-map',
+        name: 'Current project map',
+        projectLocalId: 'project-1',
+        updatedAt: '2026-06-29T09:00:00.000Z',
+      }),
+      createMap({
+        id: 'other-map',
+        name: 'Other project map',
+        projectLocalId: 'project-2',
+        updatedAt: '2026-06-29T12:00:00.000Z',
+      }),
+    ]);
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+
+    expect(await screen.findByText('Current project map')).toBeInTheDocument();
+    expect(screen.queryByText('Other project map')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: 'Saved maps scope' }),
+    ).toBeInTheDocument();
+    const thisProjectButton = screen.getByRole('button', {
+      name: 'This project',
+    });
+    const allProjectsButton = screen.getByRole('button', {
+      name: 'All projects',
+    });
+    expect(thisProjectButton).toHaveAttribute('aria-pressed', 'true');
+    expect(thisProjectButton).toHaveClass('min-h-[44px]');
+    expect(allProjectsButton).toHaveClass('min-h-[44px]');
+    expect(screen.getByTestId('saved-maps-results')).toHaveAttribute(
+      'aria-live',
+      'polite',
+    );
+
+    await user.click(allProjectsButton);
+
+    expect(allProjectsButton).toHaveAttribute('aria-pressed', 'true');
+    const rows = await screen.findAllByTestId('saved-map-row');
+    expect(rows[0]).toHaveTextContent('Other project map');
+    expect(rows[0]).toHaveTextContent('Origin: Neighbor territory');
+    expect(rows[1]).toHaveTextContent('Current project map');
+    expect(rows[1]).toHaveTextContent('Origin: Current territory');
+  });
+
+  it('renders a safe origin fallback when an all-project map has no resolvable project', async () => {
+    const user = userEvent.setup();
+    await getDb().maps.add(
+      createMap({
+        id: 'orphan-map',
+        name: 'Orphaned map',
+        projectLocalId: 'deleted-project',
+      }),
+    );
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+
+    const row = await screen.findByTestId('saved-map-row');
+    expect(row).toHaveTextContent('Orphaned map');
+    expect(row).toHaveTextContent('Origin project unavailable');
+  });
+
+  it('distinguishes an untitled origin project from a missing origin', async () => {
+    const user = userEvent.setup();
+    await addProject('untitled-project');
+    await getDb().maps.add(
+      createMap({
+        id: 'untitled-map',
+        name: 'Untitled origin map',
+        projectLocalId: 'untitled-project',
+      }),
+    );
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+
+    const row = await screen.findByTestId('saved-map-row');
+    expect(row).toHaveTextContent('Origin: Untitled Project');
+    expect(row).not.toHaveTextContent('Origin project unavailable');
+  });
+
   it('sets a saved map as active for the current project', async () => {
     const user = userEvent.setup();
     await addProject('project-1');
@@ -97,6 +192,161 @@ describe('SavedMapsList', () => {
       expect(project?.activeMapId).toBe('map-1');
     });
     expect(useMapStore.getState().activeMapId).toBe('map-1');
+  });
+
+  it('activates a map from another origin project on the currently selected target project', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1');
+    await addProject('project-2');
+    await getDb().maps.add(
+      createMap({ projectLocalId: 'project-2', name: 'Shared local map' }),
+    );
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+
+    await waitFor(async () => {
+      expect((await getDb().projects.get('project-1'))?.activeMapId).toBe(
+        'map-1',
+      );
+    });
+    expect(
+      (await getDb().projects.get('project-2'))?.activeMapId,
+    ).toBeUndefined();
+  });
+
+  it('keeps the activation write bound to the project selected when the mutation starts', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1');
+    await addProject('project-2');
+    await getDb().maps.add(
+      createMap({ projectLocalId: 'project-2', name: 'Cross-project map' }),
+    );
+
+    const projectsTable = getDb().projects;
+    const originalUpdate = projectsTable.update.bind(projectsTable);
+    let releaseWrite: (() => void) | undefined;
+    vi.spyOn(projectsTable, 'update').mockImplementation((...args) => {
+      const pendingUpdate = (async () => {
+        await keepDexieTransactionAlive(
+          new Promise<void>((resolve) => {
+            releaseWrite = resolve;
+          }),
+        );
+        return originalUpdate(...args);
+      })();
+      return pendingUpdate as unknown as ReturnType<
+        typeof projectsTable.update
+      >;
+    });
+
+    const { rerender } = render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+
+    rerender(<SavedMapsList projectLocalId="project-2" />);
+    await act(async () => {
+      useMapStore.getState().hydrateActiveMap('project-2', null);
+      releaseWrite?.();
+    });
+
+    await waitFor(async () => {
+      expect((await getDb().projects.get('project-1'))?.activeMapId).toBe(
+        'map-1',
+      );
+    });
+    expect(
+      (await getDb().projects.get('project-2'))?.activeMapId,
+    ).toBeUndefined();
+    expect(useMapStore.getState().activeProjectLocalId).toBe('project-2');
+    expect(useMapStore.getState().activeMapId).toBeNull();
+  });
+
+  it('reconciles a successful activation after switching away and back before the write finishes', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1');
+    await addProject('project-2');
+    await getDb().maps.add(
+      createMap({ projectLocalId: 'project-2', name: 'Cross-project map' }),
+    );
+
+    const projectsTable = getDb().projects;
+    const originalUpdate = projectsTable.update.bind(projectsTable);
+    let releaseWrite: (() => void) | undefined;
+    vi.spyOn(projectsTable, 'update').mockImplementation((...args) => {
+      const pendingUpdate = (async () => {
+        await keepDexieTransactionAlive(
+          new Promise<void>((resolve) => {
+            releaseWrite = resolve;
+          }),
+        );
+        return originalUpdate(...args);
+      })();
+      return pendingUpdate as unknown as ReturnType<
+        typeof projectsTable.update
+      >;
+    });
+
+    const { rerender } = render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+
+    rerender(<SavedMapsList projectLocalId="project-2" />);
+    await act(async () => {
+      useMapStore.getState().hydrateActiveMap('project-2', null);
+    });
+    rerender(<SavedMapsList projectLocalId="project-1" />);
+    await act(async () => {
+      // Simulate hydration reading the old persisted value before the delayed
+      // activation write lands.
+      useMapStore.getState().hydrateActiveMap('project-1', null);
+      releaseWrite?.();
+    });
+
+    await waitFor(async () => {
+      expect((await getDb().projects.get('project-1'))?.activeMapId).toBe(
+        'map-1',
+      );
+    });
+    expect(useMapStore.getState().activeProjectLocalId).toBe('project-1');
+    expect(useMapStore.getState().activeMapId).toBe('map-1');
+  });
+
+  it('does not roll a failed activation back into a project selected while the write is pending', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1');
+    await addProject('project-2', 'map-2');
+    await getDb().maps.add(
+      createMap({ projectLocalId: 'project-2', name: 'Cross-project map' }),
+    );
+
+    const projectsTable = getDb().projects;
+    let rejectWrite: ((error: Error) => void) | undefined;
+    vi.spyOn(projectsTable, 'update').mockReturnValueOnce(
+      new Promise<number>((_resolve, reject) => {
+        rejectWrite = reject;
+      }) as unknown as ReturnType<typeof projectsTable.update>,
+    );
+
+    const { rerender } = render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+
+    rerender(<SavedMapsList projectLocalId="project-2" />);
+    await act(async () => {
+      useMapStore.getState().hydrateActiveMap('project-2', 'map-2');
+      rejectWrite?.(new Error('IndexedDB write failed'));
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not update active map. Please try again.',
+    );
+    expect(useMapStore.getState().activeProjectLocalId).toBe('project-2');
+    expect(useMapStore.getState().activeMapId).toBe('map-2');
+    expect(
+      (await getDb().projects.get('project-1'))?.activeMapId,
+    ).toBeUndefined();
   });
 
   it('shows an error and rolls back when setting the active map fails', async () => {
@@ -166,11 +416,14 @@ describe('SavedMapsList', () => {
     const user = userEvent.setup();
     let resolveUpdate: (value: number) => void = () => {};
     const projectsTable = getDb().projects;
-    vi.spyOn(projectsTable, 'update').mockReturnValueOnce(
-      new Promise<number>((resolve) => {
+    vi.spyOn(projectsTable, 'update').mockImplementationOnce(() => {
+      const pendingUpdate = new Promise<number>((resolve) => {
         resolveUpdate = resolve;
-      }) as unknown as ReturnType<typeof projectsTable.update>,
-    );
+      });
+      return keepDexieTransactionAlive(pendingUpdate) as unknown as ReturnType<
+        typeof projectsTable.update
+      >;
+    });
     await addProject('project-1');
     await getDb().maps.bulkAdd([
       createMap({ id: 'map-1', name: 'First map' }),

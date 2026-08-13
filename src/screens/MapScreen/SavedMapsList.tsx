@@ -1,19 +1,24 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  useAllMaps,
   useDeleteMap,
   useMaps,
   useRenameMap,
   useSetActiveMapMutation,
 } from '@/hooks/useMaps';
+import { useProjects } from '@/hooks/useProjects';
 import type { SavedMap } from '@/lib/db';
 import { useMapStore } from '@/stores/map-store';
 
+import { DeleteMapDialog, RenameMapDialog } from './SavedMapDialogs';
+import { SavedMapRow } from './SavedMapRow';
+import {
+  type SavedMapsScope,
+  SavedMapsScopeToggle,
+} from './SavedMapsScopeToggle';
 import { SmpPreviewDialog } from './SmpPreviewDialog';
 import { mapMessages } from './messages';
 
@@ -26,23 +31,16 @@ type PendingAction =
   | { type: 'rename'; mapId: string }
   | { type: 'delete'; mapId: string };
 
-const STATUS_MESSAGE_BY_STATUS: Record<
-  SavedMap['status'],
-  keyof typeof mapMessages
-> = {
-  draft: 'statusDraft',
-  downloading: 'statusDownloading',
-  ready: 'statusReady',
-  error: 'statusError',
-};
-
 export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const intl = useIntl();
   const activeMapId = useMapStore((state) => state.activeMapId);
-  const mapsQuery = useMaps(projectLocalId);
-  const setActiveMap = useSetActiveMapMutation(projectLocalId);
-  const renameMap = useRenameMap(projectLocalId);
-  const deleteMap = useDeleteMap(projectLocalId);
+  const [scope, setScope] = useState<SavedMapsScope>('project');
+  const projectMapsQuery = useMaps(projectLocalId, scope === 'project');
+  const allMapsQuery = useAllMaps(scope === 'all');
+  const projectsQuery = useProjects();
+  const setActiveMap = useSetActiveMapMutation();
+  const renameMap = useRenameMap();
+  const deleteMap = useDeleteMap();
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(
     null,
   );
@@ -54,7 +52,21 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [previewTargetId, setPreviewTargetId] = useState<string | null>(null);
 
+  const mapsQuery = scope === 'all' ? allMapsQuery : projectMapsQuery;
   const maps = mapsQuery.data ?? [];
+  const isMapsPending =
+    mapsQuery.isPending || (scope === 'all' && projectsQuery.isPending);
+  const originProjectNameById = useMemo(() => {
+    const names = new Map<string, string>();
+    const untitledProject = intl.formatMessage(mapMessages.untitledProject);
+
+    for (const project of projectsQuery.data ?? []) {
+      if (project.deleted) continue;
+      names.set(project.localId, project.name?.trim() || untitledProject);
+    }
+
+    return names;
+  }, [intl, projectsQuery.data]);
   const previewTarget = previewTargetId
     ? (maps.find((map) => map.id === previewTargetId) ?? null)
     : null;
@@ -87,10 +99,15 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
 
   async function handleActiveToggle(mapId: string, isActive: boolean) {
     setActiveError(null);
+    const targetProjectLocalId = projectLocalId;
+    if (!targetProjectLocalId) return;
 
     try {
       await runPendingAction({ type: 'active', mapId }, () =>
-        setActiveMap.mutateAsync(isActive ? null : mapId),
+        setActiveMap.mutateAsync({
+          targetProjectLocalId,
+          mapId: isActive ? null : mapId,
+        }),
       );
     } catch {
       setActiveError(intl.formatMessage(mapMessages.activeError));
@@ -135,8 +152,48 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
     }
   }
 
-  function isPending(type: PendingAction['type'], mapId: string) {
-    return pendingAction?.type === type && pendingAction.mapId === mapId;
+  function pendingActionTypeFor(mapId: string) {
+    return pendingAction?.mapId === mapId ? pendingAction.type : null;
+  }
+
+  function renderMapResults() {
+    if (isMapsPending) {
+      return (
+        <>
+          <Skeleton height={80} className="rounded-card" />
+          <Skeleton height={80} className="rounded-card" />
+        </>
+      );
+    }
+
+    if (maps.length === 0) {
+      return (
+        <p className="rounded-card bg-surface p-4 text-sm text-text-muted">
+          {intl.formatMessage(mapMessages.savedMapsEmpty)}
+        </p>
+      );
+    }
+
+    return maps.map((map) => {
+      const isActive = activeMapId === map.id;
+      return (
+        <SavedMapRow
+          key={map.id}
+          map={map}
+          scope={scope}
+          originProjectName={originProjectNameById.get(map.projectLocalId)}
+          isActive={isActive}
+          pendingActionType={pendingActionTypeFor(map.id)}
+          hasPendingAction={hasPendingAction}
+          onActiveToggle={() => {
+            void handleActiveToggle(map.id, isActive);
+          }}
+          onPreview={() => setPreviewTargetId(map.id)}
+          onRename={() => openRenameDialog(map)}
+          onDelete={() => openDeleteDialog(map)}
+        />
+      );
+    });
   }
 
   return (
@@ -145,134 +202,45 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
         {intl.formatMessage(mapMessages.savedMaps)}
       </h2>
 
+      <SavedMapsScopeToggle
+        scope={scope}
+        disabled={hasPendingAction}
+        onScopeChange={setScope}
+      />
+
       {activeError ? (
         <p role="alert" className="text-sm text-error">
           {activeError}
         </p>
       ) : null}
 
-      {mapsQuery.isPending ? (
-        <div className="flex flex-col gap-2">
-          <Skeleton height={80} className="rounded-card" />
-          <Skeleton height={80} className="rounded-card" />
-        </div>
-      ) : null}
-
-      {!mapsQuery.isPending && maps.length === 0 ? (
-        <p className="rounded-card bg-surface p-4 text-sm text-text-muted">
-          {intl.formatMessage(mapMessages.savedMapsEmpty)}
-        </p>
-      ) : null}
-
-      <div className="flex flex-col gap-2">
-        {maps.map((map) => {
-          const isActive = activeMapId === map.id;
-          return (
-            <article
-              key={map.id}
-              data-testid="saved-map-row"
-              className="rounded-card bg-surface p-3"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="truncate text-sm font-semibold text-text">
-                    {map.name}
-                  </h3>
-                  <span className="mt-1 inline-flex rounded-full bg-surface-card px-2 py-0.5 text-xs font-semibold capitalize text-text-muted">
-                    {intl.formatMessage(
-                      mapMessages[STATUS_MESSAGE_BY_STATUS[map.status]],
-                    )}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant={isActive ? 'secondary' : 'primary'}
-                  onClick={() => {
-                    void handleActiveToggle(map.id, isActive);
-                  }}
-                  loading={isPending('active', map.id)}
-                  disabled={hasPendingAction && !isPending('active', map.id)}
-                >
-                  {intl.formatMessage(
-                    isActive ? mapMessages.removeActive : mapMessages.setActive,
-                  )}
-                </Button>
-                {map.status === 'ready' ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setPreviewTargetId(map.id)}
-                    disabled={hasPendingAction}
-                  >
-                    {intl.formatMessage(mapMessages.previewAction)}
-                  </Button>
-                ) : null}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => openRenameDialog(map)}
-                  loading={isPending('rename', map.id)}
-                  disabled={hasPendingAction && !isPending('rename', map.id)}
-                >
-                  {intl.formatMessage(mapMessages.rename)}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onClick={() => openDeleteDialog(map)}
-                  loading={isPending('delete', map.id)}
-                  disabled={hasPendingAction && !isPending('delete', map.id)}
-                >
-                  {intl.formatMessage(mapMessages.delete)}
-                </Button>
-              </div>
-            </article>
-          );
-        })}
+      <div
+        data-testid="saved-maps-results"
+        className="flex flex-col gap-2"
+        aria-live="polite"
+        aria-busy={isMapsPending}
+      >
+        {renderMapResults()}
       </div>
 
-      <Modal
-        open={renameTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setRenameTarget(null);
+      <RenameMapDialog
+        target={renameTarget}
+        name={renameName}
+        error={renameError}
+        loading={
+          renameTarget
+            ? pendingActionTypeFor(renameTarget.id) === 'rename'
+            : false
+        }
+        onNameChange={(name) => {
+          setRenameName(name);
+          setRenameError(null);
         }}
-        title={intl.formatMessage(mapMessages.renameDialogTitle)}
-        description={intl.formatMessage(mapMessages.renameDialogDescription)}
-      >
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleRenameSubmit();
-          }}
-        >
-          <Input
-            label={intl.formatMessage(mapMessages.renamePrompt)}
-            value={renameName}
-            onChange={(event) => {
-              setRenameName(event.target.value);
-              setRenameError(null);
-            }}
-            error={renameError ?? undefined}
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setRenameTarget(null)}>
-              {intl.formatMessage(mapMessages.cancel)}
-            </Button>
-            <Button
-              type="submit"
-              loading={
-                renameTarget ? isPending('rename', renameTarget.id) : false
-              }
-            >
-              {intl.formatMessage(mapMessages.renameSave)}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        onCancel={() => setRenameTarget(null)}
+        onSubmit={() => {
+          void handleRenameSubmit();
+        }}
+      />
 
       <SmpPreviewDialog
         open={previewTarget !== null}
@@ -282,53 +250,22 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
         map={previewTarget}
       />
 
-      <Modal
-        open={deleteTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteTarget(null);
-            setDeleteError(null);
-          }
-        }}
-        title={intl.formatMessage(mapMessages.deleteDialogTitle)}
-        description={
+      <DeleteMapDialog
+        target={deleteTarget}
+        error={deleteError}
+        loading={
           deleteTarget
-            ? intl.formatMessage(mapMessages.deleteDialogDescription, {
-                name: deleteTarget.name,
-              })
-            : undefined
+            ? pendingActionTypeFor(deleteTarget.id) === 'delete'
+            : false
         }
-      >
-        <div className="flex flex-col gap-4">
-          {deleteError ? (
-            <p role="alert" className="text-sm text-error">
-              {deleteError}
-            </p>
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setDeleteTarget(null);
-                setDeleteError(null);
-              }}
-            >
-              {intl.formatMessage(mapMessages.cancel)}
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                void handleDeleteConfirm();
-              }}
-              loading={
-                deleteTarget ? isPending('delete', deleteTarget.id) : false
-              }
-            >
-              {intl.formatMessage(mapMessages.deleteConfirm)}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onCancel={() => {
+          setDeleteTarget(null);
+          setDeleteError(null);
+        }}
+        onConfirm={() => {
+          void handleDeleteConfirm();
+        }}
+      />
     </section>
   );
 }

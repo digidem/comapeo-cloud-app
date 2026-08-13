@@ -1451,6 +1451,12 @@
   "map.saved.noProjectLink": {
     "defaultMessage": "Go to Home"
   },
+  "map.saved.origin": {
+    "defaultMessage": "Origin: {project}"
+  },
+  "map.saved.originUnavailable": {
+    "defaultMessage": "Origin project unavailable"
+  },
   "map.saved.removeActive": {
     "defaultMessage": "Remove active"
   },
@@ -1471,6 +1477,15 @@
   },
   "map.saved.saveMap": {
     "defaultMessage": "Save Map"
+  },
+  "map.saved.scope.allProjects": {
+    "defaultMessage": "All projects"
+  },
+  "map.saved.scope.label": {
+    "defaultMessage": "Saved maps scope"
+  },
+  "map.saved.scope.thisProject": {
+    "defaultMessage": "This project"
   },
   "map.saved.setActive": {
     "defaultMessage": "Set active"

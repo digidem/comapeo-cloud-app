@@ -94,10 +94,10 @@ export async function updateProject(
   });
 }
 
-export async function deleteProject(localId: string): Promise<void> {
+export async function deleteProject(localId: string): Promise<string[]> {
   return wrapDb(async () => {
     const db = getDb();
-    await db.transaction(
+    return db.transaction(
       'rw',
       [
         db.projects,
@@ -110,6 +110,13 @@ export async function deleteProject(localId: string): Promise<void> {
         db.maps,
       ],
       async () => {
+        const removedMaps = await db.maps
+          .where('projectLocalId')
+          .equals(localId)
+          .toArray();
+        const removedMapIds = removedMaps.map((map) => map.id);
+        const removedMapIdSet = new Set(removedMapIds);
+
         await db.observations.where('projectLocalId').equals(localId).delete();
         await db.alerts.where('projectLocalId').equals(localId).delete();
         await db.attachments.where('projectLocalId').equals(localId).delete();
@@ -117,7 +124,25 @@ export async function deleteProject(localId: string): Promise<void> {
         await db.fields.where('projectLocalId').equals(localId).delete();
         await db.presets.where('projectLocalId').equals(localId).delete();
         await db.maps.where('projectLocalId').equals(localId).delete();
+
+        if (removedMapIdSet.size > 0) {
+          const updatedAt = timestamp();
+          await db.projects
+            .filter(
+              (project) =>
+                project.localId !== localId &&
+                project.activeMapId !== null &&
+                project.activeMapId !== undefined &&
+                removedMapIdSet.has(project.activeMapId),
+            )
+            .modify((project) => {
+              project.activeMapId = null;
+              project.updatedAt = updatedAt;
+            });
+        }
+
         await db.projects.delete(localId);
+        return removedMapIds;
       },
     );
   });

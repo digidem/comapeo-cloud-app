@@ -1,17 +1,46 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { recoverCancelledMapDownload } from '@/lib/map/saved-map-lifecycle';
 import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
 import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
 import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
-export const mapsQueryKey = (projectLocalId: string | null) => [
-  'maps',
-  projectLocalId,
-];
+export const mapsQueryKey = (projectLocalId: string | null) =>
+  ['maps', { scope: 'project', projectLocalId }] as const;
+
+export const allMapsQueryKey = ['maps', { scope: 'all' }] as const;
+
+export function removeMapsFromListCaches(
+  queryClient: QueryClient,
+  mapIds: Iterable<string>,
+): void {
+  const removedMapIds = new Set(mapIds);
+  if (removedMapIds.size === 0) return;
+
+  queryClient.setQueriesData<SavedMap[]>({ queryKey: ['maps'] }, (maps) =>
+    maps?.filter((map) => !removedMapIds.has(map.id)),
+  );
+}
+
+export function clearDeletedMapFromActiveStore(mapId: string): void {
+  const storeState = useMapStore.getState();
+  if (storeState.activeMapId === mapId) {
+    storeState.hydrateActiveMap(storeState.activeProjectLocalId, null);
+  }
+}
+
+function sortMapsNewestFirst(maps: SavedMap[]): SavedMap[] {
+  return [...maps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
 
 function assertValidNewMapOrigin(map: SavedMap): void {
   if (map.origin === 'imported') {
@@ -28,7 +57,7 @@ function assertValidNewMapOrigin(map: SavedMap): void {
   }
 }
 
-export function useMaps(projectLocalId: string | null) {
+export function useMaps(projectLocalId: string | null, enabled = true) {
   return useQuery({
     queryKey: mapsQueryKey(projectLocalId),
     queryFn: async () => {
@@ -37,9 +66,17 @@ export function useMaps(projectLocalId: string | null) {
         .where('projectLocalId')
         .equals(projectLocalId!)
         .toArray();
-      return maps.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return sortMapsNewestFirst(maps);
     },
-    enabled: projectLocalId !== null,
+    enabled: enabled && projectLocalId !== null,
+  });
+}
+
+export function useAllMaps(enabled = true) {
+  return useQuery({
+    queryKey: allMapsQueryKey,
+    queryFn: async () => sortMapsNewestFirst(await getDb().maps.toArray()),
+    enabled,
   });
 }
 
@@ -52,15 +89,13 @@ export function useCreateMap() {
       await getDb().maps.add(map);
       return map;
     },
-    onSuccess: (map) => {
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(map.projectLocalId),
-      });
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
     },
   });
 }
 
-export function useRenameMap(projectLocalId: string | null) {
+export function useRenameMap() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -69,69 +104,69 @@ export function useRenameMap(projectLocalId: string | null) {
       await getDb().maps.update(mapId, { name, updatedAt });
     },
     onSuccess: (_data, { mapId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(projectLocalId),
-      });
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
       void queryClient.invalidateQueries({ queryKey: ['map', mapId] });
     },
   });
 }
 
-export function useDeleteMap(projectLocalId: string | null) {
+export function useDeleteMap() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (mapId: string) => {
       const downloadState = useMapDownloadStore.getState();
-      if (downloadState.active?.mapId === mapId) {
-        downloadState.active.cancel();
-        downloadState.clear(mapId);
-      }
+      const cancelledDownload = downloadState.active?.mapId === mapId;
+      if (cancelledDownload) downloadState.active?.cancel();
 
       const db = getDb();
       const updatedAt = new Date().toISOString();
-      await db.transaction('rw', [db.maps, db.projects], async () => {
-        await db.maps.delete(mapId);
-        await db.projects
-          .filter((project) => project.activeMapId === mapId)
-          .modify((project) => {
-            project.activeMapId = null;
-            project.updatedAt = updatedAt;
-          });
-      });
-
-      const storeState = useMapStore.getState();
-      if (
-        storeState.activeMapId === mapId &&
-        storeState.activeProjectLocalId === projectLocalId
-      ) {
-        storeState.hydrateActiveMap(projectLocalId, null);
+      try {
+        await db.transaction('rw', [db.maps, db.projects], async () => {
+          await db.maps.delete(mapId);
+          await db.projects
+            .filter((project) => project.activeMapId === mapId)
+            .modify((project) => {
+              project.activeMapId = null;
+              project.updatedAt = updatedAt;
+            });
+        });
+      } catch (error) {
+        if (cancelledDownload) {
+          await recoverCancelledMapDownload(mapId);
+          useMapDownloadStore.getState().clear(mapId);
+        }
+        throw error;
       }
+
+      if (cancelledDownload) useMapDownloadStore.getState().clear(mapId);
+      clearDeletedMapFromActiveStore(mapId);
     },
     onSuccess: (_data, mapId) => {
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(projectLocalId),
-      });
-      void queryClient.invalidateQueries({ queryKey: ['map', mapId] });
+      removeMapsFromListCaches(queryClient, [mapId]);
+      queryClient.removeQueries({ queryKey: ['map', mapId], exact: true });
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }
 
-export function useSetActiveMapMutation(projectLocalId: string | null) {
+export function useSetActiveMapMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (mapId: string | null) => {
-      if (!projectLocalId) return;
-
-      await useMapStore.getState().setActiveMap(projectLocalId, mapId);
+    mutationFn: async ({
+      targetProjectLocalId,
+      mapId,
+    }: {
+      targetProjectLocalId: string;
+      mapId: string | null;
+    }) => {
+      await useMapStore.getState().setActiveMap(targetProjectLocalId, mapId);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(projectLocalId),
-      });
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
     },
   });
 }
@@ -162,15 +197,11 @@ export function useDownloadMap() {
       });
     },
     onSuccess: (_mapId, { map }) => {
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(map.projectLocalId),
-      });
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
       void queryClient.invalidateQueries({ queryKey: ['map', map.id] });
     },
-    onError: (_error, { map }) => {
-      void queryClient.invalidateQueries({
-        queryKey: mapsQueryKey(map.projectLocalId),
-      });
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
     },
   });
 }

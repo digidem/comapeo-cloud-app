@@ -6,8 +6,15 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import {
+  allMapsQueryKey,
+  clearDeletedMapFromActiveStore,
+  mapsQueryKey,
+  removeMapsFromListCaches,
+  useAllMaps,
   useCreateMap,
   useDeleteMap,
+  useMaps,
+  useRenameMap,
   useSetActiveMapMutation,
 } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
@@ -15,14 +22,29 @@ import { getDb, resetDb } from '@/lib/db';
 import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
-function wrapper({ children }: { children: ReactNode }) {
-  const qc = new QueryClient({
+function createQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0 },
       mutations: { retry: false },
     },
   });
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
+
+function createWrapper(queryClient = createQueryClient()) {
+  return function TestWrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+  };
+}
+
+function wrapper({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={createQueryClient()}>
+      {children}
+    </QueryClientProvider>
+  );
 }
 
 function createMap(overrides: Partial<SavedMap> = {}): SavedMap {
@@ -56,6 +78,95 @@ async function addProject(localId: string, activeMapId?: string | null) {
     deleted: false,
   });
 }
+
+describe('map query cache helpers', () => {
+  it('uses a structurally distinct key for the all-projects map list', () => {
+    expect(allMapsQueryKey).not.toEqual(mapsQueryKey('all-projects'));
+  });
+
+  it('removes deleted maps synchronously from every cached map list', () => {
+    const queryClient = new QueryClient();
+    const keptMap = createMap({ id: 'map-2', projectLocalId: 'project-2' });
+    const deletedMap = createMap({ id: 'map-1' });
+
+    queryClient.setQueryData(mapsQueryKey('project-1'), [deletedMap]);
+    queryClient.setQueryData(allMapsQueryKey, [deletedMap, keptMap]);
+
+    removeMapsFromListCaches(queryClient, ['map-1']);
+
+    expect(queryClient.getQueryData(mapsQueryKey('project-1'))).toEqual([]);
+    expect(queryClient.getQueryData(allMapsQueryKey)).toEqual([keptMap]);
+  });
+});
+
+describe('map list observer consistency', () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it('updates project and all-project observers after rename', async () => {
+    await getDb().maps.add(createMap());
+    const queryClient = createQueryClient();
+    const observerWrapper = createWrapper(queryClient);
+    const { result } = renderHook(
+      () => ({
+        projectMaps: useMaps('project-1'),
+        allMaps: useAllMaps(),
+        renameMap: useRenameMap(),
+      }),
+      { wrapper: observerWrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.projectMaps.data?.[0]?.name).toBe(
+        'Territory draft',
+      );
+      expect(result.current.allMaps.data?.[0]?.name).toBe('Territory draft');
+    });
+
+    await act(async () => {
+      await result.current.renameMap.mutateAsync({
+        mapId: 'map-1',
+        name: 'Renamed territory',
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.projectMaps.data?.[0]?.name).toBe(
+        'Renamed territory',
+      );
+      expect(result.current.allMaps.data?.[0]?.name).toBe('Renamed territory');
+    });
+  });
+
+  it('removes a deleted map from project and all-project observers', async () => {
+    await getDb().maps.add(createMap());
+    const queryClient = createQueryClient();
+    const observerWrapper = createWrapper(queryClient);
+    const { result } = renderHook(
+      () => ({
+        projectMaps: useMaps('project-1'),
+        allMaps: useAllMaps(),
+        deleteMap: useDeleteMap(),
+      }),
+      { wrapper: observerWrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.projectMaps.data).toHaveLength(1);
+      expect(result.current.allMaps.data).toHaveLength(1);
+    });
+
+    await act(async () => {
+      await result.current.deleteMap.mutateAsync('map-1');
+    });
+
+    await waitFor(() => {
+      expect(result.current.projectMaps.data).toEqual([]);
+      expect(result.current.allMaps.data).toEqual([]);
+    });
+  });
+});
 
 describe('useCreateMap', () => {
   beforeEach(async () => {
@@ -131,7 +242,7 @@ describe('useDeleteMap', () => {
     await getDb().maps.add(createMap());
     useMapStore.getState().hydrateActiveMap('project-1', 'map-1');
 
-    const { result } = renderHook(() => useDeleteMap('project-1'), {
+    const { result } = renderHook(() => useDeleteMap(), {
       wrapper,
     });
     result.current.mutate('map-1');
@@ -142,23 +253,20 @@ describe('useDeleteMap', () => {
     expect(useMapStore.getState().activeProjectLocalId).toBe('project-1');
   });
 
-  it('does not touch the store when the store represents a different project (navigation race)', async () => {
+  it('clears the deleted map from whichever project is currently hydrated', async () => {
     await addProject('project-1', 'map-1');
+    await addProject('project-2', 'map-1');
     await getDb().maps.add(createMap());
-    // Store currently represents project-2, even though it happens to share
-    // the same activeMapId value as the deleted map.
     useMapStore.getState().hydrateActiveMap('project-2', 'map-1');
 
-    const { result } = renderHook(() => useDeleteMap('project-1'), {
-      wrapper,
-    });
+    const { result } = renderHook(() => useDeleteMap(), { wrapper });
     result.current.mutate('map-1');
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    // The store must still represent project-2 with its value untouched.
     expect(useMapStore.getState().activeProjectLocalId).toBe('project-2');
-    expect(useMapStore.getState().activeMapId).toBe('map-1');
+    expect(useMapStore.getState().activeMapId).toBeNull();
+    expect((await getDb().projects.get('project-2'))?.activeMapId).toBeNull();
   });
 
   it('does not touch the store when the deleted map is not the active one', async () => {
@@ -166,7 +274,7 @@ describe('useDeleteMap', () => {
     await getDb().maps.add(createMap());
     useMapStore.getState().hydrateActiveMap('project-1', 'map-2');
 
-    const { result } = renderHook(() => useDeleteMap('project-1'), {
+    const { result } = renderHook(() => useDeleteMap(), {
       wrapper,
     });
     result.current.mutate('map-1');
@@ -176,12 +284,22 @@ describe('useDeleteMap', () => {
     expect(useMapStore.getState().activeMapId).toBe('map-2');
   });
 
+  it('does not clear a newer selection after the active project changes', () => {
+    useMapStore.getState().hydrateActiveMap('project-1', 'map-1');
+    useMapStore.getState().hydrateActiveMap('project-2', 'map-2');
+
+    clearDeletedMapFromActiveStore('map-1');
+
+    expect(useMapStore.getState().activeProjectLocalId).toBe('project-2');
+    expect(useMapStore.getState().activeMapId).toBe('map-2');
+  });
+
   it('removes the map and clears activeMapId on every referencing project row', async () => {
     await addProject('project-1', 'map-1');
     await addProject('project-2', 'map-1');
     await getDb().maps.add(createMap());
 
-    const { result } = renderHook(() => useDeleteMap('project-1'), {
+    const { result } = renderHook(() => useDeleteMap(), {
       wrapper,
     });
     result.current.mutate('map-1');
@@ -203,7 +321,7 @@ describe('useDeleteMap', () => {
       cancel,
     });
 
-    const { result } = renderHook(() => useDeleteMap('project-1'), {
+    const { result } = renderHook(() => useDeleteMap(), {
       wrapper,
     });
     result.current.mutate('map-1');
@@ -213,6 +331,29 @@ describe('useDeleteMap', () => {
     expect(cancel).toHaveBeenCalledOnce();
     expect(useMapDownloadStore.getState().active).toBeNull();
     expect(await getDb().maps.get('map-1')).toBeUndefined();
+  });
+
+  it('recovers a cancelled download when map deletion fails', async () => {
+    await addProject('project-1', 'map-1');
+    await getDb().maps.add(createMap({ status: 'downloading' }));
+    const cancel = vi.fn();
+    useMapDownloadStore.getState().start({
+      mapId: 'map-1',
+      mapName: 'Territory draft',
+      cancel,
+    });
+    vi.spyOn(getDb().maps, 'delete').mockRejectedValueOnce(
+      new Error('delete failed'),
+    );
+
+    const { result } = renderHook(() => useDeleteMap(), { wrapper });
+    result.current.mutate('map-1');
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(useMapDownloadStore.getState().active).toBeNull();
+    expect(await getDb().maps.get('map-1')).toMatchObject({ status: 'draft' });
   });
 });
 
@@ -224,19 +365,20 @@ describe('useSetActiveMapMutation', () => {
   });
 
   it('rejects and rolls back the store when the project update touches zero rows', async () => {
+    await getDb().maps.add(
+      createMap({ id: 'map-after', projectLocalId: 'missing-project' }),
+    );
     useMapStore.getState().hydrateActiveMap('missing-project', 'map-before');
 
-    const { result } = renderHook(
-      () => useSetActiveMapMutation('missing-project'),
-      {
-        wrapper,
-      },
-    );
+    const { result } = renderHook(() => useSetActiveMapMutation(), { wrapper });
 
     await act(async () => {
-      await expect(result.current.mutateAsync('map-after')).rejects.toThrow(
-        'Project not found: missing-project',
-      );
+      await expect(
+        result.current.mutateAsync({
+          targetProjectLocalId: 'missing-project',
+          mapId: 'map-after',
+        }),
+      ).rejects.toThrow('Project not found: missing-project');
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
 

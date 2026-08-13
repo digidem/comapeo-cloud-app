@@ -38,6 +38,14 @@ interface MapState {
 
 type PersistedMapState = Pick<MapState, 'basemapId'>;
 
+const activeMapOperationVersions = new Map<string, number>();
+
+function nextActiveMapOperationVersion(projectLocalId: string): number {
+  const version = (activeMapOperationVersions.get(projectLocalId) ?? 0) + 1;
+  activeMapOperationVersions.set(projectLocalId, version);
+  return version;
+}
+
 export const useMapStore = create<MapState>()(
   persist(
     (set, get) => ({
@@ -45,36 +53,43 @@ export const useMapStore = create<MapState>()(
       setBasemap: (basemapId) => set({ basemapId }),
       activeProjectLocalId: null,
       activeMapId: null,
-      // Optimistically updates the in-memory cache, then persists the choice on
-      // the Dexie Project record. If the write never lands — either IndexedDB
-      // rejects it, or Dexie's update() touches 0 rows because the project no
-      // longer exists — the optimistic cache update is rolled back so the UI
-      // matches the still-unchanged project row instead of showing a selection
-      // that would silently revert on the next hydration.
+      // Persist the selection against the explicit target project captured by
+      // the caller. The in-memory slot is updated optimistically only when it
+      // currently represents that project, while a per-project operation
+      // version prevents an older completion from overwriting a newer choice.
       setActiveMap: async (projectLocalId, mapId) => {
-        // Guard: only act when the store is already representing this project.
-        // A mismatch means the hydration effect has not yet run for this project
-        // (or the user switched away), so writing would corrupt the wrong slot.
-        if (get().activeProjectLocalId !== projectLocalId) return;
-        const previousMapId = get().activeMapId;
-        set({ activeMapId: mapId });
-        // Revert the optimistic selection only when the store still represents
-        // the SAME project that issued this write AND no later setActiveMap
-        // call has since changed the value. Once the user switches projects
-        // the hydration effect owns activeMapId, so restoring previousMapId
-        // here would drop the old project's selection into the new project's
-        // slot (the value comparison alone is not enough: both projects can
-        // share a value, e.g. null).
+        const operationVersion = nextActiveMapOperationVersion(projectLocalId);
+        const stateAtStart = get();
+        const updatedOptimistically =
+          stateAtStart.activeProjectLocalId === projectLocalId;
+        const previousMapId = stateAtStart.activeMapId;
+
+        if (updatedOptimistically) set({ activeMapId: mapId });
+
+        const isLatestOperation = () =>
+          activeMapOperationVersions.get(projectLocalId) === operationVersion;
         const rollback = () => {
+          if (!updatedOptimistically || !isLatestOperation()) return;
           if (get().activeProjectLocalId !== projectLocalId) return;
           if (get().activeMapId !== mapId) return;
           set({ activeMapId: previousMapId });
         };
+
         let rowsUpdated: number;
         try {
-          rowsUpdated = await getDb().projects.update(projectLocalId, {
-            activeMapId: mapId,
-          });
+          const db = getDb();
+          rowsUpdated = await db.transaction(
+            'rw',
+            [db.maps, db.projects],
+            async () => {
+              if (mapId !== null && !(await db.maps.get(mapId))) {
+                throw new Error(`Map not found: ${mapId}`);
+              }
+              return db.projects.update(projectLocalId, {
+                activeMapId: mapId,
+              });
+            },
+          );
         } catch (error) {
           rollback();
           throw error;
@@ -83,6 +98,17 @@ export const useMapStore = create<MapState>()(
         if (rowsUpdated === 0) {
           rollback();
           throw new Error(`Project not found: ${projectLocalId}`);
+        }
+
+        // If navigation moved away and then back while this write was in flight,
+        // hydration may have restored the old persisted value. Reconcile the
+        // successful write only when this is still the newest operation for the
+        // target project, so a later user selection always wins.
+        if (
+          isLatestOperation() &&
+          get().activeProjectLocalId === projectLocalId
+        ) {
+          set({ activeMapId: mapId });
         }
       },
       // Cache-only setter used by the hydration effect to avoid writing back

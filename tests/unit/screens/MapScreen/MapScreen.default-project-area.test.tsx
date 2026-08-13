@@ -115,6 +115,14 @@ vi.mock('@/lib/data-layer', async () => {
   };
 });
 
+function getConfigSaveButton() {
+  const button = screen
+    .getAllByRole('button', { name: 'Save Map', hidden: true })
+    .find((candidate) => candidate.classList.contains('w-full'));
+  if (!button) throw new Error('Map configuration Save Map button not found');
+  return button;
+}
+
 describe('MapScreen - default project area (issue #153)', () => {
   beforeEach(async () => {
     await resetDb();
@@ -246,11 +254,7 @@ describe('MapScreen - default project area (issue #153)', () => {
     await user.type(westInput, '-72');
 
     await waitFor(() => {
-      const saveButtons = screen.getAllByRole('button', {
-        name: 'Save Map',
-        hidden: true,
-      });
-      expect(saveButtons[saveButtons.length - 1]).toBeEnabled();
+      expect(getConfigSaveButton()).toBeEnabled();
     });
 
     resolvePoints({
@@ -311,11 +315,7 @@ describe('MapScreen - default project area (issue #153)', () => {
       );
     });
 
-    const saveButtons = screen.getAllByRole('button', {
-      name: 'Save Map',
-      hidden: true,
-    });
-    expect(saveButtons[saveButtons.length - 1]).toBeDisabled();
+    expect(getConfigSaveButton()).toBeDisabled();
   });
 
   it('pads a single-point project to the minimum bbox span before fitting', async () => {
@@ -432,19 +432,12 @@ describe('MapScreen - default project area (issue #153)', () => {
     render(<MapScreen />);
     await screen.findByTestId('mock-authoring-map');
 
-    // The settings-sheet Save Map should be disabled at defaults
-    // (hasConfigChanges should be false)
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole('button', { name: 'Map settings', hidden: true }),
-    );
-
-    const allSaves = screen.getAllByRole('button', {
-      name: 'Save Map',
-      hidden: true,
+    // The configuration Save Map should be disabled at defaults
+    // (hasConfigChanges should be false). Select it by its full-width control
+    // styling rather than DOM order, because the mobile quick-save is always enabled.
+    await waitFor(() => {
+      expect(getConfigSaveButton()).toBeDisabled();
     });
-    const settingsSheetSave = allSaves[allSaves.length - 1];
-    expect(settingsSheetSave).toBeDisabled();
   });
 
   it('handles antimeridian-spanning projects by shifting and fitting correctly', async () => {
