@@ -14,6 +14,10 @@ vi.mock('@/components/layout/shell-slot', () => ({
   useShellSlot: vi.fn(),
 }));
 
+vi.mock('@/hooks/useIsDesktop', () => ({
+  useIsDesktop: () => false,
+}));
+
 vi.mock('@tanstack/react-router', async () => {
   const actual = await vi.importActual<typeof import('@tanstack/react-router')>(
     '@tanstack/react-router',
@@ -86,6 +90,14 @@ vi.mock('react-map-gl/maplibre', () => ({
   },
 }));
 
+function getConfigSaveButton() {
+  const button = screen
+    .getAllByRole('button', { name: 'Save Map', hidden: true })
+    .find((candidate) => candidate.classList.contains('w-full'));
+  if (!button) throw new Error('Map configuration Save Map button not found');
+  return button;
+}
+
 describe('MapScreen - default basemap (issue #153)', () => {
   beforeEach(async () => {
     await resetDb();
@@ -153,13 +165,9 @@ describe('MapScreen - default basemap (issue #153)', () => {
       await screen.findByRole('button', { name: 'Map settings', hidden: true }),
     );
 
-    // The settings-sheet Save Map should be disabled at defaults
-    // (hasConfigChanges should be false)
-    const allSaves = screen.getAllByRole('button', {
-      name: 'Save Map',
-      hidden: true,
-    });
-    const settingsSheetSave = allSaves[allSaves.length - 1];
-    expect(settingsSheetSave).toBeDisabled();
+    // The map-configuration Save Map should be disabled at defaults.
+    // Select it by its full-width control styling rather than DOM order,
+    // because the mobile quick-save is intentionally always enabled.
+    expect(getConfigSaveButton()).toBeDisabled();
   });
 });
