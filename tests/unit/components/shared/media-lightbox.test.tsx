@@ -191,6 +191,38 @@ describe('MediaLightbox', () => {
     expect(document.activeElement).toBe(closeButton);
   });
 
+  it('moves focus to close button when images shrinks from multiple to single and the focused next button disappears', () => {
+    const { rerender } = render(
+      <MediaLightbox
+        images={images}
+        currentIndex={0}
+        onClose={() => {}}
+        onNavigate={() => {}}
+      />,
+    );
+    const nextButton = screen.getByRole('button', { name: /next image/i });
+    nextButton.focus();
+    expect(document.activeElement).toBe(nextButton);
+
+    // Shrink to single image: both prev/next disappear, focus returns to close
+    rerender(
+      <MediaLightbox
+        images={['https://example.com/only.jpg']}
+        currentIndex={0}
+        onClose={() => {}}
+        onNavigate={() => {}}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: /next image/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /previous image/i }),
+    ).not.toBeInTheDocument();
+    const closeButton = screen.getByRole('button', { name: /close preview/i });
+    expect(document.activeElement).toBe(closeButton);
+  });
+
   it('has correct aria role and modal attribute', () => {
     render(
       <MediaLightbox

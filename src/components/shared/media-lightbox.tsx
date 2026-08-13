@@ -106,9 +106,9 @@ function MediaLightbox({
   // Handle focus management when navigation buttons appear/disappear.
   // Uses a ref (no setState), so useEffect is sufficient — no need to defer
   // with setTimeout and no risk of updating state after unmount.
+  // No early `hasMultiple` guard: when images shrinks to 1, both
+  // canGoPrev/canGoNext become false, so focus correctly returns to Close.
   useEffect(() => {
-    if (!hasMultiple) return;
-
     // When the focused nav button disappears (canGoPrev/canGoNext flipped to
     // false), move focus back to the always-present Close button.
     if (!canGoPrev && focusedElementRef.current === 'prev') {
@@ -117,7 +117,7 @@ function MediaLightbox({
     if (!canGoNext && focusedElementRef.current === 'next') {
       closeButtonRef.current?.focus();
     }
-  }, [canGoPrev, canGoNext, hasMultiple]);
+  }, [canGoPrev, canGoNext]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
