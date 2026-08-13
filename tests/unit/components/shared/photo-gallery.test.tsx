@@ -94,6 +94,38 @@ describe('PhotoGallery', () => {
     expect(await screen.findByAltText('photo4.png')).toBeInTheDocument();
   });
 
+  it('lazy-loads correctly when multiple photos share the same driveId', async () => {
+    const { rerender } = render(
+      <PhotoGallery
+        photos={[
+          { driveId: 'shared', name: 'photo1.jpg', type: 'image/jpeg' },
+          { driveId: 'shared', name: 'photo2.png', type: 'image/png' },
+        ]}
+        projectId={projectId}
+      />,
+    );
+
+    // IntersectionObserver mock fires immediately for ALL observed elements,
+    // so both thumbnails load synchronously in test environment
+    expect(await screen.findByAltText('photo1.jpg')).toBeInTheDocument();
+    expect(await screen.findByAltText('photo2.png')).toBeInTheDocument();
+
+    // Replace with same photos in different order
+    rerender(
+      <PhotoGallery
+        photos={[
+          { driveId: 'shared', name: 'photo2.png', type: 'image/png' },
+          { driveId: 'shared', name: 'photo1.jpg', type: 'image/jpeg' },
+        ]}
+        projectId={projectId}
+      />,
+    );
+
+    // Both should load correctly after rerender (mock fires immediately)
+    expect(await screen.findByAltText('photo2.png')).toBeInTheDocument();
+    expect(await screen.findByAltText('photo1.jpg')).toBeInTheDocument();
+  });
+
   it('clicking thumbnail shows preview', async () => {
     const user = userEvent.setup();
     render(<PhotoGallery photos={photos} projectId={projectId} />);

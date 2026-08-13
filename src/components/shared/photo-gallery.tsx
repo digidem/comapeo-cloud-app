@@ -18,6 +18,12 @@ interface Photo {
   type: string;
 }
 
+function photoKey(photo: Photo): string {
+  // CoMapeo assigns the same driveId to all blobs from the same writer;
+  // type + name distinguish attachments. Use a stable composite key.
+  return JSON.stringify([photo.driveId, photo.type, photo.name]);
+}
+
 interface PhotoGalleryProps {
   photos: Photo[];
   projectId: string;
@@ -46,10 +52,11 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
   );
 
   // IntersectionObserver for lazy loading thumbnails.
-  // Key visibility by stable `driveId` so that replacing/reordering the list
-  // (same length) re-runs the effect and observes the new thumbnails rather
-  // than stale indexes.
-  const photoIds = photos.map((p) => p.driveId).join(',');
+  // Key visibility by stable composite `photoKey` so that replacing/reordering
+  // the list (same length) re-runs the effect and observes the new thumbnails
+  // rather than stale indexes. driveId alone is NOT unique — multiple blobs
+  // from the same device share it.
+  const photoIds = photos.map(photoKey).join(',');
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -104,7 +111,7 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {photos.map((photo, index) => (
           <button
-            key={photo.driveId}
+            key={photoKey(photo)}
             ref={(el) => {
               thumbnailRefs.current[index] = el;
             }}
@@ -115,9 +122,9 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
               photoName: photo.name,
             })}
             data-index={index}
-            data-photo-id={photo.driveId}
+            data-photo-id={photoKey(photo)}
           >
-            {visibleThumbnails.has(photo.driveId) && (
+            {visibleThumbnails.has(photoKey(photo)) && (
               <AuthImg
                 src={getAttachmentUrl(
                   projectId,
@@ -130,7 +137,7 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
                 className="h-full w-full object-cover"
               />
             )}
-            {!visibleThumbnails.has(photo.driveId) && (
+            {!visibleThumbnails.has(photoKey(photo)) && (
               <div
                 className="h-full w-full object-cover rounded-card bg-surface-container-low animate-pulse"
                 aria-hidden="true"
