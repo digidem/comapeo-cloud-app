@@ -51,11 +51,18 @@ export interface MeasurementReport {
   samples: MeasurementSample[];
 }
 
+export function findRulesByRef<T extends { ref?: string }>(
+  ruleset: { rules?: T[] } | null,
+  ref = TILE_RATE_LIMIT_RULE_REF,
+): T[] {
+  return ruleset?.rules?.filter((rule) => rule.ref === ref) ?? [];
+}
+
 export function findRuleByRef<T extends { ref?: string }>(
   ruleset: { rules?: T[] } | null,
   ref = TILE_RATE_LIMIT_RULE_REF,
 ): T | undefined {
-  return ruleset?.rules?.find((rule) => rule.ref === ref);
+  return findRulesByRef(ruleset, ref)[0];
 }
 
 export interface CloudflareRateLimitRule {

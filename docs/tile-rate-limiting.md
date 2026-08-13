@@ -138,6 +138,8 @@ Inspect the managed rule without changing it:
 CLOUDFLARE_API_TOKEN=... npm run ops:tile-rate-limit -- status --zone comapeo.cloud
 ```
 
+The status output includes `managedRuleCount` and `duplicateManagedRules`. Normal operation has exactly one managed rule. If multiple rules have the stable managed reference, `apply` fails closed instead of updating an arbitrary match. Resolve the duplicate configuration before applying a new threshold or mode.
+
 Operational checks after enforcement:
 
 - Cloudflare Security Events / rate-limit analytics for rule matches and mitigations;
@@ -161,7 +163,7 @@ Then verify:
 CLOUDFLARE_API_TOKEN=... npm run ops:tile-rate-limit -- status --zone comapeo.cloud
 ```
 
-The rule should report `enabled: false`. This does not remove or modify unrelated rate-limiting rules. The Pages Function's application limiter remains active as defense-in-depth.
+The rule should report `enabled: false`. The disable command disables every rule with this managed reference before reporting success, and `status` exposes the number of matching rules for cleanup. This does not remove or modify unrelated rate-limiting rules. The Pages Function's application limiter remains active as defense-in-depth.
 
 The same rule can also be disabled in Cloudflare Dashboard under **Security / WAF / Rate limiting rules**. If the edge rule causes a production incident, disable it first, confirm `/api/tiles` resumes normal behavior, and investigate/tune before re-enabling.
 

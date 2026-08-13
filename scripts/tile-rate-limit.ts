@@ -10,7 +10,7 @@ import {
   TILE_RATE_LIMIT_RULE_REF,
   buildCloudflareRateLimitRule,
   buildMeasurementReport,
-  findRuleByRef,
+  findRulesByRef,
   summarizeHarSample,
   validateEnforcementReadiness,
   validateProductionMeasurementTarget,
@@ -190,19 +190,32 @@ async function getRateLimitRuleset(
   );
 }
 
-function findManagedRule(
+export function findManagedRules(
   ruleset: CloudflareRuleset | null,
-): CloudflareRule | undefined {
-  return findRuleByRef(ruleset, TILE_RATE_LIMIT_RULE_REF);
+): CloudflareRule[] {
+  return findRulesByRef(ruleset, TILE_RATE_LIMIT_RULE_REF);
 }
 
-async function upsertManagedRule(
+function requireAtMostOneManagedRule(
+  ruleset: CloudflareRuleset | null,
+  operation: string,
+): CloudflareRule | undefined {
+  const matches = findManagedRules(ruleset);
+  if (matches.length > 1) {
+    throw new Error(
+      `Found ${matches.length} managed tile rate-limit rules during ${operation}; resolve duplicate managed rules before continuing`,
+    );
+  }
+  return matches[0];
+}
+
+export async function upsertManagedRule(
   token: string,
   zoneId: string,
   rule: CloudflareRateLimitRule,
 ): Promise<CloudflareRule> {
   const ruleset = await getRateLimitRuleset(token, zoneId);
-  const existing = findManagedRule(ruleset);
+  const existing = requireAtMostOneManagedRule(ruleset, 'upsert');
 
   if (ruleset && existing?.id) {
     const updatedRuleset = await cloudflareRequest<CloudflareRuleset>(
@@ -210,7 +223,10 @@ async function upsertManagedRule(
       `/zones/${zoneId}/rulesets/${ruleset.id}/rules/${existing.id}`,
       { method: 'PATCH', body: JSON.stringify(rule) },
     );
-    const updated = findManagedRule(updatedRuleset);
+    const updated = requireAtMostOneManagedRule(
+      updatedRuleset,
+      'update response',
+    );
     if (!updated)
       throw new Error('Cloudflare returned no updated managed rule');
     return updated;
@@ -222,7 +238,10 @@ async function upsertManagedRule(
       `/zones/${zoneId}/rulesets/${ruleset.id}/rules`,
       { method: 'POST', body: JSON.stringify(rule) },
     );
-    const created = findManagedRule(updatedRuleset);
+    const created = requireAtMostOneManagedRule(
+      updatedRuleset,
+      'create response',
+    );
     if (!created)
       throw new Error('Cloudflare returned no created managed rule');
     return created;
@@ -239,47 +258,45 @@ async function upsertManagedRule(
       }),
     },
   );
-  const created = findManagedRule(createdRuleset);
+  const created = requireAtMostOneManagedRule(
+    createdRuleset,
+    'ruleset creation response',
+  );
   if (!created)
     throw new Error('Cloudflare created the ruleset but not the managed rule');
   return created;
 }
 
-function writableExistingRule(rule: CloudflareRule): CloudflareRule {
-  const {
-    action,
-    action_parameters,
-    description,
-    enabled,
-    expression,
-    ratelimit,
-    ref,
-  } = rule;
-  return {
-    action,
-    ...(action_parameters ? { action_parameters } : {}),
-    description,
-    enabled,
-    expression,
-    ratelimit,
-    ref,
-  };
+export function writableExistingRule(
+  rule: CloudflareRule,
+): Record<string, unknown> {
+  const writable = { ...rule } as Record<string, unknown>;
+  delete writable.id;
+  delete writable.version;
+  delete writable.last_updated;
+  return writable;
 }
 
-async function disableManagedRule(
+export async function disableManagedRule(
   token: string,
   zoneId: string,
 ): Promise<boolean> {
   const ruleset = await getRateLimitRuleset(token, zoneId);
-  const existing = findManagedRule(ruleset);
-  if (!ruleset || !existing?.id) return false;
-  const body = writableExistingRule(existing);
-  body.enabled = false;
-  await cloudflareRequest(
-    token,
-    `/zones/${zoneId}/rulesets/${ruleset.id}/rules/${existing.id}`,
-    { method: 'PATCH', body: JSON.stringify(body) },
-  );
+  const existingRules = findManagedRules(ruleset);
+  if (!ruleset || existingRules.length === 0) return false;
+  if (existingRules.some((rule) => !rule.id)) {
+    throw new Error('Cloudflare returned a managed rule without an id');
+  }
+
+  for (const existing of existingRules) {
+    const body = writableExistingRule(existing);
+    body.enabled = false;
+    await cloudflareRequest(
+      token,
+      `/zones/${zoneId}/rulesets/${ruleset.id}/rules/${existing.id}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    );
+  }
   return true;
 }
 
@@ -398,13 +415,16 @@ async function status(values: Map<string, string | boolean>): Promise<void> {
   const zoneName = productionZoneOption(values);
   const zoneId = await resolveZoneId(token, zoneName);
   const ruleset = await getRateLimitRuleset(token, zoneId);
-  const rule = findManagedRule(ruleset);
+  const rules = findManagedRules(ruleset);
+  const rule = rules[0];
   console.log(
     JSON.stringify(
       rule
         ? {
             zone: zoneName,
             rulesetId: ruleset?.id,
+            managedRuleCount: rules.length,
+            duplicateManagedRules: rules.length > 1,
             ruleId: rule.id,
             ref: rule.ref,
             action: rule.action,
@@ -412,7 +432,7 @@ async function status(values: Map<string, string | boolean>): Promise<void> {
             expression: rule.expression,
             ratelimit: rule.ratelimit,
           }
-        : { zone: zoneName, present: false },
+        : { zone: zoneName, present: false, managedRuleCount: 0 },
       null,
       2,
     ),
@@ -433,7 +453,7 @@ async function disable(values: Map<string, string | boolean>): Promise<void> {
   );
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const { command, values } = parseArgs(process.argv.slice(2));
   if (command === 'measure') return measure(values);
   if (command === 'render') return render(values);
@@ -443,8 +463,10 @@ async function main(): Promise<void> {
   return usage();
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`tile-rate-limit: ${message}`);
-  process.exitCode = 1;
-});
+if (process.argv[1]?.endsWith('tile-rate-limit.ts')) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`tile-rate-limit: ${message}`);
+    process.exitCode = 1;
+  });
+}

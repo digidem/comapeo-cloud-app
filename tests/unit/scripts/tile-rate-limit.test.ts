@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   PRODUCTION_TILE_HOST,
@@ -12,6 +12,32 @@ import {
   validateProductionMeasurementTarget,
   validateProductionZoneName,
 } from '../../../scripts/lib/tile-rate-limit';
+import {
+  disableManagedRule,
+  upsertManagedRule,
+  writableExistingRule,
+} from '../../../scripts/tile-rate-limit';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function cloudflareResponse(result: unknown): Response {
+  return new Response(
+    JSON.stringify({ success: true, result, errors: [], messages: [] }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
+function exampleManagedRule() {
+  return buildCloudflareRateLimitRule({
+    host: PRODUCTION_TILE_HOST,
+    requestsPerPeriod: 1370,
+    periodSeconds: 60,
+    mitigationTimeoutSeconds: 60,
+    mode: 'enforce',
+  });
+}
 
 describe('tile rate limit operations', () => {
   it('computes the maximum request burst inside a rolling window', () => {
@@ -199,6 +225,166 @@ describe('tile rate limit operations', () => {
     };
 
     expect(findRuleByRef(ruleset)).toBe(managedRule);
+  });
+
+  it('fails closed when duplicate managed rules exist before an upsert', async () => {
+    const rule = exampleManagedRule();
+    const ruleset = {
+      id: 'ruleset-id',
+      rules: [
+        { ...rule, id: 'managed-a' },
+        { ...rule, id: 'managed-b' },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cloudflareResponse(ruleset));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const duplicateUpsert = upsertManagedRule('token', 'zone-id', rule);
+    await expect(duplicateUpsert).rejects.toThrow(
+      /2 managed tile rate-limit rules/i,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables every duplicate managed rule and preserves writable fields', async () => {
+    const rule = exampleManagedRule();
+    const ruleset = {
+      id: 'ruleset-id',
+      rules: [
+        {
+          ...rule,
+          id: 'managed-a',
+          version: '3',
+          last_updated: '2026-08-13T12:00:00.000Z',
+          logging: { enabled: true },
+        },
+        {
+          ...rule,
+          id: 'managed-b',
+          version: '4',
+          last_updated: '2026-08-13T12:01:00.000Z',
+          logging: { enabled: true },
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cloudflareResponse(ruleset))
+      .mockResolvedValueOnce(cloudflareResponse(ruleset))
+      .mockResolvedValueOnce(cloudflareResponse(ruleset));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(disableManagedRule('token', 'zone-id')).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    for (const callIndex of [1, 2]) {
+      const [, init] = fetchMock.mock.calls[callIndex] as [string, RequestInit];
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      expect(init.method).toBe('PATCH');
+      expect(body.enabled).toBe(false);
+      expect(body.logging).toEqual({ enabled: true });
+      expect(body).not.toHaveProperty('id');
+      expect(body).not.toHaveProperty('version');
+      expect(body).not.toHaveProperty('last_updated');
+    }
+  });
+
+  it('preserves unknown writable rule fields while removing response metadata', () => {
+    const writable = writableExistingRule({
+      ...exampleManagedRule(),
+      id: 'managed-a',
+      version: '7',
+      last_updated: '2026-08-13T12:00:00.000Z',
+      logging: { enabled: true },
+    } as Parameters<typeof writableExistingRule>[0]);
+
+    expect(writable).toMatchObject({
+      ref: 'comapeo-cloud-app-tiles-rate-limit',
+      logging: { enabled: true },
+    });
+    expect(writable).not.toHaveProperty('id');
+    expect(writable).not.toHaveProperty('version');
+    expect(writable).not.toHaveProperty('last_updated');
+  });
+
+  it('uses POST to append a managed rule to an existing ruleset', async () => {
+    const rule = exampleManagedRule();
+    const existingRuleset = {
+      id: 'ruleset-id',
+      rules: [{ id: 'other', ref: 'other' }],
+    };
+    const createdRuleset = {
+      id: 'ruleset-id',
+      rules: [
+        { id: 'other', ref: 'other' },
+        { ...rule, id: 'managed-a' },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cloudflareResponse(existingRuleset))
+      .mockResolvedValueOnce(cloudflareResponse(createdRuleset));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      upsertManagedRule('token', 'zone-id', rule),
+    ).resolves.toMatchObject({
+      id: 'managed-a',
+      ref: 'comapeo-cloud-app-tiles-rate-limit',
+    });
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).toMatch(/\/rulesets\/ruleset-id\/rules$/);
+    expect(init.method).toBe('POST');
+  });
+
+  it('uses PUT to create the phase entrypoint when no ruleset exists', async () => {
+    const rule = exampleManagedRule();
+    const createdRuleset = {
+      id: 'ruleset-id',
+      rules: [{ ...rule, id: 'managed-a' }],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(cloudflareResponse(createdRuleset));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      upsertManagedRule('token', 'zone-id', rule),
+    ).resolves.toMatchObject({
+      id: 'managed-a',
+    });
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).toMatch(/\/rulesets\/phases\/http_ratelimit\/entrypoint$/);
+    expect(init.method).toBe('PUT');
+  });
+
+  it('uses PATCH to update the existing unique managed rule', async () => {
+    const rule = exampleManagedRule();
+    const existingRuleset = {
+      id: 'ruleset-id',
+      rules: [{ ...rule, id: 'managed-a' }],
+    };
+    const updatedRuleset = {
+      id: 'ruleset-id',
+      rules: [{ ...rule, id: 'managed-a', enabled: false }],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cloudflareResponse(existingRuleset))
+      .mockResolvedValueOnce(cloudflareResponse(updatedRuleset));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      upsertManagedRule('token', 'zone-id', rule),
+    ).resolves.toMatchObject({
+      id: 'managed-a',
+    });
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).toMatch(/\/rulesets\/ruleset-id\/rules\/managed-a$/);
+    expect(init.method).toBe('PATCH');
   });
 
   it('refuses enforcement when measurement or false-positive validation is incomplete', () => {
