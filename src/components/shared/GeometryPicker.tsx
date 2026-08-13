@@ -82,7 +82,7 @@ export interface GeometryPickerProps {
   onValidationChange?: (message: string | undefined) => void;
   showMap?: boolean;
   allowedTypes?: readonly AlertGeometryType[];
-  externalPoint?: Position;
+  externalPoint?: [number, number];
 }
 
 interface DraftVertex {
@@ -245,10 +245,6 @@ export function GeometryPicker({
   externalPoint,
 }: GeometryPickerProps) {
   const intl = useIntl();
-  const onChangeRef = useRef(onChange);
-  const onValidationChangeRef = useRef(onValidationChange);
-  onChangeRef.current = onChange;
-  onValidationChangeRef.current = onValidationChange;
   const mapRef = useRef<MapRef>(null);
   const mapLoadedRef = useRef(false);
   const [projectArea, setProjectArea] = useState<{
@@ -260,11 +256,15 @@ export function GeometryPicker({
       ? projectArea.bounds
       : undefined;
   const [type, setType] = useState<AlertGeometryType>('Point');
-  const [vertices, setVertices] = useState<DraftVertex[]>([]);
-  const [manualLongitude, setManualLongitude] = useState('');
-  const [manualLatitude, setManualLatitude] = useState('');
-  const externalLongitude = externalPoint?.[0];
-  const externalLatitude = externalPoint?.[1];
+  const [vertices, setVertices] = useState<DraftVertex[]>(() =>
+    externalPoint ? [{ id: 'external-point', position: externalPoint }] : [],
+  );
+  const [manualLongitude, setManualLongitude] = useState(() =>
+    externalPoint ? String(externalPoint[0]) : '',
+  );
+  const [manualLatitude, setManualLatitude] = useState(() =>
+    externalPoint ? String(externalPoint[1]) : '',
+  );
   const positions = useMemo(
     () => vertices.map((vertex) => vertex.position),
     [vertices],
@@ -348,23 +348,6 @@ export function GeometryPicker({
     if (!error) onChange(geometryFromVertices(nextType, nextPositions));
     else onChange(undefined);
   }
-
-  useEffect(() => {
-    if (externalLongitude === undefined || externalLatitude === undefined) return;
-    const position: Position = [externalLongitude, externalLatitude];
-    const errorKey = validateGeometryDraft('Point', [position]);
-    const error = errorKey
-      ? intl.formatMessage(messages[errorKey as keyof typeof messages])
-      : undefined;
-    setType('Point');
-    setVertices([{ id: 'external-point', position }]);
-    setManualLongitude(String(externalLongitude));
-    setManualLatitude(String(externalLatitude));
-    onValidationChangeRef.current?.(error);
-    onChangeRef.current(
-      error ? undefined : geometryFromVertices('Point', [position]),
-    );
-  }, [externalLatitude, externalLongitude, intl]);
 
   function chooseType(nextType: AlertGeometryType) {
     setType(nextType);
