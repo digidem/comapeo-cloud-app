@@ -73,6 +73,27 @@ describe('PhotoGallery', () => {
     expect(screen.getByText('No photos')).toBeInTheDocument();
   });
 
+  it('lazy-loads new thumbnails when a same-length photos array replaces the previous one', async () => {
+    const { rerender } = render(
+      <PhotoGallery photos={photos} projectId={projectId} />,
+    );
+
+    // Initial thumbnails load (IntersectionObserver mock fires immediately)
+    expect(await screen.findByAltText('photo1.jpg')).toBeInTheDocument();
+    expect(await screen.findByAltText('photo2.png')).toBeInTheDocument();
+
+    // Replace with a DIFFERENT same-length array (different driveIds)
+    const newPhotos = [
+      { driveId: 'drive3', name: 'photo3.jpg', type: 'image/jpeg' },
+      { driveId: 'drive4', name: 'photo4.png', type: 'image/png' },
+    ];
+    rerender(<PhotoGallery photos={newPhotos} projectId={projectId} />);
+
+    // New thumbnails must load — not stuck on placeholders from stale indexes
+    expect(await screen.findByAltText('photo3.jpg')).toBeInTheDocument();
+    expect(await screen.findByAltText('photo4.png')).toBeInTheDocument();
+  });
+
   it('clicking thumbnail shows preview', async () => {
     const user = userEvent.setup();
     render(<PhotoGallery photos={photos} projectId={projectId} />);

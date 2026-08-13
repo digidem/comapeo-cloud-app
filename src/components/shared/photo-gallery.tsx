@@ -31,7 +31,7 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
   const [focusOnClose, setFocusOnClose] = useState<HTMLButtonElement | null>(
     null,
   );
-  const [visibleThumbnails, setVisibleThumbnails] = useState<Set<number>>(
+  const [visibleThumbnails, setVisibleThumbnails] = useState<Set<string>>(
     new Set(),
   );
 
@@ -45,15 +45,21 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
     ),
   );
 
-  // IntersectionObserver for lazy loading thumbnails
+  // IntersectionObserver for lazy loading thumbnails.
+  // Key visibility by stable `driveId` so that replacing/reordering the list
+  // (same length) re-runs the effect and observes the new thumbnails rather
+  // than stale indexes.
+  const photoIds = photos.map((p) => p.driveId).join(',');
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const target = entry.target as HTMLElement;
-            const index = Number(target.dataset.index);
-            setVisibleThumbnails((prev) => new Set(prev).add(index));
+            const photoId = target.dataset.photoId;
+            if (photoId) {
+              setVisibleThumbnails((prev) => new Set(prev).add(photoId));
+            }
             observer.unobserve(entry.target);
           }
         });
@@ -61,12 +67,12 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
       { rootMargin: '200px' }, // Start loading 200px before entering viewport
     );
 
-    thumbnailRefs.current.forEach((el, _index) => {
+    thumbnailRefs.current.forEach((el) => {
       if (el) observer.observe(el);
     });
 
     return () => observer.disconnect();
-  }, [photos.length]);
+  }, [photoIds]);
 
   const handleThumbnailClick = useCallback((index: number) => {
     // Store reference to the thumbnail that opened the preview for focus restoration
@@ -104,13 +110,14 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
             }}
             type="button"
             onClick={() => handleThumbnailClick(index)}
-            className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-card"
+            className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-card aspect-square overflow-hidden"
             aria-label={intl.formatMessage(messages.viewPhoto, {
               photoName: photo.name,
             })}
             data-index={index}
+            data-photo-id={photo.driveId}
           >
-            {visibleThumbnails.has(index) && (
+            {visibleThumbnails.has(photo.driveId) && (
               <AuthImg
                 src={getAttachmentUrl(
                   projectId,
@@ -120,12 +127,12 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
                   'thumbnail',
                 )}
                 alt={photo.name}
-                className="w-full rounded-card"
+                className="h-full w-full object-cover"
               />
             )}
-            {!visibleThumbnails.has(index) && (
+            {!visibleThumbnails.has(photo.driveId) && (
               <div
-                className="w-full aspect-square rounded-card bg-surface-container-low animate-pulse"
+                className="h-full w-full object-cover rounded-card bg-surface-container-low animate-pulse"
                 aria-hidden="true"
               />
             )}
