@@ -1,16 +1,18 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { Link } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { AlertCard } from '@/components/shared/AlertCard';
+import { AlertForm } from '@/components/shared/AlertForm';
 import { AlertsMap } from '@/components/shared/AlertsMap';
 import { MapScreenLayout } from '@/components/shared/MapScreenLayout';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useProjects } from '@/hooks/useProjects';
+import type { AlertGeometry } from '@/lib/alert-form-utils';
 import { useAlertViewModeStore } from '@/stores/alert-view-mode-store';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -46,6 +48,10 @@ const messages = defineMessages({
   addAlert: {
     id: 'alerts.addAlert',
     defaultMessage: 'Add Alert',
+  },
+  createAlertTitle: {
+    id: 'alerts.create.title',
+    defaultMessage: 'Create Alert',
   },
   viewGrid: {
     id: 'alerts.viewGrid',
@@ -113,6 +119,9 @@ export function AlertsScreen() {
   const alertsQuery = useAlerts(selectedProjectId);
   const viewMode = useAlertViewModeStore((state) => state.viewMode);
   const setViewMode = useAlertViewModeStore((state) => state.setViewMode);
+  const [isCreatingInline, setIsCreatingInline] = useState(false);
+  const [mapSelectedPoint, setMapSelectedPoint] = useState<[number, number]>();
+  const [draftPoint, setDraftPoint] = useState<[number, number]>();
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
@@ -158,6 +167,25 @@ export function AlertsScreen() {
 
   const alerts = alertsQuery.data ?? [];
 
+  function closeInlineCreation() {
+    setIsCreatingInline(false);
+    setMapSelectedPoint(undefined);
+    setDraftPoint(undefined);
+  }
+
+  function updateDraftPoint(geometry: AlertGeometry | undefined) {
+    if (geometry?.type !== 'Point' || !Array.isArray(geometry.coordinates)) {
+      setDraftPoint(undefined);
+      return;
+    }
+    const [longitude, latitude] = geometry.coordinates;
+    if (typeof longitude !== 'number' || typeof latitude !== 'number') {
+      setDraftPoint(undefined);
+      return;
+    }
+    setDraftPoint([longitude, latitude]);
+  }
+
   const addAlertLink = (
     <Link
       to="/alerts/new"
@@ -178,10 +206,24 @@ export function AlertsScreen() {
         topRightPositionClassName="top-4 right-3 z-30 items-center"
         topRight={
           <>
-            {addAlertLink}
             <button
               type="button"
-              onClick={() => setViewMode('grid')}
+              onClick={() => {
+                setMapSelectedPoint(undefined);
+                setDraftPoint(undefined);
+                setIsCreatingInline(true);
+              }}
+              disabled={isCreatingInline}
+              className="inline-flex min-h-[44px] items-center rounded-button bg-primary px-3 py-2 text-center text-xs font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {intl.formatMessage(messages.addAlert)}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                closeInlineCreation();
+                setViewMode('grid');
+              }}
               className="inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-button bg-surface-card text-text-muted shadow-card transition-colors hover:bg-surface-container-low hover:text-text"
               aria-label={intl.formatMessage(messages.switchToGridView)}
               title={intl.formatMessage(messages.viewGrid)}
@@ -196,6 +238,12 @@ export function AlertsScreen() {
             alerts={alerts}
             height="h-full"
             basemapSwitcherPositionClassName="top-[4.25rem] right-3"
+            interactionMode={isCreatingInline ? 'create-point' : 'browse'}
+            onMapPointSelect={(point) => {
+              setMapSelectedPoint(point);
+              setDraftPoint(point);
+            }}
+            draftPoint={draftPoint}
             showEmptyState={
               !alertsQuery.isPending &&
               !alertsQuery.isError &&
@@ -203,7 +251,39 @@ export function AlertsScreen() {
             }
           />
 
-          {alertsQuery.isError ? (
+          {isCreatingInline ? (
+            <section
+              role="dialog"
+              aria-modal="false"
+              aria-labelledby="inline-create-alert-title"
+              className="absolute inset-x-0 bottom-0 z-40 max-h-[72%] overflow-y-auto rounded-t-card border border-border/20 bg-surface-card shadow-elevated md:inset-y-3 md:right-3 md:left-auto md:w-[28rem] md:max-h-none md:rounded-card"
+            >
+              <div className="sticky top-0 z-10 border-b border-border/20 bg-surface-card px-4 py-3">
+                <h2
+                  id="inline-create-alert-title"
+                  className="text-lg font-bold text-text"
+                >
+                  {intl.formatMessage(messages.createAlertTitle)}
+                </h2>
+              </div>
+              <div className="p-4">
+                <AlertForm
+                  projectLocalId={selectedProjectId}
+                  compact
+                  geometryPickerProps={{
+                    showMap: false,
+                    allowedTypes: ['Point'],
+                    externalPoint: mapSelectedPoint,
+                  }}
+                  onGeometryChange={updateDraftPoint}
+                  onCancel={closeInlineCreation}
+                  onSuccess={closeInlineCreation}
+                />
+              </div>
+            </section>
+          ) : null}
+
+          {!isCreatingInline && alertsQuery.isError ? (
             <div
               role="alert"
               className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
@@ -214,7 +294,9 @@ export function AlertsScreen() {
             </div>
           ) : null}
 
-          {alertsQuery.isPending && !alertsQuery.isError ? (
+          {!isCreatingInline &&
+          alertsQuery.isPending &&
+          !alertsQuery.isError ? (
             <div
               role="status"
               className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
@@ -230,7 +312,8 @@ export function AlertsScreen() {
             </div>
           ) : null}
 
-          {!alertsQuery.isPending &&
+          {!isCreatingInline &&
+          !alertsQuery.isPending &&
           !alertsQuery.isError &&
           alerts.length === 0 ? (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm">

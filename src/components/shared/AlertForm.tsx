@@ -1,7 +1,7 @@
 import { valibotResolver } from '@hookform/resolvers/valibot';
 import * as v from 'valibot';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -117,10 +117,33 @@ export function AlertForm({
 }: AlertFormProps) {
   const intl = useIntl();
   const createAlert = useCreateAlert();
-  const previousProjectLocalIdRef = useRef(projectLocalId);
-  const [geometry, setGeometry] = useState<AlertGeometry>();
-  const [geometryMessage, setGeometryMessage] = useState<string>();
-  const [geometrySubmitError, setGeometrySubmitError] = useState(false);
+  const externalPoint = geometryPickerProps?.externalPoint;
+  const geometryScopeKey = `${projectLocalId ?? 'no-project'}:${
+    externalPoint ? `${externalPoint[0]},${externalPoint[1]}` : 'manual'
+  }`;
+  const externalPointGeometry: AlertGeometry | undefined = externalPoint
+    ? { type: 'Point', coordinates: externalPoint }
+    : undefined;
+  const [geometryState, setGeometryState] = useState<{
+    scopeKey: string;
+    value: AlertGeometry | undefined;
+  }>();
+  const geometry =
+    geometryState?.scopeKey === geometryScopeKey
+      ? geometryState.value
+      : externalPointGeometry;
+  const [geometryValidation, setGeometryValidation] = useState<{
+    scopeKey: string;
+    message: string | undefined;
+  }>();
+  const geometryMessage =
+    geometryValidation?.scopeKey === geometryScopeKey
+      ? geometryValidation.message
+      : undefined;
+  const [geometrySubmitErrorScope, setGeometrySubmitErrorScope] =
+    useState<string>();
+  const geometrySubmitError =
+    geometrySubmitErrorScope === geometryScopeKey && !geometry;
   const [metadataRows, setMetadataRows] = useState<MetadataRow[]>([]);
   const [metadataErrors, setMetadataErrors] = useState<Record<string, string>>(
     {},
@@ -139,15 +162,6 @@ export function AlertForm({
       alertType: '',
     },
   });
-
-  useEffect(() => {
-    if (previousProjectLocalIdRef.current === projectLocalId) return;
-    previousProjectLocalIdRef.current = projectLocalId;
-    setGeometry(undefined);
-    setGeometryMessage(undefined);
-    setGeometrySubmitError(false);
-    onGeometryChange?.(undefined);
-  }, [onGeometryChange, projectLocalId]);
 
   function translateMetadataErrors(errors: Record<string, string>) {
     const messageFor = (code: string) => {
@@ -168,15 +182,15 @@ export function AlertForm({
   }
 
   function updateGeometry(next: AlertGeometry | undefined) {
-    setGeometry(next);
+    setGeometryState({ scopeKey: geometryScopeKey, value: next });
     onGeometryChange?.(next);
-    if (next) setGeometrySubmitError(false);
+    if (next) setGeometrySubmitErrorScope(undefined);
   }
 
   function clearDraftAndCancel() {
-    setGeometry(undefined);
-    setGeometryMessage(undefined);
-    setGeometrySubmitError(false);
+    setGeometryState(undefined);
+    setGeometryValidation(undefined);
+    setGeometrySubmitErrorScope(undefined);
     setMetadataRows([]);
     setMetadataErrors({});
     onGeometryChange?.(undefined);
@@ -186,7 +200,7 @@ export function AlertForm({
   function onSubmit(data: FormData) {
     if (!projectLocalId) return;
     if (!geometry) {
-      setGeometrySubmitError(true);
+      setGeometrySubmitErrorScope(geometryScopeKey);
       return;
     }
     const metadata = metadataRowsToRecord(metadataRows);
@@ -224,9 +238,12 @@ export function AlertForm({
           {intl.formatMessage(messages.geometryLabel)}
         </h2>
         <GeometryPicker
+          key={geometryScopeKey}
           projectLocalId={projectLocalId}
           onChange={updateGeometry}
-          onValidationChange={setGeometryMessage}
+          onValidationChange={(message) =>
+            setGeometryValidation({ scopeKey: geometryScopeKey, message })
+          }
           {...geometryPickerProps}
         />
         {geometry && (

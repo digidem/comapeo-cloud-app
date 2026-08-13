@@ -16,13 +16,16 @@ test.describe('Alerts map and grid', () => {
     });
     await expect(gridToggle).toBeVisible();
     await expect(
-      page.getByRole('link', { name: /Add Alert/i }),
-    ).toHaveAttribute('href', '/alerts/new');
+      page.getByRole('button', { name: /Add Alert/i }),
+    ).toBeVisible();
 
     await gridToggle.click();
     await expect(
       page.getByRole('button', { name: /Switch to map view/i }),
     ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /Add Alert/i }),
+    ).toHaveAttribute('href', '/alerts/new');
     await expect(page.getByText('forest-change')).toBeVisible();
     await expect(page.getByText('area-change')).toBeVisible();
 
@@ -32,5 +35,39 @@ test.describe('Alerts map and grid', () => {
     }));
     expect(preferences.alerts).toContain('grid');
     expect(preferences.data).toContain('map');
+  });
+
+  test('creates a point alert inline from the map and keeps the Alerts view', async ({
+    page,
+  }) => {
+    await setupMockServer(page);
+    await seedAlertMapState(page);
+    await page.goto('/alerts');
+
+    await page.getByRole('button', { name: /Add Alert/i }).click();
+    const dialog = page.getByRole('dialog', { name: /Create Alert/i });
+    await expect(dialog).toBeVisible();
+
+    await expect(page.locator('.maplibregl-canvas').first()).toBeVisible();
+
+    const longitude = dialog.getByLabel('Longitude');
+    const latitude = dialog.getByLabel('Latitude');
+    await longitude.fill('-51.25');
+    await latitude.fill('-3.75');
+    await dialog.getByRole('button', { name: 'Add point' }).click();
+    await expect(longitude).toHaveValue('-51.25');
+    await expect(latitude).toHaveValue('-3.75');
+
+    await dialog.getByLabel('Detection Date Start').fill('2026-08-12');
+    await dialog.getByLabel('Detection Date End').fill('2026-08-12');
+    await dialog.getByLabel('Source ID').fill('e2e-inline');
+    await dialog.getByLabel('Alert Type').fill('inline-e2e');
+    await dialog.getByRole('button', { name: 'Create' }).click();
+
+    await expect(dialog).toBeHidden();
+    await expect(page).toHaveURL(/\/alerts$/);
+
+    await page.getByRole('button', { name: /Switch to grid view/i }).click();
+    await expect(page.getByText('inline-e2e')).toBeVisible();
   });
 });

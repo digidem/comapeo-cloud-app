@@ -1,8 +1,8 @@
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AlertGeometry, MetadataRow } from '@/lib/alert-form-utils';
 import { AlertForm } from '@/components/shared/AlertForm';
+import type { AlertGeometry, MetadataRow } from '@/lib/alert-form-utils';
 
 const mockMutate = vi.fn();
 let mockIsPending = false;
@@ -131,6 +131,32 @@ describe('AlertForm', () => {
     expect(screen.getByTestId('geometry-picker')).toHaveAttribute(
       'data-external-point',
       '-51.25,-3.75',
+    );
+  });
+
+  it('submits an externally selected map point without a second geometry action', async () => {
+    const user = userEvent.setup();
+    render(
+      <AlertForm
+        projectLocalId="proj-1"
+        onCancel={vi.fn()}
+        geometryPickerProps={{
+          showMap: false,
+          allowedTypes: ['Point'],
+          externalPoint: [-51.25, -3.75],
+        }}
+      />,
+    );
+
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectLocalId: 'proj-1',
+        geometry: { type: 'Point', coordinates: [-51.25, -3.75] },
+      }),
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });
 

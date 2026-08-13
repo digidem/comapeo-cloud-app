@@ -32,6 +32,9 @@ export interface AlertsMapProps {
   showEmptyState?: boolean;
   basemapSwitcherPositionClassName?: string;
   onGeometryClick?: (alertId: string) => void;
+  interactionMode?: 'browse' | 'create-point';
+  onMapPointSelect?: (point: [number, number]) => void;
+  draftPoint?: [number, number];
 }
 
 export function AlertsMap({
@@ -40,6 +43,9 @@ export function AlertsMap({
   showEmptyState = true,
   basemapSwitcherPositionClassName,
   onGeometryClick,
+  interactionMode = 'browse',
+  onMapPointSelect,
+  draftPoint,
 }: AlertsMapProps) {
   const intl = useIntl();
   const navigate = useNavigate();
@@ -49,6 +55,25 @@ export function AlertsMap({
   const featureCollection = useMemo(
     () => alertsToFeatureCollection(alerts),
     [alerts],
+  );
+  const draftFeatureCollection = useMemo(
+    () =>
+      draftPoint
+        ? {
+            type: 'FeatureCollection' as const,
+            features: [
+              {
+                type: 'Feature' as const,
+                properties: {},
+                geometry: {
+                  type: 'Point' as const,
+                  coordinates: draftPoint,
+                },
+              },
+            ],
+          }
+        : undefined,
+    [draftPoint],
   );
   const bounds = useMemo(
     () => getAlertGeometryBounds(featureCollection),
@@ -78,8 +103,12 @@ export function AlertsMap({
     fitInitialBounds();
   }, [fitInitialBounds]);
 
-  const handleGeometryClick = useCallback(
+  const handleMapClick = useCallback(
     (event: MapLayerMouseEvent) => {
+      if (interactionMode === 'create-point') {
+        onMapPointSelect?.([event.lngLat.lng, event.lngLat.lat]);
+        return;
+      }
       const alertId = event.features?.[0]?.properties?.alertId;
       if (typeof alertId !== 'string') return;
       if (onGeometryClick) {
@@ -91,10 +120,13 @@ export function AlertsMap({
         params: { alertId },
       });
     },
-    [navigate, onGeometryClick],
+    [interactionMode, navigate, onGeometryClick, onMapPointSelect],
   );
 
   const isTailwindClass = typeof height === 'string' && /^h-/.test(height);
+  let mapCursor = 'grab';
+  if (interactionMode === 'create-point') mapCursor = 'crosshair';
+  else if (featureCollection.features.length > 0) mapCursor = 'pointer';
 
   return (
     <div
@@ -116,9 +148,11 @@ export function AlertsMap({
           mapLoadedRef.current = true;
           fitInitialBounds();
         }}
-        onClick={handleGeometryClick}
-        interactiveLayerIds={INTERACTIVE_LAYER_IDS}
-        cursor={featureCollection.features.length > 0 ? 'pointer' : 'grab'}
+        onClick={handleMapClick}
+        interactiveLayerIds={
+          interactionMode === 'browse' ? INTERACTIVE_LAYER_IDS : undefined
+        }
+        cursor={mapCursor}
         className="h-full w-full"
         basemapSwitcherPositionClassName={basemapSwitcherPositionClassName}
       >
@@ -160,9 +194,25 @@ export function AlertsMap({
             />
           </Source>
         ) : null}
+        {draftFeatureCollection ? (
+          <Source id="alert-draft" type="geojson" data={draftFeatureCollection}>
+            <Layer
+              id="alert-draft-point"
+              type="circle"
+              paint={{
+                'circle-color': '#dc2626',
+                'circle-radius': 8,
+                'circle-stroke-color': '#FFFFFF',
+                'circle-stroke-width': 2,
+              }}
+            />
+          </Source>
+        ) : null}
       </MapContainer>
 
-      {showEmptyState && featureCollection.features.length === 0 ? (
+      {showEmptyState &&
+      interactionMode === 'browse' &&
+      featureCollection.features.length === 0 ? (
         <div className="absolute inset-0 flex items-center justify-center bg-surface-card/80 p-6 text-center backdrop-blur-sm">
           <p className="text-text-muted text-sm">
             {intl.formatMessage(messages.empty)}
