@@ -203,6 +203,40 @@ describe('AlertsMap', () => {
     );
   });
 
+  it('refits when the meaningful alert extent changes after initial load', () => {
+    const { rerender } = render(
+      <AlertsMap
+        alerts={[makeAlert({ type: 'Point', coordinates: [-60, -3] })]}
+      />,
+    );
+
+    screen.getByTestId('load-map').click();
+    expect(mockFitBounds).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <AlertsMap
+        alerts={[
+          makeAlert({
+            type: 'MultiPoint',
+            coordinates: [
+              [-72, -15],
+              [-48, 2],
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    expect(mockFitBounds).toHaveBeenCalledTimes(2);
+    expect(mockFitBounds).toHaveBeenLastCalledWith(
+      [
+        [-72, -15],
+        [-48, 2],
+      ],
+      expect.objectContaining({ padding: 50, maxZoom: 14 }),
+    );
+  });
+
   it('navigates to alert detail when any rendered geometry is clicked', () => {
     render(
       <AlertsMap
