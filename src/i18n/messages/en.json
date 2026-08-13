@@ -221,11 +221,26 @@
   "alerts.noProjectLink": {
     "defaultMessage": "Go to Home"
   },
+  "alerts.switchToGridView": {
+    "defaultMessage": "Switch to grid view"
+  },
+  "alerts.switchToMapView": {
+    "defaultMessage": "Switch to map view"
+  },
   "alerts.title": {
     "defaultMessage": "Alerts"
   },
   "alerts.untitledProject": {
     "defaultMessage": "Untitled Project"
+  },
+  "alerts.viewGrid": {
+    "defaultMessage": "Grid view"
+  },
+  "alerts.viewMap": {
+    "defaultMessage": "Map view"
+  },
+  "alertsMap.empty": {
+    "defaultMessage": "No alerts with location to show on the map"
   },
   "app.title": {
     "defaultMessage": "CoMapeo Cloud"
