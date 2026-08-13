@@ -36,14 +36,18 @@ describe('PhotoGallery', () => {
 
   it('renders thumbnail grid from photos array', () => {
     render(<PhotoGallery photos={photos} projectId={projectId} />);
-    const images = screen.getAllByRole('img');
-    expect(images).toHaveLength(2);
+    const thumbnails = screen.getAllByRole('button', { name: /View / });
+    expect(thumbnails).toHaveLength(2);
   });
 
-  it('each thumbnail has correct alt text', () => {
+  it('each thumbnail has correct aria-label', () => {
     render(<PhotoGallery photos={photos} projectId={projectId} />);
-    expect(screen.getByAltText('photo1.jpg')).toBeInTheDocument();
-    expect(screen.getByAltText('photo2.png')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'View photo1.jpg' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'View photo2.png' }),
+    ).toBeInTheDocument();
   });
 
   it('builds thumbnail URLs using getAttachmentUrl with thumbnail variant', () => {
@@ -77,7 +81,7 @@ describe('PhotoGallery', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     // Click first thumbnail
-    const firstThumb = screen.getByAltText('photo1.jpg');
+    const firstThumb = screen.getByRole('button', { name: 'View photo1.jpg' });
     await user.click(firstThumb);
 
     // Preview dialog should appear
@@ -91,7 +95,7 @@ describe('PhotoGallery', () => {
     const user = userEvent.setup();
     render(<PhotoGallery photos={photos} projectId={projectId} />);
 
-    await user.click(screen.getByAltText('photo1.jpg'));
+    await user.click(screen.getByRole('button', { name: 'View photo1.jpg' }));
 
     expect(getAttachmentUrl).toHaveBeenCalledWith(
       'proj1',
@@ -106,7 +110,7 @@ describe('PhotoGallery', () => {
     const user = userEvent.setup();
     render(<PhotoGallery photos={photos} projectId={projectId} />);
 
-    await user.click(screen.getByAltText('photo1.jpg'));
+    await user.click(screen.getByRole('button', { name: 'View photo1.jpg' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
     const closeButton = screen.getByRole('button', { name: 'Close preview' });

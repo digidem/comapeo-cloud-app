@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useState,
 } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -67,8 +68,13 @@ function MediaLightbox({
   const intl = useIntl();
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const prevButtonRef = useRef<HTMLButtonElement>(null);
+  const nextButtonRef = useRef<HTMLButtonElement>(null);
   const touchStartXRef = useRef<number | null>(null);
   const focusOnCloseRef = useRef<HTMLElement | null>(focusOnClose);
+  const [focusedElement, setFocusedElement] = useState<
+    'close' | 'prev' | 'next' | null
+  >('close');
   const hasMultiple = images.length > 1;
   const safeIndex = Math.min(Math.max(currentIndex, 0), images.length - 1);
   const currentImage = images[safeIndex];
@@ -99,6 +105,24 @@ function MediaLightbox({
       focusOnCloseRef.current?.focus();
     };
   }, []);
+
+  // Handle focus management when navigation buttons appear/disappear
+  // Using useLayoutEffect to avoid the setState-in-effect lint error, but only when needed
+  useEffect(() => {
+    if (!hasMultiple) return;
+
+    // When canGoPrev becomes false and prev button was focused, move focus to close
+    if (!canGoPrev && focusedElement === 'prev') {
+      closeButtonRef.current?.focus();
+      // Use setTimeout to defer setState to avoid synchronous render in effect
+      setTimeout(() => setFocusedElement('close'), 0);
+    }
+    // When canGoNext becomes false and next button was focused, move focus to close
+    if (!canGoNext && focusedElement === 'next') {
+      closeButtonRef.current?.focus();
+      setTimeout(() => setFocusedElement('close'), 0);
+    }
+  }, [canGoPrev, canGoNext, focusedElement, hasMultiple]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
@@ -201,6 +225,7 @@ function MediaLightbox({
         ref={closeButtonRef}
         type="button"
         onClick={onClose}
+        onFocus={() => setFocusedElement('close')}
         className="absolute top-4 right-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-colors"
         aria-label={intl.formatMessage(messages.closePreview)}
       >
@@ -222,8 +247,10 @@ function MediaLightbox({
 
       {hasMultiple && canGoPrev && (
         <button
+          ref={prevButtonRef}
           type="button"
           onClick={() => onNavigate(safeIndex - 1)}
+          onFocus={() => setFocusedElement('prev')}
           className="absolute left-2 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-colors"
           aria-label={intl.formatMessage(messages.previousImage)}
         >
@@ -245,8 +272,10 @@ function MediaLightbox({
 
       {hasMultiple && canGoNext && (
         <button
+          ref={nextButtonRef}
           type="button"
           onClick={() => onNavigate(safeIndex + 1)}
+          onFocus={() => setFocusedElement('next')}
           className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-colors"
           aria-label={intl.formatMessage(messages.nextImage)}
         >

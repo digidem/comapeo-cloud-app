@@ -36,9 +36,26 @@ if (typeof HTMLElement !== 'undefined') {
 Object.defineProperty(window, 'IntersectionObserver', {
   writable: true,
   value: class IntersectionObserver {
-    observe() {}
+    root = null;
+    rootMargin = '';
+    thresholds = [0];
+    scrollMargin = '';
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback;
+    }
+    callback: IntersectionObserverCallback;
+    observe(target: Element) {
+      // In test environment, immediately trigger intersection for all observed elements
+      this.callback?.(
+        [{ target, isIntersecting: true }] as IntersectionObserverEntry[],
+        this as unknown as IntersectionObserver,
+      );
+    }
     unobserve() {}
     disconnect() {}
+    takeRecords() {
+      return [];
+    }
   },
 });
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { AuthImg } from '@/components/shared/auth-img';
@@ -31,6 +31,9 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
   const [focusOnClose, setFocusOnClose] = useState<HTMLButtonElement | null>(
     null,
   );
+  const [visibleThumbnails, setVisibleThumbnails] = useState<Set<number>>(
+    new Set(),
+  );
 
   const imageUrls = photos.map((photo) =>
     getAttachmentUrl(
@@ -41,6 +44,29 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
       'original',
     ),
   );
+
+  // IntersectionObserver for lazy loading thumbnails
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const target = entry.target as HTMLElement;
+            const index = Number(target.dataset.index);
+            setVisibleThumbnails((prev) => new Set(prev).add(index));
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: '200px' }, // Start loading 200px before entering viewport
+    );
+
+    thumbnailRefs.current.forEach((el, _index) => {
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [photos.length]);
 
   const handleThumbnailClick = useCallback((index: number) => {
     // Store reference to the thumbnail that opened the preview for focus restoration
@@ -58,8 +84,8 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
 
   const handleNavigate = useCallback((index: number) => {
     // Update the stored thumbnail reference when navigating
+    // BUT do NOT update focusOnClose - that should remain the opener
     openedThumbnailRef.current = thumbnailRefs.current[index] ?? null;
-    setFocusOnClose(openedThumbnailRef.current);
     setPreviewIndex(index);
   }, []);
 
@@ -82,18 +108,27 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
             aria-label={intl.formatMessage(messages.viewPhoto, {
               photoName: photo.name,
             })}
+            data-index={index}
           >
-            <AuthImg
-              src={getAttachmentUrl(
-                projectId,
-                photo.driveId,
-                photo.type,
-                photo.name,
-                'thumbnail',
-              )}
-              alt={photo.name}
-              className="w-full rounded-card"
-            />
+            {visibleThumbnails.has(index) && (
+              <AuthImg
+                src={getAttachmentUrl(
+                  projectId,
+                  photo.driveId,
+                  photo.type,
+                  photo.name,
+                  'thumbnail',
+                )}
+                alt={photo.name}
+                className="w-full rounded-card"
+              />
+            )}
+            {!visibleThumbnails.has(index) && (
+              <div
+                className="w-full aspect-square rounded-card bg-surface-container-low animate-pulse"
+                aria-hidden="true"
+              />
+            )}
           </button>
         ))}
       </div>

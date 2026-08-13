@@ -248,9 +248,10 @@ export function ObservationDetailScreen() {
                 setLightboxIndex(null);
               }}
               onNavigate={(index) => {
+                // Update the stored thumbnail reference when navigating
+                // BUT do NOT update focusOnClose - that should remain the opener
                 openedThumbnailRef.current =
                   thumbnailRefs.current[index] ?? null;
-                setFocusOnClose(openedThumbnailRef.current);
                 setLightboxIndex(index);
               }}
               focusOnClose={focusOnClose}
