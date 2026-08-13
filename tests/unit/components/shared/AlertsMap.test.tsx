@@ -74,6 +74,23 @@ vi.mock('react-map-gl/maplibre', () => ({
     </div>
   ),
   Layer: ({ id }: { id: string }) => <div data-testid={id} />,
+  Marker: ({
+    children,
+    longitude,
+    latitude,
+  }: {
+    children: ReactNode;
+    longitude: number;
+    latitude: number;
+  }) => (
+    <div
+      data-testid="map-marker"
+      data-longitude={longitude}
+      data-latitude={latitude}
+    >
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -312,11 +329,18 @@ describe('AlertsMap', () => {
       />,
     );
 
-    expect(screen.getByTestId('alert-draft-source')).toHaveAttribute(
-      'data-features',
-      '1',
+    expect(screen.getByTestId('map-marker')).toHaveAttribute(
+      'data-longitude',
+      '-51.25',
     );
-    expect(screen.getByTestId('alert-draft-point')).toBeInTheDocument();
+    expect(screen.getByTestId('map-marker')).toHaveAttribute(
+      'data-latitude',
+      '-3.75',
+    );
+    expect(screen.getByTestId('alert-draft-point')).toHaveClass(
+      'bg-error',
+      'border-surface-card',
+    );
   });
 
   it('shows the no-location state while invalid alerts remain absent from the map', () => {
