@@ -27,7 +27,7 @@ test.describe('Alerts map and grid', () => {
     await expect(page.getByText('area-change')).toBeVisible();
 
     const preferences = await page.evaluate(() => ({
-      alerts: localStorage.getItem('alert-view-mode-preference'),
+      alerts: localStorage.getItem('comapeo-alert-view-mode-preference'),
       data: localStorage.getItem('view-mode-preference'),
     }));
     expect(preferences.alerts).toContain('grid');
