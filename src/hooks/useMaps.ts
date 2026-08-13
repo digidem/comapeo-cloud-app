@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
@@ -8,12 +13,29 @@ import { downloadSmp } from '@/lib/map/smp-download';
 import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
-export const mapsQueryKey = (projectLocalId: string | null) => [
-  'maps',
-  projectLocalId,
-];
+export const mapsQueryKey = (projectLocalId: string | null) =>
+  ['maps', { scope: 'project', projectLocalId }] as const;
 
-export const allMapsQueryKey = ['maps', 'all-projects'] as const;
+export const allMapsQueryKey = ['maps', { scope: 'all' }] as const;
+
+export function removeMapsFromListCaches(
+  queryClient: QueryClient,
+  mapIds: Iterable<string>,
+): void {
+  const removedMapIds = new Set(mapIds);
+  if (removedMapIds.size === 0) return;
+
+  queryClient.setQueriesData<SavedMap[]>({ queryKey: ['maps'] }, (maps) =>
+    maps?.filter((map) => !removedMapIds.has(map.id)),
+  );
+}
+
+export function clearDeletedMapFromActiveStore(mapId: string): void {
+  const storeState = useMapStore.getState();
+  if (storeState.activeMapId === mapId) {
+    storeState.hydrateActiveMap(storeState.activeProjectLocalId, null);
+  }
+}
 
 function sortMapsNewestFirst(maps: SavedMap[]): SavedMap[] {
   return maps.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -34,7 +56,7 @@ function assertValidNewMapOrigin(map: SavedMap): void {
   }
 }
 
-export function useMaps(projectLocalId: string | null) {
+export function useMaps(projectLocalId: string | null, enabled = true) {
   return useQuery({
     queryKey: mapsQueryKey(projectLocalId),
     queryFn: async () => {
@@ -45,14 +67,15 @@ export function useMaps(projectLocalId: string | null) {
         .toArray();
       return sortMapsNewestFirst(maps);
     },
-    enabled: projectLocalId !== null,
+    enabled: enabled && projectLocalId !== null,
   });
 }
 
-export function useAllMaps() {
+export function useAllMaps(enabled = true) {
   return useQuery({
     queryKey: allMapsQueryKey,
     queryFn: async () => sortMapsNewestFirst(await getDb().maps.toArray()),
+    enabled,
   });
 }
 
@@ -86,7 +109,7 @@ export function useRenameMap() {
   });
 }
 
-export function useDeleteMap(projectLocalId: string | null) {
+export function useDeleteMap() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -109,17 +132,12 @@ export function useDeleteMap(projectLocalId: string | null) {
           });
       });
 
-      const storeState = useMapStore.getState();
-      if (
-        storeState.activeMapId === mapId &&
-        storeState.activeProjectLocalId === projectLocalId
-      ) {
-        storeState.hydrateActiveMap(projectLocalId, null);
-      }
+      clearDeletedMapFromActiveStore(mapId);
     },
     onSuccess: (_data, mapId) => {
+      removeMapsFromListCaches(queryClient, [mapId]);
+      queryClient.removeQueries({ queryKey: ['map', mapId], exact: true });
       void queryClient.invalidateQueries({ queryKey: ['maps'] });
-      void queryClient.invalidateQueries({ queryKey: ['map', mapId] });
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });

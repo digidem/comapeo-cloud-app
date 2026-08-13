@@ -51,7 +51,7 @@ export function RenameMapDialog({
           error={error ?? undefined}
         />
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onCancel}>
+          <Button type="button" variant="secondary" onClick={onCancel}>
             {intl.formatMessage(mapMessages.cancel)}
           </Button>
           <Button type="submit" loading={loading}>
@@ -102,7 +102,7 @@ export function DeleteMapDialog({
           </p>
         ) : null}
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onCancel}>
+          <Button type="button" variant="secondary" onClick={onCancel}>
             {intl.formatMessage(mapMessages.cancel)}
           </Button>
           <Button variant="danger" onClick={onConfirm} loading={loading}>

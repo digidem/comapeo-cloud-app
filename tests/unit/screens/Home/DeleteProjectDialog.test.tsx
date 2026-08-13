@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
 
 import { DeleteProjectDialog } from '@/screens/Home/DeleteProjectDialog';
+import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
 vi.mock('@/lib/data-layer', () => ({
@@ -13,6 +14,7 @@ vi.mock('@/lib/data-layer', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   useMapStore.setState({ activeProjectLocalId: null, activeMapId: null });
+  useMapDownloadStore.setState({ active: null });
 });
 
 describe('DeleteProjectDialog', () => {
@@ -83,13 +85,20 @@ describe('DeleteProjectDialog', () => {
     });
   });
 
-  it('clears active-map state and cache when the deleted project owned the selected map', async () => {
+  it('clears active-map state, downloads, and caches for maps owned by the deleted project', async () => {
     const { deleteProject } = await import('@/lib/data-layer');
     vi.mocked(deleteProject).mockResolvedValue(['map-1']);
     useMapStore.setState({
       activeProjectLocalId: 'target-project',
       activeMapId: 'map-1',
     });
+    const cancel = vi.fn();
+    useMapDownloadStore.getState().start({
+      mapId: 'map-1',
+      mapName: 'Downloading map',
+      cancel,
+    });
+    const setQueriesData = vi.spyOn(QueryClient.prototype, 'setQueriesData');
     const removeQueries = vi.spyOn(QueryClient.prototype, 'removeQueries');
     const invalidateQueries = vi.spyOn(
       QueryClient.prototype,
@@ -113,6 +122,12 @@ describe('DeleteProjectDialog', () => {
       expect(useMapStore.getState().activeMapId).toBeNull();
     });
     expect(useMapStore.getState().activeProjectLocalId).toBe('target-project');
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(useMapDownloadStore.getState().active).toBeNull();
+    expect(setQueriesData).toHaveBeenCalledWith(
+      { queryKey: ['maps'] },
+      expect.any(Function),
+    );
     expect(removeQueries).toHaveBeenCalledWith({
       queryKey: ['map', 'map-1'],
       exact: true,

@@ -5,7 +5,9 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
+import { removeMapsFromListCaches } from '@/hooks/useMaps';
 import { deleteProject } from '@/lib/data-layer';
+import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
 interface DeleteProjectDialogProps {
@@ -81,7 +83,16 @@ function DeleteProjectDialog({
     deleteProject(projectLocalId).then(
       (removedMapIds) => {
         const removedMapIdSet = new Set(removedMapIds);
+        const downloadStore = useMapDownloadStore.getState();
         const mapStore = useMapStore.getState();
+
+        if (
+          downloadStore.active &&
+          removedMapIdSet.has(downloadStore.active.mapId)
+        ) {
+          downloadStore.active.cancel();
+          downloadStore.clear(downloadStore.active.mapId);
+        }
 
         if (mapStore.activeProjectLocalId === projectLocalId) {
           mapStore.hydrateActiveMap(null, null);
@@ -92,6 +103,7 @@ function DeleteProjectDialog({
           mapStore.hydrateActiveMap(mapStore.activeProjectLocalId, null);
         }
 
+        removeMapsFromListCaches(queryClient, removedMapIds);
         for (const mapId of removedMapIds) {
           queryClient.removeQueries({ queryKey: ['map', mapId], exact: true });
         }

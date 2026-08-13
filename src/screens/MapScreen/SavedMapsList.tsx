@@ -35,12 +35,12 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
   const intl = useIntl();
   const activeMapId = useMapStore((state) => state.activeMapId);
   const [scope, setScope] = useState<SavedMapsScope>('project');
-  const projectMapsQuery = useMaps(projectLocalId);
-  const allMapsQuery = useAllMaps();
+  const projectMapsQuery = useMaps(projectLocalId, scope === 'project');
+  const allMapsQuery = useAllMaps(scope === 'all');
   const projectsQuery = useProjects();
   const setActiveMap = useSetActiveMapMutation();
   const renameMap = useRenameMap();
-  const deleteMap = useDeleteMap(projectLocalId);
+  const deleteMap = useDeleteMap();
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(
     null,
   );

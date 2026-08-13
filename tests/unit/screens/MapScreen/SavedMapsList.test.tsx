@@ -111,9 +111,18 @@ describe('SavedMapsList', () => {
 
     expect(await screen.findByText('Current project map')).toBeInTheDocument();
     expect(screen.queryByText('Other project map')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: 'Saved maps scope' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'This project' }),
+    ).toHaveAttribute('aria-pressed', 'true');
 
     await user.click(screen.getByRole('button', { name: 'All projects' }));
 
+    expect(
+      screen.getByRole('button', { name: 'All projects' }),
+    ).toHaveAttribute('aria-pressed', 'true');
     const rows = await screen.findAllByTestId('saved-map-row');
     expect(rows[0]).toHaveTextContent('Other project map');
     expect(rows[0]).toHaveTextContent('Origin: Neighbor territory');
@@ -137,6 +146,25 @@ describe('SavedMapsList', () => {
     const row = await screen.findByTestId('saved-map-row');
     expect(row).toHaveTextContent('Orphaned map');
     expect(row).toHaveTextContent('Origin project unavailable');
+  });
+
+  it('distinguishes an untitled origin project from a missing origin', async () => {
+    const user = userEvent.setup();
+    await addProject('untitled-project');
+    await getDb().maps.add(
+      createMap({
+        id: 'untitled-map',
+        name: 'Untitled origin map',
+        projectLocalId: 'untitled-project',
+      }),
+    );
+
+    render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+
+    const row = await screen.findByTestId('saved-map-row');
+    expect(row).toHaveTextContent('Origin: Untitled Project');
+    expect(row).not.toHaveTextContent('Origin project unavailable');
   });
 
   it('sets a saved map as active for the current project', async () => {
@@ -205,7 +233,10 @@ describe('SavedMapsList', () => {
     await user.click(await screen.findByRole('button', { name: 'Set active' }));
 
     rerender(<SavedMapsList projectLocalId="project-2" />);
-    releaseWrite?.();
+    await act(async () => {
+      useMapStore.getState().hydrateActiveMap('project-2', null);
+      releaseWrite?.();
+    });
 
     await waitFor(async () => {
       expect((await getDb().projects.get('project-1'))?.activeMapId).toBe(
@@ -214,6 +245,44 @@ describe('SavedMapsList', () => {
     });
     expect(
       (await getDb().projects.get('project-2'))?.activeMapId,
+    ).toBeUndefined();
+    expect(useMapStore.getState().activeProjectLocalId).toBe('project-2');
+    expect(useMapStore.getState().activeMapId).toBeNull();
+  });
+
+  it('does not roll a failed activation back into a project selected while the write is pending', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1');
+    await addProject('project-2', 'map-2');
+    await getDb().maps.add(
+      createMap({ projectLocalId: 'project-2', name: 'Cross-project map' }),
+    );
+
+    const projectsTable = getDb().projects;
+    let rejectWrite: ((error: Error) => void) | undefined;
+    vi.spyOn(projectsTable, 'update').mockReturnValueOnce(
+      new Promise<number>((_resolve, reject) => {
+        rejectWrite = reject;
+      }) as unknown as ReturnType<typeof projectsTable.update>,
+    );
+
+    const { rerender } = render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+
+    rerender(<SavedMapsList projectLocalId="project-2" />);
+    await act(async () => {
+      useMapStore.getState().hydrateActiveMap('project-2', 'map-2');
+      rejectWrite?.(new Error('IndexedDB write failed'));
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not update active map. Please try again.',
+    );
+    expect(useMapStore.getState().activeProjectLocalId).toBe('project-2');
+    expect(useMapStore.getState().activeMapId).toBe('map-2');
+    expect(
+      (await getDb().projects.get('project-1'))?.activeMapId,
     ).toBeUndefined();
   });
 
