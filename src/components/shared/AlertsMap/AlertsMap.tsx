@@ -4,6 +4,7 @@ import {
   Layer,
   type MapLayerMouseEvent,
   type MapRef,
+  Marker,
   Source,
 } from 'react-map-gl/maplibre';
 
@@ -56,25 +57,6 @@ export function AlertsMap({
   const featureCollection = useMemo(
     () => alertsToFeatureCollection(alerts),
     [alerts],
-  );
-  const draftFeatureCollection = useMemo(
-    () =>
-      draftPoint
-        ? {
-            type: 'FeatureCollection' as const,
-            features: [
-              {
-                type: 'Feature' as const,
-                properties: {},
-                geometry: {
-                  type: 'Point' as const,
-                  coordinates: draftPoint,
-                },
-              },
-            ],
-          }
-        : undefined,
-    [draftPoint],
   );
   const bounds = useMemo(
     () => getAlertGeometryBounds(featureCollection),
@@ -195,19 +177,14 @@ export function AlertsMap({
             />
           </Source>
         ) : null}
-        {draftFeatureCollection ? (
-          <Source id="alert-draft" type="geojson" data={draftFeatureCollection}>
-            <Layer
-              id="alert-draft-point"
-              type="circle"
-              paint={{
-                'circle-color': '#dc2626',
-                'circle-radius': 8,
-                'circle-stroke-color': '#FFFFFF',
-                'circle-stroke-width': 2,
-              }}
+        {draftPoint ? (
+          <Marker longitude={draftPoint[0]} latitude={draftPoint[1]}>
+            <div
+              data-testid="alert-draft-point"
+              aria-hidden="true"
+              className="h-4 w-4 rounded-full border-2 border-surface-card bg-error shadow"
             />
-          </Source>
+          </Marker>
         ) : null}
       </MapContainer>
 
