@@ -2,6 +2,7 @@ export const TILE_RATE_LIMIT_PATH = '/api/tiles';
 export const TILE_RATE_LIMIT_METHOD = 'GET';
 export const TILE_RATE_LIMIT_RULE_REF = 'comapeo-cloud-app-tiles-rate-limit';
 export const PRODUCTION_TILE_HOST = 'app.comapeo.cloud';
+export const PRODUCTION_ZONE_NAME = 'comapeo.cloud';
 
 const SUPPORTED_PERIODS = new Set([10, 60, 120, 300, 600, 3600]);
 const SUPPORTED_MITIGATION_TIMEOUTS = new Set([
@@ -82,6 +83,14 @@ export interface CloudflareRateLimitRule {
 function assertHost(host: string): void {
   if (!/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(host)) {
     throw new Error(`Invalid hostname: ${host}`);
+  }
+}
+
+export function validateProductionZoneName(zoneName: string): void {
+  if (zoneName !== PRODUCTION_ZONE_NAME) {
+    throw new Error(
+      `Cloudflare operations must target the production zone ${PRODUCTION_ZONE_NAME}`,
+    );
   }
 }
 

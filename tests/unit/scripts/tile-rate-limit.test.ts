@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   PRODUCTION_TILE_HOST,
+  PRODUCTION_ZONE_NAME,
   buildCloudflareRateLimitRule,
   buildMeasurementReport,
   findRuleByRef,
@@ -9,6 +10,7 @@ import {
   summarizeHarSample,
   validateEnforcementReadiness,
   validateProductionMeasurementTarget,
+  validateProductionZoneName,
 } from '../../../scripts/lib/tile-rate-limit';
 
 describe('tile rate limit operations', () => {
@@ -176,6 +178,14 @@ describe('tile rate limit operations', () => {
     expect(() => validateProductionMeasurementTarget(report)).toThrow(
       /production/i,
     );
+  });
+
+  it('requires the configured production zone', () => {
+    expect(PRODUCTION_ZONE_NAME).toBe('comapeo.cloud');
+    expect(() => validateProductionZoneName('example.com')).toThrow(
+      /production zone/i,
+    );
+    expect(() => validateProductionZoneName('comapeo.cloud')).not.toThrow();
   });
 
   it('extracts the managed rule from Cloudflare ruleset mutation responses', () => {

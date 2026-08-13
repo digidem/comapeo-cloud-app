@@ -5,6 +5,7 @@ import {
   type CloudflareRateLimitRule,
   type MeasurementReport,
   PRODUCTION_TILE_HOST,
+  PRODUCTION_ZONE_NAME,
   type RateLimitMode,
   TILE_RATE_LIMIT_RULE_REF,
   buildCloudflareRateLimitRule,
@@ -13,6 +14,7 @@ import {
   summarizeHarSample,
   validateEnforcementReadiness,
   validateProductionMeasurementTarget,
+  validateProductionZoneName,
 } from './lib/tile-rate-limit';
 
 const API_BASE = 'https://api.cloudflare.com/client/v4';
@@ -117,6 +119,12 @@ function modeOption(values: Map<string, string | boolean>): RateLimitMode {
     throw new Error('--mode must be observe or enforce');
   }
   return mode;
+}
+
+function productionZoneOption(values: Map<string, string | boolean>): string {
+  const zoneName = stringOption(values, 'zone', PRODUCTION_ZONE_NAME);
+  validateProductionZoneName(zoneName);
+  return zoneName;
 }
 
 async function readJson(path: string): Promise<unknown> {
@@ -364,7 +372,7 @@ function tokenFromEnv(): string {
 async function apply(values: Map<string, string | boolean>): Promise<void> {
   const token = tokenFromEnv();
   const report = await readReport(stringOption(values, 'report'));
-  const zoneName = stringOption(values, 'zone', 'comapeo.cloud');
+  const zoneName = productionZoneOption(values);
   const zoneId = await resolveZoneId(token, zoneName);
   const rule = reportRule(report, values);
   const result = await upsertManagedRule(token, zoneId, rule);
@@ -387,7 +395,7 @@ async function apply(values: Map<string, string | boolean>): Promise<void> {
 
 async function status(values: Map<string, string | boolean>): Promise<void> {
   const token = tokenFromEnv();
-  const zoneName = stringOption(values, 'zone', 'comapeo.cloud');
+  const zoneName = productionZoneOption(values);
   const zoneId = await resolveZoneId(token, zoneName);
   const ruleset = await getRateLimitRuleset(token, zoneId);
   const rule = findManagedRule(ruleset);
@@ -413,7 +421,7 @@ async function status(values: Map<string, string | boolean>): Promise<void> {
 
 async function disable(values: Map<string, string | boolean>): Promise<void> {
   const token = tokenFromEnv();
-  const zoneName = stringOption(values, 'zone', 'comapeo.cloud');
+  const zoneName = productionZoneOption(values);
   const zoneId = await resolveZoneId(token, zoneName);
   const changed = await disableManagedRule(token, zoneId);
   console.log(
