@@ -357,6 +357,11 @@ jobs:
             npx playwright test --project=chromium --project=firefox --project=webkit --reporter=list
           fi
 
+      - name: PWA offline cold-start E2E
+        env:
+          VITE_PREVIEW: '1'
+        run: npx playwright test tests/e2e/map-offline-cold-start.e2e.ts --project=chromium --reporter=list
+
   # -----------------------------------------------------------------------
   # Visual regression with Argos CI
   # NOTE: Dependabot PRs don't have access to secrets (ARGOS_TOKEN is
