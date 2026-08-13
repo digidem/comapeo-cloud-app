@@ -34,6 +34,7 @@ Keep static review separate from live GitHub verification.
 
 - Prefer a reviewer-native detached/resumable execution surface over forcing the review under the shell timeout.
 - For Claude Code 2.1.139+, use `scripts/claude_review.py` and the supervisor-backed `--bg` path described in `claude-code-review.md`. Dispatch should return in seconds; review wall-clock time is then independent of CodexPro's shell ceiling.
+- For the Kimi K3 fallback, prefer a persistent ACP session (`acpx` with `opencode-go/kimi-k3`) when a synchronous OpenCode Go or Oh My Pi review approaches the shell timeout. Queue the exact-diff review, poll `status`/session history in short windows, and collect the final terminal verdict; partial reasoning, a timed-out foreground command, or a still-running session must not count as approval.
 - Use Claude `--safe-mode` on the subscription-backed reviewer path to disable hooks/plugins/MCP/CLAUDE.md/custom startup state while preserving OAuth/keychain authentication. Do not use `--bare` by default because bare mode intentionally skips OAuth/keychain reads and expects API-key-style auth.
 - Bind every reviewer run to the exact pushed HEAD SHA and the **current live target-branch tip**, compute the merge-base from those refs, and require a clean PR worktree before dispatch. Do not treat PR `baseRefOid` / REST `base.sha` as the live target tip; they can lag when the base branch advances.
 - Ask for blockers, should-fix issues, and nits; do not ask the reviewer to poll CI or own live GitHub verification.
