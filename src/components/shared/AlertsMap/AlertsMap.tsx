@@ -122,6 +122,9 @@ export function AlertsMap({
       >
         {featureCollection.features.length > 0 ? (
           <Source id="alerts" type="geojson" data={featureCollection}>
+            {/* MapLibre's geometry-type expression returns the simple family
+                for Multi* geometries, so these three layers cover all six
+                supported GeoJSON geometry types. */}
             <Layer
               id="alert-polygons"
               type="fill"

@@ -86,11 +86,21 @@ describe('AlertsMap', () => {
       .AlertsMap;
   });
 
-  it('renders neutral point, line, and polygon layers from one alert source', () => {
+  it('renders all six supported geometry families through neutral map layers', () => {
     render(
       <AlertsMap
         alerts={[
           makeAlert({ type: 'Point', coordinates: [-55, -8] }),
+          {
+            ...makeAlert({
+              type: 'MultiPoint',
+              coordinates: [
+                [-56, -8],
+                [-57, -9],
+              ],
+            }),
+            localId: 'multi-point',
+          },
           {
             ...makeAlert({
               type: 'LineString',
@@ -100,6 +110,22 @@ describe('AlertsMap', () => {
               ],
             }),
             localId: 'line',
+          },
+          {
+            ...makeAlert({
+              type: 'MultiLineString',
+              coordinates: [
+                [
+                  [-60, -4],
+                  [-61, -5],
+                ],
+                [
+                  [-62, -6],
+                  [-63, -7],
+                ],
+              ],
+            }),
+            localId: 'multi-line',
           },
           {
             ...makeAlert({
@@ -115,13 +141,37 @@ describe('AlertsMap', () => {
             }),
             localId: 'polygon',
           },
+          {
+            ...makeAlert({
+              type: 'MultiPolygon',
+              coordinates: [
+                [
+                  [
+                    [-64, -8],
+                    [-65, -8],
+                    [-65, -9],
+                    [-64, -8],
+                  ],
+                ],
+                [
+                  [
+                    [-66, -10],
+                    [-67, -10],
+                    [-67, -11],
+                    [-66, -10],
+                  ],
+                ],
+              ],
+            }),
+            localId: 'multi-polygon',
+          },
         ]}
       />,
     );
 
     expect(screen.getByTestId('alert-source')).toHaveAttribute(
       'data-features',
-      '3',
+      '6',
     );
     expect(screen.getByTestId('alert-points')).toBeInTheDocument();
     expect(screen.getByTestId('alert-lines')).toBeInTheDocument();
