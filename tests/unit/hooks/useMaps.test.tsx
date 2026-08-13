@@ -365,6 +365,9 @@ describe('useSetActiveMapMutation', () => {
   });
 
   it('rejects and rolls back the store when the project update touches zero rows', async () => {
+    await getDb().maps.add(
+      createMap({ id: 'map-after', projectLocalId: 'missing-project' }),
+    );
     useMapStore.getState().hydrateActiveMap('missing-project', 'map-before');
 
     const { result } = renderHook(() => useSetActiveMapMutation(), { wrapper });

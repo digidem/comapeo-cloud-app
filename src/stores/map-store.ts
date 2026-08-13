@@ -77,9 +77,19 @@ export const useMapStore = create<MapState>()(
 
         let rowsUpdated: number;
         try {
-          rowsUpdated = await getDb().projects.update(projectLocalId, {
-            activeMapId: mapId,
-          });
+          const db = getDb();
+          rowsUpdated = await db.transaction(
+            'rw',
+            [db.maps, db.projects],
+            async () => {
+              if (mapId !== null && !(await db.maps.get(mapId))) {
+                throw new Error(`Map not found: ${mapId}`);
+              }
+              return db.projects.update(projectLocalId, {
+                activeMapId: mapId,
+              });
+            },
+          );
         } catch (error) {
           rollback();
           throw error;

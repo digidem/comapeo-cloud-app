@@ -6,12 +6,15 @@ import {
   waitFor,
   within,
 } from '@tests/mocks/test-utils';
+import Dexie from 'dexie';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
 import { getDb, resetDb } from '@/lib/db';
 import { SavedMapsList } from '@/screens/MapScreen/SavedMapsList';
 import { useMapStore } from '@/stores/map-store';
+
+const keepDexieTransactionAlive = Dexie.waitFor.bind(Dexie);
 
 function createMap(overrides: Partial<SavedMap> = {}): SavedMap {
   return {
@@ -226,9 +229,11 @@ describe('SavedMapsList', () => {
     let releaseWrite: (() => void) | undefined;
     vi.spyOn(projectsTable, 'update').mockImplementation((...args) => {
       const pendingUpdate = (async () => {
-        await new Promise<void>((resolve) => {
-          releaseWrite = resolve;
-        });
+        await keepDexieTransactionAlive(
+          new Promise<void>((resolve) => {
+            releaseWrite = resolve;
+          }),
+        );
         return originalUpdate(...args);
       })();
       return pendingUpdate as unknown as ReturnType<
@@ -271,9 +276,11 @@ describe('SavedMapsList', () => {
     let releaseWrite: (() => void) | undefined;
     vi.spyOn(projectsTable, 'update').mockImplementation((...args) => {
       const pendingUpdate = (async () => {
-        await new Promise<void>((resolve) => {
-          releaseWrite = resolve;
-        });
+        await keepDexieTransactionAlive(
+          new Promise<void>((resolve) => {
+            releaseWrite = resolve;
+          }),
+        );
         return originalUpdate(...args);
       })();
       return pendingUpdate as unknown as ReturnType<
@@ -409,11 +416,14 @@ describe('SavedMapsList', () => {
     const user = userEvent.setup();
     let resolveUpdate: (value: number) => void = () => {};
     const projectsTable = getDb().projects;
-    vi.spyOn(projectsTable, 'update').mockReturnValueOnce(
-      new Promise<number>((resolve) => {
+    vi.spyOn(projectsTable, 'update').mockImplementationOnce(() => {
+      const pendingUpdate = new Promise<number>((resolve) => {
         resolveUpdate = resolve;
-      }) as unknown as ReturnType<typeof projectsTable.update>,
-    );
+      });
+      return keepDexieTransactionAlive(pendingUpdate) as unknown as ReturnType<
+        typeof projectsTable.update
+      >;
+    });
     await addProject('project-1');
     await getDb().maps.bulkAdd([
       createMap({ id: 'map-1', name: 'First map' }),

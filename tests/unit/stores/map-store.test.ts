@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SavedMap } from '@/lib/db';
 import { getDb, resetDb } from '@/lib/db';
 import { DEFAULT_BASEMAP_ID } from '@/lib/map/basemaps';
 import { useMapStore } from '@/stores/map-store';
@@ -12,6 +13,24 @@ beforeEach(() => {
 afterEach(() => {
   localStorage.clear();
 });
+
+function createMap(id: string, projectLocalId: string): SavedMap {
+  return {
+    id,
+    projectLocalId,
+    name: `Map ${id}`,
+    type: 'raster',
+    origin: 'authored',
+    styleUrl: 'https://example.com/{z}/{x}/{y}.png',
+    bbox: [-70, -5, -60, 2],
+    minZoom: 0,
+    maxZoom: 14,
+    scheme: 'xyz',
+    status: 'draft',
+    createdAt: '2026-06-28T00:00:00Z',
+    updatedAt: '2026-06-28T00:00:00Z',
+  };
+}
 
 describe('map-store', () => {
   it(`default basemapId is "${DEFAULT_BASEMAP_ID}"`, () => {
@@ -72,6 +91,7 @@ describe('map-store activeMapId', () => {
 
   it('setActiveMap updates the cache and writes activeMapId to the project', async () => {
     const db = getDb();
+    await db.maps.add(createMap('map-1', 'proj-1'));
     await db.projects.add({
       localId: 'proj-1',
       sourceType: 'local',
@@ -119,6 +139,7 @@ describe('map-store activeMapId', () => {
 
   it('persists to the captured target without changing a different hydrated project', async () => {
     const db = getDb();
+    await db.maps.add(createMap('map-x', 'proj-target'));
     await db.projects.add({
       localId: 'proj-target',
       sourceType: 'local',
@@ -140,6 +161,7 @@ describe('map-store activeMapId', () => {
 
   it('restores the previous activeMapId when a same-project Dexie update rejects', async () => {
     const db = getDb();
+    await db.maps.add(createMap('map-after', 'proj-rejects'));
     const updateSpy = vi
       .spyOn(db.projects, 'update')
       .mockRejectedValueOnce(new Error('idb rejected'));
@@ -160,6 +182,7 @@ describe('map-store activeMapId', () => {
 
   it('restores the previous activeMapId when a same-project Dexie update touches zero rows', async () => {
     const db = getDb();
+    await db.maps.add(createMap('map-after', 'proj-missing'));
     const updateSpy = vi.spyOn(db.projects, 'update').mockResolvedValueOnce(0);
 
     useMapStore.getState().hydrateActiveMap('proj-missing', 'map-before');
@@ -174,6 +197,33 @@ describe('map-store activeMapId', () => {
     expect(useMapStore.getState().activeMapId).toBe('map-before');
 
     updateSpy.mockRestore();
+  });
+
+  it('rejects a missing map and rolls back the project and cache', async () => {
+    const db = getDb();
+    await db.maps.add(createMap('map-before', 'proj-existing-map'));
+    await db.projects.add({
+      localId: 'proj-missing-map',
+      sourceType: 'local',
+      sourceId: 'local',
+      activeMapId: 'map-before',
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    useMapStore.getState().hydrateActiveMap('proj-missing-map', 'map-before');
+
+    const write = useMapStore
+      .getState()
+      .setActiveMap('proj-missing-map', 'map-missing');
+    expect(useMapStore.getState().activeMapId).toBe('map-missing');
+
+    await expect(write).rejects.toThrow('Map not found: map-missing');
+    expect(useMapStore.getState().activeMapId).toBe('map-before');
+    expect((await db.projects.get('proj-missing-map'))?.activeMapId).toBe(
+      'map-before',
+    );
   });
 
   it('hydrateActiveMap sets the cache only and does not write to Dexie', async () => {
@@ -200,6 +250,7 @@ describe('map-store activeMapId', () => {
 
   it('round-trip: setActiveMap then re-hydrate yields the same value', async () => {
     const db = getDb();
+    await db.maps.add(createMap('map-r', 'proj-4'));
     await db.projects.add({
       localId: 'proj-4',
       sourceType: 'local',
@@ -236,6 +287,7 @@ describe('map-store activeMapId', () => {
 
   it('reconciles a successful write after navigating A to B and back to A', async () => {
     const db = getDb();
+    await db.maps.add(createMap('map-after', 'proj-a'));
     let resolveUpdate: ((rows: number) => void) | undefined;
     const updateSpy = vi.spyOn(db.projects, 'update').mockReturnValueOnce(
       new Promise<number>((resolve) => {
