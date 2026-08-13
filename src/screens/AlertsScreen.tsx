@@ -252,11 +252,10 @@ export function AlertsScreen() {
           />
 
           {isCreatingInline ? (
-            <section
-              role="dialog"
-              aria-modal="false"
+            <dialog
+              open
               aria-labelledby="inline-create-alert-title"
-              className="absolute inset-x-0 bottom-0 z-40 max-h-[72%] overflow-y-auto rounded-t-card border border-border/20 bg-surface-card shadow-elevated md:inset-y-3 md:right-3 md:left-auto md:w-[28rem] md:max-h-none md:rounded-card"
+              className="absolute inset-x-0 bottom-0 z-40 m-0 max-h-[72%] max-w-none overflow-y-auto rounded-t-card border border-border/20 bg-surface-card p-0 shadow-elevated md:inset-y-3 md:right-3 md:left-auto md:w-[28rem] md:max-h-none md:rounded-card"
             >
               <div className="sticky top-0 z-10 border-b border-border/20 bg-surface-card px-4 py-3">
                 <h2
@@ -280,7 +279,7 @@ export function AlertsScreen() {
                   onSuccess={closeInlineCreation}
                 />
               </div>
-            </section>
+            </dialog>
           ) : null}
 
           {!isCreatingInline && alertsQuery.isError ? (

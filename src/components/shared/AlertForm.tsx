@@ -188,11 +188,6 @@ export function AlertForm({
   }
 
   function clearDraftAndCancel() {
-    setGeometryState(undefined);
-    setGeometryValidation(undefined);
-    setGeometrySubmitErrorScope(undefined);
-    setMetadataRows([]);
-    setMetadataErrors({});
     onGeometryChange?.(undefined);
     onCancel();
   }

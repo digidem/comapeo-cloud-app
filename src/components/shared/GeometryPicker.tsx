@@ -76,6 +76,18 @@ const messages = defineMessages({
   },
 });
 
+const GEOMETRY_TYPE_OPTIONS = [
+  ['Point', messages.point],
+  ['LineString', messages.line],
+  ['Polygon', messages.polygon],
+] as const;
+
+const DEFAULT_ALLOWED_TYPES: readonly AlertGeometryType[] = [
+  'Point',
+  'LineString',
+  'Polygon',
+];
+
 export interface GeometryPickerProps {
   projectLocalId?: string;
   onChange: (value: AlertGeometry | undefined) => void;
@@ -121,29 +133,25 @@ function GeometryTypePicker({
   onChange: (type: AlertGeometryType) => void;
 }) {
   const intl = useIntl();
-  const options = [
-    ['Point', messages.point],
-    ['LineString', messages.line],
-    ['Polygon', messages.polygon],
-  ] as const;
+  const allowedTypeSet = useMemo(() => new Set(allowedTypes), [allowedTypes]);
   return (
     <fieldset className="flex flex-wrap gap-2">
       <legend className="mb-2 text-sm font-medium text-text">
         {intl.formatMessage(messages.typeLabel)}
       </legend>
-      {options
-        .filter(([geometryType]) => allowedTypes.includes(geometryType))
-        .map(([geometryType, label]) => (
-          <Button
-            key={geometryType}
-            type="button"
-            variant={type === geometryType ? 'primary' : 'secondary'}
-            onClick={() => onChange(geometryType)}
-            aria-pressed={type === geometryType}
-          >
-            {intl.formatMessage(label)}
-          </Button>
-        ))}
+      {GEOMETRY_TYPE_OPTIONS.filter(([geometryType]) =>
+        allowedTypeSet.has(geometryType),
+      ).map(([geometryType, label]) => (
+        <Button
+          key={geometryType}
+          type="button"
+          variant={type === geometryType ? 'primary' : 'secondary'}
+          onClick={() => onChange(geometryType)}
+          aria-pressed={type === geometryType}
+        >
+          {intl.formatMessage(label)}
+        </Button>
+      ))}
     </fieldset>
   );
 }
@@ -241,7 +249,7 @@ export function GeometryPicker({
   onChange,
   onValidationChange,
   showMap = true,
-  allowedTypes = ['Point', 'LineString', 'Polygon'],
+  allowedTypes = DEFAULT_ALLOWED_TYPES,
   externalPoint,
 }: GeometryPickerProps) {
   const intl = useIntl();
