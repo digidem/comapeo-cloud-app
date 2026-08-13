@@ -7,6 +7,7 @@ import {
 
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { recoverCancelledMapDownload } from '@/lib/map/saved-map-lifecycle';
 import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
 import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
@@ -38,7 +39,7 @@ export function clearDeletedMapFromActiveStore(mapId: string): void {
 }
 
 function sortMapsNewestFirst(maps: SavedMap[]): SavedMap[] {
-  return maps.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return [...maps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 function assertValidNewMapOrigin(map: SavedMap): void {
@@ -115,23 +116,30 @@ export function useDeleteMap() {
   return useMutation({
     mutationFn: async (mapId: string) => {
       const downloadState = useMapDownloadStore.getState();
-      if (downloadState.active?.mapId === mapId) {
-        downloadState.active.cancel();
-        downloadState.clear(mapId);
-      }
+      const cancelledDownload = downloadState.active?.mapId === mapId;
+      if (cancelledDownload) downloadState.active?.cancel();
 
       const db = getDb();
       const updatedAt = new Date().toISOString();
-      await db.transaction('rw', [db.maps, db.projects], async () => {
-        await db.maps.delete(mapId);
-        await db.projects
-          .filter((project) => project.activeMapId === mapId)
-          .modify((project) => {
-            project.activeMapId = null;
-            project.updatedAt = updatedAt;
-          });
-      });
+      try {
+        await db.transaction('rw', [db.maps, db.projects], async () => {
+          await db.maps.delete(mapId);
+          await db.projects
+            .filter((project) => project.activeMapId === mapId)
+            .modify((project) => {
+              project.activeMapId = null;
+              project.updatedAt = updatedAt;
+            });
+        });
+      } catch (error) {
+        if (cancelledDownload) {
+          await recoverCancelledMapDownload(mapId);
+          useMapDownloadStore.getState().clear(mapId);
+        }
+        throw error;
+      }
 
+      if (cancelledDownload) useMapDownloadStore.getState().clear(mapId);
       clearDeletedMapFromActiveStore(mapId);
     },
     onSuccess: (_data, mapId) => {

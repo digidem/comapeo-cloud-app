@@ -156,6 +156,46 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
     return pendingAction?.mapId === mapId ? pendingAction.type : null;
   }
 
+  function renderMapResults() {
+    if (isMapsPending) {
+      return (
+        <>
+          <Skeleton height={80} className="rounded-card" />
+          <Skeleton height={80} className="rounded-card" />
+        </>
+      );
+    }
+
+    if (maps.length === 0) {
+      return (
+        <p className="rounded-card bg-surface p-4 text-sm text-text-muted">
+          {intl.formatMessage(mapMessages.savedMapsEmpty)}
+        </p>
+      );
+    }
+
+    return maps.map((map) => {
+      const isActive = activeMapId === map.id;
+      return (
+        <SavedMapRow
+          key={map.id}
+          map={map}
+          scope={scope}
+          originProjectName={originProjectNameById.get(map.projectLocalId)}
+          isActive={isActive}
+          pendingActionType={pendingActionTypeFor(map.id)}
+          hasPendingAction={hasPendingAction}
+          onActiveToggle={() => {
+            void handleActiveToggle(map.id, isActive);
+          }}
+          onPreview={() => setPreviewTargetId(map.id)}
+          onRename={() => openRenameDialog(map)}
+          onDelete={() => openDeleteDialog(map)}
+        />
+      );
+    });
+  }
+
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-base font-semibold text-text">
@@ -174,40 +214,13 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
         </p>
       ) : null}
 
-      {isMapsPending ? (
-        <div className="flex flex-col gap-2">
-          <Skeleton height={80} className="rounded-card" />
-          <Skeleton height={80} className="rounded-card" />
-        </div>
-      ) : null}
-
-      {!isMapsPending && maps.length === 0 ? (
-        <p className="rounded-card bg-surface p-4 text-sm text-text-muted">
-          {intl.formatMessage(mapMessages.savedMapsEmpty)}
-        </p>
-      ) : null}
-
-      <div className="flex flex-col gap-2">
-        {maps.map((map) => {
-          const isActive = activeMapId === map.id;
-          return (
-            <SavedMapRow
-              key={map.id}
-              map={map}
-              scope={scope}
-              originProjectName={originProjectNameById.get(map.projectLocalId)}
-              isActive={isActive}
-              pendingActionType={pendingActionTypeFor(map.id)}
-              hasPendingAction={hasPendingAction}
-              onActiveToggle={() => {
-                void handleActiveToggle(map.id, isActive);
-              }}
-              onPreview={() => setPreviewTargetId(map.id)}
-              onRename={() => openRenameDialog(map)}
-              onDelete={() => openDeleteDialog(map)}
-            />
-          );
-        })}
+      <div
+        data-testid="saved-maps-results"
+        className="flex flex-col gap-2"
+        aria-live="polite"
+        aria-busy={isMapsPending}
+      >
+        {renderMapResults()}
       </div>
 
       <RenameMapDialog

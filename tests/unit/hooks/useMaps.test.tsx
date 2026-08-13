@@ -10,8 +10,11 @@ import {
   clearDeletedMapFromActiveStore,
   mapsQueryKey,
   removeMapsFromListCaches,
+  useAllMaps,
   useCreateMap,
   useDeleteMap,
+  useMaps,
+  useRenameMap,
   useSetActiveMapMutation,
 } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
@@ -19,14 +22,29 @@ import { getDb, resetDb } from '@/lib/db';
 import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
-function wrapper({ children }: { children: ReactNode }) {
-  const qc = new QueryClient({
+function createQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0 },
       mutations: { retry: false },
     },
   });
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
+
+function createWrapper(queryClient = createQueryClient()) {
+  return function TestWrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+  };
+}
+
+function wrapper({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={createQueryClient()}>
+      {children}
+    </QueryClientProvider>
+  );
 }
 
 function createMap(overrides: Partial<SavedMap> = {}): SavedMap {
@@ -78,6 +96,75 @@ describe('map query cache helpers', () => {
 
     expect(queryClient.getQueryData(mapsQueryKey('project-1'))).toEqual([]);
     expect(queryClient.getQueryData(allMapsQueryKey)).toEqual([keptMap]);
+  });
+});
+
+describe('map list observer consistency', () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it('updates project and all-project observers after rename', async () => {
+    await getDb().maps.add(createMap());
+    const queryClient = createQueryClient();
+    const observerWrapper = createWrapper(queryClient);
+    const { result } = renderHook(
+      () => ({
+        projectMaps: useMaps('project-1'),
+        allMaps: useAllMaps(),
+        renameMap: useRenameMap(),
+      }),
+      { wrapper: observerWrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.projectMaps.data?.[0]?.name).toBe(
+        'Territory draft',
+      );
+      expect(result.current.allMaps.data?.[0]?.name).toBe('Territory draft');
+    });
+
+    await act(async () => {
+      await result.current.renameMap.mutateAsync({
+        mapId: 'map-1',
+        name: 'Renamed territory',
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.projectMaps.data?.[0]?.name).toBe(
+        'Renamed territory',
+      );
+      expect(result.current.allMaps.data?.[0]?.name).toBe('Renamed territory');
+    });
+  });
+
+  it('removes a deleted map from project and all-project observers', async () => {
+    await getDb().maps.add(createMap());
+    const queryClient = createQueryClient();
+    const observerWrapper = createWrapper(queryClient);
+    const { result } = renderHook(
+      () => ({
+        projectMaps: useMaps('project-1'),
+        allMaps: useAllMaps(),
+        deleteMap: useDeleteMap(),
+      }),
+      { wrapper: observerWrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.projectMaps.data).toHaveLength(1);
+      expect(result.current.allMaps.data).toHaveLength(1);
+    });
+
+    await act(async () => {
+      await result.current.deleteMap.mutateAsync('map-1');
+    });
+
+    await waitFor(() => {
+      expect(result.current.projectMaps.data).toEqual([]);
+      expect(result.current.allMaps.data).toEqual([]);
+    });
   });
 });
 
@@ -244,6 +331,29 @@ describe('useDeleteMap', () => {
     expect(cancel).toHaveBeenCalledOnce();
     expect(useMapDownloadStore.getState().active).toBeNull();
     expect(await getDb().maps.get('map-1')).toBeUndefined();
+  });
+
+  it('recovers a cancelled download when map deletion fails', async () => {
+    await addProject('project-1', 'map-1');
+    await getDb().maps.add(createMap({ status: 'downloading' }));
+    const cancel = vi.fn();
+    useMapDownloadStore.getState().start({
+      mapId: 'map-1',
+      mapName: 'Territory draft',
+      cancel,
+    });
+    vi.spyOn(getDb().maps, 'delete').mockRejectedValueOnce(
+      new Error('delete failed'),
+    );
+
+    const { result } = renderHook(() => useDeleteMap(), { wrapper });
+    result.current.mutate('map-1');
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(useMapDownloadStore.getState().active).toBeNull();
+    expect(await getDb().maps.get('map-1')).toMatchObject({ status: 'draft' });
   });
 });
 

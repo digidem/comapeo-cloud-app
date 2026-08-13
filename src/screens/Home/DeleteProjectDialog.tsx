@@ -7,6 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { removeMapsFromListCaches } from '@/hooks/useMaps';
 import { deleteProject } from '@/lib/data-layer';
+import {
+  getProjectSavedMapIds,
+  recoverCancelledMapDownload,
+} from '@/lib/map/saved-map-lifecycle';
 import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
@@ -80,18 +84,37 @@ function DeleteProjectDialog({
   function handleDelete() {
     dispatch({ type: 'submit' });
 
-    deleteProject(projectLocalId).then(
-      (removedMapIds) => {
-        const removedMapIdSet = new Set(removedMapIds);
-        const downloadStore = useMapDownloadStore.getState();
-        const mapStore = useMapStore.getState();
+    void (async () => {
+      let cancelledDownloadMapId: string | null = null;
 
+      try {
+        const projectMapIds = await getProjectSavedMapIds(projectLocalId);
+        const projectMapIdSet = new Set(projectMapIds);
+        const downloadStore = useMapDownloadStore.getState();
         if (
           downloadStore.active &&
-          removedMapIdSet.has(downloadStore.active.mapId)
+          projectMapIdSet.has(downloadStore.active.mapId)
         ) {
+          cancelledDownloadMapId = downloadStore.active.mapId;
           downloadStore.active.cancel();
-          downloadStore.clear(downloadStore.active.mapId);
+        }
+
+        const removedMapIds = await deleteProject(projectLocalId);
+        const removedMapIdSet = new Set(removedMapIds);
+        const latestDownloadStore = useMapDownloadStore.getState();
+        const mapStore = useMapStore.getState();
+
+        // Catch a download that started after the pre-delete map lookup.
+        if (
+          latestDownloadStore.active &&
+          removedMapIdSet.has(latestDownloadStore.active.mapId) &&
+          latestDownloadStore.active.mapId !== cancelledDownloadMapId
+        ) {
+          latestDownloadStore.active.cancel();
+          latestDownloadStore.clear(latestDownloadStore.active.mapId);
+        }
+        if (cancelledDownloadMapId) {
+          latestDownloadStore.clear(cancelledDownloadMapId);
         }
 
         if (mapStore.activeProjectLocalId === projectLocalId) {
@@ -112,15 +135,18 @@ function DeleteProjectDialog({
 
         dispatch({ type: 'success' });
         onDeleted();
-      },
-      (err: unknown) => {
+      } catch (err) {
+        if (cancelledDownloadMapId) {
+          await recoverCancelledMapDownload(cancelledDownloadMapId);
+          useMapDownloadStore.getState().clear(cancelledDownloadMapId);
+        }
         const message =
           err instanceof Error
             ? err.message
             : intl.formatMessage(messages.failed);
         dispatch({ type: 'error', message });
-      },
-    );
+      }
+    })();
   }
 
   function handleClose() {

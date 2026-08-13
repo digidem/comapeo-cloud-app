@@ -27,6 +27,7 @@ export function SavedMapsScopeToggle({
     >
       <Button
         size="sm"
+        className="min-h-[44px]"
         variant={scope === 'project' ? 'primary' : 'secondary'}
         aria-pressed={scope === 'project'}
         onClick={() => onScopeChange('project')}
@@ -36,6 +37,7 @@ export function SavedMapsScopeToggle({
       </Button>
       <Button
         size="sm"
+        className="min-h-[44px]"
         variant={scope === 'all' ? 'primary' : 'secondary'}
         aria-pressed={scope === 'all'}
         onClick={() => onScopeChange('all')}

@@ -114,15 +114,23 @@ describe('SavedMapsList', () => {
     expect(
       screen.getByRole('group', { name: 'Saved maps scope' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'This project' }),
-    ).toHaveAttribute('aria-pressed', 'true');
+    const thisProjectButton = screen.getByRole('button', {
+      name: 'This project',
+    });
+    const allProjectsButton = screen.getByRole('button', {
+      name: 'All projects',
+    });
+    expect(thisProjectButton).toHaveAttribute('aria-pressed', 'true');
+    expect(thisProjectButton).toHaveClass('min-h-[44px]');
+    expect(allProjectsButton).toHaveClass('min-h-[44px]');
+    expect(screen.getByTestId('saved-maps-results')).toHaveAttribute(
+      'aria-live',
+      'polite',
+    );
 
-    await user.click(screen.getByRole('button', { name: 'All projects' }));
+    await user.click(allProjectsButton);
 
-    expect(
-      screen.getByRole('button', { name: 'All projects' }),
-    ).toHaveAttribute('aria-pressed', 'true');
+    expect(allProjectsButton).toHaveAttribute('aria-pressed', 'true');
     const rows = await screen.findAllByTestId('saved-map-row');
     expect(rows[0]).toHaveTextContent('Other project map');
     expect(rows[0]).toHaveTextContent('Origin: Neighbor territory');
@@ -248,6 +256,54 @@ describe('SavedMapsList', () => {
     ).toBeUndefined();
     expect(useMapStore.getState().activeProjectLocalId).toBe('project-2');
     expect(useMapStore.getState().activeMapId).toBeNull();
+  });
+
+  it('reconciles a successful activation after switching away and back before the write finishes', async () => {
+    const user = userEvent.setup();
+    await addProject('project-1');
+    await addProject('project-2');
+    await getDb().maps.add(
+      createMap({ projectLocalId: 'project-2', name: 'Cross-project map' }),
+    );
+
+    const projectsTable = getDb().projects;
+    const originalUpdate = projectsTable.update.bind(projectsTable);
+    let releaseWrite: (() => void) | undefined;
+    vi.spyOn(projectsTable, 'update').mockImplementation((...args) => {
+      const pendingUpdate = (async () => {
+        await new Promise<void>((resolve) => {
+          releaseWrite = resolve;
+        });
+        return originalUpdate(...args);
+      })();
+      return pendingUpdate as unknown as ReturnType<
+        typeof projectsTable.update
+      >;
+    });
+
+    const { rerender } = render(<SavedMapsList projectLocalId="project-1" />);
+    await user.click(screen.getByRole('button', { name: 'All projects' }));
+    await user.click(await screen.findByRole('button', { name: 'Set active' }));
+
+    rerender(<SavedMapsList projectLocalId="project-2" />);
+    await act(async () => {
+      useMapStore.getState().hydrateActiveMap('project-2', null);
+    });
+    rerender(<SavedMapsList projectLocalId="project-1" />);
+    await act(async () => {
+      // Simulate hydration reading the old persisted value before the delayed
+      // activation write lands.
+      useMapStore.getState().hydrateActiveMap('project-1', null);
+      releaseWrite?.();
+    });
+
+    await waitFor(async () => {
+      expect((await getDb().projects.get('project-1'))?.activeMapId).toBe(
+        'map-1',
+      );
+    });
+    expect(useMapStore.getState().activeProjectLocalId).toBe('project-1');
+    expect(useMapStore.getState().activeMapId).toBe('map-1');
   });
 
   it('does not roll a failed activation back into a project selected while the write is pending', async () => {

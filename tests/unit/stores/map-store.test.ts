@@ -117,20 +117,25 @@ describe('map-store activeMapId', () => {
     expect(project?.activeMapId).toBeNull();
   });
 
-  it('setActiveMap does not write or change cache when called for a non-hydrated project', async () => {
-    // Store represents nothing (activeProjectLocalId: null). Calling setActiveMap
-    // for an unknown project must be a no-op: no cache mutation, no Dexie write.
+  it('persists to the captured target without changing a different hydrated project', async () => {
     const db = getDb();
-    await expect(
-      useMapStore.getState().setActiveMap('does-not-exist', 'map-x'),
-    ).resolves.toBeUndefined();
+    await db.projects.add({
+      localId: 'proj-target',
+      sourceType: 'local',
+      sourceId: 'local',
+      activeMapId: null,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    useMapStore.getState().hydrateActiveMap('proj-other', 'map-other');
 
-    // Cache must remain untouched.
-    expect(useMapStore.getState().activeMapId).toBeNull();
-    expect(useMapStore.getState().activeProjectLocalId).toBeNull();
+    await useMapStore.getState().setActiveMap('proj-target', 'map-x');
 
-    // No project row is created.
-    expect(await db.projects.get('does-not-exist')).toBeUndefined();
+    expect((await db.projects.get('proj-target'))?.activeMapId).toBe('map-x');
+    expect(useMapStore.getState().activeProjectLocalId).toBe('proj-other');
+    expect(useMapStore.getState().activeMapId).toBe('map-other');
   });
 
   it('restores the previous activeMapId when a same-project Dexie update rejects', async () => {
@@ -227,6 +232,29 @@ describe('map-store activeMapId', () => {
     const parsed = JSON.parse(stored!);
     expect(parsed.state).not.toHaveProperty('activeMapId');
     expect(parsed.state).not.toHaveProperty('activeProjectLocalId');
+  });
+
+  it('reconciles a successful write after navigating A to B and back to A', async () => {
+    const db = getDb();
+    let resolveUpdate: ((rows: number) => void) | undefined;
+    const updateSpy = vi.spyOn(db.projects, 'update').mockReturnValueOnce(
+      new Promise<number>((resolve) => {
+        resolveUpdate = resolve;
+      }) as ReturnType<typeof db.projects.update>,
+    );
+
+    useMapStore.getState().hydrateActiveMap('proj-a', 'map-before');
+    const write = useMapStore.getState().setActiveMap('proj-a', 'map-after');
+    expect(useMapStore.getState().activeMapId).toBe('map-after');
+
+    useMapStore.getState().hydrateActiveMap('proj-b', null);
+    useMapStore.getState().hydrateActiveMap('proj-a', 'map-before');
+    resolveUpdate?.(1);
+    await write;
+
+    expect(useMapStore.getState().activeProjectLocalId).toBe('proj-a');
+    expect(useMapStore.getState().activeMapId).toBe('map-after');
+    updateSpy.mockRestore();
   });
 
   it('a failed write does not roll back into a different project slot', async () => {
