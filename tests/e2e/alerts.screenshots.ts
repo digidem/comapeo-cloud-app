@@ -8,11 +8,12 @@ import {
   takeScreenshot,
 } from './screenshot-utils';
 import type { ThemeId, ViewportName } from './screenshot-utils';
+import { seedAlertMapState } from './seed-alert-map';
 
 test.describe('Alerts - visual screenshots', () => {
   for (const themeId of THEME_IDS) {
     for (const [viewportName, viewport] of Object.entries(VIEWPORTS)) {
-      test(`alerts list ${themeId} theme at ${viewportName} viewport`, async ({
+      test(`alerts map ${themeId} theme at ${viewportName} viewport`, async ({
         browser,
       }) => {
         const context = await browser.newContext({
@@ -25,14 +26,19 @@ test.describe('Alerts - visual screenshots', () => {
           await setupMockServer(page);
           await page.goto('/');
           await setTheme(page, themeId as ThemeId);
+          await seedAlertMapState(page);
 
-          // Navigate to alerts list (Data screen, alerts tab)
-          await page.goto('/data');
+          // The seeded local project includes point and polygon alert geometry
+          // so bounds, neutral styling, and responsive controls are visible.
+          await page.goto('/alerts');
           await page.waitForLoadState('domcontentloaded');
+          await page
+            .getByRole('button', { name: /Switch to grid view/i })
+            .waitFor();
 
           await takeScreenshot(
             page,
-            `alerts-list-${themeId}`,
+            `alerts-map-${themeId}`,
             viewportName as ViewportName,
           );
         } finally {

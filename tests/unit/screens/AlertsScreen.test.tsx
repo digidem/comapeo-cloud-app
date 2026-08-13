@@ -1,7 +1,11 @@
+import userEvent from '@testing-library/user-event';
 import { render, screen } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { Alert } from '@/lib/data-layer';
 import { AlertsScreen } from '@/screens/AlertsScreen';
+import { useAlertViewModeStore } from '@/stores/alert-view-mode-store';
+import { useViewModeStore } from '@/stores/view-mode-store';
 
 // --- Shared mock factories ---
 
@@ -10,16 +14,20 @@ const defaultProjects = [
   { localId: 'proj-2', name: 'Another Project' },
 ];
 
-const defaultAlerts = [
+const defaultAlerts: Alert[] = [
   {
     localId: 'alert-1',
     projectLocalId: 'proj-1',
+    sourceType: 'local',
+    sourceId: 'source-1',
     geometry: { type: 'Point', coordinates: [12.34, 56.78] },
     metadata: { severity: 'high', alert_type: 'deforestation' },
     detectionDateStart: '2024-03-14T00:00:00Z',
     detectionDateEnd: '2024-03-15T00:00:00Z',
     createdAt: '2024-03-15T08:00:00Z',
     updatedAt: '2024-03-15T08:00:00Z',
+    dirtyLocal: false,
+    deleted: false,
   },
 ];
 
@@ -53,6 +61,22 @@ vi.mock('@/hooks/useAlerts', () => ({
   useAlerts: vi.fn(() => mockAlertsQuery),
 }));
 
+vi.mock('@/components/shared/AlertsMap', () => ({
+  AlertsMap: ({
+    alerts,
+    showEmptyState,
+  }: {
+    alerts: Alert[];
+    showEmptyState: boolean;
+  }) => (
+    <div
+      data-testid="alerts-map"
+      data-alert-count={alerts.length}
+      data-show-empty-state={String(showEmptyState)}
+    />
+  ),
+}));
+
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
     <a href={to}>{children}</a>
@@ -64,6 +88,8 @@ function resetMocks() {
   mockSelectedProjectId = null;
   mockProjectsQuery = { data: defaultProjects, isPending: false };
   mockAlertsQuery = { data: defaultAlerts, isPending: false };
+  useAlertViewModeStore.setState({ viewMode: 'map' });
+  useViewModeStore.setState({ viewMode: 'map' });
 }
 
 describe('AlertsScreen', () => {
@@ -76,9 +102,7 @@ describe('AlertsScreen', () => {
       mockProjectsQuery = { data: undefined, isPending: true };
 
       render(<AlertsScreen />);
-      const skeletons = document.querySelectorAll(
-        '[class*="animate-pulse"], [class*="bg-muted"]',
-      );
+      const skeletons = screen.getAllByTestId('skeleton');
       expect(skeletons.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -107,10 +131,9 @@ describe('AlertsScreen', () => {
       mockAlertsQuery = { data: undefined, isPending: true };
 
       render(<AlertsScreen />);
-      const skeletons = document.querySelectorAll(
-        '[class*="animate-pulse"], [class*="bg-muted"]',
-      );
+      const skeletons = screen.getAllByTestId('skeleton');
       expect(skeletons.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByRole('status')).toHaveTextContent('Loading...');
     });
 
     it('renders alerts error state', () => {
@@ -121,6 +144,7 @@ describe('AlertsScreen', () => {
         screen.getByText('Failed to load alerts. Please try again.'),
       ).toBeInTheDocument();
       expect(screen.queryByText('No alerts yet')).not.toBeInTheDocument();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
     it('renders "No alerts yet" when alerts array is empty', () => {
@@ -130,7 +154,56 @@ describe('AlertsScreen', () => {
       expect(screen.getByText('No alerts yet')).toBeInTheDocument();
     });
 
+    it('defaults to map view and preserves the Add Alert link', () => {
+      render(<AlertsScreen />);
+
+      expect(screen.getByTestId('alerts-map')).toHaveAttribute(
+        'data-alert-count',
+        '1',
+      );
+      expect(
+        screen.getByRole('button', { name: 'Switch to grid view' }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Add Alert' })).toHaveAttribute(
+        'href',
+        '/alerts/new',
+      );
+    });
+
+    it('switches to the existing grid without changing Data view preference', async () => {
+      const user = userEvent.setup();
+      render(<AlertsScreen />);
+
+      await user.click(
+        screen.getByRole('button', { name: 'Switch to grid view' }),
+      );
+
+      expect(screen.queryByTestId('alerts-map')).not.toBeInTheDocument();
+      expect(screen.getByText('deforestation')).toBeInTheDocument();
+      expect(useAlertViewModeStore.getState().viewMode).toBe('grid');
+      expect(useViewModeStore.getState().viewMode).toBe('map');
+      expect(
+        screen.getByRole('button', { name: 'Switch to map view' }),
+      ).toBeInTheDocument();
+    });
+
+    it('uses a map-owned no-location state for alerts without valid geometry', () => {
+      mockAlertsQuery = {
+        data: [{ ...defaultAlerts[0]!, geometry: undefined }],
+        isPending: false,
+      };
+
+      render(<AlertsScreen />);
+
+      expect(screen.getByTestId('alerts-map')).toHaveAttribute(
+        'data-show-empty-state',
+        'true',
+      );
+      expect(screen.queryByText('No alerts yet')).not.toBeInTheDocument();
+    });
+
     it('renders alert cards when alerts exist', () => {
+      useAlertViewModeStore.setState({ viewMode: 'grid' });
       mockAlertsQuery = { data: defaultAlerts, isPending: false };
 
       render(<AlertsScreen />);
@@ -149,6 +222,7 @@ describe('AlertsScreen', () => {
     });
 
     it('renders alert cards linking to alert detail', () => {
+      useAlertViewModeStore.setState({ viewMode: 'grid' });
       mockAlertsQuery = { data: defaultAlerts, isPending: false };
 
       render(<AlertsScreen />);

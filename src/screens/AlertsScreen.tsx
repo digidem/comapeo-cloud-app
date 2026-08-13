@@ -5,10 +5,13 @@ import { Link } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { AlertCard } from '@/components/shared/AlertCard';
+import { AlertsMap } from '@/components/shared/AlertsMap';
+import { MapScreenLayout } from '@/components/shared/MapScreenLayout';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useProjects } from '@/hooks/useProjects';
+import { useAlertViewModeStore } from '@/stores/alert-view-mode-store';
 import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
@@ -44,13 +47,72 @@ const messages = defineMessages({
     id: 'alerts.addAlert',
     defaultMessage: 'Add Alert',
   },
+  viewGrid: {
+    id: 'alerts.viewGrid',
+    defaultMessage: 'Grid view',
+  },
+  viewMap: {
+    id: 'alerts.viewMap',
+    defaultMessage: 'Map view',
+  },
+  switchToMapView: {
+    id: 'alerts.switchToMapView',
+    defaultMessage: 'Switch to map view',
+  },
+  switchToGridView: {
+    id: 'alerts.switchToGridView',
+    defaultMessage: 'Switch to grid view',
+  },
 });
+
+function MapIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+      <line x1="8" y1="2" x2="8" y2="18" />
+      <line x1="16" y1="6" x2="16" y2="22" />
+    </svg>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="7" height="7" />
+      <rect x="14" y="3" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" />
+      <rect x="3" y="14" width="7" height="7" />
+    </svg>
+  );
+}
 
 export function AlertsScreen() {
   const intl = useIntl();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projectsQuery = useProjects();
   const alertsQuery = useAlerts(selectedProjectId);
+  const viewMode = useAlertViewModeStore((state) => state.viewMode);
+  const setViewMode = useAlertViewModeStore((state) => state.setViewMode);
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
@@ -96,6 +158,92 @@ export function AlertsScreen() {
 
   const alerts = alertsQuery.data ?? [];
 
+  const addAlertLink = (
+    <Link
+      to="/alerts/new"
+      className="inline-flex min-h-[44px] items-center rounded-button bg-primary px-3 py-2 text-center text-xs font-medium text-white no-underline transition-colors hover:bg-primary-dark"
+    >
+      {intl.formatMessage(messages.addAlert)}
+    </Link>
+  );
+
+  if (viewMode === 'map') {
+    return (
+      <MapScreenLayout
+        topLeft={
+          <h1 className="rounded-button bg-surface-card px-3 py-2 text-xl font-bold text-text shadow-card">
+            {intl.formatMessage(messages.title)}
+          </h1>
+        }
+        topRightPositionClassName="top-4 right-3 z-30 items-center"
+        topRight={
+          <>
+            {addAlertLink}
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className="inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-button bg-surface-card text-text-muted shadow-card transition-colors hover:bg-surface-container-low hover:text-text"
+              aria-label={intl.formatMessage(messages.switchToGridView)}
+              title={intl.formatMessage(messages.viewGrid)}
+            >
+              <GridIcon />
+            </button>
+          </>
+        }
+      >
+        <div className="relative h-full">
+          <AlertsMap
+            alerts={alerts}
+            height="h-full"
+            basemapSwitcherPositionClassName="top-[4.25rem] right-3"
+            showEmptyState={
+              !alertsQuery.isPending &&
+              !alertsQuery.isError &&
+              alerts.length > 0
+            }
+          />
+
+          {alertsQuery.isError ? (
+            <div
+              role="alert"
+              className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
+            >
+              <span className="text-error text-sm">
+                {intl.formatMessage(messages.alertsError)}
+              </span>
+            </div>
+          ) : null}
+
+          {alertsQuery.isPending && !alertsQuery.isError ? (
+            <div
+              role="status"
+              className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
+            >
+              <span className="sr-only">
+                {intl.formatMessage(messages.loading)}
+              </span>
+              <div className="w-full max-w-sm space-y-3" aria-hidden="true">
+                <Skeleton className="h-6 w-1/2" />
+                <Skeleton className="h-32 w-full rounded-card" />
+                <Skeleton className="h-20 w-full rounded-card" />
+              </div>
+            </div>
+          ) : null}
+
+          {!alertsQuery.isPending &&
+          !alertsQuery.isError &&
+          alerts.length === 0 ? (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm">
+              <span className="text-text-muted text-sm">
+                {intl.formatMessage(messages.noAlerts)}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      </MapScreenLayout>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
       {/* Title */}
@@ -105,12 +253,16 @@ export function AlertsScreen() {
         </h1>
 
         <div className="flex items-center gap-2">
-          <Link
-            to="/alerts/new"
-            className="rounded-button bg-primary px-3 py-1.5 text-xs font-medium text-white no-underline hover:bg-primary-dark transition-colors text-center"
+          {addAlertLink}
+          <button
+            type="button"
+            onClick={() => setViewMode('map')}
+            className="inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-button bg-surface-card text-text-muted transition-colors hover:bg-surface-container-low hover:text-text"
+            aria-label={intl.formatMessage(messages.switchToMapView)}
+            title={intl.formatMessage(messages.viewMap)}
           >
-            {intl.formatMessage(messages.addAlert)}
-          </Link>
+            <MapIcon />
+          </button>
         </div>
       </div>
 
@@ -118,7 +270,7 @@ export function AlertsScreen() {
       {(() => {
         if (alertsQuery.isError) {
           return (
-            <div className="flex items-center justify-center p-8">
+            <div role="alert" className="flex items-center justify-center p-8">
               <span className="text-error text-sm">
                 {intl.formatMessage(messages.alertsError)}
               </span>
@@ -127,7 +279,10 @@ export function AlertsScreen() {
         }
         if (alertsQuery.isPending) {
           return (
-            <div className="flex flex-col gap-4 p-6">
+            <div role="status" className="flex flex-col gap-4 p-6">
+              <span className="sr-only">
+                {intl.formatMessage(messages.loading)}
+              </span>
               <Skeleton height={100} className="rounded-card" />
               <Skeleton height={100} className="rounded-card" />
             </div>
