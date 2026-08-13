@@ -209,11 +209,12 @@ function MapContainer({
   const isActiveMapHydrationPending =
     selectedProjectId !== null && activeProjectLocalId !== selectedProjectId;
   const isActiveMapRecordPending = activeMapId !== null && isActiveMapPending;
+  const isActiveMapTransitionPending =
+    isActiveMapHydrationPending || isActiveMapRecordPending;
   const hasReadySmpBlob =
     activeSavedMap?.status === 'ready' && activeSavedMap.smpBlob !== undefined;
   const shouldHoldOfflineStyle =
-    isActiveMapHydrationPending ||
-    isActiveMapRecordPending ||
+    isActiveMapTransitionPending ||
     (hasReadySmpBlob && !smpStyle && (!smpLoadError || isImportedActiveMap));
 
   // Build an ImageryBasemap from the active map's saved style settings
@@ -328,10 +329,9 @@ function MapContainer({
 
   const mapStyle = useMemo(
     () =>
-      smpStyle ??
-      (shouldHoldOfflineStyle
+      shouldHoldOfflineStyle
         ? OFFLINE_PENDING_STYLE
-        : basemapToMapStyle(effectiveBasemap)),
+        : (smpStyle ?? basemapToMapStyle(effectiveBasemap)),
     [smpStyle, shouldHoldOfflineStyle, effectiveBasemap],
   );
 
@@ -438,7 +438,7 @@ function MapContainer({
         </div>
       )}
 
-      {smpLoadError && activeSavedMap ? (
+      {smpLoadError && activeSavedMap && !isActiveMapTransitionPending ? (
         <div
           className={`absolute left-3 z-20 ${
             isOnlineActive ? 'bottom-12' : 'bottom-3'
@@ -457,7 +457,7 @@ function MapContainer({
       ) : null}
 
       {/* Active offline map badge — bottom-left, visible when SMP tiles are active */}
-      {smpStyle && (
+      {smpStyle && !isActiveMapTransitionPending && (
         <div className="absolute bottom-3 left-3 z-20">
           <span
             data-testid="map-active-map-badge"

@@ -1,4 +1,10 @@
-import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
+import {
+  act,
+  render,
+  screen,
+  userEvent,
+  waitFor,
+} from '@tests/mocks/test-utils';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { focusManager } from '@tanstack/react-query';
@@ -317,6 +323,47 @@ describe('MapContainer', () => {
       sources: {},
       layers: [],
     });
+  });
+
+  it('hides a resolved SMP while a different project is hydrating', async () => {
+    const oldStyle = {
+      version: 8 as const,
+      sources: {},
+      layers: [{ id: 'old-project', type: 'background' as const }],
+    };
+    mockResolveSmpStyle.mockResolvedValueOnce(oldStyle);
+    useProjectStore.setState({ selectedProjectId: 'proj-1' });
+    useMapStore.setState({
+      activeProjectLocalId: 'proj-1',
+      activeMapId: 'old-map',
+    });
+    mockDbGet.mockResolvedValue({
+      id: 'old-map',
+      projectLocalId: 'proj-1',
+      name: 'Old Project Map',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      status: 'ready',
+      smpBlob: new Blob(),
+    });
+
+    render(<MapContainer />);
+    await waitFor(() => expect(mapProps.at(-1)?.mapStyle).toEqual(oldStyle));
+
+    act(() => {
+      useProjectStore.setState({ selectedProjectId: 'proj-2' });
+    });
+    await waitFor(() =>
+      expect(mapProps.at(-1)?.mapStyle).toEqual({
+        version: 8,
+        sources: {},
+        layers: [],
+      }),
+    );
+    expect(
+      screen.queryByTestId('map-active-map-badge'),
+    ).not.toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------
