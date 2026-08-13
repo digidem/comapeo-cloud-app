@@ -107,12 +107,16 @@ test.describe('CSP Runtime Verification', () => {
     // /api/info to /info, so this exercises the real proxy path without an
     // external archive dependency in either local or deployed-preview E2E.
     const appOrigin = new URL(page.url()).origin;
+    const directResponse = await page.request.get('/info');
     const response = await page.request.get('/api/info', {
       headers: { 'x-target-url': appOrigin },
     });
 
+    expect(directResponse.status()).toBe(200);
+    expect(directResponse.headers()['cache-control']).not.toBe('no-store');
     expect(response.status()).toBe(200);
     expect(response.headers()['content-type']).toContain('text/html');
+    expect(response.headers()['cache-control']).toBe('no-store');
   });
 
   test('service worker registration does not cause CSP errors', async ({
