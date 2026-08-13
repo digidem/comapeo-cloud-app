@@ -4,12 +4,15 @@ import { resolve } from 'node:path';
 import {
   type CloudflareRateLimitRule,
   type MeasurementReport,
+  PRODUCTION_TILE_HOST,
   type RateLimitMode,
   TILE_RATE_LIMIT_RULE_REF,
   buildCloudflareRateLimitRule,
   buildMeasurementReport,
+  findRuleByRef,
   summarizeHarSample,
   validateEnforcementReadiness,
+  validateProductionMeasurementTarget,
 } from './lib/tile-rate-limit';
 
 const API_BASE = 'https://api.cloudflare.com/client/v4';
@@ -182,7 +185,7 @@ async function getRateLimitRuleset(
 function findManagedRule(
   ruleset: CloudflareRuleset | null,
 ): CloudflareRule | undefined {
-  return ruleset?.rules?.find((rule) => rule.ref === TILE_RATE_LIMIT_RULE_REF);
+  return findRuleByRef(ruleset, TILE_RATE_LIMIT_RULE_REF);
 }
 
 async function upsertManagedRule(
@@ -194,22 +197,26 @@ async function upsertManagedRule(
   const existing = findManagedRule(ruleset);
 
   if (ruleset && existing?.id) {
-    const updated = await cloudflareRequest<CloudflareRule>(
+    const updatedRuleset = await cloudflareRequest<CloudflareRuleset>(
       token,
       `/zones/${zoneId}/rulesets/${ruleset.id}/rules/${existing.id}`,
       { method: 'PATCH', body: JSON.stringify(rule) },
     );
-    if (!updated) throw new Error('Cloudflare returned no updated rule');
+    const updated = findManagedRule(updatedRuleset);
+    if (!updated)
+      throw new Error('Cloudflare returned no updated managed rule');
     return updated;
   }
 
   if (ruleset) {
-    const created = await cloudflareRequest<CloudflareRule>(
+    const updatedRuleset = await cloudflareRequest<CloudflareRuleset>(
       token,
       `/zones/${zoneId}/rulesets/${ruleset.id}/rules`,
       { method: 'POST', body: JSON.stringify(rule) },
     );
-    if (!created) throw new Error('Cloudflare returned no created rule');
+    const created = findManagedRule(updatedRuleset);
+    if (!created)
+      throw new Error('Cloudflare returned no created managed rule');
     return created;
   }
 
@@ -272,6 +279,7 @@ function reportRule(
   report: MeasurementReport,
   values: Map<string, string | boolean>,
 ): CloudflareRateLimitRule {
+  validateProductionMeasurementTarget(report);
   const mode = modeOption(values);
   const threshold = numberOption(
     values,
@@ -287,7 +295,7 @@ function reportRule(
   if (mode === 'enforce') {
     validateEnforcementReadiness({
       report,
-      host: report.target.host,
+      host: PRODUCTION_TILE_HOST,
       requestsPerPeriod: threshold,
       periodSeconds: report.windowSeconds,
       falsePositiveValidationConfirmed: booleanOption(
@@ -298,7 +306,7 @@ function reportRule(
   }
 
   return buildCloudflareRateLimitRule({
-    host: report.target.host,
+    host: PRODUCTION_TILE_HOST,
     requestsPerPeriod: threshold,
     periodSeconds: report.windowSeconds,
     mitigationTimeoutSeconds,

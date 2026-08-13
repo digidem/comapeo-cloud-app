@@ -1,6 +1,7 @@
 export const TILE_RATE_LIMIT_PATH = '/api/tiles';
 export const TILE_RATE_LIMIT_METHOD = 'GET';
 export const TILE_RATE_LIMIT_RULE_REF = 'comapeo-cloud-app-tiles-rate-limit';
+export const PRODUCTION_TILE_HOST = 'app.comapeo.cloud';
 
 const SUPPORTED_PERIODS = new Set([10, 60, 120, 300, 600, 3600]);
 const SUPPORTED_MITIGATION_TIMEOUTS = new Set([
@@ -47,6 +48,13 @@ export interface MeasurementReport {
   observedMaxRequestsPerWindow: number;
   recommendedRequestsPerPeriod: number;
   samples: MeasurementSample[];
+}
+
+export function findRuleByRef<T extends { ref?: string }>(
+  ruleset: { rules?: T[] } | null,
+  ref = TILE_RATE_LIMIT_RULE_REF,
+): T | undefined {
+  return ruleset?.rules?.find((rule) => rule.ref === ref);
 }
 
 export interface CloudflareRateLimitRule {
@@ -293,6 +301,20 @@ export function buildCloudflareRateLimitRule(options: {
   }
 
   return base;
+}
+
+export function validateProductionMeasurementTarget(
+  report: MeasurementReport,
+): void {
+  if (
+    report.target.host !== PRODUCTION_TILE_HOST ||
+    report.target.method !== TILE_RATE_LIMIT_METHOD ||
+    report.target.path !== TILE_RATE_LIMIT_PATH
+  ) {
+    throw new Error(
+      'Measurement report must target production GET https://app.comapeo.cloud/api/tiles',
+    );
+  }
 }
 
 export function validateEnforcementReadiness(options: {

@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  PRODUCTION_TILE_HOST,
   buildCloudflareRateLimitRule,
   buildMeasurementReport,
+  findRuleByRef,
   maxRequestsInWindow,
   summarizeHarSample,
   validateEnforcementReadiness,
+  validateProductionMeasurementTarget,
 } from '../../../scripts/lib/tile-rate-limit';
 
 describe('tile rate limit operations', () => {
@@ -141,6 +144,51 @@ describe('tile rate limit operations', () => {
 
     expect(rule.action).toBe('log');
     expect(rule).not.toHaveProperty('action_parameters');
+  });
+
+  it('rejects a measurement report for a non-production host', () => {
+    const report = buildMeasurementReport({
+      host: 'preview.example.com',
+      windowSeconds: 60,
+      samples: [
+        {
+          kind: 'small',
+          name: 'small',
+          requestCount: 1,
+          durationMs: 1,
+          maxRequestsPerWindow: 1,
+          firstRequestAt: '2026-08-13T12:00:00.000Z',
+          lastRequestAt: '2026-08-13T12:00:00.001Z',
+        },
+        {
+          kind: 'large',
+          name: 'large',
+          requestCount: 2,
+          durationMs: 2,
+          maxRequestsPerWindow: 2,
+          firstRequestAt: '2026-08-13T12:00:01.000Z',
+          lastRequestAt: '2026-08-13T12:00:01.002Z',
+        },
+      ],
+    });
+
+    expect(PRODUCTION_TILE_HOST).toBe('app.comapeo.cloud');
+    expect(() => validateProductionMeasurementTarget(report)).toThrow(
+      /production/i,
+    );
+  });
+
+  it('extracts the managed rule from Cloudflare ruleset mutation responses', () => {
+    const managedRule = {
+      id: 'rule-id',
+      ref: 'comapeo-cloud-app-tiles-rate-limit',
+    };
+    const ruleset = {
+      id: 'ruleset-id',
+      rules: [{ id: 'other', ref: 'other' }, managedRule],
+    };
+
+    expect(findRuleByRef(ruleset)).toBe(managedRule);
   });
 
   it('refuses enforcement when measurement or false-positive validation is incomplete', () => {
