@@ -1,7 +1,10 @@
 import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { QueryClient } from '@tanstack/react-query';
+
 import { DeleteProjectDialog } from '@/screens/Home/DeleteProjectDialog';
+import { useMapStore } from '@/stores/map-store';
 
 vi.mock('@/lib/data-layer', () => ({
   deleteProject: vi.fn(),
@@ -9,6 +12,7 @@ vi.mock('@/lib/data-layer', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useMapStore.setState({ activeProjectLocalId: null, activeMapId: null });
 });
 
 describe('DeleteProjectDialog', () => {
@@ -56,7 +60,7 @@ describe('DeleteProjectDialog', () => {
 
   it('calls deleteProject and onDeleted on confirm', async () => {
     const { deleteProject } = await import('@/lib/data-layer');
-    vi.mocked(deleteProject).mockResolvedValue(undefined as never);
+    vi.mocked(deleteProject).mockResolvedValue([]);
 
     const user = userEvent.setup();
     const onDeleted = vi.fn();
@@ -77,6 +81,43 @@ describe('DeleteProjectDialog', () => {
       expect(deleteProject).toHaveBeenCalledWith('p1');
       expect(onDeleted).toHaveBeenCalledOnce();
     });
+  });
+
+  it('clears active-map state and cache when the deleted project owned the selected map', async () => {
+    const { deleteProject } = await import('@/lib/data-layer');
+    vi.mocked(deleteProject).mockResolvedValue(['map-1']);
+    useMapStore.setState({
+      activeProjectLocalId: 'target-project',
+      activeMapId: 'map-1',
+    });
+    const removeQueries = vi.spyOn(QueryClient.prototype, 'removeQueries');
+    const invalidateQueries = vi.spyOn(
+      QueryClient.prototype,
+      'invalidateQueries',
+    );
+    const user = userEvent.setup();
+
+    render(
+      <DeleteProjectDialog
+        isOpen
+        projectLocalId="origin-project"
+        projectName="Origin Project"
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /delete/i }));
+
+    await waitFor(() => {
+      expect(useMapStore.getState().activeMapId).toBeNull();
+    });
+    expect(useMapStore.getState().activeProjectLocalId).toBe('target-project');
+    expect(removeQueries).toHaveBeenCalledWith({
+      queryKey: ['map', 'map-1'],
+      exact: true,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['maps'] });
   });
 
   it('calls onClose when cancel is clicked', async () => {

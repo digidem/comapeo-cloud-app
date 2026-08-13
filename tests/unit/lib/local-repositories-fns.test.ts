@@ -157,8 +157,9 @@ describe('local-repositories functions — projects', () => {
       activeMapId: mapId,
     });
 
-    await deleteProject(originProject.localId);
+    const removedMapIds = await deleteProject(originProject.localId);
 
+    expect(removedMapIds).toEqual([mapId]);
     expect(await getDb().maps.get(mapId)).toBeUndefined();
     expect(
       (await getDb().projects.get(targetProject.localId))?.activeMapId,

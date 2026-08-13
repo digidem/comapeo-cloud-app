@@ -1,9 +1,12 @@
 import { useReducer } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { deleteProject } from '@/lib/data-layer';
+import { useMapStore } from '@/stores/map-store';
 
 interface DeleteProjectDialogProps {
   isOpen: boolean;
@@ -69,13 +72,32 @@ function DeleteProjectDialog({
   onDeleted,
 }: DeleteProjectDialogProps) {
   const intl = useIntl();
+  const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
 
   function handleDelete() {
     dispatch({ type: 'submit' });
 
     deleteProject(projectLocalId).then(
-      () => {
+      (removedMapIds) => {
+        const removedMapIdSet = new Set(removedMapIds);
+        const mapStore = useMapStore.getState();
+
+        if (mapStore.activeProjectLocalId === projectLocalId) {
+          mapStore.hydrateActiveMap(null, null);
+        } else if (
+          mapStore.activeMapId !== null &&
+          removedMapIdSet.has(mapStore.activeMapId)
+        ) {
+          mapStore.hydrateActiveMap(mapStore.activeProjectLocalId, null);
+        }
+
+        for (const mapId of removedMapIds) {
+          queryClient.removeQueries({ queryKey: ['map', mapId], exact: true });
+        }
+        void queryClient.invalidateQueries({ queryKey: ['maps'] });
+        void queryClient.invalidateQueries({ queryKey: ['projects'] });
+
         dispatch({ type: 'success' });
         onDeleted();
       },
