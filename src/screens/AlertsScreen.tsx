@@ -1,3 +1,5 @@
+import * as Dialog from '@radix-ui/react-dialog';
+
 import { useMemo, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -9,6 +11,7 @@ import { AlertForm } from '@/components/shared/AlertForm';
 import { AlertsMap } from '@/components/shared/AlertsMap';
 import { MapScreenLayout } from '@/components/shared/MapScreenLayout';
 import { Card } from '@/components/ui/card';
+import { CloseIcon } from '@/components/ui/close-icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useProjects } from '@/hooks/useProjects';
@@ -52,6 +55,10 @@ const messages = defineMessages({
   createAlertTitle: {
     id: 'alerts.create.title',
     defaultMessage: 'Create Alert',
+  },
+  closeCreateAlert: {
+    id: 'alerts.create.close',
+    defaultMessage: 'Close create alert',
   },
   viewGrid: {
     id: 'alerts.viewGrid',
@@ -252,34 +259,48 @@ export function AlertsScreen() {
           />
 
           {isCreatingInline ? (
-            <dialog
-              open
-              aria-labelledby="inline-create-alert-title"
-              className="absolute inset-x-0 bottom-0 z-40 m-0 max-h-[72%] max-w-none overflow-y-auto rounded-t-card border border-border/20 bg-surface-card p-0 shadow-elevated md:inset-y-3 md:right-3 md:left-auto md:w-[28rem] md:max-h-none md:rounded-card"
-            >
-              <div className="sticky top-0 z-10 border-b border-border/20 bg-surface-card px-4 py-3">
-                <h2
-                  id="inline-create-alert-title"
-                  className="text-lg font-bold text-text"
-                >
-                  {intl.formatMessage(messages.createAlertTitle)}
-                </h2>
-              </div>
-              <div className="p-4">
-                <AlertForm
-                  projectLocalId={selectedProjectId}
-                  compact
-                  geometryPickerProps={{
-                    showMap: false,
-                    allowedTypes: ['Point'],
-                    externalPoint: mapSelectedPoint,
-                  }}
-                  onGeometryChange={updateDraftPoint}
-                  onCancel={closeInlineCreation}
-                  onSuccess={closeInlineCreation}
-                />
-              </div>
-            </dialog>
+            <Dialog.Root open modal={false}>
+              <Dialog.Content
+                aria-describedby={undefined}
+                className="absolute inset-x-0 bottom-0 z-40 flex max-h-[85%] flex-col rounded-t-card border border-border/20 bg-surface-card shadow-elevated focus:outline-none md:inset-y-3 md:right-3 md:left-auto md:m-0 md:w-[28rem] md:max-h-none md:rounded-card"
+                style={{ animation: 'slideUp 200ms ease-out' }}
+              >
+                <div className="flex justify-center pt-3 pb-1 md:hidden">
+                  <div
+                    aria-hidden="true"
+                    className="h-1 w-10 rounded-full bg-border"
+                  />
+                </div>
+                <div className="flex items-center justify-between border-b border-border/20 px-4 py-3">
+                  <Dialog.Title className="text-lg font-bold text-text">
+                    {intl.formatMessage(messages.createAlertTitle)}
+                  </Dialog.Title>
+                  <button
+                    type="button"
+                    onClick={closeInlineCreation}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary md:hidden"
+                    aria-label={intl.formatMessage(messages.closeCreateAlert)}
+                    style={{ touchAction: 'manipulation' }}
+                  >
+                    <CloseIcon size={20} />
+                  </button>
+                </div>
+                <div className="overflow-y-auto p-4">
+                  <AlertForm
+                    projectLocalId={selectedProjectId}
+                    compact
+                    geometryPickerProps={{
+                      showMap: false,
+                      allowedTypes: ['Point'],
+                      externalPoint: mapSelectedPoint,
+                    }}
+                    onGeometryChange={updateDraftPoint}
+                    onCancel={closeInlineCreation}
+                    onSuccess={closeInlineCreation}
+                  />
+                </div>
+              </Dialog.Content>
+            </Dialog.Root>
           ) : null}
 
           {!isCreatingInline && alertsQuery.isError ? (

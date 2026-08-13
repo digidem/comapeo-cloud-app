@@ -71,6 +71,9 @@
   "alerts.create.cancel": {
     "defaultMessage": "Cancel"
   },
+  "alerts.create.close": {
+    "defaultMessage": "Close create alert"
+  },
   "alerts.create.detectionDateEnd": {
     "defaultMessage": "Detection Date End"
   },

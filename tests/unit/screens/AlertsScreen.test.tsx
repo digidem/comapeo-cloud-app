@@ -236,6 +236,9 @@ describe('AlertsScreen', () => {
       expect(
         screen.getByRole('dialog', { name: 'Create Alert' }),
       ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Close create alert' }),
+      ).toBeInTheDocument();
       expect(screen.getByTestId('inline-alert-form')).toHaveAttribute(
         'data-show-map',
         'false',
