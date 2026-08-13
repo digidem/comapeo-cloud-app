@@ -60,6 +60,7 @@ export function InlineAlertCreationPanel({
         <Dialog.Content
           aria-describedby={undefined}
           data-testid="inline-alert-sheet"
+          onEscapeKeyDown={onClose}
           className={`absolute inset-x-0 bottom-0 z-40 max-h-[85%] flex-col rounded-t-card border border-border/20 bg-surface-card shadow-elevated focus:outline-none md:inset-y-3 md:right-3 md:left-auto md:m-0 md:flex md:w-[28rem] md:max-h-none md:rounded-card ${
             isSelectingMapOnMobile ? 'hidden' : 'flex'
           }`}

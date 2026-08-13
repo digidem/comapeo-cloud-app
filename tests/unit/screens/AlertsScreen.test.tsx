@@ -253,6 +253,20 @@ describe('AlertsScreen', () => {
       );
     });
 
+    it('Escape exits inline creation and restores map browsing', async () => {
+      const user = userEvent.setup();
+      render(<AlertsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Add Alert' }));
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByTestId('inline-alert-form')).not.toBeInTheDocument();
+      expect(screen.getByTestId('alerts-map')).toHaveAttribute(
+        'data-interaction-mode',
+        'browse',
+      );
+    });
+
     it('lets mobile users hide the sheet to select a map point and restores it afterward', async () => {
       const user = userEvent.setup();
       render(<AlertsScreen />);
