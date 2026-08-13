@@ -260,4 +260,37 @@ describe('GeometryPicker', () => {
       'A polygon needs at least 3 points.',
     );
   });
+
+  it('accepts a point from an external map while keeping coordinate entry in sync', async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <GeometryPicker
+        onChange={onChange}
+        showMap={false}
+        allowedTypes={['Point']}
+      />,
+    );
+
+    expect(screen.queryByText('Map click')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Line$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Polygon$/ })).not.toBeInTheDocument();
+
+    rerender(
+      <GeometryPicker
+        onChange={onChange}
+        showMap={false}
+        allowedTypes={['Point']}
+        externalPoint={[-51.25, -3.75]}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith({
+        type: 'Point',
+        coordinates: [-51.25, -3.75],
+      }),
+    );
+    expect(screen.getByLabelText('Longitude')).toHaveValue(-51.25);
+    expect(screen.getByLabelText('Latitude')).toHaveValue(-3.75);
+  });
 });

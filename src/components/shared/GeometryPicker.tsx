@@ -76,10 +76,13 @@ const messages = defineMessages({
   },
 });
 
-interface GeometryPickerProps {
+export interface GeometryPickerProps {
   projectLocalId?: string;
   onChange: (value: AlertGeometry | undefined) => void;
   onValidationChange?: (message: string | undefined) => void;
+  showMap?: boolean;
+  allowedTypes?: readonly AlertGeometryType[];
+  externalPoint?: Position;
 }
 
 interface DraftVertex {
@@ -110,34 +113,37 @@ function draftFeature(type: AlertGeometryType, vertices: Position[]) {
 
 function GeometryTypePicker({
   type,
+  allowedTypes,
   onChange,
 }: {
   type: AlertGeometryType;
+  allowedTypes: readonly AlertGeometryType[];
   onChange: (type: AlertGeometryType) => void;
 }) {
   const intl = useIntl();
+  const options = [
+    ['Point', messages.point],
+    ['LineString', messages.line],
+    ['Polygon', messages.polygon],
+  ] as const;
   return (
     <fieldset className="flex flex-wrap gap-2">
       <legend className="mb-2 text-sm font-medium text-text">
         {intl.formatMessage(messages.typeLabel)}
       </legend>
-      {(
-        [
-          ['Point', messages.point],
-          ['LineString', messages.line],
-          ['Polygon', messages.polygon],
-        ] as const
-      ).map(([geometryType, label]) => (
-        <Button
-          key={geometryType}
-          type="button"
-          variant={type === geometryType ? 'primary' : 'secondary'}
-          onClick={() => onChange(geometryType)}
-          aria-pressed={type === geometryType}
-        >
-          {intl.formatMessage(label)}
-        </Button>
-      ))}
+      {options
+        .filter(([geometryType]) => allowedTypes.includes(geometryType))
+        .map(([geometryType, label]) => (
+          <Button
+            key={geometryType}
+            type="button"
+            variant={type === geometryType ? 'primary' : 'secondary'}
+            onClick={() => onChange(geometryType)}
+            aria-pressed={type === geometryType}
+          >
+            {intl.formatMessage(label)}
+          </Button>
+        ))}
     </fieldset>
   );
 }
@@ -234,8 +240,15 @@ export function GeometryPicker({
   projectLocalId,
   onChange,
   onValidationChange,
+  showMap = true,
+  allowedTypes = ['Point', 'LineString', 'Polygon'],
+  externalPoint,
 }: GeometryPickerProps) {
   const intl = useIntl();
+  const onChangeRef = useRef(onChange);
+  const onValidationChangeRef = useRef(onValidationChange);
+  onChangeRef.current = onChange;
+  onValidationChangeRef.current = onValidationChange;
   const mapRef = useRef<MapRef>(null);
   const mapLoadedRef = useRef(false);
   const [projectArea, setProjectArea] = useState<{
@@ -250,6 +263,8 @@ export function GeometryPicker({
   const [vertices, setVertices] = useState<DraftVertex[]>([]);
   const [manualLongitude, setManualLongitude] = useState('');
   const [manualLatitude, setManualLatitude] = useState('');
+  const externalLongitude = externalPoint?.[0];
+  const externalLatitude = externalPoint?.[1];
   const positions = useMemo(
     () => vertices.map((vertex) => vertex.position),
     [vertices],
@@ -272,7 +287,7 @@ export function GeometryPicker({
   );
 
   useEffect(() => {
-    if (!projectLocalId) return;
+    if (!projectLocalId || !showMap) return;
     let cancelled = false;
     void getProjectPoints(projectLocalId)
       .then((points) => {
@@ -310,7 +325,7 @@ export function GeometryPicker({
     return () => {
       cancelled = true;
     };
-  }, [projectLocalId]);
+  }, [projectLocalId, showMap]);
 
   useEffect(() => {
     fitProjectArea();
@@ -333,6 +348,23 @@ export function GeometryPicker({
     if (!error) onChange(geometryFromVertices(nextType, nextPositions));
     else onChange(undefined);
   }
+
+  useEffect(() => {
+    if (externalLongitude === undefined || externalLatitude === undefined) return;
+    const position: Position = [externalLongitude, externalLatitude];
+    const errorKey = validateGeometryDraft('Point', [position]);
+    const error = errorKey
+      ? intl.formatMessage(messages[errorKey as keyof typeof messages])
+      : undefined;
+    setType('Point');
+    setVertices([{ id: 'external-point', position }]);
+    setManualLongitude(String(externalLongitude));
+    setManualLatitude(String(externalLatitude));
+    onValidationChangeRef.current?.(error);
+    onChangeRef.current(
+      error ? undefined : geometryFromVertices('Point', [position]),
+    );
+  }, [externalLatitude, externalLongitude, intl]);
 
   function chooseType(nextType: AlertGeometryType) {
     setType(nextType);
@@ -397,72 +429,78 @@ export function GeometryPicker({
 
   return (
     <div className="flex flex-col gap-3">
-      <GeometryTypePicker type={type} onChange={chooseType} />
+      <GeometryTypePicker
+        type={type}
+        allowedTypes={allowedTypes}
+        onChange={chooseType}
+      />
 
       <p className="text-sm text-text-muted">{intl.formatMessage(hint)}</p>
-      <MapContainer
-        mapRef={mapRef}
-        height={360}
-        className="rounded-card"
-        initialViewState={{ longitude: -60, latitude: -3, zoom: 4 }}
-        onLoad={() => {
-          mapLoadedRef.current = true;
-          fitProjectArea();
-        }}
-        onClick={(event) => addPoint(event.lngLat.lng, event.lngLat.lat)}
-      >
-        {feature && (
-          <Source id="alert-geometry-draft" type="geojson" data={feature}>
-            {type === 'Polygon' && vertices.length >= 3 && (
+      {showMap ? (
+        <MapContainer
+          mapRef={mapRef}
+          height={360}
+          className="rounded-card"
+          initialViewState={{ longitude: -60, latitude: -3, zoom: 4 }}
+          onLoad={() => {
+            mapLoadedRef.current = true;
+            fitProjectArea();
+          }}
+          onClick={(event) => addPoint(event.lngLat.lng, event.lngLat.lat)}
+        >
+          {feature && (
+            <Source id="alert-geometry-draft" type="geojson" data={feature}>
+              {type === 'Polygon' && vertices.length >= 3 && (
+                <Layer
+                  id="alert-geometry-fill"
+                  type="fill"
+                  paint={{ 'fill-color': '#dc2626', 'fill-opacity': 0.18 }}
+                />
+              )}
               <Layer
-                id="alert-geometry-fill"
-                type="fill"
-                paint={{ 'fill-color': '#dc2626', 'fill-opacity': 0.18 }}
+                id="alert-geometry-line"
+                type="line"
+                paint={{ 'line-color': '#dc2626', 'line-width': 3 }}
               />
-            )}
-            <Layer
-              id="alert-geometry-line"
-              type="line"
-              paint={{ 'line-color': '#dc2626', 'line-width': 3 }}
-            />
-          </Source>
-        )}
-        {vertices.map((vertex, index) => {
-          const [longitude, latitude] = vertex.position;
-          return (
-            <Marker
-              key={vertex.id}
-              longitude={longitude}
-              latitude={latitude}
-              draggable={type === 'Point'}
-              onDragEnd={
-                type === 'Point'
-                  ? (event) => {
-                      const next: DraftVertex[] = [
-                        {
-                          ...vertex,
-                          position: [event.lngLat.lng, event.lngLat.lat],
-                        },
-                      ];
-                      setVertices(next);
-                      setManualLongitude(String(event.lngLat.lng));
-                      setManualLatitude(String(event.lngLat.lat));
-                      commit(next);
-                    }
-                  : undefined
-              }
-            >
-              <div
-                role="img"
-                className="h-4 w-4 rounded-full border-2 border-white bg-error shadow"
-                aria-label={intl.formatMessage(messages.vertexLabel, {
-                  number: index + 1,
-                })}
-              />
-            </Marker>
-          );
-        })}
-      </MapContainer>
+            </Source>
+          )}
+          {vertices.map((vertex, index) => {
+            const [longitude, latitude] = vertex.position;
+            return (
+              <Marker
+                key={vertex.id}
+                longitude={longitude}
+                latitude={latitude}
+                draggable={type === 'Point'}
+                onDragEnd={
+                  type === 'Point'
+                    ? (event) => {
+                        const next: DraftVertex[] = [
+                          {
+                            ...vertex,
+                            position: [event.lngLat.lng, event.lngLat.lat],
+                          },
+                        ];
+                        setVertices(next);
+                        setManualLongitude(String(event.lngLat.lng));
+                        setManualLatitude(String(event.lngLat.lat));
+                        commit(next);
+                      }
+                    : undefined
+                }
+              >
+                <div
+                  role="img"
+                  className="h-4 w-4 rounded-full border-2 border-white bg-error shadow"
+                  aria-label={intl.formatMessage(messages.vertexLabel, {
+                    number: index + 1,
+                  })}
+                />
+              </Marker>
+            );
+          })}
+        </MapContainer>
+      ) : null}
 
       <CoordinateEntry
         longitude={manualLongitude}
