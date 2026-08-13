@@ -36,14 +36,18 @@ describe('PhotoGallery', () => {
 
   it('renders thumbnail grid from photos array', () => {
     render(<PhotoGallery photos={photos} projectId={projectId} />);
-    const images = screen.getAllByRole('img');
-    expect(images).toHaveLength(2);
+    const thumbnails = screen.getAllByRole('button', { name: /View / });
+    expect(thumbnails).toHaveLength(2);
   });
 
-  it('each thumbnail has correct alt text', () => {
+  it('each thumbnail has correct aria-label', () => {
     render(<PhotoGallery photos={photos} projectId={projectId} />);
-    expect(screen.getByAltText('photo1.jpg')).toBeInTheDocument();
-    expect(screen.getByAltText('photo2.png')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'View photo1.jpg' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'View photo2.png' }),
+    ).toBeInTheDocument();
   });
 
   it('builds thumbnail URLs using getAttachmentUrl with thumbnail variant', () => {
@@ -69,6 +73,59 @@ describe('PhotoGallery', () => {
     expect(screen.getByText('No photos')).toBeInTheDocument();
   });
 
+  it('lazy-loads new thumbnails when a same-length photos array replaces the previous one', async () => {
+    const { rerender } = render(
+      <PhotoGallery photos={photos} projectId={projectId} />,
+    );
+
+    // Initial thumbnails load (IntersectionObserver mock fires immediately)
+    expect(await screen.findByAltText('photo1.jpg')).toBeInTheDocument();
+    expect(await screen.findByAltText('photo2.png')).toBeInTheDocument();
+
+    // Replace with a DIFFERENT same-length array (different driveIds)
+    const newPhotos = [
+      { driveId: 'drive3', name: 'photo3.jpg', type: 'image/jpeg' },
+      { driveId: 'drive4', name: 'photo4.png', type: 'image/png' },
+    ];
+    rerender(<PhotoGallery photos={newPhotos} projectId={projectId} />);
+
+    // New thumbnails must load — not stuck on placeholders from stale indexes
+    expect(await screen.findByAltText('photo3.jpg')).toBeInTheDocument();
+    expect(await screen.findByAltText('photo4.png')).toBeInTheDocument();
+  });
+
+  it('lazy-loads correctly when multiple photos share the same driveId', async () => {
+    const { rerender } = render(
+      <PhotoGallery
+        photos={[
+          { driveId: 'shared', name: 'photo1.jpg', type: 'image/jpeg' },
+          { driveId: 'shared', name: 'photo2.png', type: 'image/png' },
+        ]}
+        projectId={projectId}
+      />,
+    );
+
+    // IntersectionObserver mock fires immediately for ALL observed elements,
+    // so both thumbnails load synchronously in test environment
+    expect(await screen.findByAltText('photo1.jpg')).toBeInTheDocument();
+    expect(await screen.findByAltText('photo2.png')).toBeInTheDocument();
+
+    // Replace with same photos in different order
+    rerender(
+      <PhotoGallery
+        photos={[
+          { driveId: 'shared', name: 'photo2.png', type: 'image/png' },
+          { driveId: 'shared', name: 'photo1.jpg', type: 'image/jpeg' },
+        ]}
+        projectId={projectId}
+      />,
+    );
+
+    // Both should load correctly after rerender (mock fires immediately)
+    expect(await screen.findByAltText('photo2.png')).toBeInTheDocument();
+    expect(await screen.findByAltText('photo1.jpg')).toBeInTheDocument();
+  });
+
   it('clicking thumbnail shows preview', async () => {
     const user = userEvent.setup();
     render(<PhotoGallery photos={photos} projectId={projectId} />);
@@ -77,7 +134,7 @@ describe('PhotoGallery', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     // Click first thumbnail
-    const firstThumb = screen.getByAltText('photo1.jpg');
+    const firstThumb = screen.getByRole('button', { name: 'View photo1.jpg' });
     await user.click(firstThumb);
 
     // Preview dialog should appear
@@ -91,7 +148,7 @@ describe('PhotoGallery', () => {
     const user = userEvent.setup();
     render(<PhotoGallery photos={photos} projectId={projectId} />);
 
-    await user.click(screen.getByAltText('photo1.jpg'));
+    await user.click(screen.getByRole('button', { name: 'View photo1.jpg' }));
 
     expect(getAttachmentUrl).toHaveBeenCalledWith(
       'proj1',
@@ -106,7 +163,7 @@ describe('PhotoGallery', () => {
     const user = userEvent.setup();
     render(<PhotoGallery photos={photos} projectId={projectId} />);
 
-    await user.click(screen.getByAltText('photo1.jpg'));
+    await user.click(screen.getByRole('button', { name: 'View photo1.jpg' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
     const closeButton = screen.getByRole('button', { name: 'Close preview' });

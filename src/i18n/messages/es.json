@@ -531,6 +531,7 @@
   "observationsMap.markerLabel": "Ver observación",
   "pagination.loadMore": "Cargar más",
   "pagination.showing": "Mostrando {start}–{end} de {total} {itemLabel}",
+  "photoGallery.viewPhoto": "Ver {photoName}",
   "settings.backup.description": "Exporta tu configuración local a un archivo JSON, o importa una copia de seguridad exportada anteriormente.",
   "settings.backup.exportButton": "Exportar Copia de Seguridad",
   "settings.backup.exportError": "Error al exportar copia de seguridad.",

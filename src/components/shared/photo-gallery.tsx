@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { AuthImg } from '@/components/shared/auth-img';
@@ -18,6 +18,12 @@ interface Photo {
   type: string;
 }
 
+function photoKey(photo: Photo): string {
+  // CoMapeo assigns the same driveId to all blobs from the same writer;
+  // type + name distinguish attachments. Use a stable composite key.
+  return JSON.stringify([photo.driveId, photo.type, photo.name]);
+}
+
 interface PhotoGalleryProps {
   photos: Photo[];
   projectId: string;
@@ -31,6 +37,9 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
   const [focusOnClose, setFocusOnClose] = useState<HTMLButtonElement | null>(
     null,
   );
+  const [visibleThumbnails, setVisibleThumbnails] = useState<Set<string>>(
+    new Set(),
+  );
 
   const imageUrls = photos.map((photo) =>
     getAttachmentUrl(
@@ -41,6 +50,36 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
       'original',
     ),
   );
+
+  // IntersectionObserver for lazy loading thumbnails.
+  // Key visibility by stable composite `photoKey` so that replacing/reordering
+  // the list (same length) re-runs the effect and observes the new thumbnails
+  // rather than stale indexes. driveId alone is NOT unique — multiple blobs
+  // from the same device share it.
+  const photoIds = photos.map(photoKey).join(',');
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const target = entry.target as HTMLElement;
+            const photoId = target.dataset.photoId;
+            if (photoId) {
+              setVisibleThumbnails((prev) => new Set(prev).add(photoId));
+            }
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: '200px' }, // Start loading 200px before entering viewport
+    );
+
+    thumbnailRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [photoIds]);
 
   const handleThumbnailClick = useCallback((index: number) => {
     // Store reference to the thumbnail that opened the preview for focus restoration
@@ -58,8 +97,8 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
 
   const handleNavigate = useCallback((index: number) => {
     // Update the stored thumbnail reference when navigating
+    // BUT do NOT update focusOnClose - that should remain the opener
     openedThumbnailRef.current = thumbnailRefs.current[index] ?? null;
-    setFocusOnClose(openedThumbnailRef.current);
     setPreviewIndex(index);
   }, []);
 
@@ -72,28 +111,38 @@ export function PhotoGallery({ photos, projectId }: PhotoGalleryProps) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {photos.map((photo, index) => (
           <button
-            key={photo.driveId}
+            key={photoKey(photo)}
             ref={(el) => {
               thumbnailRefs.current[index] = el;
             }}
             type="button"
             onClick={() => handleThumbnailClick(index)}
-            className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-card"
+            className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-card aspect-square overflow-hidden"
             aria-label={intl.formatMessage(messages.viewPhoto, {
               photoName: photo.name,
             })}
+            data-index={index}
+            data-photo-id={photoKey(photo)}
           >
-            <AuthImg
-              src={getAttachmentUrl(
-                projectId,
-                photo.driveId,
-                photo.type,
-                photo.name,
-                'thumbnail',
-              )}
-              alt={photo.name}
-              className="w-full rounded-card"
-            />
+            {visibleThumbnails.has(photoKey(photo)) && (
+              <AuthImg
+                src={getAttachmentUrl(
+                  projectId,
+                  photo.driveId,
+                  photo.type,
+                  photo.name,
+                  'thumbnail',
+                )}
+                alt={photo.name}
+                className="h-full w-full object-cover"
+              />
+            )}
+            {!visibleThumbnails.has(photoKey(photo)) && (
+              <div
+                className="h-full w-full object-cover rounded-card bg-surface-container-low animate-pulse"
+                aria-hidden="true"
+              />
+            )}
           </button>
         ))}
       </div>
