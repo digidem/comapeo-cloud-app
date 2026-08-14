@@ -56,6 +56,29 @@ describe('ArchiveBrowser', () => {
     });
   });
 
+  it('shows a persistent Create Project action in the non-empty state', async () => {
+    const user = userEvent.setup();
+    const onCreateNew = vi.fn();
+
+    render(
+      <ArchiveBrowser
+        selectedProjectId={null}
+        onSelect={vi.fn()}
+        onCreateNew={onCreateNew}
+        onAddServer={vi.fn()}
+        onSelectServer={vi.fn()}
+      />,
+    );
+
+    const createProjectButton = screen.getByRole('button', {
+      name: 'Create Project',
+    });
+
+    await user.click(createProjectButton);
+
+    expect(onCreateNew).toHaveBeenCalledOnce();
+  });
+
   it('renders remote archive overflow button with correct aria-label', async () => {
     const user = userEvent.setup();
     const onSelectServer = vi.fn();
