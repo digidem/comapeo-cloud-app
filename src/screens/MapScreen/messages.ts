@@ -507,7 +507,7 @@ export const mapMessages = defineMessages({
   },
   referenceOverlaysSizeLimit: {
     id: 'map.referenceOverlays.sizeLimit',
-    defaultMessage: 'Up to 5 MB per file',
+    defaultMessage: 'Up to {max} MB per file',
   },
   referenceOverlaysList: {
     id: 'map.referenceOverlays.list',
@@ -517,9 +517,17 @@ export const mapMessages = defineMessages({
     id: 'map.referenceOverlays.hide',
     defaultMessage: 'Hide {name}',
   },
+  referenceOverlaysHideAction: {
+    id: 'map.referenceOverlays.hideAction',
+    defaultMessage: 'Hide',
+  },
   referenceOverlaysShow: {
     id: 'map.referenceOverlays.show',
     defaultMessage: 'Show {name}',
+  },
+  referenceOverlaysShowAction: {
+    id: 'map.referenceOverlays.showAction',
+    defaultMessage: 'Show',
   },
   referenceOverlaysRemove: {
     id: 'map.referenceOverlays.remove',
@@ -563,7 +571,7 @@ export const mapMessages = defineMessages({
   referenceOverlaysTooLarge: {
     id: 'map.referenceOverlays.tooLarge',
     defaultMessage:
-      '{name} is larger than 5 MB. Choose a smaller file. No files from this selection were added.',
+      '{name} is larger than {max} MB. Choose a smaller file. No files from this selection were added.',
   },
   referenceOverlaysUnsupported: {
     id: 'map.referenceOverlays.unsupported',

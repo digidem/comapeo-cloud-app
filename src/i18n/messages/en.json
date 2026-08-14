@@ -1466,6 +1466,9 @@
   "map.referenceOverlays.hide": {
     "defaultMessage": "Hide {name}"
   },
+  "map.referenceOverlays.hideAction": {
+    "defaultMessage": "Hide"
+  },
   "map.referenceOverlays.importFailed": {
     "defaultMessage": "GeoJSON import failed"
   },
@@ -1496,14 +1499,17 @@
   "map.referenceOverlays.show": {
     "defaultMessage": "Show {name}"
   },
+  "map.referenceOverlays.showAction": {
+    "defaultMessage": "Show"
+  },
   "map.referenceOverlays.sizeLimit": {
-    "defaultMessage": "Up to 5 MB per file"
+    "defaultMessage": "Up to {max} MB per file"
   },
   "map.referenceOverlays.title": {
     "defaultMessage": "Reference data"
   },
   "map.referenceOverlays.tooLarge": {
-    "defaultMessage": "{name} is larger than 5 MB. Choose a smaller file. No files from this selection were added."
+    "defaultMessage": "{name} is larger than {max} MB. Choose a smaller file. No files from this selection were added."
   },
   "map.referenceOverlays.unsupported": {
     "defaultMessage": "{name} has no supported geometry to display. No files from this selection were added."

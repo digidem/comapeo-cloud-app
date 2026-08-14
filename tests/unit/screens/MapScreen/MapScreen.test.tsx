@@ -483,7 +483,8 @@ describe('MapScreen', () => {
     );
   });
 
-  it('shows drag-and-drop import failures on the map even when controls are out of view', async () => {
+  it('shows and dismisses drag-and-drop import failures on the map', async () => {
+    const user = userEvent.setup();
     render(<MapScreen />);
     const brokenFile = new File(
       ['{"type":"Point","coordinates":["bad",0]}'],
@@ -500,6 +501,12 @@ describe('MapScreen', () => {
     expect(mapAlert).toHaveTextContent(
       'dropped-broken.geojson is not valid GeoJSON.',
     );
+    await user.click(
+      within(mapAlert).getByRole('button', { name: 'Dismiss error' }),
+    );
+    expect(
+      screen.queryByTestId('reference-overlay-map-error'),
+    ).not.toBeInTheDocument();
   });
 
   it('caps retained reference overlays to protect mobile memory', async () => {

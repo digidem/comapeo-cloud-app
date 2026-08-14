@@ -29,6 +29,7 @@ import {
 import {
   type GeoJsonOverlay,
   GeoJsonOverlayError,
+  MAX_GEOJSON_OVERLAY_MEGABYTES,
   readGeoJsonOverlayFile,
 } from '@/lib/map/geojson-overlays';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
@@ -154,6 +155,7 @@ export function MapScreen() {
     useState<'controls' | 'map' | null>(null);
   const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
   const referenceOverlayImportsRef = useRef(new Set<symbol>());
+  const referenceOverlayCountRef = useRef(0);
   const referenceOverlayReservedSlotsRef = useRef(0);
   const referenceOverlayGenerationRef = useRef(0);
   const referenceOverlayImportSequenceRef = useRef(0);
@@ -171,6 +173,7 @@ export function MapScreen() {
   useEffect(() => {
     referenceOverlayGenerationRef.current += 1;
     referenceOverlayImportsRef.current.clear();
+    referenceOverlayCountRef.current = 0;
     referenceOverlayReservedSlotsRef.current = 0;
     referenceOverlayImportSequenceRef.current = 0;
     referenceOverlayLatestUiOutcomeRef.current = 0;
@@ -324,7 +327,7 @@ export function MapScreen() {
     const importSequence = referenceOverlayImportSequenceRef.current + 1;
     referenceOverlayImportSequenceRef.current = importSequence;
     const nextOverlayCount =
-      referenceOverlays.length +
+      referenceOverlayCountRef.current +
       referenceOverlayReservedSlotsRef.current +
       files.length;
     if (nextOverlayCount > MAX_REFERENCE_OVERLAYS) {
@@ -369,7 +372,10 @@ export function MapScreen() {
 
       const failure = results.find((result) => !result.ok);
       if (failure && !failure.ok) {
-        const values = { name: failure.file.name };
+        const values = {
+          name: failure.file.name,
+          max: MAX_GEOJSON_OVERLAY_MEGABYTES,
+        };
         let errorMessage: string;
         if (failure.error instanceof GeoJsonOverlayError) {
           let message = mapMessages.referenceOverlaysInvalid;
@@ -428,6 +434,7 @@ export function MapScreen() {
             ]
           : [],
       );
+      referenceOverlayCountRef.current += additions.length;
       setReferenceOverlays((current) => [...current, ...additions]);
       if (importSequence >= referenceOverlayLatestUiOutcomeRef.current) {
         referenceOverlayLatestUiOutcomeRef.current = importSequence;
@@ -457,6 +464,11 @@ export function MapScreen() {
   }
 
   function handleReferenceOverlayRemove(id: string) {
+    if (!referenceOverlays.some((overlay) => overlay.id === id)) return;
+    referenceOverlayCountRef.current = Math.max(
+      0,
+      referenceOverlayCountRef.current - 1,
+    );
     setReferenceOverlays((current) =>
       current.filter((overlay) => overlay.id !== id),
     );

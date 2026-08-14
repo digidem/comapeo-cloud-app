@@ -12,7 +12,9 @@ import type {
  * synchronous JSON.parse() work and the much larger in-memory object graph it
  * creates.
  */
-export const MAX_GEOJSON_OVERLAY_BYTES = 5 * 1024 * 1024;
+export const MAX_GEOJSON_OVERLAY_MEGABYTES = 5;
+export const MAX_GEOJSON_OVERLAY_BYTES =
+  MAX_GEOJSON_OVERLAY_MEGABYTES * 1024 * 1024;
 
 export type GeoJsonOverlayErrorCode =
   | 'invalid'
@@ -58,13 +60,26 @@ function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+// Keep this validator separate from geometrySchema: reference overlays accept
+// GeometryCollection and extra position dimensions, but share its lon/lat ranges.
 function isPosition(value: unknown): value is Position {
-  return (
-    Array.isArray(value) &&
-    value.length >= 2 &&
-    value.every((coordinate) =>
+  if (!Array.isArray(value) || value.length < 2) return false;
+  if (
+    !value.every((coordinate) =>
       typeof coordinate === 'number' ? Number.isFinite(coordinate) : false,
     )
+  ) {
+    return false;
+  }
+
+  const [longitude, latitude] = value;
+  return (
+    typeof longitude === 'number' &&
+    longitude >= -180 &&
+    longitude <= 180 &&
+    typeof latitude === 'number' &&
+    latitude >= -90 &&
+    latitude <= 90
   );
 }
 
@@ -76,8 +91,8 @@ function isLineCoordinates(value: unknown): value is Position[] {
   );
 }
 
-function positionsEqual(a: Position, b: Position): boolean {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
+function positionsShareLongitudeLatitude(a: Position, b: Position): boolean {
+  return a[0] === b[0] && a[1] === b[1];
 }
 
 function validateLinearRing(value: unknown): asserts value is Position[] {
@@ -86,7 +101,9 @@ function validateLinearRing(value: unknown): asserts value is Position[] {
   if (value.length < 4) invalidPolygonRing();
   const first = value[0];
   const last = value.at(-1);
-  if (!first || !last || !positionsEqual(first, last)) invalidPolygonRing();
+  if (!first || !last || !positionsShareLongitudeLatitude(first, last)) {
+    invalidPolygonRing();
+  }
 }
 
 function validatePolygonCoordinates(

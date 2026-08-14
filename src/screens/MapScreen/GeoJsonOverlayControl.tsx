@@ -1,7 +1,10 @@
 import { useId } from 'react';
 import { useIntl } from 'react-intl';
 
-import type { GeoJsonOverlay } from '@/lib/map/geojson-overlays';
+import {
+  type GeoJsonOverlay,
+  MAX_GEOJSON_OVERLAY_MEGABYTES,
+} from '@/lib/map/geojson-overlays';
 
 import { mapMessages } from './messages';
 
@@ -34,15 +37,13 @@ export function GeoJsonOverlayControl({
 
   return (
     <section className="flex flex-col gap-3" aria-labelledby={titleId}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 id={titleId} className="text-sm font-semibold text-text">
-            {intl.formatMessage(mapMessages.referenceOverlaysTitle)}
-          </h2>
-          <p className="mt-1 text-xs text-text-muted">
-            {intl.formatMessage(mapMessages.referenceOverlaysHelp)}
-          </p>
-        </div>
+      <div>
+        <h2 id={titleId} className="text-sm font-semibold text-text">
+          {intl.formatMessage(mapMessages.referenceOverlaysTitle)}
+        </h2>
+        <p className="mt-1 text-xs text-text-muted">
+          {intl.formatMessage(mapMessages.referenceOverlaysHelp)}
+        </p>
       </div>
 
       <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-btn bg-surface px-3 py-2 text-sm font-semibold text-text shadow-sm hover:bg-surface-hover focus-within:ring-2 focus-within:ring-primary">
@@ -64,7 +65,9 @@ export function GeoJsonOverlayControl({
       </label>
 
       <p className="text-xs text-text-muted">
-        {intl.formatMessage(mapMessages.referenceOverlaysSizeLimit)}
+        {intl.formatMessage(mapMessages.referenceOverlaysSizeLimit, {
+          max: MAX_GEOJSON_OVERLAY_MEGABYTES,
+        })}
       </p>
 
       {error ? (
@@ -106,14 +109,19 @@ export function GeoJsonOverlayControl({
               </span>
               <button
                 type="button"
-                onClick={() => onToggle(overlay.id)}
-                className="min-h-11 rounded-btn px-2 text-xs font-semibold text-primary hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                {intl.formatMessage(
+                aria-label={intl.formatMessage(
                   overlay.visible
                     ? mapMessages.referenceOverlaysHide
                     : mapMessages.referenceOverlaysShow,
                   { name: overlay.name },
+                )}
+                onClick={() => onToggle(overlay.id)}
+                className="min-h-11 shrink-0 rounded-btn px-2 text-xs font-semibold text-primary hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {intl.formatMessage(
+                  overlay.visible
+                    ? mapMessages.referenceOverlaysHideAction
+                    : mapMessages.referenceOverlaysShowAction,
                 )}
               </button>
               <button

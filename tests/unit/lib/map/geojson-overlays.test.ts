@@ -107,6 +107,18 @@ describe('GeoJSON reference overlays', () => {
     ).toThrow(/valid GeoJSON/i);
   });
 
+  it('rejects out-of-range longitude and latitude while preserving extra dimensions', () => {
+    expect(() =>
+      normalizeGeoJson({ type: 'Point', coordinates: [181, 0] }),
+    ).toThrow(/valid GeoJSON/i);
+    expect(() =>
+      normalizeGeoJson({ type: 'Point', coordinates: [0, -91] }),
+    ).toThrow(/valid GeoJSON/i);
+    expect(
+      normalizeGeoJson({ type: 'Point', coordinates: [-60, -3, 120] }).features,
+    ).toHaveLength(1);
+  });
+
   it('reports malformed polygon rings distinctly from generic GeoJSON errors', () => {
     expect(() =>
       normalizeGeoJson({
@@ -121,6 +133,22 @@ describe('GeoJSON reference overlays', () => {
         ],
       }),
     ).toThrow(/polygon ring/i);
+  });
+
+  it('accepts ring closure when endpoint dimensions differ but lon/lat match', () => {
+    const normalized = normalizeGeoJson({
+      type: 'Polygon',
+      coordinates: [
+        [
+          [-61, -4, 12],
+          [-59, -4, 11],
+          [-59, -2, 10],
+          [-61, -4],
+        ],
+      ],
+    });
+
+    expect(normalized.features).toHaveLength(1);
   });
 
   it('keeps structurally invalid polygon coordinates on the generic invalid path', () => {
