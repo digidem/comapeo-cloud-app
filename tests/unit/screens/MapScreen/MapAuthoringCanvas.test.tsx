@@ -191,6 +191,20 @@ describe('MapAuthoringCanvas reference overlays', () => {
     expect(onOverlayFilesDrop).toHaveBeenCalledWith([file]);
   });
 
+  it('does not swallow non-file drop events', () => {
+    const { onOverlayFilesDrop } = renderCanvas([]);
+    const region = screen.getByRole('region', { name: 'Map authoring canvas' });
+    const dropEvent = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(dropEvent, 'dataTransfer', {
+      value: { types: ['text/plain'], files: [] },
+    });
+
+    fireEvent(region, dropEvent);
+
+    expect(dropEvent.defaultPrevented).toBe(false);
+    expect(onOverlayFilesDrop).not.toHaveBeenCalled();
+  });
+
   it('clears the drop affordance when a file drag ends without usable files', () => {
     const { onOverlayFilesDrop } = renderCanvas([]);
     const region = screen.getByRole('region', { name: 'Map authoring canvas' });

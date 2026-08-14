@@ -148,7 +148,6 @@ export function MapScreen() {
   const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
   const referenceOverlayImportsRef = useRef(new Set<symbol>());
   const referenceOverlayGenerationRef = useRef(0);
-  const latestReferenceOverlayImportRef = useRef<symbol | null>(null);
   const [referenceOverlayProjectId, setReferenceOverlayProjectId] =
     useState(selectedProjectId);
   if (referenceOverlayProjectId !== selectedProjectId) {
@@ -161,7 +160,6 @@ export function MapScreen() {
   useEffect(() => {
     referenceOverlayGenerationRef.current += 1;
     referenceOverlayImportsRef.current.clear();
-    latestReferenceOverlayImportRef.current = null;
   }, [selectedProjectId]);
 
   // Track the computed project bbox for hasConfigChanges comparison
@@ -306,7 +304,6 @@ export function MapScreen() {
     const importGeneration = referenceOverlayGenerationRef.current;
     const importToken = Symbol('reference-overlay-import');
     referenceOverlayImportsRef.current.add(importToken);
-    latestReferenceOverlayImportRef.current = importToken;
     setReferenceOverlayLoading(true);
     setReferenceOverlayError(null);
 
@@ -333,13 +330,14 @@ export function MapScreen() {
 
       const failure = results.find((result) => !result.ok);
       if (failure && !failure.ok) {
-        if (latestReferenceOverlayImportRef.current !== importToken) {
-          return;
-        }
         const values = { name: failure.file.name };
         if (failure.error instanceof GeoJsonOverlayError) {
           let message = mapMessages.referenceOverlaysInvalid;
-          if (failure.error.code === 'too-large') {
+          if (failure.error.code === 'invalid-polygon-ring') {
+            message = mapMessages.referenceOverlaysInvalidPolygonRing;
+          } else if (failure.error.code === 'read') {
+            message = mapMessages.referenceOverlaysReadError;
+          } else if (failure.error.code === 'too-large') {
             message = mapMessages.referenceOverlaysTooLarge;
           } else if (failure.error.code === 'unsupported') {
             message = mapMessages.referenceOverlaysUnsupported;
@@ -372,7 +370,6 @@ export function MapScreen() {
       if (referenceOverlayGenerationRef.current === importGeneration) {
         referenceOverlayImportsRef.current.delete(importToken);
         if (referenceOverlayImportsRef.current.size === 0) {
-          latestReferenceOverlayImportRef.current = null;
           setReferenceOverlayLoading(false);
         }
       }

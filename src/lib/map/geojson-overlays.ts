@@ -15,7 +15,12 @@ import type {
 export const MAX_GEOJSON_OVERLAY_BYTES = 5 * 1024 * 1024;
 
 export type GeoJsonOverlayErrorCode =
-  'invalid' | 'too-large' | 'unsupported' | 'unsupported-file';
+  | 'invalid'
+  | 'invalid-polygon-ring'
+  | 'read'
+  | 'too-large'
+  | 'unsupported'
+  | 'unsupported-file';
 
 export class GeoJsonOverlayError extends Error {
   readonly code: GeoJsonOverlayErrorCode;
@@ -34,18 +39,19 @@ export interface GeoJsonOverlay {
   visible: boolean;
 }
 
-export interface GeoJsonGeometryFamilies {
-  points: FeatureCollection<Geometry, GeoJsonProperties>;
-  lines: FeatureCollection<Geometry, GeoJsonProperties>;
-  polygons: FeatureCollection<Geometry, GeoJsonProperties>;
-}
-
 type JsonRecord = Record<string, unknown>;
 
 const MAX_GEOJSON_GEOMETRY_DEPTH = 64;
 
 function invalidGeoJson(): never {
   throw new GeoJsonOverlayError('invalid', 'This file is not valid GeoJSON.');
+}
+
+function invalidPolygonRing(): never {
+  throw new GeoJsonOverlayError(
+    'invalid-polygon-ring',
+    'Polygon rings must contain at least four positions and be closed.',
+  );
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -130,7 +136,7 @@ function validateGeometry(value: unknown): Geometry {
         }
         break;
       case 'Polygon':
-        if (!isPolygonCoordinates(candidate.coordinates)) invalidGeoJson();
+        if (!isPolygonCoordinates(candidate.coordinates)) invalidPolygonRing();
         break;
       case 'MultiPolygon':
         if (
@@ -140,7 +146,7 @@ function validateGeometry(value: unknown): Geometry {
             isPolygonCoordinates(polygon),
           )
         ) {
-          invalidGeoJson();
+          invalidPolygonRing();
         }
         break;
       case 'GeometryCollection':
@@ -275,52 +281,19 @@ export async function readGeoJsonOverlayFile(
     );
   }
 
+  let text: string;
+  try {
+    text = await file.text();
+  } catch {
+    throw new GeoJsonOverlayError('read', 'Could not read this GeoJSON file.');
+  }
+
   let parsed: unknown;
   try {
-    parsed = JSON.parse(await file.text()) as unknown;
+    parsed = JSON.parse(text) as unknown;
   } catch {
     throw new GeoJsonOverlayError('invalid', 'This file is not valid GeoJSON.');
   }
 
   return normalizeGeoJson(parsed);
-}
-
-function featureCollection(
-  features: Array<Feature<Geometry, GeoJsonProperties>>,
-): FeatureCollection<Geometry, GeoJsonProperties> {
-  return { type: 'FeatureCollection', features };
-}
-
-export function splitGeoJsonByGeometryFamily(
-  data: FeatureCollection<Geometry, GeoJsonProperties>,
-): GeoJsonGeometryFamilies {
-  const points: Array<Feature<Geometry, GeoJsonProperties>> = [];
-  const lines: Array<Feature<Geometry, GeoJsonProperties>> = [];
-  const polygons: Array<Feature<Geometry, GeoJsonProperties>> = [];
-
-  for (const feature of data.features) {
-    switch (feature.geometry.type) {
-      case 'Point':
-      case 'MultiPoint':
-        points.push(feature);
-        break;
-      case 'LineString':
-      case 'MultiLineString':
-        lines.push(feature);
-        break;
-      case 'Polygon':
-      case 'MultiPolygon':
-        polygons.push(feature);
-        break;
-      case 'GeometryCollection':
-        // normalizeGeoJson() flattens these before data reaches this function.
-        break;
-    }
-  }
-
-  return {
-    points: featureCollection(points),
-    lines: featureCollection(lines),
-    polygons: featureCollection(polygons),
-  };
 }

@@ -423,6 +423,7 @@ export function MapAuthoringCanvas({
         }
       }}
       onDrop={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return;
         const files = Array.from(event.dataTransfer.files ?? []);
         event.preventDefault();
         event.stopPropagation();

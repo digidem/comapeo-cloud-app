@@ -4,11 +4,10 @@ import {
   MAX_GEOJSON_OVERLAY_BYTES,
   normalizeGeoJson,
   readGeoJsonOverlayFile,
-  splitGeoJsonByGeometryFamily,
 } from '@/lib/map/geojson-overlays';
 
 describe('GeoJSON reference overlays', () => {
-  it('accepts FeatureCollection roots and splits mixed supported geometry families', () => {
+  it('accepts FeatureCollection roots with mixed supported geometry families', () => {
     const normalized = normalizeGeoJson({
       type: 'FeatureCollection',
       features: [
@@ -48,11 +47,9 @@ describe('GeoJSON reference overlays', () => {
       ],
     });
 
-    const families = splitGeoJsonByGeometryFamily(normalized);
-
-    expect(families.points.features).toHaveLength(1);
-    expect(families.lines.features).toHaveLength(1);
-    expect(families.polygons.features).toHaveLength(1);
+    expect(normalized.features.map((feature) => feature.geometry.type)).toEqual(
+      ['Point', 'MultiLineString', 'Polygon'],
+    );
   });
 
   it('accepts Feature and Geometry roots', () => {
@@ -96,10 +93,9 @@ describe('GeoJSON reference overlays', () => {
       ],
     });
 
-    const families = splitGeoJsonByGeometryFamily(normalized);
-    expect(normalized.features).toHaveLength(2);
-    expect(families.points.features).toHaveLength(1);
-    expect(families.polygons.features).toHaveLength(1);
+    expect(normalized.features.map((feature) => feature.geometry.type)).toEqual(
+      ['Point', 'MultiPolygon'],
+    );
   });
 
   it('rejects non-GeoJSON roots and malformed coordinates', () => {
@@ -109,6 +105,22 @@ describe('GeoJSON reference overlays', () => {
     expect(() =>
       normalizeGeoJson({ type: 'Point', coordinates: ['not-a-number', -3] }),
     ).toThrow(/valid GeoJSON/i);
+  });
+
+  it('reports malformed polygon rings distinctly from generic GeoJSON errors', () => {
+    expect(() =>
+      normalizeGeoJson({
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-61, -4],
+            [-59, -4],
+            [-59, -2],
+            [-61, -3],
+          ],
+        ],
+      }),
+    ).toThrow(/polygon ring/i);
   });
 
   it('rejects excessively nested GeometryCollections with a controlled validation error', () => {
@@ -147,6 +159,21 @@ describe('GeoJSON reference overlays', () => {
       code: 'unsupported-file',
     });
     expect(text).not.toHaveBeenCalled();
+  });
+
+  it('reports file read failures separately from invalid JSON', async () => {
+    const file = {
+      name: 'unreadable.geojson',
+      size: 64,
+      type: 'application/geo+json',
+      text: vi.fn(async () => {
+        throw new Error('read failed');
+      }),
+    } as unknown as File;
+
+    await expect(readGeoJsonOverlayFile(file)).rejects.toMatchObject({
+      code: 'read',
+    });
   });
 
   it('parses a valid file and reports invalid JSON as an invalid overlay', async () => {

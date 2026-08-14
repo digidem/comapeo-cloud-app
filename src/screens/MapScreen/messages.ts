@@ -551,22 +551,32 @@ export const mapMessages = defineMessages({
   },
   referenceOverlaysInvalid: {
     id: 'map.referenceOverlays.invalid',
-    defaultMessage: '{name} is not valid GeoJSON.',
+    defaultMessage:
+      '{name} is not valid GeoJSON. No files from this selection were added.',
+  },
+  referenceOverlaysInvalidPolygonRing: {
+    id: 'map.referenceOverlays.invalidPolygonRing',
+    defaultMessage:
+      '{name} has invalid polygon rings. Rings must contain at least four positions and be closed. No files from this selection were added.',
   },
   referenceOverlaysTooLarge: {
     id: 'map.referenceOverlays.tooLarge',
-    defaultMessage: '{name} is larger than 5 MB. Choose a smaller file.',
+    defaultMessage:
+      '{name} is larger than 5 MB. Choose a smaller file. No files from this selection were added.',
   },
   referenceOverlaysUnsupported: {
     id: 'map.referenceOverlays.unsupported',
-    defaultMessage: '{name} has no supported geometry to display.',
+    defaultMessage:
+      '{name} has no supported geometry to display. No files from this selection were added.',
   },
   referenceOverlaysUnsupportedFile: {
     id: 'map.referenceOverlays.unsupportedFile',
-    defaultMessage: '{name} is not a GeoJSON or JSON file.',
+    defaultMessage:
+      '{name} is not a GeoJSON or JSON file. No files from this selection were added.',
   },
   referenceOverlaysReadError: {
     id: 'map.referenceOverlays.readError',
-    defaultMessage: 'Could not read {name}.',
+    defaultMessage:
+      'Could not read {name}. No files from this selection were added.',
   },
 });

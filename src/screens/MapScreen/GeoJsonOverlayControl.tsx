@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { useIntl } from 'react-intl';
 
 import type { GeoJsonOverlay } from '@/lib/map/geojson-overlays';
@@ -24,18 +25,13 @@ export function GeoJsonOverlayControl({
   loading = false,
 }: GeoJsonOverlayControlProps) {
   const intl = useIntl();
+  const titleId = useId();
 
   return (
-    <section
-      className="flex flex-col gap-3"
-      aria-labelledby="geojson-overlays-title"
-    >
+    <section className="flex flex-col gap-3" aria-labelledby={titleId}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2
-            id="geojson-overlays-title"
-            className="text-sm font-semibold text-text"
-          >
+          <h2 id={titleId} className="text-sm font-semibold text-text">
             {intl.formatMessage(mapMessages.referenceOverlaysTitle)}
           </h2>
           <p className="mt-1 text-xs text-text-muted">

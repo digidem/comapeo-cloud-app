@@ -44,6 +44,31 @@ describe('GeoJsonOverlayControl', () => {
     expect(screen.getByText('Up to 5 MB per file')).toBeInTheDocument();
   });
 
+  it('uses unique labelled-by ids when multiple controls are mounted', () => {
+    render(
+      <>
+        <GeoJsonOverlayControl
+          overlays={[]}
+          onFilesSelected={vi.fn()}
+          onToggle={vi.fn()}
+          onRemove={vi.fn()}
+        />
+        <GeoJsonOverlayControl
+          overlays={[]}
+          onFilesSelected={vi.fn()}
+          onToggle={vi.fn()}
+          onRemove={vi.fn()}
+        />
+      </>,
+    );
+
+    const labelledBy = screen
+      .getAllByRole('region', { name: 'Reference data' })
+      .map((section) => section.getAttribute('aria-labelledby'));
+    expect(labelledBy).toHaveLength(2);
+    expect(new Set(labelledBy).size).toBe(2);
+  });
+
   it('shows each overlay by filename with visibility and remove actions', async () => {
     const user = userEvent.setup();
     const onToggle = vi.fn();

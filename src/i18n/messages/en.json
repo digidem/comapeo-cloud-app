@@ -1470,7 +1470,10 @@
     "defaultMessage": "Hide {name}"
   },
   "map.referenceOverlays.invalid": {
-    "defaultMessage": "{name} is not valid GeoJSON."
+    "defaultMessage": "{name} is not valid GeoJSON. No files from this selection were added."
+  },
+  "map.referenceOverlays.invalidPolygonRing": {
+    "defaultMessage": "{name} has invalid polygon rings. Rings must contain at least four positions and be closed. No files from this selection were added."
   },
   "map.referenceOverlays.list": {
     "defaultMessage": "GeoJSON reference files"
@@ -1479,7 +1482,7 @@
     "defaultMessage": "Adding GeoJSON…"
   },
   "map.referenceOverlays.readError": {
-    "defaultMessage": "Could not read {name}."
+    "defaultMessage": "Could not read {name}. No files from this selection were added."
   },
   "map.referenceOverlays.remove": {
     "defaultMessage": "Remove {name}"
@@ -1497,13 +1500,13 @@
     "defaultMessage": "Reference data"
   },
   "map.referenceOverlays.tooLarge": {
-    "defaultMessage": "{name} is larger than 5 MB. Choose a smaller file."
+    "defaultMessage": "{name} is larger than 5 MB. Choose a smaller file. No files from this selection were added."
   },
   "map.referenceOverlays.unsupported": {
-    "defaultMessage": "{name} has no supported geometry to display."
+    "defaultMessage": "{name} has no supported geometry to display. No files from this selection were added."
   },
   "map.referenceOverlays.unsupportedFile": {
-    "defaultMessage": "{name} is not a GeoJSON or JSON file."
+    "defaultMessage": "{name} is not a GeoJSON or JSON file. No files from this selection were added."
   },
   "map.referenceOverlays.visible": {
     "defaultMessage": "Visible"
