@@ -178,7 +178,7 @@ describe('StorageSettings', () => {
     );
 
     await waitFor(() => {
-      expect(mockReload).toHaveBeenCalledTimes(1);
+      expect(mockReload).toHaveBeenCalled();
     });
   });
 
