@@ -104,6 +104,19 @@ const _messages = defineMessages({
     id: 'settings.backup.importError',
     defaultMessage: 'Failed to import backup: {error}',
   },
+  backupInvalidFormat: {
+    id: 'settings.backup.invalidFormat',
+    defaultMessage: 'Invalid backup file format.',
+  },
+  backupStorageUnavailable: {
+    id: 'settings.backup.storageUnavailable',
+    defaultMessage:
+      'Backup import failed. Local preferences may have been partially reset.',
+  },
+  backupReadError: {
+    id: 'settings.backup.readError',
+    defaultMessage: 'Failed to read backup file.',
+  },
 
   // Clear LocalStorage section
   clearTitle: {
@@ -293,18 +306,24 @@ export function SettingsScreen() {
           scheduleTimeout(() => window.location.reload(), 500);
         } else {
           setImportStatus('error');
-          setImportError(result.error ?? 'Unknown error');
+          setImportError(
+            intl.formatMessage(
+              result.error === 'storage-unavailable'
+                ? _messages.backupStorageUnavailable
+                : _messages.backupInvalidFormat,
+            ),
+          );
         }
       };
 
       reader.onerror = () => {
         setImportStatus('error');
-        setImportError(reader.error?.message ?? 'Failed to read file');
+        setImportError(intl.formatMessage(_messages.backupReadError));
       };
 
       reader.readAsText(file);
     },
-    [scheduleTimeout],
+    [intl, scheduleTimeout],
   );
 
   const handleClearAll = useCallback(async () => {

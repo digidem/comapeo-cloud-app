@@ -348,7 +348,7 @@ describe('SettingsScreen', () => {
     it('shows error feedback when import fails', async () => {
       vi.mocked(importLocalStorageData).mockReturnValueOnce({
         success: false,
-        error: 'Invalid backup file format',
+        error: 'invalid-format',
       });
 
       const OriginalFileReader = window.FileReader;
@@ -377,6 +377,40 @@ describe('SettingsScreen', () => {
         ).toBeInTheDocument();
         expect(
           screen.getByText(/Invalid backup file format/),
+        ).toBeInTheDocument();
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
+    });
+
+    it('shows localized partial-reset warning when browser storage blocks import', async () => {
+      vi.mocked(importLocalStorageData).mockReturnValueOnce({
+        success: false,
+        error: 'storage-unavailable',
+      });
+
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class MockFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          readAsText() {
+            this.result = '{}';
+            this.onload?.({} as Event);
+          }
+        } as unknown as typeof window.FileReader;
+
+        renderWithToast(<SettingsScreen />);
+
+        fireEvent.change(screen.getByTestId('backup-file-input'), {
+          target: { files: [new File(['{}'], 'backup.json')] },
+        });
+
+        expect(
+          await screen.findByText(
+            /Local preferences may have been partially reset/,
+          ),
         ).toBeInTheDocument();
       } finally {
         window.FileReader = OriginalFileReader;
@@ -438,7 +472,9 @@ describe('SettingsScreen', () => {
         });
 
         expect(screen.getByText(/Failed to import backup/)).toBeInTheDocument();
-        expect(screen.getByText(/Read error/)).toBeInTheDocument();
+        expect(
+          screen.getByText(/Failed to read backup file/),
+        ).toBeInTheDocument();
       } finally {
         window.FileReader = OriginalFileReader;
       }

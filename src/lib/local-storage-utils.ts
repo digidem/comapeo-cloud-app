@@ -35,20 +35,22 @@ export function exportLocalStorageData(): string {
   });
 }
 
+export type ImportLocalStorageError = 'invalid-format' | 'storage-unavailable';
+
 export function importLocalStorageData(jsonString: string): {
   success: boolean;
-  error?: string;
+  error?: ImportLocalStorageError;
 } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonString);
   } catch {
-    return { success: false, error: 'Invalid backup file format' };
+    return { success: false, error: 'invalid-format' };
   }
 
   const result = v.safeParse(backupSchema, parsed);
   if (!result.success) {
-    return { success: false, error: 'Invalid backup file format' };
+    return { success: false, error: 'invalid-format' };
   }
 
   try {
@@ -63,7 +65,7 @@ export function importLocalStorageData(jsonString: string): {
   } catch {
     return {
       success: false,
-      error: 'Browser storage is unavailable; backup was not imported.',
+      error: 'storage-unavailable',
     };
   }
 

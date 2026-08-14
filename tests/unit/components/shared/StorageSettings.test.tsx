@@ -241,6 +241,9 @@ describe('StorageSettings', () => {
         screen.queryByText('Clear All Cached Data?'),
       ).not.toBeInTheDocument();
       expect(screen.queryByText('DB exploded')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /Clear All Cached Data/ }),
+      ).toBeDisabled();
     } finally {
       clearSpy.mockRestore();
     }

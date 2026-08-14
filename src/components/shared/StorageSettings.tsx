@@ -183,7 +183,8 @@ export function StorageSettings() {
       await clearAllStorage();
     } catch {
       setClearError(intl.formatMessage(messages.clearError));
-      setClearing(false);
+      // clearAllStorage schedules a reload after failures; keep the action disabled
+      // so a second destructive reset cannot start during that brief window.
     }
   }, [clearing, intl]);
 

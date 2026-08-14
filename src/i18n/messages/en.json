@@ -1763,6 +1763,15 @@
   "settings.backup.importSuccess": {
     "defaultMessage": "Backup imported. Reloading…"
   },
+  "settings.backup.invalidFormat": {
+    "defaultMessage": "Invalid backup file format."
+  },
+  "settings.backup.readError": {
+    "defaultMessage": "Failed to read backup file."
+  },
+  "settings.backup.storageUnavailable": {
+    "defaultMessage": "Backup import failed. Local preferences may have been partially reset."
+  },
   "settings.backup.title": {
     "defaultMessage": "Backup & Restore"
   },
