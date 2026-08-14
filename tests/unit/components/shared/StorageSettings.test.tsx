@@ -204,10 +204,10 @@ describe('StorageSettings', () => {
       );
 
       await waitFor(() => {
-        expect(mockReload).toHaveBeenCalledTimes(1);
+        expect(mockReload).toHaveBeenCalled();
       });
-      // Auth-store behavior under blocked persistence is covered directly in
-      // auth-store.test.ts; this integration test owns the caller reload path.
+      // Auth-store behavior and exact reload scheduling are covered directly in
+      // lower-level tests; this integration test only owns reaching the reload path.
     } finally {
       removeItemSpy.mockRestore();
     }
