@@ -84,8 +84,25 @@ export async function getCategorySet(
  * Clears all data from the categories database.
  * Used by the "Clear All Data" flow to ensure no stale category sets persist.
  */
-export async function resetCategoriesDb(): Promise<void> {
-  await categoriesDb.transaction('rw', categoriesDb.tables, async () => {
-    await Promise.all(categoriesDb.tables.map((table) => table.clear()));
+async function clearCategoriesDatabase(db: CategoriesDB): Promise<void> {
+  await db.transaction('rw', db.tables, async () => {
+    await Promise.all(db.tables.map((table) => table.clear()));
   });
+}
+
+export async function resetCategoriesDb(): Promise<void> {
+  await clearCategoriesDatabase(categoriesDb);
+}
+
+export function closeCategoriesDbForStorageReset(): void {
+  categoriesDb.close();
+}
+
+export async function resetCategoriesDbIsolated(): Promise<void> {
+  const db = new CategoriesDB();
+  try {
+    await clearCategoriesDatabase(db);
+  } finally {
+    db.close();
+  }
 }

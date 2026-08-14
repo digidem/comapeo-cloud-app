@@ -534,11 +534,37 @@ export function getDb(): AppDatabase {
 // Reset helper (for tests)
 // ---------------------------------------------------------------------------
 
-export async function resetDb(): Promise<void> {
-  const db = getDb();
+async function clearDatabaseTables(db: AppDatabase): Promise<void> {
   await db.transaction('rw', db.tables, async () => {
     await Promise.all(db.tables.map((table) => table.clear()));
   });
+}
+
+export async function resetDb(): Promise<void> {
+  await clearDatabaseTables(getDb());
+}
+
+/**
+ * Quiesce this tab's primary database connection during a cross-tab reset.
+ * Dexie 4 keeps an explicitly closed connection closed until `open()` is called,
+ * so app code cannot transparently auto-open it and enqueue stale writes.
+ */
+export function closeDbForStorageReset(): void {
+  _db?.close();
+}
+
+/**
+ * Clear the shared primary database through a fresh connection while this tab's
+ * app-owned singleton remains closed. This lets a receiving tab perform a final
+ * cleanup after any transaction that was already queued before the reset signal.
+ */
+export async function resetDbIsolated(): Promise<void> {
+  const db = new AppDatabase();
+  try {
+    await clearDatabaseTables(db);
+  } finally {
+    db.close();
+  }
 }
 
 // ---------------------------------------------------------------------------

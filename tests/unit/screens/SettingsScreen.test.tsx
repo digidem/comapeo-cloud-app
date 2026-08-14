@@ -5,6 +5,7 @@ import {
   render,
   screen,
   userEvent,
+  waitFor,
   within,
 } from '@tests/mocks/test-utils';
 import { HttpResponse, http } from 'msw';
@@ -401,7 +402,7 @@ describe('SettingsScreen', () => {
       }
     });
 
-    it('shows localized partial-reset warning when browser storage blocks import', async () => {
+    it('shows localized restored-state warning when browser storage blocks import', async () => {
       vi.mocked(importLocalStorageData).mockReturnValueOnce({
         success: false,
         error: 'storage-unavailable',
@@ -426,10 +427,47 @@ describe('SettingsScreen', () => {
         });
 
         expect(
-          await screen.findByText(
-            /Local preferences may have been partially reset/,
-          ),
+          await screen.findByText(/Existing preferences were restored/),
         ).toBeInTheDocument();
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
+    });
+
+    it('warns and reloads immediately when import compensation also fails', async () => {
+      vi.mocked(importLocalStorageData).mockReturnValueOnce({
+        success: false,
+        error: 'compensation-failed',
+      });
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
+      });
+
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class MockFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          readAsText() {
+            this.result = '{}';
+            this.onload?.({} as Event);
+          }
+        } as unknown as typeof window.FileReader;
+
+        render(<SettingsScreen />);
+        fireEvent.change(screen.getByTestId('backup-file-input'), {
+          target: { files: [new File(['{}'], 'backup.json')] },
+        });
+
+        expect(
+          screen.getByText(/could not restore your previous preferences/),
+        ).toBeInTheDocument();
+        await waitFor(() => {
+          expect(mockReload).toHaveBeenCalledOnce();
+        });
       } finally {
         window.FileReader = OriginalFileReader;
       }

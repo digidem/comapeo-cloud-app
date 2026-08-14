@@ -104,7 +104,12 @@ const _messages = defineMessages({
   backupStorageUnavailable: {
     id: 'settings.backup.storageUnavailable',
     defaultMessage:
-      'Backup import failed. Local preferences may have been partially reset.',
+      'Backup import failed because browser storage is unavailable. Existing preferences were restored.',
+  },
+  backupCompensationFailed: {
+    id: 'settings.backup.compensationFailed',
+    defaultMessage:
+      'Backup import could not restore your previous preferences. Reloading to reconcile browser state.',
   },
   backupReadError: {
     id: 'settings.backup.readError',
@@ -258,13 +263,23 @@ export function SettingsScreen() {
           window.location.reload();
         } else {
           setImportStatus('error');
-          setImportError(
-            intl.formatMessage(
-              result.error === 'storage-unavailable'
-                ? _messages.backupStorageUnavailable
-                : _messages.backupInvalidFormat,
-            ),
-          );
+          if (result.error === 'compensation-failed') {
+            setImportError(
+              intl.formatMessage(_messages.backupCompensationFailed),
+            );
+            // Reconcile live persisted stores with the browser state immediately;
+            // a zero-delay task gives React one paint opportunity for the warning
+            // without leaving an interaction window for more preference writes.
+            scheduleTimeout(() => window.location.reload(), 0);
+          } else {
+            setImportError(
+              intl.formatMessage(
+                result.error === 'storage-unavailable'
+                  ? _messages.backupStorageUnavailable
+                  : _messages.backupInvalidFormat,
+              ),
+            );
+          }
         }
       };
 
@@ -275,7 +290,7 @@ export function SettingsScreen() {
 
       reader.readAsText(file);
     },
-    [intl],
+    [intl, scheduleTimeout],
   );
 
   return (

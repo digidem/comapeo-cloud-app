@@ -1742,6 +1742,9 @@
   "photoGallery.viewPhoto": {
     "defaultMessage": "View {photoName}"
   },
+  "settings.backup.compensationFailed": {
+    "defaultMessage": "Backup import could not restore your previous preferences. Reloading to reconcile browser state."
+  },
   "settings.backup.description": {
     "defaultMessage": "Export your local settings to a JSON file, or import a previously exported backup."
   },
@@ -1767,7 +1770,7 @@
     "defaultMessage": "The selected backup file could not be read."
   },
   "settings.backup.storageUnavailable": {
-    "defaultMessage": "Backup import failed. Local preferences may have been partially reset."
+    "defaultMessage": "Backup import failed because browser storage is unavailable. Existing preferences were restored."
   },
   "settings.backup.title": {
     "defaultMessage": "Backup & Restore"
