@@ -6,6 +6,12 @@ import { backupSchema } from '@/lib/schemas/backup-schema';
 import { useAuthStore } from '@/stores/auth-store';
 
 const COMAPEO_PREFIX = 'comapeo-';
+// App-owned keys that predate or do not follow the current comapeo-* naming
+// convention. Keep them explicit so cleanup remains safe for unrelated storage.
+const ADDITIONAL_COMAPEO_KEYS = [
+  'comapeo:activeServerId',
+  'view-mode-preference',
+] as const;
 
 function getComapeoKeys(): string[] {
   const keys: string[] = [];
@@ -20,6 +26,9 @@ function getComapeoKeys(): string[] {
 
 export function removeComapeoKeys(): void {
   for (const key of getComapeoKeys()) {
+    localStorage.removeItem(key);
+  }
+  for (const key of ADDITIONAL_COMAPEO_KEYS) {
     localStorage.removeItem(key);
   }
 }
@@ -57,7 +66,7 @@ export function importLocalStorageData(jsonString: string): {
     return { success: false, error: 'Invalid backup file format' };
   }
 
-  // Clear existing comapeo-* keys first for atomic restore
+  // Clear existing CoMapeo-owned keys first for atomic restore.
   removeComapeoKeys();
 
   for (const [key, value] of Object.entries(result.output.data)) {
@@ -70,7 +79,7 @@ export function importLocalStorageData(jsonString: string): {
 }
 
 export async function clearAllStorage(): Promise<void> {
-  // Only clear comapeo-* prefixed keys, not all localStorage
+  // Clear only CoMapeo-owned keys, never unrelated localStorage.
   removeComapeoKeys();
   await resetDb();
   await resetCategoriesDb();

@@ -305,6 +305,23 @@ describe('clearAllData', () => {
     expect(await db.syncMetadata.count()).toBe(0);
   });
 
+  it('removes app preferences while preserving unrelated localStorage', async () => {
+    localStorage.setItem('comapeo-alert-view-mode-preference', 'grid');
+    localStorage.setItem('unrelated-key', 'keep');
+
+    try {
+      await clearAllData();
+
+      expect(
+        localStorage.getItem('comapeo-alert-view-mode-preference'),
+      ).toBeNull();
+      expect(localStorage.getItem('unrelated-key')).toBe('keep');
+    } finally {
+      localStorage.removeItem('comapeo-alert-view-mode-preference');
+      localStorage.removeItem('unrelated-key');
+    }
+  });
+
   it('still completes IndexedDB cleanup when localStorage removal fails', async () => {
     const db = getDb();
 

@@ -5,9 +5,11 @@ import { QueryClient } from '@tanstack/react-query';
 
 import { StorageSettings } from '@/components/shared/StorageSettings';
 import { getDb, resetDb } from '@/lib/db';
+import { useAuthStore } from '@/stores/auth-store';
 
-// Mock navigator.storage.estimate
+// Mock browser APIs used by storage settings.
 const mockEstimate = vi.fn();
+const mockReload = vi.fn();
 
 beforeEach(async () => {
   vi.stubGlobal('navigator', {
@@ -20,6 +22,11 @@ beforeEach(async () => {
   mockEstimate.mockResolvedValue({
     quota: 1073741824,
     usage: 52428800,
+  });
+  mockReload.mockReset();
+  Object.defineProperty(window, 'location', {
+    value: { reload: mockReload },
+    writable: true,
   });
 
   await resetDb();
@@ -181,6 +188,60 @@ describe('StorageSettings', () => {
     });
 
     invalidateQueries.mockRestore();
+  });
+
+  it('reloads after cached data is cleared to reset persisted in-memory state', async () => {
+    const user = userEvent.setup();
+
+    render(<StorageSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Total Usage')).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole('button', { name: 'Clear All Cached Data' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+    );
+
+    await waitFor(() => {
+      expect(mockReload).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('finishes the reset when localStorage removal is blocked', async () => {
+    useAuthStore.setState({ tier: 'cloud', activeServerId: 'server-1' });
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(() => {
+        throw new DOMException('Storage access denied', 'SecurityError');
+      });
+    const user = userEvent.setup();
+
+    try {
+      render(<StorageSettings />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Total Usage')).toBeInTheDocument();
+      });
+
+      await user.click(
+        screen.getByRole('button', { name: 'Clear All Cached Data' }),
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+      );
+
+      await waitFor(() => {
+        expect(mockReload).toHaveBeenCalledTimes(1);
+      });
+      expect(useAuthStore.getState().activeServerId).toBeNull();
+      expect(useAuthStore.getState().tier).toBe('local');
+    } finally {
+      removeItemSpy.mockRestore();
+    }
   });
 
   it('uses the localized cancel label in the clear confirmation dialog', async () => {

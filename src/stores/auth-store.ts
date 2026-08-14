@@ -435,7 +435,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   clearAll: () => {
-    persistActiveServerId(null);
+    try {
+      persistActiveServerId(null);
+    } catch {
+      // Storage can be blocked independently of in-memory state. Clearing the
+      // active connection must still succeed so callers can finish a full reset.
+    }
     set({
       tier: 'local',
       servers: [],

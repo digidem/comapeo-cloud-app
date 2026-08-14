@@ -122,7 +122,7 @@ export async function clearAllData(): Promise<void> {
     await db.iconCache.clear();
   });
 
-  // Also clear comapeo-* localStorage keys (view-mode preferences, etc.).
+  // Also clear CoMapeo-owned localStorage keys (view-mode preferences, etc.).
   // Storage access can be blocked independently of IndexedDB; do not reject after
   // the transaction has committed because callers still need to clear in-memory state.
   try {

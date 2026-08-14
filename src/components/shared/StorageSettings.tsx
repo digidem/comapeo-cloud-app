@@ -74,7 +74,7 @@ const messages = defineMessages({
   clearConfirmDescription: {
     id: 'settings.storage.clearConfirmDescription',
     defaultMessage:
-      'This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. This cannot be undone.',
+      'This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. App preferences such as language, theme, and map/list views will be reset. This cannot be undone.',
   },
   clearConfirmButton: {
     id: 'settings.storage.clearConfirmButton',
@@ -201,6 +201,9 @@ export function StorageSettings() {
       setIsConfirmOpen(false);
       await queryClient.invalidateQueries();
       await loadStats();
+      // Reload so every persisted Zustand store is re-created from the now-clean
+      // browser storage instead of re-persisting stale in-memory preferences.
+      window.location.reload();
     } catch (err) {
       setClearError(
         err instanceof Error ? err.message : 'Failed to clear data',

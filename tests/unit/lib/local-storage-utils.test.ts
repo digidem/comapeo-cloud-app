@@ -4,6 +4,7 @@ import {
   clearAllStorage,
   exportLocalStorageData,
   importLocalStorageData,
+  removeComapeoKeys,
 } from '@/lib/local-storage-utils';
 
 vi.mock('@/lib/db', () => ({
@@ -19,6 +20,26 @@ vi.mock('@/stores/auth-store', () => ({
     getState: vi.fn(() => ({ clearAll: vi.fn() })),
   },
 }));
+
+describe('removeComapeoKeys', () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('removes all app-owned storage keys and preserves unrelated keys', () => {
+    localStorage.setItem('comapeo-locale', 'en');
+    localStorage.setItem('comapeo:activeServerId', 'server-1');
+    localStorage.setItem('view-mode-preference', 'grid');
+    localStorage.setItem('unrelated-key', 'keep');
+
+    removeComapeoKeys();
+
+    expect(localStorage.getItem('comapeo-locale')).toBeNull();
+    expect(localStorage.getItem('comapeo:activeServerId')).toBeNull();
+    expect(localStorage.getItem('view-mode-preference')).toBeNull();
+    expect(localStorage.getItem('unrelated-key')).toBe('keep');
+  });
+});
 
 describe('exportLocalStorageData', () => {
   afterEach(() => {
@@ -212,12 +233,14 @@ describe('importLocalStorageData', () => {
 });
 
 describe('clearAllStorage', () => {
-  it('clears only comapeo-prefixed localStorage entries', async () => {
+  it('clears CoMapeo-owned localStorage entries and preserves unrelated keys', async () => {
     localStorage.setItem('comapeo-locale', '"en"');
     localStorage.setItem(
       'comapeo-alert-view-mode-preference',
       JSON.stringify({ state: { viewMode: 'grid' }, version: 0 }),
     );
+    localStorage.setItem('comapeo:activeServerId', 'server-1');
+    localStorage.setItem('view-mode-preference', 'grid');
     localStorage.setItem('other-key', 'value');
 
     // Prevent actual reload
@@ -232,7 +255,8 @@ describe('clearAllStorage', () => {
     expect(
       localStorage.getItem('comapeo-alert-view-mode-preference'),
     ).toBeNull();
-    // Non-comapeo keys should be preserved
+    expect(localStorage.getItem('comapeo:activeServerId')).toBeNull();
+    expect(localStorage.getItem('view-mode-preference')).toBeNull();
     expect(localStorage.getItem('other-key')).toBe('value');
   });
 
