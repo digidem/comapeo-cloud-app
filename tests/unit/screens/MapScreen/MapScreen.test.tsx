@@ -279,6 +279,55 @@ describe('MapScreen', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('does not surface stale import failures after MapScreen unmounts', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: string) => void;
+    let resolveSecond!: (value: string) => void;
+    const firstRead = new Promise<string>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondRead = new Promise<string>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const firstFile = new File([], 'unmounted-broken.geojson', {
+      type: 'application/geo+json',
+    });
+    const secondFile = new File([], 'newer-valid.geojson', {
+      type: 'application/geo+json',
+    });
+    Object.defineProperty(firstFile, 'text', {
+      value: vi.fn(() => firstRead),
+    });
+    Object.defineProperty(secondFile, 'text', {
+      value: vi.fn(() => secondRead),
+    });
+
+    const { rerender } = render(<MapScreen />);
+    await user.upload(
+      await screen.findByLabelText('Add GeoJSON reference'),
+      firstFile,
+    );
+    fireEvent.drop(
+      screen.getByRole('region', { name: 'Map authoring canvas' }),
+      { dataTransfer: { types: ['Files'], files: [secondFile] } },
+    );
+
+    await act(async () => {
+      resolveSecond('{"type":"Point","coordinates":[-59,-2]}');
+      await secondRead;
+    });
+    expect(await screen.findByText('newer-valid.geojson')).toBeInTheDocument();
+    rerender(<div>Another screen</div>);
+
+    await act(async () => {
+      resolveFirst('{"type":"Point","coordinates":["bad",0]}');
+      await firstRead;
+    });
+
+    expect(screen.getByText('Another screen')).toBeInTheDocument();
+    expect(screen.queryByText('GeoJSON import failed')).not.toBeInTheDocument();
+  });
+
   it('shows an older failure while a newer import is pending, then clears it when the newer import succeeds', async () => {
     const user = userEvent.setup();
     render(<MapScreen />);

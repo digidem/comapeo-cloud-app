@@ -26,6 +26,11 @@ export function GeoJsonOverlayControl({
 }: GeoJsonOverlayControlProps) {
   const intl = useIntl();
   const titleId = useId();
+  const filePickerLabel = intl.formatMessage(
+    loading
+      ? mapMessages.referenceOverlaysLoading
+      : mapMessages.referenceOverlaysAdd,
+  );
 
   return (
     <section className="flex flex-col gap-3" aria-labelledby={titleId}>
@@ -41,18 +46,15 @@ export function GeoJsonOverlayControl({
       </div>
 
       <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-btn bg-surface px-3 py-2 text-sm font-semibold text-text shadow-sm hover:bg-surface-hover focus-within:ring-2 focus-within:ring-primary">
-        <span>
-          {loading
-            ? intl.formatMessage(mapMessages.referenceOverlaysLoading)
-            : intl.formatMessage(mapMessages.referenceOverlaysAdd)}
-        </span>
+        <span aria-live="polite">{filePickerLabel}</span>
         <input
           type="file"
           className="sr-only"
           accept=".geojson,.json,application/geo+json,application/json"
           multiple
           disabled={loading}
-          aria-label={intl.formatMessage(mapMessages.referenceOverlaysAdd)}
+          aria-busy={loading}
+          aria-label={filePickerLabel}
           onChange={(event) => {
             const files = Array.from(event.currentTarget.files ?? []);
             event.currentTarget.value = '';

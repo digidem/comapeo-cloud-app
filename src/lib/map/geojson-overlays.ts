@@ -80,19 +80,20 @@ function positionsEqual(a: Position, b: Position): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
-function isLinearRing(value: unknown): value is Position[] {
-  if (!Array.isArray(value) || value.length < 4) return false;
-  if (!value.every((position) => isPosition(position))) return false;
+function validateLinearRing(value: unknown): asserts value is Position[] {
+  if (!Array.isArray(value)) invalidGeoJson();
+  if (!value.every((position) => isPosition(position))) invalidGeoJson();
+  if (value.length < 4) invalidPolygonRing();
   const first = value[0];
   const last = value.at(-1);
-  return Boolean(first && last && positionsEqual(first, last));
+  if (!first || !last || !positionsEqual(first, last)) invalidPolygonRing();
 }
 
 function validatePolygonCoordinates(
   value: unknown,
 ): asserts value is Position[][] {
   if (!Array.isArray(value) || value.length === 0) invalidGeoJson();
-  if (!value.every((ring) => isLinearRing(ring))) invalidPolygonRing();
+  value.forEach((ring) => validateLinearRing(ring));
 }
 
 function validateGeometry(value: unknown): Geometry {

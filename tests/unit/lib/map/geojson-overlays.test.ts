@@ -130,6 +130,15 @@ describe('GeoJSON reference overlays', () => {
     expect(() =>
       normalizeGeoJson({ type: 'Polygon', coordinates: [] }),
     ).toThrow('This file is not valid GeoJSON.');
+    expect(() =>
+      normalizeGeoJson({ type: 'Polygon', coordinates: [42] }),
+    ).toThrow('This file is not valid GeoJSON.');
+    expect(() =>
+      normalizeGeoJson({
+        type: 'Polygon',
+        coordinates: [[['not-a-number', -3]]],
+      }),
+    ).toThrow('This file is not valid GeoJSON.');
   });
 
   it('derives unique child ids when flattening a GeometryCollection feature', () => {

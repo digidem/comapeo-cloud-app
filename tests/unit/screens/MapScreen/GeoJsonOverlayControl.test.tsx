@@ -44,6 +44,26 @@ describe('GeoJsonOverlayControl', () => {
     expect(screen.getByText('Up to 5 MB per file')).toBeInTheDocument();
   });
 
+  it('exposes the loading state through the file picker accessible name and busy state', () => {
+    render(
+      <GeoJsonOverlayControl
+        overlays={[]}
+        onFilesSelected={vi.fn()}
+        onToggle={vi.fn()}
+        onRemove={vi.fn()}
+        loading
+      />,
+    );
+
+    const input = screen.getByLabelText('Adding GeoJSON…');
+    expect(input).toBeDisabled();
+    expect(input).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByText('Adding GeoJSON…')).toHaveAttribute(
+      'aria-live',
+      'polite',
+    );
+  });
+
   it('uses unique labelled-by ids when multiple controls are mounted', () => {
     render(
       <>

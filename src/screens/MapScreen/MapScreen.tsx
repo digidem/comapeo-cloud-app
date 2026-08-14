@@ -141,6 +141,7 @@ export function MapScreen() {
   >(null);
   const previousBboxRef = useRef<[number, number, number, number] | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(false);
   const [showUndo, setShowUndo] = useState(false);
   const [frameError, setFrameError] = useState<string | null>(null);
   const [referenceOverlays, setReferenceOverlays] = useState<GeoJsonOverlay[]>(
@@ -191,7 +192,9 @@ export function MapScreen() {
   }, [drawMode]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     };
   }, []);
@@ -357,6 +360,7 @@ export function MapScreen() {
         }),
       );
       if (
+        !isMountedRef.current ||
         useProjectStore.getState().selectedProjectId !== importProjectId ||
         referenceOverlayGenerationRef.current !== importGeneration
       ) {
@@ -431,7 +435,10 @@ export function MapScreen() {
         setReferenceOverlayErrorSurface(null);
       }
     } finally {
-      if (referenceOverlayGenerationRef.current === importGeneration) {
+      if (
+        isMountedRef.current &&
+        referenceOverlayGenerationRef.current === importGeneration
+      ) {
         referenceOverlayReservedSlotsRef.current -= files.length;
         referenceOverlayImportsRef.current.delete(importToken);
         if (referenceOverlayImportsRef.current.size === 0) {
