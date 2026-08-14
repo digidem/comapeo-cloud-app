@@ -271,12 +271,10 @@ describe('MapScreen', () => {
       await firstRead;
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('GeoJSON import failed')).not.toBeInTheDocument();
     expect(
-      await screen.findByText('GeoJSON import failed'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getAllByText(/broken-first\.geojson is not valid GeoJSON/).length,
-    ).toBeGreaterThan(0);
+      screen.queryByText(/broken-first\.geojson is not valid GeoJSON/),
+    ).not.toBeInTheDocument();
   });
 
   it('does not surface stale import failures after MapScreen unmounts', async () => {

@@ -398,15 +398,14 @@ export function MapScreen() {
           );
         }
 
+        if (importSequence < referenceOverlayLatestUiOutcomeRef.current) {
+          return;
+        }
+        referenceOverlayLatestUiOutcomeRef.current = importSequence;
+
         const controlsUnavailable =
           errorSurface === 'controls' && !isDesktop && !settingsOpenRef.current;
-        if (
-          controlsUnavailable ||
-          importSequence < referenceOverlayLatestUiOutcomeRef.current
-        ) {
-          if (importSequence >= referenceOverlayLatestUiOutcomeRef.current) {
-            referenceOverlayLatestUiOutcomeRef.current = importSequence;
-          }
+        if (controlsUnavailable) {
           addToast({
             variant: 'error',
             title: intl.formatMessage(
@@ -416,7 +415,6 @@ export function MapScreen() {
           });
           return;
         }
-        referenceOverlayLatestUiOutcomeRef.current = importSequence;
         setReferenceOverlayError(errorMessage);
         setReferenceOverlayErrorSurface(errorSurface);
         return;
