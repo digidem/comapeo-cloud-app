@@ -5,29 +5,29 @@
     "method": "GET",
     "path": "/api/tiles"
   },
-  "measuredAt": "2026-08-14T09:57:40.112Z",
+  "measuredAt": "2026-08-14T10:27:58.719Z",
   "windowSeconds": 60,
   "safetyMultiplier": 1.5,
-  "observedMaxRequestsPerWindow": 1568,
-  "recommendedRequestsPerPeriod": 2360,
+  "observedMaxRequestsPerWindow": 3136,
+  "recommendedRequestsPerPeriod": 4710,
   "samples": [
     {
       "kind": "small",
       "name": "production-small-smp-2026-08-14",
       "requestCount": 362,
-      "durationMs": 4934,
+      "durationMs": 5931,
       "maxRequestsPerWindow": 362,
-      "firstRequestAt": "2026-08-14T09:57:02.784Z",
-      "lastRequestAt": "2026-08-14T09:57:07.718Z"
+      "firstRequestAt": "2026-08-14T10:26:27.593Z",
+      "lastRequestAt": "2026-08-14T10:26:33.524Z"
     },
     {
       "kind": "large",
-      "name": "production-large-smp-2026-08-14",
-      "requestCount": 1568,
-      "durationMs": 9125,
-      "maxRequestsPerWindow": 1568,
-      "firstRequestAt": "2026-08-14T09:57:11.447Z",
-      "lastRequestAt": "2026-08-14T09:57:20.572Z"
+      "name": "production-large-back-to-back-smp-2026-08-14",
+      "requestCount": 3136,
+      "durationMs": 51426,
+      "maxRequestsPerWindow": 3136,
+      "firstRequestAt": "2026-08-14T10:26:40.288Z",
+      "lastRequestAt": "2026-08-14T10:27:31.714Z"
     }
   ]
 }

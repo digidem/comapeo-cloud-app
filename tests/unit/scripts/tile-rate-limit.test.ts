@@ -59,6 +59,13 @@ describe('tile rate limit operations', () => {
             },
           },
           {
+            startedDateTime: '2026-08-13T12:00:00.500Z',
+            request: {
+              method: 'GET',
+              url: 'https://app.comapeo.cloud/api/tiles/?url=https%3A%2F%2Ftiles.example%2F0%2F0%2F1.png',
+            },
+          },
+          {
             startedDateTime: '2026-08-13T12:00:01.000Z',
             request: {
               method: 'POST',
@@ -90,8 +97,8 @@ describe('tile rate limit operations', () => {
       windowSeconds: 60,
     });
 
-    expect(summary.requestCount).toBe(1);
-    expect(summary.maxRequestsPerWindow).toBe(1);
+    expect(summary.requestCount).toBe(2);
+    expect(summary.maxRequestsPerWindow).toBe(2);
   });
 
   it('builds a report only when both small and large flows are present', () => {
@@ -146,7 +153,7 @@ describe('tile rate limit operations', () => {
     });
 
     expect(rule.expression).toBe(
-      '(http.host eq "app.comapeo.cloud" and http.request.method eq "GET" and http.request.uri.path eq "/api/tiles")',
+      '(http.host eq "app.comapeo.cloud" and http.request.method eq "GET" and http.request.uri.path in {"/api/tiles" "/api/tiles/"})',
     );
     expect(rule.action).toBe('block');
     expect(rule.action_parameters).toEqual({
@@ -279,11 +286,27 @@ describe('tile rate limit operations', () => {
         },
       ],
     };
+    const disabledA = {
+      ...ruleset,
+      rules: ruleset.rules.map((existing) =>
+        existing.id === 'managed-a'
+          ? { ...existing, enabled: false }
+          : existing,
+      ),
+    };
+    const disabledBoth = {
+      ...disabledA,
+      rules: disabledA.rules.map((existing) =>
+        existing.id === 'managed-b'
+          ? { ...existing, enabled: false }
+          : existing,
+      ),
+    };
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(cloudflareResponse(ruleset))
-      .mockResolvedValueOnce(cloudflareResponse(ruleset))
-      .mockResolvedValueOnce(cloudflareResponse(ruleset));
+      .mockResolvedValueOnce(cloudflareResponse(disabledA))
+      .mockResolvedValueOnce(cloudflareResponse(disabledBoth));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(disableManagedRule('token', 'zone-id')).resolves.toBe(true);
@@ -299,6 +322,23 @@ describe('tile rate limit operations', () => {
       expect(body).not.toHaveProperty('version');
       expect(body).not.toHaveProperty('last_updated');
     }
+  });
+
+  it('fails when Cloudflare does not confirm a managed rule was disabled', async () => {
+    const rule = exampleManagedRule();
+    const ruleset = {
+      id: 'ruleset-id',
+      rules: [{ ...rule, id: 'managed-a' }],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cloudflareResponse(ruleset))
+      .mockResolvedValueOnce(cloudflareResponse(ruleset));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(disableManagedRule('token', 'zone-id')).rejects.toThrow(
+      /did not confirm managed rule managed-a was disabled/i,
+    );
   });
 
   it('preserves unknown writable rule fields while removing response metadata', () => {

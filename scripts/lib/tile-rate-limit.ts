@@ -1,4 +1,5 @@
 export const TILE_RATE_LIMIT_PATH = '/api/tiles';
+export const TILE_RATE_LIMIT_TRAILING_SLASH_PATH = TILE_RATE_LIMIT_PATH + '/';
 export const TILE_RATE_LIMIT_METHOD = 'GET';
 export const TILE_RATE_LIMIT_RULE_REF = 'comapeo-cloud-app-tiles-rate-limit';
 export const PRODUCTION_TILE_HOST = 'app.comapeo.cloud';
@@ -176,7 +177,8 @@ export function summarizeHarSample(
     }
     if (
       parsedUrl.hostname !== options.host ||
-      parsedUrl.pathname !== TILE_RATE_LIMIT_PATH
+      (parsedUrl.pathname !== TILE_RATE_LIMIT_PATH &&
+        parsedUrl.pathname !== TILE_RATE_LIMIT_TRAILING_SLASH_PATH)
     ) {
       continue;
     }
@@ -293,7 +295,7 @@ export function buildCloudflareRateLimitRule(options: {
   const base: CloudflareRateLimitRule = {
     ref: TILE_RATE_LIMIT_RULE_REF,
     description: 'CoMapeo production tile proxy distributed abuse protection',
-    expression: `(http.host eq "${options.host}" and http.request.method eq "${TILE_RATE_LIMIT_METHOD}" and http.request.uri.path eq "${TILE_RATE_LIMIT_PATH}")`,
+    expression: `(http.host eq "${options.host}" and http.request.method eq "${TILE_RATE_LIMIT_METHOD}" and http.request.uri.path in {"${TILE_RATE_LIMIT_PATH}" "${TILE_RATE_LIMIT_TRAILING_SLASH_PATH}"})`,
     action: options.mode === 'observe' ? 'log' : 'block',
     enabled: true,
     ratelimit: {

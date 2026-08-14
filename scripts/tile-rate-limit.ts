@@ -411,11 +411,19 @@ export async function disableManagedRule(
   for (const existing of existingRules) {
     const body = writableExistingRule(existing);
     body.enabled = false;
-    await cloudflareRequest(
+    const updatedRuleset = await cloudflareRequest<CloudflareRuleset>(
       token,
       `/zones/${zoneId}/rulesets/${ruleset.id}/rules/${existing.id}`,
       { method: 'PATCH', body: JSON.stringify(body) },
     );
+    const updated = updatedRuleset?.rules?.find(
+      (rule) => rule.id === existing.id,
+    );
+    if (!updated || updated.enabled !== false) {
+      throw new Error(
+        `Cloudflare did not confirm managed rule ${existing.id} was disabled`,
+      );
+    }
   }
   return true;
 }
