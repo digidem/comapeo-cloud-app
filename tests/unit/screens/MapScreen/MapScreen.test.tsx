@@ -226,7 +226,7 @@ describe('MapScreen', () => {
     });
   });
 
-  it('surfaces a failed overlapping import even when a newer import succeeds first', async () => {
+  it('does not surface a stale older failure after a newer import already succeeded', async () => {
     const user = userEvent.setup();
     render(<MapScreen />);
 
@@ -270,9 +270,59 @@ describe('MapScreen', () => {
       resolveFirst('{"type":"Point","coordinates":["bad",0]}');
       await firstRead;
     });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows an older failure while a newer import is pending, then clears it when the newer import succeeds', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    let resolveFirst!: (value: string) => void;
+    let resolveSecond!: (value: string) => void;
+    const firstRead = new Promise<string>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondRead = new Promise<string>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const firstFile = new File([], 'broken-first.geojson', {
+      type: 'application/geo+json',
+    });
+    const secondFile = new File([], 'valid-second.geojson', {
+      type: 'application/geo+json',
+    });
+    Object.defineProperty(firstFile, 'text', {
+      value: vi.fn(() => firstRead),
+    });
+    Object.defineProperty(secondFile, 'text', {
+      value: vi.fn(() => secondRead),
+    });
+
+    await user.upload(
+      await screen.findByLabelText('Add GeoJSON reference'),
+      firstFile,
+    );
+    fireEvent.drop(
+      screen.getByRole('region', { name: 'Map authoring canvas' }),
+      { dataTransfer: { types: ['Files'], files: [secondFile] } },
+    );
+
+    await act(async () => {
+      resolveFirst('{"type":"Point","coordinates":["bad",0]}');
+      await firstRead;
+    });
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'broken-first.geojson is not valid GeoJSON.',
     );
+
+    await act(async () => {
+      resolveSecond('{"type":"Point","coordinates":[-59,-2]}');
+      await secondRead;
+    });
+    expect(await screen.findByText('valid-second.geojson')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
   });
 
   it('rejects an invalid multi-file batch without adding partial overlay state', async () => {

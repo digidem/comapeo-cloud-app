@@ -150,6 +150,8 @@ export function MapScreen() {
   const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
   const referenceOverlayImportsRef = useRef(new Set<symbol>());
   const referenceOverlayGenerationRef = useRef(0);
+  const referenceOverlayImportSequenceRef = useRef(0);
+  const referenceOverlayLatestUiOutcomeRef = useRef(0);
   const [referenceOverlayProjectId, setReferenceOverlayProjectId] =
     useState(selectedProjectId);
   if (referenceOverlayProjectId !== selectedProjectId) {
@@ -163,6 +165,8 @@ export function MapScreen() {
   useEffect(() => {
     referenceOverlayGenerationRef.current += 1;
     referenceOverlayImportsRef.current.clear();
+    referenceOverlayImportSequenceRef.current = 0;
+    referenceOverlayLatestUiOutcomeRef.current = 0;
   }, [selectedProjectId]);
 
   // Track the computed project bbox for hasConfigChanges comparison
@@ -308,6 +312,8 @@ export function MapScreen() {
     if (files.length === 0) return;
     const importProjectId = selectedProjectId;
     const importGeneration = referenceOverlayGenerationRef.current;
+    const importSequence = referenceOverlayImportSequenceRef.current + 1;
+    referenceOverlayImportSequenceRef.current = importSequence;
     const importToken = Symbol('reference-overlay-import');
     referenceOverlayImportsRef.current.add(importToken);
     setReferenceOverlayLoading(true);
@@ -337,6 +343,10 @@ export function MapScreen() {
 
       const failure = results.find((result) => !result.ok);
       if (failure && !failure.ok) {
+        if (importSequence < referenceOverlayLatestUiOutcomeRef.current) {
+          return;
+        }
+        referenceOverlayLatestUiOutcomeRef.current = importSequence;
         const values = { name: failure.file.name };
         if (failure.error instanceof GeoJsonOverlayError) {
           let message = mapMessages.referenceOverlaysInvalid;
@@ -374,6 +384,11 @@ export function MapScreen() {
           : [],
       );
       setReferenceOverlays((current) => [...current, ...additions]);
+      if (importSequence >= referenceOverlayLatestUiOutcomeRef.current) {
+        referenceOverlayLatestUiOutcomeRef.current = importSequence;
+        setReferenceOverlayError(null);
+        setReferenceOverlayErrorSurface(null);
+      }
     } finally {
       if (referenceOverlayGenerationRef.current === importGeneration) {
         referenceOverlayImportsRef.current.delete(importToken);
