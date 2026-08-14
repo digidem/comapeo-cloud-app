@@ -400,9 +400,10 @@ describe('clearAllStorage', () => {
     expect(mockReload).toHaveBeenCalledOnce();
   });
 
-  it('throws and does not reload if resetDb() throws', async () => {
+  it('throws without clearing preferences or reloading if resetDb() throws', async () => {
     const { resetDb } = await import('@/lib/db');
     vi.mocked(resetDb).mockRejectedValueOnce(new Error('DB error'));
+    localStorage.setItem('comapeo-locale', '"pt"');
 
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
@@ -411,14 +412,16 @@ describe('clearAllStorage', () => {
     });
 
     await expect(clearAllStorage()).rejects.toThrow('DB error');
+    expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
     expect(mockReload).not.toHaveBeenCalled();
   });
 
-  it('throws and does not reload if resetCategoriesDb() throws', async () => {
+  it('throws without clearing preferences or reloading if resetCategoriesDb() throws', async () => {
     const { resetCategoriesDb } = await import('@/lib/categories-db');
     vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
       new Error('Categories error'),
     );
+    localStorage.setItem('comapeo-locale', '"pt"');
 
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
@@ -427,6 +430,7 @@ describe('clearAllStorage', () => {
     });
 
     await expect(clearAllStorage()).rejects.toThrow('Categories error');
+    expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
     expect(mockReload).not.toHaveBeenCalled();
   });
 });

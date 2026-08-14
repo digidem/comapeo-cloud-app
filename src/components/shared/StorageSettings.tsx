@@ -191,7 +191,6 @@ export function StorageSettings() {
       setClearError(
         err instanceof Error ? err.message : 'Failed to clear data',
       );
-    } finally {
       setClearing(false);
     }
   }, [clearing]);

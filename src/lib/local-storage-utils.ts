@@ -56,6 +56,9 @@ export function importLocalStorageData(jsonString: string): {
 }
 
 export async function clearAllStorage(): Promise<void> {
+  // If either IndexedDB reset fails, leave browser preferences untouched rather
+  // than creating a second, unrelated partial reset. The caller handles the
+  // failure UX and reload policy.
   await resetDb();
   await resetCategoriesDb();
   useAuthStore.getState().clearAll();

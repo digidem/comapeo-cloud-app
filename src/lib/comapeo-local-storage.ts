@@ -1,7 +1,10 @@
 const COMAPEO_PREFIXES = ['comapeo-', 'comapeo:'] as const;
+
+export const VIEW_MODE_STORAGE_KEY = 'view-mode-preference';
+
 // The current view-mode store predates the app-wide prefix convention. Keep the
 // exception explicit so storage ownership remains narrow and unrelated keys stay safe.
-const UNPREFIXED_COMAPEO_KEYS = new Set(['view-mode-preference']);
+const UNPREFIXED_COMAPEO_KEYS = new Set([VIEW_MODE_STORAGE_KEY]);
 
 export function isComapeoStorageKey(key: string): boolean {
   return (
