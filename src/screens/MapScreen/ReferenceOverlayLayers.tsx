@@ -46,20 +46,6 @@ export function ReferenceOverlayLayers({
   return (
     <Source id={sourceId} type="geojson" data={overlay.data}>
       <Layer
-        id={`${sourceId}-points-circle`}
-        type="circle"
-        paint={REFERENCE_POINT_PAINT}
-        layout={layout}
-        filter={['in', '$type', 'Point']}
-      />
-      <Layer
-        id={`${sourceId}-lines-line`}
-        type="line"
-        paint={REFERENCE_LINE_PAINT}
-        layout={layout}
-        filter={['in', '$type', 'LineString']}
-      />
-      <Layer
         id={`${sourceId}-polygons-fill`}
         type="fill"
         paint={REFERENCE_FILL_PAINT}
@@ -72,6 +58,20 @@ export function ReferenceOverlayLayers({
         paint={REFERENCE_OUTLINE_PAINT}
         layout={layout}
         filter={['in', '$type', 'Polygon']}
+      />
+      <Layer
+        id={`${sourceId}-lines-line`}
+        type="line"
+        paint={REFERENCE_LINE_PAINT}
+        layout={layout}
+        filter={['in', '$type', 'LineString']}
+      />
+      <Layer
+        id={`${sourceId}-points-circle`}
+        type="circle"
+        paint={REFERENCE_POINT_PAINT}
+        layout={layout}
+        filter={['in', '$type', 'Point']}
       />
     </Source>
   );

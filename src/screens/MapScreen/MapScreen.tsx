@@ -13,6 +13,7 @@ import { CloseIcon } from '@/components/ui/close-icon';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { useCreateMap, useMaps } from '@/hooks/useMaps';
 import { useProjects } from '@/hooks/useProjects';
@@ -54,6 +55,7 @@ interface SettingsSheetProps {
 
 const DEFAULT_BBOX: [number, number, number, number] = [-75, -12, -45, 8];
 const DEFAULT_ZOOM: ZoomRange = { minZoom: 0, maxZoom: 14 };
+const MAX_REFERENCE_OVERLAYS = 10;
 
 // Frame overlay geometry for the mobile "pan-under-frame" draw pattern
 const FRAME_LEFT = 0.1; // 10% from left
@@ -116,6 +118,7 @@ function SettingsSheet({ open, onOpenChange, children }: SettingsSheetProps) {
 
 export function MapScreen() {
   const intl = useIntl();
+  const { addToast } = useToast();
   const isDesktop = useIsDesktop();
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const projectsQuery = useProjects();
@@ -129,6 +132,7 @@ export function MapScreen() {
     useState<[number, number, number, number]>(DEFAULT_BBOX);
   const [zoomRange, setZoomRange] = useState<ZoomRange>(DEFAULT_ZOOM);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsOpenRef = useRef(false);
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
   const [mapName, setMapName] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
@@ -149,6 +153,7 @@ export function MapScreen() {
     useState<'controls' | 'map' | null>(null);
   const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
   const referenceOverlayImportsRef = useRef(new Set<symbol>());
+  const referenceOverlayReservedSlotsRef = useRef(0);
   const referenceOverlayGenerationRef = useRef(0);
   const referenceOverlayImportSequenceRef = useRef(0);
   const referenceOverlayLatestUiOutcomeRef = useRef(0);
@@ -165,6 +170,7 @@ export function MapScreen() {
   useEffect(() => {
     referenceOverlayGenerationRef.current += 1;
     referenceOverlayImportsRef.current.clear();
+    referenceOverlayReservedSlotsRef.current = 0;
     referenceOverlayImportSequenceRef.current = 0;
     referenceOverlayLatestUiOutcomeRef.current = 0;
   }, [selectedProjectId]);
@@ -314,6 +320,22 @@ export function MapScreen() {
     const importGeneration = referenceOverlayGenerationRef.current;
     const importSequence = referenceOverlayImportSequenceRef.current + 1;
     referenceOverlayImportSequenceRef.current = importSequence;
+    const nextOverlayCount =
+      referenceOverlays.length +
+      referenceOverlayReservedSlotsRef.current +
+      files.length;
+    if (nextOverlayCount > MAX_REFERENCE_OVERLAYS) {
+      referenceOverlayLatestUiOutcomeRef.current = importSequence;
+      setReferenceOverlayError(
+        intl.formatMessage(mapMessages.referenceOverlaysLimit, {
+          max: MAX_REFERENCE_OVERLAYS,
+        }),
+      );
+      setReferenceOverlayErrorSurface(errorSurface);
+      return;
+    }
+
+    referenceOverlayReservedSlotsRef.current += files.length;
     const importToken = Symbol('reference-overlay-import');
     referenceOverlayImportsRef.current.add(importToken);
     setReferenceOverlayLoading(true);
@@ -343,11 +365,8 @@ export function MapScreen() {
 
       const failure = results.find((result) => !result.ok);
       if (failure && !failure.ok) {
-        if (importSequence < referenceOverlayLatestUiOutcomeRef.current) {
-          return;
-        }
-        referenceOverlayLatestUiOutcomeRef.current = importSequence;
         const values = { name: failure.file.name };
+        let errorMessage: string;
         if (failure.error instanceof GeoJsonOverlayError) {
           let message = mapMessages.referenceOverlaysInvalid;
           if (failure.error.code === 'invalid-polygon-ring') {
@@ -361,12 +380,34 @@ export function MapScreen() {
           } else if (failure.error.code === 'unsupported-file') {
             message = mapMessages.referenceOverlaysUnsupportedFile;
           }
-          setReferenceOverlayError(intl.formatMessage(message, values));
+          errorMessage = intl.formatMessage(message, values);
         } else {
-          setReferenceOverlayError(
-            intl.formatMessage(mapMessages.referenceOverlaysReadError, values),
+          errorMessage = intl.formatMessage(
+            mapMessages.referenceOverlaysReadError,
+            values,
           );
         }
+
+        const controlsUnavailable =
+          errorSurface === 'controls' && !isDesktop && !settingsOpenRef.current;
+        if (
+          controlsUnavailable ||
+          importSequence < referenceOverlayLatestUiOutcomeRef.current
+        ) {
+          if (importSequence >= referenceOverlayLatestUiOutcomeRef.current) {
+            referenceOverlayLatestUiOutcomeRef.current = importSequence;
+          }
+          addToast({
+            variant: 'error',
+            title: intl.formatMessage(
+              mapMessages.referenceOverlaysImportFailed,
+            ),
+            description: errorMessage,
+          });
+          return;
+        }
+        referenceOverlayLatestUiOutcomeRef.current = importSequence;
+        setReferenceOverlayError(errorMessage);
         setReferenceOverlayErrorSurface(errorSurface);
         return;
       }
@@ -391,6 +432,7 @@ export function MapScreen() {
       }
     } finally {
       if (referenceOverlayGenerationRef.current === importGeneration) {
+        referenceOverlayReservedSlotsRef.current -= files.length;
         referenceOverlayImportsRef.current.delete(importToken);
         if (referenceOverlayImportsRef.current.size === 0) {
           setReferenceOverlayLoading(false);
@@ -483,9 +525,18 @@ export function MapScreen() {
     );
   }, [bbox, zoomRange, selectedStyle, projectBbox]);
 
+  function handleSettingsOpenChange(open: boolean) {
+    settingsOpenRef.current = open;
+    setSettingsOpen(open);
+    if (!open && referenceOverlayErrorSurface === 'controls') {
+      setReferenceOverlayError(null);
+      setReferenceOverlayErrorSurface(null);
+    }
+  }
+
   function openNameDialog() {
     setNameError(null);
-    setSettingsOpen(false);
+    handleSettingsOpenChange(false);
     setNameDialogOpen(true);
   }
 
@@ -657,7 +708,7 @@ export function MapScreen() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setSettingsOpen(true)}
+                onClick={() => handleSettingsOpenChange(true)}
               >
                 {intl.formatMessage(mapMessages.settings)}
               </Button>
@@ -758,7 +809,10 @@ export function MapScreen() {
         ) : null}
       </div>
 
-      <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+      <SettingsSheet
+        open={settingsOpen}
+        onOpenChange={handleSettingsOpenChange}
+      >
         {isDesktop ? null : renderControls()}
       </SettingsSheet>
 

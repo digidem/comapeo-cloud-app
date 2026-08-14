@@ -521,14 +521,6 @@ export const mapMessages = defineMessages({
     id: 'map.referenceOverlays.show',
     defaultMessage: 'Show {name}',
   },
-  referenceOverlaysVisible: {
-    id: 'map.referenceOverlays.visible',
-    defaultMessage: 'Visible',
-  },
-  referenceOverlaysHidden: {
-    id: 'map.referenceOverlays.hidden',
-    defaultMessage: 'Hidden',
-  },
   referenceOverlaysRemove: {
     id: 'map.referenceOverlays.remove',
     defaultMessage: 'Remove {name}',
@@ -549,10 +541,19 @@ export const mapMessages = defineMessages({
     id: 'map.referenceOverlays.dismissAction',
     defaultMessage: 'Dismiss',
   },
+  referenceOverlaysImportFailed: {
+    id: 'map.referenceOverlays.importFailed',
+    defaultMessage: 'GeoJSON import failed',
+  },
   referenceOverlaysInvalid: {
     id: 'map.referenceOverlays.invalid',
     defaultMessage:
       '{name} is not valid GeoJSON. No files from this selection were added.',
+  },
+  referenceOverlaysLimit: {
+    id: 'map.referenceOverlays.limit',
+    defaultMessage:
+      'You can keep up to {max} reference files on the map. Remove one before adding more.',
   },
   referenceOverlaysInvalidPolygonRing: {
     id: 'map.referenceOverlays.invalidPolygonRing',

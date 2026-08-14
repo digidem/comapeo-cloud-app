@@ -271,6 +271,12 @@ describe('MapScreen', () => {
       await firstRead;
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(
+      await screen.findByText('GeoJSON import failed'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/broken-first\.geojson is not valid GeoJSON/).length,
+    ).toBeGreaterThan(0);
   });
 
   it('shows an older failure while a newer import is pending, then clears it when the newer import succeeds', async () => {
@@ -350,7 +356,7 @@ describe('MapScreen', () => {
     );
     expect(screen.queryByText('valid.geojson')).not.toBeInTheDocument();
     expect(
-      screen.queryByTestId(/mock-source-reference-overlay-.*-points/),
+      screen.queryByTestId(/mock-source-reference-overlay-/),
     ).not.toBeInTheDocument();
   });
 
@@ -445,6 +451,43 @@ describe('MapScreen', () => {
     expect(mapAlert).toHaveTextContent(
       'dropped-broken.geojson is not valid GeoJSON.',
     );
+  });
+
+  it('caps retained reference overlays to protect mobile memory', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const files = Array.from(
+      { length: 10 },
+      (_, index) =>
+        new File(
+          [`{"type":"Point","coordinates":[${-60 + index / 10},-3]}`],
+          `reference-${index}.geojson`,
+          { type: 'application/geo+json' },
+        ),
+    );
+    await user.upload(input, files);
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId(/mock-source-reference-overlay-/),
+      ).toHaveLength(10);
+    });
+
+    await user.upload(
+      input,
+      new File(['{"type":"Point","coordinates":[-58,-2]}'], 'extra.geojson', {
+        type: 'application/geo+json',
+      }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'You can keep up to 10 reference files on the map. Remove one before adding more.',
+    );
+    expect(screen.queryByTitle('extra.geojson')).not.toBeInTheDocument();
+    expect(
+      screen.getAllByTestId(/mock-source-reference-overlay-/),
+    ).toHaveLength(10);
   });
 
   it('clears transient reference overlays when the selected project changes', async () => {
@@ -562,6 +605,68 @@ describe('MapScreen', () => {
       expect(
         await within(settingsDialog).findByRole('alert'),
       ).toHaveTextContent('broken.geojson is not valid GeoJSON.');
+
+      await user.click(
+        within(settingsDialog).getByRole('button', {
+          name: 'Close map settings',
+        }),
+      );
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Map settings' }));
+      expect(
+        within(
+          screen.getByRole('dialog', { name: 'Map settings' }),
+        ).queryByRole('alert'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('routes a late picker failure to a toast after the settings sheet closes', async () => {
+      const user = userEvent.setup();
+      let resolveRead!: (value: string) => void;
+      const pendingRead = new Promise<string>((resolve) => {
+        resolveRead = resolve;
+      });
+      const file = new File([], 'late-broken.geojson', {
+        type: 'application/geo+json',
+      });
+      Object.defineProperty(file, 'text', {
+        value: vi.fn(() => pendingRead),
+      });
+
+      render(<MapScreen />);
+      await user.click(
+        await screen.findByRole('button', { name: 'Map settings' }),
+      );
+      const settingsDialog = screen.getByRole('dialog', {
+        name: 'Map settings',
+      });
+      await user.upload(
+        within(settingsDialog).getByLabelText('Add GeoJSON reference'),
+        file,
+      );
+      await user.click(
+        within(settingsDialog).getByRole('button', {
+          name: 'Close map settings',
+        }),
+      );
+
+      await act(async () => {
+        resolveRead('{"type":"Point","coordinates":["bad",0]}');
+        await pendingRead;
+      });
+
+      expect(
+        await screen.findByText('GeoJSON import failed'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Map settings' }));
+      expect(
+        within(
+          screen.getByRole('dialog', { name: 'Map settings' }),
+        ).queryByRole('alert'),
+      ).not.toBeInTheDocument();
     });
 
     it('rejects a frame confirm that crosses the antimeridian instead of drawing an inverted bbox', async () => {

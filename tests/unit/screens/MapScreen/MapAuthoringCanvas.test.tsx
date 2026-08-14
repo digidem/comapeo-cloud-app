@@ -155,6 +155,18 @@ describe('MapAuthoringCanvas reference overlays', () => {
         (props) => props.id === 'reference-overlay-mixed-polygons-fill',
       )?.filter,
     ).toEqual(['in', '$type', 'Polygon']);
+    expect(
+      layerProps
+        .filter((props) =>
+          String(props.id).startsWith('reference-overlay-mixed-'),
+        )
+        .map((props) => props.id),
+    ).toEqual([
+      'reference-overlay-mixed-polygons-fill',
+      'reference-overlay-mixed-polygons-outline',
+      'reference-overlay-mixed-lines-line',
+      'reference-overlay-mixed-points-circle',
+    ]);
   });
 
   it('keeps the source mounted and hides all layers when an overlay is hidden', () => {
