@@ -857,6 +857,9 @@
   "home.archives": {
     "defaultMessage": "Archives"
   },
+  "home.archives.createProject": {
+    "defaultMessage": "Create Project"
+  },
   "home.archives.empty.cta": {
     "defaultMessage": "Create Project"
   },

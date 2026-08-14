@@ -8,6 +8,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Link } from '@tanstack/react-router';
 
 import { ArchiveOverflowSheet } from '@/components/shared/ArchiveOverflowSheet';
+import { CreateProjectNavAction } from '@/components/shared/CreateProjectNavAction';
 import { Button } from '@/components/ui/button';
 import { CloseIcon } from '@/components/ui/close-icon';
 import { SUPPORTED_LOCALES } from '@/i18n/load-messages';
@@ -528,30 +529,14 @@ function MobileNavDrawer({
 
             {hasArchives && onCreateProject && (
               <div className="px-2 pt-3 pb-2">
-                <button
-                  type="button"
+                <CreateProjectNavAction
                   onClick={() => {
                     onNavigate();
                     onCreateProject();
                   }}
-                  className="flex w-full items-center gap-2 rounded-btn px-3 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-surface hover:text-primary-hover"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
                   {intl.formatMessage(messages.createProject)}
-                </button>
+                </CreateProjectNavAction>
               </div>
             )}
 

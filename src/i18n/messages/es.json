@@ -277,6 +277,7 @@
   "home.archive.sync": "Sincronizar Ahora",
   "home.archive.syncFailed": "Error al sincronizar",
   "home.archives": "Archivos",
+  "home.archives.createProject": "Crear Proyecto",
   "home.archives.empty.cta": "Crear Proyecto",
   "home.archives.empty.desc": "Agregue un servidor de archivo remoto o cree su primer proyecto para comenzar.",
   "home.archives.empty.title": "Bienvenido a CoMapeo Cloud",
