@@ -49,6 +49,39 @@ describe('removeComapeoKeys', () => {
       removeItemSpy.mockRestore();
     }
   });
+
+  it('clears stale preferences and reloads when another tab signals a reset', async () => {
+    const {
+      COMAPEO_STORAGE_RESET_SIGNAL_KEY,
+      registerComapeoStorageResetListener,
+    } = await import('@/lib/comapeo-local-storage');
+    localStorage.setItem('comapeo-locale', '"pt"');
+    localStorage.setItem('view-mode-preference', 'grid');
+    localStorage.setItem('unrelated-key', 'keep');
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+    const unregister = registerComapeoStorageResetListener();
+
+    try {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: COMAPEO_STORAGE_RESET_SIGNAL_KEY,
+          newValue: 'generation-2',
+          storageArea: localStorage,
+        }),
+      );
+
+      expect(localStorage.getItem('comapeo-locale')).toBeNull();
+      expect(localStorage.getItem('view-mode-preference')).toBeNull();
+      expect(localStorage.getItem('unrelated-key')).toBe('keep');
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      unregister();
+    }
+  });
 });
 
 describe('storage key ownership', () => {

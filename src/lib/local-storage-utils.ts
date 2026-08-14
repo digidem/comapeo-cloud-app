@@ -1,7 +1,11 @@
 import * as v from 'valibot';
 
 import { resetCategoriesDb } from '@/lib/categories-db';
-import { getComapeoKeys, removeComapeoKeys } from '@/lib/comapeo-local-storage';
+import {
+  getComapeoKeys,
+  removeComapeoKeys,
+  signalComapeoStorageReset,
+} from '@/lib/comapeo-local-storage';
 import { resetDb } from '@/lib/db';
 import { backupSchema } from '@/lib/schemas/backup-schema';
 import { useAuthStore } from '@/stores/auth-store';
@@ -18,9 +22,32 @@ function getBackupKeys(): string[] {
   );
 }
 
+function getBackupSnapshot(): Record<string, string> {
+  const snapshot: Record<string, string> = {};
+  for (const key of getBackupKeys()) {
+    const value = localStorage.getItem(key);
+    if (value !== null) snapshot[key] = value;
+  }
+  return snapshot;
+}
+
 function removeBackupKeys(): void {
   for (const key of getBackupKeys()) {
     localStorage.removeItem(key);
+  }
+}
+
+function restoreBackupSnapshot(snapshot: Record<string, string>): void {
+  const originalKeys = new Set(Object.keys(snapshot));
+
+  // Remove keys introduced by a partially applied import, then restore the
+  // original values. This is a compensating transaction because localStorage
+  // itself does not provide atomic multi-key writes.
+  for (const key of getBackupKeys()) {
+    if (!originalKeys.has(key)) localStorage.removeItem(key);
+  }
+  for (const [key, value] of Object.entries(snapshot)) {
+    localStorage.setItem(key, value);
   }
 }
 
@@ -71,6 +98,13 @@ export function importLocalStorageData(jsonString: string): {
     return { success: false, error: 'invalid-format' };
   }
 
+  let snapshot: Record<string, string>;
+  try {
+    snapshot = getBackupSnapshot();
+  } catch {
+    return { success: false, error: 'storage-unavailable' };
+  }
+
   try {
     // Preserve the v1 backup contract: clear and restore only `comapeo-*`
     // preferences. Full-reset ownership is intentionally broader.
@@ -82,6 +116,12 @@ export function importLocalStorageData(jsonString: string): {
       }
     }
   } catch {
+    try {
+      restoreBackupSnapshot(snapshot);
+    } catch {
+      // A persistent browser-storage failure can also block compensation. The
+      // operation still fails closed and the UI reports storage unavailability.
+    }
     return {
       success: false,
       error: 'storage-unavailable',
@@ -91,28 +131,70 @@ export function importLocalStorageData(jsonString: string): {
   return { success: true };
 }
 
+export type ClearAllStorageFailureStep = 'categories-db' | 'app-db';
+
+export class ClearAllStorageError extends Error {
+  readonly partial: boolean;
+  readonly failedStep: ClearAllStorageFailureStep;
+
+  constructor(options: {
+    failedStep: ClearAllStorageFailureStep;
+    partial: boolean;
+    cause: unknown;
+  }) {
+    super(
+      options.partial
+        ? 'The local data reset only partially completed.'
+        : 'The local data reset could not start safely.',
+      { cause: options.cause },
+    );
+    this.name = 'ClearAllStorageError';
+    this.partial = options.partial;
+    this.failedStep = options.failedStep;
+  }
+}
+
 const RESET_FAILURE_RELOAD_DELAY_MS = 1500;
 
-export async function clearAllStorage(): Promise<void> {
+function clearRuntimeStateBestEffort(): void {
   try {
-    // If an IndexedDB reset fails, leave browser preferences untouched rather
-    // than creating a second, unrelated partial reset.
-    await resetDb();
-    await resetCategoriesDb();
     useAuthStore.getState().clearAll();
-
-    // Remove persisted browser preferences last so live stores have no await window
-    // in which to re-write stale state before the reload.
-    try {
-      removeComapeoKeys({ bestEffort: true });
-    } catch {
-      // Best effort: inaccessible localStorage cannot be enumerated by the app either.
-    }
-    window.location.reload();
-  } catch (error) {
-    // All callers share one failure policy: surface the rejection, then reload
-    // shortly afterward so no potentially partial in-memory state survives.
-    setTimeout(() => window.location.reload(), RESET_FAILURE_RELOAD_DELAY_MS);
-    throw error;
+  } catch {
+    // Once a destructive database reset has succeeded, continue clearing every
+    // remaining owned store rather than stopping in another partial state.
   }
+  removeComapeoKeys({ bestEffort: true });
+  signalComapeoStorageReset();
+}
+
+export async function clearAllStorage(): Promise<void> {
+  // Clear the lower-value categories cache first. Its transaction is atomic; if
+  // it fails, stop before touching the primary application database or prefs.
+  try {
+    await resetCategoriesDb();
+  } catch (cause) {
+    throw new ClearAllStorageError({
+      failedStep: 'categories-db',
+      partial: false,
+      cause,
+    });
+  }
+
+  try {
+    await resetDb();
+  } catch (cause) {
+    // Categories are already cleared, so the reset is necessarily partial.
+    // Finish every remaining cleanup step best-effort, coordinate other tabs,
+    // and reload shortly after the UI has had a chance to explain the failure.
+    clearRuntimeStateBestEffort();
+    setTimeout(() => window.location.reload(), RESET_FAILURE_RELOAD_DELAY_MS);
+    throw new ClearAllStorageError({
+      failedStep: 'app-db',
+      partial: true,
+      cause,
+    });
+  }
+
+  clearRuntimeStateBestEffort();
+  window.location.reload();
 }

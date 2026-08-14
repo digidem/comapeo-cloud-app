@@ -292,6 +292,76 @@ describe('importLocalStorageData', () => {
     }
   });
 
+  it('restores the original preferences when the first imported write fails', () => {
+    localStorage.setItem('comapeo-locale', '"pt"');
+    localStorage.setItem('comapeo-theme', '"dark"');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: {
+        'comapeo-locale': '"en"',
+        'comapeo-theme': '"light"',
+      },
+    });
+    const originalSetItem = Storage.prototype.setItem;
+    let failed = false;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        if (!failed && key === 'comapeo-locale' && value === '"en"') {
+          failed = true;
+          throw new DOMException('Quota exceeded', 'QuotaExceededError');
+        }
+        return originalSetItem.call(this, key, value);
+      });
+
+    try {
+      expect(importLocalStorageData(backup)).toEqual({
+        success: false,
+        error: 'storage-unavailable',
+      });
+      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+      expect(localStorage.getItem('comapeo-theme')).toBe('"dark"');
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
+
+  it('restores the original preferences when a later imported write fails', () => {
+    localStorage.setItem('comapeo-locale', '"pt"');
+    localStorage.setItem('comapeo-theme', '"dark"');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: {
+        'comapeo-locale': '"en"',
+        'comapeo-theme': '"light"',
+      },
+    });
+    const originalSetItem = Storage.prototype.setItem;
+    let failed = false;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        if (!failed && key === 'comapeo-theme' && value === '"light"') {
+          failed = true;
+          throw new DOMException('Quota exceeded', 'QuotaExceededError');
+        }
+        return originalSetItem.call(this, key, value);
+      });
+
+    try {
+      expect(importLocalStorageData(backup)).toEqual({
+        success: false,
+        error: 'storage-unavailable',
+      });
+      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+      expect(localStorage.getItem('comapeo-theme')).toBe('"dark"');
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
+
   it('clears existing comapeo keys before restoring backup', () => {
     // Set up existing state that is NOT in the backup
     localStorage.setItem('comapeo-theme', '"dark"');
@@ -459,10 +529,16 @@ describe('clearAllStorage', () => {
     expect(mockReload).toHaveBeenCalledOnce();
   });
 
-  it('preserves preferences and schedules a reload if resetDb() throws', async () => {
+  it('continues best-effort cleanup and schedules a reload if resetDb() throws after categories clear', async () => {
     vi.useFakeTimers();
     try {
       const { resetDb } = await import('@/lib/db');
+      const { resetCategoriesDb } = await import('@/lib/categories-db');
+      const { useAuthStore } = await import('@/stores/auth-store');
+      const mockClearAll = vi.fn();
+      vi.mocked(useAuthStore.getState).mockReturnValue({
+        clearAll: mockClearAll,
+      } as unknown as ReturnType<typeof useAuthStore.getState>);
       vi.mocked(resetDb).mockRejectedValueOnce(new Error('DB error'));
       localStorage.setItem('comapeo-locale', '"pt"');
 
@@ -472,8 +548,14 @@ describe('clearAllStorage', () => {
         writable: true,
       });
 
-      await expect(clearAllStorage()).rejects.toThrow('DB error');
-      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        partial: true,
+        failedStep: 'app-db',
+      });
+      expect(resetCategoriesDb).toHaveBeenCalledOnce();
+      expect(mockClearAll).toHaveBeenCalledOnce();
+      expect(localStorage.getItem('comapeo-locale')).toBeNull();
       expect(mockReload).not.toHaveBeenCalled();
 
       await vi.advanceTimersByTimeAsync(1500);
@@ -483,29 +565,27 @@ describe('clearAllStorage', () => {
     }
   });
 
-  it('preserves preferences and schedules a reload if resetCategoriesDb() throws', async () => {
-    vi.useFakeTimers();
-    try {
-      const { resetCategoriesDb } = await import('@/lib/categories-db');
-      vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
-        new Error('Categories error'),
-      );
-      localStorage.setItem('comapeo-locale', '"pt"');
+  it('stops before clearing primary data when resetCategoriesDb() fails', async () => {
+    const { resetDb } = await import('@/lib/db');
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
+      new Error('Categories error'),
+    );
+    localStorage.setItem('comapeo-locale', '"pt"');
 
-      const mockReload = vi.fn();
-      Object.defineProperty(window, 'location', {
-        value: { reload: mockReload },
-        writable: true,
-      });
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
 
-      await expect(clearAllStorage()).rejects.toThrow('Categories error');
-      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
-      expect(mockReload).not.toHaveBeenCalled();
-
-      await vi.advanceTimersByTimeAsync(1500);
-      expect(mockReload).toHaveBeenCalledOnce();
-    } finally {
-      vi.useRealTimers();
-    }
+    await expect(clearAllStorage()).rejects.toMatchObject({
+      name: 'ClearAllStorageError',
+      partial: false,
+      failedStep: 'categories-db',
+    });
+    expect(resetDb).not.toHaveBeenCalled();
+    expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+    expect(mockReload).not.toHaveBeenCalled();
   });
 });

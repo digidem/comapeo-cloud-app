@@ -55,6 +55,18 @@ describe('StorageSettings', () => {
     expect(screen.getByText(/1\.0 GB/)).toBeInTheDocument();
   });
 
+  it('localizes usage percentage text and progress accessibility text', async () => {
+    render(<StorageSettings />, { locale: 'pt' });
+
+    const progress = await screen.findByRole('progressbar');
+
+    expect(screen.getByText('4,9% usado')).toBeInTheDocument();
+    expect(progress).toHaveAttribute(
+      'aria-valuetext',
+      '4,9% do armazenamento usado',
+    );
+  });
+
   it('displays per-table record counts', async () => {
     const db = getDb();
 
@@ -214,10 +226,16 @@ describe('StorageSettings', () => {
     }
   });
 
-  it('shows reset failures after the confirmation dialog closes', async () => {
+  it('shows partial reset failures after the confirmation dialog closes', async () => {
     const clearSpy = vi
       .spyOn(localStorageUtils, 'clearAllStorage')
-      .mockRejectedValueOnce(new Error('DB exploded'));
+      .mockRejectedValueOnce(
+        new localStorageUtils.ClearAllStorageError({
+          failedStep: 'app-db',
+          partial: true,
+          cause: new Error('DB exploded'),
+        }),
+      );
     const user = userEvent.setup();
 
     try {
@@ -235,7 +253,7 @@ describe('StorageSettings', () => {
       );
 
       expect(await screen.findByRole('alert')).toHaveTextContent(
-        'Some data could not be cleared. The app will reload.',
+        'Some local data was cleared, but the reset could not finish. The app will reload.',
       );
       expect(
         screen.queryByText('Clear All Cached Data?'),
@@ -244,6 +262,40 @@ describe('StorageSettings', () => {
       expect(
         screen.getByRole('button', { name: /Clear All Cached Data/ }),
       ).toBeDisabled();
+    } finally {
+      clearSpy.mockRestore();
+    }
+  });
+
+  it('allows retry when reset fails before destructive clearing starts', async () => {
+    const clearSpy = vi
+      .spyOn(localStorageUtils, 'clearAllStorage')
+      .mockRejectedValueOnce(
+        new localStorageUtils.ClearAllStorageError({
+          failedStep: 'categories-db',
+          partial: false,
+          cause: new Error('Categories unavailable'),
+        }),
+      );
+    const user = userEvent.setup();
+
+    try {
+      render(<StorageSettings />);
+      await screen.findByText('Total Usage');
+
+      await user.click(
+        screen.getByRole('button', { name: 'Clear All Cached Data' }),
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Cached data could not be cleared. Your existing local data was left unchanged. You can try again.',
+      );
+      expect(
+        screen.getByRole('button', { name: 'Clear All Cached Data' }),
+      ).toBeEnabled();
     } finally {
       clearSpy.mockRestore();
     }

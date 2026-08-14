@@ -1830,10 +1830,16 @@
     "defaultMessage": "Clear All Cached Data?"
   },
   "settings.storage.clearError": {
-    "defaultMessage": "Some data could not be cleared. The app will reload."
+    "defaultMessage": "Cached data could not be cleared. Your existing local data was left unchanged. You can try again."
+  },
+  "settings.storage.clearPartialError": {
+    "defaultMessage": "Some local data was cleared, but the reset could not finish. The app will reload."
   },
   "settings.storage.description": {
     "defaultMessage": "Manage cached data stored in your browser."
+  },
+  "settings.storage.loadingLabel": {
+    "defaultMessage": "Loading storage information"
   },
   "settings.storage.observations": {
     "defaultMessage": "Observations"
@@ -1861,6 +1867,12 @@
   },
   "settings.storage.totalUsage": {
     "defaultMessage": "Total Usage"
+  },
+  "settings.storage.usagePercent": {
+    "defaultMessage": "{percent}% used"
+  },
+  "settings.storage.usagePercentAria": {
+    "defaultMessage": "{percent}% of storage used"
   },
   "settings.title": {
     "defaultMessage": "Settings"

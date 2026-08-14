@@ -5,7 +5,10 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { clearAllStorage } from '@/lib/local-storage-utils';
+import {
+  ClearAllStorageError,
+  clearAllStorage,
+} from '@/lib/local-storage-utils';
 import { type StorageStats, getStorageStats } from '@/lib/storage';
 
 const messages = defineMessages({
@@ -24,6 +27,18 @@ const messages = defineMessages({
   totalOf: {
     id: 'settings.storage.totalOf',
     defaultMessage: '{usage} of {quota}',
+  },
+  usagePercent: {
+    id: 'settings.storage.usagePercent',
+    defaultMessage: '{percent}% used',
+  },
+  usagePercentAria: {
+    id: 'settings.storage.usagePercentAria',
+    defaultMessage: '{percent}% of storage used',
+  },
+  loadingLabel: {
+    id: 'settings.storage.loadingLabel',
+    defaultMessage: 'Loading storage information',
   },
   recordsLabel: {
     id: 'settings.storage.records',
@@ -80,7 +95,13 @@ const messages = defineMessages({
   },
   clearError: {
     id: 'settings.storage.clearError',
-    defaultMessage: 'Some data could not be cleared. The app will reload.',
+    defaultMessage:
+      'Cached data could not be cleared. Your existing local data was left unchanged. You can try again.',
+  },
+  clearPartialError: {
+    id: 'settings.storage.clearPartialError',
+    defaultMessage:
+      'Some local data was cleared, but the reset could not finish. The app will reload.',
   },
 });
 
@@ -118,6 +139,7 @@ function TableRowItem({ label, count }: TableRow) {
 
 interface UsageBarProps {
   percent: number;
+  ariaValueText: string;
 }
 
 function getBarColor(percent: number): string {
@@ -126,7 +148,7 @@ function getBarColor(percent: number): string {
   return '#1F6FFF';
 }
 
-function UsageBar({ percent }: UsageBarProps) {
+function UsageBar({ percent, ariaValueText }: UsageBarProps) {
   const clamped = Math.min(100, Math.max(0, percent));
   return (
     <div
@@ -135,7 +157,7 @@ function UsageBar({ percent }: UsageBarProps) {
       aria-valuenow={clamped}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuetext={`${clamped}% storage used`}
+      aria-valuetext={ariaValueText}
     >
       <div
         className="h-2 rounded-full transition-all duration-300"
@@ -181,10 +203,17 @@ export function StorageSettings() {
       // Use the same full reset path as SettingsScreen so all app databases,
       // persisted preferences, in-memory auth state, and reload semantics stay aligned.
       await clearAllStorage();
-    } catch {
-      setClearError(intl.formatMessage(messages.clearError));
-      // clearAllStorage schedules a reload after failures; keep the action disabled
-      // so a second destructive reset cannot start during that brief window.
+    } catch (error) {
+      const partial = error instanceof ClearAllStorageError && error.partial;
+      setClearError(
+        intl.formatMessage(
+          partial ? messages.clearPartialError : messages.clearError,
+        ),
+      );
+      // A partial reset schedules a reload after the error is shown; keep the
+      // action disabled during that window. If nothing destructive happened,
+      // re-enable the button so the user can retry safely.
+      if (!partial) setClearing(false);
     }
   }, [clearing, intl]);
 
@@ -193,7 +222,7 @@ export function StorageSettings() {
       <div
         role="status"
         aria-live="polite"
-        aria-label="Loading storage information"
+        aria-label={intl.formatMessage(messages.loadingLabel)}
         className="mt-4 space-y-3"
       >
         <Skeleton className="h-5 w-32" />
@@ -240,6 +269,17 @@ export function StorageSettings() {
   ];
 
   const totalRecords = tableRows.reduce((sum, r) => sum + r.count, 0);
+  const usagePercent = Math.min(100, Math.max(0, stats?.usagePercent ?? 0));
+  const formattedUsagePercent = intl.formatNumber(usagePercent, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  const usagePercentText = intl.formatMessage(messages.usagePercent, {
+    percent: formattedUsagePercent,
+  });
+  const usagePercentAriaText = intl.formatMessage(messages.usagePercentAria, {
+    percent: formattedUsagePercent,
+  });
 
   return (
     <div>
@@ -262,9 +302,9 @@ export function StorageSettings() {
             })}
           </span>
         </div>
-        <UsageBar percent={stats?.usagePercent ?? 0} />
+        <UsageBar percent={usagePercent} ariaValueText={usagePercentAriaText} />
         <p className="text-xs text-text-muted tabular-nums">
-          {stats?.usagePercent.toFixed(1) ?? '0.0'}% used
+          {usagePercentText}
         </p>
       </Card>
 
