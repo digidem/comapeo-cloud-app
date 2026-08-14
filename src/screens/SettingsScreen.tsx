@@ -269,7 +269,8 @@ export function SettingsScreen() {
       URL.revokeObjectURL(url);
       setExportStatus('success');
       scheduleTimeout(() => setExportStatus('idle'), 3000);
-    } catch {
+    } catch (error) {
+      console.error('Failed to export local storage backup', error);
       setExportStatus('error');
     }
   }, [scheduleTimeout]);
@@ -316,10 +317,6 @@ export function SettingsScreen() {
         description: intl.formatMessage(_messages.clearErrorDescription),
         variant: 'error',
       });
-      // Half-cleared state must not persist: force a reload so stale
-      // in-memory state is discarded even when the clear fails. Delay it
-      // so the error toast stays visible.
-      setTimeout(() => window.location.reload(), 1500);
     }
   }, [addToast, intl]);
 

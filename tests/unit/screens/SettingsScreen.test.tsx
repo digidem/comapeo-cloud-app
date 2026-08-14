@@ -1,11 +1,11 @@
 import type { UserEvent } from '@testing-library/user-event';
 import { server } from '@tests/mocks/node';
 import {
-  act,
   fireEvent,
   render,
   screen,
   userEvent,
+  waitFor,
   within,
 } from '@tests/mocks/test-utils';
 import { HttpResponse, http } from 'msw';
@@ -318,17 +318,31 @@ describe('SettingsScreen', () => {
       clearTimeoutSpy.mockRestore();
     });
 
-    it('shows error feedback when export fails', async () => {
+    it('shows error feedback and logs diagnostics when export fails', async () => {
+      const exportError = new Error('Storage unavailable');
       vi.mocked(exportLocalStorageData).mockImplementationOnce(() => {
-        throw new Error('Storage unavailable');
+        throw exportError;
       });
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
 
-      const user = userEvent.setup();
-      renderWithToast(<SettingsScreen />);
+      try {
+        const user = userEvent.setup();
+        renderWithToast(<SettingsScreen />);
 
-      await user.click(screen.getByRole('button', { name: 'Export Backup' }));
+        await user.click(screen.getByRole('button', { name: 'Export Backup' }));
 
-      expect(screen.getByText('Failed to export backup.')).toBeInTheDocument();
+        expect(
+          screen.getByText('Failed to export backup.'),
+        ).toBeInTheDocument();
+        expect(consoleError).toHaveBeenCalledWith(
+          'Failed to export local storage backup',
+          exportError,
+        );
+      } finally {
+        consoleError.mockRestore();
+      }
     });
 
     it('shows error feedback when import fails', async () => {
@@ -493,51 +507,26 @@ describe('SettingsScreen', () => {
       expect(clearAllStorage).toHaveBeenCalledTimes(1);
     });
 
-    it('shows translated error toast and reloads after 1500ms when clearing fails', async () => {
-      vi.useFakeTimers();
-      try {
-        const mockReload = vi.fn();
-        Object.defineProperty(window, 'location', {
-          value: { reload: mockReload },
-          writable: true,
-        });
-        vi.mocked(clearAllStorage).mockRejectedValueOnce(
-          new Error('DB exploded'),
-        );
+    it('shows translated error toast when clearing fails', async () => {
+      vi.mocked(clearAllStorage).mockRejectedValueOnce(
+        new Error('DB exploded'),
+      );
 
-        renderWithToast(<SettingsScreen />);
+      renderWithToast(<SettingsScreen />);
 
-        fireEvent.click(screen.getByRole('button', { name: 'Clear All Data' }));
-        fireEvent.click(
-          screen.getByRole('button', { name: 'Yes, Clear Everything' }),
-        );
+      fireEvent.click(screen.getByRole('button', { name: 'Clear All Data' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+      );
 
-        // Flush the rejection microtask so the catch block runs.
-        await act(async () => {
-          await vi.advanceTimersByTimeAsync(0);
-        });
-
-        // Translated description, never the raw error message.
+      await waitFor(() => {
         expect(
           screen.getByText(
             'Some data could not be cleared. The app will reload.',
           ),
         ).toBeInTheDocument();
-        expect(screen.queryByText('DB exploded')).not.toBeInTheDocument();
-        // Reload is deferred so the toast stays visible.
-        expect(mockReload).not.toHaveBeenCalled();
-
-        await act(async () => {
-          await vi.advanceTimersByTimeAsync(1499);
-        });
-        expect(mockReload).not.toHaveBeenCalled();
-        await act(async () => {
-          await vi.advanceTimersByTimeAsync(1);
-        });
-        expect(mockReload).toHaveBeenCalledTimes(1);
-      } finally {
-        vi.useRealTimers();
-      }
+      });
+      expect(screen.queryByText('DB exploded')).not.toBeInTheDocument();
     });
   });
 });

@@ -1,4 +1,3 @@
-import { removeComapeoKeys } from '@/lib/comapeo-local-storage';
 import { isZeroZeroCoord } from '@/lib/coords';
 import { getDb } from '@/lib/db';
 
@@ -95,42 +94,6 @@ export async function getStorageStats(): Promise<StorageStats> {
       syncMetadata: { count: syncMetadata },
     },
   };
-}
-
-// ---------------------------------------------------------------------------
-// clearAllData
-// ---------------------------------------------------------------------------
-
-/**
- * Clears all tables in the main app IndexedDB database plus CoMapeo-owned
- * localStorage keys, including remote server records and persisted UI preferences.
- * This helper does not clear the separate categories database, in-memory stores,
- * or reload the page; use clearAllStorage() for the complete app reset flow.
- */
-export async function clearAllData(): Promise<void> {
-  const db = getDb();
-
-  await db.transaction('rw', db.tables, async () => {
-    await db.projects.clear();
-    await db.observations.clear();
-    await db.alerts.clear();
-    await db.presets.clear();
-    await db.attachments.clear();
-    await db.tracks.clear();
-    await db.fields.clear();
-    await db.syncMetadata.clear();
-    await db.remoteServers.clear();
-    await db.iconCache.clear();
-  });
-
-  // Also clear CoMapeo-owned localStorage keys (view-mode preferences, etc.).
-  // Storage access can be blocked independently of IndexedDB; do not reject after
-  // the transaction has committed because callers still need to clear in-memory state.
-  try {
-    removeComapeoKeys();
-  } catch {
-    // Best effort: inaccessible localStorage cannot be read by the app either.
-  }
 }
 
 // ---------------------------------------------------------------------------

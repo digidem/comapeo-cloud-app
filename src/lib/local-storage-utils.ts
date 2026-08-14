@@ -22,8 +22,10 @@ export function exportLocalStorageData(): string {
         data[key] = value;
       }
     }
-  } catch {
-    throw new Error('Browser storage is unavailable; backup was not created.');
+  } catch (error) {
+    throw new Error('Browser storage is unavailable; backup was not created.', {
+      cause: error,
+    });
   }
 
   return JSON.stringify({
@@ -61,20 +63,28 @@ export function importLocalStorageData(jsonString: string): {
   return { success: true };
 }
 
-export async function clearAllStorage(): Promise<void> {
-  // If either IndexedDB reset fails, leave browser preferences untouched rather
-  // than creating a second, unrelated partial reset. The caller handles the
-  // failure UX and reload policy.
-  await resetDb();
-  await resetCategoriesDb();
-  useAuthStore.getState().clearAll();
+const RESET_FAILURE_RELOAD_DELAY_MS = 1500;
 
-  // Remove persisted browser preferences last so live stores have no await window
-  // in which to re-write stale state before the reload.
+export async function clearAllStorage(): Promise<void> {
   try {
-    removeComapeoKeys();
-  } catch {
-    // Best effort: continue the reset and reload even if localStorage is inaccessible.
+    // If an IndexedDB reset fails, leave browser preferences untouched rather
+    // than creating a second, unrelated partial reset.
+    await resetDb();
+    await resetCategoriesDb();
+    useAuthStore.getState().clearAll();
+
+    // Remove persisted browser preferences last so live stores have no await window
+    // in which to re-write stale state before the reload.
+    try {
+      removeComapeoKeys();
+    } catch {
+      // Best effort: inaccessible localStorage cannot be read by the app either.
+    }
+    window.location.reload();
+  } catch (error) {
+    // All callers share one failure policy: surface the rejection, then reload
+    // shortly afterward so no potentially partial in-memory state survives.
+    setTimeout(() => window.location.reload(), RESET_FAILURE_RELOAD_DELAY_MS);
+    throw error;
   }
-  window.location.reload();
 }

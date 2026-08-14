@@ -119,16 +119,26 @@ describe('exportLocalStorageData', () => {
     expect(parsed.data).toEqual({});
   });
 
-  it('fails closed with a stable error when browser storage is blocked', () => {
+  it('fails closed with a stable error and preserves the storage failure as cause', () => {
     localStorage.setItem('comapeo-locale', '"en"');
+    const storageError = new DOMException(
+      'Storage access denied',
+      'SecurityError',
+    );
     const keySpy = vi.spyOn(Storage.prototype, 'key').mockImplementation(() => {
-      throw new DOMException('Storage access denied', 'SecurityError');
+      throw storageError;
     });
 
     try {
       expect(() => exportLocalStorageData()).toThrow(
         'Browser storage is unavailable; backup was not created.',
       );
+      try {
+        exportLocalStorageData();
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).cause).toBe(storageError);
+      }
     } finally {
       keySpy.mockRestore();
     }
@@ -275,6 +285,10 @@ describe('importLocalStorageData', () => {
 });
 
 describe('clearAllStorage', () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
   it('clears CoMapeo-owned localStorage entries and preserves unrelated keys', async () => {
     localStorage.setItem('comapeo-locale', '"en"');
     localStorage.setItem(
@@ -415,37 +429,53 @@ describe('clearAllStorage', () => {
     expect(mockReload).toHaveBeenCalledOnce();
   });
 
-  it('throws without clearing preferences or reloading if resetDb() throws', async () => {
-    const { resetDb } = await import('@/lib/db');
-    vi.mocked(resetDb).mockRejectedValueOnce(new Error('DB error'));
-    localStorage.setItem('comapeo-locale', '"pt"');
+  it('preserves preferences and schedules a reload if resetDb() throws', async () => {
+    vi.useFakeTimers();
+    try {
+      const { resetDb } = await import('@/lib/db');
+      vi.mocked(resetDb).mockRejectedValueOnce(new Error('DB error'));
+      localStorage.setItem('comapeo-locale', '"pt"');
 
-    const mockReload = vi.fn();
-    Object.defineProperty(window, 'location', {
-      value: { reload: mockReload },
-      writable: true,
-    });
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
+      });
 
-    await expect(clearAllStorage()).rejects.toThrow('DB error');
-    expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
-    expect(mockReload).not.toHaveBeenCalled();
+      await expect(clearAllStorage()).rejects.toThrow('DB error');
+      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('throws without clearing preferences or reloading if resetCategoriesDb() throws', async () => {
-    const { resetCategoriesDb } = await import('@/lib/categories-db');
-    vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
-      new Error('Categories error'),
-    );
-    localStorage.setItem('comapeo-locale', '"pt"');
+  it('preserves preferences and schedules a reload if resetCategoriesDb() throws', async () => {
+    vi.useFakeTimers();
+    try {
+      const { resetCategoriesDb } = await import('@/lib/categories-db');
+      vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
+        new Error('Categories error'),
+      );
+      localStorage.setItem('comapeo-locale', '"pt"');
 
-    const mockReload = vi.fn();
-    Object.defineProperty(window, 'location', {
-      value: { reload: mockReload },
-      writable: true,
-    });
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
+      });
 
-    await expect(clearAllStorage()).rejects.toThrow('Categories error');
-    expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
-    expect(mockReload).not.toHaveBeenCalled();
+      await expect(clearAllStorage()).rejects.toThrow('Categories error');
+      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
