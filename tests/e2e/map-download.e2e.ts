@@ -258,7 +258,7 @@ test.describe('GeoJSON reference overlays (E2E)', () => {
       buffer: Buffer.from(MIXED_GEOJSON),
     });
 
-    await expect(page.getByText('mixed-reference.geojson')).toBeVisible();
+    await expect(page.getByTitle('mixed-reference.geojson')).toBeVisible();
     const hideButton = page.getByRole('button', {
       name: 'Hide mixed-reference.geojson',
     });
@@ -275,7 +275,7 @@ test.describe('GeoJSON reference overlays (E2E)', () => {
     await page
       .getByRole('button', { name: 'Remove mixed-reference.geojson' })
       .click();
-    await expect(page.getByText('mixed-reference.geojson')).toHaveCount(0);
+    await expect(page.getByTitle('mixed-reference.geojson')).toHaveCount(0);
   });
 
   test('mobile file picker remains available through map settings', async ({
@@ -294,7 +294,7 @@ test.describe('GeoJSON reference overlays (E2E)', () => {
       buffer: Buffer.from('{"type":"Point","coordinates":[-60,-3]}'),
     });
 
-    await expect(page.getByText('mobile-reference.geojson')).toBeVisible();
+    await expect(page.getByTitle('mobile-reference.geojson')).toBeVisible();
 
     await input.setInputFiles({
       name: 'broken.geojson',

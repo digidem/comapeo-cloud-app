@@ -84,9 +84,13 @@ describe('GeoJsonOverlayControl', () => {
 
     expect(screen.getByText('territory.geojson')).toBeInTheDocument();
 
-    await user.click(
-      screen.getByRole('button', { name: 'Hide territory.geojson' }),
-    );
+    const visibilityButton = screen.getByRole('button', {
+      name: 'Hide territory.geojson',
+    });
+    expect(visibilityButton).toHaveTextContent('Hide');
+    expect(visibilityButton).not.toHaveAttribute('aria-pressed');
+
+    await user.click(visibilityButton);
     expect(onToggle).toHaveBeenCalledWith('overlay-1');
 
     await user.click(

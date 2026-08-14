@@ -88,12 +88,11 @@ function isLinearRing(value: unknown): value is Position[] {
   return Boolean(first && last && positionsEqual(first, last));
 }
 
-function isPolygonCoordinates(value: unknown): value is Position[][] {
-  return (
-    Array.isArray(value) &&
-    value.length > 0 &&
-    value.every((ring) => isLinearRing(ring))
-  );
+function validatePolygonCoordinates(
+  value: unknown,
+): asserts value is Position[][] {
+  if (!Array.isArray(value) || value.length === 0) invalidGeoJson();
+  if (!value.every((ring) => isLinearRing(ring))) invalidPolygonRing();
 }
 
 function validateGeometry(value: unknown): Geometry {
@@ -136,18 +135,18 @@ function validateGeometry(value: unknown): Geometry {
         }
         break;
       case 'Polygon':
-        if (!isPolygonCoordinates(candidate.coordinates)) invalidPolygonRing();
+        validatePolygonCoordinates(candidate.coordinates);
         break;
       case 'MultiPolygon':
         if (
           !Array.isArray(candidate.coordinates) ||
-          candidate.coordinates.length === 0 ||
-          !candidate.coordinates.every((polygon) =>
-            isPolygonCoordinates(polygon),
-          )
+          candidate.coordinates.length === 0
         ) {
-          invalidPolygonRing();
+          invalidGeoJson();
         }
+        candidate.coordinates.forEach((polygon) =>
+          validatePolygonCoordinates(polygon),
+        );
         break;
       case 'GeometryCollection':
         if (!Array.isArray(candidate.geometries)) invalidGeoJson();
@@ -177,6 +176,9 @@ function normalizeGeometry(
 ): Array<Feature<Geometry, GeoJsonProperties>> {
   const features: Array<Feature<Geometry, GeoJsonProperties>> = [];
   const stack: Geometry[] = [geometry];
+  const deriveChildIds =
+    geometry.type === 'GeometryCollection' && id !== undefined;
+  let childIndex = 0;
 
   while (stack.length > 0) {
     const current = stack.pop();
@@ -190,12 +192,17 @@ function normalizeGeometry(
       continue;
     }
 
+    let featureId = id;
+    if (id !== undefined && deriveChildIds) {
+      featureId = `${id}:${childIndex}`;
+    }
     features.push({
       type: 'Feature',
       properties,
       geometry: current,
-      ...(id === undefined ? {} : { id }),
+      ...(featureId === undefined ? {} : { id: featureId }),
     });
+    childIndex += 1;
   }
 
   return features;

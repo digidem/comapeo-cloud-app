@@ -104,20 +104,14 @@ export function GeoJsonOverlayControl({
               </span>
               <button
                 type="button"
-                aria-pressed={overlay.visible}
-                aria-label={intl.formatMessage(
-                  overlay.visible
-                    ? mapMessages.referenceOverlaysHide
-                    : mapMessages.referenceOverlaysShow,
-                  { name: overlay.name },
-                )}
                 onClick={() => onToggle(overlay.id)}
                 className="min-h-11 rounded-btn px-2 text-xs font-semibold text-primary hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {intl.formatMessage(
                   overlay.visible
-                    ? mapMessages.referenceOverlaysVisible
-                    : mapMessages.referenceOverlaysHidden,
+                    ? mapMessages.referenceOverlaysHide
+                    : mapMessages.referenceOverlaysShow,
+                  { name: overlay.name },
                 )}
               </button>
               <button

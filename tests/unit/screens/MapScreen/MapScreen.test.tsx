@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
 import { getDb, resetDb } from '@/lib/db';
+import { MAX_GEOJSON_OVERLAY_BYTES } from '@/lib/map/geojson-overlays';
 import { MapScreen } from '@/screens/MapScreen/MapScreen';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -330,6 +331,69 @@ describe('MapScreen', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'unclosed.geojson has invalid polygon rings.',
+    );
+  });
+
+  it('maps unsupported, oversized, and wrong-file errors to user-visible messages', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    const input = await screen.findByLabelText('Add GeoJSON reference');
+    await user.upload(
+      input,
+      new File(
+        ['{"type":"FeatureCollection","features":[]}'],
+        'empty.geojson',
+        {
+          type: 'application/geo+json',
+        },
+      ),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'empty.geojson has no supported geometry to display.',
+    );
+
+    const oversized = new File(
+      ['{"type":"Point","coordinates":[-60,-3]}'],
+      'large.geojson',
+      { type: 'application/geo+json' },
+    );
+    Object.defineProperty(oversized, 'size', {
+      value: MAX_GEOJSON_OVERLAY_BYTES + 1,
+    });
+    await user.upload(input, oversized);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'large.geojson is larger than 5 MB.',
+    );
+
+    const wrongFile = new File(['not geojson'], 'photo.jpg', {
+      type: 'image/jpeg',
+    });
+    fireEvent.drop(
+      screen.getByRole('region', { name: 'Map authoring canvas' }),
+      { dataTransfer: { types: ['Files'], files: [wrongFile] } },
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'photo.jpg is not a GeoJSON or JSON file.',
+    );
+  });
+
+  it('shows drag-and-drop import failures on the map even when controls are out of view', async () => {
+    render(<MapScreen />);
+    const brokenFile = new File(
+      ['{"type":"Point","coordinates":["bad",0]}'],
+      'dropped-broken.geojson',
+      { type: 'application/geo+json' },
+    );
+
+    fireEvent.drop(
+      await screen.findByRole('region', { name: 'Map authoring canvas' }),
+      { dataTransfer: { types: ['Files'], files: [brokenFile] } },
+    );
+
+    const mapAlert = await screen.findByTestId('reference-overlay-map-error');
+    expect(mapAlert).toHaveTextContent(
+      'dropped-broken.geojson is not valid GeoJSON.',
     );
   });
 

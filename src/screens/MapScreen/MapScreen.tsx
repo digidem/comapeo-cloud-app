@@ -145,6 +145,8 @@ export function MapScreen() {
   const [referenceOverlayError, setReferenceOverlayError] = useState<
     string | null
   >(null);
+  const [referenceOverlayErrorSurface, setReferenceOverlayErrorSurface] =
+    useState<'controls' | 'map' | null>(null);
   const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
   const referenceOverlayImportsRef = useRef(new Set<symbol>());
   const referenceOverlayGenerationRef = useRef(0);
@@ -154,6 +156,7 @@ export function MapScreen() {
     setReferenceOverlayProjectId(selectedProjectId);
     setReferenceOverlays([]);
     setReferenceOverlayError(null);
+    setReferenceOverlayErrorSurface(null);
     setReferenceOverlayLoading(false);
   }
 
@@ -298,7 +301,10 @@ export function MapScreen() {
     setShowUndo(false);
   }
 
-  async function handleReferenceOverlayFiles(files: File[]) {
+  async function handleReferenceOverlayFiles(
+    files: File[],
+    errorSurface: 'controls' | 'map' = 'controls',
+  ) {
     if (files.length === 0) return;
     const importProjectId = selectedProjectId;
     const importGeneration = referenceOverlayGenerationRef.current;
@@ -306,6 +312,7 @@ export function MapScreen() {
     referenceOverlayImportsRef.current.add(importToken);
     setReferenceOverlayLoading(true);
     setReferenceOverlayError(null);
+    setReferenceOverlayErrorSurface(null);
 
     try {
       const results = await Promise.all(
@@ -350,6 +357,7 @@ export function MapScreen() {
             intl.formatMessage(mapMessages.referenceOverlaysReadError, values),
           );
         }
+        setReferenceOverlayErrorSurface(errorSurface);
         return;
       }
 
@@ -547,8 +555,15 @@ export function MapScreen() {
           onFilesSelected={handleReferenceOverlayFiles}
           onToggle={handleReferenceOverlayToggle}
           onRemove={handleReferenceOverlayRemove}
-          error={referenceOverlayError}
-          onDismissError={() => setReferenceOverlayError(null)}
+          error={
+            referenceOverlayErrorSurface === 'controls'
+              ? referenceOverlayError
+              : null
+          }
+          onDismissError={() => {
+            setReferenceOverlayError(null);
+            setReferenceOverlayErrorSurface(null);
+          }}
           loading={referenceOverlayLoading}
         />
         <ZoomSelector value={zoomRange} onChange={setZoomRange} />
@@ -594,8 +609,33 @@ export function MapScreen() {
             onDrawModeChange={handleDrawModeChange}
             fitBounds={autoFitBbox}
             overlays={referenceOverlays}
-            onOverlayFilesDrop={handleReferenceOverlayFiles}
+            onOverlayFilesDrop={(files) =>
+              handleReferenceOverlayFiles(files, 'map')
+            }
           />
+
+          {referenceOverlayError && referenceOverlayErrorSurface === 'map' ? (
+            <div
+              role="alert"
+              data-testid="reference-overlay-map-error"
+              className="absolute bottom-16 right-4 z-20 flex max-w-sm items-start gap-2 rounded-btn bg-error px-3 py-2 text-sm text-white shadow-card"
+            >
+              <span className="min-w-0 flex-1">{referenceOverlayError}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setReferenceOverlayError(null);
+                  setReferenceOverlayErrorSurface(null);
+                }}
+                aria-label={intl.formatMessage(
+                  mapMessages.referenceOverlaysDismiss,
+                )}
+                className="min-h-11 shrink-0 rounded-btn px-2 text-xs font-semibold text-white underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                {intl.formatMessage(mapMessages.referenceOverlaysDismissAction)}
+              </button>
+            </div>
+          ) : null}
 
           {drawMode !== 'draw_rectangle' && (
             <div className="absolute bottom-4 left-4 flex gap-2 lg:hidden">

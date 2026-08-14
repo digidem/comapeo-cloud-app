@@ -123,6 +123,47 @@ describe('GeoJSON reference overlays', () => {
     ).toThrow(/polygon ring/i);
   });
 
+  it('keeps structurally invalid polygon coordinates on the generic invalid path', () => {
+    expect(() =>
+      normalizeGeoJson({ type: 'Polygon', coordinates: 'not-an-array' }),
+    ).toThrow('This file is not valid GeoJSON.');
+    expect(() =>
+      normalizeGeoJson({ type: 'Polygon', coordinates: [] }),
+    ).toThrow('This file is not valid GeoJSON.');
+  });
+
+  it('derives unique child ids when flattening a GeometryCollection feature', () => {
+    const normalized = normalizeGeoJson({
+      type: 'Feature',
+      id: 'group',
+      properties: { source: 'field' },
+      geometry: {
+        type: 'GeometryCollection',
+        geometries: [
+          { type: 'Point', coordinates: [-60, -3] },
+          {
+            type: 'LineString',
+            coordinates: [
+              [-60, -3],
+              [-59, -2],
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(normalized.features.map((feature) => feature.id)).toEqual([
+      'group:0',
+      'group:1',
+    ]);
+  });
+
+  it('rejects an empty FeatureCollection as unsupported', () => {
+    expect(() =>
+      normalizeGeoJson({ type: 'FeatureCollection', features: [] }),
+    ).toThrow(/no supported geometry/i);
+  });
+
   it('rejects excessively nested GeometryCollections with a controlled validation error', () => {
     let geometry: unknown = { type: 'Point', coordinates: [-60, -3] };
     for (let depth = 0; depth < 80; depth += 1) {
