@@ -153,18 +153,15 @@ describe('MapScreen', () => {
     expect(await screen.findByText('point.geojson')).toBeInTheDocument();
     expect(screen.getByText('route.geojson')).toBeInTheDocument();
     expect(
-      screen.getByTestId(/mock-source-reference-overlay-.*-points/),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByTestId(/mock-source-reference-overlay-.*-lines/),
-    ).toBeInTheDocument();
+      screen.getAllByTestId(/mock-source-reference-overlay-.*/),
+    ).toHaveLength(2);
 
     await user.click(
       screen.getByRole('button', { name: 'Hide point.geojson' }),
     );
     expect(
-      screen.queryByTestId(/mock-source-reference-overlay-.*-points/),
-    ).not.toBeInTheDocument();
+      screen.getAllByTestId(/mock-source-reference-overlay-.*/),
+    ).toHaveLength(2);
 
     await user.click(
       screen.getByRole('button', { name: 'Remove route.geojson' }),
@@ -198,6 +195,43 @@ describe('MapScreen', () => {
     expect(screen.queryByText('valid.geojson')).not.toBeInTheDocument();
     expect(
       screen.queryByTestId(/mock-source-reference-overlay-.*-points/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('clears transient reference overlays when the selected project changes', async () => {
+    const user = userEvent.setup();
+    await getDb().projects.add({
+      localId: 'project-2',
+      sourceType: 'local',
+      sourceId: 'local-2',
+      name: 'Second Project',
+      createdAt: '2026-06-29T00:00:00.000Z',
+      updatedAt: '2026-06-29T00:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    render(<MapScreen />);
+
+    const input = await screen.findByLabelText('Add GeoJSON reference');
+    await user.upload(
+      input,
+      new File(
+        ['{"type":"Point","coordinates":[-60,-3]}'],
+        'project-1.geojson',
+        { type: 'application/geo+json' },
+      ),
+    );
+    expect(await screen.findByText('project-1.geojson')).toBeInTheDocument();
+
+    act(() => {
+      useProjectStore.setState({ selectedProjectId: 'project-2' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('project-1.geojson')).not.toBeInTheDocument();
+    });
+    expect(
+      screen.queryByTestId(/mock-source-reference-overlay-.*/),
     ).not.toBeInTheDocument();
   });
 
@@ -254,6 +288,31 @@ describe('MapScreen', () => {
       expect(
         screen.getAllByRole('heading', { name: 'Bounds', level: 2 }),
       ).toHaveLength(1);
+    });
+
+    it('shows invalid GeoJSON errors inside the mobile settings sheet', async () => {
+      const user = userEvent.setup();
+      render(<MapScreen />);
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Map settings' }),
+      );
+      const input = screen.getByLabelText('Add GeoJSON reference');
+      await user.upload(
+        input,
+        new File(
+          ['{"type":"Point","coordinates":["bad",0]}'],
+          'broken.geojson',
+          { type: 'application/geo+json' },
+        ),
+      );
+
+      const settingsDialog = screen.getByRole('dialog', {
+        name: 'Map settings',
+      });
+      expect(
+        await within(settingsDialog).findByRole('alert'),
+      ).toHaveTextContent('broken.geojson is not valid GeoJSON.');
     });
 
     it('rejects a frame confirm that crosses the antimeridian instead of drawing an inverted bbox', async () => {

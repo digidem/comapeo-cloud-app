@@ -1451,6 +1451,12 @@
   "map.referenceOverlays.add": {
     "defaultMessage": "Add GeoJSON reference"
   },
+  "map.referenceOverlays.dismiss": {
+    "defaultMessage": "Dismiss error"
+  },
+  "map.referenceOverlays.dismissAction": {
+    "defaultMessage": "Dismiss"
+  },
   "map.referenceOverlays.dropHint": {
     "defaultMessage": "Drop GeoJSON files to add reference data"
   },
@@ -1495,6 +1501,9 @@
   },
   "map.referenceOverlays.unsupported": {
     "defaultMessage": "{name} has no supported geometry to display."
+  },
+  "map.referenceOverlays.unsupportedFile": {
+    "defaultMessage": "{name} is not a GeoJSON or JSON file."
   },
   "map.referenceOverlays.visible": {
     "defaultMessage": "Visible"

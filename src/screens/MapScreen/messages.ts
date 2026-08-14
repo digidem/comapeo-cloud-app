@@ -541,6 +541,14 @@ export const mapMessages = defineMessages({
     id: 'map.referenceOverlays.dropHint',
     defaultMessage: 'Drop GeoJSON files to add reference data',
   },
+  referenceOverlaysDismiss: {
+    id: 'map.referenceOverlays.dismiss',
+    defaultMessage: 'Dismiss error',
+  },
+  referenceOverlaysDismissAction: {
+    id: 'map.referenceOverlays.dismissAction',
+    defaultMessage: 'Dismiss',
+  },
   referenceOverlaysInvalid: {
     id: 'map.referenceOverlays.invalid',
     defaultMessage: '{name} is not valid GeoJSON.',
@@ -552,6 +560,10 @@ export const mapMessages = defineMessages({
   referenceOverlaysUnsupported: {
     id: 'map.referenceOverlays.unsupported',
     defaultMessage: '{name} has no supported geometry to display.',
+  },
+  referenceOverlaysUnsupportedFile: {
+    id: 'map.referenceOverlays.unsupportedFile',
+    defaultMessage: '{name} is not a GeoJSON or JSON file.',
   },
   referenceOverlaysReadError: {
     id: 'map.referenceOverlays.readError',

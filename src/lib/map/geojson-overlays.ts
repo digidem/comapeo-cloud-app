@@ -14,7 +14,8 @@ import type {
  */
 export const MAX_GEOJSON_OVERLAY_BYTES = 5 * 1024 * 1024;
 
-export type GeoJsonOverlayErrorCode = 'invalid' | 'too-large' | 'unsupported';
+export type GeoJsonOverlayErrorCode =
+  'invalid' | 'too-large' | 'unsupported' | 'unsupported-file';
 
 export class GeoJsonOverlayError extends Error {
   readonly code: GeoJsonOverlayErrorCode;
@@ -217,6 +218,19 @@ export function normalizeGeoJson(
 export async function readGeoJsonOverlayFile(
   file: File,
 ): Promise<FeatureCollection<Geometry, GeoJsonProperties>> {
+  const lowerName = file.name.toLowerCase();
+  const supportedFileType =
+    lowerName.endsWith('.geojson') ||
+    lowerName.endsWith('.json') ||
+    file.type === 'application/geo+json' ||
+    file.type === 'application/json';
+  if (!supportedFileType) {
+    throw new GeoJsonOverlayError(
+      'unsupported-file',
+      'Choose a GeoJSON or JSON file.',
+    );
+  }
+
   if (file.size > MAX_GEOJSON_OVERLAY_BYTES) {
     throw new GeoJsonOverlayError(
       'too-large',

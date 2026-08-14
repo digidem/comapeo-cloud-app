@@ -146,6 +146,14 @@ export function MapScreen() {
     string | null
   >(null);
   const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
+  const [referenceOverlayProjectId, setReferenceOverlayProjectId] =
+    useState(selectedProjectId);
+  if (referenceOverlayProjectId !== selectedProjectId) {
+    setReferenceOverlayProjectId(selectedProjectId);
+    setReferenceOverlays([]);
+    setReferenceOverlayError(null);
+  }
+
   // Track the computed project bbox for hasConfigChanges comparison
   const [projectBbox, setProjectBbox] = useState<
     [number, number, number, number] | null
@@ -284,6 +292,7 @@ export function MapScreen() {
 
   async function handleReferenceOverlayFiles(files: File[]) {
     if (files.length === 0) return;
+    const importProjectId = selectedProjectId;
     setReferenceOverlayLoading(true);
     setReferenceOverlayError(null);
 
@@ -301,6 +310,10 @@ export function MapScreen() {
           }
         }),
       );
+      if (useProjectStore.getState().selectedProjectId !== importProjectId) {
+        return;
+      }
+
       const failure = results.find((result) => !result.ok);
       if (failure && !failure.ok) {
         const values = { name: failure.file.name };
@@ -310,6 +323,8 @@ export function MapScreen() {
             message = mapMessages.referenceOverlaysTooLarge;
           } else if (failure.error.code === 'unsupported') {
             message = mapMessages.referenceOverlaysUnsupported;
+          } else if (failure.error.code === 'unsupported-file') {
+            message = mapMessages.referenceOverlaysUnsupportedFile;
           }
           setReferenceOverlayError(intl.formatMessage(message, values));
         } else {
@@ -509,6 +524,8 @@ export function MapScreen() {
           onFilesSelected={handleReferenceOverlayFiles}
           onToggle={handleReferenceOverlayToggle}
           onRemove={handleReferenceOverlayRemove}
+          error={referenceOverlayError}
+          onDismissError={() => setReferenceOverlayError(null)}
           loading={referenceOverlayLoading}
         />
         <ZoomSelector value={zoomRange} onChange={setZoomRange} />
@@ -556,15 +573,6 @@ export function MapScreen() {
             overlays={referenceOverlays}
             onOverlayFilesDrop={handleReferenceOverlayFiles}
           />
-
-          {referenceOverlayError ? (
-            <p
-              role="alert"
-              className="absolute left-3 right-16 top-16 z-20 rounded-btn bg-error px-3 py-2 text-sm text-white shadow-card"
-            >
-              {referenceOverlayError}
-            </p>
-          ) : null}
 
           {drawMode !== 'draw_rectangle' && (
             <div className="absolute bottom-4 left-4 flex gap-2 lg:hidden">

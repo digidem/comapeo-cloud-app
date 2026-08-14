@@ -295,6 +295,16 @@ test.describe('GeoJSON reference overlays (E2E)', () => {
     });
 
     await expect(page.getByText('mobile-reference.geojson')).toBeVisible();
+
+    await input.setInputFiles({
+      name: 'broken.geojson',
+      mimeType: 'application/geo+json',
+      buffer: Buffer.from('{"type":"Point","coordinates":["bad",0]}'),
+    });
+    const settingsDialog = page.getByRole('dialog', { name: 'Map settings' });
+    await expect(settingsDialog.getByRole('alert')).toContainText(
+      'broken.geojson is not valid GeoJSON.',
+    );
   });
 });
 

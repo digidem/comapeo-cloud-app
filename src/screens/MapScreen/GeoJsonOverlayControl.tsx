@@ -10,6 +10,7 @@ interface GeoJsonOverlayControlProps {
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
   error?: string | null;
+  onDismissError?: () => void;
   loading?: boolean;
 }
 
@@ -19,6 +20,7 @@ export function GeoJsonOverlayControl({
   onToggle,
   onRemove,
   error,
+  onDismissError,
   loading = false,
 }: GeoJsonOverlayControlProps) {
   const intl = useIntl();
@@ -68,12 +70,24 @@ export function GeoJsonOverlayControl({
       </p>
 
       {error ? (
-        <p
+        <div
           role="alert"
-          className="rounded-btn bg-error/10 px-3 py-2 text-sm text-error"
+          className="flex items-start gap-2 rounded-btn bg-error/10 px-3 py-2 text-sm text-error"
         >
-          {error}
-        </p>
+          <span className="min-w-0 flex-1">{error}</span>
+          {onDismissError ? (
+            <button
+              type="button"
+              onClick={onDismissError}
+              aria-label={intl.formatMessage(
+                mapMessages.referenceOverlaysDismiss,
+              )}
+              className="min-h-11 shrink-0 rounded-btn px-2 text-xs font-semibold text-error hover:bg-error/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {intl.formatMessage(mapMessages.referenceOverlaysDismissAction)}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {overlays.length > 0 ? (

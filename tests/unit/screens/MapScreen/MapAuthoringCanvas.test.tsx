@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@tests/mocks/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
 import type { RefObject } from 'react';
@@ -12,6 +12,7 @@ import { MapAuthoringCanvas } from '@/screens/MapScreen/MapAuthoringCanvas';
 vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}));
 
 const mapCanvas = document.createElement('canvas');
+const layerProps: Array<Record<string, unknown>> = [];
 const mapHandle = {
   getMap: () => ({
     getCanvas: () => mapCanvas,
@@ -38,12 +39,15 @@ vi.mock('react-map-gl/maplibre', () => ({
       {props.children as React.ReactNode}
     </div>
   ),
-  Layer: (props: Record<string, unknown>) => (
-    <div
-      data-testid={`mock-layer-${String(props.id)}`}
-      data-type={props.type}
-    />
-  ),
+  Layer: (props: Record<string, unknown>) => {
+    layerProps.push(props);
+    return (
+      <div
+        data-testid={`mock-layer-${String(props.id)}`}
+        data-type={props.type}
+      />
+    );
+  },
   AttributionControl: () => null,
 }));
 
@@ -113,9 +117,16 @@ function renderCanvas(overlays: GeoJsonOverlay[] = [mixedOverlay]) {
 }
 
 describe('MapAuthoringCanvas reference overlays', () => {
-  it('renders point, line, and polygon families with the appropriate MapLibre layers', () => {
+  beforeEach(() => {
+    layerProps.length = 0;
+  });
+
+  it('renders mixed geometry from one source with filtered family layers', () => {
     renderCanvas();
 
+    expect(
+      screen.getByTestId('mock-source-reference-overlay-mixed'),
+    ).toBeInTheDocument();
     expect(
       screen.getByTestId('mock-layer-reference-overlay-mixed-points-circle'),
     ).toHaveAttribute('data-type', 'circle');
@@ -128,13 +139,37 @@ describe('MapAuthoringCanvas reference overlays', () => {
     expect(
       screen.getByTestId('mock-layer-reference-overlay-mixed-polygons-outline'),
     ).toHaveAttribute('data-type', 'line');
+
+    expect(
+      layerProps.find(
+        (props) => props.id === 'reference-overlay-mixed-points-circle',
+      )?.filter,
+    ).toEqual(['in', '$type', 'Point']);
+    expect(
+      layerProps.find(
+        (props) => props.id === 'reference-overlay-mixed-lines-line',
+      )?.filter,
+    ).toEqual(['in', '$type', 'LineString']);
+    expect(
+      layerProps.find(
+        (props) => props.id === 'reference-overlay-mixed-polygons-fill',
+      )?.filter,
+    ).toEqual(['in', '$type', 'Polygon']);
   });
 
-  it('does not render sources for hidden overlays', () => {
+  it('keeps the source mounted and hides all layers when an overlay is hidden', () => {
     renderCanvas([{ ...mixedOverlay, visible: false }]);
+
     expect(
-      screen.queryByTestId('mock-source-reference-overlay-mixed-points'),
-    ).not.toBeInTheDocument();
+      screen.getByTestId('mock-source-reference-overlay-mixed'),
+    ).toBeInTheDocument();
+    const overlayLayers = layerProps.filter((props) =>
+      String(props.id).startsWith('reference-overlay-mixed-'),
+    );
+    expect(overlayLayers).toHaveLength(4);
+    for (const layer of overlayLayers) {
+      expect(layer.layout).toEqual({ visibility: 'none' });
+    }
   });
 
   it('accepts GeoJSON files dropped on the map without changing normal pointer gestures', () => {
@@ -154,5 +189,26 @@ describe('MapAuthoringCanvas reference overlays', () => {
     });
 
     expect(onOverlayFilesDrop).toHaveBeenCalledWith([file]);
+  });
+
+  it('clears the drop affordance when a file drag ends without usable files', () => {
+    const { onOverlayFilesDrop } = renderCanvas([]);
+    const region = screen.getByRole('region', { name: 'Map authoring canvas' });
+
+    fireEvent.dragOver(region, {
+      dataTransfer: { types: ['Files'], files: [], dropEffect: 'none' },
+    });
+    expect(
+      screen.getByText('Drop GeoJSON files to add reference data'),
+    ).toBeInTheDocument();
+
+    fireEvent.drop(region, {
+      dataTransfer: { types: ['Files'], files: [] },
+    });
+
+    expect(
+      screen.queryByText('Drop GeoJSON files to add reference data'),
+    ).not.toBeInTheDocument();
+    expect(onOverlayFilesDrop).not.toHaveBeenCalled();
   });
 });

@@ -125,6 +125,21 @@ describe('GeoJSON reference overlays', () => {
     expect(text).not.toHaveBeenCalled();
   });
 
+  it('rejects clearly unsupported file types before reading or parsing them', async () => {
+    const text = vi.fn(async () => '{"type":"Point","coordinates":[0,0]}');
+    const file = {
+      name: 'reference.jpg',
+      size: 64,
+      type: 'image/jpeg',
+      text,
+    } as unknown as File;
+
+    await expect(readGeoJsonOverlayFile(file)).rejects.toMatchObject({
+      code: 'unsupported-file',
+    });
+    expect(text).not.toHaveBeenCalled();
+  });
+
   it('parses a valid file and reports invalid JSON as an invalid overlay', async () => {
     const validFile = {
       name: 'territory.geojson',

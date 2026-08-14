@@ -70,7 +70,9 @@ describe('GeoJsonOverlayControl', () => {
     expect(onRemove).toHaveBeenCalledWith('overlay-1');
   });
 
-  it('renders import errors as an alert', () => {
+  it('renders import errors as a dismissible alert', async () => {
+    const user = userEvent.setup();
+    const onDismissError = vi.fn();
     render(
       <GeoJsonOverlayControl
         overlays={[]}
@@ -78,11 +80,14 @@ describe('GeoJsonOverlayControl', () => {
         onToggle={vi.fn()}
         onRemove={vi.fn()}
         error="This file is not valid GeoJSON."
+        onDismissError={onDismissError}
       />,
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'This file is not valid GeoJSON.',
     );
+    await user.click(screen.getByRole('button', { name: 'Dismiss error' }));
+    expect(onDismissError).toHaveBeenCalledOnce();
   });
 });
