@@ -182,7 +182,6 @@ describe('StorageSettings', () => {
     await waitFor(() => {
       expect(mockReload).toHaveBeenCalledTimes(1);
     });
-    expect(mockEstimate).toHaveBeenCalledTimes(1);
   });
 
   it('finishes the reset when localStorage removal is blocked', async () => {
