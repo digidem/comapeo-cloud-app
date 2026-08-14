@@ -124,11 +124,81 @@ describe('MapScreen', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Base map')).toBeInTheDocument();
     expect(screen.getByText('Bounds')).toBeInTheDocument();
+    expect(screen.getByText('Reference data')).toBeInTheDocument();
     expect(screen.getByText('Zoom range')).toBeInTheDocument();
     expect(screen.getByText('Saved maps')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Draw bounds' }),
     ).toBeInTheDocument();
+  });
+
+  it('adds multiple reference overlays and supports visibility and removal', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const pointFile = new File(
+      ['{"type":"Point","coordinates":[-60,-3]}'],
+      'point.geojson',
+      { type: 'application/geo+json' },
+    );
+    const lineFile = new File(
+      ['{"type":"LineString","coordinates":[[-60,-3],[-59,-2]]}'],
+      'route.geojson',
+      { type: 'application/geo+json' },
+    );
+
+    await user.upload(input, [pointFile, lineFile]);
+
+    expect(await screen.findByText('point.geojson')).toBeInTheDocument();
+    expect(screen.getByText('route.geojson')).toBeInTheDocument();
+    expect(
+      screen.getByTestId(/mock-source-reference-overlay-.*-points/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId(/mock-source-reference-overlay-.*-lines/),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Hide point.geojson' }),
+    );
+    expect(
+      screen.queryByTestId(/mock-source-reference-overlay-.*-points/),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove route.geojson' }),
+    );
+    expect(screen.queryByText('route.geojson')).not.toBeInTheDocument();
+  });
+
+  it('rejects an invalid multi-file batch without adding partial overlay state', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const validFile = new File(
+      ['{"type":"Point","coordinates":[-60,-3]}'],
+      'valid.geojson',
+      { type: 'application/geo+json' },
+    );
+    const invalidFile = new File(
+      ['{"type":"Point","coordinates":["bad",0]}'],
+      'broken.geojson',
+      {
+        type: 'application/geo+json',
+      },
+    );
+
+    await user.upload(input, [validFile, invalidFile]);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'broken.geojson is not valid GeoJSON.',
+    );
+    expect(screen.queryByText('valid.geojson')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId(/mock-source-reference-overlay-.*-points/),
+    ).not.toBeInTheDocument();
   });
 
   it('moves compact map attribution to the bottom-left', async () => {

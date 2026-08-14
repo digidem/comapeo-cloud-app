@@ -2,7 +2,14 @@ import type { Feature, Polygon } from 'geojson';
 import type { MapMouseEvent, MapTouchEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { RefObject } from 'react';
 import { useIntl } from 'react-intl';
 import Map, {
@@ -14,6 +21,10 @@ import Map, {
 
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { crossesAntimeridian } from '@/lib/map/bbox-utils';
+import {
+  type GeoJsonOverlay,
+  splitGeoJsonByGeometryFamily,
+} from '@/lib/map/geojson-overlays';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 
 import { mapMessages } from './messages';
@@ -29,6 +40,10 @@ interface MapAuthoringCanvasProps {
   onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
   /** Bounds to fit after the map is ready. */
   fitBounds?: [number, number, number, number] | null;
+  /** Transient GeoJSON authoring references. */
+  overlays?: GeoJsonOverlay[];
+  /** Called when files are dropped directly onto the authoring map. */
+  onOverlayFilesDrop?: (files: File[]) => void | Promise<void>;
 }
 
 const INITIAL_VIEW_STATE = {
@@ -60,6 +75,30 @@ const DRAW_OUTLINE_PAINT = {
   'line-color': '#04145C',
   'line-width': 2,
   'line-dasharray': [4, 4] as number[],
+};
+
+const REFERENCE_POINT_PAINT = {
+  'circle-color': '#E45D2A',
+  'circle-radius': 5,
+  'circle-stroke-color': '#FFFFFF',
+  'circle-stroke-width': 1.5,
+};
+
+const REFERENCE_LINE_PAINT = {
+  'line-color': '#E45D2A',
+  'line-width': 3,
+  'line-opacity': 0.9,
+};
+
+const REFERENCE_FILL_PAINT = {
+  'fill-color': '#E45D2A',
+  'fill-opacity': 0.16,
+};
+
+const REFERENCE_OUTLINE_PAINT = {
+  'line-color': '#E45D2A',
+  'line-width': 2.5,
+  'line-opacity': 0.95,
 };
 
 function bboxToFeature([west, south, east, north]: [
@@ -120,6 +159,8 @@ export function MapAuthoringCanvas({
   onDrawCreate,
   onDrawModeChange,
   fitBounds,
+  overlays = [],
+  onOverlayFilesDrop,
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();
   const mapStyle = useMemo(() => basemapToMapStyle(basemap), [basemap]);
@@ -127,6 +168,17 @@ export function MapAuthoringCanvas({
     () => (bbox ? bboxToFeature(bbox) : null),
     [bbox],
   );
+  const visibleOverlayFamilies = useMemo(
+    () =>
+      overlays
+        .filter((overlay) => overlay.visible)
+        .map((overlay) => ({
+          overlay,
+          families: splitGeoJsonByGeometryFamily(overlay.data),
+        })),
+    [overlays],
+  );
+  const [isFileDragActive, setIsFileDragActive] = useState(false);
 
   // Drag‑to‑draw state
   const [dragStart, setDragStart] = useState<{
@@ -390,7 +442,35 @@ export function MapAuthoringCanvas({
       role="region"
       aria-label={intl.formatMessage(mapMessages.canvasAria)}
       data-testid="map-authoring-canvas"
-      className="h-full min-h-0 overflow-hidden"
+      className="relative h-full min-h-0 overflow-hidden"
+      onDragEnter={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+        event.preventDefault();
+        setIsFileDragActive(true);
+      }}
+      onDragOver={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        setIsFileDragActive(true);
+      }}
+      onDragLeave={(event) => {
+        const relatedTarget = event.relatedTarget;
+        if (
+          !(relatedTarget instanceof Node) ||
+          !event.currentTarget.contains(relatedTarget)
+        ) {
+          setIsFileDragActive(false);
+        }
+      }}
+      onDrop={(event) => {
+        const files = Array.from(event.dataTransfer.files ?? []);
+        if (files.length === 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setIsFileDragActive(false);
+        void onOverlayFilesDrop?.(files);
+      }}
     >
       <Map
         ref={mapRef}
@@ -416,6 +496,55 @@ export function MapAuthoringCanvas({
           </Source>
         )}
 
+        {visibleOverlayFamilies.map(({ overlay, families }) => (
+          <Fragment key={overlay.id}>
+            {families.points.features.length > 0 ? (
+              <Source
+                id={`reference-overlay-${overlay.id}-points`}
+                type="geojson"
+                data={families.points}
+              >
+                <Layer
+                  id={`reference-overlay-${overlay.id}-points-circle`}
+                  type="circle"
+                  paint={REFERENCE_POINT_PAINT}
+                />
+              </Source>
+            ) : null}
+            {families.lines.features.length > 0 ? (
+              <Source
+                id={`reference-overlay-${overlay.id}-lines`}
+                type="geojson"
+                data={families.lines}
+              >
+                <Layer
+                  id={`reference-overlay-${overlay.id}-lines-line`}
+                  type="line"
+                  paint={REFERENCE_LINE_PAINT}
+                />
+              </Source>
+            ) : null}
+            {families.polygons.features.length > 0 ? (
+              <Source
+                id={`reference-overlay-${overlay.id}-polygons`}
+                type="geojson"
+                data={families.polygons}
+              >
+                <Layer
+                  id={`reference-overlay-${overlay.id}-polygons-fill`}
+                  type="fill"
+                  paint={REFERENCE_FILL_PAINT}
+                />
+                <Layer
+                  id={`reference-overlay-${overlay.id}-polygons-outline`}
+                  type="line"
+                  paint={REFERENCE_OUTLINE_PAINT}
+                />
+              </Source>
+            ) : null}
+          </Fragment>
+        ))}
+
         {isDrawing && dragStart && dragEnd && (
           <Source id="draw-preview" type="geojson" data={previewFeature}>
             <Layer id="draw-preview-fill" type="fill" paint={DRAW_FILL_PAINT} />
@@ -427,6 +556,13 @@ export function MapAuthoringCanvas({
           </Source>
         )}
       </Map>
+      {isFileDragActive ? (
+        <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-card border-2 border-dashed border-primary bg-surface-card/90 px-6 text-center shadow-elevated">
+          <p className="text-sm font-semibold text-text">
+            {intl.formatMessage(mapMessages.referenceOverlaysDropHint)}
+          </p>
+        </div>
+      ) : null}
       {drawError && (
         <p
           role="alert"

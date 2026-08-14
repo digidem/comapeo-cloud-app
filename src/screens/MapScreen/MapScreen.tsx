@@ -25,6 +25,11 @@ import {
   finalizeBbox,
   spansAntimeridian,
 } from '@/lib/map/bbox-utils';
+import {
+  type GeoJsonOverlay,
+  GeoJsonOverlayError,
+  readGeoJsonOverlayFile,
+} from '@/lib/map/geojson-overlays';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { uuid } from '@/lib/uuid';
 import { useProjectStore } from '@/stores/project-store';
@@ -32,6 +37,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { BoundsEditor } from './BoundsEditor';
 import { DownloadPanel } from './DownloadPanel';
 import { DrawBoundsControl } from './DrawBoundsControl';
+import { GeoJsonOverlayControl } from './GeoJsonOverlayControl';
 import { ImportSmpButton } from './ImportSmpButton';
 import { MapAuthoringCanvas } from './MapAuthoringCanvas';
 import { SavedMapsList } from './SavedMapsList';
@@ -133,6 +139,13 @@ export function MapScreen() {
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showUndo, setShowUndo] = useState(false);
   const [frameError, setFrameError] = useState<string | null>(null);
+  const [referenceOverlays, setReferenceOverlays] = useState<GeoJsonOverlay[]>(
+    [],
+  );
+  const [referenceOverlayError, setReferenceOverlayError] = useState<
+    string | null
+  >(null);
+  const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
   // Track the computed project bbox for hasConfigChanges comparison
   const [projectBbox, setProjectBbox] = useState<
     [number, number, number, number] | null
@@ -267,6 +280,76 @@ export function MapScreen() {
   function handleUndoDraw() {
     if (previousBboxRef.current) setBbox(previousBboxRef.current);
     setShowUndo(false);
+  }
+
+  async function handleReferenceOverlayFiles(files: File[]) {
+    if (files.length === 0) return;
+    setReferenceOverlayLoading(true);
+    setReferenceOverlayError(null);
+
+    try {
+      const results = await Promise.all(
+        files.map(async (file) => {
+          try {
+            return {
+              ok: true as const,
+              file,
+              data: await readGeoJsonOverlayFile(file),
+            };
+          } catch (error) {
+            return { ok: false as const, file, error };
+          }
+        }),
+      );
+      const failure = results.find((result) => !result.ok);
+      if (failure && !failure.ok) {
+        const values = { name: failure.file.name };
+        if (failure.error instanceof GeoJsonOverlayError) {
+          let message = mapMessages.referenceOverlaysInvalid;
+          if (failure.error.code === 'too-large') {
+            message = mapMessages.referenceOverlaysTooLarge;
+          } else if (failure.error.code === 'unsupported') {
+            message = mapMessages.referenceOverlaysUnsupported;
+          }
+          setReferenceOverlayError(intl.formatMessage(message, values));
+        } else {
+          setReferenceOverlayError(
+            intl.formatMessage(mapMessages.referenceOverlaysReadError, values),
+          );
+        }
+        return;
+      }
+
+      const additions: GeoJsonOverlay[] = results.flatMap((result) =>
+        result.ok
+          ? [
+              {
+                id: uuid(),
+                name: result.file.name,
+                data: result.data,
+                visible: true,
+              },
+            ]
+          : [],
+      );
+      setReferenceOverlays((current) => [...current, ...additions]);
+    } finally {
+      setReferenceOverlayLoading(false);
+    }
+  }
+
+  function handleReferenceOverlayToggle(id: string) {
+    setReferenceOverlays((current) =>
+      current.map((overlay) =>
+        overlay.id === id ? { ...overlay, visible: !overlay.visible } : overlay,
+      ),
+    );
+  }
+
+  function handleReferenceOverlayRemove(id: string) {
+    setReferenceOverlays((current) =>
+      current.filter((overlay) => overlay.id !== id),
+    );
   }
 
   function handleConfirmFrame() {
@@ -421,6 +504,13 @@ export function MapScreen() {
           projectLocalId={selectedProjectId}
           mapRef={mapRef}
         />
+        <GeoJsonOverlayControl
+          overlays={referenceOverlays}
+          onFilesSelected={handleReferenceOverlayFiles}
+          onToggle={handleReferenceOverlayToggle}
+          onRemove={handleReferenceOverlayRemove}
+          loading={referenceOverlayLoading}
+        />
         <ZoomSelector value={zoomRange} onChange={setZoomRange} />
         <p className="text-xs text-text-muted">
           {intl.formatMessage(mapMessages.zoomDownloadNote)}
@@ -463,7 +553,18 @@ export function MapScreen() {
             onDrawCreate={handleDrawCreate}
             onDrawModeChange={handleDrawModeChange}
             fitBounds={autoFitBbox}
+            overlays={referenceOverlays}
+            onOverlayFilesDrop={handleReferenceOverlayFiles}
           />
+
+          {referenceOverlayError ? (
+            <p
+              role="alert"
+              className="absolute left-3 right-16 top-16 z-20 rounded-btn bg-error px-3 py-2 text-sm text-white shadow-card"
+            >
+              {referenceOverlayError}
+            </p>
+          ) : null}
 
           {drawMode !== 'draw_rectangle' && (
             <div className="absolute bottom-4 left-4 flex gap-2 lg:hidden">

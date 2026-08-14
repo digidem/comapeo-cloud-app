@@ -488,4 +488,73 @@ export const mapMessages = defineMessages({
     defaultMessage:
       '{n} tiles could not be downloaded. The package may be incomplete.',
   },
+  referenceOverlaysTitle: {
+    id: 'map.referenceOverlays.title',
+    defaultMessage: 'Reference data',
+  },
+  referenceOverlaysHelp: {
+    id: 'map.referenceOverlays.help',
+    defaultMessage:
+      'Add GeoJSON to align the download area. Reference data is not saved with the map.',
+  },
+  referenceOverlaysAdd: {
+    id: 'map.referenceOverlays.add',
+    defaultMessage: 'Add GeoJSON reference',
+  },
+  referenceOverlaysLoading: {
+    id: 'map.referenceOverlays.loading',
+    defaultMessage: 'Adding GeoJSON…',
+  },
+  referenceOverlaysSizeLimit: {
+    id: 'map.referenceOverlays.sizeLimit',
+    defaultMessage: 'Up to 5 MB per file',
+  },
+  referenceOverlaysList: {
+    id: 'map.referenceOverlays.list',
+    defaultMessage: 'GeoJSON reference files',
+  },
+  referenceOverlaysHide: {
+    id: 'map.referenceOverlays.hide',
+    defaultMessage: 'Hide {name}',
+  },
+  referenceOverlaysShow: {
+    id: 'map.referenceOverlays.show',
+    defaultMessage: 'Show {name}',
+  },
+  referenceOverlaysVisible: {
+    id: 'map.referenceOverlays.visible',
+    defaultMessage: 'Visible',
+  },
+  referenceOverlaysHidden: {
+    id: 'map.referenceOverlays.hidden',
+    defaultMessage: 'Hidden',
+  },
+  referenceOverlaysRemove: {
+    id: 'map.referenceOverlays.remove',
+    defaultMessage: 'Remove {name}',
+  },
+  referenceOverlaysRemoveAction: {
+    id: 'map.referenceOverlays.removeAction',
+    defaultMessage: 'Remove',
+  },
+  referenceOverlaysDropHint: {
+    id: 'map.referenceOverlays.dropHint',
+    defaultMessage: 'Drop GeoJSON files to add reference data',
+  },
+  referenceOverlaysInvalid: {
+    id: 'map.referenceOverlays.invalid',
+    defaultMessage: '{name} is not valid GeoJSON.',
+  },
+  referenceOverlaysTooLarge: {
+    id: 'map.referenceOverlays.tooLarge',
+    defaultMessage: '{name} is larger than 5 MB. Choose a smaller file.',
+  },
+  referenceOverlaysUnsupported: {
+    id: 'map.referenceOverlays.unsupported',
+    defaultMessage: '{name} has no supported geometry to display.',
+  },
+  referenceOverlaysReadError: {
+    id: 'map.referenceOverlays.readError',
+    defaultMessage: 'Could not read {name}.',
+  },
 });
