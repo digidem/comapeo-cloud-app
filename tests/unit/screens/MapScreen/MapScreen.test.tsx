@@ -1,5 +1,6 @@
 import {
   act,
+  fireEvent,
   render,
   screen,
   userEvent,
@@ -167,6 +168,61 @@ describe('MapScreen', () => {
       screen.getByRole('button', { name: 'Remove route.geojson' }),
     );
     expect(screen.queryByText('route.geojson')).not.toBeInTheDocument();
+  });
+
+  it('keeps import loading active until overlapping picker and drop imports both finish', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    let resolveFirst!: (value: string) => void;
+    let resolveSecond!: (value: string) => void;
+    const firstRead = new Promise<string>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondRead = new Promise<string>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const firstFile = new File([], 'first.geojson', {
+      type: 'application/geo+json',
+    });
+    const secondFile = new File([], 'second.geojson', {
+      type: 'application/geo+json',
+    });
+    Object.defineProperty(firstFile, 'text', {
+      value: vi.fn(() => firstRead),
+    });
+    Object.defineProperty(secondFile, 'text', {
+      value: vi.fn(() => secondRead),
+    });
+
+    await user.upload(
+      await screen.findByLabelText('Add GeoJSON reference'),
+      firstFile,
+    );
+    expect(await screen.findByText('Adding GeoJSON…')).toBeInTheDocument();
+
+    fireEvent.drop(
+      screen.getByRole('region', { name: 'Map authoring canvas' }),
+      {
+        dataTransfer: { types: ['Files'], files: [secondFile] },
+      },
+    );
+
+    await act(async () => {
+      resolveFirst('{"type":"Point","coordinates":[-60,-3]}');
+      await firstRead;
+    });
+    expect(await screen.findByText('first.geojson')).toBeInTheDocument();
+    expect(screen.getByText('Adding GeoJSON…')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSecond('{"type":"Point","coordinates":[-59,-2]}');
+      await secondRead;
+    });
+    expect(await screen.findByText('second.geojson')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('Adding GeoJSON…')).not.toBeInTheDocument();
+    });
   });
 
   it('rejects an invalid multi-file batch without adding partial overlay state', async () => {

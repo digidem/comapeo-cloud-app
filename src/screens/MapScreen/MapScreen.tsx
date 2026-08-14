@@ -146,13 +146,23 @@ export function MapScreen() {
     string | null
   >(null);
   const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
+  const referenceOverlayImportsRef = useRef(new Set<symbol>());
+  const referenceOverlayGenerationRef = useRef(0);
+  const latestReferenceOverlayImportRef = useRef<symbol | null>(null);
   const [referenceOverlayProjectId, setReferenceOverlayProjectId] =
     useState(selectedProjectId);
   if (referenceOverlayProjectId !== selectedProjectId) {
     setReferenceOverlayProjectId(selectedProjectId);
     setReferenceOverlays([]);
     setReferenceOverlayError(null);
+    setReferenceOverlayLoading(false);
   }
+
+  useEffect(() => {
+    referenceOverlayGenerationRef.current += 1;
+    referenceOverlayImportsRef.current.clear();
+    latestReferenceOverlayImportRef.current = null;
+  }, [selectedProjectId]);
 
   // Track the computed project bbox for hasConfigChanges comparison
   const [projectBbox, setProjectBbox] = useState<
@@ -293,6 +303,10 @@ export function MapScreen() {
   async function handleReferenceOverlayFiles(files: File[]) {
     if (files.length === 0) return;
     const importProjectId = selectedProjectId;
+    const importGeneration = referenceOverlayGenerationRef.current;
+    const importToken = Symbol('reference-overlay-import');
+    referenceOverlayImportsRef.current.add(importToken);
+    latestReferenceOverlayImportRef.current = importToken;
     setReferenceOverlayLoading(true);
     setReferenceOverlayError(null);
 
@@ -310,12 +324,18 @@ export function MapScreen() {
           }
         }),
       );
-      if (useProjectStore.getState().selectedProjectId !== importProjectId) {
+      if (
+        useProjectStore.getState().selectedProjectId !== importProjectId ||
+        referenceOverlayGenerationRef.current !== importGeneration
+      ) {
         return;
       }
 
       const failure = results.find((result) => !result.ok);
       if (failure && !failure.ok) {
+        if (latestReferenceOverlayImportRef.current !== importToken) {
+          return;
+        }
         const values = { name: failure.file.name };
         if (failure.error instanceof GeoJsonOverlayError) {
           let message = mapMessages.referenceOverlaysInvalid;
@@ -349,7 +369,13 @@ export function MapScreen() {
       );
       setReferenceOverlays((current) => [...current, ...additions]);
     } finally {
-      setReferenceOverlayLoading(false);
+      if (referenceOverlayGenerationRef.current === importGeneration) {
+        referenceOverlayImportsRef.current.delete(importToken);
+        if (referenceOverlayImportsRef.current.size === 0) {
+          latestReferenceOverlayImportRef.current = null;
+          setReferenceOverlayLoading(false);
+        }
+      }
     }
   }
 

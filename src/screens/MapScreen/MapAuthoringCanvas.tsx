@@ -118,6 +118,8 @@ const EMPTY_FEATURE: Feature<Polygon> = {
   geometry: { type: 'Polygon', coordinates: [[]] },
 };
 
+const EMPTY_REFERENCE_OVERLAYS: GeoJsonOverlay[] = [];
+
 export function MapAuthoringCanvas({
   basemap,
   bbox,
@@ -126,7 +128,7 @@ export function MapAuthoringCanvas({
   onDrawCreate,
   onDrawModeChange,
   fitBounds,
-  overlays = [],
+  overlays = EMPTY_REFERENCE_OVERLAYS,
   onOverlayFilesDrop,
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();

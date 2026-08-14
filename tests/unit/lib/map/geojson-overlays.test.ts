@@ -111,6 +111,15 @@ describe('GeoJSON reference overlays', () => {
     ).toThrow(/valid GeoJSON/i);
   });
 
+  it('rejects excessively nested GeometryCollections with a controlled validation error', () => {
+    let geometry: unknown = { type: 'Point', coordinates: [-60, -3] };
+    for (let depth = 0; depth < 80; depth += 1) {
+      geometry = { type: 'GeometryCollection', geometries: [geometry] };
+    }
+
+    expect(() => normalizeGeoJson(geometry)).toThrow(/valid GeoJSON/i);
+  });
+
   it('rejects an oversized file before reading or parsing it', async () => {
     const text = vi.fn(async () => '{"type":"Point","coordinates":[0,0]}');
     const file = {

@@ -42,6 +42,8 @@ export interface GeoJsonGeometryFamilies {
 
 type JsonRecord = Record<string, unknown>;
 
+const MAX_GEOJSON_GEOMETRY_DEPTH = 64;
+
 function invalidGeoJson(): never {
   throw new GeoJsonOverlayError('invalid', 'This file is not valid GeoJSON.');
 }
@@ -89,52 +91,77 @@ function isPolygonCoordinates(value: unknown): value is Position[][] {
 }
 
 function validateGeometry(value: unknown): Geometry {
-  if (!isRecord(value) || typeof value.type !== 'string') invalidGeoJson();
+  const stack: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
 
-  switch (value.type) {
-    case 'Point':
-      if (!isPosition(value.coordinates)) invalidGeoJson();
-      return value as unknown as Geometry;
-    case 'MultiPoint':
-      if (
-        !Array.isArray(value.coordinates) ||
-        value.coordinates.length === 0 ||
-        !value.coordinates.every((position) => isPosition(position))
-      ) {
-        invalidGeoJson();
-      }
-      return value as unknown as Geometry;
-    case 'LineString':
-      if (!isLineCoordinates(value.coordinates)) invalidGeoJson();
-      return value as unknown as Geometry;
-    case 'MultiLineString':
-      if (
-        !Array.isArray(value.coordinates) ||
-        value.coordinates.length === 0 ||
-        !value.coordinates.every((line) => isLineCoordinates(line))
-      ) {
-        invalidGeoJson();
-      }
-      return value as unknown as Geometry;
-    case 'Polygon':
-      if (!isPolygonCoordinates(value.coordinates)) invalidGeoJson();
-      return value as unknown as Geometry;
-    case 'MultiPolygon':
-      if (
-        !Array.isArray(value.coordinates) ||
-        value.coordinates.length === 0 ||
-        !value.coordinates.every((polygon) => isPolygonCoordinates(polygon))
-      ) {
-        invalidGeoJson();
-      }
-      return value as unknown as Geometry;
-    case 'GeometryCollection':
-      if (!Array.isArray(value.geometries)) invalidGeoJson();
-      value.geometries.forEach((geometry) => validateGeometry(geometry));
-      return value as unknown as Geometry;
-    default:
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || current.depth > MAX_GEOJSON_GEOMETRY_DEPTH) {
       invalidGeoJson();
+    }
+
+    const candidate = current.value;
+    if (!isRecord(candidate) || typeof candidate.type !== 'string') {
+      invalidGeoJson();
+    }
+
+    switch (candidate.type) {
+      case 'Point':
+        if (!isPosition(candidate.coordinates)) invalidGeoJson();
+        break;
+      case 'MultiPoint':
+        if (
+          !Array.isArray(candidate.coordinates) ||
+          candidate.coordinates.length === 0 ||
+          !candidate.coordinates.every((position) => isPosition(position))
+        ) {
+          invalidGeoJson();
+        }
+        break;
+      case 'LineString':
+        if (!isLineCoordinates(candidate.coordinates)) invalidGeoJson();
+        break;
+      case 'MultiLineString':
+        if (
+          !Array.isArray(candidate.coordinates) ||
+          candidate.coordinates.length === 0 ||
+          !candidate.coordinates.every((line) => isLineCoordinates(line))
+        ) {
+          invalidGeoJson();
+        }
+        break;
+      case 'Polygon':
+        if (!isPolygonCoordinates(candidate.coordinates)) invalidGeoJson();
+        break;
+      case 'MultiPolygon':
+        if (
+          !Array.isArray(candidate.coordinates) ||
+          candidate.coordinates.length === 0 ||
+          !candidate.coordinates.every((polygon) =>
+            isPolygonCoordinates(polygon),
+          )
+        ) {
+          invalidGeoJson();
+        }
+        break;
+      case 'GeometryCollection':
+        if (!Array.isArray(candidate.geometries)) invalidGeoJson();
+        for (
+          let index = candidate.geometries.length - 1;
+          index >= 0;
+          index -= 1
+        ) {
+          stack.push({
+            value: candidate.geometries[index],
+            depth: current.depth + 1,
+          });
+        }
+        break;
+      default:
+        invalidGeoJson();
+    }
   }
+
+  return value as Geometry;
 }
 
 function normalizeGeometry(
@@ -142,20 +169,30 @@ function normalizeGeometry(
   properties: GeoJsonProperties,
   id?: string | number,
 ): Array<Feature<Geometry, GeoJsonProperties>> {
-  if (geometry.type === 'GeometryCollection') {
-    return geometry.geometries.flatMap((member) =>
-      normalizeGeometry(member, properties, id),
-    );
-  }
+  const features: Array<Feature<Geometry, GeoJsonProperties>> = [];
+  const stack: Geometry[] = [geometry];
 
-  return [
-    {
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) continue;
+
+    if (current.type === 'GeometryCollection') {
+      for (let index = current.geometries.length - 1; index >= 0; index -= 1) {
+        const member = current.geometries[index];
+        if (member) stack.push(member);
+      }
+      continue;
+    }
+
+    features.push({
       type: 'Feature',
       properties,
-      geometry,
+      geometry: current,
       ...(id === undefined ? {} : { id }),
-    },
-  ];
+    });
+  }
+
+  return features;
 }
 
 function normalizeFeature(
