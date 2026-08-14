@@ -105,15 +105,18 @@ describe('exportLocalStorageData', () => {
     });
 
     try {
-      expect(() => exportLocalStorageData()).toThrow(
-        'Browser storage is unavailable; backup was not created.',
-      );
+      let caught: unknown;
       try {
         exportLocalStorageData();
       } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).cause).toBe(storageError);
+        caught = error;
       }
+
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toBe(
+        'Browser storage is unavailable; backup was not created.',
+      );
+      expect((caught as Error).cause).toBe(storageError);
     } finally {
       keySpy.mockRestore();
     }

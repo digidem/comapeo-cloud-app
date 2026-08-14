@@ -8,11 +8,8 @@ import { defineMessages, useIntl } from 'react-intl';
 import { StorageSettings } from '@/components/shared/StorageSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Modal } from '@/components/ui/modal';
-import { useToast } from '@/components/ui/toast';
 import { InviteApiError, createEncryptedInvite } from '@/lib/api-client';
 import {
-  clearAllStorage,
   exportLocalStorageData,
   importLocalStorageData,
 } from '@/lib/local-storage-utils';
@@ -117,46 +114,6 @@ const _messages = defineMessages({
     id: 'settings.backup.readError',
     defaultMessage: 'Failed to read backup file.',
   },
-
-  // Clear LocalStorage section
-  clearTitle: {
-    id: 'settings.clear.title',
-    defaultMessage: 'Clear Local Data',
-  },
-  clearDescription: {
-    id: 'settings.clear.description',
-    defaultMessage:
-      'Remove all local settings, preferences, and cached data. This cannot be undone.',
-  },
-  clearButton: {
-    id: 'settings.clear.button',
-    defaultMessage: 'Clear All Data',
-  },
-  clearConfirmTitle: {
-    id: 'settings.clear.confirmTitle',
-    defaultMessage: 'Clear All Data?',
-  },
-  clearConfirmDescription: {
-    id: 'settings.clear.confirmDescription',
-    defaultMessage:
-      'This will permanently remove all local settings, preferences, and cached data, then reload the app. This action cannot be undone.',
-  },
-  clearConfirmButton: {
-    id: 'settings.clear.confirmButton',
-    defaultMessage: 'Yes, Clear Everything',
-  },
-  clearErrorTitle: {
-    id: 'settings.clear.errorTitle',
-    defaultMessage: 'Failed to clear data',
-  },
-  clearErrorDescription: {
-    id: 'settings.clear.errorDescription',
-    defaultMessage: 'Some data could not be cleared. The app will reload.',
-  },
-  clearCancelButton: {
-    id: 'settings.clear.cancelButton',
-    defaultMessage: 'Cancel',
-  },
 });
 
 const generateInviteSchema = v.object({
@@ -179,7 +136,6 @@ const LOCALE_LABELS: Record<string, string> = {
 export function SettingsScreen() {
   const intl = useIntl();
   const locale = useLocaleStore((s) => s.locale);
-  const { addToast } = useToast();
 
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -194,7 +150,6 @@ export function SettingsScreen() {
     'idle' | 'loading' | 'success' | 'error'
   >('idle');
   const [importError, setImportError] = useState<string | null>(null);
-  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timeoutIdsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -325,19 +280,6 @@ export function SettingsScreen() {
     },
     [intl, scheduleTimeout],
   );
-
-  const handleClearAll = useCallback(async () => {
-    try {
-      await clearAllStorage();
-    } catch (err) {
-      console.error('Failed to clear local data', err);
-      addToast({
-        title: intl.formatMessage(_messages.clearErrorTitle),
-        description: intl.formatMessage(_messages.clearErrorDescription),
-        variant: 'error',
-      });
-    }
-  }, [addToast, intl]);
 
   return (
     <section className="p-3 sm:p-4 lg:p-6">
@@ -491,51 +433,6 @@ export function SettingsScreen() {
           })}
         </p>
       )}
-
-      {/* Clear Local Data */}
-      <h2 className="text-lg font-semibold text-text mt-6">
-        {intl.formatMessage(_messages.clearTitle)}
-      </h2>
-      <p className="text-sm text-text-muted mt-2">
-        {intl.formatMessage(_messages.clearDescription)}
-      </p>
-      <div className="mt-4 max-w-md">
-        <Button
-          variant="danger"
-          onClick={() => setIsClearConfirmOpen(true)}
-          className="w-full sm:w-auto"
-        >
-          {intl.formatMessage(_messages.clearButton)}
-        </Button>
-      </div>
-
-      <Modal
-        open={isClearConfirmOpen}
-        onOpenChange={(open) => {
-          if (!open) setIsClearConfirmOpen(false);
-        }}
-        title={intl.formatMessage(_messages.clearConfirmTitle)}
-        description={intl.formatMessage(_messages.clearConfirmDescription)}
-      >
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-4">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setIsClearConfirmOpen(false)}
-          >
-            {intl.formatMessage(_messages.clearCancelButton)}
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            size="sm"
-            onClick={handleClearAll}
-          >
-            {intl.formatMessage(_messages.clearConfirmButton)}
-          </Button>
-        </div>
-      </Modal>
     </section>
   );
 }
