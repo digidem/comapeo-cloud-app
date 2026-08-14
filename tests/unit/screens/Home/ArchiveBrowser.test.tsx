@@ -79,6 +79,34 @@ describe('ArchiveBrowser', () => {
     expect(onCreateNew).toHaveBeenCalledOnce();
   });
 
+  it('keeps the persistent action distinct from the empty-state CTA', () => {
+    useAuthStore.setState({ servers: [] });
+    mockUseArchiveStatus.mockReturnValue({
+      servers: [],
+      anyError: false,
+      anySyncing: false,
+    });
+
+    render(
+      <ArchiveBrowser
+        selectedProjectId={null}
+        onSelect={vi.fn()}
+        onCreateNew={vi.fn()}
+        onAddServer={vi.fn()}
+        onSelectServer={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'Create Project' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: 'Create your first project from project list',
+      }),
+    ).toBeInTheDocument();
+  });
+
   it('renders remote archive overflow button with correct aria-label', async () => {
     const user = userEvent.setup();
     const onSelectServer = vi.fn();
