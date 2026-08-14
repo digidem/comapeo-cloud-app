@@ -1433,6 +1433,42 @@
   "map.nameDialog.title": {
     "defaultMessage": "Save map"
   },
+  "map.overlay.addButton": {
+    "defaultMessage": "Add GeoJSON overlay"
+  },
+  "map.overlay.description": {
+    "defaultMessage": "Load GeoJSON to align download bounds with territory boundaries, routes, or points."
+  },
+  "map.overlay.dragDrop": {
+    "defaultMessage": "Drop a .geojson or .json file here"
+  },
+  "map.overlay.error.invalidGeoJson": {
+    "defaultMessage": "File is not valid GeoJSON. Use FeatureCollection, Feature, or a Geometry."
+  },
+  "map.overlay.error.invalidJson": {
+    "defaultMessage": "File is not valid JSON."
+  },
+  "map.overlay.error.tooLarge": {
+    "defaultMessage": "File is too large (max 10 MB). Simplify it and try again."
+  },
+  "map.overlay.fileLabel": {
+    "defaultMessage": "GeoJSON overlay file"
+  },
+  "map.overlay.hide": {
+    "defaultMessage": "Hide overlay"
+  },
+  "map.overlay.remove": {
+    "defaultMessage": "Remove overlay"
+  },
+  "map.overlay.show": {
+    "defaultMessage": "Show overlay"
+  },
+  "map.overlay.title": {
+    "defaultMessage": "Reference overlays"
+  },
+  "map.overlay.toggleVisibility": {
+    "defaultMessage": "Toggle visibility"
+  },
   "map.preview.action": {
     "defaultMessage": "Preview"
   },

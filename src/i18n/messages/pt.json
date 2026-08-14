@@ -599,5 +599,17 @@
   "theme.ariaSetSystem": "Usar tema do sistema",
   "theme.dark": "Escuro",
   "theme.light": "Claro",
-  "theme.system": "Sistema"
+  "theme.system": "Sistema",
+  "map.overlay.title": "Camadas de referência",
+  "map.overlay.description": "Carregue GeoJSON para alinhar os limites de download com fronteiras territoriais, rotas ou pontos.",
+  "map.overlay.addButton": "Adicionar camada GeoJSON",
+  "map.overlay.fileLabel": "Arquivo de camada GeoJSON",
+  "map.overlay.dragDrop": "Solte um arquivo .geojson ou .json aqui",
+  "map.overlay.toggleVisibility": "Alternar visibilidade",
+  "map.overlay.remove": "Remover camada",
+  "map.overlay.hide": "Ocultar camada",
+  "map.overlay.show": "Mostrar camada",
+  "map.overlay.error.tooLarge": "O arquivo é muito grande (máx. 10 MB). Simplifique e tente novamente.",
+  "map.overlay.error.invalidJson": "O arquivo não é JSON válido.",
+  "map.overlay.error.invalidGeoJson": "O arquivo não é GeoJSON válido. Use FeatureCollection, Feature ou uma geometria."
 }

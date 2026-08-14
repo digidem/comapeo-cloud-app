@@ -16,6 +16,8 @@ import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { crossesAntimeridian } from '@/lib/map/bbox-utils';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 
+import { OverlayLayers } from './OverlayLayers';
+import type { GeoJsonOverlay } from './OverlayLayers';
 import { mapMessages } from './messages';
 
 interface MapAuthoringCanvasProps {
@@ -29,6 +31,8 @@ interface MapAuthoringCanvasProps {
   onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
   /** Bounds to fit after the map is ready. */
   fitBounds?: [number, number, number, number] | null;
+  /** Transient GeoJSON reference overlays rendered on the canvas. */
+  overlays?: GeoJsonOverlay[];
 }
 
 const INITIAL_VIEW_STATE = {
@@ -120,6 +124,7 @@ export function MapAuthoringCanvas({
   onDrawCreate,
   onDrawModeChange,
   fitBounds,
+  overlays,
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();
   const mapStyle = useMemo(() => basemapToMapStyle(basemap), [basemap]);
@@ -426,6 +431,10 @@ export function MapAuthoringCanvas({
             />
           </Source>
         )}
+
+        {overlays?.map((overlay) => (
+          <OverlayLayers key={overlay.id} overlay={overlay} />
+        ))}
       </Map>
       {drawError && (
         <p

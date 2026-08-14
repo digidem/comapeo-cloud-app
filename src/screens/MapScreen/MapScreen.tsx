@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useIntl } from 'react-intl';
 import type { MapRef } from 'react-map-gl/maplibre';
@@ -32,8 +32,10 @@ import { useProjectStore } from '@/stores/project-store';
 import { BoundsEditor } from './BoundsEditor';
 import { DownloadPanel } from './DownloadPanel';
 import { DrawBoundsControl } from './DrawBoundsControl';
+import { GeoJsonOverlayPanel } from './GeoJsonOverlayPanel';
 import { ImportSmpButton } from './ImportSmpButton';
 import { MapAuthoringCanvas } from './MapAuthoringCanvas';
+import type { GeoJsonOverlay } from './OverlayLayers';
 import { SavedMapsList } from './SavedMapsList';
 import { StylePicker } from './StylePicker';
 import { ZoomSelector } from './ZoomSelector';
@@ -147,6 +149,22 @@ export function MapScreen() {
   useEffect(() => {
     drawModeRef.current = drawMode;
   }, [drawMode]);
+
+  // Transient GeoJSON reference overlays — authoring aids only, never persisted.
+  // Cleared automatically when MapScreen unmounts because this state lives here.
+  const [overlays, setOverlays] = useState<GeoJsonOverlay[]>([]);
+
+  const handleAddOverlay = useCallback((overlay: GeoJsonOverlay) => {
+    setOverlays((prev) => [...prev, overlay]);
+  }, []);
+  const handleToggleOverlayVisibility = useCallback((id: string) => {
+    setOverlays((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, visible: !o.visible } : o)),
+    );
+  }, []);
+  const handleRemoveOverlay = useCallback((id: string) => {
+    setOverlays((prev) => prev.filter((o) => o.id !== id));
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -425,6 +443,12 @@ export function MapScreen() {
         <p className="text-xs text-text-muted">
           {intl.formatMessage(mapMessages.zoomDownloadNote)}
         </p>
+        <GeoJsonOverlayPanel
+          overlays={overlays}
+          onAdd={handleAddOverlay}
+          onToggleVisibility={handleToggleOverlayVisibility}
+          onRemove={handleRemoveOverlay}
+        />
         <SavedMapsList projectLocalId={selectedProjectId} />
         <ImportSmpButton projectLocalId={selectedProjectId} />
         {(() => {
@@ -463,6 +487,7 @@ export function MapScreen() {
             onDrawCreate={handleDrawCreate}
             onDrawModeChange={handleDrawModeChange}
             fitBounds={autoFitBbox}
+            overlays={overlays}
           />
 
           {drawMode !== 'draw_rectangle' && (

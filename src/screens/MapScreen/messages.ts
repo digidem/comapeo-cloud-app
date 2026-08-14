@@ -488,4 +488,55 @@ export const mapMessages = defineMessages({
     defaultMessage:
       '{n} tiles could not be downloaded. The package may be incomplete.',
   },
+  // ── GeoJSON reference overlays ─────────────────────────────────────────
+  overlayTitle: {
+    id: 'map.overlay.title',
+    defaultMessage: 'Reference overlays',
+  },
+  overlayDescription: {
+    id: 'map.overlay.description',
+    defaultMessage:
+      'Load GeoJSON to align download bounds with territory boundaries, routes, or points.',
+  },
+  overlayAddButton: {
+    id: 'map.overlay.addButton',
+    defaultMessage: 'Add GeoJSON overlay',
+  },
+  overlayFileLabel: {
+    id: 'map.overlay.fileLabel',
+    defaultMessage: 'GeoJSON overlay file',
+  },
+  overlayDragDrop: {
+    id: 'map.overlay.dragDrop',
+    defaultMessage: 'Drop a .geojson or .json file here',
+  },
+  overlayToggleVisibility: {
+    id: 'map.overlay.toggleVisibility',
+    defaultMessage: 'Toggle visibility',
+  },
+  overlayRemove: {
+    id: 'map.overlay.remove',
+    defaultMessage: 'Remove overlay',
+  },
+  overlayHide: {
+    id: 'map.overlay.hide',
+    defaultMessage: 'Hide overlay',
+  },
+  overlayShow: {
+    id: 'map.overlay.show',
+    defaultMessage: 'Show overlay',
+  },
+  overlayErrorTooLarge: {
+    id: 'map.overlay.error.tooLarge',
+    defaultMessage: 'File is too large (max 10 MB). Simplify it and try again.',
+  },
+  overlayErrorInvalidJson: {
+    id: 'map.overlay.error.invalidJson',
+    defaultMessage: 'File is not valid JSON.',
+  },
+  overlayErrorInvalidGeoJson: {
+    id: 'map.overlay.error.invalidGeoJson',
+    defaultMessage:
+      'File is not valid GeoJSON. Use FeatureCollection, Feature, or a Geometry.',
+  },
 });
