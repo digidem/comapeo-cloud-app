@@ -102,10 +102,10 @@ export async function getStorageStats(): Promise<StorageStats> {
 // ---------------------------------------------------------------------------
 
 /**
- * Clears all app-owned cached data from IndexedDB and localStorage, including
- * remote server records and persisted UI preferences.
- * Does not clear in-memory stores or reload the page; callers completing a full
- * app reset must handle those steps immediately afterward.
+ * Clears all tables in the main app IndexedDB database plus CoMapeo-owned
+ * localStorage keys, including remote server records and persisted UI preferences.
+ * This helper does not clear the separate categories database, in-memory stores,
+ * or reload the page; use clearAllStorage() for the complete app reset flow.
  */
 export async function clearAllData(): Promise<void> {
   const db = getDb();

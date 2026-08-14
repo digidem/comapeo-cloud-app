@@ -13,11 +13,17 @@ import { useAuthStore } from '@/stores/auth-store';
 export function exportLocalStorageData(): string {
   const data: Record<string, string> = {};
 
-  for (const key of getComapeoKeys()) {
-    const value = localStorage.getItem(key);
-    if (value !== null) {
-      data[key] = value;
+  // Backup export is intentionally fail-closed: if browser storage is blocked,
+  // surface an error instead of downloading a misleading empty/partial backup.
+  try {
+    for (const key of getComapeoKeys()) {
+      const value = localStorage.getItem(key);
+      if (value !== null) {
+        data[key] = value;
+      }
     }
+  } catch {
+    throw new Error('Browser storage is unavailable; backup was not created.');
   }
 
   return JSON.stringify({

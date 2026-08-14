@@ -5,12 +5,8 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  type StorageStats,
-  clearAllData,
-  getStorageStats,
-} from '@/lib/storage';
-import { useAuthStore } from '@/stores/auth-store';
+import { clearAllStorage } from '@/lib/local-storage-utils';
+import { type StorageStats, getStorageStats } from '@/lib/storage';
 
 const messages = defineMessages({
   storageTitle: {
@@ -178,15 +174,9 @@ export function StorageSettings() {
     setClearing(true);
     setClearError(null);
     try {
-      await clearAllData();
-      // Clear in-memory auth store so it's consistent with the now-empty IndexedDB.
-      // Without this, stale server records in memory would block re-adding the
-      // same server (duplicate check) even though IndexedDB is empty.
-      useAuthStore.getState().clearAll();
-      setIsConfirmOpen(false);
-      // Reload immediately so persisted Zustand stores cannot re-write stale
-      // in-memory preferences after their storage keys have been removed.
-      window.location.reload();
+      // Use the same full reset path as SettingsScreen so all app databases,
+      // persisted preferences, in-memory auth state, and reload semantics stay aligned.
+      await clearAllStorage();
     } catch (err) {
       setClearError(
         err instanceof Error ? err.message : 'Failed to clear data',

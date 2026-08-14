@@ -118,6 +118,21 @@ describe('exportLocalStorageData', () => {
 
     expect(parsed.data).toEqual({});
   });
+
+  it('fails closed with a stable error when browser storage is blocked', () => {
+    localStorage.setItem('comapeo-locale', '"en"');
+    const keySpy = vi.spyOn(Storage.prototype, 'key').mockImplementation(() => {
+      throw new DOMException('Storage access denied', 'SecurityError');
+    });
+
+    try {
+      expect(() => exportLocalStorageData()).toThrow(
+        'Browser storage is unavailable; backup was not created.',
+      );
+    } finally {
+      keySpy.mockRestore();
+    }
+  });
 });
 
 describe('importLocalStorageData', () => {
