@@ -304,6 +304,32 @@ describe('clearAllData', () => {
     expect(await db.iconCache.count()).toBe(0);
     expect(await db.syncMetadata.count()).toBe(0);
   });
+
+  it('still completes IndexedDB cleanup when localStorage removal fails', async () => {
+    const db = getDb();
+
+    await db.remoteServers.add({
+      id: 'server-1',
+      baseUrl: 'https://archive.example.com',
+      status: 'connected',
+      lastSyncedAt: '2026-01-01T00:00:00Z',
+    });
+    localStorage.setItem('comapeo-test-preference', 'map');
+
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(() => {
+        throw new DOMException('Storage access denied', 'SecurityError');
+      });
+
+    try {
+      await expect(clearAllData()).resolves.toBeUndefined();
+      expect(await db.remoteServers.count()).toBe(0);
+    } finally {
+      removeItemSpy.mockRestore();
+      localStorage.removeItem('comapeo-test-preference');
+    }
+  });
 });
 
 describe('clearServerData', () => {
