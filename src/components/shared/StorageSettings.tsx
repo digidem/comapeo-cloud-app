@@ -78,6 +78,10 @@ const messages = defineMessages({
     id: 'settings.storage.clearCancelButton',
     defaultMessage: 'Cancel',
   },
+  clearError: {
+    id: 'settings.storage.clearError',
+    defaultMessage: 'Some data could not be cleared. The app will reload.',
+  },
 });
 
 function formatBytes(bytes: number): string {
@@ -177,13 +181,11 @@ export function StorageSettings() {
       // Use the same full reset path as SettingsScreen so all app databases,
       // persisted preferences, in-memory auth state, and reload semantics stay aligned.
       await clearAllStorage();
-    } catch (err) {
-      setClearError(
-        err instanceof Error ? err.message : 'Failed to clear data',
-      );
+    } catch {
+      setClearError(intl.formatMessage(messages.clearError));
       setClearing(false);
     }
-  }, [clearing]);
+  }, [clearing, intl]);
 
   if (loading) {
     return (
@@ -286,6 +288,11 @@ export function StorageSettings() {
         >
           {intl.formatMessage(messages.clearButton)}
         </Button>
+        {clearError !== null && (
+          <p role="alert" className="text-sm text-red-600 mt-2">
+            {clearError}
+          </p>
+        )}
       </div>
 
       <ConfirmDialog
@@ -301,11 +308,7 @@ export function StorageSettings() {
         variant="destructive"
         loading={clearing}
         onConfirm={handleClearAll}
-      >
-        {clearError !== null && (
-          <p className="text-sm text-red-600">{clearError}</p>
-        )}
-      </ConfirmDialog>
+      />
     </div>
   );
 }

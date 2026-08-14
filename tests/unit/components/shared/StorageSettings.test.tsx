@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StorageSettings } from '@/components/shared/StorageSettings';
 import { getDb, resetDb } from '@/lib/db';
+import * as localStorageUtils from '@/lib/local-storage-utils';
 
 // Mock browser APIs used by storage settings.
 const mockEstimate = vi.fn();
@@ -210,6 +211,38 @@ describe('StorageSettings', () => {
       // lower-level tests; this integration test only owns reaching the reload path.
     } finally {
       removeItemSpy.mockRestore();
+    }
+  });
+
+  it('shows reset failures after the confirmation dialog closes', async () => {
+    const clearSpy = vi
+      .spyOn(localStorageUtils, 'clearAllStorage')
+      .mockRejectedValueOnce(new Error('DB exploded'));
+    const user = userEvent.setup();
+
+    try {
+      render(<StorageSettings />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Total Usage')).toBeInTheDocument();
+      });
+
+      await user.click(
+        screen.getByRole('button', { name: 'Clear All Cached Data' }),
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Some data could not be cleared. The app will reload.',
+      );
+      expect(
+        screen.queryByText('Clear All Cached Data?'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('DB exploded')).not.toBeInTheDocument();
+    } finally {
+      clearSpy.mockRestore();
     }
   });
 

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { removeComapeoKeys } from '@/lib/comapeo-local-storage';
+import {
+  isComapeoStorageKey,
+  removeComapeoKeys,
+} from '@/lib/comapeo-local-storage';
 import {
   clearAllStorage,
   exportLocalStorageData,
@@ -42,6 +45,48 @@ describe('removeComapeoKeys', () => {
     ).toBeNull();
     expect(localStorage.getItem('view-mode-preference')).toBeNull();
     expect(localStorage.getItem('unrelated-key')).toBe('keep');
+  });
+
+  it('continues removing remaining keys in best-effort mode', () => {
+    localStorage.setItem('comapeo-first', 'keep-on-error');
+    localStorage.setItem('comapeo-second', 'remove-me');
+    const originalRemoveItem = Storage.prototype.removeItem;
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(function (this: Storage, key: string) {
+        if (key === 'comapeo-first') {
+          throw new DOMException('Storage access denied', 'SecurityError');
+        }
+        return originalRemoveItem.call(this, key);
+      });
+
+    try {
+      expect(() => removeComapeoKeys({ bestEffort: true })).not.toThrow();
+      expect(localStorage.getItem('comapeo-first')).toBe('keep-on-error');
+      expect(localStorage.getItem('comapeo-second')).toBeNull();
+    } finally {
+      removeItemSpy.mockRestore();
+    }
+  });
+});
+
+describe('storage key ownership', () => {
+  it('recognizes every current persisted app-owned key', () => {
+    const persistedKeys = [
+      'comapeo-locale',
+      'view-mode-preference',
+      'comapeo-alert-view-mode-preference',
+      'comapeo-archive',
+      'comapeo-project',
+      'comapeo-map',
+      'comapeo-theme-mode',
+      'comapeo:activeServerId',
+      'comapeo:downloadIncludeGlobalOverview',
+    ];
+
+    for (const key of persistedKeys) {
+      expect(isComapeoStorageKey(key), key).toBe(true);
+    }
   });
 });
 
@@ -260,6 +305,29 @@ describe('importLocalStorageData', () => {
     expect(result).toEqual({ success: true });
     expect(localStorage.getItem('comapeo-locale')).toBe('"en"');
     expect(localStorage.getItem('malicious-key')).toBeNull();
+  });
+
+  it('returns a controlled error when browser storage is blocked', () => {
+    localStorage.setItem('comapeo-locale', '"pt"');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: { 'comapeo-locale': '"en"' },
+    });
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(() => {
+        throw new DOMException('Storage access denied', 'SecurityError');
+      });
+
+    try {
+      expect(importLocalStorageData(backup)).toEqual({
+        success: false,
+        error: 'Browser storage is unavailable; backup was not imported.',
+      });
+    } finally {
+      removeItemSpy.mockRestore();
+    }
   });
 
   it('clears existing comapeo keys before restoring backup', () => {

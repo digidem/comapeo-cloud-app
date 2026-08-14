@@ -583,6 +583,7 @@
   "settings.storage.clearConfirmButton": "Sí, borrar todo",
   "settings.storage.clearConfirmDescription": "Esto eliminará todos los datos almacenados en caché localmente, incluidos proyectos, observaciones, alertas y adjuntos. Los servidores de archivo conectados también se eliminarán y deberán volver a agregarse. Las preferencias de la aplicación, como el idioma, el tema y las vistas de mapa/lista, se restablecerán y la aplicación se recargará. Esta acción no se puede deshacer.",
   "settings.storage.clearConfirmTitle": "¿Borrar todos los datos en caché?",
+  "settings.storage.clearError": "Algunos datos no se pudieron borrar. La app se recargará.",
   "settings.storage.description": "Administra los datos en caché almacenados en tu navegador.",
   "settings.storage.observations": "Observaciones",
   "settings.storage.presets": "Preajustes",

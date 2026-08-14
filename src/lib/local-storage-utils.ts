@@ -51,13 +51,20 @@ export function importLocalStorageData(jsonString: string): {
     return { success: false, error: 'Invalid backup file format' };
   }
 
-  // Clear existing CoMapeo-owned keys first for atomic restore.
-  removeComapeoKeys();
+  try {
+    // Clear existing CoMapeo-owned keys first, then restore only app-owned keys.
+    removeComapeoKeys();
 
-  for (const [key, value] of Object.entries(result.output.data)) {
-    if (isComapeoStorageKey(key)) {
-      localStorage.setItem(key, value);
+    for (const [key, value] of Object.entries(result.output.data)) {
+      if (isComapeoStorageKey(key)) {
+        localStorage.setItem(key, value);
+      }
     }
+  } catch {
+    return {
+      success: false,
+      error: 'Browser storage is unavailable; backup was not imported.',
+    };
   }
 
   return { success: true };
@@ -76,9 +83,9 @@ export async function clearAllStorage(): Promise<void> {
     // Remove persisted browser preferences last so live stores have no await window
     // in which to re-write stale state before the reload.
     try {
-      removeComapeoKeys();
+      removeComapeoKeys({ bestEffort: true });
     } catch {
-      // Best effort: inaccessible localStorage cannot be read by the app either.
+      // Best effort: inaccessible localStorage cannot be enumerated by the app either.
     }
     window.location.reload();
   } catch (error) {

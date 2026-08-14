@@ -1850,6 +1850,9 @@
   "settings.storage.clearConfirmTitle": {
     "defaultMessage": "Clear All Cached Data?"
   },
+  "settings.storage.clearError": {
+    "defaultMessage": "Some data could not be cleared. The app will reload."
+  },
   "settings.storage.description": {
     "defaultMessage": "Manage cached data stored in your browser."
   },

@@ -24,8 +24,14 @@ export function getComapeoKeys(): string[] {
   return keys;
 }
 
-export function removeComapeoKeys(): void {
+export function removeComapeoKeys(options?: { bestEffort?: boolean }): void {
+  const bestEffort = options?.bestEffort ?? false;
+
   for (const key of getComapeoKeys()) {
-    localStorage.removeItem(key);
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      if (!bestEffort) throw error;
+    }
   }
 }
