@@ -10,8 +10,6 @@ import { resetDb } from '@/lib/db';
 import { backupSchema } from '@/lib/schemas/backup-schema';
 import { useAuthStore } from '@/stores/auth-store';
 
-export { removeComapeoKeys } from '@/lib/comapeo-local-storage';
-
 export function exportLocalStorageData(): string {
   const data: Record<string, string> = {};
 
@@ -58,14 +56,16 @@ export function importLocalStorageData(jsonString: string): {
 }
 
 export async function clearAllStorage(): Promise<void> {
-  // Storage access can be blocked independently of IndexedDB and in-memory state.
+  await resetDb();
+  await resetCategoriesDb();
+  useAuthStore.getState().clearAll();
+
+  // Remove persisted browser preferences last so live stores have no await window
+  // in which to re-write stale state before the reload.
   try {
     removeComapeoKeys();
   } catch {
     // Best effort: continue the reset and reload even if localStorage is inaccessible.
   }
-  await resetDb();
-  await resetCategoriesDb();
-  useAuthStore.getState().clearAll();
   window.location.reload();
 }

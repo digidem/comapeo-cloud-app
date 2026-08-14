@@ -234,6 +234,7 @@ describe('StorageSettings', () => {
     expect(
       screen.getByRole('button', { name: 'Cancelar' }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/aplicativo será recarregado/)).toBeInTheDocument();
   });
 
   it('shows zero counts when storage is empty', async () => {

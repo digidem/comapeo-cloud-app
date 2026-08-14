@@ -126,7 +126,7 @@ const _messages = defineMessages({
   clearConfirmDescription: {
     id: 'settings.clear.confirmDescription',
     defaultMessage:
-      'This will permanently remove all local settings, preferences, and cached data. This action cannot be undone.',
+      'This will permanently remove all local settings, preferences, and cached data, then reload the app. This action cannot be undone.',
   },
   clearConfirmButton: {
     id: 'settings.clear.confirmButton',

@@ -102,9 +102,10 @@ export async function getStorageStats(): Promise<StorageStats> {
 // ---------------------------------------------------------------------------
 
 /**
- * Clears ALL data from IndexedDB tables, including remote server records.
- * Does not reload the page.
- * Useful for resetting the app to a clean state (e.g. before re-adding a server).
+ * Clears all app-owned cached data from IndexedDB and localStorage, including
+ * remote server records and persisted UI preferences.
+ * Does not clear in-memory stores or reload the page; callers completing a full
+ * app reset must handle those steps immediately afterward.
  */
 export async function clearAllData(): Promise<void> {
   const db = getDb();

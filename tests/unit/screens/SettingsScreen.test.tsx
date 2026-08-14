@@ -462,6 +462,7 @@ describe('SettingsScreen', () => {
       expect(
         screen.getByText(/permanently remove all local settings/),
       ).toBeInTheDocument();
+      expect(screen.getByText(/then reload the app/)).toBeInTheDocument();
       expect(
         screen.getByText(/This action cannot be undone/),
       ).toBeInTheDocument();

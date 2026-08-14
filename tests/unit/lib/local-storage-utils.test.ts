@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { removeComapeoKeys } from '@/lib/comapeo-local-storage';
 import {
   clearAllStorage,
   exportLocalStorageData,
   importLocalStorageData,
-  removeComapeoKeys,
 } from '@/lib/local-storage-utils';
 
 vi.mock('@/lib/db', () => ({
@@ -79,7 +79,7 @@ describe('exportLocalStorageData', () => {
     expect(parsed.data).not.toHaveProperty('unrelated');
   });
 
-  it('includes colon-namespaced and legacy app-owned keys', () => {
+  it('includes colon-namespaced and unprefixed app-owned keys', () => {
     localStorage.setItem('comapeo:activeServerId', 'server-1');
     localStorage.setItem('comapeo:downloadIncludeGlobalOverview', 'true');
     localStorage.setItem('view-mode-preference', 'grid');
@@ -285,6 +285,33 @@ describe('clearAllStorage', () => {
     expect(localStorage.getItem('comapeo:activeServerId')).toBeNull();
     expect(localStorage.getItem('view-mode-preference')).toBeNull();
     expect(localStorage.getItem('other-key')).toBe('value');
+  });
+
+  it('removes browser preferences only after IndexedDB resets complete', async () => {
+    const { resetDb } = await import('@/lib/db');
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    vi.mocked(resetDb).mockClear();
+    vi.mocked(resetCategoriesDb).mockClear();
+    localStorage.setItem('comapeo-locale', '"en"');
+    const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem');
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+    });
+
+    try {
+      await clearAllStorage();
+
+      const resetDbOrder = vi.mocked(resetDb).mock.invocationCallOrder[0]!;
+      const resetCategoriesDbOrder =
+        vi.mocked(resetCategoriesDb).mock.invocationCallOrder[0]!;
+      const removeItemOrder = removeItemSpy.mock.invocationCallOrder[0]!;
+
+      expect(resetDbOrder).toBeLessThan(removeItemOrder);
+      expect(resetCategoriesDbOrder).toBeLessThan(removeItemOrder);
+    } finally {
+      removeItemSpy.mockRestore();
+    }
   });
 
   it('continues the reset when localStorage removal is blocked', async () => {

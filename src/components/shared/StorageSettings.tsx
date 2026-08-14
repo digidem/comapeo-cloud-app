@@ -72,7 +72,7 @@ const messages = defineMessages({
   clearConfirmDescription: {
     id: 'settings.storage.clearConfirmDescription',
     defaultMessage:
-      'This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. App preferences such as language, theme, and map/list views will be reset. This cannot be undone.',
+      'This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. App preferences such as language, theme, and map/list views will be reset, and the app will reload. This cannot be undone.',
   },
   clearConfirmButton: {
     id: 'settings.storage.clearConfirmButton',
