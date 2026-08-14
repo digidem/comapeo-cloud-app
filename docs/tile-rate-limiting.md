@@ -144,6 +144,8 @@ CLOUDFLARE_API_TOKEN=... npm run ops:tile-rate-limit -- status --zone comapeo.cl
 
 The status output includes `managedRuleCount` and `duplicateManagedRules`. Normal operation has exactly one managed rule. If multiple rules have the stable managed reference, `apply` fails closed instead of updating an arbitrary match. Resolve the duplicate configuration before applying a new threshold or mode.
 
+For repository operators who do not have a local Cloudflare token, `.github/workflows/tile-rate-limit-ops.yml` exposes the same `status`, `observe`, `enforce`, and `disable` operations through GitHub Actions using the repository Cloudflare secret. Enforcement still requires an explicit false-positive-validation confirmation. The production baseline currently used by that workflow is `ops/tile-rate-limit/production-baseline-2026-08-14.json`; replace it only after collecting and reviewing a newer representative small + large production measurement.
+
 Operational checks after enforcement:
 
 - Cloudflare Security Events / rate-limit analytics for rule matches and mitigations;

@@ -1,0 +1,85 @@
+name: Tile rate limit operations
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Production tile rate-limit operation
+        required: true
+        type: choice
+        options:
+          - status
+          - observe
+          - enforce
+          - disable
+      confirm_false_positive_validation:
+        description: Confirm observe-mode false-positive validation is complete (required for enforce)
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tile-rate-limit-production
+  cancel-in-progress: false
+
+jobs:
+  operate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Refuse unconfirmed enforcement
+        if: ${{ inputs.operation == 'enforce' && !inputs.confirm_false_positive_validation }}
+        run: |
+          echo 'Enforcement requires confirm_false_positive_validation=true.' >&2
+          exit 1
+
+      - name: Status
+        if: ${{ inputs.operation == 'status' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npm run ops:tile-rate-limit -- status --zone comapeo.cloud
+
+      - name: Apply observe mode
+        if: ${{ inputs.operation == 'observe' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npm run ops:tile-rate-limit -- apply
+          --report ops/tile-rate-limit/production-baseline-2026-08-14.json
+          --mode observe
+          --zone comapeo.cloud
+
+      - name: Apply enforcement
+        if: ${{ inputs.operation == 'enforce' && inputs.confirm_false_positive_validation }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npm run ops:tile-rate-limit -- apply
+          --report ops/tile-rate-limit/production-baseline-2026-08-14.json
+          --mode enforce
+          --zone comapeo.cloud
+          --confirm-false-positive-validation
+
+      - name: Disable managed rule
+        if: ${{ inputs.operation == 'disable' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npm run ops:tile-rate-limit -- disable --zone comapeo.cloud
