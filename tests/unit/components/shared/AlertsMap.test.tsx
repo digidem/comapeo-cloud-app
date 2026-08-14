@@ -15,17 +15,20 @@ vi.mock('@/components/shared/MapContainer', () => ({
     onLoad,
     onClick,
     mapRef,
+    cursor,
   }: {
     children: ReactNode;
     onLoad?: () => void;
     onClick: (event: {
       features: Array<{ properties: { alertId: string } }>;
+      lngLat: { lng: number; lat: number };
     }) => void;
     mapRef: RefObject<{ fitBounds: typeof mockFitBounds } | null>;
+    cursor?: string;
   }) => {
     mapRef.current = { fitBounds: mockFitBounds };
     return (
-      <div data-testid="map-container">
+      <div data-testid="map-container" data-cursor={cursor}>
         {children}
         <button type="button" data-testid="load-map" onClick={onLoad}>
           load
@@ -34,10 +37,22 @@ vi.mock('@/components/shared/MapContainer', () => ({
           type="button"
           data-testid="click-geometry"
           onClick={() =>
-            onClick({ features: [{ properties: { alertId: 'alert-42' } }] })
+            onClick({
+              features: [{ properties: { alertId: 'alert-42' } }],
+              lngLat: { lng: -55, lat: -8 },
+            })
           }
         >
           geometry
+        </button>
+        <button
+          type="button"
+          data-testid="click-map-point"
+          onClick={() =>
+            onClick({ features: [], lngLat: { lng: -51.25, lat: -3.75 } })
+          }
+        >
+          map point
         </button>
       </div>
     );
@@ -48,16 +63,35 @@ vi.mock('react-map-gl/maplibre', () => ({
   Source: ({
     children,
     data,
+    id,
   }: {
     children: ReactNode;
     data: FeatureCollection;
+    id: string;
   }) => (
-    <div data-testid="alert-source" data-features={data.features.length}>
+    <div data-testid={`${id}-source`} data-features={data.features.length}>
       {children}
     </div>
   ),
   Layer: ({ id, paint }: { id: string; paint?: Record<string, unknown> }) => (
     <div data-testid={id} data-paint={JSON.stringify(paint ?? {})} />
+  ),
+  Marker: ({
+    children,
+    longitude,
+    latitude,
+  }: {
+    children: ReactNode;
+    longitude: number;
+    latitude: number;
+  }) => (
+    <div
+      data-testid="map-marker"
+      data-longitude={longitude}
+      data-latitude={latitude}
+    >
+      {children}
+    </div>
   ),
 }));
 
@@ -171,7 +205,7 @@ describe('AlertsMap', () => {
       />,
     );
 
-    expect(screen.getByTestId('alert-source')).toHaveAttribute(
+    expect(screen.getByTestId('alerts-source')).toHaveAttribute(
       'data-features',
       '6',
     );
@@ -257,6 +291,64 @@ describe('AlertsMap', () => {
     });
   });
 
+  it('selects a map point without navigating while point creation is active', () => {
+    const onMapPointSelect = vi.fn();
+    render(
+      <AlertsMap
+        alerts={[makeAlert({ type: 'Point', coordinates: [-55, -8] })]}
+        interactionMode="create-point"
+        onMapPointSelect={onMapPointSelect}
+      />,
+    );
+
+    screen.getByTestId('click-map-point').click();
+
+    expect(onMapPointSelect).toHaveBeenCalledWith([-51.25, -3.75]);
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('map-container')).toHaveAttribute(
+      'data-cursor',
+      'crosshair',
+    );
+  });
+
+  it('treats alert geometry clicks as point placement while creation is active', () => {
+    const onMapPointSelect = vi.fn();
+    render(
+      <AlertsMap
+        alerts={[makeAlert({ type: 'Point', coordinates: [-55, -8] })]}
+        interactionMode="create-point"
+        onMapPointSelect={onMapPointSelect}
+      />,
+    );
+
+    screen.getByTestId('click-geometry').click();
+
+    expect(onMapPointSelect).toHaveBeenCalledWith([-55, -8]);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('renders the inline draft point on the existing alerts map', () => {
+    render(
+      <AlertsMap
+        alerts={[makeAlert({ type: 'Point', coordinates: [-55, -8] })]}
+        draftPoint={[-51.25, -3.75]}
+      />,
+    );
+
+    expect(screen.getByTestId('map-marker')).toHaveAttribute(
+      'data-longitude',
+      '-51.25',
+    );
+    expect(screen.getByTestId('map-marker')).toHaveAttribute(
+      'data-latitude',
+      '-3.75',
+    );
+    expect(screen.getByTestId('alert-draft-point')).toHaveClass(
+      'bg-error',
+      'border-surface-card',
+    );
+  });
+
   it('shows the no-location state while invalid alerts remain absent from the map', () => {
     render(
       <AlertsMap
@@ -267,6 +359,6 @@ describe('AlertsMap', () => {
     expect(
       screen.getByText('No alerts with location to show on the map'),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId('alert-source')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('alerts-source')).not.toBeInTheDocument();
   });
 });

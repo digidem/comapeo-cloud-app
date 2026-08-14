@@ -65,15 +65,70 @@ vi.mock('@/components/shared/AlertsMap', () => ({
   AlertsMap: ({
     alerts,
     showEmptyState,
+    interactionMode,
+    onMapPointSelect,
+    draftPoint,
   }: {
     alerts: Alert[];
     showEmptyState: boolean;
+    interactionMode?: string;
+    onMapPointSelect?: (point: [number, number]) => void;
+    draftPoint?: [number, number];
   }) => (
     <div
       data-testid="alerts-map"
       data-alert-count={alerts.length}
       data-show-empty-state={String(showEmptyState)}
-    />
+      data-interaction-mode={interactionMode}
+      data-draft-point={draftPoint?.join(',')}
+    >
+      <button type="button" onClick={() => onMapPointSelect?.([-51.25, -3.75])}>
+        Select inline map point
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock('@/components/shared/AlertForm', () => ({
+  AlertForm: ({
+    geometryPickerProps,
+    onCancel,
+    onSuccess,
+    onGeometryChange,
+  }: {
+    geometryPickerProps?: {
+      showMap?: boolean;
+      allowedTypes?: readonly string[];
+      externalPoint?: [number, number];
+    };
+    onCancel: () => void;
+    onSuccess?: () => void;
+    onGeometryChange?: (geometry: {
+      type: 'Point';
+      coordinates: [number, number];
+    }) => void;
+  }) => (
+    <div
+      data-testid="inline-alert-form"
+      data-show-map={String(geometryPickerProps?.showMap)}
+      data-allowed-types={geometryPickerProps?.allowedTypes?.join(',')}
+      data-external-point={geometryPickerProps?.externalPoint?.join(',')}
+    >
+      <button type="button" onClick={onCancel}>
+        Mock cancel
+      </button>
+      <button type="button" onClick={onSuccess}>
+        Mock success
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onGeometryChange?.({ type: 'Point', coordinates: [-51.25, -3.75] })
+        }
+      >
+        Mock draft geometry
+      </button>
+    </div>
   ),
 }));
 
@@ -154,7 +209,7 @@ describe('AlertsScreen', () => {
       expect(screen.getByText('No alerts yet')).toBeInTheDocument();
     });
 
-    it('defaults to map view and preserves the Add Alert link', () => {
+    it('defaults to map view with inline Add Alert creation', () => {
       render(<AlertsScreen />);
 
       expect(screen.getByTestId('alerts-map')).toHaveAttribute(
@@ -164,9 +219,142 @@ describe('AlertsScreen', () => {
       expect(
         screen.getByRole('button', { name: 'Switch to grid view' }),
       ).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Add Alert' })).toHaveAttribute(
-        'href',
-        '/alerts/new',
+      expect(
+        screen.getByRole('button', { name: 'Add Alert' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('link', { name: 'Add Alert' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('opens the canonical alert form in point-only inline mode', async () => {
+      const user = userEvent.setup();
+      render(<AlertsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Add Alert' }));
+
+      expect(
+        screen.getByRole('dialog', { name: 'Create Alert' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Close create alert' }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('inline-alert-form')).toHaveAttribute(
+        'data-show-map',
+        'false',
+      );
+      expect(screen.getByTestId('inline-alert-form')).toHaveAttribute(
+        'data-allowed-types',
+        'Point',
+      );
+      expect(screen.getByTestId('alerts-map')).toHaveAttribute(
+        'data-interaction-mode',
+        'create-point',
+      );
+    });
+
+    it('Escape exits inline creation and restores map browsing', async () => {
+      const user = userEvent.setup();
+      render(<AlertsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Add Alert' }));
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByTestId('inline-alert-form')).not.toBeInTheDocument();
+      expect(screen.getByTestId('alerts-map')).toHaveAttribute(
+        'data-interaction-mode',
+        'browse',
+      );
+    });
+
+    it('lets mobile users hide the sheet to select a map point and restores it afterward', async () => {
+      const user = userEvent.setup();
+      render(<AlertsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Add Alert' }));
+      const sheet = screen.getByTestId('inline-alert-sheet');
+      expect(sheet).not.toHaveClass('hidden');
+
+      await user.click(screen.getByRole('button', { name: 'Select on map' }));
+      expect(sheet).toHaveClass('hidden');
+      expect(
+        screen.getByText('Tap the map to place the alert point'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Back to form' }),
+      ).toBeInTheDocument();
+
+      await user.click(
+        screen.getByRole('button', { name: 'Select inline map point' }),
+      );
+
+      expect(sheet).not.toHaveClass('hidden');
+      expect(
+        screen.getByRole('button', { name: 'Change location on map' }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('inline-alert-form')).toHaveAttribute(
+        'data-external-point',
+        '-51.25,-3.75',
+      );
+    });
+
+    it('feeds map point selection into the shared geometry picker and draft map point', async () => {
+      const user = userEvent.setup();
+      render(<AlertsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Add Alert' }));
+      await user.click(
+        screen.getByRole('button', { name: 'Select inline map point' }),
+      );
+
+      expect(screen.getByTestId('inline-alert-form')).toHaveAttribute(
+        'data-external-point',
+        '-51.25,-3.75',
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'Mock draft geometry' }),
+      );
+      expect(screen.getByTestId('alerts-map')).toHaveAttribute(
+        'data-draft-point',
+        '-51.25,-3.75',
+      );
+    });
+
+    it('cancel exits creation mode and restores normal map interaction', async () => {
+      const user = userEvent.setup();
+      render(<AlertsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Add Alert' }));
+      await user.click(
+        screen.getByRole('button', { name: 'Select inline map point' }),
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'Mock draft geometry' }),
+      );
+      await user.click(screen.getByRole('button', { name: 'Mock cancel' }));
+
+      expect(screen.queryByTestId('inline-alert-form')).not.toBeInTheDocument();
+      expect(screen.getByTestId('alerts-map')).toHaveAttribute(
+        'data-interaction-mode',
+        'browse',
+      );
+      expect(screen.getByTestId('alerts-map')).not.toHaveAttribute(
+        'data-draft-point',
+      );
+    });
+
+    it('successful creation stays on the Alerts map and exits creation mode', async () => {
+      const user = userEvent.setup();
+      render(<AlertsScreen />);
+
+      await user.click(screen.getByRole('button', { name: 'Add Alert' }));
+      await user.click(screen.getByRole('button', { name: 'Mock success' }));
+
+      expect(screen.queryByTestId('inline-alert-form')).not.toBeInTheDocument();
+      expect(screen.getByTestId('alerts-map')).toBeInTheDocument();
+      expect(screen.getByTestId('alerts-map')).toHaveAttribute(
+        'data-interaction-mode',
+        'browse',
       );
     });
 
@@ -211,9 +399,14 @@ describe('AlertsScreen', () => {
       expect(screen.getByText('deforestation')).toBeInTheDocument();
     });
 
-    it('renders the Add Alert link', () => {
+    it('keeps /alerts/new as the grid-view Add Alert path', () => {
+      useAlertViewModeStore.setState({ viewMode: 'grid' });
       render(<AlertsScreen />);
-      expect(screen.getByText('Add Alert')).toBeInTheDocument();
+
+      expect(screen.getByRole('link', { name: 'Add Alert' })).toHaveAttribute(
+        'href',
+        '/alerts/new',
+      );
     });
 
     it('renders Alerts title', () => {

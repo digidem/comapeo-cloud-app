@@ -68,8 +68,17 @@
   "alerts.create.alertType": {
     "defaultMessage": "Alert Type"
   },
+  "alerts.create.backToForm": {
+    "defaultMessage": "Back to form"
+  },
   "alerts.create.cancel": {
     "defaultMessage": "Cancel"
+  },
+  "alerts.create.changeOnMap": {
+    "defaultMessage": "Change location on map"
+  },
+  "alerts.create.close": {
+    "defaultMessage": "Close create alert"
   },
   "alerts.create.detectionDateEnd": {
     "defaultMessage": "Detection Date End"
@@ -200,11 +209,17 @@
   "alerts.create.requiredField": {
     "defaultMessage": "This field is required."
   },
+  "alerts.create.selectOnMap": {
+    "defaultMessage": "Select on map"
+  },
   "alerts.create.sourceId": {
     "defaultMessage": "Source ID"
   },
   "alerts.create.submit": {
     "defaultMessage": "Create"
+  },
+  "alerts.create.tapMapToPlace": {
+    "defaultMessage": "Tap the map to place the alert point"
   },
   "alerts.create.title": {
     "defaultMessage": "Create Alert"
