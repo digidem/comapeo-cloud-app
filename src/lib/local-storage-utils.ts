@@ -18,7 +18,7 @@ function getComapeoKeys(): string[] {
   return keys;
 }
 
-function removeComapeoKeys(): void {
+export function removeComapeoKeys(): void {
   for (const key of getComapeoKeys()) {
     localStorage.removeItem(key);
   }

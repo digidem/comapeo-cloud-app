@@ -1,5 +1,6 @@
 import { isZeroZeroCoord } from '@/lib/coords';
 import { getDb } from '@/lib/db';
+import { removeComapeoKeys } from '@/lib/local-storage-utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -120,6 +121,9 @@ export async function clearAllData(): Promise<void> {
     await db.remoteServers.clear();
     await db.iconCache.clear();
   });
+
+  // Also clear comapeo-* localStorage keys (view-mode preferences, etc.)
+  removeComapeoKeys();
 }
 
 // ---------------------------------------------------------------------------
