@@ -860,9 +860,6 @@
   "home.archives": {
     "defaultMessage": "Archives"
   },
-  "home.archives.empty.cta": {
-    "defaultMessage": "Create Project"
-  },
   "home.archives.empty.desc": {
     "defaultMessage": "Add a remote archive server or create your first project to get started."
   },

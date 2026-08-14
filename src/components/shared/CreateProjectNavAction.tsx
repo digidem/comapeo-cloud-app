@@ -18,7 +18,7 @@ function CreateProjectNavAction({ onClick }: CreateProjectNavActionProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-btn px-3 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-surface hover:text-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="flex min-h-11 w-full items-center gap-2 rounded-btn px-3 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-surface hover:text-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <svg
         width="16"

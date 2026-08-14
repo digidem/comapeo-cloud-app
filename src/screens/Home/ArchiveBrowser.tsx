@@ -29,7 +29,7 @@ const messages = defineMessages({
       'Add a remote archive server or create your first project to get started.',
   },
   emptyCta: {
-    id: 'home.archives.empty.cta',
+    id: 'common.createProject',
     defaultMessage: 'Create Project',
   },
   addAria: {
@@ -204,7 +204,7 @@ function ArchiveBrowser({
       ) : (
         /* Accordion archive sections */
         <div className="flex flex-col gap-2">
-          <CreateProjectNavAction onClick={onCreateNew} />
+          {!isLoading && <CreateProjectNavAction onClick={onCreateNew} />}
           {archives.map((archive) => {
             const status = archive.url
               ? statusMap.get(normalizeUrl(archive.url))
