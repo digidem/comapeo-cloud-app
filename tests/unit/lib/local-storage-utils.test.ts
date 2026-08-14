@@ -29,6 +29,7 @@ describe('removeComapeoKeys', () => {
   it('removes all app-owned storage keys and preserves unrelated keys', () => {
     localStorage.setItem('comapeo-locale', 'en');
     localStorage.setItem('comapeo:activeServerId', 'server-1');
+    localStorage.setItem('comapeo:downloadIncludeGlobalOverview', 'true');
     localStorage.setItem('view-mode-preference', 'grid');
     localStorage.setItem('unrelated-key', 'keep');
 
@@ -36,6 +37,9 @@ describe('removeComapeoKeys', () => {
 
     expect(localStorage.getItem('comapeo-locale')).toBeNull();
     expect(localStorage.getItem('comapeo:activeServerId')).toBeNull();
+    expect(
+      localStorage.getItem('comapeo:downloadIncludeGlobalOverview'),
+    ).toBeNull();
     expect(localStorage.getItem('view-mode-preference')).toBeNull();
     expect(localStorage.getItem('unrelated-key')).toBe('keep');
   });
@@ -75,7 +79,22 @@ describe('exportLocalStorageData', () => {
     expect(parsed.data).not.toHaveProperty('unrelated');
   });
 
-  it('includes all known comapeo-* keys when present', () => {
+  it('includes colon-namespaced and legacy app-owned keys', () => {
+    localStorage.setItem('comapeo:activeServerId', 'server-1');
+    localStorage.setItem('comapeo:downloadIncludeGlobalOverview', 'true');
+    localStorage.setItem('view-mode-preference', 'grid');
+
+    const result = exportLocalStorageData();
+    const parsed = JSON.parse(result);
+
+    expect(parsed.data).toMatchObject({
+      'comapeo:activeServerId': 'server-1',
+      'comapeo:downloadIncludeGlobalOverview': 'true',
+      'view-mode-preference': 'grid',
+    });
+  });
+
+  it('includes all known app-owned storage keys when present', () => {
     localStorage.setItem('comapeo-locale', '"en"');
     localStorage.setItem('comapeo-project', '{"id":"abc"}');
     localStorage.setItem('comapeo-archive', '{"enabled":true}');
@@ -91,7 +110,7 @@ describe('exportLocalStorageData', () => {
     expect(parsed.data['comapeo-theme']).toBe('"dark"');
   });
 
-  it('returns empty data object when no comapeo-* keys exist', () => {
+  it('returns empty data object when no app-owned keys exist', () => {
     localStorage.setItem('other-key', 'value');
 
     const result = exportLocalStorageData();
@@ -113,6 +132,9 @@ describe('importLocalStorageData', () => {
       data: {
         'comapeo-locale': '"en"',
         'comapeo-theme': '"dark"',
+        'comapeo:activeServerId': 'server-1',
+        'comapeo:downloadIncludeGlobalOverview': 'true',
+        'view-mode-preference': 'grid',
       },
     });
 
@@ -121,6 +143,11 @@ describe('importLocalStorageData', () => {
     expect(result).toEqual({ success: true });
     expect(localStorage.getItem('comapeo-locale')).toBe('"en"');
     expect(localStorage.getItem('comapeo-theme')).toBe('"dark"');
+    expect(localStorage.getItem('comapeo:activeServerId')).toBe('server-1');
+    expect(localStorage.getItem('comapeo:downloadIncludeGlobalOverview')).toBe(
+      'true',
+    );
+    expect(localStorage.getItem('view-mode-preference')).toBe('grid');
   });
 
   it('rejects invalid JSON with error message', () => {
@@ -193,7 +220,7 @@ describe('importLocalStorageData', () => {
     });
   });
 
-  it('only writes comapeo-prefixed keys from backup to localStorage', () => {
+  it('only restores app-owned keys from backup', () => {
     const backup = JSON.stringify({
       version: 1,
       exportedAt: '2025-01-01T00:00:00.000Z',
@@ -258,6 +285,36 @@ describe('clearAllStorage', () => {
     expect(localStorage.getItem('comapeo:activeServerId')).toBeNull();
     expect(localStorage.getItem('view-mode-preference')).toBeNull();
     expect(localStorage.getItem('other-key')).toBe('value');
+  });
+
+  it('continues the reset when localStorage removal is blocked', async () => {
+    const { resetDb } = await import('@/lib/db');
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    const { useAuthStore } = await import('@/stores/auth-store');
+    const mockClearAll = vi.fn();
+    vi.mocked(useAuthStore.getState).mockReturnValue({
+      clearAll: mockClearAll,
+    } as unknown as ReturnType<typeof useAuthStore.getState>);
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(() => {
+        throw new DOMException('Storage access denied', 'SecurityError');
+      });
+
+    try {
+      await expect(clearAllStorage()).resolves.toBeUndefined();
+      expect(resetDb).toHaveBeenCalled();
+      expect(resetCategoriesDb).toHaveBeenCalled();
+      expect(mockClearAll).toHaveBeenCalled();
+      expect(mockReload).toHaveBeenCalled();
+    } finally {
+      removeItemSpy.mockRestore();
+    }
   });
 
   it('calls resetDb() to clear IndexedDB', async () => {

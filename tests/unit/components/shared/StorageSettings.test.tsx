@@ -1,8 +1,6 @@
 import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { QueryClient } from '@tanstack/react-query';
-
 import { StorageSettings } from '@/components/shared/StorageSettings';
 import { getDb, resetDb } from '@/lib/db';
 import { useAuthStore } from '@/stores/auth-store';
@@ -28,6 +26,7 @@ beforeEach(async () => {
     value: { reload: mockReload },
     writable: true,
   });
+  useAuthStore.setState({ tier: 'local', activeServerId: null });
 
   await resetDb();
 });
@@ -164,32 +163,6 @@ describe('StorageSettings', () => {
     });
   });
 
-  it('invalidates query cache after cached data is cleared', async () => {
-    const invalidateQueries = vi
-      .spyOn(QueryClient.prototype, 'invalidateQueries')
-      .mockResolvedValue(undefined);
-    const user = userEvent.setup();
-
-    render(<StorageSettings />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Total Usage')).toBeInTheDocument();
-    });
-
-    await user.click(
-      screen.getByRole('button', { name: 'Clear All Cached Data' }),
-    );
-    await user.click(
-      screen.getByRole('button', { name: 'Yes, Clear Everything' }),
-    );
-
-    await waitFor(() => {
-      expect(invalidateQueries).toHaveBeenCalledTimes(1);
-    });
-
-    invalidateQueries.mockRestore();
-  });
-
   it('reloads after cached data is cleared to reset persisted in-memory state', async () => {
     const user = userEvent.setup();
 
@@ -209,6 +182,7 @@ describe('StorageSettings', () => {
     await waitFor(() => {
       expect(mockReload).toHaveBeenCalledTimes(1);
     });
+    expect(mockEstimate).toHaveBeenCalledTimes(1);
   });
 
   it('finishes the reset when localStorage removal is blocked', async () => {

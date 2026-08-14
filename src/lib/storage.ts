@@ -1,6 +1,6 @@
+import { removeComapeoKeys } from '@/lib/comapeo-local-storage';
 import { isZeroZeroCoord } from '@/lib/coords';
 import { getDb } from '@/lib/db';
-import { removeComapeoKeys } from '@/lib/local-storage-utils';
 
 // ---------------------------------------------------------------------------
 // Types

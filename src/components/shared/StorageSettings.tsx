@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { useQueryClient } from '@tanstack/react-query';
-
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -152,7 +150,6 @@ function UsageBar({ percent }: UsageBarProps) {
 
 export function StorageSettings() {
   const intl = useIntl();
-  const queryClient = useQueryClient();
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -176,18 +173,6 @@ export function StorageSettings() {
     };
   }, []);
 
-  const loadStats = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await getStorageStats();
-      setStats(result);
-    } catch (err) {
-      console.warn('Failed to load storage stats:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   const handleClearAll = useCallback(async () => {
     if (clearing) return;
     setClearing(true);
@@ -199,10 +184,8 @@ export function StorageSettings() {
       // same server (duplicate check) even though IndexedDB is empty.
       useAuthStore.getState().clearAll();
       setIsConfirmOpen(false);
-      await queryClient.invalidateQueries();
-      await loadStats();
-      // Reload so every persisted Zustand store is re-created from the now-clean
-      // browser storage instead of re-persisting stale in-memory preferences.
+      // Reload immediately so persisted Zustand stores cannot re-write stale
+      // in-memory preferences after their storage keys have been removed.
       window.location.reload();
     } catch (err) {
       setClearError(
@@ -211,7 +194,7 @@ export function StorageSettings() {
     } finally {
       setClearing(false);
     }
-  }, [loadStats, queryClient, clearing]);
+  }, [clearing]);
 
   if (loading) {
     return (

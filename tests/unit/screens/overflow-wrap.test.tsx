@@ -39,7 +39,6 @@ vi.mock('@/lib/local-storage-utils', () => ({
   exportLocalStorageData: vi.fn(() => '"{\\"version\\":1,\\"data\\":{}}"'),
   importLocalStorageData: vi.fn(() => ({ success: true })),
   clearAllStorage: vi.fn(() => Promise.resolve()),
-  removeComapeoKeys: vi.fn(),
 }));
 
 vi.mock('@/components/layout/shell-slot', () => ({
