@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "target": {
+    "host": "app.comapeo.cloud",
+    "method": "GET",
+    "path": "/api/tiles"
+  },
+  "measuredAt": "2026-08-14T10:27:58.719Z",
+  "windowSeconds": 60,
+  "safetyMultiplier": 1.5,
+  "observedMaxRequestsPerWindow": 3136,
+  "recommendedRequestsPerPeriod": 4710,
+  "samples": [
+    {
+      "kind": "small",
+      "name": "production-small-smp-2026-08-14",
+      "requestCount": 362,
+      "durationMs": 5931,
+      "maxRequestsPerWindow": 362,
+      "firstRequestAt": "2026-08-14T10:26:27.593Z",
+      "lastRequestAt": "2026-08-14T10:26:33.524Z"
+    },
+    {
+      "kind": "large",
+      "name": "production-large-back-to-back-smp-2026-08-14",
+      "requestCount": 3136,
+      "durationMs": 51426,
+      "maxRequestsPerWindow": 3136,
+      "firstRequestAt": "2026-08-14T10:26:40.288Z",
+      "lastRequestAt": "2026-08-14T10:27:31.714Z"
+    }
+  ]
+}
