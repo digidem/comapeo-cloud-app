@@ -43,11 +43,34 @@ interface CliOptions {
   values: Map<string, string | boolean>;
 }
 
+const COMMAND_OPTIONS: Record<string, ReadonlySet<string>> = {
+  measure: new Set(['small', 'large', 'output', 'host', 'period', 'safety']),
+  render: new Set([
+    'report',
+    'mode',
+    'threshold',
+    'mitigation-timeout',
+    'confirm-false-positive-validation',
+  ]),
+  apply: new Set([
+    'report',
+    'mode',
+    'threshold',
+    'mitigation-timeout',
+    'zone',
+    'confirm-false-positive-validation',
+  ]),
+  status: new Set(['zone']),
+  disable: new Set(['zone']),
+};
+
+const BOOLEAN_OPTIONS = new Set(['confirm-false-positive-validation']);
+
 function usage(): never {
   console.error(`Usage:
   npm run ops:tile-rate-limit -- measure --small <small.har> --large <large.har> --output <report.json> [--host app.comapeo.cloud] [--period 60] [--safety 1.5]
-  npm run ops:tile-rate-limit -- render --report <report.json> [--mode observe|enforce] [--threshold N] [--confirm-false-positive-validation]
-  npm run ops:tile-rate-limit -- apply --report <report.json> [--mode observe|enforce] [--threshold N] [--zone comapeo.cloud] [--confirm-false-positive-validation]
+  npm run ops:tile-rate-limit -- render --report <report.json> [--mode observe|enforce] [--threshold N] [--mitigation-timeout SECONDS] [--confirm-false-positive-validation]
+  npm run ops:tile-rate-limit -- apply --report <report.json> [--mode observe|enforce] [--threshold N] [--mitigation-timeout SECONDS] [--zone comapeo.cloud] [--confirm-false-positive-validation]
   npm run ops:tile-rate-limit -- status [--zone comapeo.cloud]
   npm run ops:tile-rate-limit -- disable [--zone comapeo.cloud]
 
@@ -57,15 +80,37 @@ explicit --confirm-false-positive-validation flag.`);
   process.exit(2);
 }
 
-function parseArgs(argv: string[]): CliOptions {
+export function parseArgs(argv: string[]): CliOptions {
   const [command, ...rest] = argv;
   if (!command) return usage();
+  const allowedOptions = COMMAND_OPTIONS[command];
+  if (!allowedOptions) return usage();
   const values = new Map<string, string | boolean>();
   for (let index = 0; index < rest.length; index += 1) {
     const current = rest[index];
-    if (!current?.startsWith('--')) return usage();
+    if (!current?.startsWith('--')) {
+      throw new Error(`Unexpected argument: ${String(current)}`);
+    }
+    if (current.includes('=')) {
+      throw new Error(
+        'Options must use --key value syntax; --key=value is not supported',
+      );
+    }
     const key = current.slice(2);
+    if (!allowedOptions.has(key)) {
+      throw new Error(`Unknown option --${key} for ${command}`);
+    }
+    if (values.has(key)) {
+      throw new Error(`Duplicate option --${key}`);
+    }
     const next = rest[index + 1];
+    if (BOOLEAN_OPTIONS.has(key)) {
+      if (next && !next.startsWith('--')) {
+        throw new Error(`--${key} does not take a value`);
+      }
+      values.set(key, true);
+      continue;
+    }
     if (!next || next.startsWith('--')) {
       values.set(key, true);
       continue;
@@ -209,6 +254,78 @@ function requireAtMostOneManagedRule(
   return matches[0];
 }
 
+export function assertManagedRuleMatchesIntent(
+  actual: CloudflareRule,
+  expected: CloudflareRateLimitRule,
+  operation: string,
+): void {
+  const mismatches: string[] = [];
+
+  if (actual.action !== expected.action) mismatches.push('action');
+  if (actual.enabled !== expected.enabled) mismatches.push('enabled');
+  if (actual.expression !== expected.expression) mismatches.push('expression');
+
+  const actualRateLimit = actual.ratelimit;
+  if (!actualRateLimit) {
+    mismatches.push('ratelimit');
+  } else {
+    if (actualRateLimit.period !== expected.ratelimit.period) {
+      mismatches.push('ratelimit.period');
+    }
+    if (
+      actualRateLimit.requests_per_period !==
+      expected.ratelimit.requests_per_period
+    ) {
+      mismatches.push('ratelimit.requests_per_period');
+    }
+    if (
+      actualRateLimit.mitigation_timeout !==
+      expected.ratelimit.mitigation_timeout
+    ) {
+      mismatches.push('ratelimit.mitigation_timeout');
+    }
+    if (
+      actualRateLimit.requests_to_origin !==
+      expected.ratelimit.requests_to_origin
+    ) {
+      mismatches.push('ratelimit.requests_to_origin');
+    }
+    const actualCharacteristics = new Set(actualRateLimit.characteristics);
+    if (
+      actualCharacteristics.size !==
+        expected.ratelimit.characteristics.length ||
+      expected.ratelimit.characteristics.some(
+        (characteristic) => !actualCharacteristics.has(characteristic),
+      )
+    ) {
+      mismatches.push('ratelimit.characteristics');
+    }
+  }
+
+  if (expected.action_parameters === undefined) {
+    if (actual.action_parameters !== undefined) {
+      mismatches.push('action_parameters');
+    }
+  } else {
+    const actualResponse = actual.action_parameters?.response;
+    const expectedResponse = expected.action_parameters.response;
+    if (
+      !actualResponse ||
+      actualResponse.status_code !== expectedResponse.status_code ||
+      actualResponse.content_type !== expectedResponse.content_type ||
+      actualResponse.content !== expectedResponse.content
+    ) {
+      mismatches.push('action_parameters');
+    }
+  }
+
+  if (mismatches.length > 0) {
+    throw new Error(
+      `Cloudflare ${operation} response does not match the requested managed rule (${mismatches.join(', ')}). Run status and disable before retrying`,
+    );
+  }
+}
+
 export async function upsertManagedRule(
   token: string,
   zoneId: string,
@@ -229,6 +346,7 @@ export async function upsertManagedRule(
     );
     if (!updated)
       throw new Error('Cloudflare returned no updated managed rule');
+    assertManagedRuleMatchesIntent(updated, rule, 'update');
     return updated;
   }
 
@@ -244,6 +362,7 @@ export async function upsertManagedRule(
     );
     if (!created)
       throw new Error('Cloudflare returned no created managed rule');
+    assertManagedRuleMatchesIntent(created, rule, 'create');
     return created;
   }
 
@@ -264,6 +383,7 @@ export async function upsertManagedRule(
   );
   if (!created)
     throw new Error('Cloudflare created the ruleset but not the managed rule');
+  assertManagedRuleMatchesIntent(created, rule, 'ruleset creation');
   return created;
 }
 

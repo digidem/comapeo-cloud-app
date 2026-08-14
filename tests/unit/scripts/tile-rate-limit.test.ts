@@ -14,6 +14,7 @@ import {
 } from '../../../scripts/lib/tile-rate-limit';
 import {
   disableManagedRule,
+  parseArgs,
   upsertManagedRule,
   writableExistingRule,
 } from '../../../scripts/tile-rate-limit';
@@ -214,6 +215,15 @@ describe('tile rate limit operations', () => {
     expect(() => validateProductionZoneName('comapeo.cloud')).not.toThrow();
   });
 
+  it('rejects unknown CLI options and --key=value syntax', () => {
+    expect(() =>
+      parseArgs(['apply', '--report', 'report.json', '--threshold=5000']),
+    ).toThrow(/--key=value is not supported/i);
+    expect(() =>
+      parseArgs(['apply', '--report', 'report.json', '--thresholdd', '5000']),
+    ).toThrow(/unknown option --thresholdd/i);
+  });
+
   it('extracts the managed rule from Cloudflare ruleset mutation responses', () => {
     const managedRule = {
       id: 'rule-id',
@@ -369,7 +379,7 @@ describe('tile rate limit operations', () => {
     };
     const updatedRuleset = {
       id: 'ruleset-id',
-      rules: [{ ...rule, id: 'managed-a', enabled: false }],
+      rules: [{ ...rule, id: 'managed-a' }],
     };
     const fetchMock = vi
       .fn()
@@ -385,6 +395,43 @@ describe('tile rate limit operations', () => {
     const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(url).toMatch(/\/rulesets\/ruleset-id\/rules\/managed-a$/);
     expect(init.method).toBe('PATCH');
+  });
+
+  it('fails closed when an observe update response retains block parameters', async () => {
+    const enforcingRule = exampleManagedRule();
+    const observeRule = buildCloudflareRateLimitRule({
+      host: PRODUCTION_TILE_HOST,
+      requestsPerPeriod: 1370,
+      periodSeconds: 60,
+      mitigationTimeoutSeconds: 60,
+      mode: 'observe',
+    });
+    const existingRuleset = {
+      id: 'ruleset-id',
+      rules: [{ ...enforcingRule, id: 'managed-a' }],
+    };
+    const staleUpdatedRuleset = {
+      id: 'ruleset-id',
+      rules: [
+        {
+          ...observeRule,
+          id: 'managed-a',
+          action_parameters: enforcingRule.action_parameters,
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(cloudflareResponse(existingRuleset))
+      .mockResolvedValueOnce(cloudflareResponse(staleUpdatedRuleset));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      upsertManagedRule('token', 'zone-id', observeRule),
+    ).rejects.toThrow(/action_parameters/i);
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(body).not.toHaveProperty('action_parameters');
   });
 
   it('refuses enforcement when measurement or false-positive validation is incomplete', () => {
@@ -443,11 +490,27 @@ describe('tile rate limit operations', () => {
       validateEnforcementReadiness({
         report: inconsistentReport,
         host: 'app.comapeo.cloud',
-        requestsPerPeriod: 2,
+        requestsPerPeriod: 1000,
         periodSeconds: 60,
         falsePositiveValidationConfirmed: true,
       }),
-    ).toThrow(/samples|inconsistent|observed legitimate burst/i);
+    ).toThrow(/observed burst is inconsistent with samples/i);
+
+    const inconsistentTimestampReport = {
+      ...report,
+      samples: report.samples.map((sample) =>
+        sample.kind === 'small' ? { ...sample, durationMs: 9_999 } : sample,
+      ),
+    };
+    expect(() =>
+      validateEnforcementReadiness({
+        report: inconsistentTimestampReport,
+        host: 'app.comapeo.cloud',
+        requestsPerPeriod: 1350,
+        periodSeconds: 60,
+        falsePositiveValidationConfirmed: true,
+      }),
+    ).toThrow(/inconsistent request timestamps/i);
 
     const malformedSampleReport = {
       ...report,

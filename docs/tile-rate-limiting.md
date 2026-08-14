@@ -57,6 +57,8 @@ npm run ops:tile-rate-limit -- render \
   --mode observe
 ```
 
+`--mitigation-timeout SECONDS` controls Cloudflare's mitigation timeout and defaults to the measurement report window. The script validates the value locally before any Cloudflare mutation; supported values are `0`, `10`, `60`, `120`, `300`, `600`, `3600`, and `86400` seconds.
+
 The rule expression must remain exactly equivalent to:
 
 ```text
@@ -119,6 +121,8 @@ The script refuses enforcement when:
 - `--confirm-false-positive-validation` is omitted.
 
 An explicit higher threshold can be supplied with `--threshold N` after observation justifies it.
+
+If a different supported mitigation timeout is required, pass `--mitigation-timeout SECONDS`; otherwise it defaults to the measurement window from the report.
 
 ## Client-visible behavior
 
