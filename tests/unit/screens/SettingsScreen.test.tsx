@@ -331,6 +331,38 @@ describe('SettingsScreen', () => {
       }
     });
 
+    it('reloads immediately after a successful import', () => {
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
+      });
+
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class MockFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          readAsText() {
+            this.result = '{}';
+            this.onload?.({} as Event);
+          }
+        } as unknown as typeof window.FileReader;
+
+        render(<SettingsScreen />);
+
+        fireEvent.change(screen.getByTestId('backup-file-input'), {
+          target: { files: [new File(['{}'], 'backup.json')] },
+        });
+
+        expect(importLocalStorageData).toHaveBeenCalledTimes(1);
+        expect(mockReload).toHaveBeenCalledTimes(1);
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
+    });
+
     it('shows error feedback when import fails', async () => {
       vi.mocked(importLocalStorageData).mockReturnValueOnce({
         success: false,
@@ -459,7 +491,7 @@ describe('SettingsScreen', () => {
 
         expect(screen.getByText(/Failed to import backup/)).toBeInTheDocument();
         expect(
-          screen.getByText(/Failed to read backup file/),
+          screen.getByText(/selected backup file could not be read/),
         ).toBeInTheDocument();
       } finally {
         window.FileReader = OriginalFileReader;

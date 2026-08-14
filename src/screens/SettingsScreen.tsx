@@ -89,10 +89,6 @@ const _messages = defineMessages({
     id: 'settings.backup.exportSuccess',
     defaultMessage: 'Backup exported successfully.',
   },
-  backupImportSuccess: {
-    id: 'settings.backup.importSuccess',
-    defaultMessage: 'Backup imported. Reloading…',
-  },
   backupExportError: {
     id: 'settings.backup.exportError',
     defaultMessage: 'Failed to export backup.',
@@ -112,7 +108,7 @@ const _messages = defineMessages({
   },
   backupReadError: {
     id: 'settings.backup.readError',
-    defaultMessage: 'Failed to read backup file.',
+    defaultMessage: 'The selected backup file could not be read.',
   },
 });
 
@@ -147,7 +143,7 @@ export function SettingsScreen() {
     'idle' | 'success' | 'error'
   >('idle');
   const [importStatus, setImportStatus] = useState<
-    'idle' | 'loading' | 'success' | 'error'
+    'idle' | 'loading' | 'error'
   >('idle');
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -257,8 +253,9 @@ export function SettingsScreen() {
       reader.onload = () => {
         const result = importLocalStorageData(reader.result as string);
         if (result.success) {
-          setImportStatus('success');
-          scheduleTimeout(() => window.location.reload(), 500);
+          // Reload immediately so live persisted stores cannot overwrite restored
+          // preferences between import and app rehydration.
+          window.location.reload();
         } else {
           setImportStatus('error');
           setImportError(
@@ -278,7 +275,7 @@ export function SettingsScreen() {
 
       reader.readAsText(file);
     },
-    [intl, scheduleTimeout],
+    [intl],
   );
 
   return (
@@ -419,11 +416,6 @@ export function SettingsScreen() {
       {exportStatus === 'error' && (
         <p className="text-sm text-error mt-2">
           {intl.formatMessage(_messages.backupExportError)}
-        </p>
-      )}
-      {importStatus === 'success' && (
-        <p className="text-sm text-green-600 mt-2">
-          {intl.formatMessage(_messages.backupImportSuccess)}
         </p>
       )}
       {importStatus === 'error' && importError && (

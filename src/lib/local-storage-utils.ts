@@ -1,14 +1,32 @@
 import * as v from 'valibot';
 
 import { resetCategoriesDb } from '@/lib/categories-db';
-import {
-  getComapeoKeys,
-  isComapeoStorageKey,
-  removeComapeoKeys,
-} from '@/lib/comapeo-local-storage';
+import { getComapeoKeys, removeComapeoKeys } from '@/lib/comapeo-local-storage';
 import { resetDb } from '@/lib/db';
 import { backupSchema } from '@/lib/schemas/backup-schema';
 import { useAuthStore } from '@/stores/auth-store';
+
+// Backup version 1 historically includes only `comapeo-*` keys. Keep that
+// contract stable even though full-reset ownership is broader (colon-namespaced
+// and legacy unprefixed keys are reset-only until a future backup version can
+// represent their absence without breaking older snapshots).
+const BACKUP_STORAGE_PREFIX = 'comapeo-';
+
+function getBackupKeys(): string[] {
+  return getComapeoKeys().filter((key) =>
+    key.startsWith(BACKUP_STORAGE_PREFIX),
+  );
+}
+
+function removeBackupKeys(): void {
+  for (const key of getBackupKeys()) {
+    localStorage.removeItem(key);
+  }
+}
+
+function isBackupStorageKey(key: string): boolean {
+  return key.startsWith(BACKUP_STORAGE_PREFIX);
+}
 
 export function exportLocalStorageData(): string {
   const data: Record<string, string> = {};
@@ -16,7 +34,7 @@ export function exportLocalStorageData(): string {
   // Backup export is intentionally fail-closed: if browser storage is blocked,
   // surface an error instead of downloading a misleading empty/partial backup.
   try {
-    for (const key of getComapeoKeys()) {
+    for (const key of getBackupKeys()) {
       const value = localStorage.getItem(key);
       if (value !== null) {
         data[key] = value;
@@ -54,11 +72,12 @@ export function importLocalStorageData(jsonString: string): {
   }
 
   try {
-    // Clear existing CoMapeo-owned keys first, then restore only app-owned keys.
-    removeComapeoKeys();
+    // Preserve the v1 backup contract: clear and restore only `comapeo-*`
+    // preferences. Full-reset ownership is intentionally broader.
+    removeBackupKeys();
 
     for (const [key, value] of Object.entries(result.output.data)) {
-      if (isComapeoStorageKey(key)) {
+      if (isBackupStorageKey(key)) {
         localStorage.setItem(key, value);
       }
     }

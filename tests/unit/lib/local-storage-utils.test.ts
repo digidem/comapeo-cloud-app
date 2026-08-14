@@ -54,7 +54,8 @@ describe('exportLocalStorageData', () => {
     expect(parsed.data).not.toHaveProperty('unrelated');
   });
 
-  it('includes colon-namespaced and unprefixed app-owned keys', () => {
+  it('keeps the v1 backup scope limited to comapeo-prefixed keys', () => {
+    localStorage.setItem('comapeo-locale', '"en"');
     localStorage.setItem('comapeo:activeServerId', 'server-1');
     localStorage.setItem('comapeo:downloadIncludeGlobalOverview', 'true');
     localStorage.setItem('view-mode-preference', 'grid');
@@ -62,11 +63,7 @@ describe('exportLocalStorageData', () => {
     const result = exportLocalStorageData();
     const parsed = JSON.parse(result);
 
-    expect(parsed.data).toMatchObject({
-      'comapeo:activeServerId': 'server-1',
-      'comapeo:downloadIncludeGlobalOverview': 'true',
-      'view-mode-preference': 'grid',
-    });
+    expect(parsed.data).toEqual({ 'comapeo-locale': '"en"' });
   });
 
   it('includes all known app-owned storage keys when present', () => {
@@ -128,16 +125,13 @@ describe('importLocalStorageData', () => {
     localStorage.clear();
   });
 
-  it('successfully imports valid backup data and writes keys to localStorage', () => {
+  it('successfully imports valid v1 backup data', () => {
     const backup = JSON.stringify({
       version: 1,
       exportedAt: '2025-01-01T00:00:00.000Z',
       data: {
         'comapeo-locale': '"en"',
         'comapeo-theme': '"dark"',
-        'comapeo:activeServerId': 'server-1',
-        'comapeo:downloadIncludeGlobalOverview': 'true',
-        'view-mode-preference': 'grid',
       },
     });
 
@@ -146,9 +140,44 @@ describe('importLocalStorageData', () => {
     expect(result).toEqual({ success: true });
     expect(localStorage.getItem('comapeo-locale')).toBe('"en"');
     expect(localStorage.getItem('comapeo-theme')).toBe('"dark"');
+  });
+
+  it('preserves reset-only keys when importing an older v1 backup', () => {
+    localStorage.setItem('comapeo:activeServerId', 'server-1');
+    localStorage.setItem('comapeo:downloadIncludeGlobalOverview', 'true');
+    localStorage.setItem('view-mode-preference', 'grid');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: { 'comapeo-locale': '"pt"' },
+    });
+
+    expect(importLocalStorageData(backup)).toEqual({ success: true });
+    expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
     expect(localStorage.getItem('comapeo:activeServerId')).toBe('server-1');
     expect(localStorage.getItem('comapeo:downloadIncludeGlobalOverview')).toBe(
       'true',
+    );
+    expect(localStorage.getItem('view-mode-preference')).toBe('grid');
+  });
+
+  it('ignores reset-only keys embedded in a v1 backup', () => {
+    localStorage.setItem('comapeo:activeServerId', 'current-server');
+    localStorage.setItem('view-mode-preference', 'grid');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: {
+        'comapeo-locale': '"en"',
+        'comapeo:activeServerId': 'backup-server',
+        'view-mode-preference': 'list',
+      },
+    });
+
+    expect(importLocalStorageData(backup)).toEqual({ success: true });
+    expect(localStorage.getItem('comapeo-locale')).toBe('"en"');
+    expect(localStorage.getItem('comapeo:activeServerId')).toBe(
+      'current-server',
     );
     expect(localStorage.getItem('view-mode-preference')).toBe('grid');
   });
