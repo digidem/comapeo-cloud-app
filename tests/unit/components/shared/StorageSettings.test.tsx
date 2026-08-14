@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StorageSettings } from '@/components/shared/StorageSettings';
 import { getDb, resetDb } from '@/lib/db';
-import { useAuthStore } from '@/stores/auth-store';
 
 // Mock browser APIs used by storage settings.
 const mockEstimate = vi.fn();
@@ -26,8 +25,6 @@ beforeEach(async () => {
     value: { reload: mockReload },
     writable: true,
   });
-  useAuthStore.setState({ tier: 'local', activeServerId: null });
-
   await resetDb();
 });
 
@@ -184,8 +181,7 @@ describe('StorageSettings', () => {
     });
   });
 
-  it('finishes the reset when localStorage removal is blocked', async () => {
-    useAuthStore.setState({ tier: 'cloud', activeServerId: 'server-1' });
+  it('still reloads when localStorage removal is blocked', async () => {
     const removeItemSpy = vi
       .spyOn(Storage.prototype, 'removeItem')
       .mockImplementation(() => {
@@ -210,8 +206,8 @@ describe('StorageSettings', () => {
       await waitFor(() => {
         expect(mockReload).toHaveBeenCalledTimes(1);
       });
-      expect(useAuthStore.getState().activeServerId).toBeNull();
-      expect(useAuthStore.getState().tier).toBe('local');
+      // Auth-store behavior under blocked persistence is covered directly in
+      // auth-store.test.ts; this integration test owns the caller reload path.
     } finally {
       removeItemSpy.mockRestore();
     }
