@@ -1,11 +1,6 @@
-import { defineMessages, useIntl } from 'react-intl';
+import { useIntl } from 'react-intl';
 
-const messages = defineMessages({
-  label: {
-    id: 'common.createProject',
-    defaultMessage: 'Create Project',
-  },
-});
+import { commonMessages } from '@/i18n/common-messages';
 
 interface CreateProjectNavActionProps {
   onClick: () => void;
@@ -34,7 +29,7 @@ function CreateProjectNavAction({ onClick }: CreateProjectNavActionProps) {
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
       </svg>
-      {intl.formatMessage(messages.label)}
+      {intl.formatMessage(commonMessages.createProject)}
     </button>
   );
 }

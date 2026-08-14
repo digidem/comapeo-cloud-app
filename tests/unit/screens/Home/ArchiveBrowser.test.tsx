@@ -101,6 +101,7 @@ describe('ArchiveBrowser', () => {
     expect(
       screen.queryByRole('button', { name: 'Create Project' }),
     ).not.toBeInTheDocument();
+    expect(screen.getByTestId('skeleton')).toHaveStyle({ height: '44px' });
   });
 
   it('renders exactly one create affordance in the empty state', () => {

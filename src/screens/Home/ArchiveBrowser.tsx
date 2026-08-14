@@ -4,9 +4,11 @@ import { defineMessages, useIntl } from 'react-intl';
 import { ArchiveOverflowSheet } from '@/components/shared/ArchiveOverflowSheet';
 import { CreateProjectNavAction } from '@/components/shared/CreateProjectNavAction';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
 import { useProjects } from '@/hooks/useProjects';
 import { useRemoteArchives } from '@/hooks/useRemoteArchives';
+import { commonMessages } from '@/i18n/common-messages';
 import type { Project } from '@/lib/db';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -27,10 +29,6 @@ const messages = defineMessages({
     id: 'home.archives.empty.desc',
     defaultMessage:
       'Add a remote archive server or create your first project to get started.',
-  },
-  emptyCta: {
-    id: 'common.createProject',
-    defaultMessage: 'Create Project',
   },
   addAria: {
     id: 'home.archive.addAria',
@@ -194,7 +192,7 @@ function ArchiveBrowser({
               onClick={onCreateNew}
               aria-label={intl.formatMessage(messages.firstProjectListAria)}
             >
-              {intl.formatMessage(messages.emptyCta)}
+              {intl.formatMessage(commonMessages.createProject)}
             </Button>
             <Button variant="secondary" size="sm" onClick={onAddServer}>
               + {intl.formatMessage(messages.addServer)}
@@ -204,7 +202,11 @@ function ArchiveBrowser({
       ) : (
         /* Accordion archive sections */
         <div className="flex flex-col gap-2">
-          {!isLoading && <CreateProjectNavAction onClick={onCreateNew} />}
+          {isLoading ? (
+            <Skeleton height={44} />
+          ) : (
+            <CreateProjectNavAction onClick={onCreateNew} />
+          )}
           {archives.map((archive) => {
             const status = archive.url
               ? statusMap.get(normalizeUrl(archive.url))
