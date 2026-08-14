@@ -32,10 +32,6 @@ const messages = defineMessages({
     id: 'home.archives.empty.cta',
     defaultMessage: 'Create Project',
   },
-  createProject: {
-    id: 'home.archives.createProject',
-    defaultMessage: 'Create Project',
-  },
   addAria: {
     id: 'home.archive.addAria',
     defaultMessage: 'Add a new archive server',
@@ -208,9 +204,7 @@ function ArchiveBrowser({
       ) : (
         /* Accordion archive sections */
         <div className="flex flex-col gap-2">
-          <CreateProjectNavAction onClick={onCreateNew}>
-            {intl.formatMessage(messages.createProject)}
-          </CreateProjectNavAction>
+          <CreateProjectNavAction onClick={onCreateNew} />
           {archives.map((archive) => {
             const status = archive.url
               ? statusMap.get(normalizeUrl(archive.url))

@@ -416,6 +416,9 @@
   "categories.untitledProject": {
     "defaultMessage": "Untitled Project"
   },
+  "common.createProject": {
+    "defaultMessage": "Create Project"
+  },
   "common.refreshAria": {
     "defaultMessage": "Refresh data"
   },
@@ -856,9 +859,6 @@
   },
   "home.archives": {
     "defaultMessage": "Archives"
-  },
-  "home.archives.createProject": {
-    "defaultMessage": "Create Project"
   },
   "home.archives.empty.cta": {
     "defaultMessage": "Create Project"
@@ -1657,9 +1657,6 @@
   },
   "mobileNav.collapseAria": {
     "defaultMessage": "Toggle archive section"
-  },
-  "mobileNav.createProject": {
-    "defaultMessage": "Create Project"
   },
   "mobileNav.dialogTitle": {
     "defaultMessage": "Menu"

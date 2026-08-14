@@ -1,14 +1,19 @@
-import type { ReactNode } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
+
+const messages = defineMessages({
+  label: {
+    id: 'common.createProject',
+    defaultMessage: 'Create Project',
+  },
+});
 
 interface CreateProjectNavActionProps {
-  children: ReactNode;
   onClick: () => void;
 }
 
-function CreateProjectNavAction({
-  children,
-  onClick,
-}: CreateProjectNavActionProps) {
+function CreateProjectNavAction({ onClick }: CreateProjectNavActionProps) {
+  const intl = useIntl();
+
   return (
     <button
       type="button"
@@ -29,7 +34,7 @@ function CreateProjectNavAction({
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
       </svg>
-      {children}
+      {intl.formatMessage(messages.label)}
     </button>
   );
 }

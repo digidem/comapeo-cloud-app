@@ -32,10 +32,6 @@ const messages = defineMessages({
     id: 'mobileNav.addServer',
     defaultMessage: 'Add Server',
   },
-  createProject: {
-    id: 'mobileNav.createProject',
-    defaultMessage: 'Create Project',
-  },
   noServersTitle: {
     id: 'mobileNav.noServersTitle',
     defaultMessage: 'No remote archive servers yet.',
@@ -534,9 +530,7 @@ function MobileNavDrawer({
                     onNavigate();
                     onCreateProject();
                   }}
-                >
-                  {intl.formatMessage(messages.createProject)}
-                </CreateProjectNavAction>
+                />
               </div>
             )}
 
