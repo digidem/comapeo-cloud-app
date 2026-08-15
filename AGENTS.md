@@ -41,6 +41,13 @@ If a project-scoped .claude/orchestrator_prompt.md or .codex/orchestrator_prompt
 
 Use raw one-shot `claude` / `codex exec` only for small bounded jobs or read-only reviews where Zenith would be unnecessary overhead.
 
+## Issue and PR Scope Continuity
+
+- Before widening an implementation beyond its issue or PR scope, search the existing GitHub backlog and related PRs for overlapping or follow-up work.
+- Keep substantial intentionally out-of-scope work in focused follow-up issues instead of silently expanding the current PR. Link those issues to the shipped predecessor and the relevant architecture chain.
+- In follow-up specs, explicitly reuse the canonical implementation, data model, or integration path that already exists; avoid parallel state, parsers, renderers, or persistence models unless an architectural decision requires them.
+- Do not promote proposed or unmerged follow-up designs into project-wide `AGENTS.md` architecture. Document durable architecture here only after it lands; keep pending design decisions in their issue/spec/ADR.
+
 ## TDD Workflow (MANDATORY)
 
 Every feature MUST follow this cycle:
