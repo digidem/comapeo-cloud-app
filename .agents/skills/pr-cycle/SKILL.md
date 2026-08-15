@@ -88,6 +88,7 @@ Declare `MERGE-READY` only when all of these are true simultaneously for one exa
 - Current GitHub head SHA and current live target-branch tip equal the pair used for final review and verification.
 - GitHub reports the PR mergeable and clean, or an explicitly understood repository-equivalent state.
 - All required and relevant checks are terminal and green. Treat every skipped or neutral check as requiring explicit adjudication before readiness; only clearly legitimate conditional skips are acceptable. Pending, queued, running, cancelled, timed-out, action-required, or failing relevant checks are not.
+- A green wrapper job is not sufficient when a relevant command is masked by `continue-on-error`, soft-fail logic, or equivalent workflow behavior. For such checks, inspect the underlying step outcome/conclusion and logs (or equivalent job-level evidence) and explicitly adjudicate the underlying command before treating it as green.
 - GitHub review decision is not `CHANGES_REQUESTED` or `REVIEW_REQUIRED`; a top-level blocking review counts even when it created no inline review thread.
 - No unresolved actionable review threads remain.
 - No outstanding blocker or should-fix finding remains from requested independent reviewers.
@@ -115,13 +116,27 @@ Clean only resources belonging to the merged PR. Use the exact isolated worktree
 
 1. Confirm the isolated PR worktree is clean, including no untracked files that need preserving. Never force-remove a PR worktree to bypass a dirty-worktree check.
 2. Before deleting any branch, prove the local PR branch has no unpushed commits: if its remote-tracking branch exists, require the local tip to equal that remote tip; if the remote branch is already absent, require the local tip to equal the PR head SHA recorded at verified merge time. If either check fails, preserve the branch and report it instead of cleaning it up.
-3. Remove the PR remote branch if it still exists.
+3. Remove the PR remote branch if it still exists. If a repository pre-push hook runs on branch deletion and only replays validation already satisfied for the verified merged head, it may be bypassed for this cleanup-only delete with `git push --no-verify origin --delete <branch>` after step 2's exact tip-parity proof. Never use this exception to skip validation for a code push or before merge verification.
 4. Remove the isolated PR worktree.
 5. Remove the PR local branch after the worktree is gone and only after step 2 proved it safe.
 6. Verify the remote branch is absent and the worktree is no longer registered.
 7. Recheck the default and unrelated worktrees and confirm pre-existing changes remain untouched.
 
 Avoid broad repository cleanup operations unless the user explicitly requests them.
+
+## 8. Session lessons and documentation checkpoint
+
+Before concluding every PR cycle, review the session for durable, reusable lessons exposed by the work: recurring tool limits, CI or reviewer blind spots, cleanup hazards, repository-wide conventions, or contributor-workflow gotchas. Do not document transient provider outages, one-off command noise, or feature-specific details that belong in the issue, spec, or ADR.
+
+When a durable lesson exists, document it in the canonical home:
+
+- `.agents/skills/pr-cycle/` for reusable PR-cycle mechanics, safeguards, helper behavior, and execution-surface workarounds.
+- `AGENTS.md` for project-specific agent, coding, validation, architecture, or repository conventions.
+- `README.md` only when human contributors or users need the setup, command, or workflow information without reading agent instructions.
+
+Avoid duplicating the same policy across files; keep one canonical statement and cross-link when useful. If documenting a lesson would materially widen an application PR, create a focused follow-up docs/process PR instead of mixing unrelated process changes into the implementation. Run that follow-up through the normal PR-cycle gate, but do not merge it without explicit merge authorization. A lessons-only follow-up should not recursively create another lessons PR unless it uncovers a new material reusable gap.
+
+If lesson documentation is added to the current PR, any push invalidates prior exact-SHA review and CI evidence; rerun the gate on the new head. The final report must state what durable lessons were documented and where, or that no durable documentation change was warranted.
 
 ## Status reporting
 

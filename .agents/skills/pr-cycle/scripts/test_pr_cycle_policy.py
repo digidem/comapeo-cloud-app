@@ -35,11 +35,23 @@ def assert_policy_contract(
 
     test.assertIn("exact isolated worktree and local branch captured at cycle start", skill_text)
     test.assertIn("similarly named issue/feature worktrees or branches as unrelated", skill_text)
+    test.assertIn("A green wrapper job is not sufficient", skill_text)
+    test.assertIn("continue-on-error", skill_text)
+    test.assertIn("git push --no-verify origin --delete <branch>", skill_text)
+
+    test.assertIn("## 8. Session lessons and documentation checkpoint", skill_text)
+    test.assertIn("Before concluding every PR cycle", skill_text)
+    test.assertIn("`.agents/skills/pr-cycle/` for reusable PR-cycle mechanics", skill_text)
+    test.assertIn("`README.md` only when human contributors or users need", skill_text)
+    test.assertIn("create a focused follow-up docs/process PR", skill_text)
+    test.assertIn("final report must state what durable lessons were documented", skill_text)
 
     test.assertIn("## Issue and PR Scope Continuity", agents_text)
     test.assertIn("search the existing GitHub backlog", agents_text)
     test.assertIn("reuse the canonical implementation, data model, or integration path", agents_text)
     test.assertIn("Do not promote proposed or unmerged follow-up designs", agents_text)
+    test.assertIn("tracked artifacts under `screenshots/screenshot/`", agents_text)
+    test.assertIn("restore incidental changes after exploratory runs", agents_text)
 
     test.assertIn(
         "python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py",
@@ -98,6 +110,64 @@ class PrCyclePolicyTests(unittest.TestCase):
                 self,
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_soft_fail_ci_adjudication_policy_is_required(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "A green wrapper job is not sufficient",
+            "A green wrapper job is always sufficient",
+        )
+        with self.assertRaisesRegex(AssertionError, "A green wrapper job is not sufficient"):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_cleanup_branch_delete_hook_bypass_is_required(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "git push --no-verify origin --delete <branch>",
+            "git push origin --delete <branch>",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "git push --no-verify origin --delete <branch>"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_session_lessons_checkpoint_is_required(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "## 8. Session lessons and documentation checkpoint",
+            "## 8. Optional session notes",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "## 8. Session lessons and documentation checkpoint"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_argos_artifact_guidance_is_required(self) -> None:
+        agents_text = AGENTS.read_text().replace(
+            "tracked artifacts under `screenshots/screenshot/`",
+            "ignored artifacts under `screenshots/screenshot/`",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "tracked artifacts under `screenshots/screenshot/`"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=SKILL.read_text(),
+                agents_text=agents_text,
                 ci_text=CI.read_text(),
             )
 

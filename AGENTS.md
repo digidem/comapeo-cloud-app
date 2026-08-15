@@ -214,9 +214,7 @@ Pattern for adding new screen screenshots:
 5. Run `npm run test:screenshots` to generate PNGs
 6. Run `npm run review:mobile` (or `npm run pipeline:mobile-review`) for LLM-based visual review
 
-Screenshots are gitignored (generated artifacts). Each Playwright project
-that runs E2E tests uses all 3 browsers; the `screenshot` project uses
-chromium only for deterministic rendering.
+The review artifacts under `tests/e2e/screenshots/` are generated and gitignored. Separately, `takeScreenshot()` uses Argos and may write tracked artifacts under `screenshots/screenshot/` (`*.png` and `*.argos.json`). Local E2E or screenshot verification can therefore dirty those tracked files; restore incidental changes after exploratory runs unless the task intentionally updates visual baselines. Each Playwright project that runs E2E tests uses all 3 browsers; the `screenshot` project uses chromium only for deterministic rendering.
 
 ## Commit Messages
 

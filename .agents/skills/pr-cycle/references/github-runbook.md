@@ -73,6 +73,14 @@ Use a full `--log` only when the failed-log slice is insufficient and the run is
 
 Wait until relevant checks are terminal. `pr_wait.py` exits 0 only for a fully terminal-green rollup. A terminal rollup containing `SKIPPED`, `NEUTRAL`, or no usable checks returns `terminal_requires_adjudication` with a non-zero exit so callers cannot accidentally treat it as green. Only clearly legitimate conditional skips are acceptable after explicit adjudication. Queued, pending, in-progress, cancelled, timed-out, action-required, and failing relevant checks are not green.
 
+A successful wrapper job can still hide a failing underlying command when a workflow intentionally uses `continue-on-error`, soft-fail shell logic, or an equivalent masking mechanism. Do not inspect every successful job step by default, but when a relevant readiness signal is known to be soft-failed, inspect the job's step-level outcome/conclusion and logs before counting it as green:
+
+```bash
+gh run view <run-id> --repo <owner/repo> --json jobs
+```
+
+If the underlying command failed, adjudicate it explicitly as a real PR issue or a justified advisory/non-blocking condition; the green wrapper alone is not evidence of success.
+
 ## Exact-revision discipline
 
 Capture the pushed head SHA after every push and the live target-branch tip before every independent review. A reviewer verdict and readiness decision are valid only for that exact head/base-tip pair.
@@ -106,5 +114,13 @@ Perform cleanup only for the merged PR branch and its isolated worktree.
 5. Remove the local PR branch only after step 2 proved it safe and the worktree is gone.
 6. Verify the remote branch is absent and the PR worktree is not registered.
 7. Recheck unrelated/default worktrees and preserve all pre-existing changes.
+
+Some repositories run pre-push hooks even for a remote branch deletion. If step 3 is blocked or times out solely because such a hook is replaying validation that was already satisfied for the verified merged head, and step 2 already proved exact local/remote tip parity, retry the cleanup-only deletion without hooks:
+
+```bash
+git push --no-verify origin --delete <head-branch>
+```
+
+This exception is only for post-merge branch deletion. Never use it to skip validation on a code push or before merge verification.
 
 Avoid broad cleanup or pruning commands during normal PR cleanup.
