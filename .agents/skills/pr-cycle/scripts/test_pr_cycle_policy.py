@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import re
 import unittest
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -24,8 +25,13 @@ def assert_policy_contract(
     test.assertIn("reply with precise evidence", skill_text)
 
     test.assertIn("Address nits when they materially improve the codebase", skill_text)
-    test.assertIn("correctness, maintainability, test quality, clarity, or operability", skill_text)
+    test.assertIn(
+        "correctness, security, data-loss prevention, maintainability, test quality, clarity, or operability",
+        skill_text,
+    )
     test.assertIn("Skip purely cosmetic or preference-only nits", skill_text)
+    test.assertIn("After two consecutive nit-only revision cycles", skill_text)
+    test.assertIn("defer remaining marginal nits", skill_text)
 
     test.assertIn("exact isolated worktree and local branch captured at cycle start", skill_text)
     test.assertIn("similarly named issue/feature worktrees or branches as unrelated", skill_text)
@@ -115,7 +121,7 @@ class PrCyclePolicyTests(unittest.TestCase):
         ci_text = CI.read_text()
         self.assertEqual(ci_text.count(command), 1)
         ci_text = ci_text.replace(command, f"# {command}", 1)
-        with self.assertRaisesRegex(AssertionError, command):
+        with self.assertRaisesRegex(AssertionError, re.escape(command)):
             assert_policy_contract(
                 self,
                 skill_text=SKILL.read_text(),
