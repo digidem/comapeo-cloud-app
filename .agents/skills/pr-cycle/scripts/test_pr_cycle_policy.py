@@ -170,11 +170,39 @@ class PrCyclePolicyTests(unittest.TestCase):
 
     def test_readiness_request_is_not_merge_authorization(self) -> None:
         skill_text = SKILL.read_text().replace(
-            "A request to run a PR cycle, make the PR merge-ready",
-            "A request to run a PR cycle or make the PR merge-ready authorizes merge",
+            "A request to run a PR cycle, make the PR merge-ready, review it, or report readiness is not merge authorization.",
+            "A readiness request authorizes merge.",
         )
         with self.assertRaisesRegex(
             AssertionError, "A request to run a PR cycle, make the PR merge-ready"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_authorization_provenance_checkpoint_is_required(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "Perform an authorization-provenance checkpoint before any merge command.",
+            "Skip authorization provenance before merge commands.",
+        )
+        with self.assertRaisesRegex(AssertionError, "authorization-provenance checkpoint"):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_external_merge_must_not_be_claimed_by_current_execution(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "If the PR became merged without this execution issuing the merge command",
+            "If this execution did not issue the merge command, claim the merge anyway",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "If the PR became merged without this execution issuing the merge command"
         ):
             assert_policy_contract(
                 self,
