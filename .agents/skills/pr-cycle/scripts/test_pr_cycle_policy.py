@@ -56,6 +56,7 @@ def assert_policy_contract(
     test.assertIn("GitHub actions run under the user's authenticated account", skill_text)
     test.assertIn("treat that as a concurrent writer", skill_text)
     test.assertIn("A concurrent writer never grants merge authority", skill_text)
+    test.assertIn("a pre-existing head this execution reviewed and accepted", skill_text)
     test.assertIn("authorization-provenance checkpoint", skill_text)
     test.assertIn("A request to run a PR cycle, make the PR merge-ready", skill_text)
     test.assertIn("If the PR became merged without this execution issuing the merge command", skill_text)
