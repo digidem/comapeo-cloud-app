@@ -1,5 +1,6 @@
 import {
   act,
+  fireEvent,
   render,
   screen,
   userEvent,
@@ -11,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
 import { getDb, resetDb } from '@/lib/db';
+import { MAX_GEOJSON_OVERLAY_BYTES } from '@/lib/map/geojson-overlays';
 import { MapScreen } from '@/screens/MapScreen/MapScreen';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -124,11 +126,477 @@ describe('MapScreen', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Base map')).toBeInTheDocument();
     expect(screen.getByText('Bounds')).toBeInTheDocument();
+    expect(screen.getByText('Reference data')).toBeInTheDocument();
     expect(screen.getByText('Zoom range')).toBeInTheDocument();
     expect(screen.getByText('Saved maps')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Draw bounds' }),
     ).toBeInTheDocument();
+  });
+
+  it('adds multiple reference overlays and supports visibility and removal', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const pointFile = new File(
+      ['{"type":"Point","coordinates":[-60,-3]}'],
+      'point.geojson',
+      { type: 'application/geo+json' },
+    );
+    const lineFile = new File(
+      ['{"type":"LineString","coordinates":[[-60,-3],[-59,-2]]}'],
+      'route.geojson',
+      { type: 'application/geo+json' },
+    );
+
+    await user.upload(input, [pointFile, lineFile]);
+
+    expect(await screen.findByText('point.geojson')).toBeInTheDocument();
+    expect(screen.getByText('route.geojson')).toBeInTheDocument();
+    expect(
+      screen.getAllByTestId(/mock-source-reference-overlay-.*/),
+    ).toHaveLength(2);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Hide point.geojson' }),
+    );
+    expect(
+      screen.getAllByTestId(/mock-source-reference-overlay-.*/),
+    ).toHaveLength(2);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove route.geojson' }),
+    );
+    expect(screen.queryByText('route.geojson')).not.toBeInTheDocument();
+  });
+
+  it('keeps import loading active until overlapping picker and drop imports both finish', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    let resolveFirst!: (value: string) => void;
+    let resolveSecond!: (value: string) => void;
+    const firstRead = new Promise<string>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondRead = new Promise<string>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const firstFile = new File([], 'first.geojson', {
+      type: 'application/geo+json',
+    });
+    const secondFile = new File([], 'second.geojson', {
+      type: 'application/geo+json',
+    });
+    Object.defineProperty(firstFile, 'text', {
+      value: vi.fn(() => firstRead),
+    });
+    Object.defineProperty(secondFile, 'text', {
+      value: vi.fn(() => secondRead),
+    });
+
+    await user.upload(
+      await screen.findByLabelText('Add GeoJSON reference'),
+      firstFile,
+    );
+    expect(await screen.findByText('Adding GeoJSON…')).toBeInTheDocument();
+
+    fireEvent.drop(
+      screen.getByRole('region', { name: 'Map authoring canvas' }),
+      {
+        dataTransfer: { types: ['Files'], files: [secondFile] },
+      },
+    );
+
+    await act(async () => {
+      resolveFirst('{"type":"Point","coordinates":[-60,-3]}');
+      await firstRead;
+    });
+    expect(await screen.findByText('first.geojson')).toBeInTheDocument();
+    expect(screen.getByText('Adding GeoJSON…')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSecond('{"type":"Point","coordinates":[-59,-2]}');
+      await secondRead;
+    });
+    expect(await screen.findByText('second.geojson')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('Adding GeoJSON…')).not.toBeInTheDocument();
+    });
+  });
+
+  it('does not surface a stale older failure after a newer import already succeeded', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    let resolveFirst!: (value: string) => void;
+    let resolveSecond!: (value: string) => void;
+    const firstRead = new Promise<string>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondRead = new Promise<string>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const firstFile = new File([], 'broken-first.geojson', {
+      type: 'application/geo+json',
+    });
+    const secondFile = new File([], 'valid-second.geojson', {
+      type: 'application/geo+json',
+    });
+    Object.defineProperty(firstFile, 'text', {
+      value: vi.fn(() => firstRead),
+    });
+    Object.defineProperty(secondFile, 'text', {
+      value: vi.fn(() => secondRead),
+    });
+
+    await user.upload(
+      await screen.findByLabelText('Add GeoJSON reference'),
+      firstFile,
+    );
+    fireEvent.drop(
+      screen.getByRole('region', { name: 'Map authoring canvas' }),
+      { dataTransfer: { types: ['Files'], files: [secondFile] } },
+    );
+
+    await act(async () => {
+      resolveSecond('{"type":"Point","coordinates":[-59,-2]}');
+      await secondRead;
+    });
+    expect(await screen.findByText('valid-second.geojson')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveFirst('{"type":"Point","coordinates":["bad",0]}');
+      await firstRead;
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('GeoJSON import failed')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/broken-first\.geojson is not valid GeoJSON/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not surface stale import failures after MapScreen unmounts', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: string) => void;
+    let resolveSecond!: (value: string) => void;
+    const firstRead = new Promise<string>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondRead = new Promise<string>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const firstFile = new File([], 'unmounted-broken.geojson', {
+      type: 'application/geo+json',
+    });
+    const secondFile = new File([], 'newer-valid.geojson', {
+      type: 'application/geo+json',
+    });
+    Object.defineProperty(firstFile, 'text', {
+      value: vi.fn(() => firstRead),
+    });
+    Object.defineProperty(secondFile, 'text', {
+      value: vi.fn(() => secondRead),
+    });
+
+    const { rerender } = render(<MapScreen />);
+    await user.upload(
+      await screen.findByLabelText('Add GeoJSON reference'),
+      firstFile,
+    );
+    fireEvent.drop(
+      screen.getByRole('region', { name: 'Map authoring canvas' }),
+      { dataTransfer: { types: ['Files'], files: [secondFile] } },
+    );
+
+    await act(async () => {
+      resolveSecond('{"type":"Point","coordinates":[-59,-2]}');
+      await secondRead;
+    });
+    expect(await screen.findByText('newer-valid.geojson')).toBeInTheDocument();
+    rerender(<div>Another screen</div>);
+
+    await act(async () => {
+      resolveFirst('{"type":"Point","coordinates":["bad",0]}');
+      await firstRead;
+    });
+
+    expect(screen.getByText('Another screen')).toBeInTheDocument();
+    expect(screen.queryByText('GeoJSON import failed')).not.toBeInTheDocument();
+  });
+
+  it('shows an older failure while a newer import is pending, then clears it when the newer import succeeds', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    let resolveFirst!: (value: string) => void;
+    let resolveSecond!: (value: string) => void;
+    const firstRead = new Promise<string>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondRead = new Promise<string>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const firstFile = new File([], 'broken-first.geojson', {
+      type: 'application/geo+json',
+    });
+    const secondFile = new File([], 'valid-second.geojson', {
+      type: 'application/geo+json',
+    });
+    Object.defineProperty(firstFile, 'text', {
+      value: vi.fn(() => firstRead),
+    });
+    Object.defineProperty(secondFile, 'text', {
+      value: vi.fn(() => secondRead),
+    });
+
+    await user.upload(
+      await screen.findByLabelText('Add GeoJSON reference'),
+      firstFile,
+    );
+    fireEvent.drop(
+      screen.getByRole('region', { name: 'Map authoring canvas' }),
+      { dataTransfer: { types: ['Files'], files: [secondFile] } },
+    );
+
+    await act(async () => {
+      resolveFirst('{"type":"Point","coordinates":["bad",0]}');
+      await firstRead;
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'broken-first.geojson is not valid GeoJSON.',
+    );
+
+    await act(async () => {
+      resolveSecond('{"type":"Point","coordinates":[-59,-2]}');
+      await secondRead;
+    });
+    expect(await screen.findByText('valid-second.geojson')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
+  it('rejects an invalid multi-file batch without adding partial overlay state', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const validFile = new File(
+      ['{"type":"Point","coordinates":[-60,-3]}'],
+      'valid.geojson',
+      { type: 'application/geo+json' },
+    );
+    const invalidFile = new File(
+      ['{"type":"Point","coordinates":["bad",0]}'],
+      'broken.geojson',
+      {
+        type: 'application/geo+json',
+      },
+    );
+
+    await user.upload(input, [validFile, invalidFile]);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'broken.geojson is not valid GeoJSON. No files from this selection were added.',
+    );
+    expect(screen.queryByText('valid.geojson')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId(/mock-source-reference-overlay-/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('explains invalid polygon rings instead of reporting only generic GeoJSON failure', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    await user.upload(
+      await screen.findByLabelText('Add GeoJSON reference'),
+      new File(
+        [
+          JSON.stringify({
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-61, -4],
+                [-59, -4],
+                [-59, -2],
+                [-61, -3],
+              ],
+            ],
+          }),
+        ],
+        'unclosed.geojson',
+        { type: 'application/geo+json' },
+      ),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'unclosed.geojson has invalid polygon rings.',
+    );
+  });
+
+  it('maps unsupported, oversized, and wrong-file errors to user-visible messages', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    const input = await screen.findByLabelText('Add GeoJSON reference');
+    await user.upload(
+      input,
+      new File(
+        ['{"type":"FeatureCollection","features":[]}'],
+        'empty.geojson',
+        {
+          type: 'application/geo+json',
+        },
+      ),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'empty.geojson has no supported geometry to display.',
+    );
+
+    const oversized = new File(
+      ['{"type":"Point","coordinates":[-60,-3]}'],
+      'large.geojson',
+      { type: 'application/geo+json' },
+    );
+    Object.defineProperty(oversized, 'size', {
+      value: MAX_GEOJSON_OVERLAY_BYTES + 1,
+    });
+    await user.upload(input, oversized);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'large.geojson is larger than 5 MB.',
+    );
+
+    const wrongFile = new File(['not geojson'], 'photo.jpg', {
+      type: 'image/jpeg',
+    });
+    fireEvent.drop(
+      screen.getByRole('region', { name: 'Map authoring canvas' }),
+      { dataTransfer: { types: ['Files'], files: [wrongFile] } },
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'photo.jpg is not a GeoJSON or JSON file.',
+    );
+  });
+
+  it('shows and dismisses drag-and-drop import failures on the map', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+    const brokenFile = new File(
+      ['{"type":"Point","coordinates":["bad",0]}'],
+      'dropped-broken.geojson',
+      { type: 'application/geo+json' },
+    );
+
+    fireEvent.drop(
+      await screen.findByRole('region', { name: 'Map authoring canvas' }),
+      { dataTransfer: { types: ['Files'], files: [brokenFile] } },
+    );
+
+    const mapAlert = await screen.findByTestId('reference-overlay-map-error');
+    expect(mapAlert).toHaveTextContent(
+      'dropped-broken.geojson is not valid GeoJSON.',
+    );
+    await user.click(
+      within(mapAlert).getByRole('button', { name: 'Dismiss error' }),
+    );
+    expect(
+      screen.queryByTestId('reference-overlay-map-error'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('caps retained reference overlays to protect mobile memory', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const files = Array.from(
+      { length: 10 },
+      (_, index) =>
+        new File(
+          [`{"type":"Point","coordinates":[${-60 + index / 10},-3]}`],
+          `reference-${index}.geojson`,
+          { type: 'application/geo+json' },
+        ),
+    );
+    await user.upload(input, files);
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId(/mock-source-reference-overlay-/),
+      ).toHaveLength(10);
+    });
+
+    await user.upload(
+      input,
+      new File(['{"type":"Point","coordinates":[-58,-2]}'], 'extra.geojson', {
+        type: 'application/geo+json',
+      }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'You can keep up to 10 reference files on the map. Remove one before adding more.',
+    );
+    expect(screen.queryByTitle('extra.geojson')).not.toBeInTheDocument();
+    expect(
+      screen.getAllByTestId(/mock-source-reference-overlay-/),
+    ).toHaveLength(10);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove reference-0.geojson' }),
+    );
+    await user.upload(
+      input,
+      new File(
+        ['{"type":"Point","coordinates":[-58,-2]}'],
+        'replacement.geojson',
+        {
+          type: 'application/geo+json',
+        },
+      ),
+    );
+    expect(await screen.findByText('replacement.geojson')).toBeInTheDocument();
+    expect(
+      screen.getAllByTestId(/mock-source-reference-overlay-/),
+    ).toHaveLength(10);
+  });
+
+  it('clears transient reference overlays when the selected project changes', async () => {
+    const user = userEvent.setup();
+    await getDb().projects.add({
+      localId: 'project-2',
+      sourceType: 'local',
+      sourceId: 'local-2',
+      name: 'Second Project',
+      createdAt: '2026-06-29T00:00:00.000Z',
+      updatedAt: '2026-06-29T00:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    render(<MapScreen />);
+
+    const input = await screen.findByLabelText('Add GeoJSON reference');
+    await user.upload(
+      input,
+      new File(
+        ['{"type":"Point","coordinates":[-60,-3]}'],
+        'project-1.geojson',
+        { type: 'application/geo+json' },
+      ),
+    );
+    expect(await screen.findByText('project-1.geojson')).toBeInTheDocument();
+
+    act(() => {
+      useProjectStore.setState({ selectedProjectId: 'project-2' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('project-1.geojson')).not.toBeInTheDocument();
+    });
+    expect(
+      screen.queryByTestId(/mock-source-reference-overlay-.*/),
+    ).not.toBeInTheDocument();
   });
 
   it('moves compact map attribution to the bottom-left', async () => {
@@ -184,6 +652,224 @@ describe('MapScreen', () => {
       expect(
         screen.getAllByRole('heading', { name: 'Bounds', level: 2 }),
       ).toHaveLength(1);
+    });
+
+    it('shows invalid GeoJSON errors inside the mobile settings sheet', async () => {
+      const user = userEvent.setup();
+      render(<MapScreen />);
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Map settings' }),
+      );
+      const input = screen.getByLabelText('Add GeoJSON reference');
+      await user.upload(
+        input,
+        new File(
+          ['{"type":"Point","coordinates":["bad",0]}'],
+          'broken.geojson',
+          { type: 'application/geo+json' },
+        ),
+      );
+
+      const settingsDialog = screen.getByRole('dialog', {
+        name: 'Map settings',
+      });
+      expect(
+        await within(settingsDialog).findByRole('alert'),
+      ).toHaveTextContent('broken.geojson is not valid GeoJSON.');
+
+      await user.click(
+        within(settingsDialog).getByRole('button', {
+          name: 'Close map settings',
+        }),
+      );
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Map settings' }));
+      expect(
+        within(
+          screen.getByRole('dialog', { name: 'Map settings' }),
+        ).queryByRole('alert'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('routes a late picker failure to a toast after the settings sheet closes', async () => {
+      const user = userEvent.setup();
+      let resolveRead!: (value: string) => void;
+      const pendingRead = new Promise<string>((resolve) => {
+        resolveRead = resolve;
+      });
+      const file = new File([], 'late-broken.geojson', {
+        type: 'application/geo+json',
+      });
+      Object.defineProperty(file, 'text', {
+        value: vi.fn(() => pendingRead),
+      });
+
+      render(<MapScreen />);
+      await user.click(
+        await screen.findByRole('button', { name: 'Map settings' }),
+      );
+      const settingsDialog = screen.getByRole('dialog', {
+        name: 'Map settings',
+      });
+      await user.upload(
+        within(settingsDialog).getByLabelText('Add GeoJSON reference'),
+        file,
+      );
+      await user.click(
+        within(settingsDialog).getByRole('button', {
+          name: 'Close map settings',
+        }),
+      );
+
+      await act(async () => {
+        resolveRead('{"type":"Point","coordinates":["bad",0]}');
+        await pendingRead;
+      });
+
+      expect(
+        await screen.findByText('GeoJSON import failed'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Map settings' }));
+      expect(
+        within(
+          screen.getByRole('dialog', { name: 'Map settings' }),
+        ).queryByRole('alert'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('dismisses an older picker failure toast when a newer import succeeds', async () => {
+      const user = userEvent.setup();
+      let resolveFirst!: (value: string) => void;
+      let resolveSecond!: (value: string) => void;
+      const firstRead = new Promise<string>((resolve) => {
+        resolveFirst = resolve;
+      });
+      const secondRead = new Promise<string>((resolve) => {
+        resolveSecond = resolve;
+      });
+      const firstFile = new File([], 'older-broken.geojson', {
+        type: 'application/geo+json',
+      });
+      const secondFile = new File([], 'newer-valid.geojson', {
+        type: 'application/geo+json',
+      });
+      Object.defineProperty(firstFile, 'text', {
+        value: vi.fn(() => firstRead),
+      });
+      Object.defineProperty(secondFile, 'text', {
+        value: vi.fn(() => secondRead),
+      });
+
+      render(<MapScreen />);
+      await user.click(
+        await screen.findByRole('button', { name: 'Map settings' }),
+      );
+      const settingsDialog = screen.getByRole('dialog', {
+        name: 'Map settings',
+      });
+      await user.upload(
+        within(settingsDialog).getByLabelText('Add GeoJSON reference'),
+        firstFile,
+      );
+      await user.click(
+        within(settingsDialog).getByRole('button', {
+          name: 'Close map settings',
+        }),
+      );
+      fireEvent.drop(
+        screen.getByRole('region', { name: 'Map authoring canvas' }),
+        { dataTransfer: { types: ['Files'], files: [secondFile] } },
+      );
+
+      await act(async () => {
+        resolveFirst('{"type":"Point","coordinates":["bad",0]}');
+        await firstRead;
+      });
+      expect(
+        await screen.findByText('GeoJSON import failed'),
+      ).toBeInTheDocument();
+
+      await act(async () => {
+        resolveSecond('{"type":"Point","coordinates":[-59,-2]}');
+        await secondRead;
+      });
+      await waitFor(() => {
+        expect(
+          screen.queryByText('GeoJSON import failed'),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.queryByText(/older-broken\.geojson is not valid GeoJSON/),
+        ).not.toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Map settings' }));
+      expect(
+        await within(
+          screen.getByRole('dialog', { name: 'Map settings' }),
+        ).findByText('newer-valid.geojson'),
+      ).toBeInTheDocument();
+    });
+
+    it('dismisses an older picker failure toast when a newer limit error wins', async () => {
+      const user = userEvent.setup();
+      let resolveRead!: (value: string) => void;
+      const pendingRead = new Promise<string>((resolve) => {
+        resolveRead = resolve;
+      });
+      const file = new File([], 'older-broken.geojson', {
+        type: 'application/geo+json',
+      });
+      Object.defineProperty(file, 'text', {
+        value: vi.fn(() => pendingRead),
+      });
+
+      render(<MapScreen />);
+      await user.click(
+        await screen.findByRole('button', { name: 'Map settings' }),
+      );
+      const settingsDialog = screen.getByRole('dialog', {
+        name: 'Map settings',
+      });
+      await user.upload(
+        within(settingsDialog).getByLabelText('Add GeoJSON reference'),
+        file,
+      );
+      await user.click(
+        within(settingsDialog).getByRole('button', {
+          name: 'Close map settings',
+        }),
+      );
+
+      await act(async () => {
+        resolveRead('{"type":"Point","coordinates":["bad",0]}');
+        await pendingRead;
+      });
+      expect(
+        await screen.findByText('GeoJSON import failed'),
+      ).toBeInTheDocument();
+
+      const tooManyFiles = Array.from(
+        { length: 11 },
+        (_, index) =>
+          new File(['{}'], `overlay-${index}.geojson`, {
+            type: 'application/geo+json',
+          }),
+      );
+      fireEvent.drop(
+        screen.getByRole('region', { name: 'Map authoring canvas' }),
+        { dataTransfer: { types: ['Files'], files: tooManyFiles } },
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'You can keep up to 10 reference files on the map. Remove one before adding more.',
+      );
+      expect(
+        screen.queryByText('GeoJSON import failed'),
+      ).not.toBeInTheDocument();
     });
 
     it('rejects a frame confirm that crosses the antimeridian instead of drawing an inverted bbox', async () => {

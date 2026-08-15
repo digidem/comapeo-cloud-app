@@ -350,7 +350,6 @@ describe('SettingsScreen', () => {
             this.onload?.({} as Event);
           }
         } as unknown as typeof window.FileReader;
-
         render(<SettingsScreen />);
 
         fireEvent.change(screen.getByTestId('backup-file-input'), {

@@ -13,6 +13,7 @@ import { CloseIcon } from '@/components/ui/close-icon';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { useCreateMap, useMaps } from '@/hooks/useMaps';
 import { useProjects } from '@/hooks/useProjects';
@@ -25,6 +26,12 @@ import {
   finalizeBbox,
   spansAntimeridian,
 } from '@/lib/map/bbox-utils';
+import {
+  type GeoJsonOverlay,
+  GeoJsonOverlayError,
+  MAX_GEOJSON_OVERLAY_MEGABYTES,
+  readGeoJsonOverlayFile,
+} from '@/lib/map/geojson-overlays';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 import { uuid } from '@/lib/uuid';
 import { useProjectStore } from '@/stores/project-store';
@@ -32,6 +39,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { BoundsEditor } from './BoundsEditor';
 import { DownloadPanel } from './DownloadPanel';
 import { DrawBoundsControl } from './DrawBoundsControl';
+import { GeoJsonOverlayControl } from './GeoJsonOverlayControl';
 import { ImportSmpButton } from './ImportSmpButton';
 import { MapAuthoringCanvas } from './MapAuthoringCanvas';
 import { SavedMapsList } from './SavedMapsList';
@@ -48,6 +56,7 @@ interface SettingsSheetProps {
 
 const DEFAULT_BBOX: [number, number, number, number] = [-75, -12, -45, 8];
 const DEFAULT_ZOOM: ZoomRange = { minZoom: 0, maxZoom: 14 };
+const MAX_REFERENCE_OVERLAYS = 10;
 
 // Frame overlay geometry for the mobile "pan-under-frame" draw pattern
 const FRAME_LEFT = 0.1; // 10% from left
@@ -110,6 +119,7 @@ function SettingsSheet({ open, onOpenChange, children }: SettingsSheetProps) {
 
 export function MapScreen() {
   const intl = useIntl();
+  const { addToast, dismissToast } = useToast();
   const isDesktop = useIsDesktop();
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const projectsQuery = useProjects();
@@ -123,6 +133,7 @@ export function MapScreen() {
     useState<[number, number, number, number]>(DEFAULT_BBOX);
   const [zoomRange, setZoomRange] = useState<ZoomRange>(DEFAULT_ZOOM);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsOpenRef = useRef(false);
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
   const [mapName, setMapName] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
@@ -131,8 +142,56 @@ export function MapScreen() {
   >(null);
   const previousBboxRef = useRef<[number, number, number, number] | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(false);
   const [showUndo, setShowUndo] = useState(false);
   const [frameError, setFrameError] = useState<string | null>(null);
+  const [referenceOverlays, setReferenceOverlays] = useState<GeoJsonOverlay[]>(
+    [],
+  );
+  const [referenceOverlayError, setReferenceOverlayError] = useState<
+    string | null
+  >(null);
+  const [referenceOverlayErrorSurface, setReferenceOverlayErrorSurface] =
+    useState<'controls' | 'map' | null>(null);
+  const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
+  const referenceOverlayImportsRef = useRef(new Set<symbol>());
+  const referenceOverlayIdsRef = useRef(new Set<string>());
+  const referenceOverlayReservedSlotsRef = useRef(0);
+  const referenceOverlayGenerationRef = useRef(0);
+  const referenceOverlayImportSequenceRef = useRef(0);
+  const referenceOverlayLatestUiOutcomeRef = useRef(0);
+  const referenceOverlayToastRef = useRef<{
+    id: string;
+    sequence: number;
+  } | null>(null);
+  const dismissToastRef = useRef(dismissToast);
+  const [referenceOverlayProjectId, setReferenceOverlayProjectId] =
+    useState(selectedProjectId);
+  if (referenceOverlayProjectId !== selectedProjectId) {
+    setReferenceOverlayProjectId(selectedProjectId);
+    setReferenceOverlays([]);
+    setReferenceOverlayError(null);
+    setReferenceOverlayErrorSurface(null);
+    setReferenceOverlayLoading(false);
+  }
+
+  useEffect(() => {
+    dismissToastRef.current = dismissToast;
+  }, [dismissToast]);
+
+  useEffect(() => {
+    referenceOverlayGenerationRef.current += 1;
+    referenceOverlayImportsRef.current.clear();
+    referenceOverlayIdsRef.current.clear();
+    referenceOverlayReservedSlotsRef.current = 0;
+    referenceOverlayImportSequenceRef.current = 0;
+    referenceOverlayLatestUiOutcomeRef.current = 0;
+    if (referenceOverlayToastRef.current) {
+      dismissToastRef.current(referenceOverlayToastRef.current.id);
+      referenceOverlayToastRef.current = null;
+    }
+  }, [selectedProjectId]);
+
   // Track the computed project bbox for hasConfigChanges comparison
   const [projectBbox, setProjectBbox] = useState<
     [number, number, number, number] | null
@@ -149,8 +208,14 @@ export function MapScreen() {
   }, [drawMode]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      if (referenceOverlayToastRef.current) {
+        dismissToastRef.current(referenceOverlayToastRef.current.id);
+        referenceOverlayToastRef.current = null;
+      }
     };
   }, []);
 
@@ -269,6 +334,173 @@ export function MapScreen() {
     setShowUndo(false);
   }
 
+  function dismissReferenceOverlayToastThrough(sequence: number) {
+    const currentToast = referenceOverlayToastRef.current;
+    if (!currentToast || currentToast.sequence > sequence) return;
+    dismissToast(currentToast.id);
+    referenceOverlayToastRef.current = null;
+  }
+
+  async function handleReferenceOverlayFiles(
+    files: File[],
+    errorSurface: 'controls' | 'map' = 'controls',
+  ) {
+    if (files.length === 0) return;
+    const importProjectId = selectedProjectId;
+    const importGeneration = referenceOverlayGenerationRef.current;
+    const importSequence = referenceOverlayImportSequenceRef.current + 1;
+    referenceOverlayImportSequenceRef.current = importSequence;
+    const nextOverlayCount =
+      referenceOverlayIdsRef.current.size +
+      referenceOverlayReservedSlotsRef.current +
+      files.length;
+    if (nextOverlayCount > MAX_REFERENCE_OVERLAYS) {
+      referenceOverlayLatestUiOutcomeRef.current = importSequence;
+      dismissReferenceOverlayToastThrough(importSequence);
+      setReferenceOverlayError(
+        intl.formatMessage(mapMessages.referenceOverlaysLimit, {
+          max: MAX_REFERENCE_OVERLAYS,
+        }),
+      );
+      setReferenceOverlayErrorSurface(errorSurface);
+      return;
+    }
+
+    referenceOverlayReservedSlotsRef.current += files.length;
+    const importToken = Symbol('reference-overlay-import');
+    referenceOverlayImportsRef.current.add(importToken);
+    setReferenceOverlayLoading(true);
+    setReferenceOverlayError(null);
+    setReferenceOverlayErrorSurface(null);
+
+    try {
+      const results = await Promise.all(
+        files.map(async (file) => {
+          try {
+            return {
+              ok: true as const,
+              file,
+              data: await readGeoJsonOverlayFile(file),
+            };
+          } catch (error) {
+            return { ok: false as const, file, error };
+          }
+        }),
+      );
+      if (
+        !isMountedRef.current ||
+        useProjectStore.getState().selectedProjectId !== importProjectId ||
+        referenceOverlayGenerationRef.current !== importGeneration
+      ) {
+        return;
+      }
+
+      const failure = results.find((result) => !result.ok);
+      if (failure && !failure.ok) {
+        const values = {
+          name: failure.file.name,
+          max: MAX_GEOJSON_OVERLAY_MEGABYTES,
+        };
+        let errorMessage: string;
+        if (failure.error instanceof GeoJsonOverlayError) {
+          let message = mapMessages.referenceOverlaysInvalid;
+          if (failure.error.code === 'invalid-polygon-ring') {
+            message = mapMessages.referenceOverlaysInvalidPolygonRing;
+          } else if (failure.error.code === 'read') {
+            message = mapMessages.referenceOverlaysReadError;
+          } else if (failure.error.code === 'too-large') {
+            message = mapMessages.referenceOverlaysTooLarge;
+          } else if (failure.error.code === 'unsupported') {
+            message = mapMessages.referenceOverlaysUnsupported;
+          } else if (failure.error.code === 'unsupported-file') {
+            message = mapMessages.referenceOverlaysUnsupportedFile;
+          }
+          errorMessage = intl.formatMessage(message, values);
+        } else {
+          errorMessage = intl.formatMessage(
+            mapMessages.referenceOverlaysReadError,
+            values,
+          );
+        }
+
+        if (importSequence < referenceOverlayLatestUiOutcomeRef.current) {
+          return;
+        }
+        referenceOverlayLatestUiOutcomeRef.current = importSequence;
+        dismissReferenceOverlayToastThrough(importSequence);
+
+        const controlsUnavailable =
+          errorSurface === 'controls' && !isDesktop && !settingsOpenRef.current;
+        if (controlsUnavailable) {
+          const toastId = addToast({
+            variant: 'error',
+            title: intl.formatMessage(
+              mapMessages.referenceOverlaysImportFailed,
+            ),
+            description: errorMessage,
+          });
+          referenceOverlayToastRef.current = {
+            id: toastId,
+            sequence: importSequence,
+          };
+          return;
+        }
+        setReferenceOverlayError(errorMessage);
+        setReferenceOverlayErrorSurface(errorSurface);
+        return;
+      }
+
+      const additions: GeoJsonOverlay[] = results.flatMap((result) =>
+        result.ok
+          ? [
+              {
+                id: uuid(),
+                name: result.file.name,
+                data: result.data,
+                visible: true,
+              },
+            ]
+          : [],
+      );
+      for (const addition of additions) {
+        referenceOverlayIdsRef.current.add(addition.id);
+      }
+      setReferenceOverlays((current) => [...current, ...additions]);
+      if (importSequence >= referenceOverlayLatestUiOutcomeRef.current) {
+        referenceOverlayLatestUiOutcomeRef.current = importSequence;
+        dismissReferenceOverlayToastThrough(importSequence);
+        setReferenceOverlayError(null);
+        setReferenceOverlayErrorSurface(null);
+      }
+    } finally {
+      if (
+        isMountedRef.current &&
+        referenceOverlayGenerationRef.current === importGeneration
+      ) {
+        referenceOverlayReservedSlotsRef.current -= files.length;
+        referenceOverlayImportsRef.current.delete(importToken);
+        if (referenceOverlayImportsRef.current.size === 0) {
+          setReferenceOverlayLoading(false);
+        }
+      }
+    }
+  }
+
+  function handleReferenceOverlayToggle(id: string) {
+    setReferenceOverlays((current) =>
+      current.map((overlay) =>
+        overlay.id === id ? { ...overlay, visible: !overlay.visible } : overlay,
+      ),
+    );
+  }
+
+  function handleReferenceOverlayRemove(id: string) {
+    if (!referenceOverlayIdsRef.current.delete(id)) return;
+    setReferenceOverlays((current) =>
+      current.filter((overlay) => overlay.id !== id),
+    );
+  }
+
   function handleConfirmFrame() {
     const map = mapRef.current?.getMap();
     if (!map) return;
@@ -339,9 +571,18 @@ export function MapScreen() {
     );
   }, [bbox, zoomRange, selectedStyle, projectBbox]);
 
+  function handleSettingsOpenChange(open: boolean) {
+    settingsOpenRef.current = open;
+    setSettingsOpen(open);
+    if (!open && referenceOverlayErrorSurface === 'controls') {
+      setReferenceOverlayError(null);
+      setReferenceOverlayErrorSurface(null);
+    }
+  }
+
   function openNameDialog() {
     setNameError(null);
-    setSettingsOpen(false);
+    handleSettingsOpenChange(false);
     setNameDialogOpen(true);
   }
 
@@ -421,6 +662,22 @@ export function MapScreen() {
           projectLocalId={selectedProjectId}
           mapRef={mapRef}
         />
+        <GeoJsonOverlayControl
+          overlays={referenceOverlays}
+          onFilesSelected={handleReferenceOverlayFiles}
+          onToggle={handleReferenceOverlayToggle}
+          onRemove={handleReferenceOverlayRemove}
+          error={
+            referenceOverlayErrorSurface === 'controls'
+              ? referenceOverlayError
+              : null
+          }
+          onDismissError={() => {
+            setReferenceOverlayError(null);
+            setReferenceOverlayErrorSurface(null);
+          }}
+          loading={referenceOverlayLoading}
+        />
         <ZoomSelector value={zoomRange} onChange={setZoomRange} />
         <p className="text-xs text-text-muted">
           {intl.formatMessage(mapMessages.zoomDownloadNote)}
@@ -463,14 +720,41 @@ export function MapScreen() {
             onDrawCreate={handleDrawCreate}
             onDrawModeChange={handleDrawModeChange}
             fitBounds={autoFitBbox}
+            overlays={referenceOverlays}
+            onOverlayFilesDrop={(files) =>
+              handleReferenceOverlayFiles(files, 'map')
+            }
           />
+
+          {referenceOverlayError && referenceOverlayErrorSurface === 'map' ? (
+            <div
+              role="alert"
+              data-testid="reference-overlay-map-error"
+              className="absolute bottom-16 right-4 z-20 flex max-w-sm items-start gap-2 rounded-btn bg-error px-3 py-2 text-sm text-white shadow-card"
+            >
+              <span className="min-w-0 flex-1">{referenceOverlayError}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setReferenceOverlayError(null);
+                  setReferenceOverlayErrorSurface(null);
+                }}
+                aria-label={intl.formatMessage(
+                  mapMessages.referenceOverlaysDismiss,
+                )}
+                className="min-h-11 shrink-0 rounded-btn px-2 text-xs font-semibold text-white underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                {intl.formatMessage(mapMessages.referenceOverlaysDismissAction)}
+              </button>
+            </div>
+          ) : null}
 
           {drawMode !== 'draw_rectangle' && (
             <div className="absolute bottom-4 left-4 flex gap-2 lg:hidden">
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setSettingsOpen(true)}
+                onClick={() => handleSettingsOpenChange(true)}
               >
                 {intl.formatMessage(mapMessages.settings)}
               </Button>
@@ -571,7 +855,10 @@ export function MapScreen() {
         ) : null}
       </div>
 
-      <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+      <SettingsSheet
+        open={settingsOpen}
+        onOpenChange={handleSettingsOpenChange}
+      >
         {isDesktop ? null : renderControls()}
       </SettingsSheet>
 

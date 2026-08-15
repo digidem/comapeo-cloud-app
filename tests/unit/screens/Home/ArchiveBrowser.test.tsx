@@ -56,6 +56,82 @@ describe('ArchiveBrowser', () => {
     });
   });
 
+  it('shows a persistent Create Project action in the non-empty state', async () => {
+    const user = userEvent.setup();
+    const onCreateNew = vi.fn();
+
+    render(
+      <ArchiveBrowser
+        selectedProjectId={null}
+        onSelect={vi.fn()}
+        onCreateNew={onCreateNew}
+        onAddServer={vi.fn()}
+        onSelectServer={vi.fn()}
+      />,
+    );
+
+    const createProjectButton = screen.getByRole('button', {
+      name: 'Create Project',
+    });
+
+    await user.click(createProjectButton);
+
+    expect(onCreateNew).toHaveBeenCalledOnce();
+  });
+
+  it('does not render the persistent create action while projects are loading', () => {
+    mockUseProjects.mockReturnValue({
+      data: [],
+      isLoading: true,
+      isError: false,
+      error: null,
+      status: 'pending',
+    } as unknown as ReturnType<typeof useProjects>);
+
+    render(
+      <ArchiveBrowser
+        selectedProjectId={null}
+        onSelect={vi.fn()}
+        onCreateNew={vi.fn()}
+        onAddServer={vi.fn()}
+        onSelectServer={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'Create Project' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('skeleton')).toHaveStyle({ height: '44px' });
+  });
+
+  it('renders exactly one create affordance in the empty state', () => {
+    useAuthStore.setState({ servers: [] });
+    mockUseArchiveStatus.mockReturnValue({
+      servers: [],
+      anyError: false,
+      anySyncing: false,
+    });
+
+    render(
+      <ArchiveBrowser
+        selectedProjectId={null}
+        onSelect={vi.fn()}
+        onCreateNew={vi.fn()}
+        onAddServer={vi.fn()}
+        onSelectServer={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getAllByText('Create Project', { selector: 'button' }),
+    ).toHaveLength(1);
+    expect(
+      screen.getByRole('button', {
+        name: 'Create your first project from project list',
+      }),
+    ).toBeInTheDocument();
+  });
+
   it('renders remote archive overflow button with correct aria-label', async () => {
     const user = userEvent.setup();
     const onSelectServer = vi.fn();

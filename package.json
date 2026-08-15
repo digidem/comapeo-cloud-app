@@ -56,7 +56,8 @@
     "review:all": "npx tsx scripts/review-mobile-visuals.ts --viewport both",
     "pipeline:mobile-review": "npm run test:screenshots && npm run storybook:screenshots:mobile && npm run review:mobile",
     "pipeline:desktop-review": "npm run storybook:screenshots:desktop && npm run review:desktop:storybook",
-    "pipeline:review": "npm run storybook:screenshots && npm run review:all"
+    "pipeline:review": "npm run storybook:screenshots && npm run review:all",
+    "ops:tile-rate-limit": "npx tsx scripts/tile-rate-limit.ts"
   },
   "overrides": {
     "axios": "^1.18.1",

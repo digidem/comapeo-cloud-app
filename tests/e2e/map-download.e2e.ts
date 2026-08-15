@@ -180,6 +180,134 @@ async function seedMapDownloadTest(
 // Tests
 // ---------------------------------------------------------------------------
 
+async function prepareMapAuthoring(
+  page: import('@playwright/test').Page,
+  browserName: string,
+): Promise<void> {
+  test.skip(
+    browserName === 'webkit',
+    'WebKit skipped: this helper uses the same raw IndexedDB seed pattern as the map download E2E.',
+  );
+  await setupMockServer(page);
+  await page.goto('/map');
+  await page.waitForLoadState('domcontentloaded');
+  await seedMapDownloadTest(page, {
+    id: crypto.randomUUID(),
+    projectLocalId: 'geojson-e2e-project',
+    name: 'GeoJSON E2E Seed Map',
+    bbox: [-61, -4, -59, -2],
+    maxZoom: 0,
+  });
+  await page.reload();
+  await page.waitForLoadState('domcontentloaded');
+  await expect(
+    page.getByRole('region', { name: 'Map authoring canvas' }),
+  ).toBeVisible({
+    timeout: 10_000,
+  });
+}
+
+const MIXED_GEOJSON = JSON.stringify({
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: { name: 'checkpoint' },
+      geometry: { type: 'Point', coordinates: [-60, -3] },
+    },
+    {
+      type: 'Feature',
+      properties: { name: 'route' },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [-60, -3],
+          [-59.5, -2.5],
+        ],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: { name: 'territory' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-61, -4],
+            [-59, -4],
+            [-59, -2],
+            [-61, -4],
+          ],
+        ],
+      },
+    },
+  ],
+});
+
+test.describe('GeoJSON reference overlays (E2E)', () => {
+  test('desktop file picker adds, hides, shows, and removes a reference overlay', async ({
+    page,
+    browserName,
+  }) => {
+    await prepareMapAuthoring(page, browserName);
+
+    const input = page.getByLabel('Add GeoJSON reference');
+    await input.setInputFiles({
+      name: 'mixed-reference.geojson',
+      mimeType: 'application/geo+json',
+      buffer: Buffer.from(MIXED_GEOJSON),
+    });
+
+    await expect(page.getByTitle('mixed-reference.geojson')).toBeVisible();
+    const hideButton = page.getByRole('button', {
+      name: 'Hide mixed-reference.geojson',
+    });
+    await hideButton.click();
+    await expect(
+      page.getByRole('button', { name: 'Show mixed-reference.geojson' }),
+    ).toBeVisible();
+
+    await page
+      .getByRole('button', { name: 'Show mixed-reference.geojson' })
+      .click();
+    await expect(hideButton).toBeVisible();
+
+    await page
+      .getByRole('button', { name: 'Remove mixed-reference.geojson' })
+      .click();
+    await expect(page.getByTitle('mixed-reference.geojson')).toHaveCount(0);
+  });
+
+  test('mobile file picker remains available through map settings', async ({
+    page,
+    browserName,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await prepareMapAuthoring(page, browserName);
+
+    await page.getByRole('button', { name: 'Map settings' }).click();
+    const input = page.getByLabel('Add GeoJSON reference');
+    await expect(input).toBeAttached();
+    await input.setInputFiles({
+      name: 'mobile-reference.geojson',
+      mimeType: 'application/geo+json',
+      buffer: Buffer.from('{"type":"Point","coordinates":[-60,-3]}'),
+    });
+
+    await expect(page.getByTitle('mobile-reference.geojson')).toBeVisible();
+
+    await input.setInputFiles({
+      name: 'broken.geojson',
+      mimeType: 'application/geo+json',
+      buffer: Buffer.from('{"type":"Point","coordinates":["bad",0]}'),
+    });
+    const settingsDialog = page.getByRole('dialog', { name: 'Map settings' });
+    await expect(settingsDialog.getByRole('alert')).toContainText(
+      'broken.geojson is not valid GeoJSON.',
+    );
+  });
+});
+
 test.describe('SMP Download (E2E)', () => {
   test('downloads a map: pending → progress → ready → export', async ({
     page,
