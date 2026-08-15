@@ -73,13 +73,16 @@ Use a full `--log` only when the failed-log slice is insufficient and the run is
 
 Wait until relevant checks are terminal. `pr_wait.py` exits 0 only for a fully terminal-green rollup. A terminal rollup containing `SKIPPED`, `NEUTRAL`, or no usable checks returns `terminal_requires_adjudication` with a non-zero exit so callers cannot accidentally treat it as green. Only clearly legitimate conditional skips are acceptable after explicit adjudication. Queued, pending, in-progress, cancelled, timed-out, action-required, and failing relevant checks are not green.
 
-A successful wrapper job can still hide a failing underlying command when a workflow intentionally uses `continue-on-error`, soft-fail shell logic, or an equivalent masking mechanism. Do not inspect every successful job step by default, but when a relevant readiness signal is known to be soft-failed, inspect the job's step-level outcome/conclusion and logs before counting it as green:
+A successful wrapper job can still hide a failing underlying command when a workflow intentionally uses `continue-on-error`, soft-fail shell logic, or an equivalent masking mechanism. GitHub distinguishes the pre-mask step `outcome` from the post-mask `conclusion`: a failed `continue-on-error` step can end with `conclusion: success`. Do not inspect every successful job step by default, but when a relevant readiness signal is known to be soft-failed, determine the pre-mask result before counting it as green.
+
+Use the job JSON to locate the relevant job and step. If the workflow exports an explicit step `outcome`, prefer that. If the available tooling exposes only the post-mask conclusion, inspect the bounded job log for the underlying command's exit/result:
 
 ```bash
 gh run view <run-id> --repo <owner/repo> --json jobs
+gh run view <run-id> --repo <owner/repo> --job <job-id> --log
 ```
 
-If the underlying command failed, adjudicate it explicitly as a real PR issue or a justified advisory/non-blocking condition; the green wrapper alone is not evidence of success.
+If the underlying command failed, adjudicate it explicitly as a real PR issue or a justified advisory/non-blocking condition; the green wrapper or post-mask conclusion alone is not evidence of success.
 
 ## Exact-revision discipline
 

@@ -37,6 +37,7 @@ def assert_policy_contract(
     test.assertIn("similarly named issue/feature worktrees or branches as unrelated", skill_text)
     test.assertIn("A green wrapper job is not sufficient", skill_text)
     test.assertIn("continue-on-error", skill_text)
+    test.assertIn("A `conclusion: success` after `continue-on-error` is not enough", skill_text)
     test.assertIn("git push --no-verify origin --delete <branch>", skill_text)
 
     test.assertIn("## 8. Session lessons and documentation checkpoint", skill_text)

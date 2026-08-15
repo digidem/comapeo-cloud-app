@@ -88,7 +88,7 @@ Declare `MERGE-READY` only when all of these are true simultaneously for one exa
 - Current GitHub head SHA and current live target-branch tip equal the pair used for final review and verification.
 - GitHub reports the PR mergeable and clean, or an explicitly understood repository-equivalent state.
 - All required and relevant checks are terminal and green. Treat every skipped or neutral check as requiring explicit adjudication before readiness; only clearly legitimate conditional skips are acceptable. Pending, queued, running, cancelled, timed-out, action-required, or failing relevant checks are not.
-- A green wrapper job is not sufficient when a relevant command is masked by `continue-on-error`, soft-fail logic, or equivalent workflow behavior. For such checks, inspect the underlying step outcome/conclusion and logs (or equivalent job-level evidence) and explicitly adjudicate the underlying command before treating it as green.
+- A green wrapper job is not sufficient when a relevant command is masked by `continue-on-error`, soft-fail logic, or equivalent workflow behavior. Determine the pre-mask result: prefer an explicit step `outcome` or equivalent workflow-exported signal; if tooling exposes only the post-mask `conclusion`, inspect logs for the underlying command result. A `conclusion: success` after `continue-on-error` is not enough; explicitly adjudicate the underlying command before treating the check as green.
 - GitHub review decision is not `CHANGES_REQUESTED` or `REVIEW_REQUIRED`; a top-level blocking review counts even when it created no inline review thread.
 - No unresolved actionable review threads remain.
 - No outstanding blocker or should-fix finding remains from requested independent reviewers.
