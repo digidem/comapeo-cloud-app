@@ -208,6 +208,59 @@ describe('storage reset coordinator', () => {
     }
   });
 
+  it('fails closed when the first startup coordination read fails transiently', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem(
+      STORAGE_RESET_COORDINATION_KEY,
+      JSON.stringify({
+        version: 1,
+        generation: 'startup-read-failure',
+        sourceTabId: 'other-tab',
+        phase: 'start',
+        createdAt: Date.now(),
+      }),
+    );
+    const originalGetItem = Storage.prototype.getItem;
+    let failFirstCoordinationRead = true;
+    const getItemSpy = vi
+      .spyOn(Storage.prototype, 'getItem')
+      .mockImplementation(function (this: Storage, key: string) {
+        if (
+          failFirstCoordinationRead &&
+          key === STORAGE_RESET_COORDINATION_KEY
+        ) {
+          failFirstCoordinationRead = false;
+          throw new DOMException('Transient read failure', 'SecurityError');
+        }
+        return originalGetItem.call(this, key);
+      });
+
+    const registration = registerStorageResetCoordinator();
+
+    try {
+      // main.tsx uses this synchronous flag to decide whether the app may mount.
+      // An indeterminate startup read must therefore be treated as reset-pending.
+      expect(registration.resetInProgress).toBe(true);
+      expect(closeDbForStorageReset).toHaveBeenCalledOnce();
+      expect(closeCategoriesDbForStorageReset).toHaveBeenCalledOnce();
+      expect(resetDbIsolated).not.toHaveBeenCalled();
+
+      // No second storage/broadcast event arrives. The scheduled authoritative
+      // reconciliation discovers the existing start generation on its own.
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(window.location.reload).not.toHaveBeenCalled();
+      expect(resetDbIsolated).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS - 1_000);
+      expect(resetCategoriesDbIsolated).toHaveBeenCalledOnce();
+      expect(resetDbIsolated).toHaveBeenCalledOnce();
+      expect(window.location.reload).toHaveBeenCalledOnce();
+    } finally {
+      getItemSpy.mockRestore();
+      registration.unregister();
+    }
+  });
+
   it('takes over and completes a stale reset lease instead of stranding a newly opened tab', async () => {
     localStorage.setItem(
       STORAGE_RESET_COORDINATION_KEY,

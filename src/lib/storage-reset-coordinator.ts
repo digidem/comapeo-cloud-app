@@ -594,8 +594,17 @@ export function registerStorageResetCoordinator(): {
       scheduleRecovery(current);
     }
   } catch {
-    // A reset cannot be discovered when storage is inaccessible; normal startup
-    // handles that degraded browser-storage environment.
+    // Fail closed when startup cannot determine reset state. A tab opened during
+    // an active reset must not mount the app and reopen its database connections
+    // merely because one coordination read failed transiently. Keep it quiesced
+    // and retry authoritative state until we can safely reload or resume recovery.
+    resetInProgress = true;
+    quiesceStorageResetConnections();
+    clearRecoveryTimer();
+    recoveryTimer = setTimeout(
+      () => void reconcileAuthoritativeState(),
+      STORAGE_RESET_RECOVERY_RETRY_MS,
+    );
   }
 
   return {
