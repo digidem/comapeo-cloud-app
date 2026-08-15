@@ -1448,6 +1448,75 @@
   "map.preview.title": {
     "defaultMessage": "Preview map"
   },
+  "map.referenceOverlays.add": {
+    "defaultMessage": "Add GeoJSON reference"
+  },
+  "map.referenceOverlays.dismiss": {
+    "defaultMessage": "Dismiss error"
+  },
+  "map.referenceOverlays.dismissAction": {
+    "defaultMessage": "Dismiss"
+  },
+  "map.referenceOverlays.dropHint": {
+    "defaultMessage": "Drop GeoJSON files to add reference data"
+  },
+  "map.referenceOverlays.help": {
+    "defaultMessage": "Add GeoJSON to align the download area. Reference data is not saved with the map."
+  },
+  "map.referenceOverlays.hide": {
+    "defaultMessage": "Hide {name}"
+  },
+  "map.referenceOverlays.hideAction": {
+    "defaultMessage": "Hide"
+  },
+  "map.referenceOverlays.importFailed": {
+    "defaultMessage": "GeoJSON import failed"
+  },
+  "map.referenceOverlays.invalid": {
+    "defaultMessage": "{name} is not valid GeoJSON. No files from this selection were added."
+  },
+  "map.referenceOverlays.invalidPolygonRing": {
+    "defaultMessage": "{name} has invalid polygon rings. Rings must contain at least four positions and be closed. No files from this selection were added."
+  },
+  "map.referenceOverlays.limit": {
+    "defaultMessage": "You can keep up to {max} reference files on the map. Remove one before adding more."
+  },
+  "map.referenceOverlays.list": {
+    "defaultMessage": "GeoJSON reference files"
+  },
+  "map.referenceOverlays.loading": {
+    "defaultMessage": "Adding GeoJSON…"
+  },
+  "map.referenceOverlays.readError": {
+    "defaultMessage": "Could not read {name}. No files from this selection were added."
+  },
+  "map.referenceOverlays.remove": {
+    "defaultMessage": "Remove {name}"
+  },
+  "map.referenceOverlays.removeAction": {
+    "defaultMessage": "Remove"
+  },
+  "map.referenceOverlays.show": {
+    "defaultMessage": "Show {name}"
+  },
+  "map.referenceOverlays.showAction": {
+    "defaultMessage": "Show"
+  },
+  "map.referenceOverlays.sizeLimit": {
+    "defaultMessage": "Up to {max} MB per file"
+  },
+  "map.referenceOverlays.title": {
+    "defaultMessage": "Reference data"
+  },
+  "map.referenceOverlays.tooLarge": {
+    "defaultMessage": "{name} is larger than {max} MB. Choose a smaller file. No files from this selection were added."
+  },
+  "map.referenceOverlays.unsupported": {
+    "defaultMessage": "{name} has no supported geometry to display. No files from this selection were added."
+  },
+  "map.referenceOverlays.unsupportedFile": {
+    "defaultMessage": "{name} is not a GeoJSON or JSON file. No files from this selection were added."
+  },
   "map.saved.activeError": {
     "defaultMessage": "Could not update active map. Please try again."
   },

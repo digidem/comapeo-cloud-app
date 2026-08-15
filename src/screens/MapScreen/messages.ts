@@ -488,4 +488,104 @@ export const mapMessages = defineMessages({
     defaultMessage:
       '{n} tiles could not be downloaded. The package may be incomplete.',
   },
+  referenceOverlaysTitle: {
+    id: 'map.referenceOverlays.title',
+    defaultMessage: 'Reference data',
+  },
+  referenceOverlaysHelp: {
+    id: 'map.referenceOverlays.help',
+    defaultMessage:
+      'Add GeoJSON to align the download area. Reference data is not saved with the map.',
+  },
+  referenceOverlaysAdd: {
+    id: 'map.referenceOverlays.add',
+    defaultMessage: 'Add GeoJSON reference',
+  },
+  referenceOverlaysLoading: {
+    id: 'map.referenceOverlays.loading',
+    defaultMessage: 'Adding GeoJSON…',
+  },
+  referenceOverlaysSizeLimit: {
+    id: 'map.referenceOverlays.sizeLimit',
+    defaultMessage: 'Up to {max} MB per file',
+  },
+  referenceOverlaysList: {
+    id: 'map.referenceOverlays.list',
+    defaultMessage: 'GeoJSON reference files',
+  },
+  referenceOverlaysHide: {
+    id: 'map.referenceOverlays.hide',
+    defaultMessage: 'Hide {name}',
+  },
+  referenceOverlaysHideAction: {
+    id: 'map.referenceOverlays.hideAction',
+    defaultMessage: 'Hide',
+  },
+  referenceOverlaysShow: {
+    id: 'map.referenceOverlays.show',
+    defaultMessage: 'Show {name}',
+  },
+  referenceOverlaysShowAction: {
+    id: 'map.referenceOverlays.showAction',
+    defaultMessage: 'Show',
+  },
+  referenceOverlaysRemove: {
+    id: 'map.referenceOverlays.remove',
+    defaultMessage: 'Remove {name}',
+  },
+  referenceOverlaysRemoveAction: {
+    id: 'map.referenceOverlays.removeAction',
+    defaultMessage: 'Remove',
+  },
+  referenceOverlaysDropHint: {
+    id: 'map.referenceOverlays.dropHint',
+    defaultMessage: 'Drop GeoJSON files to add reference data',
+  },
+  referenceOverlaysDismiss: {
+    id: 'map.referenceOverlays.dismiss',
+    defaultMessage: 'Dismiss error',
+  },
+  referenceOverlaysDismissAction: {
+    id: 'map.referenceOverlays.dismissAction',
+    defaultMessage: 'Dismiss',
+  },
+  referenceOverlaysImportFailed: {
+    id: 'map.referenceOverlays.importFailed',
+    defaultMessage: 'GeoJSON import failed',
+  },
+  referenceOverlaysInvalid: {
+    id: 'map.referenceOverlays.invalid',
+    defaultMessage:
+      '{name} is not valid GeoJSON. No files from this selection were added.',
+  },
+  referenceOverlaysLimit: {
+    id: 'map.referenceOverlays.limit',
+    defaultMessage:
+      'You can keep up to {max} reference files on the map. Remove one before adding more.',
+  },
+  referenceOverlaysInvalidPolygonRing: {
+    id: 'map.referenceOverlays.invalidPolygonRing',
+    defaultMessage:
+      '{name} has invalid polygon rings. Rings must contain at least four positions and be closed. No files from this selection were added.',
+  },
+  referenceOverlaysTooLarge: {
+    id: 'map.referenceOverlays.tooLarge',
+    defaultMessage:
+      '{name} is larger than {max} MB. Choose a smaller file. No files from this selection were added.',
+  },
+  referenceOverlaysUnsupported: {
+    id: 'map.referenceOverlays.unsupported',
+    defaultMessage:
+      '{name} has no supported geometry to display. No files from this selection were added.',
+  },
+  referenceOverlaysUnsupportedFile: {
+    id: 'map.referenceOverlays.unsupportedFile',
+    defaultMessage:
+      '{name} is not a GeoJSON or JSON file. No files from this selection were added.',
+  },
+  referenceOverlaysReadError: {
+    id: 'map.referenceOverlays.readError',
+    defaultMessage:
+      'Could not read {name}. No files from this selection were added.',
+  },
 });

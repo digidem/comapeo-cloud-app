@@ -14,8 +14,10 @@ import Map, {
 
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { crossesAntimeridian } from '@/lib/map/bbox-utils';
+import type { GeoJsonOverlay } from '@/lib/map/geojson-overlays';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 
+import { ReferenceOverlayLayers } from './ReferenceOverlayLayers';
 import { mapMessages } from './messages';
 
 interface MapAuthoringCanvasProps {
@@ -29,6 +31,10 @@ interface MapAuthoringCanvasProps {
   onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
   /** Bounds to fit after the map is ready. */
   fitBounds?: [number, number, number, number] | null;
+  /** Transient GeoJSON authoring references. */
+  overlays?: GeoJsonOverlay[];
+  /** Called when files are dropped directly onto the authoring map. */
+  onOverlayFilesDrop?: (files: File[]) => void | Promise<void>;
 }
 
 const INITIAL_VIEW_STATE = {
@@ -112,6 +118,8 @@ const EMPTY_FEATURE: Feature<Polygon> = {
   geometry: { type: 'Polygon', coordinates: [[]] },
 };
 
+const EMPTY_REFERENCE_OVERLAYS: GeoJsonOverlay[] = [];
+
 export function MapAuthoringCanvas({
   basemap,
   bbox,
@@ -120,6 +128,8 @@ export function MapAuthoringCanvas({
   onDrawCreate,
   onDrawModeChange,
   fitBounds,
+  overlays = EMPTY_REFERENCE_OVERLAYS,
+  onOverlayFilesDrop,
 }: MapAuthoringCanvasProps) {
   const intl = useIntl();
   const mapStyle = useMemo(() => basemapToMapStyle(basemap), [basemap]);
@@ -127,6 +137,7 @@ export function MapAuthoringCanvas({
     () => (bbox ? bboxToFeature(bbox) : null),
     [bbox],
   );
+  const [isFileDragActive, setIsFileDragActive] = useState(false);
 
   // Drag‑to‑draw state
   const [dragStart, setDragStart] = useState<{
@@ -390,7 +401,36 @@ export function MapAuthoringCanvas({
       role="region"
       aria-label={intl.formatMessage(mapMessages.canvasAria)}
       data-testid="map-authoring-canvas"
-      className="h-full min-h-0 overflow-hidden"
+      className="relative h-full min-h-0 overflow-hidden"
+      onDragEnter={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+        event.preventDefault();
+        setIsFileDragActive(true);
+      }}
+      onDragOver={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        setIsFileDragActive(true);
+      }}
+      onDragLeave={(event) => {
+        const relatedTarget = event.relatedTarget;
+        if (
+          !(relatedTarget instanceof Node) ||
+          !event.currentTarget.contains(relatedTarget)
+        ) {
+          setIsFileDragActive(false);
+        }
+      }}
+      onDrop={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+        const files = Array.from(event.dataTransfer.files ?? []);
+        event.preventDefault();
+        event.stopPropagation();
+        setIsFileDragActive(false);
+        if (files.length === 0) return;
+        void onOverlayFilesDrop?.(files);
+      }}
     >
       <Map
         ref={mapRef}
@@ -416,6 +456,10 @@ export function MapAuthoringCanvas({
           </Source>
         )}
 
+        {overlays.map((overlay) => (
+          <ReferenceOverlayLayers key={overlay.id} overlay={overlay} />
+        ))}
+
         {isDrawing && dragStart && dragEnd && (
           <Source id="draw-preview" type="geojson" data={previewFeature}>
             <Layer id="draw-preview-fill" type="fill" paint={DRAW_FILL_PAINT} />
@@ -427,6 +471,13 @@ export function MapAuthoringCanvas({
           </Source>
         )}
       </Map>
+      {isFileDragActive ? (
+        <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-card border-2 border-dashed border-primary bg-surface-card/90 px-6 text-center shadow-elevated">
+          <p className="text-sm font-semibold text-text">
+            {intl.formatMessage(mapMessages.referenceOverlaysDropHint)}
+          </p>
+        </div>
+      ) : null}
       {drawError && (
         <p
           role="alert"
