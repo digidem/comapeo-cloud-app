@@ -6,7 +6,7 @@ import { removeComapeoKeys } from '@/lib/comapeo-local-storage';
 import { closeDbForStorageReset, resetDbIsolated } from '@/lib/db';
 
 export const STORAGE_RESET_COORDINATION_KEY =
-  '__comapeo-storage-reset-coordination__';
+  '__comapeo-storage-reset-coordination-v1__';
 export const STORAGE_RESET_LEASE_MS = 5_000;
 const STORAGE_RESET_RECOVERY_RETRY_MS = 1_000;
 const STORAGE_RESET_HEARTBEAT_MS = Math.max(
