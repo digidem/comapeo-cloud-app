@@ -13,7 +13,6 @@ import {
   beginStorageResetCoordination,
   registerStorageResetCoordinator,
   runStorageResetOwnerOperation,
-  waitForStorageResetQuiescence,
 } from '@/lib/storage-reset-coordinator';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -119,7 +118,7 @@ describe('storage reset coordinator', () => {
   });
 
   it('quiesces open database connections as soon as another tab starts a reset', async () => {
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       dispatchResetSignal('start');
@@ -135,7 +134,8 @@ describe('storage reset coordinator', () => {
     }
   });
 
-  it('waits for every active-tab activity lock before destructive reset work may proceed', async () => {
+  it('holds the exclusive activity barrier across destructive owner work', async () => {
+    const generation = await beginStorageResetCoordination();
     let markSharedHeld!: () => void;
     let releaseShared!: () => void;
     const sharedHeld = new Promise<void>((resolve) => {
@@ -155,23 +155,31 @@ describe('storage reset coordinator', () => {
     );
     await sharedHeld;
 
-    let barrierPassed = false;
-    const barrier = waitForStorageResetQuiescence().then(() => {
-      barrierPassed = true;
+    const destructiveWork = vi.fn(() => 'done');
+    let ownerSettled = false;
+    const ownerOperation = runStorageResetOwnerOperation(
+      generation,
+      destructiveWork,
+    ).finally(() => {
+      ownerSettled = true;
     });
     await Promise.resolve();
     await Promise.resolve();
-    expect(barrierPassed).toBe(false);
+    expect(ownerSettled).toBe(false);
+    expect(destructiveWork).not.toHaveBeenCalled();
 
     releaseShared();
-    await barrier;
-    expect(barrierPassed).toBe(true);
+    await expect(ownerOperation).resolves.toMatchObject({
+      owned: true,
+      value: 'done',
+    });
+    expect(destructiveWork).toHaveBeenCalledOnce();
   });
 
   it('honors a renewed durable lease when the original recovery timer fires', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-14T12:00:00.000Z'));
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       dispatchResetSignal('start', 'renewed-generation');
@@ -206,7 +214,7 @@ describe('storage reset coordinator', () => {
 
   it('automatically takes over when an initiating tab disappears after reset-start', async () => {
     vi.useFakeTimers();
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       dispatchResetSignal('start', 'crashed-live-generation');
@@ -260,7 +268,7 @@ describe('storage reset coordinator', () => {
         }
         return originalSetItem.call(this, key, value);
       });
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       await vi.advanceTimersByTimeAsync(0);
@@ -272,7 +280,37 @@ describe('storage reset coordinator', () => {
     }
   });
 
-  it('quiesces a tab opened while a reset is already in progress', () => {
+  it('does not expose mount readiness until the shared activity lock is acquired', async () => {
+    vi.useFakeTimers();
+    const request = vi.mocked(navigator.locks.request);
+    request.mockRejectedValueOnce(new Error('Transient activity lock failure'));
+
+    let registrationSettled = false;
+    const registrationPromise = registerStorageResetCoordinator().then(
+      (registration) => {
+        registrationSettled = true;
+        return registration;
+      },
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(registrationSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(registrationSettled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    const registration = await registrationPromise;
+    try {
+      expect(registrationSettled).toBe(true);
+      expect(registration.resetInProgress).toBe(false);
+      expect(request).toHaveBeenCalledTimes(2);
+    } finally {
+      registration.unregister();
+    }
+  });
+
+  it('quiesces a tab opened while a reset is already in progress', async () => {
     localStorage.setItem(
       STORAGE_RESET_COORDINATION_KEY,
       JSON.stringify({
@@ -284,7 +322,7 @@ describe('storage reset coordinator', () => {
       }),
     );
 
-    const registration = registerStorageResetCoordinator();
+    const registration = await registerStorageResetCoordinator();
 
     try {
       expect(registration.resetInProgress).toBe(true);
@@ -322,11 +360,11 @@ describe('storage reset coordinator', () => {
         return originalGetItem.call(this, key);
       });
 
-    const registration = registerStorageResetCoordinator();
+    const registration = await registerStorageResetCoordinator();
 
     try {
-      // main.tsx uses this synchronous flag to decide whether the app may mount.
-      // An indeterminate startup read must therefore be treated as reset-pending.
+      // main.tsx awaits registration and then uses this flag to decide whether
+      // the app may mount. An indeterminate read must stay reset-pending.
       expect(registration.resetInProgress).toBe(true);
       expect(closeDbForStorageReset).toHaveBeenCalledOnce();
       expect(closeCategoriesDbForStorageReset).toHaveBeenCalledOnce();
@@ -360,7 +398,7 @@ describe('storage reset coordinator', () => {
       }),
     );
 
-    const registration = registerStorageResetCoordinator();
+    const registration = await registerStorageResetCoordinator();
 
     try {
       expect(registration.resetInProgress).toBe(true);
@@ -406,7 +444,7 @@ describe('storage reset coordinator', () => {
         createdAt: Date.now() - STORAGE_RESET_LEASE_MS - 1,
       }),
     );
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       await vi.advanceTimersByTimeAsync(0);
@@ -470,7 +508,7 @@ describe('storage reset coordinator', () => {
         }
         return originalGetItem.call(this, key);
       });
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       await vi.advanceTimersByTimeAsync(0);
@@ -498,7 +536,7 @@ describe('storage reset coordinator', () => {
   });
 
   it('reloads an authoritative complete signal without deleting fresh post-reset data', async () => {
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
     localStorage.setItem('comapeo-theme-mode', 'dark');
 
     try {
@@ -525,7 +563,7 @@ describe('storage reset coordinator', () => {
     vi.useFakeTimers();
     const request = vi.mocked(navigator.locks.request);
     localStorage.setItem('comapeo-theme-mode', 'dark');
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
     // Registration queues the shared activity lock first; fail the next request,
     // which is the terminal-generation validation this test is targeting.
     request.mockRejectedValueOnce(new Error('Transient complete lock failure'));
@@ -552,7 +590,7 @@ describe('storage reset coordinator', () => {
   });
 
   it('ignores a stale complete signal after a newer reset generation starts', async () => {
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       dispatchResetSignal('start', 'generation-a');
@@ -579,7 +617,7 @@ describe('storage reset coordinator', () => {
   });
 
   it('ignores a stale complete signal after a newer reset generation aborts', async () => {
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       localStorage.setItem(
@@ -623,7 +661,7 @@ describe('storage reset coordinator', () => {
         createdAt: Date.now() - STORAGE_RESET_LEASE_MS - 1,
       }),
     );
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       await vi.advanceTimersByTimeAsync(0);
@@ -673,7 +711,7 @@ describe('storage reset coordinator', () => {
         createdAt: Date.now() - STORAGE_RESET_LEASE_MS - 1,
       }),
     );
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       await vi.advanceTimersByTimeAsync(0);
@@ -708,7 +746,7 @@ describe('storage reset coordinator', () => {
   });
 
   it('releases a quiesced tab without deleting preferences when reset aborts', async () => {
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       dispatchResetSignal('start');
@@ -789,7 +827,7 @@ describe('storage reset coordinator', () => {
   it('reconciles a start signal after the first lock validation fails without releasing the activity barrier early', async () => {
     vi.useFakeTimers();
     const request = vi.mocked(navigator.locks.request);
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
     // Registration queues the shared activity lock first. Fail the next request,
     // which is the start-generation validation this test is targeting.
     request.mockRejectedValueOnce(new Error('Transient lock failure'));
@@ -801,19 +839,25 @@ describe('storage reset coordinator', () => {
       expect(closeCategoriesDbForStorageReset).toHaveBeenCalled();
       expect(resetDbIsolated).not.toHaveBeenCalled();
 
+      const probeWork = vi.fn();
       let barrierPassed = false;
-      const barrier = waitForStorageResetQuiescence().then(() => {
+      const barrierProbe = runStorageResetOwnerOperation(
+        'lock-failure-generation',
+        probeWork,
+      ).finally(() => {
         barrierPassed = true;
       });
       await Promise.resolve();
       await Promise.resolve();
       expect(barrierPassed).toBe(false);
+      expect(probeWork).not.toHaveBeenCalled();
 
       // Authoritative reconciliation confirms start and only then releases this
-      // tab's shared activity lock, allowing the owner/recovery barrier through.
+      // tab's shared activity lock, allowing an exclusive activity request through.
       await vi.advanceTimersByTimeAsync(1_000);
-      await barrier;
+      await expect(barrierProbe).resolves.toEqual({ owned: false });
       expect(barrierPassed).toBe(true);
+      expect(probeWork).not.toHaveBeenCalled();
 
       await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS - 1_000);
       expect(resetCategoriesDbIsolated).toHaveBeenCalledOnce();
@@ -826,7 +870,7 @@ describe('storage reset coordinator', () => {
 
   it('reconciles a terminal signal after the first lock validation fails', async () => {
     vi.useFakeTimers();
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
 
     try {
       dispatchResetSignal('start', 'terminal-lock-failure');
@@ -862,7 +906,7 @@ describe('storage reset coordinator', () => {
           createdAt: Date.now() + 1,
         }),
       );
-      const { unregister } = registerStorageResetCoordinator();
+      const { unregister } = await registerStorageResetCoordinator();
       vi.clearAllMocks();
 
       try {
@@ -893,7 +937,7 @@ describe('storage reset coordinator', () => {
       STORAGE_RESET_COORDINATION_KEY,
       JSON.stringify(terminal),
     );
-    const { unregister } = registerStorageResetCoordinator();
+    const { unregister } = await registerStorageResetCoordinator();
     const originalSetItem = Storage.prototype.setItem;
     const setItemSpy = vi
       .spyOn(Storage.prototype, 'setItem')

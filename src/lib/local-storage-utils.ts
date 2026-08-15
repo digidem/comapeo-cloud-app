@@ -8,7 +8,6 @@ import {
   beginStorageResetCoordination,
   quiesceStorageResetConnections,
   runStorageResetOwnerOperation,
-  waitForStorageResetQuiescence,
 } from '@/lib/storage-reset-coordinator';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -194,13 +193,14 @@ async function runCoordinatedStorageReset(generation: string): Promise<void> {
   // closed singleton connections and perform their destructive work through
   // isolated connections, so app callbacks cannot queue writes behind the clear.
   quiesceStorageResetConnections();
-  await waitForStorageResetQuiescence();
 
   let result;
+  let destructiveStarted = false;
   try {
     result = await runStorageResetOwnerOperation(
       generation,
       async ({ publish }) => {
+        destructiveStarted = true;
         try {
           await resetCategoriesDb();
         } catch (cause) {
@@ -271,13 +271,14 @@ async function runCoordinatedStorageReset(generation: string): Promise<void> {
       },
     );
   } catch (cause) {
-    // This tab's app connections are already closed. Reload whether abort was
-    // published or the lease must recover, so the current tab never continues
-    // with unusable singleton connections.
+    // This tab's app connections are already closed. A barrier-acquisition error
+    // happens before destructive work starts, while later coordination failures
+    // may follow a partial clear. Either way the durable `start` marker remains
+    // recoverable and a non-cancellable reload hands it back to the coordinator.
     scheduleResetReload();
     throw new ClearAllStorageError({
       failedStep: 'coordination',
-      partial: true,
+      partial: destructiveStarted,
       cause,
       reloadScheduled: true,
     });

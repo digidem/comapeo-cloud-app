@@ -10,7 +10,7 @@ import { registerStorageResetCoordinator } from './lib/storage-reset-coordinator
 
 initSentry();
 installGlobalErrorHandlers();
-const { resetInProgress } = registerStorageResetCoordinator();
+const { resetInProgress } = await registerStorageResetCoordinator();
 registerSW({ immediate: true });
 
 const rootElement = document.getElementById('root');

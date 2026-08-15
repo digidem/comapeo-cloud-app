@@ -17,7 +17,7 @@ const STORAGE_RESET_LOCK_NAME = 'comapeo-storage-reset-v1';
 const STORAGE_RESET_TAB_ID = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 let releaseActivityLock: (() => void) | null = null;
-let activityLockRequested = false;
+let activityLockReadyPromise: Promise<void> | null = null;
 
 type StorageResetPhase = 'start' | 'complete' | 'abort';
 
@@ -112,42 +112,71 @@ async function withStorageResetLock<T>(
   );
 }
 
-function requestStorageResetActivityLock(): void {
-  if (
-    typeof navigator === 'undefined' ||
-    !navigator.locks ||
-    activityLockRequested
-  ) {
-    return;
+function requestStorageResetActivityLock(): Promise<void> {
+  if (typeof navigator === 'undefined' || !navigator.locks) {
+    return Promise.resolve();
   }
+  if (activityLockReadyPromise) return activityLockReadyPromise;
 
-  activityLockRequested = true;
   let resolveHold!: () => void;
   const hold = new Promise<void>((resolve) => {
     resolveHold = resolve;
   });
+  let resolveReady!: () => void;
+  let rejectReady!: (cause: unknown) => void;
+  let readySettled = false;
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  activityLockReadyPromise = ready;
+
   let released = false;
   const release = () => {
     if (released) return;
     released = true;
     if (releaseActivityLock === release) releaseActivityLock = null;
-    activityLockRequested = false;
     resolveHold();
   };
   releaseActivityLock = release;
 
   void navigator.locks
-    .request(
-      STORAGE_RESET_ACTIVITY_LOCK_NAME,
-      { mode: 'shared' },
-      async () => hold,
-    )
-    .catch(() => {
-      // The reset path itself also requires Web Locks. If this lifecycle guard
-      // cannot be acquired, close this tab's storage connections rather than
-      // leaving an unguarded writer alive.
-      quiesceStorageResetConnections();
+    .request(STORAGE_RESET_ACTIVITY_LOCK_NAME, { mode: 'shared' }, async () => {
+      if (!readySettled) {
+        readySettled = true;
+        resolveReady();
+      }
+      await hold;
+    })
+    .catch((cause: unknown) => {
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(cause);
+      }
+      closeStorageResetConnections();
+    })
+    .finally(() => {
+      if (activityLockReadyPromise === ready) activityLockReadyPromise = null;
+      if (releaseActivityLock === release) releaseActivityLock = null;
+      resolveHold();
     });
+
+  return ready;
+}
+
+async function waitForStorageResetActivityLock(): Promise<void> {
+  if (typeof navigator === 'undefined' || !navigator.locks) return;
+
+  for (;;) {
+    try {
+      await requestStorageResetActivityLock();
+      return;
+    } catch {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, STORAGE_RESET_RECOVERY_RETRY_MS);
+      });
+    }
+  }
 }
 
 function releaseStorageResetActivityLock(): void {
@@ -221,29 +250,27 @@ export async function runStorageResetOwnerOperation<T>(
   generation: string,
   operation: (context: StorageResetOwnerContext) => T | Promise<T>,
 ): Promise<{ owned: false } | { owned: true; value: T }> {
-  return withStorageResetLock(async () => {
-    if (!isOwnedStart(readCoordinationSignal(), generation)) {
-      return { owned: false };
-    }
-    const value = await operation({
-      publish(phase) {
-        const signal = createSignal(generation, phase);
-        if (!persistSignal(signal)) {
-          throw new Error(`Could not persist reset ${phase} state.`);
-        }
-        postBroadcastSignal(signal);
-      },
-    });
-    return { owned: true, value };
-  });
-}
-
-export async function waitForStorageResetQuiescence(): Promise<void> {
-  // Every mounted tab holds a shared activity lock for its lifetime. Reset-start
-  // handlers close their storage connections and release that lock. Acquiring the
-  // exclusive barrier therefore proves that every active tab observed start and
-  // quiesced; unlike a fixed delay, suspended/background tabs cannot be skipped.
-  await withStorageResetActivityBarrier(() => undefined);
+  // Hold the exclusive activity barrier for the entire destructive operation.
+  // Existing tabs must release their shared locks before this starts, and newly
+  // opened tabs queue behind the barrier until cleanup + terminal publication
+  // have finished, so there is no post-barrier write window.
+  return withStorageResetActivityBarrier(() =>
+    withStorageResetLock(async () => {
+      if (!isOwnedStart(readCoordinationSignal(), generation)) {
+        return { owned: false };
+      }
+      const value = await operation({
+        publish(phase) {
+          const signal = createSignal(generation, phase);
+          if (!persistSignal(signal)) {
+            throw new Error(`Could not persist reset ${phase} state.`);
+          }
+          postBroadcastSignal(signal);
+        },
+      });
+      return { owned: true, value };
+    }),
+  );
 }
 
 function closeStorageResetConnections(): void {
@@ -341,19 +368,19 @@ async function readAuthoritativeSignalLocked(): Promise<StorageResetSignal | nul
   return withStorageResetLock(() => readCoordinationSignal());
 }
 
-export function registerStorageResetCoordinator(): {
+export async function registerStorageResetCoordinator(): Promise<{
   unregister: () => void;
   resetInProgress: boolean;
-} {
+}> {
   if (typeof window === 'undefined') {
     return { unregister: () => {}, resetInProgress: false };
   }
 
-  // Register this mounted tab as an active writer before inspecting reset state.
-  // The request is queued with the browser lock manager synchronously, so a reset
-  // barrier requested after this point cannot overtake the tab. If start is
-  // already active, the synchronous check below immediately quiesces/releases it.
-  requestStorageResetActivityLock();
+  // Queue the tab's lifetime shared lock immediately, before any asynchronous
+  // work. The app is not allowed to mount until acquisition is confirmed. If a
+  // reset already holds or is waiting for the exclusive barrier, this readiness
+  // promise stays pending until the destructive generation is safely finished.
+  const activityReady = waitForStorageResetActivityLock();
 
   let terminalGeneration: string | null = null;
   let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -674,6 +701,11 @@ export function registerStorageResetCoordinator(): {
       channel = null;
     }
   }
+
+  // Do not expose mount readiness until this tab is actually participating in
+  // the shared activity barrier. Transient lock acquisition failures are retried
+  // internally while the app remains unmounted.
+  await activityReady;
 
   let resetInProgress = false;
   try {

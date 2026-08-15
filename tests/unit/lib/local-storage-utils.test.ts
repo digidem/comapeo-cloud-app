@@ -27,7 +27,6 @@ vi.mock('@/lib/storage-reset-coordinator', () => ({
     owned: true,
     value: await operation({ publish: vi.fn() }),
   })),
-  waitForStorageResetQuiescence: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('exportLocalStorageData', () => {
@@ -480,20 +479,25 @@ describe('clearAllStorage', () => {
     ).toBeLessThan(vi.mocked(resetCategoriesDb).mock.invocationCallOrder[0]!);
   });
 
-  it('does not begin database resets until the cross-tab activity barrier resolves', async () => {
+  it('does not begin database resets until the owner activity barrier enters', async () => {
     const { resetDb } = await import('@/lib/db');
     const { resetCategoriesDb } = await import('@/lib/categories-db');
-    const { waitForStorageResetQuiescence } =
+    const { runStorageResetOwnerOperation } =
       await import('@/lib/storage-reset-coordinator');
     vi.mocked(resetDb).mockClear();
     vi.mocked(resetCategoriesDb).mockClear();
-    vi.mocked(waitForStorageResetQuiescence).mockClear();
     let releaseBarrier!: () => void;
-    vi.mocked(waitForStorageResetQuiescence).mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          releaseBarrier = resolve;
-        }),
+    const barrierGate = new Promise<void>((resolve) => {
+      releaseBarrier = resolve;
+    });
+    vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+      async (_generation, operation) => {
+        await barrierGate;
+        return {
+          owned: true,
+          value: await operation({ publish: vi.fn() }),
+        };
+      },
     );
     Object.defineProperty(window, 'location', {
       value: { reload: vi.fn() },
@@ -502,7 +506,7 @@ describe('clearAllStorage', () => {
 
     const resetPromise = clearAllStorage();
     await vi.waitFor(() => {
-      expect(waitForStorageResetQuiescence).toHaveBeenCalledOnce();
+      expect(runStorageResetOwnerOperation).toHaveBeenCalledOnce();
     });
     expect(resetCategoriesDb).not.toHaveBeenCalled();
     expect(resetDb).not.toHaveBeenCalled();
@@ -511,6 +515,41 @@ describe('clearAllStorage', () => {
     await resetPromise;
     expect(resetCategoriesDb).toHaveBeenCalledOnce();
     expect(resetDb).toHaveBeenCalledOnce();
+  });
+
+  it('schedules recovery reload when the activity barrier acquisition fails', async () => {
+    vi.useFakeTimers();
+    const { resetDb } = await import('@/lib/db');
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    const { runStorageResetOwnerOperation } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(resetDb).mockClear();
+    vi.mocked(resetCategoriesDb).mockClear();
+    vi.mocked(runStorageResetOwnerOperation).mockRejectedValueOnce(
+      new Error('Transient activity barrier failure'),
+    );
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        failedStep: 'coordination',
+        partial: false,
+        reloadScheduled: true,
+      });
+      expect(resetCategoriesDb).not.toHaveBeenCalled();
+      expect(resetDb).not.toHaveBeenCalled();
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('removes browser preferences only after IndexedDB resets complete', async () => {
