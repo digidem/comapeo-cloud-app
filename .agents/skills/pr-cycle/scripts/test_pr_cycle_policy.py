@@ -50,6 +50,17 @@ def assert_policy_contract(
     test.assertIn("After two consecutive nit-only revision cycles", skill_text)
     test.assertIn("defer remaining marginal nits", skill_text)
 
+    test.assertIn("Merge authorization is execution-local and non-transferable", skill_text)
+    test.assertIn("explicit user message in its own current conversation/task", skill_text)
+    test.assertIn("another chat/session/agent", skill_text)
+    test.assertIn("GitHub actions run under the user's authenticated account", skill_text)
+    test.assertIn("treat that as a concurrent writer", skill_text)
+    test.assertIn("A concurrent writer never grants merge authority", skill_text)
+    test.assertIn("a pre-existing head this execution reviewed and accepted", skill_text)
+    test.assertIn("authorization-provenance checkpoint", skill_text)
+    test.assertIn("A request to run a PR cycle, make the PR merge-ready", skill_text)
+    test.assertIn("If the PR became merged without this execution issuing the merge command", skill_text)
+
     test.assertIn("exact isolated worktree and local branch captured at cycle start", skill_text)
     test.assertIn("similarly named issue/feature worktrees or branches as unrelated", skill_text)
     test.assertIn("A green wrapper job is not sufficient", skill_text)
@@ -65,6 +76,11 @@ def assert_policy_contract(
     test.assertIn("`README.md` only when human contributors or users need", skill_text)
     test.assertIn("create a focused follow-up docs/process PR", skill_text)
     test.assertIn("final report must state what durable lessons were documented", skill_text)
+
+    test.assertIn("## PR Merge Authorization Invariant", agents_text)
+    test.assertIn("explicit merge authorization from a user message in its own current task", agents_text)
+    test.assertIn("authorization never transfers across chats, sessions, agents", agents_text)
+    test.assertIn("Without that current-task authorization, stop at merge-ready", agents_text)
 
     test.assertIn("## Issue and PR Scope Continuity", agents_text)
     test.assertIn("search the existing GitHub backlog", agents_text)
@@ -120,6 +136,79 @@ class PrCyclePolicyTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(
             AssertionError, "verify the claim against the exact current head"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_merge_authorization_must_be_execution_local(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "Merge authorization is execution-local and non-transferable",
+            "Merge authorization may be inherited from another execution",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "Merge authorization is execution-local and non-transferable"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_concurrent_writer_does_not_grant_merge_authority(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "A concurrent writer never grants merge authority",
+            "A concurrent writer grants merge authority",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "A concurrent writer never grants merge authority"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_readiness_request_is_not_merge_authorization(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "A request to run a PR cycle, make the PR merge-ready, review it, or report readiness is not merge authorization.",
+            "A readiness request authorizes merge.",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "A request to run a PR cycle, make the PR merge-ready"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_authorization_provenance_checkpoint_is_required(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "Perform an authorization-provenance checkpoint before any merge command.",
+            "Skip authorization provenance before merge commands.",
+        )
+        with self.assertRaisesRegex(AssertionError, "authorization-provenance checkpoint"):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_external_merge_must_not_be_claimed_by_current_execution(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "If the PR became merged without this execution issuing the merge command",
+            "If this execution did not issue the merge command, claim the merge anyway",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "If the PR became merged without this execution issuing the merge command"
         ):
             assert_policy_contract(
                 self,
@@ -193,6 +282,21 @@ class PrCyclePolicyTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(
             AssertionError, "tracked artifacts under `screenshots/screenshot/`"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=SKILL.read_text(),
+                agents_text=agents_text,
+                ci_text=CI.read_text(),
+            )
+
+    def test_agents_merge_authorization_fallback_is_required(self) -> None:
+        agents_text = AGENTS.read_text().replace(
+            "authorization never transfers across chats, sessions, agents",
+            "authorization transfers across chats, sessions, agents",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "authorization never transfers across chats, sessions, agents"
         ):
             assert_policy_contract(
                 self,
