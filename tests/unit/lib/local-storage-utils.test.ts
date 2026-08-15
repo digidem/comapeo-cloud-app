@@ -480,6 +480,39 @@ describe('clearAllStorage', () => {
     ).toBeLessThan(vi.mocked(resetCategoriesDb).mock.invocationCallOrder[0]!);
   });
 
+  it('does not begin database resets until the cross-tab activity barrier resolves', async () => {
+    const { resetDb } = await import('@/lib/db');
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    const { waitForStorageResetQuiescence } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(resetDb).mockClear();
+    vi.mocked(resetCategoriesDb).mockClear();
+    vi.mocked(waitForStorageResetQuiescence).mockClear();
+    let releaseBarrier!: () => void;
+    vi.mocked(waitForStorageResetQuiescence).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseBarrier = resolve;
+        }),
+    );
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+    });
+
+    const resetPromise = clearAllStorage();
+    await vi.waitFor(() => {
+      expect(waitForStorageResetQuiescence).toHaveBeenCalledOnce();
+    });
+    expect(resetCategoriesDb).not.toHaveBeenCalled();
+    expect(resetDb).not.toHaveBeenCalled();
+
+    releaseBarrier();
+    await resetPromise;
+    expect(resetCategoriesDb).toHaveBeenCalledOnce();
+    expect(resetDb).toHaveBeenCalledOnce();
+  });
+
   it('removes browser preferences only after IndexedDB resets complete', async () => {
     const { resetDb } = await import('@/lib/db');
     const { resetCategoriesDb } = await import('@/lib/categories-db');

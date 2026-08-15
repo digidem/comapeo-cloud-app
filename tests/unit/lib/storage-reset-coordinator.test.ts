@@ -7,12 +7,15 @@ import {
 import { removeComapeoKeys } from '@/lib/comapeo-local-storage';
 import { closeDbForStorageReset, resetDbIsolated } from '@/lib/db';
 import {
+  STORAGE_RESET_ACTIVITY_LOCK_NAME,
   STORAGE_RESET_COORDINATION_KEY,
   STORAGE_RESET_LEASE_MS,
   beginStorageResetCoordination,
   registerStorageResetCoordinator,
   runStorageResetOwnerOperation,
+  waitForStorageResetQuiescence,
 } from '@/lib/storage-reset-coordinator';
+import { useAuthStore } from '@/stores/auth-store';
 
 vi.mock('@/lib/db', () => ({
   closeDbForStorageReset: vi.fn(),
@@ -29,6 +32,12 @@ vi.mock('@/lib/comapeo-local-storage', () => ({
     failedKeys: [],
     enumerationFailed: false,
   })),
+}));
+
+vi.mock('@/stores/auth-store', () => ({
+  useAuthStore: {
+    getState: vi.fn(() => ({ clearAll: vi.fn() })),
+  },
 }));
 
 function dispatchResetSignal(
@@ -76,16 +85,20 @@ function dispatchResetSignalEvent(
 
 describe('storage reset coordinator', () => {
   beforeEach(() => {
-    let lockTail = Promise.resolve();
+    const lockTails = new Map<string, Promise<void>>();
     Object.defineProperty(navigator, 'locks', {
       configurable: true,
       value: {
         request: vi.fn(
-          (_name: string, _options: LockOptions, callback: () => unknown) => {
+          (name: string, _options: LockOptions, callback: () => unknown) => {
+            const lockTail = lockTails.get(name) ?? Promise.resolve();
             const result = lockTail.then(callback, callback);
-            lockTail = result.then(
-              () => undefined,
-              () => undefined,
+            lockTails.set(
+              name,
+              result.then(
+                () => undefined,
+                () => undefined,
+              ),
             );
             return result;
           },
@@ -120,6 +133,39 @@ describe('storage reset coordinator', () => {
     } finally {
       unregister();
     }
+  });
+
+  it('waits for every active-tab activity lock before destructive reset work may proceed', async () => {
+    let markSharedHeld!: () => void;
+    let releaseShared!: () => void;
+    const sharedHeld = new Promise<void>((resolve) => {
+      markSharedHeld = resolve;
+    });
+    const sharedGate = new Promise<void>((resolve) => {
+      releaseShared = resolve;
+    });
+
+    void navigator.locks.request(
+      STORAGE_RESET_ACTIVITY_LOCK_NAME,
+      { mode: 'shared' },
+      async () => {
+        markSharedHeld();
+        await sharedGate;
+      },
+    );
+    await sharedHeld;
+
+    let barrierPassed = false;
+    const barrier = waitForStorageResetQuiescence().then(() => {
+      barrierPassed = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(barrierPassed).toBe(false);
+
+    releaseShared();
+    await barrier;
+    expect(barrierPassed).toBe(true);
   });
 
   it('honors a renewed durable lease when the original recovery timer fires', async () => {
@@ -171,6 +217,7 @@ describe('storage reset coordinator', () => {
       expect(resetCategoriesDbIsolated).toHaveBeenCalledOnce();
       expect(resetDbIsolated).toHaveBeenCalledOnce();
       expect(removeComapeoKeys).toHaveBeenCalledWith({ bestEffort: true });
+      expect(useAuthStore.getState).toHaveBeenCalled();
       expect(window.location.reload).toHaveBeenCalledOnce();
       expect(
         JSON.parse(
@@ -181,6 +228,46 @@ describe('storage reset coordinator', () => {
         phase: 'complete',
       });
     } finally {
+      unregister();
+    }
+  });
+
+  it('clears in-memory auth before recovery publishes complete', async () => {
+    vi.useFakeTimers();
+    const mockClearAll = vi.fn();
+    vi.mocked(useAuthStore.getState).mockReturnValue({
+      clearAll: mockClearAll,
+    } as unknown as ReturnType<typeof useAuthStore.getState>);
+    localStorage.setItem(
+      STORAGE_RESET_COORDINATION_KEY,
+      JSON.stringify({
+        version: 1,
+        generation: 'auth-recovery-generation',
+        sourceTabId: 'crashed-tab',
+        phase: 'start',
+        createdAt: Date.now() - STORAGE_RESET_LEASE_MS - 1,
+      }),
+    );
+    const originalSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, key, value) {
+        if (key === STORAGE_RESET_COORDINATION_KEY) {
+          const signal = JSON.parse(value) as { phase?: string };
+          if (signal.phase === 'complete') {
+            expect(mockClearAll).toHaveBeenCalledOnce();
+          }
+        }
+        return originalSetItem.call(this, key, value);
+      });
+    const { unregister } = registerStorageResetCoordinator();
+
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mockClearAll).toHaveBeenCalledOnce();
+      expect(window.location.reload).toHaveBeenCalledOnce();
+    } finally {
+      setItemSpy.mockRestore();
       unregister();
     }
   });
@@ -437,9 +524,11 @@ describe('storage reset coordinator', () => {
   it('retries authoritative complete validation after a transient lock failure without sweeping data', async () => {
     vi.useFakeTimers();
     const request = vi.mocked(navigator.locks.request);
-    request.mockRejectedValueOnce(new Error('Transient complete lock failure'));
     localStorage.setItem('comapeo-theme-mode', 'dark');
     const { unregister } = registerStorageResetCoordinator();
+    // Registration queues the shared activity lock first; fail the next request,
+    // which is the terminal-generation validation this test is targeting.
+    request.mockRejectedValueOnce(new Error('Transient complete lock failure'));
 
     try {
       dispatchResetSignal('complete', 'terminal-retry-generation');
@@ -697,11 +786,13 @@ describe('storage reset coordinator', () => {
     ).toEqual(generationB);
   });
 
-  it('reconciles a start signal after the first lock validation fails', async () => {
+  it('reconciles a start signal after the first lock validation fails without releasing the activity barrier early', async () => {
     vi.useFakeTimers();
     const request = vi.mocked(navigator.locks.request);
-    request.mockRejectedValueOnce(new Error('Transient lock failure'));
     const { unregister } = registerStorageResetCoordinator();
+    // Registration queues the shared activity lock first. Fail the next request,
+    // which is the start-generation validation this test is targeting.
+    request.mockRejectedValueOnce(new Error('Transient lock failure'));
 
     try {
       dispatchResetSignal('start', 'lock-failure-generation');
@@ -710,9 +801,21 @@ describe('storage reset coordinator', () => {
       expect(closeCategoriesDbForStorageReset).toHaveBeenCalled();
       expect(resetDbIsolated).not.toHaveBeenCalled();
 
-      await vi.advanceTimersByTimeAsync(1_000);
-      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS - 1_000);
+      let barrierPassed = false;
+      const barrier = waitForStorageResetQuiescence().then(() => {
+        barrierPassed = true;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(barrierPassed).toBe(false);
 
+      // Authoritative reconciliation confirms start and only then releases this
+      // tab's shared activity lock, allowing the owner/recovery barrier through.
+      await vi.advanceTimersByTimeAsync(1_000);
+      await barrier;
+      expect(barrierPassed).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS - 1_000);
       expect(resetCategoriesDbIsolated).toHaveBeenCalledOnce();
       expect(resetDbIsolated).toHaveBeenCalledOnce();
       expect(window.location.reload).toHaveBeenCalledOnce();

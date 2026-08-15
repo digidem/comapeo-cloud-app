@@ -4,15 +4,20 @@ import {
 } from '@/lib/categories-db';
 import { removeComapeoKeys } from '@/lib/comapeo-local-storage';
 import { closeDbForStorageReset, resetDbIsolated } from '@/lib/db';
+import { useAuthStore } from '@/stores/auth-store';
 
 export const STORAGE_RESET_COORDINATION_KEY =
   '__comapeo-storage-reset-coordination-v1__';
 export const STORAGE_RESET_LEASE_MS = 5_000;
+export const STORAGE_RESET_ACTIVITY_LOCK_NAME =
+  'comapeo-storage-reset-activity-v1';
 const STORAGE_RESET_RECOVERY_RETRY_MS = 1_000;
 const STORAGE_RESET_CHANNEL_NAME = 'comapeo-storage-reset';
 const STORAGE_RESET_LOCK_NAME = 'comapeo-storage-reset-v1';
-const CROSS_TAB_QUIESCE_DELAY_MS = 100;
 const STORAGE_RESET_TAB_ID = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+let releaseActivityLock: (() => void) | null = null;
+let activityLockRequested = false;
 
 type StorageResetPhase = 'start' | 'complete' | 'abort';
 
@@ -107,6 +112,61 @@ async function withStorageResetLock<T>(
   );
 }
 
+function requestStorageResetActivityLock(): void {
+  if (
+    typeof navigator === 'undefined' ||
+    !navigator.locks ||
+    activityLockRequested
+  ) {
+    return;
+  }
+
+  activityLockRequested = true;
+  let resolveHold!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    resolveHold = resolve;
+  });
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    if (releaseActivityLock === release) releaseActivityLock = null;
+    activityLockRequested = false;
+    resolveHold();
+  };
+  releaseActivityLock = release;
+
+  void navigator.locks
+    .request(
+      STORAGE_RESET_ACTIVITY_LOCK_NAME,
+      { mode: 'shared' },
+      async () => hold,
+    )
+    .catch(() => {
+      // The reset path itself also requires Web Locks. If this lifecycle guard
+      // cannot be acquired, close this tab's storage connections rather than
+      // leaving an unguarded writer alive.
+      quiesceStorageResetConnections();
+    });
+}
+
+function releaseStorageResetActivityLock(): void {
+  releaseActivityLock?.();
+}
+
+async function withStorageResetActivityBarrier<T>(
+  callback: () => T | Promise<T>,
+): Promise<T> {
+  if (typeof navigator === 'undefined' || !navigator.locks) {
+    throw new Error('Cross-tab reset locking is unavailable in this browser.');
+  }
+  return navigator.locks.request(
+    STORAGE_RESET_ACTIVITY_LOCK_NAME,
+    { mode: 'exclusive' },
+    async () => callback(),
+  );
+}
+
 function isOwnedStart(
   signal: StorageResetSignal | null,
   generation: string,
@@ -179,14 +239,21 @@ export async function runStorageResetOwnerOperation<T>(
 }
 
 export async function waitForStorageResetQuiescence(): Promise<void> {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, CROSS_TAB_QUIESCE_DELAY_MS);
-  });
+  // Every mounted tab holds a shared activity lock for its lifetime. Reset-start
+  // handlers close their storage connections and release that lock. Acquiring the
+  // exclusive barrier therefore proves that every active tab observed start and
+  // quiesced; unlike a fixed delay, suspended/background tabs cannot be skipped.
+  await withStorageResetActivityBarrier(() => undefined);
+}
+
+function closeStorageResetConnections(): void {
+  closeDbForStorageReset();
+  closeCategoriesDbForStorageReset();
 }
 
 export function quiesceStorageResetConnections(): void {
-  closeDbForStorageReset();
-  closeCategoriesDbForStorageReset();
+  closeStorageResetConnections();
+  releaseStorageResetActivityLock();
 }
 
 async function performFinalCleanup(): Promise<boolean> {
@@ -207,54 +274,67 @@ async function performFinalCleanup(): Promise<boolean> {
     // Stay quiesced; callers retry instead of reloading uncertain state.
   }
 
+  let runtimeCleared = true;
+  try {
+    useAuthStore.getState().clearAll();
+  } catch {
+    runtimeCleared = false;
+  }
+
   const removal = removeComapeoKeys({ bestEffort: true });
   const preferencesCleared =
     !removal.enumerationFailed && removal.failedKeys.length === 0;
 
-  return categoriesCleared && primaryCleared && preferencesCleared;
+  return (
+    categoriesCleared && primaryCleared && runtimeCleared && preferencesCleared
+  );
 }
 
 async function recoverExpiredResetLocked(
   expected: StorageResetSignal,
 ): Promise<ResetClaimResult> {
-  return withStorageResetLock(async () => {
-    const current = readCoordinationSignal();
-    if (
-      current?.phase !== 'start' ||
-      current.generation !== expected.generation
-    ) {
-      return { status: 'superseded', signal: current };
-    }
-
-    if (remainingLeaseMs(current) > 0) {
-      return { status: 'fresh', signal: current };
-    }
-
-    const claimed = createSignal(current.generation, 'start');
-    if (!persistSignal(claimed)) {
-      throw new Error('Could not persist reset recovery ownership.');
-    }
-    postBroadcastSignal(claimed);
-    // Claim and cleanup are one fenced operation. The old owner cannot resume
-    // destructive work after this takeover.
-    const cleaned = await performFinalCleanup();
-    if (cleaned) {
-      const complete = createSignal(claimed.generation, 'complete');
-      if (!persistSignal(complete)) {
-        throw new Error('Could not persist reset recovery completion.');
+  // Do not hold the generation-transition lock while waiting for active tabs:
+  // those tabs need that lock to validate start and quiesce. Once every mounted
+  // tab has released its shared activity lock, claim + cleanup + terminal publish
+  // run atomically under the transition lock.
+  return withStorageResetActivityBarrier(() =>
+    withStorageResetLock(async () => {
+      const current = readCoordinationSignal();
+      if (
+        current?.phase !== 'start' ||
+        current.generation !== expected.generation
+      ) {
+        return { status: 'superseded', signal: current };
       }
-      postBroadcastSignal(complete);
-      window.location.reload();
-      return { status: 'claimed', signal: complete };
-    }
 
-    const renewed = createSignal(claimed.generation, 'start');
-    if (!persistSignal(renewed)) {
-      throw new Error('Could not renew failed reset recovery.');
-    }
-    postBroadcastSignal(renewed);
-    return { status: 'claimed', signal: renewed };
-  });
+      if (remainingLeaseMs(current) > 0) {
+        return { status: 'fresh', signal: current };
+      }
+
+      const claimed = createSignal(current.generation, 'start');
+      if (!persistSignal(claimed)) {
+        throw new Error('Could not persist reset recovery ownership.');
+      }
+      postBroadcastSignal(claimed);
+      const cleaned = await performFinalCleanup();
+      if (cleaned) {
+        const complete = createSignal(claimed.generation, 'complete');
+        if (!persistSignal(complete)) {
+          throw new Error('Could not persist reset recovery completion.');
+        }
+        postBroadcastSignal(complete);
+        window.location.reload();
+        return { status: 'claimed', signal: complete };
+      }
+
+      const renewed = createSignal(claimed.generation, 'start');
+      if (!persistSignal(renewed)) {
+        throw new Error('Could not renew failed reset recovery.');
+      }
+      postBroadcastSignal(renewed);
+      return { status: 'claimed', signal: renewed };
+    }),
+  );
 }
 
 async function readAuthoritativeSignalLocked(): Promise<StorageResetSignal | null> {
@@ -268,6 +348,12 @@ export function registerStorageResetCoordinator(): {
   if (typeof window === 'undefined') {
     return { unregister: () => {}, resetInProgress: false };
   }
+
+  // Register this mounted tab as an active writer before inspecting reset state.
+  // The request is queued with the browser lock manager synchronously, so a reset
+  // barrier requested after this point cannot overtake the tab. If start is
+  // already active, the synchronous check below immediately quiesces/releases it.
+  requestStorageResetActivityLock();
 
   let terminalGeneration: string | null = null;
   let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -493,7 +579,11 @@ export function registerStorageResetCoordinator(): {
         return current;
       });
     } catch {
-      quiesceStorageResetConnections();
+      // Close storage immediately, but keep this tab's shared activity lock until
+      // authoritative reconciliation confirms start. Otherwise the reset owner
+      // could cross the barrier while this still-mounted tab is indeterminate and
+      // capable of issuing non-database persisted writes.
+      closeStorageResetConnections();
       clearRecoveryTimer();
       recoveryTimer = setTimeout(
         () => void reconcileAuthoritativeState(),
@@ -613,6 +703,7 @@ export function registerStorageResetCoordinator(): {
       clearRecoveryTimer();
       clearFinalizationTimer();
       stopOwnedRecovery();
+      releaseStorageResetActivityLock();
       window.removeEventListener('storage', handleStorage);
       channel?.close();
     },
