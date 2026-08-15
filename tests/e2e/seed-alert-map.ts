@@ -6,6 +6,20 @@ const PROJECT_ID = 'alerts-map-project';
 export async function seedAlertMapState(page: Page): Promise<void> {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
+  // Wait for the app's initial Dexie open/upgrade to finish before opening the
+  // same database through raw IndexedDB. Without this gate the seed can race
+  // schema initialization and leave the second open request pending.
+  await page.waitForFunction(
+    async () => {
+      const databases = await indexedDB.databases();
+      return databases.some(
+        (database) =>
+          database.name === 'comapeo-cloud-app' && (database.version ?? 0) > 0,
+      );
+    },
+    undefined,
+    { timeout: 10_000 },
+  );
 
   await page.evaluate(async (projectId) => {
     const now = '2026-08-12T12:00:00.000Z';
