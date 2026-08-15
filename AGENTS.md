@@ -122,6 +122,17 @@ Managed by Prettier via `@trivago/prettier-plugin-sort-imports`:
 - Use `@/` path alias for src imports, `@tests/` for test imports
 - Use `tests/mocks/test-utils.tsx` `render` in all component tests (wraps providers)
 
+### Storage reset safety invariants
+
+Changes that touch browser persistence or full local-data reset MUST preserve these data-loss guardrails:
+
+- Route app-owned `localStorage` writes that create or update persisted state through the fenced helpers/Zustand adapter in `src/lib/comapeo-local-storage.ts`, so stale callbacks cannot recreate data during reset. Destructive removals used for cleanup are allowed; the durable reset coordination marker managed by `src/lib/storage-reset-coordinator.ts` is an intentional control-plane exception.
+- Once a tab is quiesced for reset, ordinary app database paths must not create/reopen databases or enqueue new writes until the reset lifecycle explicitly resumes them or the page reloads. Reset-only isolated connections used by owner/recovery cleanup are the intentional exception and must remain scoped to reset cleanup.
+- Register reset coordination before app mount. When Web Locks are available, mount waits for the tab's shared activity lock; destructive reset requires cross-tab locking and must fail safely when that coordination is unavailable.
+- The reset owner must finish database, auth, and app-owned preference cleanup while holding the exclusive activity barrier before publishing `complete`. Delayed receiver tabs quiesce and reload; they must not perform their own destructive sweep after observing terminal completion.
+- Backup format v1 intentionally preserves its historical `comapeo-*` key scope even though full-reset ownership is broader. Do not silently broaden v1 import/export semantics; use a future backup version for a contract change.
+- Changes to these invariants require adversarial regression coverage for multi-tab, stale-owner/recovery, delayed-write, and partial-failure behavior—not only happy-path component tests.
+
 ## API Client
 
 - Base URL stored in auth Zustand store

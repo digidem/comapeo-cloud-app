@@ -11,8 +11,10 @@ Never repeat an identical command that already exceeded the ceiling. Change the 
 ## CI waiting
 
 - Do not use long-running watch commands through a bounded shell.
-- Use `scripts/pr_wait.py` with a 60–120 second window, then rerun it if the result is `still_pending`.
-- Treat a head-SHA change as an immediate hard stop; all prior review/readiness evidence is stale.
+- Use `scripts/pr_wait.py` with a 60–120 second window, then rerun it if the result is `still_pending`. Once the reviewed base tip is known, pass both `--expect-head` and `--expect-base-tip` so the next bounded poll that observes either revision moving stops the wait.
+- Once an expected head-SHA or live base-tip change is observed, treat it as a hard stop; all prior review/readiness evidence for that pair is stale.
+- A `still_pending` result or long elapsed runtime alone is not evidence that CI is stuck. Before rerunning or cancelling, inspect the live run/job status, current step, timestamps, and available log progress. If GitHub still reports the job `in_progress` on an active step with no failure signal, continue bounded polling instead of creating a duplicate run.
+- Rerun only after a terminal failure/cancellation/timeout, or after direct run/job inspection provides concrete evidence that the existing execution is no longer healthy.
 - When a run fails, start with failed-job logs rather than downloading the complete run log.
 
 ## Local validation

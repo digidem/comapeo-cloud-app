@@ -56,6 +56,8 @@ Repeat until there are no actionable findings on the current head:
 
 Do not stop after the first green CI run if unresolved actionable review feedback remains.
 
+If the live target-branch tip advances after review or CI evidence has been collected, immediately invalidate the old head/base-tip evidence and stop waiting on that stale pair. Refresh the live target tip and determine whether the PR branch itself must be synchronized because of conflicts, mergeability, an up-to-date branch policy, required checks, or the chosen workflow. When synchronization is required, merge the verified target tip into the PR branch without rebasing or force-pushing reviewed history, resolve conflicts while preserving both current target behavior and PR intent, run focused conflict/affected validation, then push and record the new head. In every case, restart independent review and live GitHub gates on the new exact head/base-tip pair; only use a different history strategy when repository policy or explicit user direction requires it.
+
 ## 4. Independent merge-readiness review loops
 
 When the user requests a specific reviewer or model, use it. Otherwise use an available strong independent reviewer when the environment supports one and the change risk justifies it.
@@ -80,7 +82,7 @@ A final reviewer verdict applies only to the exact head/base-tip pair it reviewe
 
 ## 5. Merge-ready gate
 
-Before the final gate, wait for CI with short probes or `scripts/pr_wait.py`; do not use `gh pr checks --watch` in a bounded shell environment because normal PR suites can legitimately run longer than the shell ceiling.
+Before the final gate, wait for CI with short probes or `scripts/pr_wait.py`; once the reviewed live base tip is known, pass both `--expect-head` and `--expect-base-tip` so polling stops at the next bounded poll that observes either revision moving. Do not use `gh pr checks --watch` in a bounded shell environment because normal PR suites can legitimately run longer than the shell ceiling.
 
 Declare `MERGE-READY` only when all of these are true simultaneously for one exact head/base-tip pair:
 
@@ -134,7 +136,7 @@ A final merged report should additionally include the merge commit SHA and confi
 ## Resources
 
 - `scripts/pr_snapshot.py` — read-only, fail-closed GitHub PR state snapshot including live base-tip, CI, and unresolved review-thread data.
-- `scripts/pr_wait.py` — bounded CI polling that exits quickly on failure/head movement and returns after a short wait window instead of relying on an unbounded watcher.
+- `scripts/pr_wait.py` — bounded CI polling that exits quickly on failure or expected head/base-tip movement and returns after a short wait window instead of relying on an unbounded watcher.
 - `scripts/claude_review.py` — exact head/base-tip, read-only Claude Code background reviewer dispatch/poll/stop helper.
 - `references/github-runbook.md` — canonical GitHub CLI commands and exact-revision merge/cleanup patterns.
 - `references/timeout-strategy.md` — bounded execution strategy for CI, local validation, model reviews, and hooks under CodexPro-style command ceilings.

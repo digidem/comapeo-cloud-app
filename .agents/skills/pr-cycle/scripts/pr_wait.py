@@ -45,20 +45,91 @@ def evaluate_pr(pr: dict[str, Any], expected_head: str | None) -> tuple[dict[str
     return {**result, "state": "terminal_requires_adjudication"}, 4
 
 
+def read_expected_base_tip(
+    repo: str,
+    pr: dict[str, Any],
+    expected_base_tip: str | None,
+    observed_base_branch: str | None,
+) -> tuple[str | None, str | None]:
+    if expected_base_tip is None:
+        return None, observed_base_branch
+
+    base_branch = pr.get("baseRefName")
+    if not isinstance(base_branch, str) or not base_branch:
+        raise pr_snapshot.SnapshotError("pull request base branch was missing")
+    if observed_base_branch is None:
+        observed_base_branch = base_branch
+    elif base_branch != observed_base_branch:
+        raise pr_snapshot.SnapshotError(
+            "pull request base branch changed during wait: "
+            f"{observed_base_branch} -> {base_branch}"
+        )
+
+    base_tip = pr_snapshot.fetch_branch_tip(repo, base_branch)
+    if not pr_snapshot.sha_matches(expected_base_tip, base_tip):
+        raise pr_snapshot.SnapshotError(
+            "base branch tip does not match expected "
+            f"{expected_base_tip}: found {base_tip}"
+        )
+    return base_tip, observed_base_branch
+
+
 def wait_for_checks(
     repo: str,
     pr_number: int,
     expected_head: str | None,
     wait_seconds: int,
     interval_seconds: int,
+    *,
+    expected_base_tip: str | None = None,
 ) -> tuple[dict[str, Any], int]:
     deadline = time.monotonic() + wait_seconds
+    observed_base_branch: str | None = None
 
     while True:
         pr = pr_snapshot.fetch_pr(repo, pr_number)
         result, code = evaluate_pr(pr, expected_head)
+        base_tip, observed_base_branch = read_expected_base_tip(
+            repo,
+            pr,
+            expected_base_tip,
+            observed_base_branch,
+        )
+        if base_tip is not None:
+            result["base_tip_sha"] = base_tip
+
         if code != 3:
-            return result, code
+            # A terminal result gets a second read before returning so we do not
+            # report success/failure from a mixed-time head/base snapshot. The
+            # final merge gate still uses pr_snapshot.py for the stronger full
+            # GitHub/thread-aware verification.
+            pr_after = pr_snapshot.fetch_pr(repo, pr_number)
+            head_before = pr.get("headRefOid")
+            head_after = pr_after.get("headRefOid")
+            if head_after != head_before:
+                raise pr_snapshot.SnapshotError(
+                    "pull request head changed during terminal verification: "
+                    f"{head_before} -> {head_after}"
+                )
+
+            result_after, code_after = evaluate_pr(pr_after, expected_head)
+            base_tip_after, observed_base_branch = read_expected_base_tip(
+                repo,
+                pr_after,
+                expected_base_tip,
+                observed_base_branch,
+            )
+            if base_tip is not None and base_tip_after != base_tip:
+                raise pr_snapshot.SnapshotError(
+                    "base branch tip changed during terminal verification: "
+                    f"{base_tip} -> {base_tip_after}"
+                )
+            if base_tip_after is not None:
+                result_after["base_tip_sha"] = base_tip_after
+
+            result, code = result_after, code_after
+            if code != 3:
+                return result, code
 
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -74,6 +145,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--expect-head",
         help="Fail unless the PR head SHA equals this reviewed/pushed SHA",
+    )
+    parser.add_argument(
+        "--expect-base-tip",
+        help="Fail unless the live target-branch tip equals this reviewed base SHA",
     )
     parser.add_argument(
         "--wait-seconds",
@@ -103,12 +178,14 @@ def main() -> int:
     try:
         repo = pr_snapshot.resolve_repo(args.repo)
         expected_head = pr_snapshot.normalize_expected_head(args.expect_head)
+        expected_base_tip = pr_snapshot.normalize_expected_base_tip(args.expect_base_tip)
         result, code = wait_for_checks(
             repo,
             args.pr,
             expected_head,
             args.wait_seconds,
             args.interval_seconds,
+            expected_base_tip=expected_base_tip,
         )
     except pr_snapshot.SnapshotError as exc:
         result = {"complete": False, "state": "error", "error": str(exc)}
