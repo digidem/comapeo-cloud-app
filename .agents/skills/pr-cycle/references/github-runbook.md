@@ -59,8 +59,14 @@ gh pr checks <pr> --repo <owner/repo>
 In bounded execution environments, do **not** use `gh pr checks --watch`: a healthy PR suite can outlive the shell timeout. Prefer the bundled bounded poller and rerun it if it reports `still_pending`:
 
 ```bash
-python3 .agents/skills/pr-cycle/scripts/pr_wait.py --repo <owner/repo> --pr <pr> --expect-head <head-sha> --wait-seconds 120
+python3 .agents/skills/pr-cycle/scripts/pr_wait.py \
+  --repo <owner/repo> --pr <pr> \
+  --expect-head <head-sha> \
+  --expect-base-tip <live-base-tip-sha> \
+  --wait-seconds 120
 ```
+
+Once a reviewed live base tip is known, always pass it to the poller. Each poll re-reads the PR base branch and its live tip, so a target-branch advance stops the wait at the next bounded poll that observes it instead of spending more CI wall time on stale review evidence.
 
 For a failed GitHub Actions run, inspect metadata first and fetch only failed logs by default:
 
@@ -76,6 +82,8 @@ Wait until relevant checks are terminal. `pr_wait.py` exits 0 only for a fully t
 ## Exact-revision discipline
 
 Capture the pushed head SHA after every push and the live target-branch tip before every independent review. A reviewer verdict and readiness decision are valid only for that exact head/base-tip pair.
+
+If the live target branch advances during the cycle, discard prior reviewer and CI/readiness evidence for the old pair and refresh the exact live tip. Synchronize the PR branch only when conflicts, mergeability, an up-to-date branch policy, required checks, or the chosen workflow require it. When synchronization is required, merge the verified target tip into the PR branch without rebasing or force-pushing reviewed history, resolve conflicts while preserving both sides, run focused validation for conflict/affected paths, and push the result. Restart the gates on the resulting exact head/base-tip pair.
 
 Immediately before an authorized merge, run the snapshot helper with both `--expect-head` and `--expect-base-tip`. If either differs, do not merge; restart verification and independent review on the new pair.
 
