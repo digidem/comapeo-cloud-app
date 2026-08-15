@@ -645,7 +645,7 @@ describe('clearAllStorage', () => {
     vi.useFakeTimers();
     const { finishStorageResetCoordination } =
       await import('@/lib/storage-reset-coordinator');
-    vi.mocked(finishStorageResetCoordination).mockReturnValueOnce(false);
+    vi.mocked(finishStorageResetCoordination).mockResolvedValueOnce(false);
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
       value: { reload: mockReload },
@@ -668,6 +668,35 @@ describe('clearAllStorage', () => {
     }
   });
 
+  it('does not let a stale owner delete preferences after losing coordination', async () => {
+    vi.useFakeTimers();
+    const { finishStorageResetCoordination } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(finishStorageResetCoordination).mockResolvedValueOnce(false);
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        failedStep: 'coordination',
+        partial: true,
+      });
+
+      // A newer owner/tab may write preferences after this tab loses the reset
+      // generation. The stale tab must not perform another owned-key sweep.
+      localStorage.setItem('comapeo-theme-mode', 'dark');
+      await vi.advanceTimersByTimeAsync(1500);
+
+      expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('reports coordination failure when abort publication fails after categories reset error', async () => {
     vi.useFakeTimers();
     const { resetCategoriesDb } = await import('@/lib/categories-db');
@@ -676,7 +705,7 @@ describe('clearAllStorage', () => {
     vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
       new Error('Categories error'),
     );
-    vi.mocked(finishStorageResetCoordination).mockReturnValueOnce(false);
+    vi.mocked(finishStorageResetCoordination).mockResolvedValueOnce(false);
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
       value: { reload: mockReload },

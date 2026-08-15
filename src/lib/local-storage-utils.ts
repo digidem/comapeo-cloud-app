@@ -210,7 +210,10 @@ async function runCoordinatedStorageReset(generation: string): Promise<void> {
   try {
     await resetCategoriesDb();
   } catch (cause) {
-    const abortPublished = finishStorageResetCoordination(generation, 'abort');
+    const abortPublished = await finishStorageResetCoordination(
+      generation,
+      'abort',
+    );
     // This tab's app connections are already closed. Reload whether abort was
     // published or the lease must recover, so the current tab never continues
     // with unusable singleton connections.
@@ -231,7 +234,10 @@ async function runCoordinatedStorageReset(generation: string): Promise<void> {
     // The primary transaction is atomic, so preserve auth and preferences when
     // it fails. Only the already-cleared categories cache is partial. Releasing
     // quiesced tabs and reloading is enough to restore a coherent app state.
-    const abortPublished = finishStorageResetCoordination(generation, 'abort');
+    const abortPublished = await finishStorageResetCoordination(
+      generation,
+      'abort',
+    );
     scheduleResetReload();
     throw new ClearAllStorageError({
       failedStep: abortPublished ? 'app-db' : 'coordination',
@@ -242,13 +248,15 @@ async function runCoordinatedStorageReset(generation: string): Promise<void> {
   }
 
   const { storageCleanupFailed } = clearRuntimeStateAfterDatabaseReset();
-  const coordinationCompleted = finishStorageResetCoordination(
+  const coordinationCompleted = await finishStorageResetCoordination(
     generation,
     'complete',
   );
 
   if (storageCleanupFailed || !coordinationCompleted) {
-    scheduleResetReload({ repeatStorageCleanup: true });
+    scheduleResetReload({
+      repeatStorageCleanup: storageCleanupFailed && coordinationCompleted,
+    });
     throw new ClearAllStorageError({
       failedStep: storageCleanupFailed ? 'browser-storage' : 'coordination',
       partial: true,
@@ -267,7 +275,7 @@ async function runCoordinatedStorageReset(generation: string): Promise<void> {
 export async function clearAllStorage(): Promise<void> {
   let generation: string;
   try {
-    generation = beginStorageResetCoordination();
+    generation = await beginStorageResetCoordination();
   } catch (cause) {
     // Coordination uses localStorage as a durable reset-start marker. If it is
     // unavailable, fail before deleting either IndexedDB database.

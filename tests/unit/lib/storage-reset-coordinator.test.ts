@@ -77,6 +77,22 @@ function dispatchResetSignalEvent(
 
 describe('storage reset coordinator', () => {
   beforeEach(() => {
+    let lockTail = Promise.resolve();
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: vi.fn(
+          (_name: string, _options: LockOptions, callback: () => unknown) => {
+            const result = lockTail.then(callback, callback);
+            lockTail = result.then(
+              () => undefined,
+              () => undefined,
+            );
+            return result;
+          },
+        ),
+      },
+    });
     vi.clearAllMocks();
     localStorage.clear();
     Object.defineProperty(window, 'location', {
@@ -90,14 +106,16 @@ describe('storage reset coordinator', () => {
     localStorage.clear();
   });
 
-  it('quiesces open database connections as soon as another tab starts a reset', () => {
+  it('quiesces open database connections as soon as another tab starts a reset', async () => {
     const { unregister } = registerStorageResetCoordinator();
 
     try {
       dispatchResetSignal('start');
 
-      expect(closeDbForStorageReset).toHaveBeenCalledOnce();
-      expect(closeCategoriesDbForStorageReset).toHaveBeenCalledOnce();
+      await vi.waitFor(() => {
+        expect(closeDbForStorageReset).toHaveBeenCalledOnce();
+        expect(closeCategoriesDbForStorageReset).toHaveBeenCalledOnce();
+      });
       expect(resetDbIsolated).not.toHaveBeenCalled();
       expect(window.location.reload).not.toHaveBeenCalled();
     } finally {
@@ -108,7 +126,7 @@ describe('storage reset coordinator', () => {
   it('renews an active reset lease so long-running initiators are not taken over', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-14T12:00:00.000Z'));
-    const generation = beginStorageResetCoordination();
+    const generation = await beginStorageResetCoordination();
     const initial = JSON.parse(
       localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
     );
@@ -163,8 +181,8 @@ describe('storage reset coordinator', () => {
     }
   });
 
-  it('preserves the durable start marker when terminal publication fails', () => {
-    const generation = beginStorageResetCoordination();
+  it('preserves the durable start marker when terminal publication fails', async () => {
+    const generation = await beginStorageResetCoordination();
     const originalSetItem = Storage.prototype.setItem;
     let shouldFailCoordinationWrite = true;
     const setItemSpy = vi
@@ -180,7 +198,10 @@ describe('storage reset coordinator', () => {
         return originalSetItem.call(this, key, value);
       });
 
-    const published = finishStorageResetCoordination(generation, 'complete');
+    const published = await finishStorageResetCoordination(
+      generation,
+      'complete',
+    );
 
     expect(published).toBe(false);
     setItemSpy.mockRestore();
@@ -289,20 +310,25 @@ describe('storage reset coordinator', () => {
         expect(removeComapeoKeys).toHaveBeenCalledWith({ bestEffort: true });
         expect(window.location.reload).toHaveBeenCalledOnce();
       });
-      expect(closeDbForStorageReset).toHaveBeenCalledOnce();
-      expect(closeCategoriesDbForStorageReset).toHaveBeenCalledOnce();
+      expect(closeDbForStorageReset).toHaveBeenCalledTimes(3);
+      expect(closeCategoriesDbForStorageReset).toHaveBeenCalledTimes(3);
     } finally {
       unregister();
     }
   });
 
-  it('ignores a stale complete signal after a newer reset generation starts', () => {
+  it('ignores a stale complete signal after a newer reset generation starts', async () => {
     const { unregister } = registerStorageResetCoordinator();
 
     try {
       dispatchResetSignal('start', 'generation-a');
       dispatchResetSignal('start', 'generation-b');
       dispatchResetSignalEvent('complete', 'generation-a');
+
+      await vi.waitFor(() => {
+        expect(navigator.locks.request).toHaveBeenCalled();
+      });
+      await Promise.resolve();
 
       expect(resetCategoriesDbIsolated).not.toHaveBeenCalled();
       expect(resetDbIsolated).not.toHaveBeenCalled();
@@ -318,7 +344,7 @@ describe('storage reset coordinator', () => {
     }
   });
 
-  it('ignores a stale complete signal after a newer reset generation aborts', () => {
+  it('ignores a stale complete signal after a newer reset generation aborts', async () => {
     const { unregister } = registerStorageResetCoordinator();
 
     try {
@@ -333,6 +359,11 @@ describe('storage reset coordinator', () => {
         }),
       );
       dispatchResetSignalEvent('complete', 'generation-a');
+
+      await vi.waitFor(() => {
+        expect(navigator.locks.request).toHaveBeenCalled();
+      });
+      await Promise.resolve();
 
       expect(resetCategoriesDbIsolated).not.toHaveBeenCalled();
       expect(resetDbIsolated).not.toHaveBeenCalled();
@@ -362,9 +393,9 @@ describe('storage reset coordinator', () => {
         JSON.parse(
           localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
         ),
-      ).toMatchObject({ phase: 'start' });
+      ).toMatchObject({ phase: 'complete' });
 
-      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS);
+      await vi.advanceTimersByTimeAsync(1_000);
       expect(resetCategoriesDbIsolated).toHaveBeenCalledTimes(2);
       expect(resetDbIsolated).toHaveBeenCalledTimes(2);
       expect(window.location.reload).toHaveBeenCalledOnce();
@@ -391,9 +422,9 @@ describe('storage reset coordinator', () => {
         JSON.parse(
           localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
         ),
-      ).toMatchObject({ phase: 'start' });
+      ).toMatchObject({ phase: 'complete' });
 
-      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS);
+      await vi.advanceTimersByTimeAsync(1_000);
       expect(resetCategoriesDbIsolated).toHaveBeenCalledTimes(2);
       expect(resetDbIsolated).toHaveBeenCalledTimes(2);
       expect(window.location.reload).toHaveBeenCalledOnce();
@@ -414,6 +445,136 @@ describe('storage reset coordinator', () => {
       });
       expect(resetDbIsolated).not.toHaveBeenCalled();
       expect(removeComapeoKeys).not.toHaveBeenCalled();
+    } finally {
+      unregister();
+    }
+  });
+
+  it('does not let an old owner finish over a newer durable generation', async () => {
+    const generationA = await beginStorageResetCoordination();
+    const generationB = {
+      version: 1,
+      generation: 'generation-b',
+      sourceTabId: 'other-tab',
+      phase: 'start',
+      createdAt: Date.now() + 1,
+    };
+    localStorage.setItem(
+      STORAGE_RESET_COORDINATION_KEY,
+      JSON.stringify(generationB),
+    );
+
+    expect(await finishStorageResetCoordination(generationA, 'complete')).toBe(
+      false,
+    );
+    expect(await finishStorageResetCoordination(generationA, 'abort')).toBe(
+      false,
+    );
+    expect(
+      JSON.parse(localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}'),
+    ).toEqual(generationB);
+  });
+
+  it('does not let an old owner heartbeat overwrite a newer durable generation', async () => {
+    vi.useFakeTimers();
+    const generationA = await beginStorageResetCoordination();
+    const stopHeartbeat = startStorageResetLeaseHeartbeat(generationA);
+    const generationB = {
+      version: 1,
+      generation: 'generation-b',
+      sourceTabId: 'other-tab',
+      phase: 'start',
+      createdAt: Date.now() + 1,
+    };
+    localStorage.setItem(
+      STORAGE_RESET_COORDINATION_KEY,
+      JSON.stringify(generationB),
+    );
+
+    try {
+      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS);
+      expect(
+        JSON.parse(
+          localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
+        ),
+      ).toEqual(generationB);
+    } finally {
+      stopHeartbeat();
+    }
+  });
+
+  it.each([
+    ['complete', 'generation-a'],
+    ['abort', 'generation-a'],
+    ['start', 'generation-b'],
+  ] as const)(
+    'ignores a stale start event when durable state is %s',
+    async (durablePhase, durableGeneration) => {
+      localStorage.setItem(
+        STORAGE_RESET_COORDINATION_KEY,
+        JSON.stringify({
+          version: 1,
+          generation: durableGeneration,
+          sourceTabId: 'other-tab',
+          phase: durablePhase,
+          createdAt: Date.now() + 1,
+        }),
+      );
+      const { unregister } = registerStorageResetCoordinator();
+      vi.clearAllMocks();
+
+      try {
+        dispatchResetSignalEvent('start', 'generation-a');
+        await vi.waitFor(() => {
+          expect(navigator.locks.request).toHaveBeenCalled();
+        });
+        await Promise.resolve();
+
+        expect(closeDbForStorageReset).not.toHaveBeenCalled();
+        expect(closeCategoriesDbForStorageReset).not.toHaveBeenCalled();
+        expect(window.location.reload).not.toHaveBeenCalled();
+      } finally {
+        unregister();
+      }
+    },
+  );
+
+  it('retries terminal cleanup without rewriting durable complete state', async () => {
+    vi.useFakeTimers();
+    vi.mocked(resetCategoriesDbIsolated).mockRejectedValueOnce(
+      new Error('categories unavailable'),
+    );
+    const { unregister } = registerStorageResetCoordinator();
+    const originalSetItem = Storage.prototype.setItem;
+
+    try {
+      dispatchResetSignal('complete', 'terminal-generation');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(window.location.reload).not.toHaveBeenCalled();
+
+      const setItemSpy = vi
+        .spyOn(Storage.prototype, 'setItem')
+        .mockImplementation(function (this: Storage, key, value) {
+          if (key === STORAGE_RESET_COORDINATION_KEY) {
+            throw new DOMException('Storage access denied', 'SecurityError');
+          }
+          return originalSetItem.call(this, key, value);
+        });
+
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(resetCategoriesDbIsolated).toHaveBeenCalledTimes(2);
+      expect(resetDbIsolated).toHaveBeenCalledTimes(2);
+      expect(window.location.reload).toHaveBeenCalledOnce();
+      expect(
+        JSON.parse(
+          localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
+        ),
+      ).toMatchObject({
+        generation: 'terminal-generation',
+        phase: 'complete',
+      });
+      expect(setItemSpy).not.toHaveBeenCalled();
     } finally {
       unregister();
     }

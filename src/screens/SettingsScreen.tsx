@@ -274,7 +274,8 @@ export function SettingsScreen() {
             setImportReconciliationPending(true);
             // Keep backup controls disabled while an assertive warning is available
             // to assistive technology, then reconcile live stores by reloading.
-            scheduleTimeout(() => window.location.reload(), 1500);
+            // This recovery timer must survive component unmount/navigation.
+            window.setTimeout(() => window.location.reload(), 1500);
           } else {
             setImportError(
               intl.formatMessage(
@@ -294,7 +295,7 @@ export function SettingsScreen() {
 
       reader.readAsText(file);
     },
-    [intl, scheduleTimeout],
+    [intl],
   );
 
   return (

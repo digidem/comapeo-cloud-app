@@ -482,6 +482,50 @@ describe('SettingsScreen', () => {
       }
     });
 
+    it('keeps compensation reconciliation reload scheduled after unmount', async () => {
+      vi.mocked(importLocalStorageData).mockReturnValueOnce({
+        success: false,
+        error: 'compensation-failed',
+      });
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
+      });
+
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class MockFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          readAsText() {
+            this.result = '{}';
+            this.onload?.({} as Event);
+          }
+        } as unknown as typeof window.FileReader;
+
+        const { unmount } = render(<SettingsScreen />);
+        fireEvent.change(screen.getByTestId('backup-file-input'), {
+          target: { files: [new File(['{}'], 'backup.json')] },
+        });
+
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          /could not restore your previous preferences/,
+        );
+        unmount();
+
+        await waitFor(
+          () => {
+            expect(mockReload).toHaveBeenCalledOnce();
+          },
+          { timeout: 2500 },
+        );
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
+    });
+
     // FIXME: flaky test — FileReader mock timing issue with jsdom. Track: https://github.com/digidem/comapeo-cloud-app/issues/TBD
     it.skip('import button shows loading state during import', async () => {
       const OriginalFileReader = window.FileReader;

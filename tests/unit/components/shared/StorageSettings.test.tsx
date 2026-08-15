@@ -15,6 +15,15 @@ beforeEach(async () => {
     storage: {
       estimate: mockEstimate,
     },
+    locks: {
+      request: vi.fn(
+        async (
+          _name: string,
+          _options: LockOptions,
+          callback: (lock: Lock | null) => unknown,
+        ) => callback({ name: 'comapeo-storage-reset-v1', mode: 'exclusive' }),
+      ),
+    },
   });
 
   mockEstimate.mockResolvedValue({
