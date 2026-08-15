@@ -289,6 +289,74 @@ describe('storage reset coordinator', () => {
     }
   });
 
+  it('retries failed recovery after a transient post-renewal storage read failure', async () => {
+    vi.useFakeTimers();
+    vi.mocked(resetCategoriesDbIsolated).mockRejectedValueOnce(
+      new Error('categories unavailable'),
+    );
+    localStorage.setItem(
+      STORAGE_RESET_COORDINATION_KEY,
+      JSON.stringify({
+        version: 1,
+        generation: 'transient-read-recovery',
+        sourceTabId: 'crashed-tab',
+        phase: 'start',
+        createdAt: Date.now() - STORAGE_RESET_LEASE_MS - 1,
+      }),
+    );
+
+    const originalSetItem = Storage.prototype.setItem;
+    const originalGetItem = Storage.prototype.getItem;
+    let recoveryStartWrites = 0;
+    let throwNextGet = false;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, key, value) {
+        if (key === STORAGE_RESET_COORDINATION_KEY) {
+          const parsed = JSON.parse(value) as { phase?: string };
+          if (parsed.phase === 'start') {
+            recoveryStartWrites += 1;
+            if (recoveryStartWrites === 2) throwNextGet = true;
+          }
+        }
+        return originalSetItem.call(this, key, value);
+      });
+    const getItemSpy = vi
+      .spyOn(Storage.prototype, 'getItem')
+      .mockImplementation(function (this: Storage, key) {
+        if (key === STORAGE_RESET_COORDINATION_KEY && throwNextGet) {
+          throwNextGet = false;
+          throw new DOMException('Transient read failure', 'SecurityError');
+        }
+        return originalGetItem.call(this, key);
+      });
+    const { unregister } = registerStorageResetCoordinator();
+
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(resetCategoriesDbIsolated).toHaveBeenCalledOnce();
+      expect(window.location.reload).not.toHaveBeenCalled();
+
+      // First owned-recovery retry hits the injected read failure and schedules
+      // another retry without requiring a new storage or broadcast event.
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(window.location.reload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      // The successful authoritative read sees the renewed lease and waits for
+      // its remaining lifetime before reclaiming the failed cleanup.
+      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS - 2_000);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(resetCategoriesDbIsolated).toHaveBeenCalledTimes(2);
+      expect(resetDbIsolated).toHaveBeenCalledTimes(2);
+      expect(window.location.reload).toHaveBeenCalledOnce();
+    } finally {
+      unregister();
+      setItemSpy.mockRestore();
+      getItemSpy.mockRestore();
+    }
+  });
+
   it('performs an isolated final database clear before a receiving tab reloads', async () => {
     const { unregister } = registerStorageResetCoordinator();
 

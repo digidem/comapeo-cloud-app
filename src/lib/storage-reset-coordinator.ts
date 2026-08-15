@@ -245,14 +245,15 @@ async function recoverExpiredResetLocked(
       }
       postBroadcastSignal(complete);
       window.location.reload();
-    } else {
-      const renewed = createSignal(claimed.generation, 'start');
-      if (!persistSignal(renewed)) {
-        throw new Error('Could not renew failed reset recovery.');
-      }
-      postBroadcastSignal(renewed);
+      return { status: 'claimed', signal: complete };
     }
-    return { status: 'claimed', signal: claimed };
+
+    const renewed = createSignal(claimed.generation, 'start');
+    if (!persistSignal(renewed)) {
+      throw new Error('Could not renew failed reset recovery.');
+    }
+    postBroadcastSignal(renewed);
+    return { status: 'claimed', signal: renewed };
   });
 }
 
@@ -401,12 +402,9 @@ export function registerStorageResetCoordinator(): {
       return;
     }
 
-    if (claim.status === 'claimed') {
-      const current = readCoordinationSignal();
-      if (current?.phase === 'start') {
-        recoveringGeneration = current.generation;
-        scheduleOwnedRecoveryRetry(current.generation);
-      }
+    if (claim.status === 'claimed' && claim.signal.phase === 'start') {
+      recoveringGeneration = claim.signal.generation;
+      scheduleOwnedRecoveryRetry(claim.signal.generation);
     }
   };
 
