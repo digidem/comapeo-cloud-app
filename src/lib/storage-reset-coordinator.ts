@@ -245,10 +245,16 @@ export function registerStorageResetCoordinator(): {
       // Keep the tab quiesced and retry. A reset cannot be safely declared over
       // while its durable cross-tab state is unreadable.
     }
-    if (
-      current !== null &&
-      (current.phase !== 'start' || current.generation !== signal.generation)
-    ) {
+    if (current === null) {
+      scheduleRecovery(signal, STORAGE_RESET_RECOVERY_RETRY_MS);
+      return;
+    }
+    if (current.phase !== 'start' || current.generation !== signal.generation) {
+      return;
+    }
+    const leaseRemaining = remainingLeaseMs(current);
+    if (leaseRemaining > 0) {
+      scheduleRecovery(current, leaseRemaining);
       return;
     }
 
@@ -301,6 +307,22 @@ export function registerStorageResetCoordinator(): {
       terminalGeneration = null;
       quiesceStorageResetConnections();
       scheduleRecovery(signal);
+      return;
+    }
+
+    let durableSignal: StorageResetSignal | null;
+    try {
+      durableSignal = readCoordinationSignal();
+    } catch {
+      // Terminal broadcasts are only hints. If durable coordination cannot be
+      // verified, keep the current tab state and let an existing lease timer retry.
+      return;
+    }
+    if (
+      durableSignal === null ||
+      durableSignal.generation !== signal.generation ||
+      durableSignal.phase !== signal.phase
+    ) {
       return;
     }
 

@@ -55,6 +55,26 @@ function dispatchResetSignal(
   );
 }
 
+function dispatchResetSignalEvent(
+  phase: 'start' | 'complete' | 'abort',
+  generation: string,
+) {
+  const value = JSON.stringify({
+    version: 1,
+    generation,
+    sourceTabId: 'other-tab',
+    phase,
+    createdAt: Date.now(),
+  });
+  window.dispatchEvent(
+    new StorageEvent('storage', {
+      key: STORAGE_RESET_COORDINATION_KEY,
+      newValue: value,
+      storageArea: localStorage,
+    }),
+  );
+}
+
 describe('storage reset coordinator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -104,6 +124,42 @@ describe('storage reset coordinator', () => {
       expect(renewed.createdAt).toBeGreaterThan(initial.createdAt);
     } finally {
       stopHeartbeat();
+    }
+  });
+
+  it('honors a renewed durable lease even when its heartbeat event is delayed', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-14T12:00:00.000Z'));
+    const { unregister } = registerStorageResetCoordinator();
+
+    try {
+      dispatchResetSignal('start', 'renewed-generation');
+      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS - 1000);
+
+      localStorage.setItem(
+        STORAGE_RESET_COORDINATION_KEY,
+        JSON.stringify({
+          version: 1,
+          generation: 'renewed-generation',
+          sourceTabId: 'other-tab',
+          phase: 'start',
+          createdAt: Date.now(),
+        }),
+      );
+
+      // The old timeout now fires, but the durable lease is fresh even though no
+      // heartbeat event was dispatched to this tab.
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(resetCategoriesDbIsolated).not.toHaveBeenCalled();
+      expect(resetDbIsolated).not.toHaveBeenCalled();
+      expect(window.location.reload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS - 1000);
+      expect(resetCategoriesDbIsolated).toHaveBeenCalledOnce();
+      expect(resetDbIsolated).toHaveBeenCalledOnce();
+      expect(window.location.reload).toHaveBeenCalledOnce();
+    } finally {
+      unregister();
     }
   });
 
@@ -235,6 +291,53 @@ describe('storage reset coordinator', () => {
       });
       expect(closeDbForStorageReset).toHaveBeenCalledOnce();
       expect(closeCategoriesDbForStorageReset).toHaveBeenCalledOnce();
+    } finally {
+      unregister();
+    }
+  });
+
+  it('ignores a stale complete signal after a newer reset generation starts', () => {
+    const { unregister } = registerStorageResetCoordinator();
+
+    try {
+      dispatchResetSignal('start', 'generation-a');
+      dispatchResetSignal('start', 'generation-b');
+      dispatchResetSignalEvent('complete', 'generation-a');
+
+      expect(resetCategoriesDbIsolated).not.toHaveBeenCalled();
+      expect(resetDbIsolated).not.toHaveBeenCalled();
+      expect(removeComapeoKeys).not.toHaveBeenCalled();
+      expect(window.location.reload).not.toHaveBeenCalled();
+      expect(
+        JSON.parse(
+          localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
+        ),
+      ).toMatchObject({ generation: 'generation-b', phase: 'start' });
+    } finally {
+      unregister();
+    }
+  });
+
+  it('ignores a stale complete signal after a newer reset generation aborts', () => {
+    const { unregister } = registerStorageResetCoordinator();
+
+    try {
+      localStorage.setItem(
+        STORAGE_RESET_COORDINATION_KEY,
+        JSON.stringify({
+          version: 1,
+          generation: 'generation-b',
+          sourceTabId: 'other-tab',
+          phase: 'abort',
+          createdAt: Date.now(),
+        }),
+      );
+      dispatchResetSignalEvent('complete', 'generation-a');
+
+      expect(resetCategoriesDbIsolated).not.toHaveBeenCalled();
+      expect(resetDbIsolated).not.toHaveBeenCalled();
+      expect(removeComapeoKeys).not.toHaveBeenCalled();
+      expect(window.location.reload).not.toHaveBeenCalled();
     } finally {
       unregister();
     }
