@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { comapeoStateStorage } from '@/lib/comapeo-local-storage';
 import { getDb } from '@/lib/db';
 import { DEFAULT_BASEMAP_ID } from '@/lib/map/basemaps';
 
@@ -121,6 +122,7 @@ export const useMapStore = create<MapState>()(
     {
       name: 'comapeo-map',
       version: 1,
+      storage: createJSONStorage(() => comapeoStateStorage),
       // Only persist the selected basemap id — not the setter functions and not
       // the project-scoped activeMapId (which is rehydrated from Dexie).
       partialize: (state): PersistedMapState => ({

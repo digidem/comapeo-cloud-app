@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
+import { setComapeoStorageItem } from '@/lib/comapeo-local-storage';
 import {
   createRemoteServer,
   deleteRemoteServer,
@@ -177,7 +178,7 @@ function persistActiveServerId(id: string | null): void {
   if (id === null) {
     localStorage.removeItem(ACTIVE_SERVER_STORAGE_KEY);
   } else {
-    localStorage.setItem(ACTIVE_SERVER_STORAGE_KEY, id);
+    setComapeoStorageItem(ACTIVE_SERVER_STORAGE_KEY, id);
   }
 }
 

@@ -1,7 +1,10 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { VIEW_MODE_STORAGE_KEY } from '@/lib/comapeo-local-storage';
+import {
+  VIEW_MODE_STORAGE_KEY,
+  comapeoStateStorage,
+} from '@/lib/comapeo-local-storage';
 
 export type ViewMode = 'grid' | 'map';
 
@@ -18,6 +21,7 @@ export const useViewModeStore = create<ViewModeState>()(
     }),
     {
       name: VIEW_MODE_STORAGE_KEY,
+      storage: createJSONStorage(() => comapeoStateStorage),
     },
   ),
 );

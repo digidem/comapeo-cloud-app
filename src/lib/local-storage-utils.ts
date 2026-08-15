@@ -1,7 +1,11 @@
 import * as v from 'valibot';
 
 import { resetCategoriesDb } from '@/lib/categories-db';
-import { getComapeoKeys, removeComapeoKeys } from '@/lib/comapeo-local-storage';
+import {
+  getComapeoKeys,
+  removeComapeoKeys,
+  setComapeoStorageItemOrThrow,
+} from '@/lib/comapeo-local-storage';
 import { resetDb } from '@/lib/db';
 import { backupSchema } from '@/lib/schemas/backup-schema';
 import {
@@ -48,7 +52,7 @@ function restoreBackupSnapshot(snapshot: Record<string, string>): void {
     if (!originalKeys.has(key)) localStorage.removeItem(key);
   }
   for (const [key, value] of Object.entries(snapshot)) {
-    localStorage.setItem(key, value);
+    setComapeoStorageItemOrThrow(key, value);
   }
 }
 
@@ -114,7 +118,7 @@ export function importLocalStorageData(jsonString: string): {
 
     for (const [key, value] of Object.entries(result.output.data)) {
       if (isBackupStorageKey(key)) {
-        localStorage.setItem(key, value);
+        setComapeoStorageItemOrThrow(key, value);
       }
     }
   } catch {

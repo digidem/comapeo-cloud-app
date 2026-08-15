@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  allowComapeoStorageWritesAfterReset,
+  blockComapeoStorageWritesForReset,
+  comapeoStateStorage,
   isComapeoStorageKey,
   removeComapeoKeys,
+  setComapeoStorageItem,
 } from '@/lib/comapeo-local-storage';
 
 describe('removeComapeoKeys', () => {
@@ -48,6 +52,38 @@ describe('removeComapeoKeys', () => {
     } finally {
       removeItemSpy.mockRestore();
     }
+  });
+});
+
+describe('storage reset write fence', () => {
+  afterEach(() => {
+    allowComapeoStorageWritesAfterReset();
+    localStorage.clear();
+  });
+
+  it('drops receiver writes that race after the owner final sweep', () => {
+    localStorage.setItem('comapeo-project', 'stale-before-reset');
+    blockComapeoStorageWritesForReset();
+    removeComapeoKeys();
+
+    // Model an already-mounted receiver callback firing after the owner's final
+    // key sweep but before its complete signal/reload reaches this tab.
+    expect(setComapeoStorageItem('comapeo-theme-mode', 'dark')).toBe(false);
+    comapeoStateStorage.setItem(
+      'comapeo-project',
+      JSON.stringify({ state: { selectedProjectId: 'project-1' }, version: 0 }),
+    );
+
+    expect(localStorage.getItem('comapeo-theme-mode')).toBeNull();
+    expect(localStorage.getItem('comapeo-project')).toBeNull();
+  });
+
+  it('allows persistence again only after reset coordination releases the fence', () => {
+    blockComapeoStorageWritesForReset();
+    allowComapeoStorageWritesAfterReset();
+
+    expect(setComapeoStorageItem('comapeo-theme-mode', 'dark')).toBe(true);
+    expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
   });
 });
 

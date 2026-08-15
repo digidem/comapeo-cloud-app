@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { useDownloadMap } from '@/hooks/useMaps';
+import { setComapeoStorageItem } from '@/lib/comapeo-local-storage';
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
@@ -77,7 +78,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const setIncludeGlobalOverview = useCallback((value: boolean) => {
     setIncludeGlobalOverviewState(value);
     try {
-      localStorage.setItem(GLOBAL_OVERVIEW_STORAGE_KEY, String(value));
+      setComapeoStorageItem(GLOBAL_OVERVIEW_STORAGE_KEY, String(value));
     } catch {
       // Ignore storage errors (private browsing, quota, etc.) — the
       // in-memory state still drives this session correctly.

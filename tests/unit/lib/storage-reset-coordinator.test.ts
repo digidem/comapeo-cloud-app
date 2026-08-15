@@ -4,7 +4,10 @@ import {
   closeCategoriesDbForStorageReset,
   resetCategoriesDbIsolated,
 } from '@/lib/categories-db';
-import { removeComapeoKeys } from '@/lib/comapeo-local-storage';
+import {
+  blockComapeoStorageWritesForReset,
+  removeComapeoKeys,
+} from '@/lib/comapeo-local-storage';
 import { closeDbForStorageReset, resetDbIsolated } from '@/lib/db';
 import {
   STORAGE_RESET_ACTIVITY_LOCK_NAME,
@@ -19,6 +22,7 @@ import { useAuthStore } from '@/stores/auth-store';
 vi.mock('@/lib/db', () => ({
   closeDbForStorageReset: vi.fn(),
   resetDbIsolated: vi.fn().mockResolvedValue(undefined),
+  resumeDbAfterStorageReset: vi.fn(),
 }));
 
 vi.mock('@/lib/categories-db', () => ({
@@ -27,6 +31,8 @@ vi.mock('@/lib/categories-db', () => ({
 }));
 
 vi.mock('@/lib/comapeo-local-storage', () => ({
+  allowComapeoStorageWritesAfterReset: vi.fn(),
+  blockComapeoStorageWritesForReset: vi.fn(),
   removeComapeoKeys: vi.fn(() => ({
     failedKeys: [],
     enumerationFailed: false,
@@ -127,6 +133,7 @@ describe('storage reset coordinator', () => {
         expect(closeDbForStorageReset).toHaveBeenCalledOnce();
         expect(closeCategoriesDbForStorageReset).toHaveBeenCalledOnce();
       });
+      expect(blockComapeoStorageWritesForReset).toHaveBeenCalledOnce();
       expect(resetDbIsolated).not.toHaveBeenCalled();
       expect(window.location.reload).not.toHaveBeenCalled();
     } finally {

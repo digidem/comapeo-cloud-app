@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { comapeoStateStorage } from '@/lib/comapeo-local-storage';
 import type { ViewMode } from '@/stores/view-mode-store';
 
 interface AlertViewModeState {
@@ -16,6 +17,7 @@ export const useAlertViewModeStore = create<AlertViewModeState>()(
     }),
     {
       name: 'comapeo-alert-view-mode-preference',
+      storage: createJSONStorage(() => comapeoStateStorage),
     },
   ),
 );

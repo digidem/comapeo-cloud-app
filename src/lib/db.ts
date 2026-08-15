@@ -522,12 +522,28 @@ export type { AppDatabase };
 // ---------------------------------------------------------------------------
 
 let _db: AppDatabase | null = null;
+let storageResetQuiesced = false;
 
 export function getDb(): AppDatabase {
   if (!_db) {
+    if (storageResetQuiesced) {
+      throw new Error('Primary database is quiesced for local-data reset.');
+    }
     _db = new AppDatabase();
   }
   return _db;
+}
+
+/**
+ * Re-enable the app-owned singleton after reset coordination has established a
+ * safe non-reset startup state. A full page reload naturally resets this module,
+ * but keeping the lifecycle explicit also makes same-page recovery deterministic.
+ */
+export function resumeDbAfterStorageReset(): void {
+  if (!storageResetQuiesced) return;
+  _db?.close();
+  _db = null;
+  storageResetQuiesced = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -541,6 +557,11 @@ async function clearDatabaseTables(db: AppDatabase): Promise<void> {
 }
 
 export async function resetDb(): Promise<void> {
+  if (storageResetQuiesced) {
+    await resetDbIsolated();
+    return;
+  }
+
   const db = getDb();
   if (!db.isOpen()) {
     await resetDbIsolated();
@@ -555,6 +576,7 @@ export async function resetDb(): Promise<void> {
  * so app code cannot transparently auto-open it and enqueue stale writes.
  */
 export function closeDbForStorageReset(): void {
+  storageResetQuiesced = true;
   _db?.close();
 }
 

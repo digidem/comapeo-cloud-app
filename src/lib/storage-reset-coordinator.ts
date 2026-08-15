@@ -2,8 +2,16 @@ import {
   closeCategoriesDbForStorageReset,
   resetCategoriesDbIsolated,
 } from '@/lib/categories-db';
-import { removeComapeoKeys } from '@/lib/comapeo-local-storage';
-import { closeDbForStorageReset, resetDbIsolated } from '@/lib/db';
+import {
+  allowComapeoStorageWritesAfterReset,
+  blockComapeoStorageWritesForReset,
+  removeComapeoKeys,
+} from '@/lib/comapeo-local-storage';
+import {
+  closeDbForStorageReset,
+  resetDbIsolated,
+  resumeDbAfterStorageReset,
+} from '@/lib/db';
 import { useAuthStore } from '@/stores/auth-store';
 
 export const STORAGE_RESET_COORDINATION_KEY =
@@ -153,7 +161,8 @@ function requestStorageResetActivityLock(): Promise<void> {
         readySettled = true;
         rejectReady(cause);
       }
-      closeStorageResetConnections();
+      // Registration has not exposed mount readiness yet, so no app-owned writer
+      // is active. Retry acquisition without latching the database reset fence.
     })
     .finally(() => {
       if (activityLockReadyPromise === ready) activityLockReadyPromise = null;
@@ -279,6 +288,10 @@ function closeStorageResetConnections(): void {
 }
 
 export function quiesceStorageResetConnections(): void {
+  // Fence every app-owned persistence path before releasing the shared activity
+  // lock. The tab may remain mounted briefly, but stale callbacks can no longer
+  // recreate localStorage or primary-database state after the owner's sweep.
+  blockComapeoStorageWritesForReset();
   closeStorageResetConnections();
   releaseStorageResetActivityLock();
 }
@@ -609,7 +622,9 @@ export async function registerStorageResetCoordinator(): Promise<{
       // Close storage immediately, but keep this tab's shared activity lock until
       // authoritative reconciliation confirms start. Otherwise the reset owner
       // could cross the barrier while this still-mounted tab is indeterminate and
-      // capable of issuing non-database persisted writes.
+      // capable of issuing persisted writes. Block localStorage immediately while
+      // retaining the shared activity lock until start is confirmed.
+      blockComapeoStorageWritesForReset();
       closeStorageResetConnections();
       clearRecoveryTimer();
       recoveryTimer = setTimeout(
@@ -727,6 +742,11 @@ export async function registerStorageResetCoordinator(): Promise<{
       () => void reconcileAuthoritativeState(),
       STORAGE_RESET_RECOVERY_RETRY_MS,
     );
+  }
+
+  if (!resetInProgress) {
+    allowComapeoStorageWritesAfterReset();
+    resumeDbAfterStorageReset();
   }
 
   return {
