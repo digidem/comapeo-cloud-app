@@ -54,6 +54,7 @@ jobs:
           python3 .agents/skills/pr-cycle/scripts/test_pr_wait.py
           python3 .agents/skills/pr-cycle/scripts/test_claude_review.py
           python3 .agents/skills/pr-cycle/scripts/test_reviewer_fallback_policy.py
+          python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py
 
   # -----------------------------------------------------------------------
   # Lint (parallel)

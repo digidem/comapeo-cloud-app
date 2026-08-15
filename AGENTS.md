@@ -41,6 +41,13 @@ If a project-scoped .claude/orchestrator_prompt.md or .codex/orchestrator_prompt
 
 Use raw one-shot `claude` / `codex exec` only for small bounded jobs or read-only reviews where Zenith would be unnecessary overhead.
 
+## Issue and PR Scope Continuity
+
+- Before widening an implementation beyond its issue or PR scope, search the existing GitHub backlog and related PRs for overlapping or follow-up work.
+- Keep substantial intentionally out-of-scope work in focused follow-up issues instead of silently expanding the current PR. Link those issues to the shipped predecessor and the relevant architecture chain.
+- In follow-up specs, explicitly reuse the canonical implementation, data model, or integration path that already exists; avoid parallel state, parsers, renderers, or persistence models unless an architectural decision requires them.
+- Do not promote proposed or unmerged follow-up designs into project-wide `AGENTS.md` architecture. Document durable architecture here only after it lands; keep pending design decisions in their issue/spec/ADR.
+
 ## TDD Workflow (MANDATORY)
 
 Every feature MUST follow this cycle:
@@ -86,11 +93,13 @@ src/
 tests/
   unit/         # Unit tests (mirrors src/ structure)
   e2e/          # Playwright E2E tests
-    screenshots/  # Generated PNG artifacts (gitignored)
+    screenshots/  # Generated review PNG artifacts (gitignored)
     screenshot-utils.ts  # Viewport constants and takeScreenshot helper
     mock-server.ts       # Playwright route intercepts using test fixtures
   fixtures/     # Test data matching real API shapes
   mocks/        # MSW handlers and test utilities
+screenshots/
+  screenshot/   # Tracked Argos visual artifacts (*.png, *.argos.json)
 ```
 
 ## Code Conventions
@@ -218,9 +227,7 @@ Pattern for adding new screen screenshots:
 5. Run `npm run test:screenshots` to generate PNGs
 6. Run `npm run review:mobile` (or `npm run pipeline:mobile-review`) for LLM-based visual review
 
-Screenshots are gitignored (generated artifacts). Each Playwright project
-that runs E2E tests uses all 3 browsers; the `screenshot` project uses
-chromium only for deterministic rendering.
+The review artifacts under `tests/e2e/screenshots/` are generated and gitignored. Separately, `takeScreenshot()` uses Argos and may write tracked artifacts under `screenshots/screenshot/` (`*.png` and `*.argos.json`). Local E2E or screenshot verification can therefore dirty those tracked files; restore incidental changes after exploratory runs unless the task intentionally updates visual baselines. Each Playwright project that runs E2E tests uses all 3 browsers; the `screenshot` project uses chromium only for deterministic rendering.
 
 ## Commit Messages
 

@@ -46,7 +46,7 @@ Fail closed when required state cannot be read. Do not call a PR merge-ready bas
 
 Repeat until there are no actionable findings on the current head:
 
-1. Inspect unresolved review threads with thread-level state. Separate actionable requests from informational, duplicate, outdated, or already-resolved comments.
+1. Inspect unresolved review threads with thread-level state. For automated or bot-generated findings, verify the claim against the exact current head before editing. If a finding is a false positive, stale, duplicate, or already satisfied, reply with precise evidence and resolve it without creating code churn; otherwise treat it as actionable.
 2. Inspect failed CI logs and relevant external-check details. Fix failures caused by the PR without changing unrelated code to mask unrelated infrastructure failures.
 3. Follow repository development rules, including required TDD and validation practices.
 4. Run narrow relevant tests first. Split local validation into bounded lint/type/test/build shards when the full command is likely to exceed the tool ceiling; let GitHub CI provide the full-suite signal when repository CI already covers it.
@@ -72,7 +72,7 @@ For each independent review:
 - Do not prime the reviewer with the desired verdict.
 - Ask it to categorize findings into blockers, should-fix issues, and non-blocking nits.
 - Fix blockers and should-fix findings, push, refresh the live target-branch tip, then start a fresh review of the new head/base-tip pair.
-- Treat nits as optional unless they reveal correctness, security, data-loss, or operability risk.
+- Address nits when they materially improve the codebase, including correctness, security, data-loss prevention, maintainability, test quality, clarity, or operability, even when they are non-blocking. Skip purely cosmetic or preference-only nits whose value does not justify another revision cycle. Any pushed nit fix invalidates the reviewed head/base-tip pair, so refresh the live base tip and rerun the exact-SHA review and CI gate. After two consecutive nit-only revision cycles, continue only for newly surfaced nits with clear correctness, security, data-loss, or operability risk or unusually high maintenance/test value; otherwise defer remaining marginal nits rather than creating indefinite review churn.
 - Keep static reviewer work separate from live GitHub verification; CI, mergeability, and review-thread state are always verified independently.
 - Prefer detached/resumable reviewer execution when supported. A shell timeout around a background dispatch or bounded poll does not imply the reviewer failed; inspect the persisted session state before deciding.
 - Count a model verdict only when it is terminal, structurally valid, and tied to the exact reviewed head/base-tip pair. A malformed, missing, stale-revision, failed, or needs-input result is not approval.
@@ -90,6 +90,7 @@ Declare `MERGE-READY` only when all of these are true simultaneously for one exa
 - Current GitHub head SHA and current live target-branch tip equal the pair used for final review and verification.
 - GitHub reports the PR mergeable and clean, or an explicitly understood repository-equivalent state.
 - All required and relevant checks are terminal and green. Treat every skipped or neutral check as requiring explicit adjudication before readiness; only clearly legitimate conditional skips are acceptable. Pending, queued, running, cancelled, timed-out, action-required, or failing relevant checks are not.
+- A green wrapper job is not sufficient when a relevant command is masked by `continue-on-error`, soft-fail logic, or equivalent workflow behavior. Determine the pre-mask result: prefer an explicit step `outcome` or equivalent workflow-exported signal; if tooling exposes only the post-mask `conclusion`, inspect logs for the underlying command result. A `conclusion: success` after `continue-on-error` is not enough; explicitly adjudicate the underlying command before treating the check as green. Keep the gate policy here; use `references/github-runbook.md` for the bounded GitHub job/step/log inspection commands.
 - GitHub review decision is not `CHANGES_REQUESTED` or `REVIEW_REQUIRED`; a top-level blocking review counts even when it created no inline review thread.
 - No unresolved actionable review threads remain.
 - No outstanding blocker or should-fix finding remains from requested independent reviewers.
@@ -113,17 +114,31 @@ Only after explicit authorization:
 
 ## 7. Scoped cleanup
 
-Clean only resources belonging to the merged PR:
+Clean only resources belonging to the merged PR. Use the exact isolated worktree and local branch captured at cycle start; treat similarly named issue/feature worktrees or branches as unrelated unless exact identity and tip equivalence are proven.
 
 1. Confirm the isolated PR worktree is clean, including no untracked files that need preserving. Never force-remove a PR worktree to bypass a dirty-worktree check.
 2. Before deleting any branch, prove the local PR branch has no unpushed commits: if its remote-tracking branch exists, require the local tip to equal that remote tip; if the remote branch is already absent, require the local tip to equal the PR head SHA recorded at verified merge time. If either check fails, preserve the branch and report it instead of cleaning it up.
-3. Remove the PR remote branch if it still exists.
+3. Remove the PR remote branch if it still exists. If a repository pre-push hook runs on branch deletion and only replays validation already satisfied for the verified merged head, it may be bypassed for this cleanup-only delete with `git push --no-verify origin --delete <branch>` after step 2's exact tip-parity proof. Never use this exception to skip validation for a code push or before merge verification. Keep the safety policy here; use `references/github-runbook.md` for the guarded cleanup command pattern.
 4. Remove the isolated PR worktree.
 5. Remove the PR local branch after the worktree is gone and only after step 2 proved it safe.
 6. Verify the remote branch is absent and the worktree is no longer registered.
 7. Recheck the default and unrelated worktrees and confirm pre-existing changes remain untouched.
 
 Avoid broad repository cleanup operations unless the user explicitly requests them.
+
+## 8. Session lessons and documentation checkpoint
+
+Before concluding every PR cycle, review the session for durable, reusable lessons exposed by the work: recurring tool limits, CI or reviewer blind spots, cleanup hazards, repository-wide conventions, or contributor-workflow gotchas. Do not document transient provider outages, one-off command noise, or feature-specific details that belong in the issue, spec, or ADR.
+
+When a durable lesson exists, document it in the canonical home:
+
+- `.agents/skills/pr-cycle/` for reusable PR-cycle mechanics, safeguards, helper behavior, and execution-surface workarounds.
+- `AGENTS.md` for project-specific agent, coding, validation, architecture, or repository conventions.
+- `README.md` only when human contributors or users need the setup, command, or workflow information without reading agent instructions.
+
+Avoid duplicating the same policy across files; keep one canonical statement and cross-link when useful. If documenting a lesson would materially widen an application PR, create a focused follow-up docs/process PR instead of mixing unrelated process changes into the implementation. Run that follow-up through the normal PR-cycle gate, but do not merge it without explicit merge authorization. A lessons-only follow-up should not recursively create another lessons PR unless it uncovers a new material reusable gap.
+
+If lesson documentation is added to the current PR, any push invalidates prior exact-SHA review and CI evidence; rerun the gate on the new head. The final report must state what durable lessons were documented and where, or that no durable documentation change was warranted.
 
 ## Status reporting
 
