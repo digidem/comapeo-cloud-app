@@ -1,6 +1,12 @@
 import * as ToastPrimitive from '@radix-ui/react-toast';
 
-import { createContext, useCallback, useContext, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 
 import { uuid } from '@/lib/uuid';
@@ -54,8 +60,13 @@ function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const contextValue = useMemo(
+    () => ({ addToast, dismissToast }),
+    [addToast, dismissToast],
+  );
+
   return (
-    <ToastContext.Provider value={{ addToast, dismissToast }}>
+    <ToastContext.Provider value={contextValue}>
       <ToastPrimitive.Provider swipeDirection="right">
         {children}
         {toasts.map((toast) => (
