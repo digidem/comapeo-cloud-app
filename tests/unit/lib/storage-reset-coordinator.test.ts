@@ -357,58 +357,53 @@ describe('storage reset coordinator', () => {
     }
   });
 
-  it('performs an isolated final database clear before a receiving tab reloads', async () => {
+  it('reloads an authoritative complete signal without deleting fresh post-reset data', async () => {
     const { unregister } = registerStorageResetCoordinator();
+    localStorage.setItem('comapeo-theme-mode', 'dark');
 
     try {
-      // A complete signal must be safe even if this tab missed the start event:
-      // close its app connections first, then clear through isolated connections.
+      // A suspended tab may receive this complete signal long after another tab
+      // has reloaded and users have created fresh data. Completion must therefore
+      // quiesce and reload only; destructive cleanup already happened pre-complete.
       dispatchResetSignal('complete');
 
       await vi.waitFor(() => {
-        expect(resetCategoriesDbIsolated).toHaveBeenCalledOnce();
-        expect(resetDbIsolated).toHaveBeenCalledOnce();
-        expect(removeComapeoKeys).toHaveBeenCalledWith({ bestEffort: true });
         expect(window.location.reload).toHaveBeenCalledOnce();
       });
-      expect(closeDbForStorageReset).toHaveBeenCalledTimes(3);
-      expect(closeCategoriesDbForStorageReset).toHaveBeenCalledTimes(3);
+      expect(resetCategoriesDbIsolated).not.toHaveBeenCalled();
+      expect(resetDbIsolated).not.toHaveBeenCalled();
+      expect(removeComapeoKeys).not.toHaveBeenCalled();
+      expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
+      expect(closeDbForStorageReset).toHaveBeenCalled();
+      expect(closeCategoriesDbForStorageReset).toHaveBeenCalled();
     } finally {
       unregister();
     }
   });
 
-  it('holds the generation lock across terminal finalization before allowing a newer reset', async () => {
-    let releaseCleanup!: () => void;
-    let markCleanupStarted!: () => void;
-    const cleanupStarted = new Promise<void>((resolve) => {
-      markCleanupStarted = resolve;
-    });
-    const cleanupGate = new Promise<void>((resolve) => {
-      releaseCleanup = resolve;
-    });
-    vi.mocked(resetCategoriesDbIsolated).mockImplementationOnce(async () => {
-      markCleanupStarted();
-      await cleanupGate;
-    });
+  it('retries authoritative complete validation after a transient lock failure without sweeping data', async () => {
+    vi.useFakeTimers();
+    const request = vi.mocked(navigator.locks.request);
+    request.mockRejectedValueOnce(new Error('Transient complete lock failure'));
+    localStorage.setItem('comapeo-theme-mode', 'dark');
     const { unregister } = registerStorageResetCoordinator();
 
     try {
-      dispatchResetSignal('complete', 'terminal-fenced-generation');
-      await cleanupStarted;
+      dispatchResetSignal('complete', 'terminal-retry-generation');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(window.location.reload).not.toHaveBeenCalled();
+      expect(resetCategoriesDbIsolated).not.toHaveBeenCalled();
+      expect(resetDbIsolated).not.toHaveBeenCalled();
+      expect(removeComapeoKeys).not.toHaveBeenCalled();
 
-      let newerStartSettled = false;
-      const newerStart = beginStorageResetCoordination().finally(() => {
-        newerStartSettled = true;
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.waitFor(() => {
+        expect(window.location.reload).toHaveBeenCalledOnce();
       });
-      await Promise.resolve();
-      await Promise.resolve();
-      expect(newerStartSettled).toBe(false);
-
-      releaseCleanup();
-      await expect(newerStart).resolves.not.toBe('terminal-fenced-generation');
-      expect(resetDbIsolated).toHaveBeenCalled();
-      expect(window.location.reload).toHaveBeenCalled();
+      expect(resetCategoriesDbIsolated).not.toHaveBeenCalled();
+      expect(resetDbIsolated).not.toHaveBeenCalled();
+      expect(removeComapeoKeys).not.toHaveBeenCalled();
+      expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
     } finally {
       unregister();
     }
@@ -471,15 +466,24 @@ describe('storage reset coordinator', () => {
     }
   });
 
-  it('still clears the primary database and retries when isolated categories cleanup fails', async () => {
+  it('retries a recoverable start after isolated categories cleanup fails', async () => {
     vi.useFakeTimers();
     vi.mocked(resetCategoriesDbIsolated).mockRejectedValueOnce(
       new Error('categories unavailable'),
     );
+    localStorage.setItem(
+      STORAGE_RESET_COORDINATION_KEY,
+      JSON.stringify({
+        version: 1,
+        generation: 'categories-recovery-generation',
+        sourceTabId: 'reloading-owner',
+        phase: 'start',
+        createdAt: Date.now() - STORAGE_RESET_LEASE_MS - 1,
+      }),
+    );
     const { unregister } = registerStorageResetCoordinator();
 
     try {
-      dispatchResetSignal('complete');
       await vi.advanceTimersByTimeAsync(0);
 
       expect(resetCategoriesDbIsolated).toHaveBeenCalledOnce();
@@ -490,26 +494,46 @@ describe('storage reset coordinator', () => {
         JSON.parse(
           localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
         ),
-      ).toMatchObject({ phase: 'complete' });
+      ).toMatchObject({
+        generation: 'categories-recovery-generation',
+        phase: 'start',
+      });
 
-      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS);
       expect(resetCategoriesDbIsolated).toHaveBeenCalledTimes(2);
       expect(resetDbIsolated).toHaveBeenCalledTimes(2);
       expect(window.location.reload).toHaveBeenCalledOnce();
+      expect(
+        JSON.parse(
+          localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
+        ),
+      ).toMatchObject({
+        generation: 'categories-recovery-generation',
+        phase: 'complete',
+      });
     } finally {
       unregister();
     }
   });
 
-  it('stays quiesced and retries instead of reloading when isolated primary cleanup fails', async () => {
+  it('retries a recoverable start after isolated primary cleanup fails', async () => {
     vi.useFakeTimers();
     vi.mocked(resetDbIsolated).mockRejectedValueOnce(
       new Error('primary unavailable'),
     );
+    localStorage.setItem(
+      STORAGE_RESET_COORDINATION_KEY,
+      JSON.stringify({
+        version: 1,
+        generation: 'primary-recovery-generation',
+        sourceTabId: 'reloading-owner',
+        phase: 'start',
+        createdAt: Date.now() - STORAGE_RESET_LEASE_MS - 1,
+      }),
+    );
     const { unregister } = registerStorageResetCoordinator();
 
     try {
-      dispatchResetSignal('complete');
       await vi.advanceTimersByTimeAsync(0);
 
       expect(resetCategoriesDbIsolated).toHaveBeenCalledOnce();
@@ -519,12 +543,23 @@ describe('storage reset coordinator', () => {
         JSON.parse(
           localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
         ),
-      ).toMatchObject({ phase: 'complete' });
+      ).toMatchObject({
+        generation: 'primary-recovery-generation',
+        phase: 'start',
+      });
 
-      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS);
       expect(resetCategoriesDbIsolated).toHaveBeenCalledTimes(2);
       expect(resetDbIsolated).toHaveBeenCalledTimes(2);
       expect(window.location.reload).toHaveBeenCalledOnce();
+      expect(
+        JSON.parse(
+          localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
+        ),
+      ).toMatchObject({
+        generation: 'primary-recovery-generation',
+        phase: 'complete',
+      });
     } finally {
       unregister();
     }
@@ -690,43 +725,49 @@ describe('storage reset coordinator', () => {
     },
   );
 
-  it('retries terminal cleanup without rewriting durable complete state', async () => {
-    vi.useFakeTimers();
-    vi.mocked(resetCategoriesDbIsolated).mockRejectedValueOnce(
-      new Error('categories unavailable'),
+  it('reloads an authoritative complete without rewriting its durable marker', async () => {
+    const terminal = {
+      version: 1,
+      generation: 'terminal-generation',
+      sourceTabId: 'other-tab',
+      phase: 'complete',
+      createdAt: Date.now(),
+    } as const;
+    localStorage.setItem(
+      STORAGE_RESET_COORDINATION_KEY,
+      JSON.stringify(terminal),
     );
     const { unregister } = registerStorageResetCoordinator();
     const originalSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, key, value) {
+        if (key === STORAGE_RESET_COORDINATION_KEY) {
+          throw new DOMException(
+            'Unexpected terminal rewrite',
+            'SecurityError',
+          );
+        }
+        return originalSetItem.call(this, key, value);
+      });
 
     try {
-      dispatchResetSignal('complete', 'terminal-generation');
-      await vi.advanceTimersByTimeAsync(0);
-      expect(window.location.reload).not.toHaveBeenCalled();
+      dispatchResetSignalEvent('complete', 'terminal-generation');
+      await vi.waitFor(() => {
+        expect(window.location.reload).toHaveBeenCalledOnce();
+      });
 
-      const setItemSpy = vi
-        .spyOn(Storage.prototype, 'setItem')
-        .mockImplementation(function (this: Storage, key, value) {
-          if (key === STORAGE_RESET_COORDINATION_KEY) {
-            throw new DOMException('Storage access denied', 'SecurityError');
-          }
-          return originalSetItem.call(this, key, value);
-        });
-
-      await vi.advanceTimersByTimeAsync(1_000);
-
-      expect(resetCategoriesDbIsolated).toHaveBeenCalledTimes(2);
-      expect(resetDbIsolated).toHaveBeenCalledTimes(2);
-      expect(window.location.reload).toHaveBeenCalledOnce();
+      expect(resetCategoriesDbIsolated).not.toHaveBeenCalled();
+      expect(resetDbIsolated).not.toHaveBeenCalled();
+      expect(removeComapeoKeys).not.toHaveBeenCalled();
       expect(
         JSON.parse(
           localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
         ),
-      ).toMatchObject({
-        generation: 'terminal-generation',
-        phase: 'complete',
-      });
+      ).toEqual(terminal);
       expect(setItemSpy).not.toHaveBeenCalled();
     } finally {
+      setItemSpy.mockRestore();
       unregister();
     }
   });

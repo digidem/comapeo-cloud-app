@@ -446,9 +446,9 @@ export function registerStorageResetCoordinator(): {
     finalizingGeneration = signal.generation;
     quiesceStorageResetConnections();
 
-    let cleaned = false;
+    let reloaded = false;
     try {
-      cleaned = await withStorageResetLock(async () => {
+      reloaded = await withStorageResetLock(() => {
         const current = readCoordinationSignal();
         if (
           current?.phase !== 'complete' ||
@@ -456,14 +456,18 @@ export function registerStorageResetCoordinator(): {
         ) {
           return false;
         }
-        const result = await performFinalCleanup();
-        if (result) window.location.reload();
-        return result;
+
+        // All destructive cleanup must finish before `complete` is published by
+        // the owner. A delayed receiver may have missed the start signal and can
+        // resume long after users have created fresh post-reset data, so it must
+        // never perform a late global sweep. Quiesce and reload only.
+        window.location.reload();
+        return true;
       });
     } catch {
       /* retry authoritative complete */
     }
-    if (cleaned) {
+    if (reloaded) {
       finalizingGeneration = null;
       return;
     }

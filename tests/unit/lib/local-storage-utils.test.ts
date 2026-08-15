@@ -614,8 +614,8 @@ describe('clearAllStorage', () => {
 
     await clearAllStorage();
 
-    expect(useAuthStore.getState).toHaveBeenCalledOnce();
-    expect(mockClearAll).toHaveBeenCalledOnce();
+    expect(useAuthStore.getState).toHaveBeenCalledTimes(2);
+    expect(mockClearAll).toHaveBeenCalledTimes(2);
   });
 
   it('calls resetCategoriesDb() to clear categories IndexedDB', async () => {
@@ -643,23 +643,19 @@ describe('clearAllStorage', () => {
     expect(mockReload).toHaveBeenCalledOnce();
   });
 
-  it('removes a late persisted-store write immediately before successful reload', async () => {
-    const { runStorageResetOwnerOperation } =
-      await import('@/lib/storage-reset-coordinator');
-    vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
-      async (_generation, operation) => ({
-        owned: true,
-        value: await operation({
-          publish: vi.fn((phase) => {
-            if (phase === 'complete') {
-              // Model a mounted persisted store writing at the last possible
-              // point before navigation, after the first runtime cleanup.
-              localStorage.setItem('comapeo-theme-mode', 'dark');
-            }
-          }),
-        }),
-      }),
-    );
+  it('removes a late persisted-store write in the final sweep before completion', async () => {
+    const { useAuthStore } = await import('@/stores/auth-store');
+    const mockClearAll = vi
+      .fn()
+      .mockImplementationOnce(() => undefined)
+      .mockImplementationOnce(() => {
+        // Model a mounted persisted store writing after the first runtime cleanup
+        // but before the final synchronous pre-completion sweep.
+        localStorage.setItem('comapeo-theme-mode', 'dark');
+      });
+    vi.mocked(useAuthStore.getState).mockReturnValue({
+      clearAll: mockClearAll,
+    } as unknown as ReturnType<typeof useAuthStore.getState>);
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
       value: { reload: mockReload },
@@ -668,8 +664,67 @@ describe('clearAllStorage', () => {
 
     await clearAllStorage();
 
+    expect(mockClearAll).toHaveBeenCalledTimes(2);
     expect(localStorage.getItem('comapeo-theme-mode')).toBeNull();
     expect(mockReload).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the reset recoverable when the final pre-completion sweep fails', async () => {
+    vi.useFakeTimers();
+    const { useAuthStore } = await import('@/stores/auth-store');
+    const { runStorageResetOwnerOperation } =
+      await import('@/lib/storage-reset-coordinator');
+    const publishedPhases: string[] = [];
+    vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+      async (_generation, operation) => ({
+        owned: true,
+        value: await operation({
+          publish: vi.fn((phase) => publishedPhases.push(phase)),
+        }),
+      }),
+    );
+    const mockClearAll = vi
+      .fn()
+      .mockImplementationOnce(() => undefined)
+      .mockImplementationOnce(() => {
+        localStorage.setItem('comapeo-theme-mode', 'dark');
+      });
+    vi.mocked(useAuthStore.getState).mockReturnValue({
+      clearAll: mockClearAll,
+    } as unknown as ReturnType<typeof useAuthStore.getState>);
+    const originalRemoveItem = Storage.prototype.removeItem;
+    let failFinalSweep = true;
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(function (this: Storage, key: string) {
+        if (failFinalSweep && key === 'comapeo-theme-mode') {
+          failFinalSweep = false;
+          throw new DOMException('Storage access denied', 'SecurityError');
+        }
+        return originalRemoveItem.call(this, key);
+      });
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        failedStep: 'browser-storage',
+        partial: true,
+        reloadScheduled: true,
+      });
+      expect(publishedPhases).toEqual(['start']);
+      expect(publishedPhases).not.toContain('complete');
+      expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      removeItemSpy.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it('treats failed complete publication as a partial coordination failure', async () => {
@@ -747,7 +802,7 @@ describe('clearAllStorage', () => {
     }
   });
 
-  it('reports coordination failure when abort publication fails after categories reset error', async () => {
+  it('reports coordination failure when recoverable start publication fails after categories reset error', async () => {
     vi.useFakeTimers();
     const { resetCategoriesDb } = await import('@/lib/categories-db');
     const { runStorageResetOwnerOperation } =
@@ -760,7 +815,7 @@ describe('clearAllStorage', () => {
         owned: true,
         value: await operation({
           publish: vi.fn((phase) => {
-            if (phase === 'abort') throw new Error('Abort write failed');
+            if (phase === 'start') throw new Error('Start renewal failed');
           }),
         }),
       }),
@@ -787,12 +842,23 @@ describe('clearAllStorage', () => {
     }
   });
 
-  it('preserves auth and preferences if resetDb() fails after categories clear', async () => {
+  it('keeps a partial app-db failure on a recoverable start generation', async () => {
     vi.useFakeTimers();
     try {
       const { resetDb } = await import('@/lib/db');
       const { resetCategoriesDb } = await import('@/lib/categories-db');
       const { useAuthStore } = await import('@/stores/auth-store');
+      const { runStorageResetOwnerOperation } =
+        await import('@/lib/storage-reset-coordinator');
+      const publishedPhases: string[] = [];
+      vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+        async (_generation, operation) => ({
+          owned: true,
+          value: await operation({
+            publish: vi.fn((phase) => publishedPhases.push(phase)),
+          }),
+        }),
+      );
       const mockClearAll = vi.fn();
       vi.mocked(useAuthStore.getState).mockReturnValue({
         clearAll: mockClearAll,
@@ -814,6 +880,8 @@ describe('clearAllStorage', () => {
         reloadScheduled: true,
       });
       expect(resetCategoriesDb).toHaveBeenCalledOnce();
+      expect(publishedPhases).toEqual(['start']);
+      expect(publishedPhases).not.toContain('abort');
       expect(mockClearAll).not.toHaveBeenCalled();
       expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
       expect(localStorage.getItem('comapeo:activeServerId')).toBe('server-1');
@@ -826,11 +894,22 @@ describe('clearAllStorage', () => {
     }
   });
 
-  it('stops before clearing primary data and reloads closed connections when categories reset fails', async () => {
+  it('keeps a categories reset failure recoverable without clearing primary data in the failed attempt', async () => {
     vi.useFakeTimers();
     try {
       const { resetDb } = await import('@/lib/db');
       const { resetCategoriesDb } = await import('@/lib/categories-db');
+      const { runStorageResetOwnerOperation } =
+        await import('@/lib/storage-reset-coordinator');
+      const publishedPhases: string[] = [];
+      vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+        async (_generation, operation) => ({
+          owned: true,
+          value: await operation({
+            publish: vi.fn((phase) => publishedPhases.push(phase)),
+          }),
+        }),
+      );
       vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
         new Error('Categories error'),
       );
@@ -849,6 +928,8 @@ describe('clearAllStorage', () => {
         reloadScheduled: true,
       });
       expect(resetDb).not.toHaveBeenCalled();
+      expect(publishedPhases).toEqual(['start']);
+      expect(publishedPhases).not.toContain('abort');
       expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
       expect(mockReload).not.toHaveBeenCalled();
 

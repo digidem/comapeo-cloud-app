@@ -204,7 +204,10 @@ async function runCoordinatedStorageReset(generation: string): Promise<void> {
         try {
           await resetCategoriesDb();
         } catch (cause) {
-          publish('abort');
+          // Keep the durable reset recoverable. The initiating tab is already
+          // quiesced, and a reload can hand the same generation to stale-reset
+          // recovery rather than abandoning a user-requested destructive reset.
+          publish('start');
           return {
             error: new ClearAllStorageError({
               failedStep: 'categories-db',
@@ -217,7 +220,10 @@ async function runCoordinatedStorageReset(generation: string): Promise<void> {
         try {
           await resetDb();
         } catch (cause) {
-          publish('abort');
+          // Categories may already be gone, so this must remain a recoverable
+          // start generation instead of publishing abort and stranding a partial
+          // reset after reload.
+          publish('start');
           return {
             error: new ClearAllStorageError({
               failedStep: 'app-db',
@@ -241,16 +247,25 @@ async function runCoordinatedStorageReset(generation: string): Promise<void> {
             }),
           };
         }
-        publish('complete');
-        // Last possible synchronous sweep catches persisted-store writes emitted
-        // during cleanup; it is still fenced from every generation transition.
-        const finalRemoval = removeComapeoKeys({ bestEffort: true });
-        if (
-          finalRemoval.enumerationFailed ||
-          finalRemoval.failedKeys.length > 0
-        ) {
-          throw new Error('Final owned browser-storage cleanup failed.');
+
+        // Perform the final synchronous runtime/storage sweep while the durable
+        // phase is still `start`. Nothing asynchronous runs between this sweep,
+        // publishing `complete`, and navigation, so a failed final sweep remains
+        // recoverable instead of leaving a terminal marker with surviving state.
+        const finalCleanup = clearRuntimeStateAfterDatabaseReset();
+        if (finalCleanup.storageCleanupFailed) {
+          publish('start');
+          return {
+            error: new ClearAllStorageError({
+              failedStep: 'browser-storage',
+              partial: true,
+              cause: new Error('Final owned browser-storage cleanup failed.'),
+              reloadScheduled: true,
+            }),
+          };
         }
+
+        publish('complete');
         window.location.reload();
         return { error: null };
       },
