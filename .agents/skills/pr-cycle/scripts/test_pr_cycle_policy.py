@@ -111,14 +111,11 @@ class PrCyclePolicyTests(unittest.TestCase):
             )
 
     def test_ci_invocation_must_be_active(self) -> None:
-        ci_text = CI.read_text().replace(
-            "          python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py",
-            "          # python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py",
-        )
-        with self.assertRaisesRegex(
-            AssertionError,
-            "python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py",
-        ):
+        command = "python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py"
+        ci_text = CI.read_text()
+        self.assertEqual(ci_text.count(command), 1)
+        ci_text = ci_text.replace(command, f"# {command}", 1)
+        with self.assertRaisesRegex(AssertionError, command):
             assert_policy_contract(
                 self,
                 skill_text=SKILL.read_text(),
