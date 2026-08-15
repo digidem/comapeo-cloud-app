@@ -542,6 +542,24 @@ describe('MapScreen', () => {
     expect(
       screen.getAllByTestId(/mock-source-reference-overlay-/),
     ).toHaveLength(10);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove reference-0.geojson' }),
+    );
+    await user.upload(
+      input,
+      new File(
+        ['{"type":"Point","coordinates":[-58,-2]}'],
+        'replacement.geojson',
+        {
+          type: 'application/geo+json',
+        },
+      ),
+    );
+    expect(await screen.findByText('replacement.geojson')).toBeInTheDocument();
+    expect(
+      screen.getAllByTestId(/mock-source-reference-overlay-/),
+    ).toHaveLength(10);
   });
 
   it('clears transient reference overlays when the selected project changes', async () => {
@@ -794,6 +812,64 @@ describe('MapScreen', () => {
           screen.getByRole('dialog', { name: 'Map settings' }),
         ).findByText('newer-valid.geojson'),
       ).toBeInTheDocument();
+    });
+
+    it('dismisses an older picker failure toast when a newer limit error wins', async () => {
+      const user = userEvent.setup();
+      let resolveRead!: (value: string) => void;
+      const pendingRead = new Promise<string>((resolve) => {
+        resolveRead = resolve;
+      });
+      const file = new File([], 'older-broken.geojson', {
+        type: 'application/geo+json',
+      });
+      Object.defineProperty(file, 'text', {
+        value: vi.fn(() => pendingRead),
+      });
+
+      render(<MapScreen />);
+      await user.click(
+        await screen.findByRole('button', { name: 'Map settings' }),
+      );
+      const settingsDialog = screen.getByRole('dialog', {
+        name: 'Map settings',
+      });
+      await user.upload(
+        within(settingsDialog).getByLabelText('Add GeoJSON reference'),
+        file,
+      );
+      await user.click(
+        within(settingsDialog).getByRole('button', {
+          name: 'Close map settings',
+        }),
+      );
+
+      await act(async () => {
+        resolveRead('{"type":"Point","coordinates":["bad",0]}');
+        await pendingRead;
+      });
+      expect(
+        await screen.findByText('GeoJSON import failed'),
+      ).toBeInTheDocument();
+
+      const tooManyFiles = Array.from(
+        { length: 11 },
+        (_, index) =>
+          new File(['{}'], `overlay-${index}.geojson`, {
+            type: 'application/geo+json',
+          }),
+      );
+      fireEvent.drop(
+        screen.getByRole('region', { name: 'Map authoring canvas' }),
+        { dataTransfer: { types: ['Files'], files: tooManyFiles } },
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'You can keep up to 10 reference files on the map. Remove one before adding more.',
+      );
+      expect(
+        screen.queryByText('GeoJSON import failed'),
+      ).not.toBeInTheDocument();
     });
 
     it('rejects a frame confirm that crosses the antimeridian instead of drawing an inverted bbox', async () => {

@@ -155,7 +155,7 @@ export function MapScreen() {
     useState<'controls' | 'map' | null>(null);
   const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
   const referenceOverlayImportsRef = useRef(new Set<symbol>());
-  const referenceOverlayCountRef = useRef(0);
+  const referenceOverlayIdsRef = useRef(new Set<string>());
   const referenceOverlayReservedSlotsRef = useRef(0);
   const referenceOverlayGenerationRef = useRef(0);
   const referenceOverlayImportSequenceRef = useRef(0);
@@ -164,6 +164,7 @@ export function MapScreen() {
     id: string;
     sequence: number;
   } | null>(null);
+  const dismissToastRef = useRef(dismissToast);
   const [referenceOverlayProjectId, setReferenceOverlayProjectId] =
     useState(selectedProjectId);
   if (referenceOverlayProjectId !== selectedProjectId) {
@@ -175,17 +176,21 @@ export function MapScreen() {
   }
 
   useEffect(() => {
+    dismissToastRef.current = dismissToast;
+  }, [dismissToast]);
+
+  useEffect(() => {
     referenceOverlayGenerationRef.current += 1;
     referenceOverlayImportsRef.current.clear();
-    referenceOverlayCountRef.current = 0;
+    referenceOverlayIdsRef.current.clear();
     referenceOverlayReservedSlotsRef.current = 0;
     referenceOverlayImportSequenceRef.current = 0;
     referenceOverlayLatestUiOutcomeRef.current = 0;
     if (referenceOverlayToastRef.current) {
-      dismissToast(referenceOverlayToastRef.current.id);
+      dismissToastRef.current(referenceOverlayToastRef.current.id);
       referenceOverlayToastRef.current = null;
     }
-  }, [dismissToast, selectedProjectId]);
+  }, [selectedProjectId]);
 
   // Track the computed project bbox for hasConfigChanges comparison
   const [projectBbox, setProjectBbox] = useState<
@@ -208,11 +213,11 @@ export function MapScreen() {
       isMountedRef.current = false;
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
       if (referenceOverlayToastRef.current) {
-        dismissToast(referenceOverlayToastRef.current.id);
+        dismissToastRef.current(referenceOverlayToastRef.current.id);
         referenceOverlayToastRef.current = null;
       }
     };
-  }, [dismissToast]);
+  }, []);
 
   // Compute project area bbox from observations on mount
   useEffect(() => {
@@ -346,11 +351,12 @@ export function MapScreen() {
     const importSequence = referenceOverlayImportSequenceRef.current + 1;
     referenceOverlayImportSequenceRef.current = importSequence;
     const nextOverlayCount =
-      referenceOverlayCountRef.current +
+      referenceOverlayIdsRef.current.size +
       referenceOverlayReservedSlotsRef.current +
       files.length;
     if (nextOverlayCount > MAX_REFERENCE_OVERLAYS) {
       referenceOverlayLatestUiOutcomeRef.current = importSequence;
+      dismissReferenceOverlayToastThrough(importSequence);
       setReferenceOverlayError(
         intl.formatMessage(mapMessages.referenceOverlaysLimit, {
           max: MAX_REFERENCE_OVERLAYS,
@@ -456,7 +462,9 @@ export function MapScreen() {
             ]
           : [],
       );
-      referenceOverlayCountRef.current += additions.length;
+      for (const addition of additions) {
+        referenceOverlayIdsRef.current.add(addition.id);
+      }
       setReferenceOverlays((current) => [...current, ...additions]);
       if (importSequence >= referenceOverlayLatestUiOutcomeRef.current) {
         referenceOverlayLatestUiOutcomeRef.current = importSequence;
@@ -487,11 +495,7 @@ export function MapScreen() {
   }
 
   function handleReferenceOverlayRemove(id: string) {
-    if (!referenceOverlays.some((overlay) => overlay.id === id)) return;
-    referenceOverlayCountRef.current = Math.max(
-      0,
-      referenceOverlayCountRef.current - 1,
-    );
+    if (!referenceOverlayIdsRef.current.delete(id)) return;
     setReferenceOverlays((current) =>
       current.filter((overlay) => overlay.id !== id),
     );
