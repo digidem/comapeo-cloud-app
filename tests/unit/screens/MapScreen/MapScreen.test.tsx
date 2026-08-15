@@ -723,6 +723,79 @@ describe('MapScreen', () => {
       ).not.toBeInTheDocument();
     });
 
+    it('dismisses an older picker failure toast when a newer import succeeds', async () => {
+      const user = userEvent.setup();
+      let resolveFirst!: (value: string) => void;
+      let resolveSecond!: (value: string) => void;
+      const firstRead = new Promise<string>((resolve) => {
+        resolveFirst = resolve;
+      });
+      const secondRead = new Promise<string>((resolve) => {
+        resolveSecond = resolve;
+      });
+      const firstFile = new File([], 'older-broken.geojson', {
+        type: 'application/geo+json',
+      });
+      const secondFile = new File([], 'newer-valid.geojson', {
+        type: 'application/geo+json',
+      });
+      Object.defineProperty(firstFile, 'text', {
+        value: vi.fn(() => firstRead),
+      });
+      Object.defineProperty(secondFile, 'text', {
+        value: vi.fn(() => secondRead),
+      });
+
+      render(<MapScreen />);
+      await user.click(
+        await screen.findByRole('button', { name: 'Map settings' }),
+      );
+      const settingsDialog = screen.getByRole('dialog', {
+        name: 'Map settings',
+      });
+      await user.upload(
+        within(settingsDialog).getByLabelText('Add GeoJSON reference'),
+        firstFile,
+      );
+      await user.click(
+        within(settingsDialog).getByRole('button', {
+          name: 'Close map settings',
+        }),
+      );
+      fireEvent.drop(
+        screen.getByRole('region', { name: 'Map authoring canvas' }),
+        { dataTransfer: { types: ['Files'], files: [secondFile] } },
+      );
+
+      await act(async () => {
+        resolveFirst('{"type":"Point","coordinates":["bad",0]}');
+        await firstRead;
+      });
+      expect(
+        await screen.findByText('GeoJSON import failed'),
+      ).toBeInTheDocument();
+
+      await act(async () => {
+        resolveSecond('{"type":"Point","coordinates":[-59,-2]}');
+        await secondRead;
+      });
+      await waitFor(() => {
+        expect(
+          screen.queryByText('GeoJSON import failed'),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.queryByText(/older-broken\.geojson is not valid GeoJSON/),
+        ).not.toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Map settings' }));
+      expect(
+        await within(
+          screen.getByRole('dialog', { name: 'Map settings' }),
+        ).findByText('newer-valid.geojson'),
+      ).toBeInTheDocument();
+    });
+
     it('rejects a frame confirm that crosses the antimeridian instead of drawing an inverted bbox', async () => {
       const user = userEvent.setup();
       unprojectMock

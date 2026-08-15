@@ -119,7 +119,7 @@ function SettingsSheet({ open, onOpenChange, children }: SettingsSheetProps) {
 
 export function MapScreen() {
   const intl = useIntl();
-  const { addToast } = useToast();
+  const { addToast, dismissToast } = useToast();
   const isDesktop = useIsDesktop();
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const projectsQuery = useProjects();
@@ -160,6 +160,10 @@ export function MapScreen() {
   const referenceOverlayGenerationRef = useRef(0);
   const referenceOverlayImportSequenceRef = useRef(0);
   const referenceOverlayLatestUiOutcomeRef = useRef(0);
+  const referenceOverlayToastRef = useRef<{
+    id: string;
+    sequence: number;
+  } | null>(null);
   const [referenceOverlayProjectId, setReferenceOverlayProjectId] =
     useState(selectedProjectId);
   if (referenceOverlayProjectId !== selectedProjectId) {
@@ -177,7 +181,11 @@ export function MapScreen() {
     referenceOverlayReservedSlotsRef.current = 0;
     referenceOverlayImportSequenceRef.current = 0;
     referenceOverlayLatestUiOutcomeRef.current = 0;
-  }, [selectedProjectId]);
+    if (referenceOverlayToastRef.current) {
+      dismissToast(referenceOverlayToastRef.current.id);
+      referenceOverlayToastRef.current = null;
+    }
+  }, [dismissToast, selectedProjectId]);
 
   // Track the computed project bbox for hasConfigChanges comparison
   const [projectBbox, setProjectBbox] = useState<
@@ -199,8 +207,12 @@ export function MapScreen() {
     return () => {
       isMountedRef.current = false;
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      if (referenceOverlayToastRef.current) {
+        dismissToast(referenceOverlayToastRef.current.id);
+        referenceOverlayToastRef.current = null;
+      }
     };
-  }, []);
+  }, [dismissToast]);
 
   // Compute project area bbox from observations on mount
   useEffect(() => {
@@ -317,6 +329,13 @@ export function MapScreen() {
     setShowUndo(false);
   }
 
+  function dismissReferenceOverlayToastThrough(sequence: number) {
+    const currentToast = referenceOverlayToastRef.current;
+    if (!currentToast || currentToast.sequence > sequence) return;
+    dismissToast(currentToast.id);
+    referenceOverlayToastRef.current = null;
+  }
+
   async function handleReferenceOverlayFiles(
     files: File[],
     errorSurface: 'controls' | 'map' = 'controls',
@@ -402,17 +421,22 @@ export function MapScreen() {
           return;
         }
         referenceOverlayLatestUiOutcomeRef.current = importSequence;
+        dismissReferenceOverlayToastThrough(importSequence);
 
         const controlsUnavailable =
           errorSurface === 'controls' && !isDesktop && !settingsOpenRef.current;
         if (controlsUnavailable) {
-          addToast({
+          const toastId = addToast({
             variant: 'error',
             title: intl.formatMessage(
               mapMessages.referenceOverlaysImportFailed,
             ),
             description: errorMessage,
           });
+          referenceOverlayToastRef.current = {
+            id: toastId,
+            sequence: importSequence,
+          };
           return;
         }
         setReferenceOverlayError(errorMessage);
@@ -436,6 +460,7 @@ export function MapScreen() {
       setReferenceOverlays((current) => [...current, ...additions]);
       if (importSequence >= referenceOverlayLatestUiOutcomeRef.current) {
         referenceOverlayLatestUiOutcomeRef.current = importSequence;
+        dismissReferenceOverlayToastThrough(importSequence);
         setReferenceOverlayError(null);
         setReferenceOverlayErrorSurface(null);
       }

@@ -16,7 +16,8 @@ interface ToastData {
 }
 
 interface ToastContextValue {
-  addToast: (toast: Omit<ToastData, 'id'>) => void;
+  addToast: (toast: Omit<ToastData, 'id'>) => string;
+  dismissToast: (id: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -46,14 +47,15 @@ function ToastProvider({ children }: { children: ReactNode }) {
   const addToast = useCallback((toast: Omit<ToastData, 'id'>) => {
     const id = uuid();
     setToasts((prev) => [...prev, { ...toast, id }]);
+    return id;
   }, []);
 
-  const removeToast = useCallback((id: string) => {
+  const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   return (
-    <ToastContext.Provider value={{ addToast }}>
+    <ToastContext.Provider value={{ addToast, dismissToast }}>
       <ToastPrimitive.Provider swipeDirection="right">
         {children}
         {toasts.map((toast) => (
@@ -61,7 +63,7 @@ function ToastProvider({ children }: { children: ReactNode }) {
             key={toast.id}
             duration={toast.duration ?? 5000}
             onOpenChange={(open) => {
-              if (!open) removeToast(toast.id);
+              if (!open) dismissToast(toast.id);
             }}
             className={`rounded-btn border p-4 shadow-elevated flex items-start gap-3 data-[state=open]:animate-slideIn ${variantClasses[toast.variant]}`}
             role="status"
