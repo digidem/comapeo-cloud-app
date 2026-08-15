@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+
+import { comapeoStateStorage } from '@/lib/comapeo-local-storage';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +28,7 @@ export const useProjectStore = create<ProjectStore>()(
     }),
     {
       name: 'comapeo-project',
+      storage: createJSONStorage(() => comapeoStateStorage),
     },
   ),
 );

@@ -8,11 +8,8 @@ import { defineMessages, useIntl } from 'react-intl';
 import { StorageSettings } from '@/components/shared/StorageSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Modal } from '@/components/ui/modal';
-import { useToast } from '@/components/ui/toast';
 import { InviteApiError, createEncryptedInvite } from '@/lib/api-client';
 import {
-  clearAllStorage,
   exportLocalStorageData,
   importLocalStorageData,
 } from '@/lib/local-storage-utils';
@@ -92,10 +89,6 @@ const _messages = defineMessages({
     id: 'settings.backup.exportSuccess',
     defaultMessage: 'Backup exported successfully.',
   },
-  backupImportSuccess: {
-    id: 'settings.backup.importSuccess',
-    defaultMessage: 'Backup imported. Reloading…',
-  },
   backupExportError: {
     id: 'settings.backup.exportError',
     defaultMessage: 'Failed to export backup.',
@@ -104,45 +97,23 @@ const _messages = defineMessages({
     id: 'settings.backup.importError',
     defaultMessage: 'Failed to import backup: {error}',
   },
-
-  // Clear LocalStorage section
-  clearTitle: {
-    id: 'settings.clear.title',
-    defaultMessage: 'Clear Local Data',
+  backupInvalidFormat: {
+    id: 'settings.backup.invalidFormat',
+    defaultMessage: 'Invalid backup file format.',
   },
-  clearDescription: {
-    id: 'settings.clear.description',
+  backupStorageUnavailable: {
+    id: 'settings.backup.storageUnavailable',
     defaultMessage:
-      'Remove all local settings, preferences, and cached data. This cannot be undone.',
+      'Backup import failed because browser storage is unavailable. Existing preferences were restored.',
   },
-  clearButton: {
-    id: 'settings.clear.button',
-    defaultMessage: 'Clear All Data',
-  },
-  clearConfirmTitle: {
-    id: 'settings.clear.confirmTitle',
-    defaultMessage: 'Clear All Data?',
-  },
-  clearConfirmDescription: {
-    id: 'settings.clear.confirmDescription',
+  backupCompensationFailed: {
+    id: 'settings.backup.compensationFailed',
     defaultMessage:
-      'This will permanently remove all local settings, preferences, and cached data. This action cannot be undone.',
+      'Backup import could not restore your previous preferences. Reloading to reconcile browser state.',
   },
-  clearConfirmButton: {
-    id: 'settings.clear.confirmButton',
-    defaultMessage: 'Yes, Clear Everything',
-  },
-  clearErrorTitle: {
-    id: 'settings.clear.errorTitle',
-    defaultMessage: 'Failed to clear data',
-  },
-  clearErrorDescription: {
-    id: 'settings.clear.errorDescription',
-    defaultMessage: 'Some data could not be cleared. The app will reload.',
-  },
-  clearCancelButton: {
-    id: 'settings.clear.cancelButton',
-    defaultMessage: 'Cancel',
+  backupReadError: {
+    id: 'settings.backup.readError',
+    defaultMessage: 'The selected backup file could not be read.',
   },
 });
 
@@ -166,7 +137,6 @@ const LOCALE_LABELS: Record<string, string> = {
 export function SettingsScreen() {
   const intl = useIntl();
   const locale = useLocaleStore((s) => s.locale);
-  const { addToast } = useToast();
 
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -178,10 +148,11 @@ export function SettingsScreen() {
     'idle' | 'success' | 'error'
   >('idle');
   const [importStatus, setImportStatus] = useState<
-    'idle' | 'loading' | 'success' | 'error'
+    'idle' | 'loading' | 'error'
   >('idle');
   const [importError, setImportError] = useState<string | null>(null);
-  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+  const [importReconciliationPending, setImportReconciliationPending] =
+    useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timeoutIdsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -269,7 +240,8 @@ export function SettingsScreen() {
       URL.revokeObjectURL(url);
       setExportStatus('success');
       scheduleTimeout(() => setExportStatus('idle'), 3000);
-    } catch {
+    } catch (error) {
+      console.error('Failed to export local storage backup', error);
       setExportStatus('error');
     }
   }, [scheduleTimeout]);
@@ -283,45 +255,48 @@ export function SettingsScreen() {
       event.target.value = '';
 
       setImportStatus('loading');
+      setImportError(null);
+      setImportReconciliationPending(false);
       const reader = new FileReader();
 
       reader.onload = () => {
         const result = importLocalStorageData(reader.result as string);
         if (result.success) {
-          setImportStatus('success');
-          scheduleTimeout(() => window.location.reload(), 500);
+          // Reload immediately so live persisted stores cannot overwrite restored
+          // preferences between import and app rehydration.
+          window.location.reload();
         } else {
           setImportStatus('error');
-          setImportError(result.error ?? 'Unknown error');
+          if (result.error === 'compensation-failed') {
+            setImportError(
+              intl.formatMessage(_messages.backupCompensationFailed),
+            );
+            setImportReconciliationPending(true);
+            // Keep backup controls disabled while an assertive warning is available
+            // to assistive technology, then reconcile live stores by reloading.
+            // This recovery timer must survive component unmount/navigation.
+            window.setTimeout(() => window.location.reload(), 1500);
+          } else {
+            setImportError(
+              intl.formatMessage(
+                result.error === 'storage-unavailable'
+                  ? _messages.backupStorageUnavailable
+                  : _messages.backupInvalidFormat,
+              ),
+            );
+          }
         }
       };
 
       reader.onerror = () => {
         setImportStatus('error');
-        setImportError(reader.error?.message ?? 'Failed to read file');
+        setImportError(intl.formatMessage(_messages.backupReadError));
       };
 
       reader.readAsText(file);
     },
-    [scheduleTimeout],
+    [intl],
   );
-
-  const handleClearAll = useCallback(async () => {
-    try {
-      await clearAllStorage();
-    } catch (err) {
-      console.error('Failed to clear local data', err);
-      addToast({
-        title: intl.formatMessage(_messages.clearErrorTitle),
-        description: intl.formatMessage(_messages.clearErrorDescription),
-        variant: 'error',
-      });
-      // Half-cleared state must not persist: force a reload so stale
-      // in-memory state is discarded even when the clear fails. Delay it
-      // so the error toast stays visible.
-      setTimeout(() => window.location.reload(), 1500);
-    }
-  }, [addToast, intl]);
 
   return (
     <section className="p-3 sm:p-4 lg:p-6">
@@ -440,14 +415,19 @@ export function SettingsScreen() {
           className="hidden"
           data-testid="backup-file-input"
         />
-        <Button variant="secondary" onClick={handleExport} className="min-w-0">
+        <Button
+          variant="secondary"
+          onClick={handleExport}
+          disabled={importReconciliationPending}
+          className="min-w-0"
+        >
           {intl.formatMessage(_messages.backupExportButton)}
         </Button>
         <Button
           variant="secondary"
           onClick={() => fileInputRef.current?.click()}
           loading={importStatus === 'loading'}
-          disabled={importStatus === 'loading'}
+          disabled={importStatus === 'loading' || importReconciliationPending}
           className="min-w-0"
         >
           {intl.formatMessage(_messages.backupImportButton)}
@@ -463,63 +443,17 @@ export function SettingsScreen() {
           {intl.formatMessage(_messages.backupExportError)}
         </p>
       )}
-      {importStatus === 'success' && (
-        <p className="text-sm text-green-600 mt-2">
-          {intl.formatMessage(_messages.backupImportSuccess)}
-        </p>
-      )}
       {importStatus === 'error' && importError && (
-        <p className="text-sm text-error mt-2">
+        <p
+          role="alert"
+          aria-live="assertive"
+          className="text-sm text-error mt-2"
+        >
           {intl.formatMessage(_messages.backupImportError, {
             error: importError,
           })}
         </p>
       )}
-
-      {/* Clear Local Data */}
-      <h2 className="text-lg font-semibold text-text mt-6">
-        {intl.formatMessage(_messages.clearTitle)}
-      </h2>
-      <p className="text-sm text-text-muted mt-2">
-        {intl.formatMessage(_messages.clearDescription)}
-      </p>
-      <div className="mt-4 max-w-md">
-        <Button
-          variant="danger"
-          onClick={() => setIsClearConfirmOpen(true)}
-          className="w-full sm:w-auto"
-        >
-          {intl.formatMessage(_messages.clearButton)}
-        </Button>
-      </div>
-
-      <Modal
-        open={isClearConfirmOpen}
-        onOpenChange={(open) => {
-          if (!open) setIsClearConfirmOpen(false);
-        }}
-        title={intl.formatMessage(_messages.clearConfirmTitle)}
-        description={intl.formatMessage(_messages.clearConfirmDescription)}
-      >
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-4">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setIsClearConfirmOpen(false)}
-          >
-            {intl.formatMessage(_messages.clearCancelButton)}
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            size="sm"
-            onClick={handleClearAll}
-          >
-            {intl.formatMessage(_messages.clearConfirmButton)}
-          </Button>
-        </div>
-      </Modal>
     </section>
   );
 }

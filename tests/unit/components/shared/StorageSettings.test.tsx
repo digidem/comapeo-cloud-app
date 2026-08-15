@@ -1,13 +1,13 @@
 import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { QueryClient } from '@tanstack/react-query';
-
 import { StorageSettings } from '@/components/shared/StorageSettings';
 import { getDb, resetDb } from '@/lib/db';
+import * as localStorageUtils from '@/lib/local-storage-utils';
 
-// Mock navigator.storage.estimate
+// Mock browser APIs used by storage settings.
 const mockEstimate = vi.fn();
+const mockReload = vi.fn();
 
 beforeEach(async () => {
   vi.stubGlobal('navigator', {
@@ -15,13 +15,28 @@ beforeEach(async () => {
     storage: {
       estimate: mockEstimate,
     },
+    locks: {
+      request: vi.fn(
+        async (
+          _name: string,
+          _options: LockOptions,
+          callback: (lock: Lock | null) => unknown,
+        ) => callback({ name: 'comapeo-storage-reset-v1', mode: 'exclusive' }),
+      ),
+    },
   });
 
   mockEstimate.mockResolvedValue({
     quota: 1073741824,
     usage: 52428800,
   });
-
+  mockReload.mockReset();
+  Object.defineProperty(window, 'location', {
+    value: { reload: mockReload },
+    writable: true,
+  });
+  const db = getDb();
+  if (!db.isOpen()) await db.open();
   await resetDb();
 });
 
@@ -49,6 +64,18 @@ describe('StorageSettings', () => {
     expect(screen.getByText(/4\.9%/)).toBeInTheDocument();
     expect(screen.getByText(/50\.0 MB/)).toBeInTheDocument();
     expect(screen.getByText(/1\.0 GB/)).toBeInTheDocument();
+  });
+
+  it('localizes usage percentage text and progress accessibility text', async () => {
+    render(<StorageSettings />, { locale: 'pt' });
+
+    const progress = await screen.findByRole('progressbar');
+
+    expect(screen.getByText('4,9% usado')).toBeInTheDocument();
+    expect(progress).toHaveAttribute(
+      'aria-valuetext',
+      '4,9% do armazenamento usado',
+    );
   });
 
   it('displays per-table record counts', async () => {
@@ -151,16 +178,16 @@ describe('StorageSettings', () => {
       screen.getByRole('button', { name: 'Yes, Clear Everything' }),
     );
 
-    await waitFor(async () => {
-      const count = await db.projects.count();
-      expect(count).toBe(0);
+    await waitFor(() => {
+      expect(mockReload).toHaveBeenCalledOnce();
     });
+    // Real navigation would recreate the app and open a fresh connection. The
+    // jsdom reload mock does not, so reopen explicitly before inspecting the DB.
+    await db.open();
+    expect(await db.projects.count()).toBe(0);
   });
 
-  it('invalidates query cache after cached data is cleared', async () => {
-    const invalidateQueries = vi
-      .spyOn(QueryClient.prototype, 'invalidateQueries')
-      .mockResolvedValue(undefined);
+  it('reloads after cached data is cleared to reset persisted in-memory state', async () => {
     const user = userEvent.setup();
 
     render(<StorageSettings />);
@@ -177,10 +204,151 @@ describe('StorageSettings', () => {
     );
 
     await waitFor(() => {
-      expect(invalidateQueries).toHaveBeenCalledTimes(1);
+      expect(mockReload).toHaveBeenCalled();
     });
+  });
 
-    invalidateQueries.mockRestore();
+  it('still reloads when localStorage removal is blocked', async () => {
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(() => {
+        throw new DOMException('Storage access denied', 'SecurityError');
+      });
+    const user = userEvent.setup();
+
+    try {
+      render(<StorageSettings />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Total Usage')).toBeInTheDocument();
+      });
+
+      await user.click(
+        screen.getByRole('button', { name: 'Clear All Cached Data' }),
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+      );
+
+      await waitFor(() => {
+        expect(mockReload).toHaveBeenCalled();
+      });
+      // Auth-store behavior and exact reload scheduling are covered directly in
+      // lower-level tests; this integration test only owns reaching the reload path.
+    } finally {
+      removeItemSpy.mockRestore();
+    }
+  });
+
+  it('shows partial reset failures after the confirmation dialog closes', async () => {
+    const clearSpy = vi
+      .spyOn(localStorageUtils, 'clearAllStorage')
+      .mockRejectedValueOnce(
+        new localStorageUtils.ClearAllStorageError({
+          failedStep: 'app-db',
+          partial: true,
+          cause: new Error('DB exploded'),
+          reloadScheduled: true,
+        }),
+      );
+    const user = userEvent.setup();
+
+    try {
+      render(<StorageSettings />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Total Usage')).toBeInTheDocument();
+      });
+
+      await user.click(
+        screen.getByRole('button', { name: 'Clear All Cached Data' }),
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'The reset could not finish safely. The app will reload and continue recovery.',
+      );
+      expect(
+        screen.queryByText('Clear All Cached Data?'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('DB exploded')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /Clear All Cached Data/ }),
+      ).toBeDisabled();
+    } finally {
+      clearSpy.mockRestore();
+    }
+  });
+
+  it('keeps clearing disabled when a non-destructive failure schedules a reload', async () => {
+    const clearSpy = vi
+      .spyOn(localStorageUtils, 'clearAllStorage')
+      .mockRejectedValueOnce(
+        new localStorageUtils.ClearAllStorageError({
+          failedStep: 'categories-db',
+          partial: false,
+          reloadScheduled: true,
+          cause: new Error('Categories unavailable'),
+        }),
+      );
+    const user = userEvent.setup();
+
+    try {
+      render(<StorageSettings />);
+      await screen.findByText('Total Usage');
+
+      await user.click(
+        screen.getByRole('button', { name: 'Clear All Cached Data' }),
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Cached data could not be cleared. Nothing was deleted. The app will reload so you can retry.',
+      );
+      expect(
+        screen.getByRole('button', { name: /Clear All Cached Data/ }),
+      ).toBeDisabled();
+    } finally {
+      clearSpy.mockRestore();
+    }
+  });
+
+  it('allows retry when reset fails before destructive clearing starts', async () => {
+    const clearSpy = vi
+      .spyOn(localStorageUtils, 'clearAllStorage')
+      .mockRejectedValueOnce(
+        new localStorageUtils.ClearAllStorageError({
+          failedStep: 'categories-db',
+          partial: false,
+          cause: new Error('Categories unavailable'),
+        }),
+      );
+    const user = userEvent.setup();
+
+    try {
+      render(<StorageSettings />);
+      await screen.findByText('Total Usage');
+
+      await user.click(
+        screen.getByRole('button', { name: 'Clear All Cached Data' }),
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Cached data could not be cleared. Your existing local data was left unchanged. You can try again.',
+      );
+      expect(
+        screen.getByRole('button', { name: 'Clear All Cached Data' }),
+      ).toBeEnabled();
+    } finally {
+      clearSpy.mockRestore();
+    }
   });
 
   it('uses the localized cancel label in the clear confirmation dialog', async () => {
@@ -199,6 +367,7 @@ describe('StorageSettings', () => {
     expect(
       screen.getByRole('button', { name: 'Cancelar' }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/aplicativo será recarregado/)).toBeInTheDocument();
   });
 
   it('shows zero counts when storage is empty', async () => {

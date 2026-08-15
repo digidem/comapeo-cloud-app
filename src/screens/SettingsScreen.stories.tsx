@@ -89,18 +89,18 @@ export const ClearDataDialogOpen: Story = {
     const canvas = getCanvas();
     const clearButton = await canvas.findByRole(
       'button',
-      { name: 'Clear All Data' },
+      { name: 'Clear All Cached Data' },
       { timeout: PLAY_TIMEOUT },
     );
     await userEvent.click(clearButton);
 
     // Assert the confirm dialog is present (state-based, not time-based)
-    const dialog = await canvas.findByRole('dialog', undefined, {
+    const dialog = await canvas.findByRole('alertdialog', undefined, {
       timeout: PLAY_TIMEOUT,
     });
     await expect(dialog).toBeVisible();
     await expect(
-      canvas.getByRole('heading', { name: 'Clear All Data?' }),
+      canvas.getByRole('heading', { name: 'Clear All Cached Data?' }),
     ).toBeInTheDocument();
   },
 };

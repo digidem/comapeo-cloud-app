@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+
+import { comapeoStateStorage } from '@/lib/comapeo-local-storage';
 
 export type Locale = 'en' | 'pt' | 'es';
 
@@ -16,6 +18,7 @@ export const useLocaleStore = create<LocaleState>()(
     }),
     {
       name: 'comapeo-locale',
+      storage: createJSONStorage(() => comapeoStateStorage),
     },
   ),
 );

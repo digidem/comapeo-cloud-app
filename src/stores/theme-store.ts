@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { setComapeoStorageItem } from '@/lib/comapeo-local-storage';
+
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 export interface ThemeState {
@@ -52,7 +54,7 @@ export const useThemeStore = create<ThemeState>()((set) => ({
 
   setMode: (mode) => {
     const resolved = resolveTheme(mode);
-    localStorage.setItem(STORAGE_KEY, mode);
+    setComapeoStorageItem(STORAGE_KEY, mode);
     applyTheme(resolved);
     set({ mode, resolved });
   },

@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { useQueryClient } from '@tanstack/react-query';
-
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  type StorageStats,
-  clearAllData,
-  getStorageStats,
-} from '@/lib/storage';
-import { useAuthStore } from '@/stores/auth-store';
+  ClearAllStorageError,
+  clearAllStorage,
+} from '@/lib/local-storage-utils';
+import { type StorageStats, getStorageStats } from '@/lib/storage';
 
 const messages = defineMessages({
   storageTitle: {
@@ -30,6 +27,18 @@ const messages = defineMessages({
   totalOf: {
     id: 'settings.storage.totalOf',
     defaultMessage: '{usage} of {quota}',
+  },
+  usagePercent: {
+    id: 'settings.storage.usagePercent',
+    defaultMessage: '{percent}% used',
+  },
+  usagePercentAria: {
+    id: 'settings.storage.usagePercentAria',
+    defaultMessage: '{percent}% of storage used',
+  },
+  loadingLabel: {
+    id: 'settings.storage.loadingLabel',
+    defaultMessage: 'Loading storage information',
   },
   recordsLabel: {
     id: 'settings.storage.records',
@@ -74,7 +83,7 @@ const messages = defineMessages({
   clearConfirmDescription: {
     id: 'settings.storage.clearConfirmDescription',
     defaultMessage:
-      'This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. This cannot be undone.',
+      'This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. App preferences such as language, theme, and map/list views will be reset, and the app will reload. This cannot be undone.',
   },
   clearConfirmButton: {
     id: 'settings.storage.clearConfirmButton',
@@ -83,6 +92,21 @@ const messages = defineMessages({
   clearCancelButton: {
     id: 'settings.storage.clearCancelButton',
     defaultMessage: 'Cancel',
+  },
+  clearError: {
+    id: 'settings.storage.clearError',
+    defaultMessage:
+      'Cached data could not be cleared. Your existing local data was left unchanged. You can try again.',
+  },
+  clearReloadError: {
+    id: 'settings.storage.clearReloadError',
+    defaultMessage:
+      'Cached data could not be cleared. Nothing was deleted. The app will reload so you can retry.',
+  },
+  clearPartialError: {
+    id: 'settings.storage.clearPartialError',
+    defaultMessage:
+      'The reset could not finish safely. The app will reload and continue recovery.',
   },
 });
 
@@ -120,6 +144,7 @@ function TableRowItem({ label, count }: TableRow) {
 
 interface UsageBarProps {
   percent: number;
+  ariaValueText: string;
 }
 
 function getBarColor(percent: number): string {
@@ -128,7 +153,7 @@ function getBarColor(percent: number): string {
   return '#1F6FFF';
 }
 
-function UsageBar({ percent }: UsageBarProps) {
+function UsageBar({ percent, ariaValueText }: UsageBarProps) {
   const clamped = Math.min(100, Math.max(0, percent));
   return (
     <div
@@ -137,7 +162,7 @@ function UsageBar({ percent }: UsageBarProps) {
       aria-valuenow={clamped}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuetext={`${clamped}% storage used`}
+      aria-valuetext={ariaValueText}
     >
       <div
         className="h-2 rounded-full transition-all duration-300"
@@ -152,7 +177,6 @@ function UsageBar({ percent }: UsageBarProps) {
 
 export function StorageSettings() {
   const intl = useIntl();
-  const queryClient = useQueryClient();
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -176,46 +200,37 @@ export function StorageSettings() {
     };
   }, []);
 
-  const loadStats = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await getStorageStats();
-      setStats(result);
-    } catch (err) {
-      console.warn('Failed to load storage stats:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   const handleClearAll = useCallback(async () => {
     if (clearing) return;
     setClearing(true);
     setClearError(null);
     try {
-      await clearAllData();
-      // Clear in-memory auth store so it's consistent with the now-empty IndexedDB.
-      // Without this, stale server records in memory would block re-adding the
-      // same server (duplicate check) even though IndexedDB is empty.
-      useAuthStore.getState().clearAll();
-      setIsConfirmOpen(false);
-      await queryClient.invalidateQueries();
-      await loadStats();
-    } catch (err) {
-      setClearError(
-        err instanceof Error ? err.message : 'Failed to clear data',
-      );
-    } finally {
-      setClearing(false);
+      // Use the same full reset path as SettingsScreen so all app databases,
+      // persisted preferences, in-memory auth state, and reload semantics stay aligned.
+      await clearAllStorage();
+    } catch (error) {
+      const resetError =
+        error instanceof ClearAllStorageError ? error : undefined;
+      let message = messages.clearError;
+      if (resetError?.partial) {
+        message = messages.clearPartialError;
+      } else if (resetError?.reloadScheduled) {
+        message = messages.clearReloadError;
+      }
+      setClearError(intl.formatMessage(message));
+      // Once this tab's DB connections have been quiesced, the reset helper
+      // schedules a reload/recovery and the destructive action must stay disabled.
+      // A coordination failure before quiescing is safe to retry immediately.
+      if (!resetError?.reloadScheduled) setClearing(false);
     }
-  }, [loadStats, queryClient, clearing]);
+  }, [clearing, intl]);
 
   if (loading) {
     return (
       <div
         role="status"
         aria-live="polite"
-        aria-label="Loading storage information"
+        aria-label={intl.formatMessage(messages.loadingLabel)}
         className="mt-4 space-y-3"
       >
         <Skeleton className="h-5 w-32" />
@@ -262,6 +277,17 @@ export function StorageSettings() {
   ];
 
   const totalRecords = tableRows.reduce((sum, r) => sum + r.count, 0);
+  const usagePercent = Math.min(100, Math.max(0, stats?.usagePercent ?? 0));
+  const formattedUsagePercent = intl.formatNumber(usagePercent, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  const usagePercentText = intl.formatMessage(messages.usagePercent, {
+    percent: formattedUsagePercent,
+  });
+  const usagePercentAriaText = intl.formatMessage(messages.usagePercentAria, {
+    percent: formattedUsagePercent,
+  });
 
   return (
     <div>
@@ -284,9 +310,9 @@ export function StorageSettings() {
             })}
           </span>
         </div>
-        <UsageBar percent={stats?.usagePercent ?? 0} />
+        <UsageBar percent={usagePercent} ariaValueText={usagePercentAriaText} />
         <p className="text-xs text-text-muted tabular-nums">
-          {stats?.usagePercent.toFixed(1) ?? '0.0'}% used
+          {usagePercentText}
         </p>
       </Card>
 
@@ -311,6 +337,11 @@ export function StorageSettings() {
         >
           {intl.formatMessage(messages.clearButton)}
         </Button>
+        {clearError !== null && (
+          <p role="alert" className="text-sm text-red-600 mt-2">
+            {clearError}
+          </p>
+        )}
       </div>
 
       <ConfirmDialog
@@ -326,11 +357,7 @@ export function StorageSettings() {
         variant="destructive"
         loading={clearing}
         onConfirm={handleClearAll}
-      >
-        {clearError !== null && (
-          <p className="text-sm text-red-600">{clearError}</p>
-        )}
-      </ConfirmDialog>
+      />
     </div>
   );
 }

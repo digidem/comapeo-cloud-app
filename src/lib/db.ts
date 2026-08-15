@@ -522,23 +522,76 @@ export type { AppDatabase };
 // ---------------------------------------------------------------------------
 
 let _db: AppDatabase | null = null;
+let storageResetQuiesced = false;
 
 export function getDb(): AppDatabase {
   if (!_db) {
+    if (storageResetQuiesced) {
+      throw new Error('Primary database is quiesced for local-data reset.');
+    }
     _db = new AppDatabase();
   }
   return _db;
+}
+
+/**
+ * Re-enable the app-owned singleton after reset coordination has established a
+ * safe non-reset startup state. A full page reload naturally resets this module,
+ * but keeping the lifecycle explicit also makes same-page recovery deterministic.
+ */
+export function resumeDbAfterStorageReset(): void {
+  if (!storageResetQuiesced) return;
+  _db?.close();
+  _db = null;
+  storageResetQuiesced = false;
 }
 
 // ---------------------------------------------------------------------------
 // Reset helper (for tests)
 // ---------------------------------------------------------------------------
 
-export async function resetDb(): Promise<void> {
-  const db = getDb();
+async function clearDatabaseTables(db: AppDatabase): Promise<void> {
   await db.transaction('rw', db.tables, async () => {
     await Promise.all(db.tables.map((table) => table.clear()));
   });
+}
+
+export async function resetDb(): Promise<void> {
+  if (storageResetQuiesced) {
+    await resetDbIsolated();
+    return;
+  }
+
+  const db = getDb();
+  if (!db.isOpen()) {
+    await resetDbIsolated();
+    return;
+  }
+  await clearDatabaseTables(db);
+}
+
+/**
+ * Quiesce this tab's primary database connection during a cross-tab reset.
+ * Dexie 4 keeps an explicitly closed connection closed until `open()` is called,
+ * so app code cannot transparently auto-open it and enqueue stale writes.
+ */
+export function closeDbForStorageReset(): void {
+  storageResetQuiesced = true;
+  _db?.close();
+}
+
+/**
+ * Clear the shared primary database through a fresh connection while this tab's
+ * app-owned singleton remains closed. This lets a receiving tab perform a final
+ * cleanup after any transaction that was already queued before the reset signal.
+ */
+export async function resetDbIsolated(): Promise<void> {
+  const db = new AppDatabase();
+  try {
+    await clearDatabaseTables(db);
+  } finally {
+    db.close();
+  }
 }
 
 // ---------------------------------------------------------------------------

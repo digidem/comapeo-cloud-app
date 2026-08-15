@@ -263,6 +263,22 @@ describe('clearAll', () => {
     expect(state.baseUrl).toBeNull();
     expect(state.isAuthenticated).toBe(false);
   });
+
+  it('resets in-memory state even when active-server persistence is blocked', () => {
+    useAuthStore.setState({ tier: 'cloud', activeServerId: 'server-1' });
+
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new DOMException('Storage access denied', 'SecurityError');
+    });
+
+    expect(() => useAuthStore.getState().clearAll()).not.toThrow();
+
+    const state = useAuthStore.getState();
+    expect(state.tier).toBe('local');
+    expect(state.servers).toEqual([]);
+    expect(state.activeServerId).toBeNull();
+    expect(state.isAuthenticated).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

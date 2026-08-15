@@ -1808,6 +1808,9 @@
   "photoGallery.viewPhoto": {
     "defaultMessage": "View {photoName}"
   },
+  "settings.backup.compensationFailed": {
+    "defaultMessage": "Backup import could not restore your previous preferences. Reloading to reconcile browser state."
+  },
   "settings.backup.description": {
     "defaultMessage": "Export your local settings to a JSON file, or import a previously exported backup."
   },
@@ -1826,38 +1829,17 @@
   "settings.backup.importError": {
     "defaultMessage": "Failed to import backup: {error}"
   },
-  "settings.backup.importSuccess": {
-    "defaultMessage": "Backup imported. Reloading…"
+  "settings.backup.invalidFormat": {
+    "defaultMessage": "Invalid backup file format."
+  },
+  "settings.backup.readError": {
+    "defaultMessage": "The selected backup file could not be read."
+  },
+  "settings.backup.storageUnavailable": {
+    "defaultMessage": "Backup import failed because browser storage is unavailable. Existing preferences were restored."
   },
   "settings.backup.title": {
     "defaultMessage": "Backup & Restore"
-  },
-  "settings.clear.button": {
-    "defaultMessage": "Clear All Data"
-  },
-  "settings.clear.cancelButton": {
-    "defaultMessage": "Cancel"
-  },
-  "settings.clear.confirmButton": {
-    "defaultMessage": "Yes, Clear Everything"
-  },
-  "settings.clear.confirmDescription": {
-    "defaultMessage": "This will permanently remove all local settings, preferences, and cached data. This action cannot be undone."
-  },
-  "settings.clear.confirmTitle": {
-    "defaultMessage": "Clear All Data?"
-  },
-  "settings.clear.description": {
-    "defaultMessage": "Remove all local settings, preferences, and cached data. This cannot be undone."
-  },
-  "settings.clear.errorDescription": {
-    "defaultMessage": "Some data could not be cleared. The app will reload."
-  },
-  "settings.clear.errorTitle": {
-    "defaultMessage": "Failed to clear data"
-  },
-  "settings.clear.title": {
-    "defaultMessage": "Clear Local Data"
   },
   "settings.invites.generate.button": {
     "defaultMessage": "Generate Invite"
@@ -1911,13 +1893,25 @@
     "defaultMessage": "Yes, Clear Everything"
   },
   "settings.storage.clearConfirmDescription": {
-    "defaultMessage": "This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. This cannot be undone."
+    "defaultMessage": "This will remove all locally cached data including projects, observations, alerts, and attachments. Connected archive servers will also be removed and must be re-added. App preferences such as language, theme, and map/list views will be reset, and the app will reload. This cannot be undone."
   },
   "settings.storage.clearConfirmTitle": {
     "defaultMessage": "Clear All Cached Data?"
   },
+  "settings.storage.clearError": {
+    "defaultMessage": "Cached data could not be cleared. Your existing local data was left unchanged. You can try again."
+  },
+  "settings.storage.clearPartialError": {
+    "defaultMessage": "The reset could not finish safely. The app will reload and continue recovery."
+  },
+  "settings.storage.clearReloadError": {
+    "defaultMessage": "Cached data could not be cleared. Nothing was deleted. The app will reload so you can retry."
+  },
   "settings.storage.description": {
     "defaultMessage": "Manage cached data stored in your browser."
+  },
+  "settings.storage.loadingLabel": {
+    "defaultMessage": "Loading storage information"
   },
   "settings.storage.observations": {
     "defaultMessage": "Observations"
@@ -1945,6 +1939,12 @@
   },
   "settings.storage.totalUsage": {
     "defaultMessage": "Total Usage"
+  },
+  "settings.storage.usagePercent": {
+    "defaultMessage": "{percent}% used"
+  },
+  "settings.storage.usagePercentAria": {
+    "defaultMessage": "{percent}% of storage used"
   },
   "settings.title": {
     "defaultMessage": "Settings"

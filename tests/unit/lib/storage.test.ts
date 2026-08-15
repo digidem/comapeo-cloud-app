@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb, resetDb } from '@/lib/db';
 import type { Observation } from '@/lib/db';
 import {
-  clearAllData,
   clearProjectData,
   clearServerData,
   getStorageStats,
@@ -208,101 +207,6 @@ describe('getStorageStats', () => {
     const stats = await getStorageStats();
     expect(stats.quota).toBe(0);
     expect(stats.usage).toBe(0);
-  });
-});
-
-describe('clearAllData', () => {
-  beforeEach(async () => {
-    await resetDb();
-  });
-
-  it('clears all IndexedDB tables', async () => {
-    const db = getDb();
-
-    await db.projects.add({
-      localId: 'proj-1',
-      sourceType: 'local',
-      sourceId: 'local',
-      createdAt: '2026-01-01T00:00:00Z',
-      updatedAt: '2026-01-01T00:00:00Z',
-      dirtyLocal: false,
-      deleted: false,
-    });
-
-    await clearAllData();
-
-    const count = await db.projects.count();
-    expect(count).toBe(0);
-  });
-
-  it('clears all data including remote servers and icon cache', async () => {
-    const db = getDb();
-
-    await db.remoteServers.add({
-      id: 'server-1',
-      baseUrl: 'https://archive.example.com',
-      status: 'connected',
-      lastSyncedAt: '2026-01-01T00:00:00Z',
-    });
-    await db.projects.add({
-      localId: 'proj-1',
-      sourceType: 'local',
-      sourceId: 'local',
-      createdAt: '2026-01-01T00:00:00Z',
-      updatedAt: '2026-01-01T00:00:00Z',
-      dirtyLocal: false,
-      deleted: false,
-    });
-    await db.observations.add({
-      localId: 'obs-1',
-      projectLocalId: 'proj-1',
-      sourceType: 'local',
-      sourceId: 'local',
-      createdAt: '2026-01-01T00:00:00Z',
-      updatedAt: '2026-01-01T00:00:00Z',
-      dirtyLocal: false,
-      deleted: false,
-    });
-    await db.tracks.add({
-      localId: 'track-1',
-      projectLocalId: 'proj-1',
-      sourceType: 'local',
-      sourceId: 'local',
-      locations: [],
-      observationRefs: [],
-      createdAt: '2026-01-01T00:00:00Z',
-      updatedAt: '2026-01-01T00:00:00Z',
-      dirtyLocal: false,
-      deleted: false,
-    });
-    await db.fields.add({
-      localId: 'field-1',
-      projectLocalId: 'proj-1',
-      sourceType: 'local',
-      sourceId: 'local',
-      type: 'text',
-      key: 'notes',
-      label: 'Notes',
-      universal: false,
-      createdAt: '2026-01-01T00:00:00Z',
-      updatedAt: '2026-01-01T00:00:00Z',
-      dirtyLocal: false,
-      deleted: false,
-    });
-
-    await clearAllData();
-
-    expect(await db.projects.count()).toBe(0);
-    expect(await db.observations.count()).toBe(0);
-    expect(await db.alerts.count()).toBe(0);
-    expect(await db.attachments.count()).toBe(0);
-    expect(await db.presets.count()).toBe(0);
-    expect(await db.tracks.count()).toBe(0);
-    expect(await db.fields.count()).toBe(0);
-    // remoteServers and iconCache are now also cleared
-    expect(await db.remoteServers.count()).toBe(0);
-    expect(await db.iconCache.count()).toBe(0);
-    expect(await db.syncMetadata.count()).toBe(0);
   });
 });
 

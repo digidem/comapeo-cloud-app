@@ -1,11 +1,11 @@
 import type { UserEvent } from '@testing-library/user-event';
 import { server } from '@tests/mocks/node';
 import {
-  act,
   fireEvent,
   render,
   screen,
   userEvent,
+  waitFor,
   within,
 } from '@tests/mocks/test-utils';
 import { HttpResponse, http } from 'msw';
@@ -13,7 +13,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetDb } from '@/lib/db';
 import {
-  clearAllStorage,
   exportLocalStorageData,
   importLocalStorageData,
 } from '@/lib/local-storage-utils';
@@ -31,7 +30,6 @@ Object.defineProperty(navigator, 'clipboard', {
 vi.mock('@/lib/local-storage-utils', () => ({
   exportLocalStorageData: vi.fn(() => '"{\\"version\\":1,\\"data\\":{}}"'),
   importLocalStorageData: vi.fn(() => ({ success: true })),
-  clearAllStorage: vi.fn(() => Promise.resolve()),
 }));
 
 async function generateInvite(user: UserEvent) {
@@ -307,23 +305,68 @@ describe('SettingsScreen', () => {
       clearTimeoutSpy.mockRestore();
     });
 
-    it('shows error feedback when export fails', async () => {
+    it('shows error feedback and logs diagnostics when export fails', async () => {
+      const exportError = new Error('Storage unavailable');
       vi.mocked(exportLocalStorageData).mockImplementationOnce(() => {
-        throw new Error('Storage unavailable');
+        throw exportError;
+      });
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      try {
+        const user = userEvent.setup();
+        render(<SettingsScreen />);
+
+        await user.click(screen.getByRole('button', { name: 'Export Backup' }));
+
+        expect(
+          screen.getByText('Failed to export backup.'),
+        ).toBeInTheDocument();
+        expect(consoleError).toHaveBeenCalledWith(
+          'Failed to export local storage backup',
+          exportError,
+        );
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    it('reloads immediately after a successful import', () => {
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
       });
 
-      const user = userEvent.setup();
-      render(<SettingsScreen />);
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class MockFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          readAsText() {
+            this.result = '{}';
+            this.onload?.({} as Event);
+          }
+        } as unknown as typeof window.FileReader;
+        render(<SettingsScreen />);
 
-      await user.click(screen.getByRole('button', { name: 'Export Backup' }));
+        fireEvent.change(screen.getByTestId('backup-file-input'), {
+          target: { files: [new File(['{}'], 'backup.json')] },
+        });
 
-      expect(screen.getByText('Failed to export backup.')).toBeInTheDocument();
+        expect(importLocalStorageData).toHaveBeenCalledTimes(1);
+        expect(mockReload).toHaveBeenCalledTimes(1);
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
     });
 
     it('shows error feedback when import fails', async () => {
       vi.mocked(importLocalStorageData).mockReturnValueOnce({
         success: false,
-        error: 'Invalid backup file format',
+        error: 'invalid-format',
       });
 
       const OriginalFileReader = window.FileReader;
@@ -353,6 +396,130 @@ describe('SettingsScreen', () => {
         expect(
           screen.getByText(/Invalid backup file format/),
         ).toBeInTheDocument();
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
+    });
+
+    it('shows localized restored-state warning when browser storage blocks import', async () => {
+      vi.mocked(importLocalStorageData).mockReturnValueOnce({
+        success: false,
+        error: 'storage-unavailable',
+      });
+
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class MockFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          readAsText() {
+            this.result = '{}';
+            this.onload?.({} as Event);
+          }
+        } as unknown as typeof window.FileReader;
+
+        render(<SettingsScreen />);
+
+        fireEvent.change(screen.getByTestId('backup-file-input'), {
+          target: { files: [new File(['{}'], 'backup.json')] },
+        });
+
+        expect(
+          await screen.findByText(/Existing preferences were restored/),
+        ).toBeInTheDocument();
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
+    });
+
+    it('announces compensation failure, disables backup controls, then reloads', async () => {
+      vi.mocked(importLocalStorageData).mockReturnValueOnce({
+        success: false,
+        error: 'compensation-failed',
+      });
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
+      });
+
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class MockFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          readAsText() {
+            this.result = '{}';
+            this.onload?.({} as Event);
+          }
+        } as unknown as typeof window.FileReader;
+
+        render(<SettingsScreen />);
+        fireEvent.change(screen.getByTestId('backup-file-input'), {
+          target: { files: [new File(['{}'], 'backup.json')] },
+        });
+
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          /could not restore your previous preferences/,
+        );
+        expect(
+          screen.getByRole('button', { name: 'Export Backup' }),
+        ).toBeDisabled();
+        expect(
+          screen.getByRole('button', { name: 'Import Backup' }),
+        ).toBeDisabled();
+        await waitFor(
+          () => {
+            expect(mockReload).toHaveBeenCalledOnce();
+          },
+          { timeout: 2500 },
+        );
+      } finally {
+        window.FileReader = OriginalFileReader;
+      }
+    });
+
+    it('keeps compensation reconciliation reload scheduled after unmount', async () => {
+      vi.mocked(importLocalStorageData).mockReturnValueOnce({
+        success: false,
+        error: 'compensation-failed',
+      });
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
+      });
+
+      const OriginalFileReader = window.FileReader;
+      try {
+        window.FileReader = class MockFileReader {
+          onload: ((ev: Event) => void) | null = null;
+          onerror: ((ev: Event) => void) | null = null;
+          result: string | null = null;
+          readAsText() {
+            this.result = '{}';
+            this.onload?.({} as Event);
+          }
+        } as unknown as typeof window.FileReader;
+
+        const { unmount } = render(<SettingsScreen />);
+        fireEvent.change(screen.getByTestId('backup-file-input'), {
+          target: { files: [new File(['{}'], 'backup.json')] },
+        });
+
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          /could not restore your previous preferences/,
+        );
+        unmount();
+
+        await waitFor(
+          () => {
+            expect(mockReload).toHaveBeenCalledOnce();
+          },
+          { timeout: 2500 },
+        );
       } finally {
         window.FileReader = OriginalFileReader;
       }
@@ -413,118 +580,11 @@ describe('SettingsScreen', () => {
         });
 
         expect(screen.getByText(/Failed to import backup/)).toBeInTheDocument();
-        expect(screen.getByText(/Read error/)).toBeInTheDocument();
+        expect(
+          screen.getByText(/selected backup file could not be read/),
+        ).toBeInTheDocument();
       } finally {
         window.FileReader = OriginalFileReader;
-      }
-    });
-  });
-
-  describe('Clear Local Data', () => {
-    it('renders Clear Local Data section heading', () => {
-      render(<SettingsScreen />);
-      expect(screen.getByText('Clear Local Data')).toBeInTheDocument();
-    });
-
-    it('renders Clear All Data button', () => {
-      render(<SettingsScreen />);
-      expect(
-        screen.getByRole('button', { name: 'Clear All Data' }),
-      ).toBeInTheDocument();
-    });
-
-    it('clicking Clear All Data opens confirmation dialog', async () => {
-      const user = userEvent.setup();
-      render(<SettingsScreen />);
-
-      await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
-
-      expect(screen.getByText('Clear All Data?')).toBeInTheDocument();
-    });
-
-    it('confirmation dialog shows warning text', async () => {
-      const user = userEvent.setup();
-      render(<SettingsScreen />);
-
-      await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
-
-      expect(
-        screen.getByText(/permanently remove all local settings/),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText(/This action cannot be undone/),
-      ).toBeInTheDocument();
-    });
-
-    it('clicking cancel closes dialog without clearing data', async () => {
-      const user = userEvent.setup();
-      render(<SettingsScreen />);
-
-      await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
-      expect(screen.getByText('Clear All Data?')).toBeInTheDocument();
-
-      await user.click(screen.getByRole('button', { name: 'Cancel' }));
-
-      expect(screen.queryByText('Clear All Data?')).not.toBeInTheDocument();
-      expect(clearAllStorage).not.toHaveBeenCalled();
-    });
-
-    it('clicking confirm calls clearAllStorage', async () => {
-      const user = userEvent.setup();
-      render(<SettingsScreen />);
-
-      await user.click(screen.getByRole('button', { name: 'Clear All Data' }));
-      await user.click(
-        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
-      );
-
-      expect(clearAllStorage).toHaveBeenCalledTimes(1);
-    });
-
-    it('shows translated error toast and reloads after 1500ms when clearing fails', async () => {
-      vi.useFakeTimers();
-      try {
-        const mockReload = vi.fn();
-        Object.defineProperty(window, 'location', {
-          value: { reload: mockReload },
-          writable: true,
-        });
-        vi.mocked(clearAllStorage).mockRejectedValueOnce(
-          new Error('DB exploded'),
-        );
-
-        render(<SettingsScreen />);
-
-        fireEvent.click(screen.getByRole('button', { name: 'Clear All Data' }));
-        fireEvent.click(
-          screen.getByRole('button', { name: 'Yes, Clear Everything' }),
-        );
-
-        // Flush the rejection microtask so the catch block runs.
-        await act(async () => {
-          await vi.advanceTimersByTimeAsync(0);
-        });
-
-        // Translated description, never the raw error message.
-        expect(
-          screen.getByText(
-            'Some data could not be cleared. The app will reload.',
-          ),
-        ).toBeInTheDocument();
-        expect(screen.queryByText('DB exploded')).not.toBeInTheDocument();
-        // Reload is deferred so the toast stays visible.
-        expect(mockReload).not.toHaveBeenCalled();
-
-        await act(async () => {
-          await vi.advanceTimersByTimeAsync(1499);
-        });
-        expect(mockReload).not.toHaveBeenCalled();
-        await act(async () => {
-          await vi.advanceTimersByTimeAsync(1);
-        });
-        expect(mockReload).toHaveBeenCalledTimes(1);
-      } finally {
-        vi.useRealTimers();
       }
     });
   });

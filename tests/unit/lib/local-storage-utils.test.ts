@@ -20,6 +20,15 @@ vi.mock('@/stores/auth-store', () => ({
   },
 }));
 
+vi.mock('@/lib/storage-reset-coordinator', () => ({
+  beginStorageResetCoordination: vi.fn(() => 'generation-1'),
+  quiesceStorageResetConnections: vi.fn(),
+  runStorageResetOwnerOperation: vi.fn(async (_generation, operation) => ({
+    owned: true,
+    value: await operation({ publish: vi.fn() }),
+  })),
+}));
+
 describe('exportLocalStorageData', () => {
   afterEach(() => {
     localStorage.clear();
@@ -54,7 +63,19 @@ describe('exportLocalStorageData', () => {
     expect(parsed.data).not.toHaveProperty('unrelated');
   });
 
-  it('includes all known comapeo-* keys when present', () => {
+  it('keeps the v1 backup scope limited to comapeo-prefixed keys', () => {
+    localStorage.setItem('comapeo-locale', '"en"');
+    localStorage.setItem('comapeo:activeServerId', 'server-1');
+    localStorage.setItem('comapeo:downloadIncludeGlobalOverview', 'true');
+    localStorage.setItem('view-mode-preference', 'grid');
+
+    const result = exportLocalStorageData();
+    const parsed = JSON.parse(result);
+
+    expect(parsed.data).toEqual({ 'comapeo-locale': '"en"' });
+  });
+
+  it('includes all known app-owned storage keys when present', () => {
     localStorage.setItem('comapeo-locale', '"en"');
     localStorage.setItem('comapeo-project', '{"id":"abc"}');
     localStorage.setItem('comapeo-archive', '{"enabled":true}');
@@ -70,13 +91,41 @@ describe('exportLocalStorageData', () => {
     expect(parsed.data['comapeo-theme']).toBe('"dark"');
   });
 
-  it('returns empty data object when no comapeo-* keys exist', () => {
+  it('returns empty data object when no app-owned keys exist', () => {
     localStorage.setItem('other-key', 'value');
 
     const result = exportLocalStorageData();
     const parsed = JSON.parse(result);
 
     expect(parsed.data).toEqual({});
+  });
+
+  it('fails closed with a stable error and preserves the storage failure as cause', () => {
+    localStorage.setItem('comapeo-locale', '"en"');
+    const storageError = new DOMException(
+      'Storage access denied',
+      'SecurityError',
+    );
+    const keySpy = vi.spyOn(Storage.prototype, 'key').mockImplementation(() => {
+      throw storageError;
+    });
+
+    try {
+      let caught: unknown;
+      try {
+        exportLocalStorageData();
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toBe(
+        'Browser storage is unavailable; backup was not created.',
+      );
+      expect((caught as Error).cause).toBe(storageError);
+    } finally {
+      keySpy.mockRestore();
+    }
   });
 });
 
@@ -85,7 +134,7 @@ describe('importLocalStorageData', () => {
     localStorage.clear();
   });
 
-  it('successfully imports valid backup data and writes keys to localStorage', () => {
+  it('successfully imports valid v1 backup data', () => {
     const backup = JSON.stringify({
       version: 1,
       exportedAt: '2025-01-01T00:00:00.000Z',
@@ -102,12 +151,52 @@ describe('importLocalStorageData', () => {
     expect(localStorage.getItem('comapeo-theme')).toBe('"dark"');
   });
 
+  it('preserves reset-only keys when importing an older v1 backup', () => {
+    localStorage.setItem('comapeo:activeServerId', 'server-1');
+    localStorage.setItem('comapeo:downloadIncludeGlobalOverview', 'true');
+    localStorage.setItem('view-mode-preference', 'grid');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: { 'comapeo-locale': '"pt"' },
+    });
+
+    expect(importLocalStorageData(backup)).toEqual({ success: true });
+    expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+    expect(localStorage.getItem('comapeo:activeServerId')).toBe('server-1');
+    expect(localStorage.getItem('comapeo:downloadIncludeGlobalOverview')).toBe(
+      'true',
+    );
+    expect(localStorage.getItem('view-mode-preference')).toBe('grid');
+  });
+
+  it('ignores reset-only keys embedded in a v1 backup', () => {
+    localStorage.setItem('comapeo:activeServerId', 'current-server');
+    localStorage.setItem('view-mode-preference', 'grid');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: {
+        'comapeo-locale': '"en"',
+        'comapeo:activeServerId': 'backup-server',
+        'view-mode-preference': 'list',
+      },
+    });
+
+    expect(importLocalStorageData(backup)).toEqual({ success: true });
+    expect(localStorage.getItem('comapeo-locale')).toBe('"en"');
+    expect(localStorage.getItem('comapeo:activeServerId')).toBe(
+      'current-server',
+    );
+    expect(localStorage.getItem('view-mode-preference')).toBe('grid');
+  });
+
   it('rejects invalid JSON with error message', () => {
     const result = importLocalStorageData('not valid json{{{');
 
     expect(result).toEqual({
       success: false,
-      error: 'Invalid backup file format',
+      error: 'invalid-format',
     });
   });
 
@@ -121,7 +210,7 @@ describe('importLocalStorageData', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Invalid backup file format',
+      error: 'invalid-format',
     });
   });
 
@@ -136,7 +225,7 @@ describe('importLocalStorageData', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Invalid backup file format',
+      error: 'invalid-format',
     });
   });
 
@@ -150,7 +239,7 @@ describe('importLocalStorageData', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Invalid backup file format',
+      error: 'invalid-format',
     });
   });
 
@@ -168,11 +257,11 @@ describe('importLocalStorageData', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Invalid backup file format',
+      error: 'invalid-format',
     });
   });
 
-  it('only writes comapeo-prefixed keys from backup to localStorage', () => {
+  it('only restores app-owned keys from backup', () => {
     const backup = JSON.stringify({
       version: 1,
       exportedAt: '2025-01-01T00:00:00.000Z',
@@ -187,6 +276,135 @@ describe('importLocalStorageData', () => {
     expect(result).toEqual({ success: true });
     expect(localStorage.getItem('comapeo-locale')).toBe('"en"');
     expect(localStorage.getItem('malicious-key')).toBeNull();
+  });
+
+  it('returns a controlled error when browser storage is blocked', () => {
+    localStorage.setItem('comapeo-locale', '"pt"');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: { 'comapeo-locale': '"en"' },
+    });
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(() => {
+        throw new DOMException('Storage access denied', 'SecurityError');
+      });
+
+    try {
+      expect(importLocalStorageData(backup)).toEqual({
+        success: false,
+        error: 'storage-unavailable',
+      });
+    } finally {
+      removeItemSpy.mockRestore();
+    }
+  });
+
+  it('restores the original preferences when the first imported write fails', () => {
+    localStorage.setItem('comapeo-locale', '"pt"');
+    localStorage.setItem('comapeo-theme', '"dark"');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: {
+        'comapeo-locale': '"en"',
+        'comapeo-theme': '"light"',
+      },
+    });
+    const originalSetItem = Storage.prototype.setItem;
+    let failed = false;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        if (!failed && key === 'comapeo-locale' && value === '"en"') {
+          failed = true;
+          throw new DOMException('Quota exceeded', 'QuotaExceededError');
+        }
+        return originalSetItem.call(this, key, value);
+      });
+
+    try {
+      expect(importLocalStorageData(backup)).toEqual({
+        success: false,
+        error: 'storage-unavailable',
+      });
+      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+      expect(localStorage.getItem('comapeo-theme')).toBe('"dark"');
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
+
+  it('restores the original preferences when a later imported write fails', () => {
+    localStorage.setItem('comapeo-locale', '"pt"');
+    localStorage.setItem('comapeo-theme', '"dark"');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: {
+        'comapeo-locale': '"en"',
+        'comapeo-theme': '"light"',
+      },
+    });
+    const originalSetItem = Storage.prototype.setItem;
+    let failed = false;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        if (!failed && key === 'comapeo-theme' && value === '"light"') {
+          failed = true;
+          throw new DOMException('Quota exceeded', 'QuotaExceededError');
+        }
+        return originalSetItem.call(this, key, value);
+      });
+
+    try {
+      expect(importLocalStorageData(backup)).toEqual({
+        success: false,
+        error: 'storage-unavailable',
+      });
+      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+      expect(localStorage.getItem('comapeo-theme')).toBe('"dark"');
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
+
+  it('reports a distinct partial result when compensating rollback also fails', () => {
+    localStorage.setItem('comapeo-locale', '"pt"');
+    localStorage.setItem('comapeo-theme', '"dark"');
+    const backup = JSON.stringify({
+      version: 1,
+      exportedAt: '2025-01-01T00:00:00.000Z',
+      data: {
+        'comapeo-locale': '"en"',
+        'comapeo-theme': '"light"',
+      },
+    });
+    const originalSetItem = Storage.prototype.setItem;
+    let importFailed = false;
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        if (!importFailed && key === 'comapeo-theme' && value === '"light"') {
+          importFailed = true;
+          throw new DOMException('Quota exceeded', 'QuotaExceededError');
+        }
+        if (importFailed && key === 'comapeo-locale' && value === '"pt"') {
+          throw new DOMException('Storage access denied', 'SecurityError');
+        }
+        return originalSetItem.call(this, key, value);
+      });
+
+    try {
+      expect(importLocalStorageData(backup)).toEqual({
+        success: false,
+        error: 'compensation-failed',
+      });
+    } finally {
+      setItemSpy.mockRestore();
+    }
   });
 
   it('clears existing comapeo keys before restoring backup', () => {
@@ -212,12 +430,18 @@ describe('importLocalStorageData', () => {
 });
 
 describe('clearAllStorage', () => {
-  it('clears only comapeo-prefixed localStorage entries', async () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('clears CoMapeo-owned localStorage entries and preserves unrelated keys', async () => {
     localStorage.setItem('comapeo-locale', '"en"');
     localStorage.setItem(
       'comapeo-alert-view-mode-preference',
       JSON.stringify({ state: { viewMode: 'grid' }, version: 0 }),
     );
+    localStorage.setItem('comapeo:activeServerId', 'server-1');
+    localStorage.setItem('view-mode-preference', 'grid');
     localStorage.setItem('other-key', 'value');
 
     // Prevent actual reload
@@ -232,8 +456,207 @@ describe('clearAllStorage', () => {
     expect(
       localStorage.getItem('comapeo-alert-view-mode-preference'),
     ).toBeNull();
-    // Non-comapeo keys should be preserved
+    expect(localStorage.getItem('comapeo:activeServerId')).toBeNull();
+    expect(localStorage.getItem('view-mode-preference')).toBeNull();
     expect(localStorage.getItem('other-key')).toBe('value');
+  });
+
+  it('quiesces the initiating tab before either database reset starts', async () => {
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    const { quiesceStorageResetConnections } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(resetCategoriesDb).mockClear();
+    vi.mocked(quiesceStorageResetConnections).mockClear();
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+    });
+
+    await clearAllStorage();
+
+    expect(
+      vi.mocked(quiesceStorageResetConnections).mock.invocationCallOrder[0]!,
+    ).toBeLessThan(vi.mocked(resetCategoriesDb).mock.invocationCallOrder[0]!);
+  });
+
+  it('does not begin database resets until the owner activity barrier enters', async () => {
+    const { resetDb } = await import('@/lib/db');
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    const { runStorageResetOwnerOperation } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(resetDb).mockClear();
+    vi.mocked(resetCategoriesDb).mockClear();
+    let releaseBarrier!: () => void;
+    const barrierGate = new Promise<void>((resolve) => {
+      releaseBarrier = resolve;
+    });
+    vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+      async (_generation, operation) => {
+        await barrierGate;
+        return {
+          owned: true,
+          value: await operation({ publish: vi.fn() }),
+        };
+      },
+    );
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+    });
+
+    const resetPromise = clearAllStorage();
+    await vi.waitFor(() => {
+      expect(runStorageResetOwnerOperation).toHaveBeenCalledOnce();
+    });
+    expect(resetCategoriesDb).not.toHaveBeenCalled();
+    expect(resetDb).not.toHaveBeenCalled();
+
+    releaseBarrier();
+    await resetPromise;
+    expect(resetCategoriesDb).toHaveBeenCalledOnce();
+    expect(resetDb).toHaveBeenCalledOnce();
+  });
+
+  it('schedules recovery reload when the activity barrier acquisition fails', async () => {
+    vi.useFakeTimers();
+    const { resetDb } = await import('@/lib/db');
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    const { runStorageResetOwnerOperation } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(resetDb).mockClear();
+    vi.mocked(resetCategoriesDb).mockClear();
+    vi.mocked(runStorageResetOwnerOperation).mockRejectedValueOnce(
+      new Error('Transient activity barrier failure'),
+    );
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        failedStep: 'coordination',
+        partial: false,
+        reloadScheduled: true,
+      });
+      expect(resetCategoriesDb).not.toHaveBeenCalled();
+      expect(resetDb).not.toHaveBeenCalled();
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('removes browser preferences only after IndexedDB resets complete', async () => {
+    const { resetDb } = await import('@/lib/db');
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    vi.mocked(resetDb).mockClear();
+    vi.mocked(resetCategoriesDb).mockClear();
+    localStorage.setItem('comapeo-locale', '"en"');
+    const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem');
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+    });
+
+    try {
+      await clearAllStorage();
+
+      const resetDbOrder = vi.mocked(resetDb).mock.invocationCallOrder[0]!;
+      const resetCategoriesDbOrder =
+        vi.mocked(resetCategoriesDb).mock.invocationCallOrder[0]!;
+      const removeItemOrder = removeItemSpy.mock.invocationCallOrder[0]!;
+
+      expect(resetDbOrder).toBeLessThan(removeItemOrder);
+      expect(resetCategoriesDbOrder).toBeLessThan(removeItemOrder);
+    } finally {
+      removeItemSpy.mockRestore();
+    }
+  });
+
+  it('reports a partial reset when localStorage removal is blocked', async () => {
+    vi.useFakeTimers();
+    const { resetDb } = await import('@/lib/db');
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    const { useAuthStore } = await import('@/stores/auth-store');
+    const mockClearAll = vi.fn();
+    vi.mocked(useAuthStore.getState).mockReturnValue({
+      clearAll: mockClearAll,
+    } as unknown as ReturnType<typeof useAuthStore.getState>);
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+    localStorage.setItem('comapeo-locale', '"pt"');
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(() => {
+        throw new DOMException('Storage access denied', 'SecurityError');
+      });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        partial: true,
+        failedStep: 'browser-storage',
+        reloadScheduled: true,
+      });
+      expect(resetDb).toHaveBeenCalled();
+      expect(resetCategoriesDb).toHaveBeenCalled();
+      expect(mockClearAll).toHaveBeenCalled();
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      removeItemSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let a delayed partial reload perform a stale repeat key sweep', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem('comapeo-locale', '"pt"');
+    const originalRemoveItem = Storage.prototype.removeItem;
+    let failedOnce = false;
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(function (this: Storage, key: string) {
+        if (!failedOnce && key === 'comapeo-locale') {
+          failedOnce = true;
+          throw new DOMException('Storage access denied', 'SecurityError');
+        }
+        return originalRemoveItem.call(this, key);
+      });
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        partial: true,
+        failedStep: 'browser-storage',
+      });
+
+      // Simulate a live persisted Zustand store emitting during the warning.
+      localStorage.setItem('comapeo-theme-mode', 'dark');
+      expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      removeItemSpy.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it('calls resetDb() to clear IndexedDB', async () => {
@@ -263,8 +686,8 @@ describe('clearAllStorage', () => {
 
     await clearAllStorage();
 
-    expect(useAuthStore.getState).toHaveBeenCalledOnce();
-    expect(mockClearAll).toHaveBeenCalledOnce();
+    expect(useAuthStore.getState).toHaveBeenCalledTimes(2);
+    expect(mockClearAll).toHaveBeenCalledTimes(2);
   });
 
   it('calls resetCategoriesDb() to clear categories IndexedDB', async () => {
@@ -292,33 +715,300 @@ describe('clearAllStorage', () => {
     expect(mockReload).toHaveBeenCalledOnce();
   });
 
-  it('throws and does not reload if resetDb() throws', async () => {
-    const { resetDb } = await import('@/lib/db');
-    vi.mocked(resetDb).mockRejectedValueOnce(new Error('DB error'));
-
+  it('removes a late persisted-store write in the final sweep before completion', async () => {
+    const { useAuthStore } = await import('@/stores/auth-store');
+    const mockClearAll = vi
+      .fn()
+      .mockImplementationOnce(() => undefined)
+      .mockImplementationOnce(() => {
+        // Model a mounted persisted store writing after the first runtime cleanup
+        // but before the final synchronous pre-completion sweep.
+        localStorage.setItem('comapeo-theme-mode', 'dark');
+      });
+    vi.mocked(useAuthStore.getState).mockReturnValue({
+      clearAll: mockClearAll,
+    } as unknown as ReturnType<typeof useAuthStore.getState>);
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
       value: { reload: mockReload },
       writable: true,
     });
 
-    await expect(clearAllStorage()).rejects.toThrow('DB error');
-    expect(mockReload).not.toHaveBeenCalled();
+    await clearAllStorage();
+
+    expect(mockClearAll).toHaveBeenCalledTimes(2);
+    expect(localStorage.getItem('comapeo-theme-mode')).toBeNull();
+    expect(mockReload).toHaveBeenCalledOnce();
   });
 
-  it('throws and does not reload if resetCategoriesDb() throws', async () => {
+  it('keeps the reset recoverable when the final pre-completion sweep fails', async () => {
+    vi.useFakeTimers();
+    const { useAuthStore } = await import('@/stores/auth-store');
+    const { runStorageResetOwnerOperation } =
+      await import('@/lib/storage-reset-coordinator');
+    const publishedPhases: string[] = [];
+    vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+      async (_generation, operation) => ({
+        owned: true,
+        value: await operation({
+          publish: vi.fn((phase) => publishedPhases.push(phase)),
+        }),
+      }),
+    );
+    const mockClearAll = vi
+      .fn()
+      .mockImplementationOnce(() => undefined)
+      .mockImplementationOnce(() => {
+        localStorage.setItem('comapeo-theme-mode', 'dark');
+      });
+    vi.mocked(useAuthStore.getState).mockReturnValue({
+      clearAll: mockClearAll,
+    } as unknown as ReturnType<typeof useAuthStore.getState>);
+    const originalRemoveItem = Storage.prototype.removeItem;
+    let failFinalSweep = true;
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, 'removeItem')
+      .mockImplementation(function (this: Storage, key: string) {
+        if (failFinalSweep && key === 'comapeo-theme-mode') {
+          failFinalSweep = false;
+          throw new DOMException('Storage access denied', 'SecurityError');
+        }
+        return originalRemoveItem.call(this, key);
+      });
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        failedStep: 'browser-storage',
+        partial: true,
+        reloadScheduled: true,
+      });
+      expect(publishedPhases).toEqual(['start']);
+      expect(publishedPhases).not.toContain('complete');
+      expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      removeItemSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('treats failed complete publication as a partial coordination failure', async () => {
+    vi.useFakeTimers();
+    const { runStorageResetOwnerOperation } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+      async (_generation, operation) => ({
+        owned: true,
+        value: await operation({
+          publish: vi.fn((phase) => {
+            if (phase === 'complete')
+              throw new Error('Completion write failed');
+          }),
+        }),
+      }),
+    );
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        partial: true,
+        failedStep: 'coordination',
+        reloadScheduled: true,
+      });
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let a stale owner delete preferences after losing coordination', async () => {
+    vi.useFakeTimers();
+    const { runStorageResetOwnerOperation } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(runStorageResetOwnerOperation).mockResolvedValueOnce({
+      owned: false,
+    });
+    const { resetDb } = await import('@/lib/db');
     const { resetCategoriesDb } = await import('@/lib/categories-db');
+    vi.mocked(resetDb).mockClear();
+    vi.mocked(resetCategoriesDb).mockClear();
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        failedStep: 'coordination',
+        partial: false,
+        reloadScheduled: true,
+      });
+      expect(resetDb).not.toHaveBeenCalled();
+      expect(resetCategoriesDb).not.toHaveBeenCalled();
+
+      // A newer owner/tab may write preferences after this tab loses the reset
+      // generation. The stale tab must not perform another owned-key sweep.
+      localStorage.setItem('comapeo-theme-mode', 'dark');
+      await vi.advanceTimersByTimeAsync(1500);
+
+      expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports coordination failure when recoverable start publication fails after categories reset error', async () => {
+    vi.useFakeTimers();
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    const { runStorageResetOwnerOperation } =
+      await import('@/lib/storage-reset-coordinator');
     vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
       new Error('Categories error'),
     );
-
+    vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+      async (_generation, operation) => ({
+        owned: true,
+        value: await operation({
+          publish: vi.fn((phase) => {
+            if (phase === 'start') throw new Error('Start renewal failed');
+          }),
+        }),
+      }),
+    );
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
       value: { reload: mockReload },
       writable: true,
     });
 
-    await expect(clearAllStorage()).rejects.toThrow('Categories error');
-    expect(mockReload).not.toHaveBeenCalled();
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        partial: true,
+        failedStep: 'coordination',
+        reloadScheduled: true,
+      });
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a partial app-db failure on a recoverable start generation', async () => {
+    vi.useFakeTimers();
+    try {
+      const { resetDb } = await import('@/lib/db');
+      const { resetCategoriesDb } = await import('@/lib/categories-db');
+      const { useAuthStore } = await import('@/stores/auth-store');
+      const { runStorageResetOwnerOperation } =
+        await import('@/lib/storage-reset-coordinator');
+      const publishedPhases: string[] = [];
+      vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+        async (_generation, operation) => ({
+          owned: true,
+          value: await operation({
+            publish: vi.fn((phase) => publishedPhases.push(phase)),
+          }),
+        }),
+      );
+      const mockClearAll = vi.fn();
+      vi.mocked(useAuthStore.getState).mockReturnValue({
+        clearAll: mockClearAll,
+      } as unknown as ReturnType<typeof useAuthStore.getState>);
+      vi.mocked(resetDb).mockRejectedValueOnce(new Error('DB error'));
+      localStorage.setItem('comapeo-locale', '"pt"');
+      localStorage.setItem('comapeo:activeServerId', 'server-1');
+
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
+      });
+
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        partial: true,
+        failedStep: 'app-db',
+        reloadScheduled: true,
+      });
+      expect(resetCategoriesDb).toHaveBeenCalledOnce();
+      expect(publishedPhases).toEqual(['start']);
+      expect(publishedPhases).not.toContain('abort');
+      expect(mockClearAll).not.toHaveBeenCalled();
+      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+      expect(localStorage.getItem('comapeo:activeServerId')).toBe('server-1');
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a categories reset failure recoverable without clearing primary data in the failed attempt', async () => {
+    vi.useFakeTimers();
+    try {
+      const { resetDb } = await import('@/lib/db');
+      const { resetCategoriesDb } = await import('@/lib/categories-db');
+      const { runStorageResetOwnerOperation } =
+        await import('@/lib/storage-reset-coordinator');
+      const publishedPhases: string[] = [];
+      vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+        async (_generation, operation) => ({
+          owned: true,
+          value: await operation({
+            publish: vi.fn((phase) => publishedPhases.push(phase)),
+          }),
+        }),
+      );
+      vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
+        new Error('Categories error'),
+      );
+      localStorage.setItem('comapeo-locale', '"pt"');
+
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
+      });
+
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        partial: false,
+        failedStep: 'categories-db',
+        reloadScheduled: true,
+      });
+      expect(resetDb).not.toHaveBeenCalled();
+      expect(publishedPhases).toEqual(['start']);
+      expect(publishedPhases).not.toContain('abort');
+      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

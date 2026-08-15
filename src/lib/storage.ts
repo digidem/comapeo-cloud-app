@@ -97,32 +97,6 @@ export async function getStorageStats(): Promise<StorageStats> {
 }
 
 // ---------------------------------------------------------------------------
-// clearAllData
-// ---------------------------------------------------------------------------
-
-/**
- * Clears ALL data from IndexedDB tables, including remote server records.
- * Does not reload the page.
- * Useful for resetting the app to a clean state (e.g. before re-adding a server).
- */
-export async function clearAllData(): Promise<void> {
-  const db = getDb();
-
-  await db.transaction('rw', db.tables, async () => {
-    await db.projects.clear();
-    await db.observations.clear();
-    await db.alerts.clear();
-    await db.presets.clear();
-    await db.attachments.clear();
-    await db.tracks.clear();
-    await db.fields.clear();
-    await db.syncMetadata.clear();
-    await db.remoteServers.clear();
-    await db.iconCache.clear();
-  });
-}
-
-// ---------------------------------------------------------------------------
 // clearServerData
 // ---------------------------------------------------------------------------
 
