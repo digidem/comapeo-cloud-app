@@ -93,11 +93,13 @@ src/
 tests/
   unit/         # Unit tests (mirrors src/ structure)
   e2e/          # Playwright E2E tests
-    screenshots/  # Generated PNG artifacts (gitignored)
+    screenshots/  # Generated review PNG artifacts (gitignored)
     screenshot-utils.ts  # Viewport constants and takeScreenshot helper
     mock-server.ts       # Playwright route intercepts using test fixtures
   fixtures/     # Test data matching real API shapes
   mocks/        # MSW handlers and test utilities
+screenshots/
+  screenshot/   # Tracked Argos visual artifacts (*.png, *.argos.json)
 ```
 
 ## Code Conventions

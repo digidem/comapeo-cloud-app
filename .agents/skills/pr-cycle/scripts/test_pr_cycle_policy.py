@@ -5,6 +5,7 @@ import unittest
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SKILL = SKILL_DIR / "SKILL.md"
+RUNBOOK = SKILL_DIR / "references" / "github-runbook.md"
 AGENTS = SKILL_DIR.parents[2] / "AGENTS.md"
 CI = SKILL_DIR.parents[2] / ".github" / "workflows" / "ci.yml"
 
@@ -67,6 +68,16 @@ class PrCyclePolicyTests(unittest.TestCase):
             skill_text=SKILL.read_text(),
             agents_text=AGENTS.read_text(),
             ci_text=CI.read_text(),
+        )
+
+    def test_runbook_soft_fail_and_cleanup_guidance_is_pinned(self) -> None:
+        runbook_text = RUNBOOK.read_text()
+        self.assertIn(
+            "GitHub distinguishes the pre-mask step `outcome` from the post-mask `conclusion`",
+            runbook_text,
+        )
+        self.assertIn(
+            "git push --no-verify origin --delete <head-branch>", runbook_text
         )
 
     def test_nit_improvement_policy_is_required(self) -> None:
