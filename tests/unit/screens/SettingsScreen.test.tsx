@@ -434,7 +434,7 @@ describe('SettingsScreen', () => {
       }
     });
 
-    it('warns and reloads immediately when import compensation also fails', async () => {
+    it('announces compensation failure, disables backup controls, then reloads', async () => {
       vi.mocked(importLocalStorageData).mockReturnValueOnce({
         success: false,
         error: 'compensation-failed',
@@ -462,12 +462,21 @@ describe('SettingsScreen', () => {
           target: { files: [new File(['{}'], 'backup.json')] },
         });
 
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          /could not restore your previous preferences/,
+        );
         expect(
-          screen.getByText(/could not restore your previous preferences/),
-        ).toBeInTheDocument();
-        await waitFor(() => {
-          expect(mockReload).toHaveBeenCalledOnce();
-        });
+          screen.getByRole('button', { name: 'Export Backup' }),
+        ).toBeDisabled();
+        expect(
+          screen.getByRole('button', { name: 'Import Backup' }),
+        ).toBeDisabled();
+        await waitFor(
+          () => {
+            expect(mockReload).toHaveBeenCalledOnce();
+          },
+          { timeout: 2500 },
+        );
       } finally {
         window.FileReader = OriginalFileReader;
       }

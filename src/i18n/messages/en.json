@@ -1836,7 +1836,10 @@
     "defaultMessage": "Cached data could not be cleared. Your existing local data was left unchanged. You can try again."
   },
   "settings.storage.clearPartialError": {
-    "defaultMessage": "Some local data was cleared, but the reset could not finish. The app will reload."
+    "defaultMessage": "The reset could not finish safely. The app will reload and continue recovery."
+  },
+  "settings.storage.clearReloadError": {
+    "defaultMessage": "Cached data could not be cleared. Nothing was deleted. The app will reload so you can retry."
   },
   "settings.storage.description": {
     "defaultMessage": "Manage cached data stored in your browser."

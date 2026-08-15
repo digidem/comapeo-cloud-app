@@ -26,6 +26,8 @@ beforeEach(async () => {
     value: { reload: mockReload },
     writable: true,
   });
+  const db = getDb();
+  if (!db.isOpen()) await db.open();
   await resetDb();
 });
 
@@ -167,10 +169,13 @@ describe('StorageSettings', () => {
       screen.getByRole('button', { name: 'Yes, Clear Everything' }),
     );
 
-    await waitFor(async () => {
-      const count = await db.projects.count();
-      expect(count).toBe(0);
+    await waitFor(() => {
+      expect(mockReload).toHaveBeenCalledOnce();
     });
+    // Real navigation would recreate the app and open a fresh connection. The
+    // jsdom reload mock does not, so reopen explicitly before inspecting the DB.
+    await db.open();
+    expect(await db.projects.count()).toBe(0);
   });
 
   it('reloads after cached data is cleared to reset persisted in-memory state', async () => {
@@ -234,6 +239,7 @@ describe('StorageSettings', () => {
           failedStep: 'app-db',
           partial: true,
           cause: new Error('DB exploded'),
+          reloadScheduled: true,
         }),
       );
     const user = userEvent.setup();
@@ -253,12 +259,47 @@ describe('StorageSettings', () => {
       );
 
       expect(await screen.findByRole('alert')).toHaveTextContent(
-        'Some local data was cleared, but the reset could not finish. The app will reload.',
+        'The reset could not finish safely. The app will reload and continue recovery.',
       );
       expect(
         screen.queryByText('Clear All Cached Data?'),
       ).not.toBeInTheDocument();
       expect(screen.queryByText('DB exploded')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /Clear All Cached Data/ }),
+      ).toBeDisabled();
+    } finally {
+      clearSpy.mockRestore();
+    }
+  });
+
+  it('keeps clearing disabled when a non-destructive failure schedules a reload', async () => {
+    const clearSpy = vi
+      .spyOn(localStorageUtils, 'clearAllStorage')
+      .mockRejectedValueOnce(
+        new localStorageUtils.ClearAllStorageError({
+          failedStep: 'categories-db',
+          partial: false,
+          reloadScheduled: true,
+          cause: new Error('Categories unavailable'),
+        }),
+      );
+    const user = userEvent.setup();
+
+    try {
+      render(<StorageSettings />);
+      await screen.findByText('Total Usage');
+
+      await user.click(
+        screen.getByRole('button', { name: 'Clear All Cached Data' }),
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'Yes, Clear Everything' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Cached data could not be cleared. Nothing was deleted. The app will reload so you can retry.',
+      );
       expect(
         screen.getByRole('button', { name: /Clear All Cached Data/ }),
       ).toBeDisabled();

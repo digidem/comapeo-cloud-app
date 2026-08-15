@@ -7,6 +7,8 @@ import { backupSchema } from '@/lib/schemas/backup-schema';
 import {
   beginStorageResetCoordination,
   finishStorageResetCoordination,
+  quiesceStorageResetConnections,
+  startStorageResetLeaseHeartbeat,
   waitForStorageResetQuiescence,
 } from '@/lib/storage-reset-coordinator';
 import { useAuthStore } from '@/stores/auth-store';
@@ -140,11 +142,13 @@ export type ClearAllStorageFailureStep =
 export class ClearAllStorageError extends Error {
   readonly partial: boolean;
   readonly failedStep: ClearAllStorageFailureStep;
+  readonly reloadScheduled: boolean;
 
   constructor(options: {
     failedStep: ClearAllStorageFailureStep;
     partial: boolean;
     cause: unknown;
+    reloadScheduled?: boolean;
   }) {
     super(
       options.partial
@@ -155,6 +159,7 @@ export class ClearAllStorageError extends Error {
     this.name = 'ClearAllStorageError';
     this.partial = options.partial;
     this.failedStep = options.failedStep;
+    this.reloadScheduled = options.reloadScheduled ?? false;
   }
 }
 
@@ -193,20 +198,11 @@ function clearRuntimeStateAfterDatabaseReset(): {
   };
 }
 
-export async function clearAllStorage(): Promise<void> {
-  let generation: string;
-  try {
-    generation = beginStorageResetCoordination();
-  } catch (cause) {
-    // Coordination uses localStorage as a durable reset-start marker. If it is
-    // unavailable, fail before deleting either IndexedDB database.
-    throw new ClearAllStorageError({
-      failedStep: 'coordination',
-      partial: false,
-      cause,
-    });
-  }
-
+async function runCoordinatedStorageReset(generation: string): Promise<void> {
+  // Quiesce this initiating tab too. resetDb()/resetCategoriesDb() detect the
+  // closed singleton connections and perform their destructive work through
+  // isolated connections, so app callbacks cannot queue writes behind the clear.
+  quiesceStorageResetConnections();
   await waitForStorageResetQuiescence();
 
   // Clear the lower-value categories cache first. Its transaction is atomic; if
@@ -214,11 +210,18 @@ export async function clearAllStorage(): Promise<void> {
   try {
     await resetCategoriesDb();
   } catch (cause) {
-    finishStorageResetCoordination(generation, 'abort');
+    const abortPublished = finishStorageResetCoordination(generation, 'abort');
+    // This tab's app connections are already closed. Reload whether abort was
+    // published or the lease must recover, so the current tab never continues
+    // with unusable singleton connections.
+    scheduleResetReload();
     throw new ClearAllStorageError({
-      failedStep: 'categories-db',
-      partial: false,
+      failedStep: abortPublished ? 'categories-db' : 'coordination',
+      // If abort could not be persisted, the durable start lease remains and a
+      // recovery tab may complete the requested reset after this error is shown.
+      partial: !abortPublished,
       cause,
+      reloadScheduled: true,
     });
   }
 
@@ -228,12 +231,13 @@ export async function clearAllStorage(): Promise<void> {
     // The primary transaction is atomic, so preserve auth and preferences when
     // it fails. Only the already-cleared categories cache is partial. Releasing
     // quiesced tabs and reloading is enough to restore a coherent app state.
-    finishStorageResetCoordination(generation, 'abort');
+    const abortPublished = finishStorageResetCoordination(generation, 'abort');
     scheduleResetReload();
     throw new ClearAllStorageError({
-      failedStep: 'app-db',
+      failedStep: abortPublished ? 'app-db' : 'coordination',
       partial: true,
       cause,
+      reloadScheduled: true,
     });
   }
 
@@ -248,6 +252,7 @@ export async function clearAllStorage(): Promise<void> {
     throw new ClearAllStorageError({
       failedStep: storageCleanupFailed ? 'browser-storage' : 'coordination',
       partial: true,
+      reloadScheduled: true,
       cause: new Error(
         storageCleanupFailed
           ? 'One or more owned browser-storage keys could not be removed.'
@@ -257,4 +262,27 @@ export async function clearAllStorage(): Promise<void> {
   }
 
   window.location.reload();
+}
+
+export async function clearAllStorage(): Promise<void> {
+  let generation: string;
+  try {
+    generation = beginStorageResetCoordination();
+  } catch (cause) {
+    // Coordination uses localStorage as a durable reset-start marker. If it is
+    // unavailable, fail before deleting either IndexedDB database.
+    throw new ClearAllStorageError({
+      failedStep: 'coordination',
+      partial: false,
+      cause,
+    });
+  }
+
+  const stopStorageResetLeaseHeartbeat =
+    startStorageResetLeaseHeartbeat(generation);
+  try {
+    await runCoordinatedStorageReset(generation);
+  } finally {
+    stopStorageResetLeaseHeartbeat();
+  }
 }

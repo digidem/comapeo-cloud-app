@@ -541,7 +541,12 @@ async function clearDatabaseTables(db: AppDatabase): Promise<void> {
 }
 
 export async function resetDb(): Promise<void> {
-  await clearDatabaseTables(getDb());
+  const db = getDb();
+  if (!db.isOpen()) {
+    await resetDbIsolated();
+    return;
+  }
+  await clearDatabaseTables(db);
 }
 
 /**

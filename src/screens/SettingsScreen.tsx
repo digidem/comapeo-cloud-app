@@ -151,6 +151,8 @@ export function SettingsScreen() {
     'idle' | 'loading' | 'error'
   >('idle');
   const [importError, setImportError] = useState<string | null>(null);
+  const [importReconciliationPending, setImportReconciliationPending] =
+    useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timeoutIdsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -253,6 +255,8 @@ export function SettingsScreen() {
       event.target.value = '';
 
       setImportStatus('loading');
+      setImportError(null);
+      setImportReconciliationPending(false);
       const reader = new FileReader();
 
       reader.onload = () => {
@@ -267,10 +271,10 @@ export function SettingsScreen() {
             setImportError(
               intl.formatMessage(_messages.backupCompensationFailed),
             );
-            // Reconcile live persisted stores with the browser state immediately;
-            // a zero-delay task gives React one paint opportunity for the warning
-            // without leaving an interaction window for more preference writes.
-            scheduleTimeout(() => window.location.reload(), 0);
+            setImportReconciliationPending(true);
+            // Keep backup controls disabled while an assertive warning is available
+            // to assistive technology, then reconcile live stores by reloading.
+            scheduleTimeout(() => window.location.reload(), 1500);
           } else {
             setImportError(
               intl.formatMessage(
@@ -410,14 +414,19 @@ export function SettingsScreen() {
           className="hidden"
           data-testid="backup-file-input"
         />
-        <Button variant="secondary" onClick={handleExport} className="min-w-0">
+        <Button
+          variant="secondary"
+          onClick={handleExport}
+          disabled={importReconciliationPending}
+          className="min-w-0"
+        >
           {intl.formatMessage(_messages.backupExportButton)}
         </Button>
         <Button
           variant="secondary"
           onClick={() => fileInputRef.current?.click()}
           loading={importStatus === 'loading'}
-          disabled={importStatus === 'loading'}
+          disabled={importStatus === 'loading' || importReconciliationPending}
           className="min-w-0"
         >
           {intl.formatMessage(_messages.backupImportButton)}
@@ -434,7 +443,11 @@ export function SettingsScreen() {
         </p>
       )}
       {importStatus === 'error' && importError && (
-        <p className="text-sm text-error mt-2">
+        <p
+          role="alert"
+          aria-live="assertive"
+          className="text-sm text-error mt-2"
+        >
           {intl.formatMessage(_messages.backupImportError, {
             error: importError,
           })}

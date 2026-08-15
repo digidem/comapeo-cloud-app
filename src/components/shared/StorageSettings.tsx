@@ -98,10 +98,15 @@ const messages = defineMessages({
     defaultMessage:
       'Cached data could not be cleared. Your existing local data was left unchanged. You can try again.',
   },
+  clearReloadError: {
+    id: 'settings.storage.clearReloadError',
+    defaultMessage:
+      'Cached data could not be cleared. Nothing was deleted. The app will reload so you can retry.',
+  },
   clearPartialError: {
     id: 'settings.storage.clearPartialError',
     defaultMessage:
-      'Some local data was cleared, but the reset could not finish. The app will reload.',
+      'The reset could not finish safely. The app will reload and continue recovery.',
   },
 });
 
@@ -204,16 +209,19 @@ export function StorageSettings() {
       // persisted preferences, in-memory auth state, and reload semantics stay aligned.
       await clearAllStorage();
     } catch (error) {
-      const partial = error instanceof ClearAllStorageError && error.partial;
-      setClearError(
-        intl.formatMessage(
-          partial ? messages.clearPartialError : messages.clearError,
-        ),
-      );
-      // A partial reset schedules a reload after the error is shown; keep the
-      // action disabled during that window. If nothing destructive happened,
-      // re-enable the button so the user can retry safely.
-      if (!partial) setClearing(false);
+      const resetError =
+        error instanceof ClearAllStorageError ? error : undefined;
+      let message = messages.clearError;
+      if (resetError?.partial) {
+        message = messages.clearPartialError;
+      } else if (resetError?.reloadScheduled) {
+        message = messages.clearReloadError;
+      }
+      setClearError(intl.formatMessage(message));
+      // Once this tab's DB connections have been quiesced, the reset helper
+      // schedules a reload/recovery and the destructive action must stay disabled.
+      // A coordination failure before quiescing is safe to retry immediately.
+      if (!resetError?.reloadScheduled) setClearing(false);
     }
   }, [clearing, intl]);
 

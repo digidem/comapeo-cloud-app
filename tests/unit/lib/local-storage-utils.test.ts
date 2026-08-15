@@ -23,6 +23,8 @@ vi.mock('@/stores/auth-store', () => ({
 vi.mock('@/lib/storage-reset-coordinator', () => ({
   beginStorageResetCoordination: vi.fn(() => 'generation-1'),
   finishStorageResetCoordination: vi.fn(() => true),
+  quiesceStorageResetConnections: vi.fn(),
+  startStorageResetLeaseHeartbeat: vi.fn(() => vi.fn()),
   waitForStorageResetQuiescence: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -458,6 +460,24 @@ describe('clearAllStorage', () => {
     expect(localStorage.getItem('other-key')).toBe('value');
   });
 
+  it('quiesces the initiating tab before either database reset starts', async () => {
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    const { quiesceStorageResetConnections } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(resetCategoriesDb).mockClear();
+    vi.mocked(quiesceStorageResetConnections).mockClear();
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+    });
+
+    await clearAllStorage();
+
+    expect(
+      vi.mocked(quiesceStorageResetConnections).mock.invocationCallOrder[0]!,
+    ).toBeLessThan(vi.mocked(resetCategoriesDb).mock.invocationCallOrder[0]!);
+  });
+
   it('removes browser preferences only after IndexedDB resets complete', async () => {
     const { resetDb } = await import('@/lib/db');
     const { resetCategoriesDb } = await import('@/lib/categories-db');
@@ -511,6 +531,7 @@ describe('clearAllStorage', () => {
         name: 'ClearAllStorageError',
         partial: true,
         failedStep: 'browser-storage',
+        reloadScheduled: true,
       });
       expect(resetDb).toHaveBeenCalled();
       expect(resetCategoriesDb).toHaveBeenCalled();
@@ -620,6 +641,64 @@ describe('clearAllStorage', () => {
     expect(mockReload).toHaveBeenCalledOnce();
   });
 
+  it('treats failed complete publication as a partial coordination failure', async () => {
+    vi.useFakeTimers();
+    const { finishStorageResetCoordination } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(finishStorageResetCoordination).mockReturnValueOnce(false);
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        partial: true,
+        failedStep: 'coordination',
+        reloadScheduled: true,
+      });
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports coordination failure when abort publication fails after categories reset error', async () => {
+    vi.useFakeTimers();
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    const { finishStorageResetCoordination } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
+      new Error('Categories error'),
+    );
+    vi.mocked(finishStorageResetCoordination).mockReturnValueOnce(false);
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    try {
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        partial: true,
+        failedStep: 'coordination',
+        reloadScheduled: true,
+      });
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('preserves auth and preferences if resetDb() fails after categories clear', async () => {
     vi.useFakeTimers();
     try {
@@ -644,6 +723,7 @@ describe('clearAllStorage', () => {
         name: 'ClearAllStorageError',
         partial: true,
         failedStep: 'app-db',
+        reloadScheduled: true,
       });
       expect(resetCategoriesDb).toHaveBeenCalledOnce();
       expect(mockClearAll).not.toHaveBeenCalled();
@@ -658,27 +738,36 @@ describe('clearAllStorage', () => {
     }
   });
 
-  it('stops before clearing primary data when resetCategoriesDb() fails', async () => {
-    const { resetDb } = await import('@/lib/db');
-    const { resetCategoriesDb } = await import('@/lib/categories-db');
-    vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
-      new Error('Categories error'),
-    );
-    localStorage.setItem('comapeo-locale', '"pt"');
+  it('stops before clearing primary data and reloads closed connections when categories reset fails', async () => {
+    vi.useFakeTimers();
+    try {
+      const { resetDb } = await import('@/lib/db');
+      const { resetCategoriesDb } = await import('@/lib/categories-db');
+      vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
+        new Error('Categories error'),
+      );
+      localStorage.setItem('comapeo-locale', '"pt"');
 
-    const mockReload = vi.fn();
-    Object.defineProperty(window, 'location', {
-      value: { reload: mockReload },
-      writable: true,
-    });
+      const mockReload = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: mockReload },
+        writable: true,
+      });
 
-    await expect(clearAllStorage()).rejects.toMatchObject({
-      name: 'ClearAllStorageError',
-      partial: false,
-      failedStep: 'categories-db',
-    });
-    expect(resetDb).not.toHaveBeenCalled();
-    expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
-    expect(mockReload).not.toHaveBeenCalled();
+      await expect(clearAllStorage()).rejects.toMatchObject({
+        name: 'ClearAllStorageError',
+        partial: false,
+        failedStep: 'categories-db',
+        reloadScheduled: true,
+      });
+      expect(resetDb).not.toHaveBeenCalled();
+      expect(localStorage.getItem('comapeo-locale')).toBe('"pt"');
+      expect(mockReload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(mockReload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

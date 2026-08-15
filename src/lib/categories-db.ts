@@ -91,6 +91,10 @@ async function clearCategoriesDatabase(db: CategoriesDB): Promise<void> {
 }
 
 export async function resetCategoriesDb(): Promise<void> {
+  if (!categoriesDb.isOpen()) {
+    await resetCategoriesDbIsolated();
+    return;
+  }
   await clearCategoriesDatabase(categoriesDb);
 }
 
