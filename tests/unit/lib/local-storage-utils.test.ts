@@ -22,9 +22,11 @@ vi.mock('@/stores/auth-store', () => ({
 
 vi.mock('@/lib/storage-reset-coordinator', () => ({
   beginStorageResetCoordination: vi.fn(() => 'generation-1'),
-  finishStorageResetCoordination: vi.fn(() => true),
   quiesceStorageResetConnections: vi.fn(),
-  startStorageResetLeaseHeartbeat: vi.fn(() => vi.fn()),
+  runStorageResetOwnerOperation: vi.fn(async (_generation, operation) => ({
+    owned: true,
+    value: await operation({ publish: vi.fn() }),
+  })),
   waitForStorageResetQuiescence: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -546,7 +548,7 @@ describe('clearAllStorage', () => {
     }
   });
 
-  it('removes stale persisted-store writes again immediately before a partial reload', async () => {
+  it('does not let a delayed partial reload perform a stale repeat key sweep', async () => {
     vi.useFakeTimers();
     localStorage.setItem('comapeo-locale', '"pt"');
     const originalRemoveItem = Storage.prototype.removeItem;
@@ -577,7 +579,7 @@ describe('clearAllStorage', () => {
       expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
 
       await vi.advanceTimersByTimeAsync(1500);
-      expect(localStorage.getItem('comapeo-theme-mode')).toBeNull();
+      expect(localStorage.getItem('comapeo-theme-mode')).toBe('dark');
       expect(mockReload).toHaveBeenCalledOnce();
     } finally {
       removeItemSpy.mockRestore();
@@ -641,11 +643,50 @@ describe('clearAllStorage', () => {
     expect(mockReload).toHaveBeenCalledOnce();
   });
 
+  it('removes a late persisted-store write immediately before successful reload', async () => {
+    const { runStorageResetOwnerOperation } =
+      await import('@/lib/storage-reset-coordinator');
+    vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+      async (_generation, operation) => ({
+        owned: true,
+        value: await operation({
+          publish: vi.fn((phase) => {
+            if (phase === 'complete') {
+              // Model a mounted persisted store writing at the last possible
+              // point before navigation, after the first runtime cleanup.
+              localStorage.setItem('comapeo-theme-mode', 'dark');
+            }
+          }),
+        }),
+      }),
+    );
+    const mockReload = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: mockReload },
+      writable: true,
+    });
+
+    await clearAllStorage();
+
+    expect(localStorage.getItem('comapeo-theme-mode')).toBeNull();
+    expect(mockReload).toHaveBeenCalledOnce();
+  });
+
   it('treats failed complete publication as a partial coordination failure', async () => {
     vi.useFakeTimers();
-    const { finishStorageResetCoordination } =
+    const { runStorageResetOwnerOperation } =
       await import('@/lib/storage-reset-coordinator');
-    vi.mocked(finishStorageResetCoordination).mockResolvedValueOnce(false);
+    vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+      async (_generation, operation) => ({
+        owned: true,
+        value: await operation({
+          publish: vi.fn((phase) => {
+            if (phase === 'complete')
+              throw new Error('Completion write failed');
+          }),
+        }),
+      }),
+    );
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
       value: { reload: mockReload },
@@ -670,9 +711,15 @@ describe('clearAllStorage', () => {
 
   it('does not let a stale owner delete preferences after losing coordination', async () => {
     vi.useFakeTimers();
-    const { finishStorageResetCoordination } =
+    const { runStorageResetOwnerOperation } =
       await import('@/lib/storage-reset-coordinator');
-    vi.mocked(finishStorageResetCoordination).mockResolvedValueOnce(false);
+    vi.mocked(runStorageResetOwnerOperation).mockResolvedValueOnce({
+      owned: false,
+    });
+    const { resetDb } = await import('@/lib/db');
+    const { resetCategoriesDb } = await import('@/lib/categories-db');
+    vi.mocked(resetDb).mockClear();
+    vi.mocked(resetCategoriesDb).mockClear();
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
       value: { reload: mockReload },
@@ -682,8 +729,11 @@ describe('clearAllStorage', () => {
     try {
       await expect(clearAllStorage()).rejects.toMatchObject({
         failedStep: 'coordination',
-        partial: true,
+        partial: false,
+        reloadScheduled: true,
       });
+      expect(resetDb).not.toHaveBeenCalled();
+      expect(resetCategoriesDb).not.toHaveBeenCalled();
 
       // A newer owner/tab may write preferences after this tab loses the reset
       // generation. The stale tab must not perform another owned-key sweep.
@@ -700,12 +750,21 @@ describe('clearAllStorage', () => {
   it('reports coordination failure when abort publication fails after categories reset error', async () => {
     vi.useFakeTimers();
     const { resetCategoriesDb } = await import('@/lib/categories-db');
-    const { finishStorageResetCoordination } =
+    const { runStorageResetOwnerOperation } =
       await import('@/lib/storage-reset-coordinator');
     vi.mocked(resetCategoriesDb).mockRejectedValueOnce(
       new Error('Categories error'),
     );
-    vi.mocked(finishStorageResetCoordination).mockResolvedValueOnce(false);
+    vi.mocked(runStorageResetOwnerOperation).mockImplementationOnce(
+      async (_generation, operation) => ({
+        owned: true,
+        value: await operation({
+          publish: vi.fn((phase) => {
+            if (phase === 'abort') throw new Error('Abort write failed');
+          }),
+        }),
+      }),
+    );
     const mockReload = vi.fn();
     Object.defineProperty(window, 'location', {
       value: { reload: mockReload },

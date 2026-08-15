@@ -9,10 +9,6 @@ export const STORAGE_RESET_COORDINATION_KEY =
   '__comapeo-storage-reset-coordination-v1__';
 export const STORAGE_RESET_LEASE_MS = 5_000;
 const STORAGE_RESET_RECOVERY_RETRY_MS = 1_000;
-const STORAGE_RESET_HEARTBEAT_MS = Math.max(
-  1_000,
-  Math.floor(STORAGE_RESET_LEASE_MS / 3),
-);
 const STORAGE_RESET_CHANNEL_NAME = 'comapeo-storage-reset';
 const STORAGE_RESET_LOCK_NAME = 'comapeo-storage-reset-v1';
 const CROSS_TAB_QUIESCE_DELAY_MS = 100;
@@ -151,61 +147,35 @@ export async function beginStorageResetCoordination(): Promise<string> {
   });
 }
 
+export interface StorageResetOwnerContext {
+  publish(phase: StorageResetPhase): void;
+}
+
 /**
- * Publish a terminal phase only if this tab still owns the same durable start.
- * A stale initiator cannot overwrite a recovery takeover or a newer generation.
+ * Run owner work while retaining the generation-transition lock. Ownership is
+ * checked before the callback, and every publication is synchronous, so a
+ * takeover/new generation can neither overlap destructive work nor slip in
+ * between its final sweep and navigation.
  */
-export async function finishStorageResetCoordination(
+export async function runStorageResetOwnerOperation<T>(
   generation: string,
-  phase: Exclude<StorageResetPhase, 'start'>,
-): Promise<boolean> {
+  operation: (context: StorageResetOwnerContext) => T | Promise<T>,
+): Promise<{ owned: false } | { owned: true; value: T }> {
   return withStorageResetLock(async () => {
-    const current = readCoordinationSignal();
-    if (!isOwnedStart(current, generation)) return false;
-
-    const signal = createSignal(generation, phase);
-    if (!persistSignal(signal)) return false;
-    postBroadcastSignal(signal);
-    return true;
+    if (!isOwnedStart(readCoordinationSignal(), generation)) {
+      return { owned: false };
+    }
+    const value = await operation({
+      publish(phase) {
+        const signal = createSignal(generation, phase);
+        if (!persistSignal(signal)) {
+          throw new Error(`Could not persist reset ${phase} state.`);
+        }
+        postBroadcastSignal(signal);
+      },
+    });
+    return { owned: true, value };
   });
-}
-
-async function renewOwnedStartLease(generation: string): Promise<boolean> {
-  return withStorageResetLock(async () => {
-    const current = readCoordinationSignal();
-    if (!isOwnedStart(current, generation)) return false;
-
-    const renewed = createSignal(generation, 'start');
-    if (!persistSignal(renewed)) return false;
-    postBroadcastSignal(renewed);
-    return true;
-  });
-}
-
-export function startStorageResetLeaseHeartbeat(
-  generation: string,
-): () => void {
-  let stopped = false;
-  let renewalInFlight = false;
-  const stop = () => {
-    stopped = true;
-    clearInterval(timer);
-  };
-
-  const timer = setInterval(() => {
-    if (stopped || renewalInFlight) return;
-    renewalInFlight = true;
-    void renewOwnedStartLease(generation)
-      .then((renewed) => {
-        if (!renewed) stop();
-      })
-      .catch(() => stop())
-      .finally(() => {
-        renewalInFlight = false;
-      });
-  }, STORAGE_RESET_HEARTBEAT_MS);
-
-  return stop;
 }
 
 export async function waitForStorageResetQuiescence(): Promise<void> {
@@ -244,7 +214,7 @@ async function performFinalCleanup(): Promise<boolean> {
   return categoriesCleared && primaryCleared && preferencesCleared;
 }
 
-async function claimExpiredReset(
+async function recoverExpiredResetLocked(
   expected: StorageResetSignal,
 ): Promise<ResetClaimResult> {
   return withStorageResetLock(async () => {
@@ -265,6 +235,23 @@ async function claimExpiredReset(
       throw new Error('Could not persist reset recovery ownership.');
     }
     postBroadcastSignal(claimed);
+    // Claim and cleanup are one fenced operation. The old owner cannot resume
+    // destructive work after this takeover.
+    const cleaned = await performFinalCleanup();
+    if (cleaned) {
+      const complete = createSignal(claimed.generation, 'complete');
+      if (!persistSignal(complete)) {
+        throw new Error('Could not persist reset recovery completion.');
+      }
+      postBroadcastSignal(complete);
+      window.location.reload();
+    } else {
+      const renewed = createSignal(claimed.generation, 'start');
+      if (!persistSignal(renewed)) {
+        throw new Error('Could not renew failed reset recovery.');
+      }
+      postBroadcastSignal(renewed);
+    }
     return { status: 'claimed', signal: claimed };
   });
 }
@@ -286,7 +273,6 @@ export function registerStorageResetCoordinator(): {
   let finalizationTimer: ReturnType<typeof setTimeout> | null = null;
   let recoveringGeneration: string | null = null;
   let finalizingGeneration: string | null = null;
-  let stopRecoveryHeartbeat: (() => void) | null = null;
 
   const clearRecoveryTimer = () => {
     if (recoveryTimer !== null) clearTimeout(recoveryTimer);
@@ -345,10 +331,20 @@ export function registerStorageResetCoordinator(): {
       return;
     }
     if (current?.phase === 'complete') {
+      if (terminalGeneration === current.generation) return;
+      terminalGeneration = current.generation;
       void finalizeResetInReceivingTab(current);
       return;
     }
     if (current?.phase === 'abort') {
+      if (terminalGeneration === current.generation) return;
+      terminalGeneration = current.generation;
+      window.location.reload();
+      return;
+    }
+    if (current === null) {
+      // This path is only entered while reconciling a previously observed reset.
+      // If the durable marker disappeared, reload to reopen quiesced connections.
       window.location.reload();
       return;
     }
@@ -360,52 +356,24 @@ export function registerStorageResetCoordinator(): {
   };
 
   const stopOwnedRecovery = () => {
-    stopRecoveryHeartbeat?.();
-    stopRecoveryHeartbeat = null;
     recoveringGeneration = null;
   };
 
   const retryOwnedRecovery = async (generation: string) => {
     if (recoveringGeneration !== generation) return;
 
-    let stillOwned: boolean;
     try {
-      stillOwned = await withStorageResetLock(() =>
-        isOwnedStart(readCoordinationSignal(), generation),
-      );
+      const current = await readAuthoritativeSignalLocked();
+      if (current?.phase === 'start') {
+        recoveringGeneration = null;
+        scheduleRecovery(current, 0);
+      } else {
+        recoveringGeneration = null;
+        void reconcileAuthoritativeState();
+      }
     } catch {
       scheduleOwnedRecoveryRetry(generation);
-      return;
     }
-
-    if (!stillOwned) {
-      stopOwnedRecovery();
-      void reconcileAuthoritativeState();
-      return;
-    }
-
-    const cleaned = await performFinalCleanup();
-    if (!cleaned) {
-      scheduleOwnedRecoveryRetry(generation);
-      return;
-    }
-
-    let completed: boolean;
-    try {
-      completed = await finishStorageResetCoordination(generation, 'complete');
-    } catch {
-      scheduleOwnedRecoveryRetry(generation);
-      return;
-    }
-
-    if (completed) {
-      stopOwnedRecovery();
-      window.location.reload();
-      return;
-    }
-
-    stopOwnedRecovery();
-    void reconcileAuthoritativeState();
   };
 
   const recoverStaleReset = async (signal: StorageResetSignal) => {
@@ -418,7 +386,7 @@ export function registerStorageResetCoordinator(): {
 
     let claim: ResetClaimResult;
     try {
-      claim = await claimExpiredReset(signal);
+      claim = await recoverExpiredResetLocked(signal);
     } catch {
       scheduleRecovery(signal, STORAGE_RESET_RECOVERY_RETRY_MS);
       return;
@@ -433,12 +401,13 @@ export function registerStorageResetCoordinator(): {
       return;
     }
 
-    recoveringGeneration = claim.signal.generation;
-    stopRecoveryHeartbeat?.();
-    stopRecoveryHeartbeat = startStorageResetLeaseHeartbeat(
-      claim.signal.generation,
-    );
-    void retryOwnedRecovery(claim.signal.generation);
+    if (claim.status === 'claimed') {
+      const current = readCoordinationSignal();
+      if (current?.phase === 'start') {
+        recoveringGeneration = current.generation;
+        scheduleOwnedRecoveryRetry(current.generation);
+      }
+    }
   };
 
   const retryTerminalFinalization = async (signal: StorageResetSignal) => {
@@ -465,6 +434,11 @@ export function registerStorageResetCoordinator(): {
       window.location.reload();
       return;
     }
+    if (current === null) {
+      finalizingGeneration = null;
+      window.location.reload();
+      return;
+    }
 
     scheduleTerminalFinalizationRetry(signal);
   };
@@ -474,10 +448,25 @@ export function registerStorageResetCoordinator(): {
     finalizingGeneration = signal.generation;
     quiesceStorageResetConnections();
 
-    const cleaned = await performFinalCleanup();
+    let cleaned = false;
+    try {
+      cleaned = await withStorageResetLock(async () => {
+        const current = readCoordinationSignal();
+        if (
+          current?.phase !== 'complete' ||
+          current.generation !== signal.generation
+        ) {
+          return false;
+        }
+        const result = await performFinalCleanup();
+        if (result) window.location.reload();
+        return result;
+      });
+    } catch {
+      /* retry authoritative complete */
+    }
     if (cleaned) {
       finalizingGeneration = null;
-      window.location.reload();
       return;
     }
 
@@ -502,10 +491,19 @@ export function registerStorageResetCoordinator(): {
         return current;
       });
     } catch {
+      quiesceStorageResetConnections();
+      clearRecoveryTimer();
+      recoveryTimer = setTimeout(
+        () => void reconcileAuthoritativeState(),
+        STORAGE_RESET_RECOVERY_RETRY_MS,
+      );
       return;
     }
 
-    if (authoritative === null) return;
+    if (authoritative === null) {
+      void reconcileAuthoritativeState();
+      return;
+    }
     terminalGeneration = null;
     scheduleRecovery(authoritative);
   };
@@ -526,10 +524,15 @@ export function registerStorageResetCoordinator(): {
         return current;
       });
     } catch {
+      quiesceStorageResetConnections();
+      scheduleTerminalFinalizationRetry(signal);
       return;
     }
 
-    if (authoritative === null) return;
+    if (authoritative === null) {
+      void reconcileAuthoritativeState();
+      return;
+    }
     if (terminalGeneration === authoritative.generation) return;
 
     terminalGeneration = authoritative.generation;

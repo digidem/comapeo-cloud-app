@@ -6,9 +6,8 @@ import { resetDb } from '@/lib/db';
 import { backupSchema } from '@/lib/schemas/backup-schema';
 import {
   beginStorageResetCoordination,
-  finishStorageResetCoordination,
   quiesceStorageResetConnections,
-  startStorageResetLeaseHeartbeat,
+  runStorageResetOwnerOperation,
   waitForStorageResetQuiescence,
 } from '@/lib/storage-reset-coordinator';
 import { useAuthStore } from '@/stores/auth-store';
@@ -165,16 +164,8 @@ export class ClearAllStorageError extends Error {
 
 const RESET_FAILURE_RELOAD_DELAY_MS = 1500;
 
-function scheduleResetReload(options?: {
-  repeatStorageCleanup?: boolean;
-}): void {
+function scheduleResetReload(): void {
   setTimeout(() => {
-    if (options?.repeatStorageCleanup) {
-      // Persisted stores may have emitted during the warning interval. Remove
-      // owned keys synchronously again immediately before navigation so no
-      // successful stale write can survive the reload boundary.
-      removeComapeoKeys({ bestEffort: true });
-    }
     window.location.reload();
   }, RESET_FAILURE_RELOAD_DELAY_MS);
 }
@@ -205,71 +196,90 @@ async function runCoordinatedStorageReset(generation: string): Promise<void> {
   quiesceStorageResetConnections();
   await waitForStorageResetQuiescence();
 
-  // Clear the lower-value categories cache first. Its transaction is atomic; if
-  // it fails, stop before touching the primary application database or prefs.
+  let result;
   try {
-    await resetCategoriesDb();
-  } catch (cause) {
-    const abortPublished = await finishStorageResetCoordination(
+    result = await runStorageResetOwnerOperation(
       generation,
-      'abort',
+      async ({ publish }) => {
+        try {
+          await resetCategoriesDb();
+        } catch (cause) {
+          publish('abort');
+          return {
+            error: new ClearAllStorageError({
+              failedStep: 'categories-db',
+              partial: false,
+              cause,
+              reloadScheduled: true,
+            }),
+          };
+        }
+        try {
+          await resetDb();
+        } catch (cause) {
+          publish('abort');
+          return {
+            error: new ClearAllStorageError({
+              failedStep: 'app-db',
+              partial: true,
+              cause,
+              reloadScheduled: true,
+            }),
+          };
+        }
+        const { storageCleanupFailed } = clearRuntimeStateAfterDatabaseReset();
+        if (storageCleanupFailed) {
+          publish('start');
+          return {
+            error: new ClearAllStorageError({
+              failedStep: 'browser-storage',
+              partial: true,
+              cause: new Error(
+                'One or more owned browser-storage keys could not be removed.',
+              ),
+              reloadScheduled: true,
+            }),
+          };
+        }
+        publish('complete');
+        // Last possible synchronous sweep catches persisted-store writes emitted
+        // during cleanup; it is still fenced from every generation transition.
+        const finalRemoval = removeComapeoKeys({ bestEffort: true });
+        if (
+          finalRemoval.enumerationFailed ||
+          finalRemoval.failedKeys.length > 0
+        ) {
+          throw new Error('Final owned browser-storage cleanup failed.');
+        }
+        window.location.reload();
+        return { error: null };
+      },
     );
+  } catch (cause) {
     // This tab's app connections are already closed. Reload whether abort was
     // published or the lease must recover, so the current tab never continues
     // with unusable singleton connections.
     scheduleResetReload();
     throw new ClearAllStorageError({
-      failedStep: abortPublished ? 'categories-db' : 'coordination',
-      // If abort could not be persisted, the durable start lease remains and a
-      // recovery tab may complete the requested reset after this error is shown.
-      partial: !abortPublished,
+      failedStep: 'coordination',
+      partial: true,
       cause,
       reloadScheduled: true,
     });
   }
-
-  try {
-    await resetDb();
-  } catch (cause) {
-    // The primary transaction is atomic, so preserve auth and preferences when
-    // it fails. Only the already-cleared categories cache is partial. Releasing
-    // quiesced tabs and reloading is enough to restore a coherent app state.
-    const abortPublished = await finishStorageResetCoordination(
-      generation,
-      'abort',
-    );
+  if (!result.owned) {
     scheduleResetReload();
     throw new ClearAllStorageError({
-      failedStep: abortPublished ? 'app-db' : 'coordination',
-      partial: true,
-      cause,
+      failedStep: 'coordination',
+      partial: false,
+      cause: new Error('Reset ownership was superseded.'),
       reloadScheduled: true,
     });
   }
-
-  const { storageCleanupFailed } = clearRuntimeStateAfterDatabaseReset();
-  const coordinationCompleted = await finishStorageResetCoordination(
-    generation,
-    'complete',
-  );
-
-  if (storageCleanupFailed || !coordinationCompleted) {
-    scheduleResetReload({
-      repeatStorageCleanup: storageCleanupFailed && coordinationCompleted,
-    });
-    throw new ClearAllStorageError({
-      failedStep: storageCleanupFailed ? 'browser-storage' : 'coordination',
-      partial: true,
-      reloadScheduled: true,
-      cause: new Error(
-        storageCleanupFailed
-          ? 'One or more owned browser-storage keys could not be removed.'
-          : 'Other open tabs could not be released from reset coordination.',
-      ),
-    });
+  if (result.value.error) {
+    scheduleResetReload();
+    throw result.value.error;
   }
-
-  window.location.reload();
 }
 
 export async function clearAllStorage(): Promise<void> {
@@ -286,11 +296,5 @@ export async function clearAllStorage(): Promise<void> {
     });
   }
 
-  const stopStorageResetLeaseHeartbeat =
-    startStorageResetLeaseHeartbeat(generation);
-  try {
-    await runCoordinatedStorageReset(generation);
-  } finally {
-    stopStorageResetLeaseHeartbeat();
-  }
+  await runCoordinatedStorageReset(generation);
 }

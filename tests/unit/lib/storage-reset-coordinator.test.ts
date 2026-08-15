@@ -10,9 +10,8 @@ import {
   STORAGE_RESET_COORDINATION_KEY,
   STORAGE_RESET_LEASE_MS,
   beginStorageResetCoordination,
-  finishStorageResetCoordination,
   registerStorageResetCoordinator,
-  startStorageResetLeaseHeartbeat,
+  runStorageResetOwnerOperation,
 } from '@/lib/storage-reset-coordinator';
 
 vi.mock('@/lib/db', () => ({
@@ -123,29 +122,7 @@ describe('storage reset coordinator', () => {
     }
   });
 
-  it('renews an active reset lease so long-running initiators are not taken over', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-14T12:00:00.000Z'));
-    const generation = await beginStorageResetCoordination();
-    const initial = JSON.parse(
-      localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
-    );
-    const stopHeartbeat = startStorageResetLeaseHeartbeat(generation);
-
-    try {
-      await vi.advanceTimersByTimeAsync(Math.ceil(STORAGE_RESET_LEASE_MS / 2));
-      const renewed = JSON.parse(
-        localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
-      );
-
-      expect(renewed).toMatchObject({ generation, phase: 'start' });
-      expect(renewed.createdAt).toBeGreaterThan(initial.createdAt);
-    } finally {
-      stopHeartbeat();
-    }
-  });
-
-  it('honors a renewed durable lease even when its heartbeat event is delayed', async () => {
+  it('honors a renewed durable lease when the original recovery timer fires', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-14T12:00:00.000Z'));
     const { unregister } = registerStorageResetCoordinator();
@@ -165,8 +142,8 @@ describe('storage reset coordinator', () => {
         }),
       );
 
-      // The old timeout now fires, but the durable lease is fresh even though no
-      // heartbeat event was dispatched to this tab.
+      // The old timeout now fires, but the authoritative durable lease is fresh
+      // even though this tab received no additional storage/broadcast event.
       await vi.advanceTimersByTimeAsync(1000);
       expect(resetCategoriesDbIsolated).not.toHaveBeenCalled();
       expect(resetDbIsolated).not.toHaveBeenCalled();
@@ -179,37 +156,6 @@ describe('storage reset coordinator', () => {
     } finally {
       unregister();
     }
-  });
-
-  it('preserves the durable start marker when terminal publication fails', async () => {
-    const generation = await beginStorageResetCoordination();
-    const originalSetItem = Storage.prototype.setItem;
-    let shouldFailCoordinationWrite = true;
-    const setItemSpy = vi
-      .spyOn(Storage.prototype, 'setItem')
-      .mockImplementation(function (this: Storage, key, value) {
-        if (
-          shouldFailCoordinationWrite &&
-          key === STORAGE_RESET_COORDINATION_KEY
-        ) {
-          shouldFailCoordinationWrite = false;
-          throw new DOMException('Storage access denied', 'SecurityError');
-        }
-        return originalSetItem.call(this, key, value);
-      });
-
-    const published = await finishStorageResetCoordination(
-      generation,
-      'complete',
-    );
-
-    expect(published).toBe(false);
-    setItemSpy.mockRestore();
-
-    const durableMarker = JSON.parse(
-      localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
-    );
-    expect(durableMarker).toMatchObject({ generation, phase: 'start' });
   });
 
   it('automatically takes over when an initiating tab disappears after reset-start', async () => {
@@ -296,6 +242,53 @@ describe('storage reset coordinator', () => {
     }
   });
 
+  it('holds the generation lock across recovery cleanup before allowing a newer reset', async () => {
+    vi.useFakeTimers();
+    let releaseCleanup!: () => void;
+    let markCleanupStarted!: () => void;
+    const cleanupStarted = new Promise<void>((resolve) => {
+      markCleanupStarted = resolve;
+    });
+    const cleanupGate = new Promise<void>((resolve) => {
+      releaseCleanup = resolve;
+    });
+    vi.mocked(resetCategoriesDbIsolated).mockImplementationOnce(async () => {
+      markCleanupStarted();
+      await cleanupGate;
+    });
+    localStorage.setItem(
+      STORAGE_RESET_COORDINATION_KEY,
+      JSON.stringify({
+        version: 1,
+        generation: 'stale-recovery-generation',
+        sourceTabId: 'crashed-tab',
+        phase: 'start',
+        createdAt: Date.now() - STORAGE_RESET_LEASE_MS - 1,
+      }),
+    );
+    const { unregister } = registerStorageResetCoordinator();
+
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      await cleanupStarted;
+
+      let newerStartSettled = false;
+      const newerStart = beginStorageResetCoordination().finally(() => {
+        newerStartSettled = true;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(newerStartSettled).toBe(false);
+
+      releaseCleanup();
+      await expect(newerStart).resolves.not.toBe('stale-recovery-generation');
+      expect(resetDbIsolated).toHaveBeenCalled();
+      expect(window.location.reload).toHaveBeenCalled();
+    } finally {
+      unregister();
+    }
+  });
+
   it('performs an isolated final database clear before a receiving tab reloads', async () => {
     const { unregister } = registerStorageResetCoordinator();
 
@@ -312,6 +305,42 @@ describe('storage reset coordinator', () => {
       });
       expect(closeDbForStorageReset).toHaveBeenCalledTimes(3);
       expect(closeCategoriesDbForStorageReset).toHaveBeenCalledTimes(3);
+    } finally {
+      unregister();
+    }
+  });
+
+  it('holds the generation lock across terminal finalization before allowing a newer reset', async () => {
+    let releaseCleanup!: () => void;
+    let markCleanupStarted!: () => void;
+    const cleanupStarted = new Promise<void>((resolve) => {
+      markCleanupStarted = resolve;
+    });
+    const cleanupGate = new Promise<void>((resolve) => {
+      releaseCleanup = resolve;
+    });
+    vi.mocked(resetCategoriesDbIsolated).mockImplementationOnce(async () => {
+      markCleanupStarted();
+      await cleanupGate;
+    });
+    const { unregister } = registerStorageResetCoordinator();
+
+    try {
+      dispatchResetSignal('complete', 'terminal-fenced-generation');
+      await cleanupStarted;
+
+      let newerStartSettled = false;
+      const newerStart = beginStorageResetCoordination().finally(() => {
+        newerStartSettled = true;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(newerStartSettled).toBe(false);
+
+      releaseCleanup();
+      await expect(newerStart).resolves.not.toBe('terminal-fenced-generation');
+      expect(resetDbIsolated).toHaveBeenCalled();
+      expect(window.location.reload).toHaveBeenCalled();
     } finally {
       unregister();
     }
@@ -450,7 +479,42 @@ describe('storage reset coordinator', () => {
     }
   });
 
-  it('does not let an old owner finish over a newer durable generation', async () => {
+  it('holds the generation lock across owner destructive work', async () => {
+    const generationA = await beginStorageResetCoordination();
+    let releaseCleanup!: () => void;
+    let markCleanupStarted!: () => void;
+    const cleanupStarted = new Promise<void>((resolve) => {
+      markCleanupStarted = resolve;
+    });
+    const cleanupGate = new Promise<void>((resolve) => {
+      releaseCleanup = resolve;
+    });
+
+    const ownerOperation = runStorageResetOwnerOperation(
+      generationA,
+      async ({ publish }) => {
+        markCleanupStarted();
+        await cleanupGate;
+        publish('complete');
+        return 'done';
+      },
+    );
+    await cleanupStarted;
+
+    let newerStartSettled = false;
+    const newerStart = beginStorageResetCoordination().finally(() => {
+      newerStartSettled = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(newerStartSettled).toBe(false);
+
+    releaseCleanup();
+    await expect(ownerOperation).resolves.toMatchObject({ owned: true });
+    await expect(newerStart).resolves.not.toBe(generationA);
+  });
+
+  it('does not run stale owner destructive work after a newer generation wins', async () => {
     const generationA = await beginStorageResetCoordination();
     const generationB = {
       version: 1,
@@ -463,43 +527,62 @@ describe('storage reset coordinator', () => {
       STORAGE_RESET_COORDINATION_KEY,
       JSON.stringify(generationB),
     );
+    const destructiveWork = vi.fn();
 
-    expect(await finishStorageResetCoordination(generationA, 'complete')).toBe(
-      false,
+    const result = await runStorageResetOwnerOperation(
+      generationA,
+      destructiveWork,
     );
-    expect(await finishStorageResetCoordination(generationA, 'abort')).toBe(
-      false,
-    );
+
+    expect(result).toEqual({ owned: false });
+    expect(destructiveWork).not.toHaveBeenCalled();
     expect(
       JSON.parse(localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}'),
     ).toEqual(generationB);
   });
 
-  it('does not let an old owner heartbeat overwrite a newer durable generation', async () => {
+  it('reconciles a start signal after the first lock validation fails', async () => {
     vi.useFakeTimers();
-    const generationA = await beginStorageResetCoordination();
-    const stopHeartbeat = startStorageResetLeaseHeartbeat(generationA);
-    const generationB = {
-      version: 1,
-      generation: 'generation-b',
-      sourceTabId: 'other-tab',
-      phase: 'start',
-      createdAt: Date.now() + 1,
-    };
-    localStorage.setItem(
-      STORAGE_RESET_COORDINATION_KEY,
-      JSON.stringify(generationB),
-    );
+    const request = vi.mocked(navigator.locks.request);
+    request.mockRejectedValueOnce(new Error('Transient lock failure'));
+    const { unregister } = registerStorageResetCoordinator();
 
     try {
-      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS);
-      expect(
-        JSON.parse(
-          localStorage.getItem(STORAGE_RESET_COORDINATION_KEY) ?? '{}',
-        ),
-      ).toEqual(generationB);
+      dispatchResetSignal('start', 'lock-failure-generation');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(closeDbForStorageReset).toHaveBeenCalled();
+      expect(closeCategoriesDbForStorageReset).toHaveBeenCalled();
+      expect(resetDbIsolated).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.advanceTimersByTimeAsync(STORAGE_RESET_LEASE_MS - 1_000);
+
+      expect(resetCategoriesDbIsolated).toHaveBeenCalledOnce();
+      expect(resetDbIsolated).toHaveBeenCalledOnce();
+      expect(window.location.reload).toHaveBeenCalledOnce();
     } finally {
-      stopHeartbeat();
+      unregister();
+    }
+  });
+
+  it('reconciles a terminal signal after the first lock validation fails', async () => {
+    vi.useFakeTimers();
+    const { unregister } = registerStorageResetCoordinator();
+
+    try {
+      dispatchResetSignal('start', 'terminal-lock-failure');
+      await vi.advanceTimersByTimeAsync(0);
+      vi.mocked(navigator.locks.request).mockRejectedValueOnce(
+        new Error('Transient terminal lock failure'),
+      );
+      dispatchResetSignal('abort', 'terminal-lock-failure');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(window.location.reload).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(window.location.reload).toHaveBeenCalledOnce();
+    } finally {
+      unregister();
     }
   });
 
