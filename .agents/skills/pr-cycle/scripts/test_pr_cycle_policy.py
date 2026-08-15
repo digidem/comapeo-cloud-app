@@ -77,6 +77,11 @@ def assert_policy_contract(
     test.assertIn("create a focused follow-up docs/process PR", skill_text)
     test.assertIn("final report must state what durable lessons were documented", skill_text)
 
+    test.assertIn("### PR Merge Authorization Invariant", agents_text)
+    test.assertIn("explicit merge authorization from a user message in its own current task", agents_text)
+    test.assertIn("authorization never transfers across chats, sessions, agents", agents_text)
+    test.assertIn("Without that current-task authorization, stop at merge-ready", agents_text)
+
     test.assertIn("## Issue and PR Scope Continuity", agents_text)
     test.assertIn("search the existing GitHub backlog", agents_text)
     test.assertIn("reuse the canonical implementation, data model, or integration path", agents_text)
@@ -277,6 +282,21 @@ class PrCyclePolicyTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(
             AssertionError, "tracked artifacts under `screenshots/screenshot/`"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=SKILL.read_text(),
+                agents_text=agents_text,
+                ci_text=CI.read_text(),
+            )
+
+    def test_agents_merge_authorization_fallback_is_required(self) -> None:
+        agents_text = AGENTS.read_text().replace(
+            "authorization never transfers across chats, sessions, agents",
+            "authorization transfers across chats, sessions, agents",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "authorization never transfers across chats, sessions, agents"
         ):
             assert_policy_contract(
                 self,
