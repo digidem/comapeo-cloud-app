@@ -10,6 +10,22 @@ AGENTS = SKILL_DIR.parents[2] / "AGENTS.md"
 CI = SKILL_DIR.parents[2] / ".github" / "workflows" / "ci.yml"
 
 
+def _ci_job_block(ci_text: str, job_name: str) -> str:
+    lines = ci_text.splitlines()
+    header = f"  {job_name}:"
+    try:
+        start = lines.index(header)
+    except ValueError:
+        return ""
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if re.fullmatch(r"  [A-Za-z0-9_-]+:\s*", lines[index]):
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
 def _active_ci_commands(ci_text: str) -> set[str]:
     return {
         line.strip()
@@ -39,7 +55,9 @@ def assert_policy_contract(
     test.assertIn("A green wrapper job is not sufficient", skill_text)
     test.assertIn("continue-on-error", skill_text)
     test.assertIn("A `conclusion: success` after `continue-on-error` is not enough", skill_text)
+    test.assertIn("Keep the gate policy here", skill_text)
     test.assertIn("git push --no-verify origin --delete <branch>", skill_text)
+    test.assertIn("Keep the safety policy here", skill_text)
 
     test.assertIn("## 8. Session lessons and documentation checkpoint", skill_text)
     test.assertIn("Before concluding every PR cycle", skill_text)
@@ -57,7 +75,7 @@ def assert_policy_contract(
 
     test.assertIn(
         "python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py",
-        _active_ci_commands(ci_text),
+        _active_ci_commands(_ci_job_block(ci_text, "pr-cycle-skill-tests")),
     )
 
 
@@ -198,11 +216,12 @@ class PrCyclePolicyTests(unittest.TestCase):
                 ci_text=CI.read_text(),
             )
 
-    def test_ci_invocation_must_be_active(self) -> None:
+    def test_ci_invocation_must_be_active_in_pr_cycle_job(self) -> None:
         command = "python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py"
         ci_text = CI.read_text()
         self.assertEqual(ci_text.count(command), 1)
         ci_text = ci_text.replace(command, f"# {command}", 1)
+        ci_text = f"{ci_text}\n# Elsewhere in the workflow:\n{command}\n"
         with self.assertRaisesRegex(AssertionError, re.escape(command)):
             assert_policy_contract(
                 self,
