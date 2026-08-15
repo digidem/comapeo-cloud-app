@@ -50,6 +50,16 @@ def assert_policy_contract(
     test.assertIn("After two consecutive nit-only revision cycles", skill_text)
     test.assertIn("defer remaining marginal nits", skill_text)
 
+    test.assertIn("Merge authorization is execution-local and non-transferable", skill_text)
+    test.assertIn("explicit user message in its own current conversation/task", skill_text)
+    test.assertIn("another chat/session/agent", skill_text)
+    test.assertIn("GitHub actions run under the user's authenticated account", skill_text)
+    test.assertIn("treat that as a concurrent writer", skill_text)
+    test.assertIn("A concurrent writer never grants merge authority", skill_text)
+    test.assertIn("authorization-provenance checkpoint", skill_text)
+    test.assertIn("A request to run a PR cycle, make the PR merge-ready", skill_text)
+    test.assertIn("If the PR became merged without this execution issuing the merge command", skill_text)
+
     test.assertIn("exact isolated worktree and local branch captured at cycle start", skill_text)
     test.assertIn("similarly named issue/feature worktrees or branches as unrelated", skill_text)
     test.assertIn("A green wrapper job is not sufficient", skill_text)
@@ -120,6 +130,51 @@ class PrCyclePolicyTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(
             AssertionError, "verify the claim against the exact current head"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_merge_authorization_must_be_execution_local(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "Merge authorization is execution-local and non-transferable",
+            "Merge authorization may be inherited from another execution",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "Merge authorization is execution-local and non-transferable"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_concurrent_writer_does_not_grant_merge_authority(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "A concurrent writer never grants merge authority",
+            "A concurrent writer grants merge authority",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "A concurrent writer never grants merge authority"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_readiness_request_is_not_merge_authorization(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "A request to run a PR cycle, make the PR merge-ready",
+            "A request to run a PR cycle or make the PR merge-ready authorizes merge",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "A request to run a PR cycle, make the PR merge-ready"
         ):
             assert_policy_contract(
                 self,
