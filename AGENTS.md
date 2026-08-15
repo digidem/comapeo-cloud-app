@@ -41,7 +41,7 @@ If a project-scoped .claude/orchestrator_prompt.md or .codex/orchestrator_prompt
 
 Use raw one-shot `claude` / `codex exec` only for small bounded jobs or read-only reviews where Zenith would be unnecessary overhead.
 
-### PR Merge Authorization Invariant
+## PR Merge Authorization Invariant
 
 For any PR merge, follow the workspace `pr-cycle` skill. The execution that issues the merge command must have explicit merge authorization from a user message in its own current task; authorization never transfers across chats, sessions, agents, automations, readiness reports, or shared GitHub credentials. Without that current-task authorization, stop at merge-ready.
 

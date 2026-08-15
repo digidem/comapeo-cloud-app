@@ -77,7 +77,7 @@ def assert_policy_contract(
     test.assertIn("create a focused follow-up docs/process PR", skill_text)
     test.assertIn("final report must state what durable lessons were documented", skill_text)
 
-    test.assertIn("### PR Merge Authorization Invariant", agents_text)
+    test.assertIn("## PR Merge Authorization Invariant", agents_text)
     test.assertIn("explicit merge authorization from a user message in its own current task", agents_text)
     test.assertIn("authorization never transfers across chats, sessions, agents", agents_text)
     test.assertIn("Without that current-task authorization, stop at merge-ready", agents_text)
