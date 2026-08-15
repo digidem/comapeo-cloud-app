@@ -70,7 +70,7 @@ For each independent review:
 - Do not prime the reviewer with the desired verdict.
 - Ask it to categorize findings into blockers, should-fix issues, and non-blocking nits.
 - Fix blockers and should-fix findings, push, refresh the live target-branch tip, then start a fresh review of the new head/base-tip pair.
-- Treat nits as optional unless they reveal correctness, security, data-loss, or operability risk. Once the exact head/base-tip pair has a terminal ready verdict with no blocker or should-fix finding, do not push solely to address optional nits unless the user explicitly asks for those nits; every push invalidates the reviewed revision pair and restarts the final review/CI gate.
+- Address nits when they materially improve the codebase, including correctness, maintainability, test quality, clarity, or operability, even when they are non-blocking. Skip purely cosmetic or preference-only nits whose value does not justify another revision cycle. Any pushed nit fix invalidates the reviewed head/base-tip pair, so refresh the live base tip and rerun the exact-SHA review and CI gate.
 - Keep static reviewer work separate from live GitHub verification; CI, mergeability, and review-thread state are always verified independently.
 - Prefer detached/resumable reviewer execution when supported. A shell timeout around a background dispatch or bounded poll does not imply the reviewer failed; inspect the persisted session state before deciding.
 - Count a model verdict only when it is terminal, structurally valid, and tied to the exact reviewed head/base-tip pair. A malformed, missing, stale-revision, failed, or needs-input result is not approval.
