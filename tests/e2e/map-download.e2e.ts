@@ -319,7 +319,7 @@ test.describe('SMP Download (E2E)', () => {
         "Dexie's async DB initialization. The SMP download feature works on WebKit " +
         '(Firefox passes the same flow), but the test-infrastructure pattern ' +
         '(raw indexedDB.open + page.reload) is unreliable outside Chromium. ' +
-        'TODO(#TODO): rewrite seed to use Dexie API via addInitScript.',
+        'TODO(#255): rewrite seed to use Dexie API via addInitScript.',
     );
     test.setTimeout(60_000);
 
