@@ -227,6 +227,7 @@ function ArchiveBrowser({
                   {/* Clickable archive toggle */}
                   <button
                     type="button"
+                    data-testid="archive-toggle"
                     aria-expanded={isExpanded}
                     onClick={(e) => {
                       e.stopPropagation();

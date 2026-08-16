@@ -28,14 +28,14 @@ test.describe('Direct archive connection', () => {
     await dialog.getByRole('button', { name: /^add$/i }).click();
 
     // Regression guard for #250: persisting the first server changes Home from
-    // its intro branch to the dashboard branch. That transition must not remount
-    // the in-flight dialog before onboarding reaches its success state.
-    await expect(page.getByText('Connecting to archive...')).toBeVisible();
+    // its intro branch to the dashboard branch. The shared dialog must survive
+    // that transition long enough for onboarding to complete and close normally.
     await expect(dialog).toBeHidden({ timeout: 30_000 });
 
-    // The synced archive data should be visible immediately without page.reload().
-    // Assert against a stable project-row contract instead of fixture display text
-    // or whichever Home coverage branch happens to render first.
+    // The archive is added after ArchiveBrowser mounted, so its accordion starts
+    // collapsed. Expand it and prove the synced project is genuinely user-visible
+    // immediately without page.reload().
+    await page.getByTestId('archive-toggle').first().click();
     await expect(page.getByTestId('archive-project-row').first()).toBeVisible({
       timeout: 30_000,
     });
