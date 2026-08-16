@@ -1,7 +1,6 @@
 import type { FeatureCollection } from 'geojson';
 
 import {
-  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -13,6 +12,7 @@ import { type IntlShape, defineMessages, useIntl } from 'react-intl';
 
 import { useQueryClient } from '@tanstack/react-query';
 
+import { useAddServerDialog } from '@/components/layout/add-server-dialog-context';
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Button } from '@/components/ui/button';
 import { useAlerts } from '@/hooks/useAlerts';
@@ -34,7 +34,6 @@ import { resolveObservationListItemName } from '@/lib/observation-list-item';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
-import { AddArchiveServerDialog } from './AddArchiveServerDialog';
 import { ArchiveServerDetail } from './ArchiveServerDetail';
 import { AreaMap } from './AreaMap';
 import { CalculationSettings } from './CalculationSettings';
@@ -89,7 +88,6 @@ interface HomeState {
   isCreateDialogOpen: boolean;
   editingProjectId: string | null;
   deletingProjectId: string | null;
-  isAddServerDialogOpen: boolean;
   selectedPresetId: string;
   params: CalculationParams;
   activeMethodId: string;
@@ -114,8 +112,6 @@ type HomeAction =
   | { type: 'SET_ACTIVE_METHOD'; methodId: string }
   | { type: 'SET_UNIT'; unit: AreaUnit }
   | { type: 'INCREMENT_COVERAGE_REFRESH' }
-  | { type: 'OPEN_ADD_SERVER_DIALOG' }
-  | { type: 'CLOSE_ADD_SERVER_DIALOG' }
   | { type: 'SELECT_SERVER'; id: string | null }
   | { type: 'CLEAR_PROJECT' };
 
@@ -166,10 +162,6 @@ function homeReducer(state: HomeState, action: HomeAction): HomeState {
       return { ...state, unit: action.unit };
     case 'INCREMENT_COVERAGE_REFRESH':
       return { ...state, coverageRefreshKey: state.coverageRefreshKey + 1 };
-    case 'OPEN_ADD_SERVER_DIALOG':
-      return { ...state, isAddServerDialogOpen: true };
-    case 'CLOSE_ADD_SERVER_DIALOG':
-      return { ...state, isAddServerDialogOpen: false };
     case 'SELECT_SERVER':
       return { ...state, selectedServerId: action.id };
     case 'CLEAR_PROJECT':
@@ -184,7 +176,6 @@ const INITIAL_STATE: HomeState = {
   isCreateDialogOpen: false,
   editingProjectId: null,
   deletingProjectId: null,
-  isAddServerDialogOpen: false,
   selectedPresetId: BUILT_IN_PRESETS[0]?.id ?? 'balanced',
   params: { ...DEFAULTS },
   activeMethodId: 'observed',
@@ -372,6 +363,7 @@ function HomeScreen() {
   const persistedServerId = useProjectStore((s) => s.selectedServerId);
   const setSelectedProjectId = useProjectStore((s) => s.setSelectedProjectId);
   const setSelectedServerId = useProjectStore((s) => s.setSelectedServerId);
+  const { openAddServerDialog } = useAddServerDialog();
   const intl = useIntl();
   const [now, setNow] = useState(() => Date.now());
 
@@ -648,11 +640,6 @@ function HomeScreen() {
     [],
   );
 
-  const handleOpenAddServer = useCallback(
-    () => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' }),
-    [],
-  );
-
   const handleIncrementRefresh = useCallback(
     () => dispatch({ type: 'INCREMENT_COVERAGE_REFRESH' }),
     [],
@@ -708,29 +695,12 @@ function HomeScreen() {
 
   useShellSlot(shellSlot);
 
-  // Keep the Home-owned archive dialog at one stable position regardless of
-  // which content branch is active. Persisting the first server changes Home's
-  // content branch mid-onboarding, and remounting the dialog would reset its
-  // in-flight progress state.
-  const withArchiveServerDialog = (content: ReactNode) => (
-    <>
-      {content}
-      <AddArchiveServerDialog
-        isOpen={state.isAddServerDialogOpen}
-        onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-        onAdded={(_serverId) => {
-          dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-        }}
-      />
-    </>
-  );
-
   // Loading state — full-page skeleton only on initial load (no data yet).
   // Background re-fetches (e.g., from auto-sync invalidation) should NOT
   // show the skeleton — the stale data remains visible while refreshing.
   // Must be after all hooks (useShellSlot) to avoid Rules of Hooks violations
   if (projectsQuery.isPending) {
-    return withArchiveServerDialog(<HomeScreenSkeleton />);
+    return <HomeScreenSkeleton />;
   }
 
   // ---- Main content area ----
@@ -741,7 +711,7 @@ function HomeScreen() {
   );
 
   if (selectedArchiveServer) {
-    return withArchiveServerDialog(
+    return (
       <>
         <ArchiveServerDetail
           server={selectedArchiveServer}
@@ -794,16 +764,16 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
-      </>,
+      </>
     );
   }
 
   if (!state.selectedProjectId && servers.length === 0) {
-    return withArchiveServerDialog(
+    return (
       <>
         <div className="flex h-full flex-col">
           <IntroPage
-            onAddServer={handleOpenAddServer}
+            onAddServer={openAddServerDialog}
             onCreateProject={handleOpenCreateDialog}
           />
         </div>
@@ -849,7 +819,7 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
-      </>,
+      </>
     );
   }
 
@@ -861,7 +831,7 @@ function HomeScreen() {
     !coverage.isCalculating && !hasMethodResults && coverage.error === null;
 
   if (showCoverageError) {
-    return withArchiveServerDialog(
+    return (
       <>
         <div className="flex h-full flex-col items-center justify-center gap-3 py-12 sm:py-16 lg:py-20 text-center">
           <p className="text-error text-sm" role="alert">
@@ -913,12 +883,12 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
-      </>,
+      </>
     );
   }
 
   if (showNoCoordinates) {
-    return withArchiveServerDialog(
+    return (
       <>
         <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
           {selectedProject && (
@@ -994,7 +964,7 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
-      </>,
+      </>
     );
   }
 
@@ -1003,7 +973,7 @@ function HomeScreen() {
 
   const observationCount = observations.length;
 
-  return withArchiveServerDialog(
+  return (
     <>
       <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
         <h1 className="sr-only">{intl.formatMessage(messages.appTitle)}</h1>
@@ -1213,7 +1183,7 @@ function HomeScreen() {
           dispatch({ type: 'PROJECT_DELETED' });
         }}
       />
-    </>,
+    </>
   );
 }
 

@@ -11,6 +11,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { act } from 'react';
 
+import { AddServerDialogProvider } from '@/components/layout/add-server-dialog-context';
 import {
   ShellSlotProvider,
   useShellOverrides,
@@ -304,7 +305,11 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    render(
+      <AddServerDialogProvider>
+        <HomeScreen />
+      </AddServerDialogProvider>,
+    );
 
     // Click "Add server" on the intro page
     await user.click(screen.getByRole('button', { name: 'Add server' }));
@@ -324,7 +329,11 @@ describe('HomeScreen', () => {
   it('keeps the add-server dialog mounted when the first server changes the Home layout', async () => {
     const user = userEvent.setup();
 
-    render(<HomeScreen />);
+    render(
+      <AddServerDialogProvider>
+        <HomeScreen />
+      </AddServerDialogProvider>,
+    );
 
     await user.click(screen.getByRole('button', { name: 'Add server' }));
     await user.click(screen.getByTestId('advanced-toggle'));

@@ -13,9 +13,8 @@ test.describe('Direct archive connection', () => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Exercise the Home intro CTA specifically. The sidebar has a separate Add
-    // Server entry point whose dialog is owned by AuthenticatedLayout and does
-    // not reproduce the first-server Home transition from #250.
+    // Exercise the Home intro CTA specifically. It should open the shared
+    // layout-owned dialog so Home render-state changes cannot interrupt onboarding.
     await page
       .getByRole('main')
       .getByRole('button', { name: 'Add server' })
@@ -34,14 +33,11 @@ test.describe('Direct archive connection', () => {
     await expect(page.getByText('Connecting to archive...')).toBeVisible();
     await expect(dialog).toBeHidden({ timeout: 15_000 });
 
-    // The fixture projects share one sync timestamp, so Home may auto-select any
-    // of them. Assert that whichever project is selected is rendered immediately
-    // without page.reload().
-    await expect(
-      page.getByRole('heading', {
-        level: 2,
-        name: /^(Test Project 1|Another Project|Untitled Project)$/,
-      }),
-    ).toBeVisible({ timeout: 10_000 });
+    // The synced archive data should be visible immediately without page.reload().
+    // Use the archive browser project label so this assertion does not depend on
+    // the coverage worker choosing a particular Home content branch.
+    await expect(page.getByText('Test Project 1').first()).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });
