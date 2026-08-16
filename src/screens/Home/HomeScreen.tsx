@@ -363,6 +363,11 @@ const messages = defineMessages({
   },
 });
 
+// Home switches between sibling layouts while the first archive is persisted
+// and synced. Reuse this key in every layout so React preserves the in-flight
+// onboarding dialog instead of remounting it and discarding its progress state.
+const ADD_ARCHIVE_SERVER_DIALOG_KEY = 'home-add-archive-server-dialog';
+
 // ---- Component ----
 
 function HomeScreen() {
@@ -795,7 +800,7 @@ function HomeScreen() {
         </div>
 
         <AddArchiveServerDialog
-          key="home-add-archive-server-dialog"
+          key={ADD_ARCHIVE_SERVER_DIALOG_KEY}
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
           onAdded={(_serverId) => {
@@ -912,7 +917,7 @@ function HomeScreen() {
         />
 
         <AddArchiveServerDialog
-          key="home-add-archive-server-dialog"
+          key={ADD_ARCHIVE_SERVER_DIALOG_KEY}
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
           onAdded={(_serverId) => {
@@ -1002,7 +1007,7 @@ function HomeScreen() {
         />
 
         <AddArchiveServerDialog
-          key="home-add-archive-server-dialog"
+          key={ADD_ARCHIVE_SERVER_DIALOG_KEY}
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
           onAdded={(_serverId) => {
@@ -1230,7 +1235,7 @@ function HomeScreen() {
       />
 
       <AddArchiveServerDialog
-        key="home-add-archive-server-dialog"
+        key={ADD_ARCHIVE_SERVER_DIALOG_KEY}
         isOpen={state.isAddServerDialogOpen}
         onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
         onAdded={(_serverId) => {

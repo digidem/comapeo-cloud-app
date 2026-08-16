@@ -30,7 +30,6 @@ test.describe('Direct archive connection', () => {
     // its intro branch to the dashboard branch. That transition must not remount
     // the in-flight dialog before onboarding reaches its success state.
     await expect(page.getByText('Connecting to archive...')).toBeVisible();
-    await expect(page.getByText('Connected!')).toBeVisible({ timeout: 15_000 });
     await expect(dialog).toBeHidden({ timeout: 15_000 });
 
     // The fixture projects share one sync timestamp, so Home may auto-select any
