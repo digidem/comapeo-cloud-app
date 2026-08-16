@@ -9,6 +9,7 @@ import {
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ReactNode } from 'react';
+import { act } from 'react';
 
 import {
   ShellSlotProvider,
@@ -23,6 +24,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { useTracks } from '@/hooks/useTracks';
 import type { CalculationResult } from '@/lib/area-calculator/types';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
 // Renders HomeScreen inside a ShellSlotProvider + a "shell reader" that exposes
@@ -206,6 +208,12 @@ async function waitForWorkspace(name: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  useAuthStore.setState({
+    servers: [],
+    activeServerId: null,
+    token: null,
+    baseUrl: null,
+  });
   useProjectStore.setState({ selectedProjectId: null, selectedServerId: null });
   mockUseProjects.mockReturnValue({
     data: [],
@@ -311,6 +319,37 @@ describe('HomeScreen', () => {
       },
       { timeout: 3000 },
     );
+  });
+
+  it('keeps the add-server dialog mounted when the first server changes the Home layout', async () => {
+    const user = userEvent.setup();
+
+    render(<HomeScreen />);
+
+    await user.click(screen.getByRole('button', { name: 'Add server' }));
+    await user.click(screen.getByTestId('advanced-toggle'));
+
+    const serverUrlInput = screen.getByLabelText('Server URL');
+    await user.type(serverUrlInput, 'https://archive.example.com');
+
+    act(() => {
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 'srv-1',
+            label: 'Test Archive',
+            baseUrl: 'https://archive.example.com',
+            token: 'test-token',
+            status: 'pending',
+          },
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Server URL')).toBe(serverUrlInput);
+    });
+    expect(serverUrlInput).toHaveValue('https://archive.example.com');
   });
 
   it('opens CreateProjectDialog when "Create project" is clicked on intro page', async () => {

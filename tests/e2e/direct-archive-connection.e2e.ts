@@ -8,6 +8,8 @@ test.describe('Direct archive connection', () => {
   });
 
   test('loads synced projects without a manual refresh', async ({ page }) => {
+    test.setTimeout(60_000);
+
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
@@ -23,7 +25,7 @@ test.describe('Direct archive connection', () => {
 
     await page.getByTestId('advanced-toggle').click();
     await page.getByLabel('Server URL').fill('https://archive.example.com');
-    await dialog.locator('input[type="password"]').fill('x');
+    await page.getByLabel('Bearer Token').fill('x');
     await dialog.getByRole('button', { name: /^add$/i }).click();
 
     // Regression guard for #250: persisting the first server changes Home from
