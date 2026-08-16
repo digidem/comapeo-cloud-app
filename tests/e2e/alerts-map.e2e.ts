@@ -4,6 +4,13 @@ import { setupMockServer } from './mock-server';
 import { seedAlertMapState } from './seed-alert-map';
 
 test.describe('Alerts map and grid', () => {
+  test.beforeEach(({ browserName }) => {
+    test.skip(
+      browserName === 'webkit',
+      'WebKit skipped: these tests use the same raw IndexedDB seed pattern as the map download E2E. TODO(#255): migrate to the shared browser-safe seed helper.',
+    );
+  });
+
   test('defaults to map and preserves map/grid preference independently', async ({
     page,
   }) => {
@@ -39,7 +46,13 @@ test.describe('Alerts map and grid', () => {
 
   test('mobile sheet exposes map selection and returns to the form after a map tap', async ({
     page,
+    browserName,
   }) => {
+    test.skip(
+      browserName !== 'chromium',
+      'MapLibre point selection requires WebGL (unavailable in Playwright firefox/webkit).',
+    );
+
     await page.setViewportSize({ width: 390, height: 844 });
     await setupMockServer(page);
     await seedAlertMapState(page);
