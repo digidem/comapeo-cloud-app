@@ -321,7 +321,7 @@ function AuthenticatedLayoutInner() {
           navigate({ to: '/' });
         }}
         onDrawerArchiveSettings={(id) => {
-          // Archive settings navigates to Home, where ArchiveBrowser owns the dialog.
+          // Archive settings navigates to Home, where the shared layout provider owns the dialog.
           useProjectStore.getState().setSelectedServerId(id);
           navigate({ to: '/' });
         }}

@@ -13,9 +13,9 @@ interface AddServerDialogContextValue {
   openAddServerDialog: () => void;
 }
 
-const AddServerDialogContext = createContext<AddServerDialogContextValue>({
-  openAddServerDialog: () => {},
-});
+const AddServerDialogContext = createContext<
+  AddServerDialogContextValue | undefined
+>(undefined);
 
 export function AddServerDialogProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -36,5 +36,11 @@ export function AddServerDialogProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAddServerDialog() {
-  return useContext(AddServerDialogContext);
+  const context = useContext(AddServerDialogContext);
+  if (!context) {
+    throw new Error(
+      'useAddServerDialog must be used within AddServerDialogProvider',
+    );
+  }
+  return context;
 }

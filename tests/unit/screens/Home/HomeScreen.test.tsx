@@ -54,9 +54,19 @@ function ShellReader() {
 function renderWithShell(ui: ReactNode) {
   return render(
     <ShellSlotProvider>
-      <ShellReader />
-      {ui}
+      <AddServerDialogProvider>
+        <ShellReader />
+        {ui}
+      </AddServerDialogProvider>
     </ShellSlotProvider>,
+  );
+}
+
+function renderHome() {
+  return render(
+    <AddServerDialogProvider>
+      <HomeScreen />
+    </AddServerDialogProvider>,
   );
 }
 
@@ -257,7 +267,7 @@ beforeEach(() => {
 
 describe('HomeScreen', () => {
   it('renders without crashing', () => {
-    render(<HomeScreen />);
+    renderHome();
     // Should render the AppShell with some content
     expect(document.body).toBeDefined();
   });
@@ -271,7 +281,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
     expect(screen.getByText('Welcome to CoMapeo Cloud')).toBeInTheDocument();
     expect(screen.getByText('Add remote archive server')).toBeInTheDocument();
     expect(screen.getByText('Create project')).toBeInTheDocument();
@@ -286,7 +296,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
     expect(
       screen.getByRole('button', { name: 'Add server' }),
     ).toBeInTheDocument();
@@ -305,11 +315,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(
-      <AddServerDialogProvider>
-        <HomeScreen />
-      </AddServerDialogProvider>,
-    );
+    renderHome();
 
     // Click "Add server" on the intro page
     await user.click(screen.getByRole('button', { name: 'Add server' }));
@@ -329,11 +335,7 @@ describe('HomeScreen', () => {
   it('keeps the add-server dialog mounted when the first server changes the Home layout', async () => {
     const user = userEvent.setup();
 
-    render(
-      <AddServerDialogProvider>
-        <HomeScreen />
-      </AddServerDialogProvider>,
-    );
+    renderHome();
 
     await user.click(screen.getByRole('button', { name: 'Add server' }));
     await user.click(screen.getByTestId('advanced-toggle'));
@@ -371,7 +373,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
     await user.click(screen.getByRole('button', { name: 'Create project' }));
     // Check that the Create Project dialog appears
     expect(
@@ -388,7 +390,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
     expect(screen.getByText('How it works')).toBeInTheDocument();
   });
 
@@ -433,7 +435,7 @@ describe('HomeScreen', () => {
       anySyncing: false,
     });
 
-    render(<HomeScreen />);
+    renderHome();
     expect(
       screen.queryByText('Welcome to CoMapeo Cloud'),
     ).not.toBeInTheDocument();
@@ -457,7 +459,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
     expect(
       screen.queryByText('Welcome to CoMapeo Cloud'),
     ).not.toBeInTheDocument();
@@ -593,7 +595,7 @@ describe('HomeScreen', () => {
   it('shows a main empty-state new project CTA', async () => {
     const user = userEvent.setup();
 
-    render(<HomeScreen />);
+    renderHome();
 
     await user.click(screen.getByRole('button', { name: 'Create project' }));
     expect(
@@ -1735,30 +1737,6 @@ describe('HomeScreen', () => {
     // Both CoverageSummary and ProjectBannerCard render "3 ha" when useCountUp is mocked
     const areaElements = screen.getAllByText('3 ha');
     expect(areaElements.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('AddArchiveServerDialog onAdded does not sync when server not found', async () => {
-    const { syncRemoteArchive: syncFn } = await import('@/lib/data-layer');
-
-    useProjectStore.setState({
-      selectedProjectId: null,
-      selectedServerId: null,
-    });
-
-    const { useAuthStore } = await import('@/stores/auth-store');
-    useAuthStore.setState({ servers: [] });
-
-    renderWithShell(<HomeScreen />);
-
-    // Find the "Add Server" button in the sidebar
-    const addServerBtn = screen.queryByRole('button', { name: /add server/i });
-    if (addServerBtn) {
-      await userEvent.setup().click(addServerBtn);
-    }
-
-    // The AddArchiveServerDialog's onAdded callback checks if server exists
-    // When server is not found after adding, sync should NOT be called
-    expect(syncFn).not.toHaveBeenCalled();
   });
 
   // Phase 9: store↔reducer bidirectional sync effects (lines 560-637)
