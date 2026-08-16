@@ -1,6 +1,7 @@
 import type { FeatureCollection } from 'geojson';
 
 import {
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -363,11 +364,6 @@ const messages = defineMessages({
   },
 });
 
-// Home switches between sibling layouts while the first archive is persisted
-// and synced. Reuse this key in every layout so React preserves the in-flight
-// onboarding dialog instead of remounting it and discarding its progress state.
-const ADD_ARCHIVE_SERVER_DIALOG_KEY = 'home-add-archive-server-dialog';
-
 // ---- Component ----
 
 function HomeScreen() {
@@ -712,16 +708,29 @@ function HomeScreen() {
 
   useShellSlot(shellSlot);
 
+  // Keep the Home-owned archive dialog at one stable position regardless of
+  // which content branch is active. Persisting the first server changes Home's
+  // content branch mid-onboarding, and remounting the dialog would reset its
+  // in-flight progress state.
+  const withArchiveServerDialog = (content: ReactNode) => (
+    <>
+      {content}
+      <AddArchiveServerDialog
+        isOpen={state.isAddServerDialogOpen}
+        onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
+        onAdded={(_serverId) => {
+          dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
+        }}
+      />
+    </>
+  );
+
   // Loading state — full-page skeleton only on initial load (no data yet).
   // Background re-fetches (e.g., from auto-sync invalidation) should NOT
   // show the skeleton — the stale data remains visible while refreshing.
   // Must be after all hooks (useShellSlot) to avoid Rules of Hooks violations
   if (projectsQuery.isPending) {
-    return (
-      <>
-        <HomeScreenSkeleton />
-      </>
-    );
+    return withArchiveServerDialog(<HomeScreenSkeleton />);
   }
 
   // ---- Main content area ----
@@ -732,7 +741,7 @@ function HomeScreen() {
   );
 
   if (selectedArchiveServer) {
-    return (
+    return withArchiveServerDialog(
       <>
         <ArchiveServerDetail
           server={selectedArchiveServer}
@@ -785,12 +794,12 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
-      </>
+      </>,
     );
   }
 
   if (!state.selectedProjectId && servers.length === 0) {
-    return (
+    return withArchiveServerDialog(
       <>
         <div className="flex h-full flex-col">
           <IntroPage
@@ -798,17 +807,6 @@ function HomeScreen() {
             onCreateProject={handleOpenCreateDialog}
           />
         </div>
-
-        <AddArchiveServerDialog
-          key={ADD_ARCHIVE_SERVER_DIALOG_KEY}
-          isOpen={state.isAddServerDialogOpen}
-          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(_serverId) => {
-            // The dialog already invalidates projects/observations/alerts as
-            // part of its connection-progress flow, so just close here.
-            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-          }}
-        />
 
         <CreateProjectDialog
           isOpen={state.isCreateDialogOpen}
@@ -851,7 +849,7 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
-      </>
+      </>,
     );
   }
 
@@ -863,7 +861,7 @@ function HomeScreen() {
     !coverage.isCalculating && !hasMethodResults && coverage.error === null;
 
   if (showCoverageError) {
-    return (
+    return withArchiveServerDialog(
       <>
         <div className="flex h-full flex-col items-center justify-center gap-3 py-12 sm:py-16 lg:py-20 text-center">
           <p className="text-error text-sm" role="alert">
@@ -915,21 +913,12 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
-
-        <AddArchiveServerDialog
-          key={ADD_ARCHIVE_SERVER_DIALOG_KEY}
-          isOpen={state.isAddServerDialogOpen}
-          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(_serverId) => {
-            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-          }}
-        />
-      </>
+      </>,
     );
   }
 
   if (showNoCoordinates) {
-    return (
+    return withArchiveServerDialog(
       <>
         <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
           {selectedProject && (
@@ -1005,16 +994,7 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
-
-        <AddArchiveServerDialog
-          key={ADD_ARCHIVE_SERVER_DIALOG_KEY}
-          isOpen={state.isAddServerDialogOpen}
-          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(_serverId) => {
-            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-          }}
-        />
-      </>
+      </>,
     );
   }
 
@@ -1023,7 +1003,7 @@ function HomeScreen() {
 
   const observationCount = observations.length;
 
-  return (
+  return withArchiveServerDialog(
     <>
       <div className="flex flex-col gap-6 p-3 sm:p-4 lg:p-6">
         <h1 className="sr-only">{intl.formatMessage(messages.appTitle)}</h1>
@@ -1233,16 +1213,7 @@ function HomeScreen() {
           dispatch({ type: 'PROJECT_DELETED' });
         }}
       />
-
-      <AddArchiveServerDialog
-        key={ADD_ARCHIVE_SERVER_DIALOG_KEY}
-        isOpen={state.isAddServerDialogOpen}
-        onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-        onAdded={(_serverId) => {
-          dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-        }}
-      />
-    </>
+    </>,
   );
 }
 
