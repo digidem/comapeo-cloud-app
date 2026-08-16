@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, apiClient } from '@/lib/api-client';
 import { getDb, resetDb } from '@/lib/db';
-import { createRemoteServer } from '@/lib/local-repositories';
+import { createRemoteServer, getRemoteServers } from '@/lib/local-repositories';
 import { syncRemoteArchive } from '@/lib/sync';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -173,6 +173,149 @@ describe('syncRemoteArchive', () => {
     expect(await db.presets.count()).toBe(1);
     expect(await db.fields.count()).toBe(1);
     expect(await db.attachments.count()).toBe(1);
+  });
+
+  it('keeps broader cached projects live for scoped one-project responses and does not client-filter server results', async () => {
+    await useAuthStore.getState().clearAll();
+    const scopedServerId = await useAuthStore.getState().addServer({
+      label: 'Scoped Archive',
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      accessScope: { type: 'project', projectId: 'proj-1' },
+      allowDuplicate: true,
+    });
+    const db = getDb();
+    const cachedProjectLocalId = `remoteArchive:${archiveUrl}:proj-2`;
+    await db.projects.add({
+      localId: cachedProjectLocalId,
+      sourceType: 'remoteArchive',
+      sourceId: 'archive-wide-server',
+      remoteId: 'proj-2',
+      name: 'Cached Project 2',
+      serverUrl: archiveUrl,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    let projectsPayload = [{ projectId: 'proj-1', name: 'Project 1' }];
+    const requestedProjectResources: string[] = [];
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({ data: projectsPayload }),
+      ),
+      http.get(`${archiveUrl}/projects/:projectId`, ({ params }) =>
+        HttpResponse.json({
+          data: {
+            projectId: params.projectId,
+            name: `Detail ${String(params.projectId)}`,
+          },
+        }),
+      ),
+      http.get(
+        `${archiveUrl}/projects/:projectId/observations`,
+        ({ params }) => {
+          requestedProjectResources.push(String(params.projectId));
+          return HttpResponse.json({ data: [] });
+        },
+      ),
+      http.get(`${archiveUrl}/projects/:projectId/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/:projectId/preset`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/:projectId/track`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/:projectId/field`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    await syncRemoteArchive(scopedServerId, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      accessScope: { type: 'project', projectId: 'proj-1' },
+    });
+
+    expect((await db.projects.get(cachedProjectLocalId))?.deleted).toBe(false);
+    expect(requestedProjectResources).toEqual(['proj-1']);
+
+    projectsPayload = [
+      { projectId: 'proj-1', name: 'Project 1' },
+      { projectId: 'proj-2', name: 'Project 2' },
+    ];
+    requestedProjectResources.length = 0;
+
+    await syncRemoteArchive(scopedServerId, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      accessScope: { type: 'project', projectId: 'proj-1' },
+    });
+
+    expect(requestedProjectResources.sort()).toEqual(['proj-1', 'proj-2']);
+  });
+
+  it('does not create a duplicate scoped server when the requested server is persisted but the auth store has not hydrated', async () => {
+    const accessScope = { type: 'project' as const, projectId: 'project-a' };
+    const serverRecord = await createRemoteServer({
+      baseUrl: archiveUrl,
+      label: 'Scoped Archive',
+      token: archiveToken,
+      accessScope,
+    });
+    useAuthStore.setState({
+      servers: [],
+      activeServerId: null,
+      token: null,
+      baseUrl: null,
+    });
+
+    server.use(
+      http.get(`${archiveUrl}/projects`, () =>
+        HttpResponse.json({
+          data: [{ projectId: 'project-a', name: 'Project A' }],
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/project-a`, () =>
+        HttpResponse.json({
+          data: { projectId: 'project-a', name: 'Project A' },
+        }),
+      ),
+      http.get(`${archiveUrl}/projects/project-a/observations`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/project-a/remoteDetectionAlerts`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/project-a/preset`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/project-a/track`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+      http.get(`${archiveUrl}/projects/project-a/field`, () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+
+    const result = await syncRemoteArchive(serverRecord.id, {
+      baseUrl: archiveUrl,
+      token: archiveToken,
+      accessScope,
+    });
+
+    expect(result.success).toBe(true);
+    expect(await getRemoteServers()).toEqual([
+      expect.objectContaining({
+        id: serverRecord.id,
+        baseUrl: archiveUrl,
+        token: archiveToken,
+        accessScope,
+      }),
+    ]);
   });
 
   it('returns success false on network failure', async () => {

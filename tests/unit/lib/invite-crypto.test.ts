@@ -34,6 +34,16 @@ describe('invite-crypto', () => {
     expect(result).toEqual({ ok: true, value: payload });
   });
 
+  it('round-trips optional project scope metadata', async () => {
+    const payload = makePayload({
+      token: 'server-issued-scoped-token',
+      scope: { type: 'project', projectId: 'project-a' },
+    });
+    const code = await encryptInvite(payload, key);
+    const result = await decryptInvite(code, key);
+    expect(result).toEqual({ ok: true, value: payload });
+  });
+
   it('produces a different ciphertext for the same payload (random IV)', async () => {
     const payload = makePayload();
     const first = await encryptInvite(payload, key);

@@ -1,11 +1,15 @@
 import * as v from 'valibot';
 
-import { encryptedPayloadSchema } from '@/lib/schemas/invite';
+import {
+  type InviteAccessScope,
+  encryptedPayloadSchema,
+} from '@/lib/schemas/invite';
 
 export type EncryptedInvitePayload = {
   url: string;
   token: string;
   exp: number;
+  scope?: InviteAccessScope;
 };
 
 export type DecryptResult =

@@ -4,7 +4,7 @@ import {
   NetworkError,
 } from '@/lib/api-client';
 import type { Project } from '@/lib/db';
-import { getRemoteServer } from '@/lib/local-repositories';
+import { getRemoteServer, updateRemoteServer } from '@/lib/local-repositories';
 import type { ReconciliationCounts } from '@/lib/reconciliation';
 import {
   type PullResult,
@@ -15,6 +15,7 @@ import {
   pullProjectsDetailed,
   pullTracksDetailed,
 } from '@/lib/remote-archive';
+import type { InviteAccessScope } from '@/lib/schemas/invite';
 import { useAuthStore } from '@/stores/auth-store';
 
 export interface SyncConcurrencyOptions {
@@ -27,6 +28,7 @@ export interface SyncConcurrencyOptions {
 export interface SyncOptions {
   baseUrl: string;
   token: string;
+  accessScope?: InviteAccessScope;
   serverLabel?: string;
   signal?: AbortSignal;
   concurrency?: SyncConcurrencyOptions;
@@ -68,11 +70,26 @@ export interface SyncResult {
 
 const activeSyncs = new Map<string, Promise<SyncResult>>();
 
-async function ensureServerInStore(options: SyncOptions): Promise<string> {
+async function ensureServerInStore(
+  serverId: string,
+  options: SyncOptions,
+): Promise<string> {
+  const persistedServer = await getRemoteServer(serverId);
+  if (persistedServer) {
+    await updateRemoteServer(serverId, {
+      label: options.serverLabel ?? options.baseUrl,
+      token: options.token,
+      accessScope: options.accessScope ?? persistedServer.accessScope,
+    });
+    await useAuthStore.getState().hydrateServers();
+    return serverId;
+  }
+
   return useAuthStore.getState().addServer({
     label: options.serverLabel ?? options.baseUrl,
     baseUrl: options.baseUrl,
     token: options.token,
+    accessScope: options.accessScope,
     allowDuplicate: true,
   });
 }
@@ -384,7 +401,7 @@ async function doSync(
 ): Promise<SyncResult> {
   try {
     throwIfAborted(options.signal);
-    await ensureServerInStore(options);
+    await ensureServerInStore(serverId, options);
     const serverRecord = await getRemoteServer(serverId);
     if (!serverRecord) {
       return resultForFatalError(

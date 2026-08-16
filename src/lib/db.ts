@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
+import type { InviteAccessScope } from '@/lib/schemas/invite';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -164,6 +165,7 @@ export interface RemoteServer {
   baseUrl: string;
   label?: string;
   token?: string;
+  accessScope?: InviteAccessScope;
   status: string;
   lastSyncedAt: string;
   lastSuccessfulSyncAt?: string;

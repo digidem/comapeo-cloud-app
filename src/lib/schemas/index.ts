@@ -29,3 +29,8 @@ export { trackSchema, tracksResponseSchema } from './track';
 export { docRefSchema } from './refs';
 export { savedMapSchema } from './saved-map';
 export type { SavedMapInput } from './saved-map';
+export {
+  inviteAccessScopeSchema,
+  projectAccessTokenResponseSchema,
+} from './invite';
+export type { InviteAccessScope, ProjectAccessTokenResponse } from './invite';

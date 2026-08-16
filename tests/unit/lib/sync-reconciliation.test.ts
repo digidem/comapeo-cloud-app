@@ -4,12 +4,14 @@ import { syncRemoteArchive } from '@/lib/sync';
 
 const mocks = vi.hoisted(() => ({
   addServer: vi.fn().mockResolvedValue('server-1'),
+  hydrateServers: vi.fn().mockResolvedValue(undefined),
   getRemoteServer: vi.fn().mockResolvedValue({
     id: 'server-1',
     baseUrl: 'https://archive.example.com',
     status: 'connected',
     lastSyncedAt: '',
   }),
+  updateRemoteServer: vi.fn().mockResolvedValue(undefined),
   pullProjectsDetailed: vi.fn(),
   pullObservationsDetailed: vi.fn(),
   pullAlertsDetailed: vi.fn(),
@@ -20,12 +22,16 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: {
-    getState: () => ({ addServer: mocks.addServer }),
+    getState: () => ({
+      addServer: mocks.addServer,
+      hydrateServers: mocks.hydrateServers,
+    }),
   },
 }));
 
 vi.mock('@/lib/local-repositories', () => ({
   getRemoteServer: mocks.getRemoteServer,
+  updateRemoteServer: mocks.updateRemoteServer,
 }));
 
 vi.mock('@/lib/remote-archive', () => ({

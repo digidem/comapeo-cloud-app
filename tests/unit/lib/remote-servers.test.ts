@@ -4,6 +4,7 @@ import { getDb, resetDb } from '@/lib/db';
 import {
   createRemoteServer,
   deleteRemoteServer,
+  deleteRemoteServers,
   getRemoteServer,
   getRemoteServers,
   updateRemoteServer,
@@ -70,6 +71,39 @@ describe('remote server repository', () => {
     expect(cached!.sourceId).toBe(server.id);
   });
 
+  it('bulk-removes remote server credentials without deleting cached domain records', async () => {
+    const scopedA = await createRemoteServer({
+      baseUrl: 'https://archive.example.com',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+    const scopedB = await createRemoteServer({
+      baseUrl: 'https://archive.example.com',
+      accessScope: { type: 'project', projectId: 'project-b' },
+    });
+    const archive = await createRemoteServer({
+      baseUrl: 'https://archive.example.com',
+      accessScope: { type: 'archive' },
+    });
+    const db = getDb();
+    await db.projects.add({
+      localId: 'cached-proj-1',
+      sourceType: 'remoteArchive',
+      sourceId: scopedA.id,
+      remoteId: 'project-a',
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-01T00:00:00Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    await deleteRemoteServers([scopedA.id, scopedB.id]);
+
+    expect((await getRemoteServers()).map((server) => server.id)).toEqual([
+      archive.id,
+    ]);
+    expect(await db.projects.get('cached-proj-1')).toBeDefined();
+  });
+
   it('persists records across database reopen', async () => {
     const server = await createRemoteServer({
       baseUrl: 'https://persistent.example.com',
@@ -81,5 +115,20 @@ describe('remote server repository', () => {
     expect(retrieved).toBeDefined();
     expect(retrieved!.baseUrl).toBe('https://persistent.example.com');
     expect(retrieved!.status).toBe('connected');
+  });
+
+  it('persists optional project access scope metadata', async () => {
+    const server = await createRemoteServer({
+      baseUrl: 'https://scoped.example.com',
+      token: 'scoped-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+
+    const retrieved = await getRemoteServer(server.id);
+
+    expect(retrieved?.accessScope).toEqual({
+      type: 'project',
+      projectId: 'project-a',
+    });
   });
 });

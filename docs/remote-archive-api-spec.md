@@ -1,9 +1,37 @@
 # CoMapeo Cloud Remote Archive API Spec
 
 > Generated from `demo.comapeo.cloud` (v0.4.0) + `comapeo-cloud` main branch source code.
-> Auth: Bearer token (shared across all projects on the same server)
+> Auth: Bearer token. Legacy archive-wide bearer credentials remain shared across
+> all projects on the same server. Project-scoped bearer credentials are minted
+> by the archive and are limited by the server to one project.
 
 ---
+
+## Authentication Scope
+
+Existing archive-wide bearer credentials are unchanged: a client that has an
+archive-wide token can list every project on the archive and read resources for
+those projects according to the existing endpoint contracts below.
+
+Project-scoped credentials are separate opaque bearer tokens. The Cloud App must
+not inspect, parse, or authorize from token contents. The archive server enforces
+scope on every request:
+
+- `GET /projects` with an archive-wide bearer token returns the normal archive
+  project list.
+- `GET /projects` with a project-scoped bearer token returns only the authorized
+  project.
+- Requests for out-of-scope project resources are unavailable and must be
+  indistinguishable from unavailable or missing resources to the client.
+
+The Cloud App does not add client-side authorization filtering for this feature.
+It stores the invite access scope for UX and state reconciliation, but the remote
+archive remains the authorization source of truth. The sync protocol does not
+change; project-scoped credentials simply cause the server to expose the smaller
+authorized project snapshot.
+
+Deployment order matters: the server capability must ship before the Cloud App
+scoped-invite UI can work against a real archive.
 
 ## Endpoints
 
@@ -35,6 +63,51 @@ Returns HTTP 200 (empty body).
 ```
 
 `name` is optional (may be absent).
+
+With legacy archive-wide bearer auth this endpoint returns all authorized
+archive projects as before. With a project-scoped bearer token this endpoint
+returns only the single project authorized for that credential.
+
+---
+
+### `POST /projects/:projectPublicId/accessTokens` — Mint project-scoped bearer token
+
+Requires an archive-wide bearer token. Project-scoped tokens cannot mint other
+project tokens.
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "token": "<opaque-project-scoped-token>",
+    "projectId": "base32-string"
+  }
+}
+```
+
+The returned `token` is opaque client data. Clients must send it as bearer auth
+and must not derive scope, project identity, expiry, or authorization decisions
+from the token value.
+
+The response `projectId` is the server-confirmed project id for the minted
+credential. The server enforces the returned credential's scope on `GET
+/projects` and every project resource endpoint.
+
+If project access tokens are not configured, the server returns:
+
+```json
+{
+  "error": {
+    "code": "PROJECT_ACCESS_TOKENS_UNAVAILABLE",
+    "message": "Project access tokens are not configured on this server"
+  }
+}
+```
+
+Server operators may configure `PROJECT_ACCESS_TOKEN_SECRET` to enable this
+capability. Archives without that optional secret preserve legacy archive-wide
+auth behavior and cannot issue project-scoped credentials.
 
 ---
 

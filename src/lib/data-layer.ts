@@ -23,7 +23,7 @@ import {
   matchObservationToPreset,
 } from '@/lib/preset-utils';
 import type { SyncOptions, SyncResult } from '@/lib/sync';
-import { syncArchive } from '@/lib/sync-coordinator';
+import { type SyncArchiveControl, syncArchive } from '@/lib/sync-coordinator';
 import { useAuthStore } from '@/stores/auth-store';
 
 // Re-export types from db
@@ -284,7 +284,7 @@ export function getSyncStatus(): {
 export function syncRemoteArchive(
   serverId: string,
   options?: SyncOptions,
-  control?: { isCancelled?: () => boolean },
+  control?: SyncArchiveControl,
 ): Promise<SyncResult> {
   return syncArchive(serverId, options, control);
 }

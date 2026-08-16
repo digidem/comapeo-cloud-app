@@ -8,11 +8,22 @@ import { defineMessages, useIntl } from 'react-intl';
 import { StorageSettings } from '@/components/shared/StorageSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { InviteApiError, createEncryptedInvite } from '@/lib/api-client';
+import {
+  ApiError,
+  InviteApiError,
+  NetworkError,
+  apiClient,
+  createEncryptedInvite,
+} from '@/lib/api-client';
+import { syncRemoteArchive } from '@/lib/data-layer';
+import type { Project } from '@/lib/db';
+import { getProjects as getLocalProjects } from '@/lib/local-repositories';
 import {
   exportLocalStorageData,
   importLocalStorageData,
 } from '@/lib/local-storage-utils';
+import type { InviteAccessScope } from '@/lib/schemas/invite';
+import { selectActiveServer, useAuthStore } from '@/stores/auth-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const _messages = defineMessages({
@@ -32,6 +43,41 @@ const _messages = defineMessages({
   generateButton: {
     id: 'settings.invites.generate.button',
     defaultMessage: 'Generate Invite',
+  },
+  scopeArchiveWide: {
+    id: 'settings.invites.scope.archiveWide',
+    defaultMessage: 'Archive-wide',
+  },
+  scopeSpecificProject: {
+    id: 'settings.invites.scope.specificProject',
+    defaultMessage: 'Specific project',
+  },
+  scopedProjectUnavailable: {
+    id: 'settings.invites.scope.unavailable',
+    defaultMessage:
+      'Full archive access is required to create project invitations.',
+  },
+  scopedProjectPlaceholder: {
+    id: 'settings.invites.scope.projectPlaceholder',
+    defaultMessage: 'Select a project',
+  },
+  scopedProjectRequired: {
+    id: 'settings.invites.scope.projectRequired',
+    defaultMessage: 'Select a project.',
+  },
+  scopedProjectUnsupported: {
+    id: 'settings.invites.scope.unsupported',
+    defaultMessage: 'This archive does not support project-scoped invitations.',
+  },
+  scopedProjectMissing: {
+    id: 'settings.invites.scope.projectMissing',
+    defaultMessage:
+      'That project is no longer available. Refreshing project list.',
+  },
+  scopedProjectNetwork: {
+    id: 'settings.invites.scope.networkError',
+    defaultMessage:
+      'Unable to reach the archive. Check your connection and try again.',
   },
   resultsTitle: {
     id: 'settings.invites.results.title',
@@ -117,7 +163,7 @@ const _messages = defineMessages({
   },
 });
 
-const generateInviteSchema = v.object({
+const archiveInviteSchema = v.object({
   remoteArchiveUrl: v.pipe(
     v.string(),
     v.nonEmpty('Required'),
@@ -126,7 +172,18 @@ const generateInviteSchema = v.object({
   bearerToken: v.pipe(v.string(), v.nonEmpty('Required')),
 });
 
+const generateInviteSchema = v.object({
+  remoteArchiveUrl: v.optional(v.string(), ''),
+  bearerToken: v.optional(v.string(), ''),
+});
+
 type GenerateInviteForm = v.InferInput<typeof generateInviteSchema>;
+type InviteScopeChoice = 'archive' | 'project';
+
+interface ProjectOption {
+  label: string;
+  remoteId: string;
+}
 
 const LOCALE_LABELS: Record<string, string> = {
   en: 'English',
@@ -134,12 +191,23 @@ const LOCALE_LABELS: Record<string, string> = {
   es: 'Espa\u00f1ol',
 };
 
+function normalizeAccessScope(
+  accessScope?: InviteAccessScope,
+): InviteAccessScope {
+  return accessScope ?? { type: 'archive' };
+}
+
 export function SettingsScreen() {
   const intl = useIntl();
   const locale = useLocaleStore((s) => s.locale);
+  const activeServer = useAuthStore((s) => selectActiveServer(s));
+  const activeServerId = activeServer?.id;
 
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [inviteScope, setInviteScope] = useState<InviteScopeChoice>('archive');
+  const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -159,10 +227,46 @@ export function SettingsScreen() {
   const {
     register,
     handleSubmit,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<GenerateInviteForm>({
     resolver: valibotResolver(generateInviteSchema),
+    defaultValues: { remoteArchiveUrl: '', bearerToken: '' },
   });
+
+  const activeServerScope = normalizeAccessScope(activeServer?.accessScope);
+  const canGenerateScopedInvite = Boolean(
+    activeServer?.id &&
+    activeServer.baseUrl &&
+    activeServer.token &&
+    activeServerScope.type === 'archive',
+  );
+  const resolvedInviteScope: InviteScopeChoice = canGenerateScopedInvite
+    ? inviteScope
+    : 'archive';
+
+  const loadProjectOptions = useCallback(async (): Promise<ProjectOption[]> => {
+    if (!activeServerId) {
+      return [];
+    }
+
+    const projects = await getLocalProjects();
+    return projects
+      .filter((project): project is Project & { remoteId: string } =>
+        Boolean(
+          project.sourceType === 'remoteArchive' &&
+          project.sourceId === activeServerId &&
+          !project.deleted &&
+          project.remoteId &&
+          project.remoteId.trim().length > 0,
+        ),
+      )
+      .map((project) => ({
+        label: project.name ?? project.remoteId,
+        remoteId: project.remoteId,
+      }));
+  }, [activeServerId]);
 
   useEffect(() => {
     return () => {
@@ -172,6 +276,18 @@ export function SettingsScreen() {
       timeoutIdsRef.current = [];
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadProjectOptions().then((options) => {
+      if (!cancelled) {
+        setProjectOptions(options);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadProjectOptions]);
 
   const scheduleTimeout = useCallback(
     (callback: () => void, delayMs: number) => {
@@ -186,21 +302,122 @@ export function SettingsScreen() {
     [],
   );
 
+  const setGeneratedInvite = useCallback((code: string) => {
+    const appOrigin = window.location.origin;
+    setInviteUrl(`${appOrigin}/invite?code=${encodeURIComponent(code)}`);
+    setInviteCode(code);
+  }, []);
+
+  const mapScopedInviteError = useCallback(
+    (err: unknown): string => {
+      if (err instanceof NetworkError) {
+        return intl.formatMessage(_messages.scopedProjectNetwork);
+      }
+      if (err instanceof ApiError) {
+        if (err.status === 403) {
+          return intl.formatMessage(_messages.scopedProjectUnavailable);
+        }
+        if (
+          err.status === 501 ||
+          err.code === 'PROJECT_ACCESS_TOKENS_UNAVAILABLE'
+        ) {
+          return intl.formatMessage(_messages.scopedProjectUnsupported);
+        }
+        if (err.status === 404 || err.kind === 'missing-project') {
+          return intl.formatMessage(_messages.scopedProjectMissing);
+        }
+      }
+      return intl.formatMessage(_messages.generateGenericError);
+    },
+    [intl],
+  );
+
+  const refreshActiveArchiveProjects = useCallback(() => {
+    if (!activeServer?.id || !activeServer.baseUrl || !activeServer.token) {
+      return;
+    }
+    void syncRemoteArchive(activeServer.id, {
+      baseUrl: activeServer.baseUrl,
+      token: activeServer.token,
+      accessScope: normalizeAccessScope(activeServer.accessScope),
+    }).finally(() => {
+      void loadProjectOptions().then(setProjectOptions);
+    });
+  }, [activeServer, loadProjectOptions]);
+
   const onGenerate = useCallback(
     async (data: GenerateInviteForm) => {
       setGenerateError(null);
+      setInviteUrl(null);
+      setInviteCode(null);
+      clearErrors();
+
       try {
+        if (resolvedInviteScope === 'project') {
+          if (!canGenerateScopedInvite || !activeServer) {
+            setGenerateError(
+              intl.formatMessage(_messages.scopedProjectUnavailable),
+            );
+            return;
+          }
+          if (!selectedProjectId) {
+            setGenerateError(
+              intl.formatMessage(_messages.scopedProjectRequired),
+            );
+            return;
+          }
+
+          const minted = await apiClient.createProjectAccessToken(
+            selectedProjectId,
+            { baseUrl: activeServer.baseUrl, token: activeServer.token },
+          );
+          if (minted.projectId !== selectedProjectId) {
+            throw new ApiError(
+              200,
+              'PROJECT_ACCESS_TOKEN_PROJECT_MISMATCH',
+              'Project access token response did not match the selected project',
+            );
+          }
+          const scope: InviteAccessScope = {
+            type: 'project',
+            projectId: selectedProjectId,
+          };
+          const { code } = await createEncryptedInvite(
+            activeServer.baseUrl,
+            minted.token,
+            24,
+            scope,
+          );
+          setGeneratedInvite(code);
+          return;
+        }
+
+        const parsed = v.safeParse(archiveInviteSchema, data);
+        if (!parsed.success) {
+          for (const issue of parsed.issues) {
+            const key = issue.path?.[0]?.key;
+            if (key === 'remoteArchiveUrl' || key === 'bearerToken') {
+              setError(key, { message: issue.message });
+            }
+          }
+          return;
+        }
+
         const { code } = await createEncryptedInvite(
-          data.remoteArchiveUrl,
-          data.bearerToken,
+          parsed.output.remoteArchiveUrl,
+          parsed.output.bearerToken,
         );
-        const appOrigin = window.location.origin;
-        setInviteUrl(`${appOrigin}/invite?code=${encodeURIComponent(code)}`);
-        setInviteCode(code);
+        setGeneratedInvite(code);
       } catch (err) {
-        setInviteUrl(null);
-        setInviteCode(null);
-        if (
+        if (resolvedInviteScope === 'project') {
+          setGenerateError(mapScopedInviteError(err));
+          if (
+            err instanceof ApiError &&
+            (err.status === 404 || err.kind === 'missing-project')
+          ) {
+            refreshActiveArchiveProjects();
+          }
+        } else if (
           err instanceof InviteApiError &&
           err.code === 'INVITE_KEY_MISSING'
         ) {
@@ -212,7 +429,18 @@ export function SettingsScreen() {
         }
       }
     },
-    [intl],
+    [
+      activeServer,
+      canGenerateScopedInvite,
+      clearErrors,
+      intl,
+      resolvedInviteScope,
+      mapScopedInviteError,
+      refreshActiveArchiveProjects,
+      selectedProjectId,
+      setError,
+      setGeneratedInvite,
+    ],
   );
 
   const copyToClipboard = useCallback(
@@ -326,6 +554,66 @@ export function SettingsScreen() {
         onSubmit={handleSubmit(onGenerate)}
         className="mt-4 space-y-4 max-w-md"
       >
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-text">
+            {intl.formatMessage(_messages.scopeSpecificProject)}
+          </legend>
+          <label className="flex min-h-[44px] items-center gap-2 text-sm text-text">
+            <input
+              type="radio"
+              name="invite-scope"
+              value="archive"
+              checked={resolvedInviteScope === 'archive'}
+              onChange={() => {
+                setInviteScope('archive');
+                setSelectedProjectId('');
+                setGenerateError(null);
+              }}
+            />
+            {intl.formatMessage(_messages.scopeArchiveWide)}
+          </label>
+          <label className="flex min-h-[44px] items-center gap-2 text-sm text-text">
+            <input
+              type="radio"
+              name="invite-scope"
+              value="project"
+              checked={resolvedInviteScope === 'project'}
+              disabled={!canGenerateScopedInvite}
+              onChange={() => {
+                setInviteScope('project');
+                setGenerateError(null);
+                void loadProjectOptions().then(setProjectOptions);
+              }}
+            />
+            {intl.formatMessage(_messages.scopeSpecificProject)}
+          </label>
+          {!canGenerateScopedInvite && (
+            <p className="text-xs text-text-muted">
+              {intl.formatMessage(_messages.scopedProjectUnavailable)}
+            </p>
+          )}
+        </fieldset>
+
+        {resolvedInviteScope === 'project' && canGenerateScopedInvite && (
+          <div className="flex flex-col gap-1">
+            <select
+              aria-label={intl.formatMessage(_messages.scopeSpecificProject)}
+              value={selectedProjectId}
+              onChange={(event) => setSelectedProjectId(event.target.value)}
+              className="w-full rounded-input border border-border bg-surface-card px-3 py-2 min-h-[44px] text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary"
+            >
+              <option value="">
+                {intl.formatMessage(_messages.scopedProjectPlaceholder)}
+              </option>
+              {projectOptions.map((project) => (
+                <option key={project.remoteId} value={project.remoteId}>
+                  {project.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <Input
           label={intl.formatMessage(_messages.generateUrl)}
           placeholder="https://archive.example.com"

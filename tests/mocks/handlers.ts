@@ -37,6 +37,32 @@ export const handlers = [
     return HttpResponse.json(projectsFixture);
   }),
 
+  http.post('*/projects/:projectId/accessTokens', ({ request, params }) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid bearer token',
+          },
+        },
+        { status: 401 },
+      );
+    }
+    const projectId =
+      typeof params.projectId === 'string' ? params.projectId : '';
+    if (!projectId) {
+      return HttpResponse.json(
+        { error: { code: 'NOT_FOUND', message: 'Project not found' } },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json({
+      data: { token: 'cpat1.mock-project-token', projectId },
+    });
+  }),
+
   http.get('*/projects/:projectId', ({ request, params }) => {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -273,7 +299,14 @@ export const handlers = [
           typeof parsed.url === 'string' &&
           typeof parsed.token === 'string'
         ) {
-          return HttpResponse.json({ url: parsed.url, token: parsed.token });
+          const responseBody: Record<string, unknown> = {
+            url: parsed.url,
+            token: parsed.token,
+          };
+          if ('scope' in parsed) {
+            responseBody.scope = parsed.scope;
+          }
+          return HttpResponse.json(responseBody);
         }
       } catch {
         // fall through

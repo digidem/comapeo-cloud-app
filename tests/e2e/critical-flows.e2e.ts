@@ -111,6 +111,194 @@ async function seedProjectWithObservations(
   return projectLocalId;
 }
 
+type MockInviteScope =
+  { type: 'archive' } | { type: 'project'; projectId: string };
+
+type MockInvitePayload = {
+  url: string;
+  token: string;
+  scope?: MockInviteScope;
+};
+
+type IndexedDbRecord = Record<string, unknown>;
+
+function createMockInviteCode(payload: MockInvitePayload) {
+  const encoded = btoa(JSON.stringify(payload))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  return `mock-encrypted-code-${encoded}`;
+}
+
+async function acceptMockInvite(
+  page: import('@playwright/test').Page,
+  code: string,
+  origin = '',
+) {
+  await page.goto(`${origin}/invite?code=${encodeURIComponent(code)}`);
+  await page.waitForLoadState('domcontentloaded');
+
+  await expect(page.getByRole('heading', { name: 'Connected!' })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.waitForURL((url) => url.pathname === '/', { timeout: 10_000 });
+}
+
+async function readIndexedDbRecords<T extends IndexedDbRecord>(
+  page: import('@playwright/test').Page,
+  storeName: string,
+): Promise<T[]> {
+  return (await page.evaluate(
+    (name) =>
+      new Promise<IndexedDbRecord[]>((resolve, reject) => {
+        const req = indexedDB.open('comapeo-cloud-app');
+        req.onsuccess = () => {
+          const db = req.result;
+          try {
+            if (!db.objectStoreNames.contains(name)) {
+              resolve([]);
+              db.close();
+              return;
+            }
+
+            const tx = db.transaction(name, 'readonly');
+            const store = tx.objectStore(name);
+            const getAllReq = store.getAll();
+            getAllReq.onsuccess = () => {
+              resolve(getAllReq.result as IndexedDbRecord[]);
+              db.close();
+            };
+            getAllReq.onerror = () => {
+              db.close();
+              reject(getAllReq.error);
+            };
+          } catch (err) {
+            db.close();
+            reject(err);
+          }
+        };
+        req.onerror = () => reject(req.error);
+      }),
+    storeName,
+  )) as T[];
+}
+
+function getStringField(record: IndexedDbRecord, field: string) {
+  const value = record[field];
+  return typeof value === 'string' ? value : null;
+}
+
+function getObjectField(record: IndexedDbRecord, field: string) {
+  const value = record[field];
+  return value && typeof value === 'object' ? (value as IndexedDbRecord) : null;
+}
+
+function getRemoteServerLocalId(server: IndexedDbRecord) {
+  return getStringField(server, 'localId') ?? getStringField(server, 'id');
+}
+
+function getRemoteArchiveProjectServerLocalId(project: IndexedDbRecord) {
+  const remoteArchive = getObjectField(project, 'remoteArchive');
+
+  return (
+    (remoteArchive &&
+      (getStringField(remoteArchive, 'remoteServerLocalId') ??
+        getStringField(remoteArchive, 'serverLocalId') ??
+        getStringField(remoteArchive, 'serverId') ??
+        getStringField(remoteArchive, 'remoteServerId'))) ??
+    getStringField(project, 'remoteServerLocalId') ??
+    getStringField(project, 'remoteArchiveServerLocalId') ??
+    getStringField(project, 'serverLocalId') ??
+    getStringField(project, 'remoteServerId') ??
+    getStringField(project, 'sourceId')
+  );
+}
+
+function getRemoteArchiveProjectRemoteId(project: IndexedDbRecord) {
+  const remoteArchive = getObjectField(project, 'remoteArchive');
+
+  return (
+    (remoteArchive && getStringField(remoteArchive, 'remoteId')) ??
+    getStringField(project, 'remoteId')
+  );
+}
+
+function getNonDeletedRemoteArchiveProjectsForServer(
+  projects: IndexedDbRecord[],
+  serverLocalId: string,
+) {
+  return projects.filter((project) => {
+    if (project.deleted === true) {
+      return false;
+    }
+
+    return getRemoteArchiveProjectServerLocalId(project) === serverLocalId;
+  });
+}
+
+async function chooseProjectForInvite(
+  page: import('@playwright/test').Page,
+  projectId: string,
+) {
+  const projectName = 'Test Project 1';
+
+  await page.getByLabel('Specific project').click();
+
+  const projectCombobox = page
+    .getByRole('combobox', { name: /project/i })
+    .first();
+  await expect(projectCombobox).toBeVisible({ timeout: 10_000 });
+
+  const projectValue = await projectCombobox
+    .locator('option')
+    .evaluateAll(
+      (options, project) => {
+        const projectOptions = options.filter(
+          (candidate): candidate is HTMLOptionElement =>
+            candidate instanceof HTMLOptionElement,
+        );
+        const option =
+          projectOptions.find(
+            (candidate) =>
+              candidate.value === project.id ||
+              Boolean(candidate.textContent?.includes(project.id)) ||
+              Boolean(candidate.textContent?.includes(project.name)),
+          ) ??
+          projectOptions.find(
+            (candidate) =>
+              candidate.value.length > 0 &&
+              !candidate.disabled &&
+              !candidate.textContent?.match(/select/i),
+          );
+
+        return option instanceof HTMLOptionElement ? option.value : null;
+      },
+      { id: projectId, name: projectName },
+    )
+    .catch(() => null);
+
+  if (projectValue) {
+    await projectCombobox.selectOption(projectValue);
+    return;
+  }
+
+  await projectCombobox.click();
+  const projectMatcher = new RegExp(`${projectName}|${projectId}`, 'i');
+
+  try {
+    await page
+      .getByRole('option', { name: projectMatcher })
+      .first()
+      .click({ timeout: 2_000 });
+    return;
+  } catch {
+    // Fall through to text matching for non-listbox custom selects.
+  }
+
+  await page.getByText(projectMatcher).last().click({ timeout: 10_000 });
+}
+
 // ---------------------------------------------------------------------------
 // Critical User Flow E2E Tests
 // ---------------------------------------------------------------------------
@@ -422,5 +610,125 @@ test.describe('Critical User Flows', () => {
 
     // Verify we end up on the home page after the redirect
     await page.waitForURL('/', { timeout: 10_000 });
+  });
+
+  // -------------------------------------------------------------------------
+  // Flow 8: Project-scoped invite does not downgrade archive access (issue #237)
+  // -------------------------------------------------------------------------
+  test('project-scoped invite does not downgrade archive credentials and hydrates scoped projects (issue #237)', async ({
+    page,
+    browser,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium');
+
+    const ARCHIVE_URL = 'https://archive.example.com';
+    const BROAD_TOKEN = 'e2e-archive-wide-token';
+    const SCOPED_TOKEN = 'cpat1.mock-project-token';
+    const SCOPED_PROJECT_ID = 'test-project-id-1';
+
+    const broadInviteCode = createMockInviteCode({
+      url: ARCHIVE_URL,
+      token: BROAD_TOKEN,
+      scope: { type: 'archive' },
+    });
+
+    await acceptMockInvite(page, broadInviteCode);
+
+    // Force a full navigation so the persisted broad remote server hydrates
+    // before generating the scoped project invite from Settings.
+    await page.goto('/settings');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible({
+      timeout: 5_000,
+    });
+
+    await chooseProjectForInvite(page, SCOPED_PROJECT_ID);
+    await page.getByRole('button', { name: /generate invite/i }).click();
+
+    await expect(page.getByRole('heading', { name: /^results$/i })).toBeVisible(
+      { timeout: 5_000 },
+    );
+
+    const inviteUrlEl = page.getByText(/\/invite\?code=/).first();
+    await expect(inviteUrlEl).toBeVisible();
+    const renderedUrl = (await inviteUrlEl.textContent())?.trim() ?? '';
+
+    expect(renderedUrl).toMatch(/^https?:\/\/[^/]+\/invite\?code=[^&]+$/);
+    expect(renderedUrl).not.toContain('token=');
+    expect(renderedUrl).not.toContain(BROAD_TOKEN);
+    expect(renderedUrl).not.toContain(SCOPED_TOKEN);
+
+    const scopedInviteCode = new URL(renderedUrl).searchParams.get('code');
+    expect(scopedInviteCode).toBeTruthy();
+
+    const broadServersBefore = await readIndexedDbRecords(
+      page,
+      'remoteServers',
+    );
+    expect(broadServersBefore).toHaveLength(1);
+    expect(broadServersBefore[0]).toMatchObject({
+      baseUrl: ARCHIVE_URL,
+      token: BROAD_TOKEN,
+      accessScope: { type: 'archive' },
+    });
+
+    await acceptMockInvite(page, scopedInviteCode ?? '');
+
+    const broadServersAfter = await readIndexedDbRecords(page, 'remoteServers');
+    expect(broadServersAfter).toHaveLength(1);
+    expect(broadServersAfter[0]).toMatchObject({
+      baseUrl: ARCHIVE_URL,
+      token: BROAD_TOKEN,
+      accessScope: { type: 'archive' },
+    });
+
+    const appOrigin = new URL(page.url()).origin;
+    const freshContext = await browser.newContext();
+
+    try {
+      const freshPage = await freshContext.newPage();
+      await setupMockServer(freshPage);
+      await acceptMockInvite(freshPage, scopedInviteCode ?? '', appOrigin);
+
+      await expect
+        .poll(
+          async () =>
+            (await readIndexedDbRecords(freshPage, 'remoteServers')).length,
+          { timeout: 10_000 },
+        )
+        .toBe(1);
+
+      const scopedServers = await readIndexedDbRecords(
+        freshPage,
+        'remoteServers',
+      );
+      expect(scopedServers).toHaveLength(1);
+      expect(scopedServers[0]).toMatchObject({
+        baseUrl: ARCHIVE_URL,
+        token: SCOPED_TOKEN,
+        accessScope: { type: 'project', projectId: SCOPED_PROJECT_ID },
+      });
+
+      const scopedServerLocalId = getRemoteServerLocalId(
+        scopedServers[0] ?? {},
+      );
+      expect(scopedServerLocalId).toBeTruthy();
+
+      await expect
+        .poll(
+          async () => {
+            const projects = await readIndexedDbRecords(freshPage, 'projects');
+            return getNonDeletedRemoteArchiveProjectsForServer(
+              projects,
+              scopedServerLocalId ?? '',
+            ).map(getRemoteArchiveProjectRemoteId);
+          },
+          { timeout: 15_000 },
+        )
+        .toEqual([SCOPED_PROJECT_ID]);
+    } finally {
+      await freshContext.close();
+    }
   });
 });

@@ -5,9 +5,11 @@ import { setComapeoStorageItem } from '@/lib/comapeo-local-storage';
 import {
   createRemoteServer,
   deleteRemoteServer,
+  deleteRemoteServers,
   getRemoteServers,
   updateRemoteServer,
 } from '@/lib/local-repositories';
+import type { InviteAccessScope } from '@/lib/schemas/invite';
 
 // Types
 // ---------------------------------------------------------------------------
@@ -37,6 +39,7 @@ export interface RemoteArchiveServer {
   label: string;
   baseUrl: string;
   token: string;
+  accessScope?: InviteAccessScope;
   lastSyncedAt?: string;
   lastSuccessfulSyncAt?: string;
   onboardingStatus?: ArchiveLifecycleStatus;
@@ -79,6 +82,7 @@ export interface AuthState extends ActiveArchiveState {
     label: string;
     baseUrl: string;
     token: string;
+    accessScope?: InviteAccessScope;
     allowDuplicate?: boolean;
   }) => Promise<string>;
   removeServer: (id: string) => Promise<void>;
@@ -100,6 +104,9 @@ export interface AuthState extends ActiveArchiveState {
       errorMessage?: string;
       lastSuccessfulSyncAt?: string;
     },
+  ) => Promise<void>;
+  consolidateScopedServersForArchive: (
+    archiveServerId: string,
   ) => Promise<void>;
   hydrateServers: () => Promise<void>;
   clearAll: () => void;
@@ -187,6 +194,39 @@ function normalizeForIdentity(baseUrl: string): string {
   return normalized.ok ? normalized.value : baseUrl.trim().replace(/\/+$/, '');
 }
 
+function normalizeAccessScope(
+  accessScope?: InviteAccessScope,
+): InviteAccessScope {
+  return accessScope ?? { type: 'archive' };
+}
+
+function isArchiveScope(accessScope?: InviteAccessScope): boolean {
+  return normalizeAccessScope(accessScope).type === 'archive';
+}
+
+function isSameAccessScope(
+  left?: InviteAccessScope,
+  right?: InviteAccessScope,
+): boolean {
+  const normalizedLeft = normalizeAccessScope(left);
+  const normalizedRight = normalizeAccessScope(right);
+  if (normalizedLeft.type !== normalizedRight.type) return false;
+  if (normalizedLeft.type === 'archive') return true;
+  if (normalizedRight.type !== 'project') return false;
+  return normalizedLeft.projectId === normalizedRight.projectId;
+}
+
+function applyServerUpdates(
+  server: RemoteArchiveServer,
+  updates: Partial<Omit<RemoteArchiveServer, 'id'>>,
+): RemoteArchiveServer {
+  const next: RemoteArchiveServer = { ...server, ...updates };
+  if ('accessScope' in updates && updates.accessScope === undefined) {
+    delete next.accessScope;
+  }
+  return next;
+}
+
 function matchesAuthIdentity(
   state: AuthState,
   identity: AuthIdentity,
@@ -213,21 +253,46 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   addServer: async (config) => {
     const normalized = normalizeForIdentity(config.baseUrl);
-    const existing = get().servers.find(
+    const matchingBaseServers = get().servers.filter(
       (server) => normalizeForIdentity(server.baseUrl) === normalized,
     );
+    const incomingScope = normalizeAccessScope(config.accessScope);
+    const existing =
+      incomingScope.type === 'project'
+        ? (matchingBaseServers.find((server) =>
+            isSameAccessScope(server.accessScope, incomingScope),
+          ) ??
+          matchingBaseServers.find((server) =>
+            isArchiveScope(server.accessScope),
+          ))
+        : matchingBaseServers.find((server) =>
+            isArchiveScope(server.accessScope),
+          );
 
     if (existing) {
       if (!config.allowDuplicate) {
         throw new DuplicateServerError(existing.id, existing.baseUrl);
       }
 
-      if (existing.token !== config.token) {
-        await updateRemoteServer(existing.id, { token: config.token });
+      if (
+        incomingScope.type === 'project' &&
+        isArchiveScope(existing.accessScope)
+      ) {
+        return existing.id;
+      }
+
+      if (
+        existing.token !== config.token ||
+        !isSameAccessScope(existing.accessScope, incomingScope)
+      ) {
+        await updateRemoteServer(existing.id, {
+          token: config.token,
+          accessScope: incomingScope,
+        });
         set((state) => {
           const servers = state.servers.map((server) =>
             server.id === existing.id
-              ? { ...server, token: config.token }
+              ? { ...server, token: config.token, accessScope: incomingScope }
               : server,
           );
           return {
@@ -244,12 +309,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       baseUrl: config.baseUrl,
       label: config.label,
       token: config.token,
+      accessScope: incomingScope,
     });
     const newServer: RemoteArchiveServer = {
       id: server.id,
       label: config.label,
       baseUrl: config.baseUrl,
       token: config.token,
+      accessScope: incomingScope,
       status: 'idle',
     };
 
@@ -374,12 +441,53 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
     set((state) => {
       const servers = state.servers.map((server) =>
-        server.id === id ? { ...server, ...updates } : server,
+        server.id === id ? applyServerUpdates(server, updates) : server,
       );
 
       return {
         servers,
         ...deriveActiveFields(servers, state.activeServerId),
+      };
+    });
+  },
+
+  consolidateScopedServersForArchive: async (archiveServerId) => {
+    const archiveServer = get().servers.find(
+      (server) => server.id === archiveServerId,
+    );
+    if (!archiveServer || !isArchiveScope(archiveServer.accessScope)) return;
+
+    const normalizedArchiveBaseUrl = normalizeForIdentity(
+      archiveServer.baseUrl,
+    );
+    const scopedServersToRemove = get().servers.filter(
+      (server) =>
+        server.id !== archiveServerId &&
+        normalizeForIdentity(server.baseUrl) === normalizedArchiveBaseUrl &&
+        normalizeAccessScope(server.accessScope).type === 'project',
+    );
+
+    await deleteRemoteServers(scopedServersToRemove.map((server) => server.id));
+
+    set((state) => {
+      const removedIds = new Set(
+        scopedServersToRemove.map((server) => server.id),
+      );
+      const servers = state.servers.filter(
+        (server) => !removedIds.has(server.id),
+      );
+      const activeServerId = removedIds.has(state.activeServerId ?? '')
+        ? archiveServerId
+        : state.activeServerId;
+
+      if (activeServerId !== state.activeServerId) {
+        persistActiveServerId(activeServerId);
+      }
+
+      return {
+        servers,
+        activeServerId,
+        ...deriveActiveFields(servers, activeServerId),
       };
     });
   },
@@ -392,6 +500,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         label: record.label ?? record.baseUrl,
         baseUrl: record.baseUrl,
         token: record.token ?? '',
+        accessScope: normalizeAccessScope(record.accessScope),
         status: ([
           'idle',
           'pending',

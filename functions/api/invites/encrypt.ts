@@ -53,9 +53,9 @@ export async function onRequestPost({
       );
     }
 
-    const { url, token, ttlHours } = parsed.output;
+    const { url, token, ttlHours, scope } = parsed.output;
     const exp = Math.floor(Date.now() / 1000) + ttlHours * 3600;
-    const code = await encryptInvite({ url, token, exp }, rawKey);
+    const code = await encryptInvite({ url, token, exp, scope }, rawKey);
 
     return withNoStore(Response.json({ code }));
   } catch {

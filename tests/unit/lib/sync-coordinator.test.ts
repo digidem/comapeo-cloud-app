@@ -19,9 +19,12 @@ const mocks = vi.hoisted(() => {
       token: string;
       status: string;
       onboardingStatus?: string;
+      accessScope?:
+        { type: 'archive' } | { type: 'project'; projectId: string };
     }>,
     addServer: vi.fn(),
     updateServerLifecycle: vi.fn().mockResolvedValue(undefined),
+    consolidateScopedServersForArchive: vi.fn().mockResolvedValue(undefined),
   };
 
   return {
@@ -79,6 +82,7 @@ describe('sync coordinator', () => {
     ];
     mocks.state.addServer.mockReset().mockResolvedValue('server-1');
     mocks.state.updateServerLifecycle.mockClear();
+    mocks.state.consolidateScopedServersForArchive.mockClear();
     mocks.healthCheck.mockReset().mockResolvedValue(true);
     mocks.getProjects.mockReset().mockResolvedValue({ data: [] });
     mocks.syncRemoteArchive.mockReset().mockResolvedValue(readyResult);
@@ -185,6 +189,160 @@ describe('sync coordinator', () => {
       'server-1',
       expect.objectContaining({ token: TEST_CREDENTIAL }),
     );
+  });
+
+  it('manual onboarding creates an archive candidate instead of treating same-base project-scoped records as duplicates', async () => {
+    mocks.state.servers = [
+      {
+        id: 'scoped-project',
+        label: 'Scoped Project',
+        baseUrl: 'https://archive.example.com',
+        token: 'project-token',
+        status: 'connected',
+        onboardingStatus: 'ready',
+        accessScope: { type: 'project', projectId: 'project-a' },
+      },
+    ];
+    mocks.state.addServer.mockResolvedValueOnce('archive-candidate');
+
+    const result = await onboardArchive({
+      baseUrl: 'https://archive.example.com/',
+      token: TEST_CREDENTIAL,
+      label: 'Archive',
+      source: 'manual',
+    });
+
+    expect(result).toMatchObject({ success: true, status: 'ready' });
+    expect(mocks.state.addServer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: 'https://archive.example.com',
+        token: TEST_CREDENTIAL,
+        accessScope: { type: 'archive' },
+        allowDuplicate: true,
+      }),
+    );
+    expect(mocks.syncRemoteArchive).toHaveBeenCalledWith(
+      'archive-candidate',
+      expect.objectContaining({ accessScope: { type: 'archive' } }),
+    );
+  });
+
+  it('manual onboarding still reports duplicate for an existing connected archive-wide same-base server', async () => {
+    mocks.state.servers = [
+      {
+        id: 'archive-wide',
+        label: 'Archive',
+        baseUrl: 'https://archive.example.com',
+        token: TEST_CREDENTIAL,
+        status: 'connected',
+        onboardingStatus: 'ready',
+        accessScope: { type: 'archive' },
+      },
+    ];
+
+    await expect(
+      onboardArchive({
+        baseUrl: 'https://archive.example.com/',
+        token: TEST_CREDENTIAL,
+        label: 'Archive',
+        source: 'manual',
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      errorCode: 'duplicate',
+    });
+    expect(mocks.state.addServer).not.toHaveBeenCalled();
+    expect(mocks.syncRemoteArchive).not.toHaveBeenCalled();
+  });
+
+  it('consolidates same-base project-scoped credentials only after a successful full archive sync', async () => {
+    await expect(
+      syncArchive('server-1', {
+        baseUrl: 'https://archive.example.com',
+        token: TEST_CREDENTIAL,
+        accessScope: { type: 'archive' },
+      }),
+    ).resolves.toEqual(readyResult);
+
+    expect(mocks.state.consolidateScopedServersForArchive).toHaveBeenCalledWith(
+      'server-1',
+    );
+  });
+
+  it.each([
+    [
+      'failed',
+      {
+        success: false,
+        status: 'error',
+        serverId: 'server-1',
+        projects: [],
+        warnings: [],
+        error: 'Sync failed',
+      } satisfies SyncResult,
+    ],
+    [
+      'partial',
+      {
+        success: false,
+        status: 'partial',
+        serverId: 'server-1',
+        projects: [],
+        warnings: ['Partial'],
+        error: 'Partial sync',
+      } satisfies SyncResult,
+    ],
+  ])(
+    'does not consolidate scoped records after a %s broad sync',
+    async (_name, result) => {
+      mocks.syncRemoteArchive.mockResolvedValueOnce(result);
+
+      await expect(
+        syncArchive('server-1', {
+          baseUrl: 'https://archive.example.com',
+          token: TEST_CREDENTIAL,
+          accessScope: { type: 'archive' },
+        }),
+      ).resolves.toEqual(result);
+
+      expect(
+        mocks.state.consolidateScopedServersForArchive,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not consolidate scoped records when a broad sync is cancelled', async () => {
+    await syncArchive(
+      'server-1',
+      {
+        baseUrl: 'https://archive.example.com',
+        token: TEST_CREDENTIAL,
+        accessScope: { type: 'archive' },
+      },
+      { isCancelled: () => true },
+    );
+
+    expect(
+      mocks.state.consolidateScopedServersForArchive,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('can defer scoped credential consolidation until the caller commits onboarding', async () => {
+    await expect(
+      syncArchive(
+        'server-1',
+        {
+          baseUrl: 'https://archive.example.com',
+          token: TEST_CREDENTIAL,
+          accessScope: { type: 'archive' },
+        },
+        { deferScopedConsolidation: true },
+      ),
+    ).resolves.toEqual(readyResult);
+
+    expect(
+      mocks.state.consolidateScopedServersForArchive,
+    ).not.toHaveBeenCalled();
   });
 
   it('stops before sync when cancellation happens during persistence', async () => {
@@ -307,6 +465,26 @@ describe('sync coordinator', () => {
 
       expect(capturedSignal).toBeInstanceOf(AbortSignal);
       expect(capturedSignal!.aborted).toBe(false);
+    });
+
+    it('includes stored server accessScope when resolving sync options without explicit options', async () => {
+      mocks.state.servers[0] = {
+        ...mocks.state.servers[0]!,
+        accessScope: { type: 'project', projectId: 'project-a' },
+      };
+      let capturedOptions: unknown;
+      mocks.syncRemoteArchive.mockImplementationOnce((_id, opts) => {
+        capturedOptions = opts;
+        return Promise.resolve(readyResult);
+      });
+
+      await syncArchive('server-1');
+
+      expect(capturedOptions).toMatchObject({
+        baseUrl: 'https://archive.example.com',
+        token: TEST_CREDENTIAL,
+        accessScope: { type: 'project', projectId: 'project-a' },
+      });
     });
 
     it('fires the ~2s cancellation poller and aborts the in-flight sync once isCancelled() flips true', async () => {

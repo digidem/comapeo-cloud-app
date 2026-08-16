@@ -24,6 +24,10 @@ export const apiClient = {
   async getProjects(_config?: unknown) {
     return { data: [] };
   },
+
+  async createProjectAccessToken(projectId: string, _config?: unknown) {
+    return { token: 'mock-project-access-token', projectId };
+  },
 };
 
 export class InviteApiError extends Error {
@@ -41,6 +45,7 @@ export async function createEncryptedInvite(
   _baseUrl: string,
   _token: string,
   _ttlHours?: number,
+  _accessScope?: unknown,
 ): Promise<{ code: string }> {
   return {
     code: LONG_MOCK_INVITE_CODE,

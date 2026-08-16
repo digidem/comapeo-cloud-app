@@ -450,6 +450,110 @@ describe('addServer deduplication', () => {
     expect(useAuthStore.getState().servers).toHaveLength(1);
     expect(useAuthStore.getState().servers[0]!.token).toBe('manual-token');
   });
+
+  it('refreshes the same scoped record for the same base URL and project', async () => {
+    const id1 = await useAuthStore.getState().addServer({
+      label: 'Project A',
+      baseUrl: 'https://archive.example.com',
+      token: 'old-scoped-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+
+    const id2 = await useAuthStore.getState().addServer({
+      label: 'Project A',
+      baseUrl: 'https://archive.example.com/',
+      token: 'new-scoped-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+      allowDuplicate: true,
+    });
+
+    const state = useAuthStore.getState();
+    expect(id2).toBe(id1);
+    expect(state.servers).toHaveLength(1);
+    expect(state.servers[0]).toMatchObject({
+      token: 'new-scoped-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+  });
+
+  it('allows different project scopes on the same base URL to coexist', async () => {
+    const id1 = await useAuthStore.getState().addServer({
+      label: 'Project A',
+      baseUrl: 'https://archive.example.com',
+      token: 'project-a-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+
+    const id2 = await useAuthStore.getState().addServer({
+      label: 'Project B',
+      baseUrl: 'https://archive.example.com',
+      token: 'project-b-token',
+      accessScope: { type: 'project', projectId: 'project-b' },
+      allowDuplicate: true,
+    });
+
+    const state = useAuthStore.getState();
+    expect(id2).not.toBe(id1);
+    expect(state.servers).toHaveLength(2);
+    expect(state.servers.map((server) => server.accessScope)).toEqual([
+      { type: 'project', projectId: 'project-a' },
+      { type: 'project', projectId: 'project-b' },
+    ]);
+  });
+
+  it('treats existing rows missing accessScope as archive-wide and never downgrades them with scoped credentials', async () => {
+    const archiveId = await useAuthStore.getState().addServer({
+      label: 'Archive',
+      baseUrl: 'https://archive.example.com',
+      token: 'archive-token',
+    });
+
+    const scopedId = await useAuthStore.getState().addServer({
+      label: 'Project A',
+      baseUrl: 'https://archive.example.com',
+      token: 'scoped-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+      allowDuplicate: true,
+    });
+
+    const state = useAuthStore.getState();
+    expect(scopedId).toBe(archiveId);
+    expect(state.servers).toHaveLength(1);
+    expect(state.servers[0]).toMatchObject({
+      token: 'archive-token',
+      accessScope: { type: 'archive' },
+    });
+  });
+
+  it('creates an archive-wide record beside scoped records and leaves scoped records until post-sync consolidation', async () => {
+    const scopedId = await useAuthStore.getState().addServer({
+      label: 'Project A',
+      baseUrl: 'https://archive.example.com',
+      token: 'scoped-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+
+    const archiveId = await useAuthStore.getState().addServer({
+      label: 'Archive',
+      baseUrl: 'https://archive.example.com',
+      token: 'archive-token',
+      accessScope: { type: 'archive' },
+      allowDuplicate: true,
+    });
+
+    expect(archiveId).not.toBe(scopedId);
+    expect(useAuthStore.getState().servers).toHaveLength(2);
+
+    await useAuthStore.getState().consolidateScopedServersForArchive(archiveId);
+
+    const state = useAuthStore.getState();
+    expect(state.servers).toHaveLength(1);
+    expect(state.servers[0]).toMatchObject({
+      id: archiveId,
+      token: 'archive-token',
+      accessScope: { type: 'archive' },
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -476,6 +580,27 @@ describe('hydrateServers', () => {
     expect(state.servers[0]!.id).toBe('db-server-1');
     expect(state.servers[0]!.baseUrl).toBe('https://hydrated.example.com');
     expect(state.servers[0]!.status).toBe('connected');
+    expect(state.servers[0]!.accessScope).toEqual({ type: 'archive' });
+  });
+
+  it('hydrates persisted project access scope metadata', async () => {
+    const db = (await import('@/lib/db')).getDb();
+    await db.remoteServers.add({
+      id: 'scoped-server',
+      baseUrl: 'https://scoped.example.com',
+      label: 'Scoped Server',
+      token: 'scoped-token',
+      status: 'connected',
+      lastSyncedAt: '',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+
+    await useAuthStore.getState().hydrateServers();
+
+    expect(useAuthStore.getState().servers[0]!.accessScope).toEqual({
+      type: 'project',
+      projectId: 'project-a',
+    });
   });
 
   it('falls back to baseUrl when label is null', async () => {

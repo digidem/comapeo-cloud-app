@@ -11,13 +11,30 @@ import {
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resetDb } from '@/lib/db';
+import { syncRemoteArchive } from '@/lib/data-layer';
+import { getDb, resetDb } from '@/lib/db';
 import {
   exportLocalStorageData,
   importLocalStorageData,
 } from '@/lib/local-storage-utils';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { useAuthStore } from '@/stores/auth-store';
+
+vi.mock('@/lib/data-layer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/data-layer')>();
+  return {
+    ...actual,
+    syncRemoteArchive: vi.fn(() =>
+      Promise.resolve({
+        success: true,
+        status: 'ready',
+        serverId: 'active-server',
+        projects: [],
+        warnings: [],
+      }),
+    ),
+  };
+});
 
 // Mock clipboard API
 Object.defineProperty(navigator, 'clipboard', {
@@ -41,6 +58,44 @@ async function generateInvite(user: UserEvent) {
   await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
 }
 
+async function seedActiveServer(
+  options: {
+    accessScope?: { type: 'archive' } | { type: 'project'; projectId: string };
+  } = {},
+) {
+  const serverId = await useAuthStore.getState().addServer({
+    label: 'Archive',
+    baseUrl: 'https://active.example.com',
+    token: 'active-archive-token',
+    accessScope: options.accessScope,
+    allowDuplicate: true,
+  });
+  useAuthStore.getState().setActiveServer(serverId);
+  return serverId;
+}
+
+async function seedProject(
+  serverId: string,
+  input: {
+    localId: string;
+    remoteId?: string;
+    name?: string;
+    deleted?: boolean;
+  },
+) {
+  await getDb().projects.add({
+    localId: input.localId,
+    sourceType: 'remoteArchive',
+    sourceId: serverId,
+    remoteId: input.remoteId,
+    name: input.name,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+    dirtyLocal: false,
+    deleted: input.deleted ?? false,
+  });
+}
+
 beforeEach(async () => {
   await resetDb();
   useAuthStore.setState({
@@ -50,6 +105,13 @@ beforeEach(async () => {
     baseUrl: null,
   });
   vi.clearAllMocks();
+  vi.mocked(syncRemoteArchive).mockReset().mockResolvedValue({
+    success: true,
+    status: 'ready',
+    serverId: 'active-server',
+    projects: [],
+    warnings: [],
+  });
 
   // Mock URL functions for export tests
   URL.createObjectURL = vi.fn(() => 'blob:http://localhost/fake-url');
@@ -154,6 +216,310 @@ describe('SettingsScreen', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Results')).not.toBeInTheDocument();
+  });
+
+  it('defaults to archive-wide invites and preserves the URL plus bearer-token form', async () => {
+    const user = userEvent.setup();
+    let capturedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.post('*/api/invites/encrypt', async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ code: 'mock-encrypted-code-archive' });
+      }),
+    );
+    render(<SettingsScreen />);
+
+    expect(screen.getByLabelText('Archive-wide')).toBeChecked();
+    expect(screen.getByLabelText('Remote Archive URL')).toBeInTheDocument();
+    expect(screen.getByLabelText('Bearer Token')).toBeInTheDocument();
+
+    await generateInvite(user);
+
+    expect(capturedBody).toMatchObject({
+      url: 'https://archive.example.com',
+      token: 'my-secret-token',
+    });
+    expect(capturedBody).not.toHaveProperty('scope');
+  });
+
+  it('lists only non-deleted active-server projects with real remote IDs for specific-project invites', async () => {
+    const serverId = await seedActiveServer();
+    await seedProject(serverId, {
+      localId: 'project-a',
+      remoteId: 'remote-project-a',
+      name: 'Forest Watch',
+    });
+    await seedProject(serverId, {
+      localId: 'project-deleted',
+      remoteId: 'remote-deleted',
+      name: 'Deleted Project',
+      deleted: true,
+    });
+    await seedProject(serverId, {
+      localId: 'project-local-only',
+      name: 'Local Only',
+    });
+    await seedProject('other-server', {
+      localId: 'project-other-server',
+      remoteId: 'remote-other',
+      name: 'Other Server',
+    });
+
+    const user = userEvent.setup();
+    render(<SettingsScreen />);
+    await user.click(screen.getByLabelText('Specific project'));
+
+    const projectSelect = screen.getByRole('combobox', {
+      name: 'Specific project',
+    });
+    expect(
+      await within(projectSelect).findByRole('option', {
+        name: 'Forest Watch',
+      }),
+    ).toHaveValue('remote-project-a');
+    expect(
+      within(projectSelect).queryByRole('option', {
+        name: 'Deleted Project',
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(projectSelect).queryByRole('option', { name: 'Local Only' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(projectSelect).queryByRole('option', { name: 'Other Server' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('disables specific-project generation when the active server is already project-scoped', async () => {
+    await seedActiveServer({
+      accessScope: { type: 'project', projectId: 'remote-project-a' },
+    });
+
+    render(<SettingsScreen />);
+
+    expect(screen.getByLabelText('Specific project')).toBeDisabled();
+    expect(
+      screen.getByText(
+        'Full archive access is required to create project invitations.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('requires a project selection before minting a scoped invite', async () => {
+    const serverId = await seedActiveServer();
+    await seedProject(serverId, {
+      localId: 'project-a',
+      remoteId: 'remote-project-a',
+      name: 'Forest Watch',
+    });
+    const user = userEvent.setup();
+    let mintCalled = false;
+    server.use(
+      http.post(
+        'https://active.example.com/projects/:projectId/accessTokens',
+        () => {
+          mintCalled = true;
+          return HttpResponse.json({
+            data: { token: 'unused', projectId: 'x' },
+          });
+        },
+      ),
+    );
+    render(<SettingsScreen />);
+
+    await user.click(screen.getByLabelText('Specific project'));
+    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+
+    expect(await screen.findByText('Select a project.')).toBeInTheDocument();
+    expect(mintCalled).toBe(false);
+  });
+
+  it('mints and encrypts a specific-project invite using only the active archive credential', async () => {
+    const serverId = await seedActiveServer();
+    await seedProject(serverId, {
+      localId: 'project-a',
+      remoteId: 'remote-project-a',
+      name: 'Forest Watch',
+    });
+    const user = userEvent.setup();
+    let mintAuth: string | null = null;
+    let encryptedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.post(
+        'https://active.example.com/projects/remote-project-a/accessTokens',
+        ({ request }) => {
+          mintAuth = request.headers.get('Authorization');
+          return HttpResponse.json({
+            data: {
+              token: 'scoped-token-from-server',
+              projectId: 'remote-project-a',
+            },
+          });
+        },
+      ),
+      http.post('*/api/invites/encrypt', async ({ request }) => {
+        encryptedBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ code: 'mock-encrypted-code-scoped' });
+      }),
+    );
+    render(<SettingsScreen />);
+
+    await user.type(
+      screen.getByLabelText('Remote Archive URL'),
+      'https://typed.example.com',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), 'typed-token');
+    await user.click(screen.getByLabelText('Specific project'));
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Specific project' }),
+      'remote-project-a',
+    );
+    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+
+    expect(await screen.findByText('Results')).toBeInTheDocument();
+    expect(mintAuth).toBe('Bearer active-archive-token');
+    expect(encryptedBody).toMatchObject({
+      url: 'https://active.example.com',
+      token: 'scoped-token-from-server',
+      ttlHours: 24,
+      scope: { type: 'project', projectId: 'remote-project-a' },
+    });
+    expect(JSON.stringify(encryptedBody)).not.toContain('active-archive-token');
+    expect(JSON.stringify(encryptedBody)).not.toContain('typed-token');
+  });
+
+  it('fails closed when the minted token response names a different project', async () => {
+    const serverId = await seedActiveServer();
+    await seedProject(serverId, {
+      localId: 'project-a',
+      remoteId: 'remote-project-a',
+      name: 'Forest Watch',
+    });
+    const user = userEvent.setup();
+    let encryptCalled = false;
+    server.use(
+      http.post(
+        'https://active.example.com/projects/remote-project-a/accessTokens',
+        () =>
+          HttpResponse.json({
+            data: {
+              token: 'wrong-project-token',
+              projectId: 'remote-project-b',
+            },
+          }),
+      ),
+      http.post('*/api/invites/encrypt', () => {
+        encryptCalled = true;
+        return HttpResponse.json({ code: 'should-not-happen' });
+      }),
+    );
+    render(<SettingsScreen />);
+
+    await user.click(screen.getByLabelText('Specific project'));
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Specific project' }),
+      'remote-project-a',
+    );
+    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+
+    expect(
+      await screen.findByText("Couldn't generate invite. Try again."),
+    ).toBeInTheDocument();
+    expect(encryptCalled).toBe(false);
+  });
+
+  it.each([
+    [
+      403,
+      'FORBIDDEN',
+      'Full archive access is required to create project invitations.',
+    ],
+    [
+      501,
+      'PROJECT_ACCESS_TOKENS_UNAVAILABLE',
+      'This archive does not support project-scoped invitations.',
+    ],
+    [
+      404,
+      'PROJECT_NOT_FOUND',
+      'That project is no longer available. Refreshing project list.',
+    ],
+  ])(
+    'maps scoped invite minting error %s/%s to localized guidance',
+    async (status, code, expectedMessage) => {
+      const serverId = await seedActiveServer();
+      await seedProject(serverId, {
+        localId: 'project-a',
+        remoteId: 'remote-project-a',
+        name: 'Forest Watch',
+      });
+      const user = userEvent.setup();
+      server.use(
+        http.post(
+          'https://active.example.com/projects/remote-project-a/accessTokens',
+          () =>
+            HttpResponse.json(
+              { error: { code, message: expectedMessage } },
+              { status },
+            ),
+        ),
+      );
+      render(<SettingsScreen />);
+
+      await user.click(screen.getByLabelText('Specific project'));
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: 'Specific project' }),
+        'remote-project-a',
+      );
+      await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+
+      expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
+      if (status === 404) {
+        expect(syncRemoteArchive).toHaveBeenCalledWith(
+          serverId,
+          expect.objectContaining({
+            baseUrl: 'https://active.example.com',
+            token: 'active-archive-token',
+          }),
+        );
+      }
+    },
+  );
+
+  it('maps scoped invite minting network failure to localized connection guidance without falling back', async () => {
+    const serverId = await seedActiveServer();
+    await seedProject(serverId, {
+      localId: 'project-a',
+      remoteId: 'remote-project-a',
+      name: 'Forest Watch',
+    });
+    const user = userEvent.setup();
+    let encryptCalled = false;
+    server.use(
+      http.post(
+        'https://active.example.com/projects/remote-project-a/accessTokens',
+        () => HttpResponse.error(),
+      ),
+      http.post('*/api/invites/encrypt', () => {
+        encryptCalled = true;
+        return HttpResponse.json({ code: 'should-not-happen' });
+      }),
+    );
+    render(<SettingsScreen />);
+
+    await user.click(screen.getByLabelText('Specific project'));
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Specific project' }),
+      'remote-project-a',
+    );
+    await user.click(screen.getByRole('button', { name: 'Generate Invite' }));
+
+    expect(
+      await screen.findByText(
+        'Unable to reach the archive. Check your connection and try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(encryptCalled).toBe(false);
   });
 
   it('copies invite URL to clipboard', async () => {

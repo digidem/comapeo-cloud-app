@@ -5,7 +5,31 @@ import {
   decryptInviteRequestSchema,
   encryptInviteRequestSchema,
   encryptedPayloadSchema,
+  inviteAccessScopeSchema,
 } from '@/lib/schemas/invite';
+
+describe('inviteAccessScopeSchema', () => {
+  it('parses archive scope metadata', () => {
+    expect(v.parse(inviteAccessScopeSchema, { type: 'archive' })).toEqual({
+      type: 'archive',
+    });
+  });
+
+  it('parses project scope metadata', () => {
+    expect(
+      v.parse(inviteAccessScopeSchema, {
+        type: 'project',
+        projectId: 'project-public-id',
+      }),
+    ).toEqual({ type: 'project', projectId: 'project-public-id' });
+  });
+
+  it('rejects project scope metadata without a projectId', () => {
+    expect(() =>
+      v.parse(inviteAccessScopeSchema, { type: 'project' }),
+    ).toThrow();
+  });
+});
 
 describe('encryptInviteRequestSchema', () => {
   it('parses a valid request with default ttlHours', () => {
@@ -25,6 +49,15 @@ describe('encryptInviteRequestSchema', () => {
       ttlHours: 1,
     });
     expect(result.ttlHours).toBe(1);
+  });
+
+  it('parses optional project scope metadata', () => {
+    const result = v.parse(encryptInviteRequestSchema, {
+      url: 'https://archive.example.com',
+      token: 'scoped-token',
+      scope: { type: 'project', projectId: 'project-a' },
+    });
+    expect(result.scope).toEqual({ type: 'project', projectId: 'project-a' });
   });
 
   it('accepts the upper-bound ttlHours of 168', () => {
@@ -120,6 +153,16 @@ describe('encryptedPayloadSchema', () => {
       token: 'bearer-abc',
       exp: 1_700_000_000,
     });
+  });
+
+  it('parses a valid decrypted payload with project scope', () => {
+    const result = v.parse(encryptedPayloadSchema, {
+      url: 'https://archive.example.com',
+      token: 'scoped-token',
+      exp: 1_700_000_000,
+      scope: { type: 'project', projectId: 'project-a' },
+    });
+    expect(result.scope).toEqual({ type: 'project', projectId: 'project-a' });
   });
 
   it('rejects a payload missing url', () => {

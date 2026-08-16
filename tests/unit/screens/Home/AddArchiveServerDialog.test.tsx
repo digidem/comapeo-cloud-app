@@ -28,6 +28,7 @@ const mockCreateRemoteServer = vi.fn().mockResolvedValue({
 vi.mock('@/lib/local-repositories', () => ({
   createRemoteServer: (...args: unknown[]) => mockCreateRemoteServer(...args),
   deleteRemoteServer: vi.fn(),
+  deleteRemoteServers: vi.fn().mockResolvedValue(undefined),
   updateRemoteServer: vi.fn(),
   getRemoteServers: vi.fn().mockResolvedValue([]),
   getRemoteServer: vi.fn(),

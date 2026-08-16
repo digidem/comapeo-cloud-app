@@ -68,7 +68,11 @@ export async function onRequestPost({
     }
 
     return withNoStore(
-      Response.json({ url: result.value.url, token: result.value.token }),
+      Response.json({
+        url: result.value.url,
+        token: result.value.token,
+        ...(result.value.scope ? { scope: result.value.scope } : {}),
+      }),
     );
   } catch {
     return jsonError(500, 'INVITE_DECRYPT_FAILED', 'Failed to decrypt invite');

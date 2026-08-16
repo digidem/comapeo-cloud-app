@@ -5,12 +5,15 @@ import {
   normalizeArchiveBaseUrl,
 } from '@/lib/archive-proxy';
 import {
+  type InviteAccessScope,
   alertsResponseSchema,
   createAlertBodySchema,
   errorResponseSchema,
   fieldsResponseSchema,
+  inviteAccessScopeSchema,
   observationsResponseSchema,
   presetsResponseSchema,
+  projectAccessTokenResponseSchema,
   projectDetailResponseSchema,
   projectsResponseSchema,
   serverInfoResponseSchema,
@@ -510,6 +513,44 @@ export const apiClient = {
     }
   },
 
+  async createProjectAccessToken(
+    projectPublicId: string,
+    config?: RequestConfig,
+  ): Promise<{ token: string; projectId: string }> {
+    try {
+      const credentials = resolveRequestCredentials(config);
+      const request = resolveApiRequest(config);
+      const response = await fetch(
+        `${request.baseUrl}/projects/${encodeURIComponent(projectPublicId)}/accessTokens`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            ...getAuthHeaders(credentials),
+            ...request.extraHeaders,
+          },
+          signal: config?.signal,
+        },
+      );
+      const result = await handleResponse(
+        response,
+        projectAccessTokenResponseSchema,
+        credentials,
+      );
+      if (result.data.projectId !== projectPublicId) {
+        throw new ApiError(
+          200,
+          'PROJECT_ACCESS_TOKEN_PROJECT_MISMATCH',
+          'Project access token response did not match the requested project',
+        );
+      }
+      return result.data;
+    } catch (error) {
+      if (isNetworkError(error)) throwNetworkError();
+      throw error;
+    }
+  },
+
   async getPresets(projectId: string, config?: RequestConfig) {
     try {
       const credentials = resolveRequestCredentials(config);
@@ -651,9 +692,11 @@ export async function createEncryptedInvite(
   baseUrl: string,
   token: string,
   ttlHours?: number,
+  accessScope?: InviteAccessScope,
 ): Promise<{ code: string }> {
   const body: Record<string, unknown> = { url: baseUrl, token };
   if (ttlHours !== undefined) body.ttlHours = ttlHours;
+  if (accessScope) body.scope = accessScope;
 
   let response: Response;
   try {
@@ -688,9 +731,11 @@ export async function createEncryptedInvite(
   return { code: (json as { code: string }).code };
 }
 
-export async function redeemEncryptedInvite(
-  code: string,
-): Promise<{ baseUrl: string; token: string }> {
+export async function redeemEncryptedInvite(code: string): Promise<{
+  baseUrl: string;
+  token: string;
+  accessScope?: InviteAccessScope;
+}> {
   let response: Response;
   try {
     response = await fetch('/api/invites/decrypt', {
@@ -711,19 +756,22 @@ export async function redeemEncryptedInvite(
   }
 
   const json: unknown = await response.json();
-  if (
-    !json ||
-    typeof json !== 'object' ||
-    typeof (json as { url?: unknown }).url !== 'string' ||
-    typeof (json as { token?: unknown }).token !== 'string'
-  ) {
+  const parsed = v.safeParse(
+    v.object({
+      url: v.string(),
+      token: v.string(),
+      scope: v.optional(inviteAccessScopeSchema),
+    }),
+    json,
+  );
+  if (!parsed.success) {
     throw new InviteApiError(
       'INVITE_REQUEST_FAILED',
       'Invite decrypt response was malformed',
     );
   }
-  const { url, token } = json as { url: string; token: string };
-  return { baseUrl: url, token };
+  const { url, token, scope } = parsed.output;
+  return { baseUrl: url, token, ...(scope ? { accessScope: scope } : {}) };
 }
 
 // ---------------------------------------------------------------------------

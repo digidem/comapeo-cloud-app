@@ -53,9 +53,9 @@ export async function handleDevEncrypt(request: Request): Promise<Response> {
       );
     }
 
-    const { url, token, ttlHours } = parsed.output;
+    const { url, token, ttlHours, scope } = parsed.output;
     const exp = Math.floor(Date.now() / 1000) + ttlHours * 3600;
-    const code = await encryptInvite({ url, token, exp }, rawKey);
+    const code = await encryptInvite({ url, token, exp, scope }, rawKey);
 
     return withNoStore(Response.json({ code }));
   } catch {
@@ -99,7 +99,11 @@ export async function handleDevDecrypt(request: Request): Promise<Response> {
     }
 
     return withNoStore(
-      Response.json({ url: result.value.url, token: result.value.token }),
+      Response.json({
+        url: result.value.url,
+        token: result.value.token,
+        ...(result.value.scope ? { scope: result.value.scope } : {}),
+      }),
     );
   } catch {
     return jsonError(500, 'INVITE_DECRYPT_FAILED', 'Failed to decrypt invite');

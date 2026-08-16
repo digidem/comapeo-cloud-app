@@ -12,6 +12,7 @@ import type {
   Track,
 } from '@/lib/db';
 import { DbError, wrapDb } from '@/lib/db-error';
+import type { InviteAccessScope } from '@/lib/schemas/invite';
 import { uuid } from '@/lib/uuid';
 
 export { DbError } from '@/lib/db-error';
@@ -414,6 +415,7 @@ export interface CreateRemoteServerInput {
   baseUrl: string;
   label?: string;
   token?: string;
+  accessScope?: InviteAccessScope;
   status?: string;
 }
 
@@ -427,6 +429,7 @@ export async function createRemoteServer(
       baseUrl: input.baseUrl,
       label: input.label,
       token: input.token,
+      accessScope: input.accessScope,
       status: input.status ?? 'idle',
       lastSyncedAt: '',
     };
@@ -467,6 +470,14 @@ export async function updateRemoteServer(
   return wrapDb(async () => {
     const db = getDb();
     await db.remoteServers.update(id, updates);
+    if ('accessScope' in updates && updates.accessScope === undefined) {
+      await db.remoteServers
+        .where('id')
+        .equals(id)
+        .modify((server) => {
+          delete server.accessScope;
+        });
+    }
     return db.remoteServers.get(id);
   });
 }
@@ -475,6 +486,16 @@ export async function deleteRemoteServer(id: string): Promise<void> {
   return wrapDb(async () => {
     const db = getDb();
     await db.remoteServers.delete(id);
+  });
+}
+
+export async function deleteRemoteServers(ids: string[]): Promise<void> {
+  return wrapDb(async () => {
+    if (ids.length === 0) return;
+    const db = getDb();
+    await db.transaction('rw', db.remoteServers, async () => {
+      await db.remoteServers.bulkDelete(ids);
+    });
   });
 }
 

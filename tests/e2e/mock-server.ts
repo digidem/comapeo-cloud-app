@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import { alertsFixture } from '@tests/fixtures/alerts';
 import { observationsFixture } from '@tests/fixtures/observations';
 import { presetsFixture } from '@tests/fixtures/presets';
@@ -12,6 +12,19 @@ import { serverInfoFixture } from '@tests/fixtures/server-info';
  * known API endpoints. This allows E2E tests to run without a real backend.
  */
 export async function setupMockServer(page: Page): Promise<void> {
+  const SCOPED_TOKEN = 'cpat1.mock-project-token';
+  const SCOPED_PROJECT_ID = 'test-project-id-1';
+  const getBearerToken = (route: Route) => {
+    const authHeader = route.request().headers().authorization;
+    return authHeader?.startsWith('Bearer ')
+      ? authHeader.slice('Bearer '.length)
+      : null;
+  };
+  const scopedTokenCannotReadProject = (route: Route, projectId: string) =>
+    getBearerToken(route) === SCOPED_TOKEN && projectId !== SCOPED_PROJECT_ID;
+  const getProjectIdFromPath = (pathname: string) =>
+    pathname.match(/\/projects\/([^/]+)/)?.[1] ?? '';
+
   await page.route('**/info', (route) =>
     route.fulfill({
       status: 200,
@@ -22,13 +35,74 @@ export async function setupMockServer(page: Page): Promise<void> {
 
   await page.route('**/healthcheck', (route) => route.fulfill({ status: 200 }));
 
-  await page.route('**/projects', (route) =>
-    route.fulfill({
+  await page.route('**/projects', (route) => {
+    const token = getBearerToken(route);
+    if (!token) {
+      return route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'UNAUTHORIZED', message: 'Invalid bearer token' },
+        }),
+      });
+    }
+
+    const projects =
+      token === SCOPED_TOKEN
+        ? projectsFixture.data.filter(
+            (project) => project.projectId === SCOPED_PROJECT_ID,
+          )
+        : projectsFixture.data;
+
+    return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(projectsFixture),
-    }),
-  );
+      body: JSON.stringify({ data: projects }),
+    });
+  });
+
+  await page.route('**/projects/*/accessTokens', (route) => {
+    const token = getBearerToken(route);
+    if (!token) {
+      return route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'UNAUTHORIZED', message: 'Invalid bearer token' },
+        }),
+      });
+    }
+    if (token === SCOPED_TOKEN) {
+      return route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'FORBIDDEN', message: 'Archive token required' },
+        }),
+      });
+    }
+
+    const url = new URL(route.request().url());
+    const match = url.pathname.match(/\/projects\/([^/]+)\/accessTokens$/);
+    const projectId = match?.[1] ? decodeURIComponent(match[1]) : '';
+    if (!projectId) {
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'NOT_FOUND', message: 'Project not found' },
+        }),
+      });
+    }
+
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: { token: 'cpat1.mock-project-token', projectId },
+      }),
+    });
+  });
 
   // Per-project detail handler. Must be registered BEFORE the sub-route
   // handlers below because Playwright matches routes in order and
@@ -46,6 +120,16 @@ export async function setupMockServer(page: Page): Promise<void> {
       // Fall through to more specific handlers (observations, alerts, etc.)
       return route.fallback();
     }
+    const projectId = decodeURIComponent(getProjectIdFromPath(url.pathname));
+    if (scopedTokenCannotReadProject(route, projectId)) {
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'NOT_FOUND', message: 'Project not found' },
+        }),
+      });
+    }
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -53,41 +137,85 @@ export async function setupMockServer(page: Page): Promise<void> {
     });
   });
 
-  await page.route('**/projects/*/observations', (route) =>
-    route.fulfill({
+  await page.route('**/projects/*/observations', (route) => {
+    const url = new URL(route.request().url());
+    const projectId = decodeURIComponent(getProjectIdFromPath(url.pathname));
+    if (scopedTokenCannotReadProject(route, projectId)) {
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'NOT_FOUND', message: 'Project not found' },
+        }),
+      });
+    }
+    return route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(observationsFixture),
-    }),
-  );
+    });
+  });
 
-  await page.route('**/projects/*/remoteDetectionAlerts', (route) =>
-    route.fulfill({
+  await page.route('**/projects/*/remoteDetectionAlerts', (route) => {
+    const url = new URL(route.request().url());
+    const projectId = decodeURIComponent(getProjectIdFromPath(url.pathname));
+    if (scopedTokenCannotReadProject(route, projectId)) {
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'NOT_FOUND', message: 'Project not found' },
+        }),
+      });
+    }
+    return route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(alertsFixture),
-    }),
-  );
+    });
+  });
 
   // Preset and field routes — registered BEFORE the catch-all projects/*
   // handler below so Playwright matches them first (route precedence is
   // registration order). Patterns use singular forms matching the actual
   // apiClient endpoints (/preset, /field).
-  await page.route('**/projects/*/preset', (route) =>
-    route.fulfill({
+  await page.route('**/projects/*/preset', (route) => {
+    const url = new URL(route.request().url());
+    const projectId = decodeURIComponent(getProjectIdFromPath(url.pathname));
+    if (scopedTokenCannotReadProject(route, projectId)) {
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'NOT_FOUND', message: 'Project not found' },
+        }),
+      });
+    }
+    return route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(presetsFixture),
-    }),
-  );
+    });
+  });
 
-  await page.route('**/projects/*/field', (route) =>
-    route.fulfill({
+  await page.route('**/projects/*/field', (route) => {
+    const url = new URL(route.request().url());
+    const projectId = decodeURIComponent(getProjectIdFromPath(url.pathname));
+    if (scopedTokenCannotReadProject(route, projectId)) {
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'NOT_FOUND', message: 'Project not found' },
+        }),
+      });
+    }
+    return route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(fieldsFixture),
-    }),
-  );
+    });
+  });
 
   // Icon route — returns SVG for category icon images fetched by AuthImg.
   // This must be registered before the empty-array routes below.
@@ -103,21 +231,43 @@ export async function setupMockServer(page: Page): Promise<void> {
   // time waiting for unmocked routes to time out against the preview server.
   const EMPTY_ARRAY_RESPONSE = JSON.stringify({ data: [] });
 
-  await page.route('**/projects/*/tracks', (route) =>
-    route.fulfill({
+  await page.route('**/projects/*/tracks', (route) => {
+    const url = new URL(route.request().url());
+    const projectId = decodeURIComponent(getProjectIdFromPath(url.pathname));
+    if (scopedTokenCannotReadProject(route, projectId)) {
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'NOT_FOUND', message: 'Project not found' },
+        }),
+      });
+    }
+    return route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: EMPTY_ARRAY_RESPONSE,
-    }),
-  );
+    });
+  });
 
-  await page.route('**/projects/*/track', (route) =>
-    route.fulfill({
+  await page.route('**/projects/*/track', (route) => {
+    const url = new URL(route.request().url());
+    const projectId = decodeURIComponent(getProjectIdFromPath(url.pathname));
+    if (scopedTokenCannotReadProject(route, projectId)) {
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'NOT_FOUND', message: 'Project not found' },
+        }),
+      });
+    }
+    return route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: EMPTY_ARRAY_RESPONSE,
-    }),
-  );
+    });
+  });
 
   // ---------------------------------------------------------------------------
   // Attachment mock — returns 1x1 transparent PNG for any attachment URL.
@@ -226,10 +376,17 @@ export async function setupMockServer(page: Page): Promise<void> {
           typeof parsed.url === 'string' &&
           typeof parsed.token === 'string'
         ) {
+          const responseBody: Record<string, unknown> = {
+            url: parsed.url,
+            token: parsed.token,
+          };
+          if ('scope' in parsed) {
+            responseBody.scope = parsed.scope;
+          }
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ url: parsed.url, token: parsed.token }),
+            body: JSON.stringify(responseBody),
           });
           return;
         }

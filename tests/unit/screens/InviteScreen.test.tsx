@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
 
-import { ApiError, apiClient } from '@/lib/api-client';
+import { ApiError, apiClient, redeemEncryptedInvite } from '@/lib/api-client';
 import { resetDb } from '@/lib/db';
+import { createRemoteServer, getRemoteServers } from '@/lib/local-repositories';
 import { syncRemoteArchive } from '@/lib/sync';
 import type { SyncResult } from '@/lib/sync';
 import * as syncCoordinator from '@/lib/sync-coordinator';
@@ -132,7 +133,17 @@ describe('InviteScreen', () => {
     resetSyncCoordinatorForTests();
     await resetDb();
     await useAuthStore.getState().clearAll();
-    vi.mocked(syncRemoteArchive).mockResolvedValue(readyResult());
+    vi.mocked(syncRemoteArchive).mockReset().mockResolvedValue(readyResult());
+    const actualApiClient =
+      await vi.importActual<typeof import('@/lib/api-client')>(
+        '@/lib/api-client',
+      );
+    vi.mocked(redeemEncryptedInvite)
+      .mockReset()
+      .mockImplementation(
+        (...args: Parameters<typeof actualApiClient.redeemEncryptedInvite>) =>
+          actualApiClient.redeemEncryptedInvite(...args),
+      );
   });
 
   afterEach(async () => {
@@ -372,6 +383,7 @@ describe('InviteScreen', () => {
     const control = syncArchiveSpy.mock.calls[0]![2];
     expect(control?.isCancelled).toBeTypeOf('function');
     expect(control?.isCancelled?.()).toBe(false);
+    expect(control?.deferScopedConsolidation).toBe(true);
 
     unmount();
     expect(control?.isCancelled?.()).toBe(true);
@@ -514,6 +526,269 @@ describe('InviteScreen', () => {
       ).toBeInTheDocument();
     });
     expect(useAuthStore.getState().servers[0]).toEqual(snapshot);
+  });
+
+  it('passes encrypted project scope into addServer and sync metadata', async () => {
+    const { redeemEncryptedInvite } = await import('@/lib/api-client');
+    vi.mocked(redeemEncryptedInvite).mockResolvedValueOnce({
+      baseUrl: 'https://archive.test',
+      token: 'scoped-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+    vi.spyOn(apiClient, 'healthCheck').mockResolvedValueOnce(true);
+    vi.spyOn(apiClient, 'getProjects').mockResolvedValueOnce({
+      data: [{ projectId: 'project-a', name: 'Project A' }],
+    });
+
+    setSearchParams('?code=scoped-code');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      const servers = useAuthStore.getState().servers;
+      expect(servers).toHaveLength(1);
+      expect(servers[0]).toMatchObject({
+        token: 'scoped-token',
+        accessScope: { type: 'project', projectId: 'project-a' },
+      });
+      expect(syncRemoteArchive).toHaveBeenCalledWith(
+        servers[0]!.id,
+        expect.objectContaining({
+          baseUrl: 'https://archive.test',
+          token: 'scoped-token',
+          accessScope: { type: 'project', projectId: 'project-a' },
+        }),
+      );
+    });
+  });
+
+  it('short-circuits a project-scoped invite when an archive-wide record already covers the same base URL', async () => {
+    const archive = {
+      id: 'archive-wide',
+      label: 'archive.test',
+      baseUrl: 'https://archive.test',
+      token: 'archive-token',
+      accessScope: { type: 'archive' as const },
+      status: 'connected' as const,
+    };
+    useAuthStore.setState({ servers: [archive] });
+    const { redeemEncryptedInvite } = await import('@/lib/api-client');
+    vi.mocked(redeemEncryptedInvite).mockResolvedValueOnce({
+      baseUrl: 'https://archive.test',
+      token: 'scoped-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+    const healthSpy = vi.spyOn(apiClient, 'healthCheck');
+    const projectsSpy = vi.spyOn(apiClient, 'getProjects');
+
+    setSearchParams('?code=scoped-code');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Connected!')).toBeInTheDocument();
+    });
+    expect(healthSpy).not.toHaveBeenCalled();
+    expect(projectsSpy).not.toHaveBeenCalled();
+    expect(syncRemoteArchive).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().servers).toEqual([archive]);
+  });
+
+  it('short-circuits from a persisted archive-wide record before auth-store hydration completes', async () => {
+    const archive = await createRemoteServer({
+      label: 'archive.test',
+      baseUrl: 'https://archive.test',
+      token: 'persisted-broad-token',
+      accessScope: { type: 'archive' },
+      status: 'connected',
+    });
+    useAuthStore.setState({ servers: [] });
+    const { redeemEncryptedInvite } = await import('@/lib/api-client');
+    vi.mocked(redeemEncryptedInvite).mockResolvedValueOnce({
+      baseUrl: 'https://archive.test',
+      token: 'scoped-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+    const healthSpy = vi.spyOn(apiClient, 'healthCheck');
+    const projectsSpy = vi.spyOn(apiClient, 'getProjects');
+
+    setSearchParams('?code=scoped-code');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Connected!')).toBeInTheDocument();
+    });
+    expect(healthSpy).not.toHaveBeenCalled();
+    expect(projectsSpy).not.toHaveBeenCalled();
+    expect(syncRemoteArchive).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().servers).toHaveLength(0);
+    expect(await getRemoteServers()).toEqual([
+      expect.objectContaining({
+        id: archive.id,
+        token: 'persisted-broad-token',
+        accessScope: { type: 'archive' },
+      }),
+    ]);
+  });
+
+  it('refreshes the same scoped project record and rolls back token, scope, lifecycle, and sync metadata on failure', async () => {
+    const snapshot = {
+      id: 'scoped-project-a',
+      label: 'archive.test',
+      baseUrl: 'https://archive.test',
+      token: 'old-scoped-token',
+      accessScope: { type: 'project' as const, projectId: 'project-a' },
+      status: 'connected' as const,
+      onboardingStatus: 'ready' as const,
+      errorMessage: 'previous warning',
+      lastSyncedAt: '2026-08-01T12:00:00.000Z',
+      lastSuccessfulSyncAt: '2026-08-01T12:00:00.000Z',
+    };
+    useAuthStore.setState({ servers: [snapshot] });
+    const { redeemEncryptedInvite } = await import('@/lib/api-client');
+    vi.mocked(redeemEncryptedInvite).mockResolvedValueOnce({
+      baseUrl: 'https://archive.test',
+      token: 'new-scoped-token',
+      accessScope: { type: 'project', projectId: 'project-a' },
+    });
+    vi.spyOn(apiClient, 'healthCheck').mockResolvedValueOnce(true);
+    vi.spyOn(apiClient, 'getProjects').mockResolvedValueOnce({
+      data: [{ projectId: 'project-a', name: 'Project A' }],
+    });
+    vi.mocked(syncRemoteArchive).mockImplementationOnce(async (serverId) => {
+      expect(serverId).toBe(snapshot.id);
+      expect(useAuthStore.getState().servers).toHaveLength(1);
+      expect(useAuthStore.getState().servers[0]).toMatchObject({
+        token: 'new-scoped-token',
+        accessScope: { type: 'project', projectId: 'project-a' },
+      });
+      return codedFailedResult('Invalid bearer credential', 'authorization');
+    });
+
+    setSearchParams('?code=scoped-code');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Invalid token or unauthorized'),
+      ).toBeInTheDocument();
+    });
+    expect(useAuthStore.getState().servers).toEqual([snapshot]);
+  });
+
+  it('allows a different project scope on the same archive to coexist', async () => {
+    const projectA = {
+      id: 'scoped-project-a',
+      label: 'Project A',
+      baseUrl: 'https://archive.test',
+      token: 'project-a-token',
+      accessScope: { type: 'project' as const, projectId: 'project-a' },
+      status: 'connected' as const,
+    };
+    useAuthStore.setState({ servers: [projectA] });
+    const { redeemEncryptedInvite } = await import('@/lib/api-client');
+    vi.mocked(redeemEncryptedInvite).mockResolvedValueOnce({
+      baseUrl: 'https://archive.test',
+      token: 'project-b-token',
+      accessScope: { type: 'project', projectId: 'project-b' },
+    });
+    vi.spyOn(apiClient, 'healthCheck').mockResolvedValueOnce(true);
+    vi.spyOn(apiClient, 'getProjects').mockResolvedValueOnce({
+      data: [{ projectId: 'project-b', name: 'Project B' }],
+    });
+
+    setSearchParams('?code=scoped-code');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      const servers = useAuthStore.getState().servers;
+      expect(servers).toHaveLength(2);
+      expect(servers.map((server) => server.accessScope)).toEqual([
+        { type: 'project', projectId: 'project-a' },
+        { type: 'project', projectId: 'project-b' },
+      ]);
+    });
+  });
+
+  it('keeps scoped records when an archive-wide upgrade fails before full sync completes', async () => {
+    const scoped = {
+      id: 'scoped-project-a',
+      label: 'Project A',
+      baseUrl: 'https://archive.test',
+      token: 'project-a-token',
+      accessScope: { type: 'project' as const, projectId: 'project-a' },
+      status: 'connected' as const,
+    };
+    useAuthStore.setState({ servers: [scoped] });
+    const { redeemEncryptedInvite } = await import('@/lib/api-client');
+    vi.mocked(redeemEncryptedInvite).mockResolvedValueOnce({
+      baseUrl: 'https://archive.test',
+      token: 'archive-token',
+    });
+    vi.spyOn(apiClient, 'healthCheck').mockResolvedValueOnce(true);
+    vi.spyOn(apiClient, 'getProjects').mockResolvedValueOnce({
+      data: [{ projectId: 'project-a', name: 'Project A' }],
+    });
+    vi.mocked(syncRemoteArchive).mockImplementationOnce(async () =>
+      partialResult(),
+    );
+
+    setSearchParams('?code=archive-code');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Connected, but some archive data could not be synced. Try again.',
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(useAuthStore.getState().servers).toEqual([scoped]);
+  });
+
+  it('reflects coordinator cleanup after a successful archive-wide full sync', async () => {
+    const scopedA = {
+      id: 'scoped-project-a',
+      label: 'Project A',
+      baseUrl: 'https://archive.test',
+      token: 'project-a-token',
+      accessScope: { type: 'project' as const, projectId: 'project-a' },
+      status: 'connected' as const,
+    };
+    const scopedB = {
+      id: 'scoped-project-b',
+      label: 'Project B',
+      baseUrl: 'https://archive.test',
+      token: 'project-b-token',
+      accessScope: { type: 'project' as const, projectId: 'project-b' },
+      status: 'connected' as const,
+    };
+    useAuthStore.setState({ servers: [scopedA, scopedB] });
+    const { redeemEncryptedInvite } = await import('@/lib/api-client');
+    vi.mocked(redeemEncryptedInvite).mockResolvedValueOnce({
+      baseUrl: 'https://archive.test',
+      token: 'archive-token',
+    });
+    vi.spyOn(apiClient, 'healthCheck').mockResolvedValueOnce(true);
+    vi.spyOn(apiClient, 'getProjects').mockResolvedValueOnce({
+      data: [
+        { projectId: 'project-a', name: 'Project A' },
+        { projectId: 'project-b', name: 'Project B' },
+      ],
+    });
+    vi.mocked(syncRemoteArchive).mockImplementationOnce(async (serverId) =>
+      readyResult(serverId),
+    );
+
+    setSearchParams('?code=archive-code');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      const servers = useAuthStore.getState().servers;
+      expect(servers).toHaveLength(1);
+      expect(servers[0]).toMatchObject({
+        token: 'archive-token',
+        accessScope: { type: 'archive' },
+      });
+    });
   });
 
   it('shows a distinct message for partial sync and rolls back the pending server', async () => {

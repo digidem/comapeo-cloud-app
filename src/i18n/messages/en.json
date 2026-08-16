@@ -1874,6 +1874,30 @@
   "settings.invites.results.title": {
     "defaultMessage": "Results"
   },
+  "settings.invites.scope.archiveWide": {
+    "defaultMessage": "Archive-wide"
+  },
+  "settings.invites.scope.networkError": {
+    "defaultMessage": "Unable to reach the archive. Check your connection and try again."
+  },
+  "settings.invites.scope.projectMissing": {
+    "defaultMessage": "That project is no longer available. Refreshing project list."
+  },
+  "settings.invites.scope.projectPlaceholder": {
+    "defaultMessage": "Select a project"
+  },
+  "settings.invites.scope.projectRequired": {
+    "defaultMessage": "Select a project."
+  },
+  "settings.invites.scope.specificProject": {
+    "defaultMessage": "Specific project"
+  },
+  "settings.invites.scope.unavailable": {
+    "defaultMessage": "Full archive access is required to create project invitations."
+  },
+  "settings.invites.scope.unsupported": {
+    "defaultMessage": "This archive does not support project-scoped invitations."
+  },
   "settings.invites.title": {
     "defaultMessage": "Remote Archive Invites"
   },

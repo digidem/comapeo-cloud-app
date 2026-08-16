@@ -110,8 +110,9 @@ function lifecycleForResult(result: SyncResult): {
   };
 }
 
-interface SyncArchiveControl {
+export interface SyncArchiveControl {
   isCancelled?: () => boolean;
+  deferScopedConsolidation?: boolean;
 }
 
 // Per-server set of cancellation callbacks. When a second caller passes a
@@ -152,6 +153,7 @@ export function syncArchive(
           baseUrl: server.baseUrl,
           token: server.token,
           serverLabel: server.label,
+          accessScope: server.accessScope,
           signal: abortController.signal,
         }
       : null);
@@ -222,6 +224,33 @@ export function syncArchive(
         await useAuthStore
           .getState()
           .updateServerLifecycle(serverId, lifecycleForResult(result));
+
+        const accessScope = resolvedOptions.accessScope ??
+          server?.accessScope ?? { type: 'archive' };
+        if (
+          result.success &&
+          result.status === 'ready' &&
+          accessScope.type === 'archive' &&
+          !control?.deferScopedConsolidation
+        ) {
+          try {
+            await useAuthStore
+              .getState()
+              .consolidateScopedServersForArchive(serverId);
+          } catch (error) {
+            console.warn(
+              'Archive sync succeeded but scoped credential cleanup failed',
+              error,
+            );
+            result = {
+              ...result,
+              warnings: [
+                ...result.warnings,
+                'Archive sync succeeded, but older project-scoped credentials could not be cleaned up.',
+              ],
+            };
+          }
+        }
       }
       await invalidateSyncedData();
       return result;
@@ -283,9 +312,14 @@ export async function onboardArchive(
     return cancelledOnboardingResult('');
   }
 
-  const existing = useAuthStore
-    .getState()
-    .servers.find((server) => server.baseUrl === normalized.value);
+  const existing = useAuthStore.getState().servers.find((server) => {
+    const existingBase = normalizeArchiveBaseUrl(server.baseUrl);
+    const isSameBase =
+      existingBase.ok && existingBase.value === normalized.value;
+    const isArchiveWide =
+      !server.accessScope || server.accessScope.type === 'archive';
+    return isSameBase && isArchiveWide;
+  });
   if (
     existing &&
     (existing.status === 'connected' || existing.onboardingStatus === 'ready')
@@ -301,6 +335,7 @@ export async function onboardArchive(
     label: options.label,
     baseUrl: normalized.value,
     token: options.token,
+    accessScope: { type: 'archive' },
     allowDuplicate: true,
   });
   if (options.isCancelled?.()) {
@@ -328,6 +363,7 @@ export async function onboardArchive(
       baseUrl: normalized.value,
       token: options.token,
       serverLabel: options.label,
+      accessScope: { type: 'archive' },
     },
     { isCancelled: options.isCancelled },
   );

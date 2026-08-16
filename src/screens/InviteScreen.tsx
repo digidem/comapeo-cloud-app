@@ -13,12 +13,15 @@ import {
   apiClient,
   redeemEncryptedInvite,
 } from '@/lib/api-client';
+import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { syncRemoteArchive } from '@/lib/data-layer';
 import {
   type ParseInviteResult,
   parseInviteUrl,
   warnLegacyInviteUrlOnce,
 } from '@/lib/invite-url';
+import { getRemoteServers } from '@/lib/local-repositories';
+import type { InviteAccessScope } from '@/lib/schemas/invite';
 import { type RemoteArchiveServer, useAuthStore } from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
@@ -135,14 +138,68 @@ async function rollbackPersistedInviteServer(
     return;
   }
 
-  await updateServer(serverId, {
+  const updates: Partial<Omit<RemoteArchiveServer, 'id'>> = {
+    accessScope: previous.accessScope,
     token: previous.token,
     status: previous.status,
     onboardingStatus: previous.onboardingStatus,
     errorMessage: previous.errorMessage,
     lastSyncedAt: previous.lastSyncedAt,
     lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
+  };
+
+  await updateServer(serverId, {
+    ...updates,
   });
+}
+
+function normalizeInviteAccessScope(
+  accessScope?: InviteAccessScope,
+): InviteAccessScope {
+  return accessScope ?? { type: 'archive' };
+}
+
+function normalizeForIdentity(baseUrl: string): string {
+  const normalized = normalizeArchiveBaseUrl(baseUrl);
+  return normalized.ok ? normalized.value : baseUrl.trim().replace(/\/+$/, '');
+}
+
+function isArchiveScope(accessScope?: InviteAccessScope): boolean {
+  return normalizeInviteAccessScope(accessScope).type === 'archive';
+}
+
+function isArchiveWideServerForBaseUrl(
+  server: { baseUrl: string; accessScope?: InviteAccessScope },
+  normalizedBaseUrl: string,
+): boolean {
+  return (
+    normalizeForIdentity(server.baseUrl) === normalizedBaseUrl &&
+    isArchiveScope(server.accessScope)
+  );
+}
+
+async function hasArchiveWideServerForBaseUrl(
+  baseUrl: string,
+): Promise<boolean> {
+  const normalized = normalizeForIdentity(baseUrl);
+  if (
+    useAuthStore
+      .getState()
+      .servers.some((server) =>
+        isArchiveWideServerForBaseUrl(server, normalized),
+      )
+  ) {
+    return true;
+  }
+
+  try {
+    const persistedServers = await getRemoteServers();
+    return persistedServers.some((server) =>
+      isArchiveWideServerForBaseUrl(server, normalized),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function parseInviteFromLocation(): ParseInviteResult | null {
@@ -272,19 +329,36 @@ export function InviteScreen() {
         setActiveStep('verify');
         let baseUrl: string;
         let token: string;
+        let accessScope: InviteAccessScope;
 
         if (validInvite.kind === 'encrypted') {
           const redeemed = await redeemEncryptedInvite(validInvite.code);
           if (cancelledRef.current) return;
           baseUrl = redeemed.baseUrl;
           token = redeemed.token;
+          accessScope = normalizeInviteAccessScope(redeemed.accessScope);
         } else {
           // TODO(issue-#8): remove this legacy branch in the next release.
           warnLegacyInviteUrlOnce();
           baseUrl = validInvite.baseUrl;
           token = validInvite.token;
+          accessScope = { type: 'archive' };
         }
         if (cancelledRef.current) return;
+
+        if (accessScope.type === 'project') {
+          const hasArchiveWideServer =
+            await hasArchiveWideServerForBaseUrl(baseUrl);
+          if (cancelledRef.current) return;
+          if (hasArchiveWideServer) {
+            setActiveStep('prepare');
+            setStatus('connected');
+            redirectTimerRef.current = setTimeout(() => {
+              if (!cancelledRef.current) navigate({ to: '/' });
+            }, 1500);
+            return;
+          }
+        }
 
         // Step 2: Validate server + credentials BEFORE persisting anything.
         // An invalid or malicious invite must never overwrite an existing
@@ -333,6 +407,7 @@ export function InviteScreen() {
           label: new URL(baseUrl).hostname,
           baseUrl,
           token,
+          accessScope,
           allowDuplicate: true,
         });
         persistedInvite = { serverId, previousServers };
@@ -345,8 +420,11 @@ export function InviteScreen() {
         setActiveStep('sync');
         const syncResult = await syncRemoteArchive(
           serverId,
-          { baseUrl, token },
-          { isCancelled: () => cancelledRef.current },
+          { baseUrl, token, accessScope },
+          {
+            isCancelled: () => cancelledRef.current,
+            deferScopedConsolidation: accessScope.type === 'archive',
+          },
         );
         if (cancelledRef.current) {
           await rollbackPersistedInvite();
@@ -371,9 +449,23 @@ export function InviteScreen() {
           return;
         }
 
-        // The coordinator already invalidated every affected query root.
+        // A ready sync is the commit point. Until here, cancellation can restore
+        // the exact prior credential set because scoped-server consolidation was
+        // deliberately deferred above.
         persistedInvite = undefined;
         setActiveStep('prepare');
+        if (accessScope.type === 'archive') {
+          try {
+            await useAuthStore
+              .getState()
+              .consolidateScopedServersForArchive(serverId);
+          } catch (error) {
+            console.warn(
+              'Archive connected but scoped credential cleanup failed',
+              error,
+            );
+          }
+        }
         if (cancelledRef.current) return;
 
         setStatus('connected');
