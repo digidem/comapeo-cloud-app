@@ -150,6 +150,43 @@ describe('AddArchiveServerDialog', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('resets form state when the same dialog instance is reopened after cancel', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={onClose}
+        onAdded={() => {}}
+      />,
+    );
+
+    await user.click(screen.getByTestId('advanced-toggle'));
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'https://example.test',
+    );
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    rerender(
+      <AddArchiveServerDialog
+        isOpen={false}
+        onClose={onClose}
+        onAdded={() => {}}
+      />,
+    );
+    rerender(
+      <AddArchiveServerDialog
+        isOpen={true}
+        onClose={onClose}
+        onAdded={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText('Invite URL or Code')).toHaveValue('');
+    expect(screen.queryByLabelText('Server URL')).not.toBeInTheDocument();
+  });
+
   // ---- Default invite URL mode tests ----
 
   it('default view shows "Invite URL" input, not "Server URL" or "Bearer Token"', () => {
