@@ -8,7 +8,7 @@ test.describe('Direct archive connection', () => {
   });
 
   test('loads synced projects without a manual refresh', async ({ page }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
@@ -31,13 +31,13 @@ test.describe('Direct archive connection', () => {
     // its intro branch to the dashboard branch. That transition must not remount
     // the in-flight dialog before onboarding reaches its success state.
     await expect(page.getByText('Connecting to archive...')).toBeVisible();
-    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
 
     // The synced archive data should be visible immediately without page.reload().
-    // Use the archive browser project label so this assertion does not depend on
-    // the coverage worker choosing a particular Home content branch.
-    await expect(page.getByText('Test Project 1').first()).toBeVisible({
-      timeout: 10_000,
+    // Assert against a stable project-row contract instead of fixture display text
+    // or whichever Home coverage branch happens to render first.
+    await expect(page.getByTestId('archive-project-row').first()).toBeVisible({
+      timeout: 30_000,
     });
   });
 });

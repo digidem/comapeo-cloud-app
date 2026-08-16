@@ -37,6 +37,15 @@ function OpenDialogButton() {
   );
 }
 
+function ProgrammaticCloseButton() {
+  const { closeAddServerDialog } = useAddServerDialog();
+  return (
+    <button type="button" onClick={closeAddServerDialog}>
+      Close shared dialog programmatically
+    </button>
+  );
+}
+
 describe('AddServerDialogProvider', () => {
   it('opens and closes the shared dialog', async () => {
     const user = userEvent.setup();
@@ -74,6 +83,28 @@ describe('AddServerDialogProvider', () => {
       screen.getByRole('button', { name: 'Complete shared dialog' }),
     );
 
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('supports programmatic close from a provider consumer', async () => {
+    const user = userEvent.setup();
+    render(
+      <AddServerDialogProvider>
+        <OpenDialogButton />
+        <ProgrammaticCloseButton />
+      </AddServerDialogProvider>,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Open shared dialog' }),
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Close shared dialog programmatically',
+      }),
+    );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 

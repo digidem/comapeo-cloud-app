@@ -11,6 +11,7 @@ import { AddArchiveServerDialog } from '@/screens/Home/AddArchiveServerDialog';
 
 interface AddServerDialogContextValue {
   openAddServerDialog: () => void;
+  closeAddServerDialog: () => void;
 }
 
 const AddServerDialogContext = createContext<
@@ -21,7 +22,10 @@ export function AddServerDialogProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const openAddServerDialog = useCallback(() => setIsOpen(true), []);
   const closeAddServerDialog = useCallback(() => setIsOpen(false), []);
-  const value = useMemo(() => ({ openAddServerDialog }), [openAddServerDialog]);
+  const value = useMemo(
+    () => ({ openAddServerDialog, closeAddServerDialog }),
+    [openAddServerDialog, closeAddServerDialog],
+  );
 
   return (
     <AddServerDialogContext.Provider value={value}>
