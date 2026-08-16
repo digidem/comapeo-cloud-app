@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
-import { useQueryClient } from '@tanstack/react-query';
-
 import { ConnectionProgress } from '@/components/shared/ConnectionProgress';
 import type { ConnectionStep } from '@/components/shared/ConnectionProgress';
 import { Button } from '@/components/ui/button';
@@ -278,7 +276,6 @@ function AddArchiveServerDialog({
   onAdded,
 }: AddArchiveServerDialogProps) {
   const intl = useIntl();
-  const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -372,16 +369,6 @@ function AddArchiveServerDialog({
           serverId: result.serverId,
           steps: [...steps],
         }));
-
-        // The coordinator owns archive sync invalidation, but Home is already
-        // mounted during direct onboarding. Explicitly refetch its active project
-        // list before declaring the dashboard prepared so the newly synced data
-        // is visible without relying on a page remount or manual refresh.
-        await queryClient.refetchQueries({
-          queryKey: ['projects'],
-          type: 'active',
-        });
-        if (cancelled) return;
 
         await new Promise((resolve) => setTimeout(resolve, 500));
         if (cancelled) return;

@@ -795,6 +795,7 @@ function HomeScreen() {
         </div>
 
         <AddArchiveServerDialog
+          key="home-add-archive-server-dialog"
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
           onAdded={(_serverId) => {
@@ -911,6 +912,7 @@ function HomeScreen() {
         />
 
         <AddArchiveServerDialog
+          key="home-add-archive-server-dialog"
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
           onAdded={(_serverId) => {
@@ -1000,6 +1002,7 @@ function HomeScreen() {
         />
 
         <AddArchiveServerDialog
+          key="home-add-archive-server-dialog"
           isOpen={state.isAddServerDialogOpen}
           onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
           onAdded={(_serverId) => {
@@ -1227,6 +1230,7 @@ function HomeScreen() {
       />
 
       <AddArchiveServerDialog
+        key="home-add-archive-server-dialog"
         isOpen={state.isAddServerDialogOpen}
         onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
         onAdded={(_serverId) => {
