@@ -1,6 +1,7 @@
 import { render, waitFor } from '@tests/mocks/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AddServerDialogProvider } from '@/components/layout/add-server-dialog-context';
 import { useProjects } from '@/hooks/useProjects';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { useProjectStore } from '@/stores/project-store';
@@ -116,7 +117,11 @@ describe('debug-sync', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    render(
+      <AddServerDialogProvider>
+        <HomeScreen />
+      </AddServerDialogProvider>,
+    );
 
     // If Effect 2 works: should show 'First Project' (from store)
     // If only auto-select: should show 'Second Project' (most recent)

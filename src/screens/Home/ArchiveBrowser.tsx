@@ -227,6 +227,7 @@ function ArchiveBrowser({
                   {/* Clickable archive toggle */}
                   <button
                     type="button"
+                    data-testid="archive-toggle"
                     aria-expanded={isExpanded}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -308,6 +309,7 @@ function ArchiveBrowser({
                         return (
                           <div
                             key={project.localId}
+                            data-testid="archive-project-row"
                             className={`flex items-center px-3 py-1.5 rounded-btn text-sm transition-colors ${
                               isActive
                                 ? 'bg-primary-soft text-primary font-medium'

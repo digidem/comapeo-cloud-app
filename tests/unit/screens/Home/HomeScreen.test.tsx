@@ -9,7 +9,9 @@ import {
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ReactNode } from 'react';
+import { act } from 'react';
 
+import { AddServerDialogProvider } from '@/components/layout/add-server-dialog-context';
 import {
   ShellSlotProvider,
   useShellOverrides,
@@ -23,6 +25,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { useTracks } from '@/hooks/useTracks';
 import type { CalculationResult } from '@/lib/area-calculator/types';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
 // Renders HomeScreen inside a ShellSlotProvider + a "shell reader" that exposes
@@ -51,9 +54,19 @@ function ShellReader() {
 function renderWithShell(ui: ReactNode) {
   return render(
     <ShellSlotProvider>
-      <ShellReader />
-      {ui}
+      <AddServerDialogProvider>
+        <ShellReader />
+        {ui}
+      </AddServerDialogProvider>
     </ShellSlotProvider>,
+  );
+}
+
+function renderHome() {
+  return render(
+    <AddServerDialogProvider>
+      <HomeScreen />
+    </AddServerDialogProvider>,
   );
 }
 
@@ -206,6 +219,12 @@ async function waitForWorkspace(name: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  useAuthStore.setState({
+    servers: [],
+    activeServerId: null,
+    token: null,
+    baseUrl: null,
+  });
   useProjectStore.setState({ selectedProjectId: null, selectedServerId: null });
   mockUseProjects.mockReturnValue({
     data: [],
@@ -248,7 +267,7 @@ beforeEach(() => {
 
 describe('HomeScreen', () => {
   it('renders without crashing', () => {
-    render(<HomeScreen />);
+    renderHome();
     // Should render the AppShell with some content
     expect(document.body).toBeDefined();
   });
@@ -262,7 +281,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
     expect(screen.getByText('Welcome to CoMapeo Cloud')).toBeInTheDocument();
     expect(screen.getByText('Add remote archive server')).toBeInTheDocument();
     expect(screen.getByText('Create project')).toBeInTheDocument();
@@ -277,7 +296,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
     expect(
       screen.getByRole('button', { name: 'Add server' }),
     ).toBeInTheDocument();
@@ -296,7 +315,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
 
     // Click "Add server" on the intro page
     await user.click(screen.getByRole('button', { name: 'Add server' }));
@@ -313,6 +332,37 @@ describe('HomeScreen', () => {
     );
   });
 
+  it('keeps the add-server dialog mounted when the first server changes the Home layout', async () => {
+    const user = userEvent.setup();
+
+    renderHome();
+
+    await user.click(screen.getByRole('button', { name: 'Add server' }));
+    await user.click(screen.getByTestId('advanced-toggle'));
+
+    const serverUrlInput = screen.getByLabelText('Server URL');
+    await user.type(serverUrlInput, 'https://archive.example.com');
+
+    act(() => {
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 'srv-1',
+            label: 'Test Archive',
+            baseUrl: 'https://archive.example.com',
+            token: 'test-token',
+            status: 'pending',
+          },
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Server URL')).toBe(serverUrlInput);
+    });
+    expect(serverUrlInput).toHaveValue('https://archive.example.com');
+  });
+
   it('opens CreateProjectDialog when "Create project" is clicked on intro page', async () => {
     const user = userEvent.setup();
     mockUseProjects.mockReturnValue({
@@ -323,7 +373,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
     await user.click(screen.getByRole('button', { name: 'Create project' }));
     // Check that the Create Project dialog appears
     expect(
@@ -340,7 +390,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
     expect(screen.getByText('How it works')).toBeInTheDocument();
   });
 
@@ -385,7 +435,7 @@ describe('HomeScreen', () => {
       anySyncing: false,
     });
 
-    render(<HomeScreen />);
+    renderHome();
     expect(
       screen.queryByText('Welcome to CoMapeo Cloud'),
     ).not.toBeInTheDocument();
@@ -409,7 +459,7 @@ describe('HomeScreen', () => {
       status: 'success',
     } as unknown as ReturnType<typeof useProjects>);
 
-    render(<HomeScreen />);
+    renderHome();
     expect(
       screen.queryByText('Welcome to CoMapeo Cloud'),
     ).not.toBeInTheDocument();
@@ -545,7 +595,7 @@ describe('HomeScreen', () => {
   it('shows a main empty-state new project CTA', async () => {
     const user = userEvent.setup();
 
-    render(<HomeScreen />);
+    renderHome();
 
     await user.click(screen.getByRole('button', { name: 'Create project' }));
     expect(
@@ -1687,30 +1737,6 @@ describe('HomeScreen', () => {
     // Both CoverageSummary and ProjectBannerCard render "3 ha" when useCountUp is mocked
     const areaElements = screen.getAllByText('3 ha');
     expect(areaElements.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('AddArchiveServerDialog onAdded does not sync when server not found', async () => {
-    const { syncRemoteArchive: syncFn } = await import('@/lib/data-layer');
-
-    useProjectStore.setState({
-      selectedProjectId: null,
-      selectedServerId: null,
-    });
-
-    const { useAuthStore } = await import('@/stores/auth-store');
-    useAuthStore.setState({ servers: [] });
-
-    renderWithShell(<HomeScreen />);
-
-    // Find the "Add Server" button in the sidebar
-    const addServerBtn = screen.queryByRole('button', { name: /add server/i });
-    if (addServerBtn) {
-      await userEvent.setup().click(addServerBtn);
-    }
-
-    // The AddArchiveServerDialog's onAdded callback checks if server exists
-    // When server is not found after adding, sync should NOT be called
-    expect(syncFn).not.toHaveBeenCalled();
   });
 
   // Phase 9: store↔reducer bidirectional sync effects (lines 560-637)

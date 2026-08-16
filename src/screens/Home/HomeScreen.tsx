@@ -12,6 +12,7 @@ import { type IntlShape, defineMessages, useIntl } from 'react-intl';
 
 import { useQueryClient } from '@tanstack/react-query';
 
+import { useAddServerDialog } from '@/components/layout/add-server-dialog-context';
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Button } from '@/components/ui/button';
 import { useAlerts } from '@/hooks/useAlerts';
@@ -33,7 +34,6 @@ import { resolveObservationListItemName } from '@/lib/observation-list-item';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
-import { AddArchiveServerDialog } from './AddArchiveServerDialog';
 import { ArchiveServerDetail } from './ArchiveServerDetail';
 import { AreaMap } from './AreaMap';
 import { CalculationSettings } from './CalculationSettings';
@@ -88,7 +88,6 @@ interface HomeState {
   isCreateDialogOpen: boolean;
   editingProjectId: string | null;
   deletingProjectId: string | null;
-  isAddServerDialogOpen: boolean;
   selectedPresetId: string;
   params: CalculationParams;
   activeMethodId: string;
@@ -113,8 +112,6 @@ type HomeAction =
   | { type: 'SET_ACTIVE_METHOD'; methodId: string }
   | { type: 'SET_UNIT'; unit: AreaUnit }
   | { type: 'INCREMENT_COVERAGE_REFRESH' }
-  | { type: 'OPEN_ADD_SERVER_DIALOG' }
-  | { type: 'CLOSE_ADD_SERVER_DIALOG' }
   | { type: 'SELECT_SERVER'; id: string | null }
   | { type: 'CLEAR_PROJECT' };
 
@@ -165,10 +162,6 @@ function homeReducer(state: HomeState, action: HomeAction): HomeState {
       return { ...state, unit: action.unit };
     case 'INCREMENT_COVERAGE_REFRESH':
       return { ...state, coverageRefreshKey: state.coverageRefreshKey + 1 };
-    case 'OPEN_ADD_SERVER_DIALOG':
-      return { ...state, isAddServerDialogOpen: true };
-    case 'CLOSE_ADD_SERVER_DIALOG':
-      return { ...state, isAddServerDialogOpen: false };
     case 'SELECT_SERVER':
       return { ...state, selectedServerId: action.id };
     case 'CLEAR_PROJECT':
@@ -183,7 +176,6 @@ const INITIAL_STATE: HomeState = {
   isCreateDialogOpen: false,
   editingProjectId: null,
   deletingProjectId: null,
-  isAddServerDialogOpen: false,
   selectedPresetId: BUILT_IN_PRESETS[0]?.id ?? 'balanced',
   params: { ...DEFAULTS },
   activeMethodId: 'observed',
@@ -371,6 +363,7 @@ function HomeScreen() {
   const persistedServerId = useProjectStore((s) => s.selectedServerId);
   const setSelectedProjectId = useProjectStore((s) => s.setSelectedProjectId);
   const setSelectedServerId = useProjectStore((s) => s.setSelectedServerId);
+  const { openAddServerDialog } = useAddServerDialog();
   const intl = useIntl();
   const [now, setNow] = useState(() => Date.now());
 
@@ -647,11 +640,6 @@ function HomeScreen() {
     [],
   );
 
-  const handleOpenAddServer = useCallback(
-    () => dispatch({ type: 'OPEN_ADD_SERVER_DIALOG' }),
-    [],
-  );
-
   const handleIncrementRefresh = useCallback(
     () => dispatch({ type: 'INCREMENT_COVERAGE_REFRESH' }),
     [],
@@ -712,11 +700,7 @@ function HomeScreen() {
   // show the skeleton — the stale data remains visible while refreshing.
   // Must be after all hooks (useShellSlot) to avoid Rules of Hooks violations
   if (projectsQuery.isPending) {
-    return (
-      <>
-        <HomeScreenSkeleton />
-      </>
-    );
+    return <HomeScreenSkeleton />;
   }
 
   // ---- Main content area ----
@@ -789,20 +773,10 @@ function HomeScreen() {
       <>
         <div className="flex h-full flex-col">
           <IntroPage
-            onAddServer={handleOpenAddServer}
+            onAddServer={openAddServerDialog}
             onCreateProject={handleOpenCreateDialog}
           />
         </div>
-
-        <AddArchiveServerDialog
-          isOpen={state.isAddServerDialogOpen}
-          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(_serverId) => {
-            // The dialog already invalidates projects/observations/alerts as
-            // part of its connection-progress flow, so just close here.
-            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-          }}
-        />
 
         <CreateProjectDialog
           isOpen={state.isCreateDialogOpen}
@@ -909,14 +883,6 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_DELETED' });
           }}
         />
-
-        <AddArchiveServerDialog
-          isOpen={state.isAddServerDialogOpen}
-          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(_serverId) => {
-            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
-          }}
-        />
       </>
     );
   }
@@ -996,14 +962,6 @@ function HomeScreen() {
           onDeleted={() => {
             void queryClient.invalidateQueries({ queryKey: ['projects'] });
             dispatch({ type: 'PROJECT_DELETED' });
-          }}
-        />
-
-        <AddArchiveServerDialog
-          isOpen={state.isAddServerDialogOpen}
-          onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-          onAdded={(_serverId) => {
-            dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
           }}
         />
       </>
@@ -1223,14 +1181,6 @@ function HomeScreen() {
         onDeleted={() => {
           void queryClient.invalidateQueries({ queryKey: ['projects'] });
           dispatch({ type: 'PROJECT_DELETED' });
-        }}
-      />
-
-      <AddArchiveServerDialog
-        isOpen={state.isAddServerDialogOpen}
-        onClose={() => dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' })}
-        onAdded={(_serverId) => {
-          dispatch({ type: 'CLOSE_ADD_SERVER_DIALOG' });
         }}
       />
     </>

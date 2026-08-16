@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
 
+import { AddServerDialogProvider } from '@/components/layout/add-server-dialog-context';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -69,7 +70,11 @@ const meta: Meta<HomeScreenArgs> = {
       useAuthStore.setState({
         servers: context.args.hasArchiveServers ? SERVER_LIST : [],
       });
-      return <Story />;
+      return (
+        <AddServerDialogProvider>
+          <Story />
+        </AddServerDialogProvider>
+      );
     },
   ],
   render: () => <HomeScreen />,

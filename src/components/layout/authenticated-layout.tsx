@@ -5,6 +5,10 @@ import { defineMessages, useIntl } from 'react-intl';
 import { useQueryClient } from '@tanstack/react-query';
 import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 
+import {
+  AddServerDialogProvider,
+  useAddServerDialog,
+} from '@/components/layout/add-server-dialog-context';
 import { AppShell } from '@/components/layout/app-shell';
 import {
   ShellSlotProvider,
@@ -13,7 +17,6 @@ import {
 import { useAutoSync } from '@/hooks/useAutoSync';
 import { useProjects } from '@/hooks/useProjects';
 import { getDb } from '@/lib/db';
-import { AddArchiveServerDialog } from '@/screens/Home/AddArchiveServerDialog';
 import { ArchiveBrowser } from '@/screens/Home/ArchiveBrowser';
 import { CreateProjectDialog } from '@/screens/Home/CreateProjectDialog';
 import { useAuthStore } from '@/stores/auth-store';
@@ -220,8 +223,8 @@ function AuthenticatedLayoutInner() {
     };
   }, [selectedProjectId, hydrateActiveMap]);
 
-  // Shared dialog state for mobile drawer and sidebar actions.
-  const [isAddServerOpen, setAddServerOpen] = useState(false);
+  // Shared dialog owner for mobile drawer, sidebar, and Home intro actions.
+  const { openAddServerDialog } = useAddServerDialog();
   const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
 
   // Data for drawer archive/project sections.
@@ -294,7 +297,7 @@ function AuthenticatedLayoutInner() {
                 navigate({ to: '/' });
               }}
               onCreateNew={() => setCreateProjectOpen(true)}
-              onAddServer={() => setAddServerOpen(true)}
+              onAddServer={openAddServerDialog}
               onSelectServer={(id) => {
                 useProjectStore.getState().setSelectedServerId(id);
                 navigate({ to: '/' });
@@ -307,7 +310,7 @@ function AuthenticatedLayoutInner() {
         drawerLocalProjects={localProjects}
         activeArchiveId={selectedServerId ?? undefined}
         activeProjectId={selectedProjectId ?? undefined}
-        onDrawerAddServer={() => setAddServerOpen(true)}
+        onDrawerAddServer={openAddServerDialog}
         onDrawerCreateProject={() => setCreateProjectOpen(true)}
         onDrawerSelectServer={(id) => {
           useProjectStore.getState().setSelectedServerId(id);
@@ -318,21 +321,13 @@ function AuthenticatedLayoutInner() {
           navigate({ to: '/' });
         }}
         onDrawerArchiveSettings={(id) => {
-          // Archive settings navigates to Home, where ArchiveBrowser owns the dialog.
+          // Archive settings navigates to Home, where the shared layout provider owns the dialog.
           useProjectStore.getState().setSelectedServerId(id);
           navigate({ to: '/' });
         }}
       >
         <Outlet />
       </AppShell>
-
-      <AddArchiveServerDialog
-        isOpen={isAddServerOpen}
-        onClose={() => setAddServerOpen(false)}
-        onAdded={() => {
-          setAddServerOpen(false);
-        }}
-      />
 
       <CreateProjectDialog
         isOpen={isCreateProjectOpen}
@@ -352,7 +347,9 @@ function AuthenticatedLayoutInner() {
 export function AuthenticatedLayout() {
   return (
     <ShellSlotProvider>
-      <AutoSyncWrapper />
+      <AddServerDialogProvider>
+        <AutoSyncWrapper />
+      </AddServerDialogProvider>
     </ShellSlotProvider>
   );
 }
