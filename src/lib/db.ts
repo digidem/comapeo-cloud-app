@@ -235,19 +235,21 @@ export interface SavedMap {
   maxZoom: number; // Default 14
   attribution?: string;
   scheme?: 'xyz' | 'tms'; // Raster only
-  /**
-   * Runtime SMP blob. Older records may persist this field directly; newer
-   * records persist `smpData` and reconstruct the Blob through the maps reading
-   * hook for WebKit-compatible IndexedDB storage.
-   */
+  /** Legacy/runtime SMP blob. New package bytes live in the mapPackages table. */
   smpBlob?: Blob;
-  /** Portable persisted SMP bytes for browsers that cannot store Blob in IDB. */
-  smpData?: ArrayBuffer;
   smpSize?: number; // SMP byte length
   status: 'draft' | 'downloading' | 'ready' | 'error';
   errorMessage?: string;
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
+}
+
+/** Portable SMP package bytes stored separately from map-list metadata. */
+export interface SavedMapPackage {
+  mapId: string;
+  data: ArrayBuffer;
+  contentType: string;
+  updatedAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +268,7 @@ class AppDatabase extends Dexie {
   presets!: EntityTable<Preset, 'localId'>;
   iconCache!: EntityTable<CachedIcon, 'url'>;
   maps!: EntityTable<SavedMap, 'id'>;
+  mapPackages!: EntityTable<SavedMapPackage, 'mapId'>;
 
   constructor() {
     super('comapeo-cloud-app');
@@ -520,14 +523,12 @@ class AppDatabase extends Dexie {
       maps: '&id, projectLocalId, [projectLocalId+updatedAt], status',
     });
 
-    this.maps.hook('reading', (map) => {
-      if (map && !map.smpBlob && map.smpData) {
-        return {
-          ...map,
-          smpBlob: new Blob([map.smpData], { type: 'application/zip' }),
-        };
-      }
-      return map;
+    // v13: store SMP package bytes separately from map metadata. ArrayBuffer is
+    // portable across the Playwright browser engines, and separating package
+    // bytes keeps map-list queries from eagerly materializing large offline maps.
+    // Legacy map rows with smpBlob remain readable through getSavedMapSmpBlob().
+    this.version(13).stores({
+      mapPackages: '&mapId',
     });
   }
 }
@@ -549,6 +550,28 @@ export function getDb(): AppDatabase {
     _db = new AppDatabase();
   }
   return _db;
+}
+
+/** Load an SMP package only when a consumer actually needs its bytes. */
+export async function getSavedMapSmpBlob(
+  map: Pick<SavedMap, 'id' | 'smpBlob'>,
+): Promise<Blob | undefined> {
+  if (map.smpBlob) return map.smpBlob;
+  const storedPackage = await getDb().mapPackages.get(map.id);
+  if (!storedPackage) return undefined;
+  return new Blob([storedPackage.data], {
+    type: storedPackage.contentType || 'application/zip',
+  });
+}
+
+/** Fetch one map and attach its package blob without hydrating package bytes in list queries. */
+export async function getSavedMapWithSmpBlob(
+  mapId: string,
+): Promise<SavedMap | undefined> {
+  const map = await getDb().maps.get(mapId);
+  if (!map) return undefined;
+  const smpBlob = await getSavedMapSmpBlob(map);
+  return smpBlob ? { ...map, smpBlob } : map;
 }
 
 /**

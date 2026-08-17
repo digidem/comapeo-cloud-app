@@ -141,9 +141,16 @@ async function seedLocalState(
         minZoom: 0,
         maxZoom: 0,
         status: 'ready',
-        smpData: e2eArrayBuffer(smpBytes),
         smpSize: smpBytes.length,
         createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    mapPackages: [
+      {
+        mapId: ACTIVE_MAP_ID,
+        data: e2eArrayBuffer(smpBytes),
+        contentType: 'application/zip',
         updatedAt: now,
       },
     ],
@@ -315,10 +322,9 @@ test.describe('active SMP offline cold start', () => {
 
     // Corrupting the local package and starting the page again must produce an
     // intentional error state rather than a hang/crash or remote fallback.
-    await updateAppDatabaseRecord(offlinePage, 'maps', ACTIVE_MAP_ID, {
-      smpBlob: undefined,
-      smpData: e2eArrayBuffer(new TextEncoder().encode('not a zip')),
-      smpSize: 9,
+    await updateAppDatabaseRecord(offlinePage, 'mapPackages', ACTIVE_MAP_ID, {
+      data: e2eArrayBuffer(new TextEncoder().encode('not a zip')),
+      contentType: 'application/zip',
       updatedAt: new Date().toISOString(),
     });
 

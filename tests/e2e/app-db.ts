@@ -15,6 +15,7 @@ export const APP_DB_TABLES = [
   'presets',
   'iconCache',
   'maps',
+  'mapPackages',
 ] as const;
 
 export type AppDbTableName = (typeof APP_DB_TABLES)[number];
@@ -147,19 +148,16 @@ async function executeDbOperation(
           value: unknown,
           path = 'result',
         ): void => {
-          if (value instanceof Blob) {
-            throw new Error(
-              `Cannot return Blob at ${path} through the E2E database helper; read portable byte-backed fields instead`,
-            );
-          }
           if (
-            value === null ||
-            typeof value !== 'object' ||
+            value instanceof Blob ||
             value instanceof ArrayBuffer ||
             ArrayBuffer.isView(value)
           ) {
-            return;
+            throw new Error(
+              `Cannot return binary data at ${path} through the E2E database helper; assert it through browser-side behavior instead`,
+            );
           }
+          if (value === null || typeof value !== 'object') return;
           if (Array.isArray(value)) {
             value.forEach((child, index) =>
               assertSerializableResult(child, `${path}[${index}]`),

@@ -8,7 +8,7 @@ import {
 import type { SavedMap } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import { recoverCancelledMapDownload } from '@/lib/map/saved-map-lifecycle';
-import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
+import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
 import { useMapDownloadStore } from '@/stores/map-download-store';
@@ -42,9 +42,16 @@ function sortMapsNewestFirst(maps: SavedMap[]): SavedMap[] {
   return [...maps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-function assertValidNewMapOrigin(map: SavedMap): void {
+type NewSavedMap = SavedMap & { smpData?: ArrayBuffer };
+
+function assertValidNewMapOrigin(map: NewSavedMap): void {
   if (map.origin === 'imported') {
-    if (!isImportedSmpMap(map)) {
+    const hasPackageBytes = Boolean(map.smpBlob || map.smpData);
+    if (
+      !isImportedSmpRecord(map) ||
+      map.status !== 'ready' ||
+      !hasPackageBytes
+    ) {
       throw new Error(
         'Imported maps must be ready self-contained style packages',
       );
@@ -84,9 +91,30 @@ export function useCreateMap() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (map: SavedMap) => {
+    mutationFn: async (map: NewSavedMap) => {
       assertValidNewMapOrigin(map);
-      await getDb().maps.add(map);
+      const db = getDb();
+
+      if (map.origin === 'imported') {
+        const packageData = map.smpData ?? (await map.smpBlob!.arrayBuffer());
+        const {
+          smpBlob: _legacyBlob,
+          smpData: _packageData,
+          ...persistedMap
+        } = map;
+        await db.transaction('rw', [db.maps, db.mapPackages], async () => {
+          await db.maps.add(persistedMap);
+          await db.mapPackages.put({
+            mapId: map.id,
+            data: packageData,
+            contentType: 'application/zip',
+            updatedAt: map.updatedAt,
+          });
+        });
+        return persistedMap;
+      }
+
+      await db.maps.add(map);
       return map;
     },
     onSuccess: () => {
@@ -122,15 +150,20 @@ export function useDeleteMap() {
       const db = getDb();
       const updatedAt = new Date().toISOString();
       try {
-        await db.transaction('rw', [db.maps, db.projects], async () => {
-          await db.maps.delete(mapId);
-          await db.projects
-            .filter((project) => project.activeMapId === mapId)
-            .modify((project) => {
-              project.activeMapId = null;
-              project.updatedAt = updatedAt;
-            });
-        });
+        await db.transaction(
+          'rw',
+          [db.maps, db.mapPackages, db.projects],
+          async () => {
+            await db.maps.delete(mapId);
+            await db.mapPackages.delete(mapId);
+            await db.projects
+              .filter((project) => project.activeMapId === mapId)
+              .modify((project) => {
+                project.activeMapId = null;
+                project.updatedAt = updatedAt;
+              });
+          },
+        );
       } catch (error) {
         if (cancelledDownload) {
           await recoverCancelledMapDownload(mapId);

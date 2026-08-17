@@ -17,7 +17,7 @@ import Map, { AttributionControl } from 'react-map-gl/maplibre';
 
 import { useQuery } from '@tanstack/react-query';
 
-import { type SavedMap, getDb } from '@/lib/db';
+import { type SavedMap, getSavedMapWithSmpBlob } from '@/lib/db';
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { BASEMAP_CATALOG, findBasemap } from '@/lib/map/basemaps';
 import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
@@ -189,7 +189,9 @@ function MapContainer({
   >({
     queryKey: ['map', activeMapId],
     queryFn: () =>
-      activeMapId ? getDb().maps.get(activeMapId) : Promise.resolve(undefined),
+      activeMapId
+        ? getSavedMapWithSmpBlob(activeMapId)
+        : Promise.resolve(undefined),
     enabled: !!activeMapId,
   });
 

@@ -144,6 +144,7 @@ describe('SmpPreviewDialog', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Loading map preview…',
     );
+    await waitFor(() => expect(smpServe.getSmpReader).toHaveBeenCalledTimes(1));
     const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
 
     rerender(
@@ -200,6 +201,7 @@ describe('SmpPreviewDialog', () => {
     const { rerender } = render(
       <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
     );
+    await waitFor(() => expect(smpServe.getSmpReader).toHaveBeenCalledTimes(1));
     const firstReaderId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
 
     rerender(

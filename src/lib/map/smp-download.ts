@@ -669,25 +669,32 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
 
   try {
     const smpData = await blob.arrayBuffer();
-    if (criticalSkipped > 0) {
-      await db.maps.update(map.id, {
-        smpBlob: undefined,
-        smpData,
-        smpSize: totalSize,
-        status: 'error',
-        errorMessage: `${criticalSkipped} tiles could not be downloaded. The package is incomplete.`,
-        updatedAt: new Date().toISOString(),
+    const updatedAt = new Date().toISOString();
+    await db.transaction('rw', [db.maps, db.mapPackages], async () => {
+      await db.mapPackages.put({
+        mapId: map.id,
+        data: smpData,
+        contentType: 'application/zip',
+        updatedAt,
       });
-    } else {
-      await db.maps.update(map.id, {
-        smpBlob: undefined,
-        smpData,
-        smpSize: totalSize,
-        status: 'ready',
-        errorMessage: undefined,
-        updatedAt: new Date().toISOString(),
-      });
-    }
+      if (criticalSkipped > 0) {
+        await db.maps.update(map.id, {
+          smpBlob: undefined,
+          smpSize: totalSize,
+          status: 'error',
+          errorMessage: `${criticalSkipped} tiles could not be downloaded. The package is incomplete.`,
+          updatedAt,
+        });
+      } else {
+        await db.maps.update(map.id, {
+          smpBlob: undefined,
+          smpSize: totalSize,
+          status: 'ready',
+          errorMessage: undefined,
+          updatedAt,
+        });
+      }
+    });
   } catch (storageError) {
     const message =
       storageError instanceof Error

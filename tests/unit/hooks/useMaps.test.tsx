@@ -198,17 +198,20 @@ describe('useCreateMap', () => {
     expect(await getDb().maps.get(map.id)).toBeUndefined();
   });
 
-  it('persists ready imported SMP records with an explicit imported origin', async () => {
-    const map = createMap({
-      id: 'imported-map',
-      type: 'style',
-      origin: 'imported',
-      styleUrl: '',
-      scheme: undefined,
-      status: 'ready',
-      smpBlob: new Blob(['smp']),
-      smpSize: 3,
-    });
+  it('persists ready imported SMP metadata separately from portable package bytes', async () => {
+    const smpData = new TextEncoder().encode('smp').buffer;
+    const map = {
+      ...createMap({
+        id: 'imported-map',
+        type: 'style',
+        origin: 'imported',
+        styleUrl: '',
+        scheme: undefined,
+        status: 'ready',
+        smpSize: smpData.byteLength,
+      }),
+      smpData,
+    };
     const { result } = renderHook(() => useCreateMap(), { wrapper });
 
     await act(async () => {
@@ -216,16 +219,23 @@ describe('useCreateMap', () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(await getDb().maps.get(map.id)).toEqual(
+    const storedMap = await getDb().maps.get(map.id);
+    expect(storedMap).toEqual(
       expect.objectContaining({
         id: map.id,
         origin: 'imported',
         type: 'style',
         styleUrl: '',
         status: 'ready',
-        smpSize: 3,
+        smpSize: smpData.byteLength,
       }),
     );
+    expect(storedMap?.smpBlob).toBeUndefined();
+    expect(storedMap).not.toHaveProperty('smpData');
+
+    const storedPackage = await getDb().mapPackages.get(map.id);
+    expect(storedPackage?.data).toEqual(smpData);
+    expect(storedPackage?.contentType).toBe('application/zip');
   });
 });
 
@@ -237,9 +247,15 @@ describe('useDeleteMap', () => {
     useMapDownloadStore.setState({ active: null });
   });
 
-  it('clears the active map in the store when the deleted map is active for the current project', async () => {
+  it('clears the active map and package bytes when the deleted map is active', async () => {
     await addProject('project-1', 'map-1');
     await getDb().maps.add(createMap());
+    await getDb().mapPackages.add({
+      mapId: 'map-1',
+      data: new TextEncoder().encode('package').buffer,
+      contentType: 'application/zip',
+      updatedAt: '2026-06-28T00:00:00Z',
+    });
     useMapStore.getState().hydrateActiveMap('project-1', 'map-1');
 
     const { result } = renderHook(() => useDeleteMap(), {
@@ -251,6 +267,7 @@ describe('useDeleteMap', () => {
 
     expect(useMapStore.getState().activeMapId).toBeNull();
     expect(useMapStore.getState().activeProjectLocalId).toBe('project-1');
+    expect(await getDb().mapPackages.get('map-1')).toBeUndefined();
   });
 
   it('clears the deleted map from whichever project is currently hydrated', async () => {

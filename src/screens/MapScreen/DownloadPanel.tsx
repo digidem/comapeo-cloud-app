@@ -6,8 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { useDownloadMap } from '@/hooks/useMaps';
 import { setComapeoStorageItem } from '@/lib/comapeo-local-storage';
-import type { SavedMap } from '@/lib/db';
-import { getDb } from '@/lib/db';
+import { type SavedMap, getSavedMapWithSmpBlob } from '@/lib/db';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import {
   checkStorageQuota,
@@ -95,9 +94,8 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     const name = `${map.name.replace(/[^a-zA-Z0-9_ -]/g, '_')}-${new Date().toISOString().slice(0, 10)}.smp`;
     exportBlobNameRef.current = name;
     void (async () => {
-      const db = getDb();
       try {
-        const stored = await db.maps.get(map.id);
+        const stored = await getSavedMapWithSmpBlob(map.id);
         if (cancelled) return;
         if (stored?.smpBlob) {
           setExportReady(true);
@@ -449,8 +447,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
             if (!url) {
               // Load blob from IndexedDB and create object URL on demand
               try {
-                const db = getDb();
-                const stored = await db.maps.get(map.id);
+                const stored = await getSavedMapWithSmpBlob(map.id);
                 if (!stored?.smpBlob) {
                   setExportMissing(true);
                   return;

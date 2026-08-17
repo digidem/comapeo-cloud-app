@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getCachedIconBlob, getDb, putCachedIconBlob, resetDb } from '@/lib/db';
+import {
+  getCachedIconBlob,
+  getDb,
+  getSavedMapSmpBlob,
+  getSavedMapWithSmpBlob,
+  putCachedIconBlob,
+  resetDb,
+} from '@/lib/db';
 import type { Field, Preset, SavedMap, Track } from '@/lib/db';
 
 beforeEach(async () => {
@@ -8,7 +15,7 @@ beforeEach(async () => {
 });
 
 describe('AppDatabase', () => {
-  it('exposes all 10 required tables', async () => {
+  it('exposes the application tables, including portable map packages', async () => {
     const db = getDb();
 
     expect(db.projects).toBeDefined();
@@ -20,7 +27,9 @@ describe('AppDatabase', () => {
     expect(db.remoteServers).toBeDefined();
     expect(db.syncMetadata).toBeDefined();
     expect(db.presets).toBeDefined();
+    expect(db.iconCache).toBeDefined();
     expect(db.maps).toBeDefined();
+    expect(db.mapPackages).toBeDefined();
   });
 
   it('defines &localId as the primary key for projects', async () => {
@@ -508,16 +517,16 @@ describe('AppDatabase', () => {
     ]);
   });
 
-  it('declares version 12 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
+  it('declares version 13 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
     const db = getDb();
 
-    // The highest declared version is 12 (v8 no-op, v9 string→ref
+    // The highest declared version is 13 (v8 no-op, v9 string→ref
     // re-declared, v10 adds the v2 sync indexes and field migrations, v11
-    // adds the iconCache table, v12 adds the maps table). If any future
-    // change drops or renumbers versions, this test fails and forces the
-    // author to think about the upgrade path for users on prior builds
-    // (especially the post-#67 v9 build).
-    expect(db.verno).toBe(12);
+    // adds iconCache, v12 adds maps, and v13 adds portable mapPackages).
+    // If any future change drops or renumbers versions, this test fails and
+    // forces the author to think about the upgrade path for users on prior
+    // builds (especially the post-#67 v9 build).
+    expect(db.verno).toBe(13);
 
     // Verify the v2 sync indexes are present in the schema. These are
     // required for the index-based queries used by remote-archive.ts.
@@ -767,10 +776,10 @@ describe('maps table', () => {
     expect(retrieved!.bbox).toEqual([-73.0, -3.5, -70.0, -1.0]);
   });
 
-  it('rehydrates portable SMP bytes as a Blob when reading a saved map', async () => {
+  it('keeps portable SMP bytes out of ordinary map metadata reads', async () => {
     const db = getDb();
     const smpBytes = new TextEncoder().encode('portable-smp-bytes').buffer;
-    const map: SavedMap & { smpData: ArrayBuffer } = {
+    const map: SavedMap = {
       id: 'map-portable-smp',
       projectLocalId: 'proj-1',
       name: 'Portable SMP',
@@ -781,18 +790,51 @@ describe('maps table', () => {
       minZoom: 0,
       maxZoom: 14,
       status: 'ready',
-      smpData: smpBytes,
       smpSize: smpBytes.byteLength,
       createdAt: '2026-06-28T00:00:00Z',
       updatedAt: '2026-06-28T00:00:00Z',
     };
 
     await db.maps.add(map);
-    const retrieved = await db.maps.get(map.id);
+    await db.mapPackages.add({
+      mapId: map.id,
+      data: smpBytes,
+      contentType: 'application/zip',
+      updatedAt: map.updatedAt,
+    });
 
-    expect(retrieved?.smpBlob).toBeInstanceOf(Blob);
-    expect(retrieved?.smpBlob?.type).toBe('application/zip');
-    expect(await retrieved?.smpBlob?.arrayBuffer()).toEqual(smpBytes);
+    const rawMap = await db.maps.get(map.id);
+    expect(rawMap).toEqual(map);
+    expect(rawMap?.smpBlob).toBeUndefined();
+
+    const hydrated = await getSavedMapWithSmpBlob(map.id);
+    expect(hydrated?.smpBlob).toBeInstanceOf(Blob);
+    expect(hydrated?.smpBlob?.type).toBe('application/zip');
+    expect(await hydrated?.smpBlob?.arrayBuffer()).toEqual(smpBytes);
+  });
+
+  it('keeps legacy Blob-backed map packages readable', async () => {
+    const db = getDb();
+    const legacyBlob = new Blob(['legacy-smp'], { type: 'application/zip' });
+    const map: SavedMap = {
+      id: 'map-legacy-smp',
+      projectLocalId: 'proj-1',
+      name: 'Legacy SMP',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      bbox: [-73.0, -3.5, -70.0, -1.0],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'ready',
+      smpBlob: legacyBlob,
+      smpSize: legacyBlob.size,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+    };
+
+    await db.maps.add(map);
+    expect(await getSavedMapSmpBlob(map)).toBe(legacyBlob);
   });
 
   it('queries saved maps by projectLocalId', async () => {

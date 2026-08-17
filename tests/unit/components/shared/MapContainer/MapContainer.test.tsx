@@ -42,9 +42,7 @@ vi.mock('@/lib/map/smp-serve', () => ({
 const mockDbGet = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@/lib/db', () => ({
-  getDb: () => ({
-    maps: { get: (...args: unknown[]) => mockDbGet(...args) },
-  }),
+  getSavedMapWithSmpBlob: (...args: unknown[]) => mockDbGet(...args),
 }));
 
 // Mock react-map-gl/maplibre
