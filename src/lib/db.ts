@@ -679,10 +679,6 @@ export async function hasSavedMapSmpPackage(
   if (map.smpBlob) return true;
 
   const db = getDb();
-  const storedChunkCount = await db.mapPackageChunks
-    .where('mapId')
-    .equals(map.id)
-    .count();
   const storedPackage = await db.mapPackages.get(map.id);
   if (!storedPackage) return false;
 
@@ -694,6 +690,10 @@ export async function hasSavedMapSmpPackage(
     );
   }
 
+  const storedChunkCount = await db.mapPackageChunks
+    .where('mapId')
+    .equals(map.id)
+    .count();
   const expectedChunkCount = storedPackage.chunkCount;
   const expectedSize = storedPackage.size ?? map.smpSize;
   return (
