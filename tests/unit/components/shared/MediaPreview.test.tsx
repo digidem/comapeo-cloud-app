@@ -79,6 +79,60 @@ describe('MediaPreview', () => {
     );
   });
 
+  it('falls back to remoteUrl when a photo attachment has no resolvedUrl', () => {
+    render(
+      <MediaPreview
+        observationLocalId="obs-1"
+        attachments={[
+          {
+            localId: 'att-remote-photo',
+            projectLocalId: 'proj-1',
+            observationLocalId: 'obs-1',
+            sourceType: 'remoteArchive',
+            sourceId: 'server-1',
+            remoteUrl: 'https://archive.example.com/remote-photo.jpg',
+            mediaType: 'photo',
+            createdAt: '',
+            updatedAt: '',
+            dirtyLocal: false,
+            deleted: false,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('auth-img')).toHaveAttribute(
+      'src',
+      'https://archive.example.com/remote-photo.jpg',
+    );
+  });
+
+  it('ignores photo attachments without a usable URL', () => {
+    render(
+      <MediaPreview
+        observationLocalId="obs-1"
+        attachments={[
+          {
+            localId: 'att-empty-photo',
+            projectLocalId: 'proj-1',
+            observationLocalId: 'obs-1',
+            sourceType: 'remoteArchive',
+            sourceId: 'server-1',
+            resolvedUrl: '',
+            mediaType: 'photo',
+            createdAt: '',
+            updatedAt: '',
+            dirtyLocal: false,
+            deleted: false,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('media-preview')).toBeNull();
+    expect(screen.queryByTestId('auth-img')).toBeNull();
+  });
+
   it('renders audio icon from first-class audio attachments without tags', () => {
     render(
       <MediaPreview

@@ -9,9 +9,17 @@ import {
 } from '@/components/ui/badge-severity';
 import { getMessages } from '@/i18n/load-messages';
 
-const intl = createIntl({ locale: 'en', messages: getMessages('en') });
+const enMessages = getMessages('en');
+const intl = createIntl({ locale: 'en', messages: enMessages });
 
 describe('badge severity helpers', () => {
+  it('uses severity message IDs that exist in the English runtime catalog', () => {
+    expect(enMessages['alertCard.severityHigh']).toBe('High');
+    expect(enMessages['alertCard.severityMedium']).toBe('Medium');
+    expect(enMessages['alertCard.severityLow']).toBe('Low');
+    expect(enMessages['alertCard.severityUnknown']).toBe('Unknown');
+  });
+
   it.each([
     ['high', 'high', 'High'],
     ['HIGH', 'high', 'High'],

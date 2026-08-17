@@ -51,10 +51,7 @@ export function MediaPreview({
   for (const attachment of attachments) {
     if (attachment.mediaType === 'audio') {
       attachmentAudioCount += 1;
-      continue;
-    }
-
-    if (attachment.mediaType === 'photo') {
+    } else if (attachment.mediaType === 'photo') {
       const url = attachment.resolvedUrl ?? attachment.remoteUrl;
       if (typeof url === 'string' && url.length > 0) {
         attachmentPhotoUrls.push(url);
