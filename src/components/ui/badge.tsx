@@ -1,25 +1,4 @@
 import { type ReactNode } from 'react';
-import { defineMessages } from 'react-intl';
-import type { IntlShape } from 'react-intl';
-
-const messages = defineMessages({
-  severityHigh: {
-    id: 'alertCard.severityHigh',
-    defaultMessage: 'High',
-  },
-  severityMedium: {
-    id: 'alertCard.severityMedium',
-    defaultMessage: 'Medium',
-  },
-  severityLow: {
-    id: 'alertCard.severityLow',
-    defaultMessage: 'Low',
-  },
-  severityUnknown: {
-    id: 'alertCard.severityUnknown',
-    defaultMessage: 'Unknown',
-  },
-});
 
 export type BadgeVariant = 'high' | 'medium' | 'low' | 'info' | 'neutral';
 
@@ -30,42 +9,6 @@ const variantStyles: Record<BadgeVariant, string> = {
   info: 'bg-slate-100 text-slate-700 border-slate-200',
   neutral: 'bg-gray-100 text-gray-600 border-gray-200',
 };
-
-export function severityToVariant(severity: string | undefined): BadgeVariant {
-  switch (severity?.toLowerCase()) {
-    case 'high':
-      return 'high';
-    case 'medium':
-      return 'medium';
-    case 'low':
-      return 'low';
-    default:
-      return 'info';
-  }
-}
-
-export function severityToLabel(
-  severity: string | undefined,
-  intl: IntlShape,
-): string {
-  switch (severity?.toLowerCase()) {
-    case 'high':
-      return intl.formatMessage(messages.severityHigh);
-    case 'medium':
-      return intl.formatMessage(messages.severityMedium);
-    case 'low':
-      return intl.formatMessage(messages.severityLow);
-    default:
-      return intl.formatMessage(messages.severityUnknown);
-  }
-}
-
-/** Returns true only for known severity values (high/medium/low). */
-export function isKnownSeverity(
-  severity: string | undefined,
-): severity is string {
-  return ['high', 'medium', 'low'].includes(severity?.toLowerCase() ?? '');
-}
 
 export interface BadgeProps {
   variant: BadgeVariant;

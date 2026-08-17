@@ -46,13 +46,21 @@ export function MediaPreview({
 }: MediaPreviewProps) {
   const intl = useIntl();
 
-  const attachmentPhotoUrls = attachments
-    .filter((attachment) => attachment.mediaType === 'photo')
-    .map((attachment) => attachment.resolvedUrl ?? attachment.remoteUrl)
-    .filter((url): url is string => typeof url === 'string' && url.length > 0);
-  const attachmentAudioCount = attachments.filter(
-    (attachment) => attachment.mediaType === 'audio',
-  ).length;
+  const attachmentPhotoUrls: string[] = [];
+  let attachmentAudioCount = 0;
+  for (const attachment of attachments) {
+    if (attachment.mediaType === 'audio') {
+      attachmentAudioCount += 1;
+      continue;
+    }
+
+    if (attachment.mediaType === 'photo') {
+      const url = attachment.resolvedUrl ?? attachment.remoteUrl;
+      if (typeof url === 'string' && url.length > 0) {
+        attachmentPhotoUrls.push(url);
+      }
+    }
+  }
 
   // Filter out empty strings from split (handles trailing commas, consecutive commas, empty string).
   const tagPhotoUrls = tags?.photoUrls

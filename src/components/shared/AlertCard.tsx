@@ -1,12 +1,12 @@
 import { type ReactNode } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
+import { Badge } from '@/components/ui/badge';
 import {
-  Badge,
   isKnownSeverity,
   severityToLabel,
   severityToVariant,
-} from '@/components/ui/badge';
+} from '@/components/ui/badge-severity';
 import type { Alert } from '@/lib/db';
 
 const messages = defineMessages({

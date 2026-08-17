@@ -29,17 +29,17 @@ const messages = defineMessages({
   },
 });
 
+const modes = ['light', 'dark', 'system'] as const;
+const ariaKeys = {
+  light: 'ariaSetLight',
+  dark: 'ariaSetDark',
+  system: 'ariaSetSystem',
+} as const;
+
 export function ThemeToggle() {
   const intl = useIntl();
   const mode = useThemeStore((s) => s.mode);
   const setMode = useThemeStore((s) => s.setMode);
-
-  const modes = ['light', 'dark', 'system'] as const;
-  const ariaKeys = {
-    light: 'ariaSetLight',
-    dark: 'ariaSetDark',
-    system: 'ariaSetSystem',
-  } as const;
 
   return (
     <div className="flex items-center gap-1 rounded-pill border border-border bg-surface p-1">

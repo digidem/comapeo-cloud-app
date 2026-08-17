@@ -6,12 +6,12 @@ import { Link, useParams } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { MapContainer } from '@/components/shared/MapContainer';
+import { Badge } from '@/components/ui/badge';
 import {
-  Badge,
   isKnownSeverity,
   severityToLabel,
   severityToVariant,
-} from '@/components/ui/badge';
+} from '@/components/ui/badge-severity';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAlerts } from '@/hooks/useAlerts';

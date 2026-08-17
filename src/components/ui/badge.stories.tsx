@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/tanstack-react';
 
-import { Badge, severityToVariant } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
+import { severityToVariant } from '@/components/ui/badge-severity';
 
 const meta: Meta<typeof Badge> = {
   title: 'Components/Badge',
