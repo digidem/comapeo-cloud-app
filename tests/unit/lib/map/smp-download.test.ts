@@ -247,7 +247,8 @@ describe('downloadSmp', () => {
     expect(result).toBe('map-1');
     expect(updateSpy).toHaveBeenCalledTimes(2);
     expect(updateSpy).toHaveBeenLastCalledWith('map-1', {
-      smpBlob: expect.any(Blob),
+      smpBlob: undefined,
+      smpData: expect.any(ArrayBuffer),
       smpSize: 3,
       status: 'ready',
       errorMessage: undefined,
@@ -340,8 +341,8 @@ describe('downloadSmp', () => {
 
     const persisted = updateSpy.mock.calls.at(-1)?.[1] as
       Partial<SavedMap> | undefined;
-    expect(persisted?.smpBlob).toBeInstanceOf(Blob);
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    expect(persisted?.smpData).toBeInstanceOf(ArrayBuffer);
+    const merged = await JSZip.loadAsync(persisted?.smpData as ArrayBuffer);
     expect(merged.file('s/g0/0/0/0.png')).not.toBeNull();
     expect(merged.file('s/g0/3/7/7.png')).not.toBeNull();
     expect(merged.file('s/0/3/4/4.png')).toBeNull();
@@ -636,7 +637,7 @@ describe('downloadSmp', () => {
 
     const persisted = updateSpy.mock.calls.at(-1)?.[1] as
       Partial<SavedMap> | undefined;
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(persisted?.smpData as ArrayBuffer);
     const style = JSON.parse(
       (await merged.file('style.json')?.async('string')) ?? '{}',
     ) as {
@@ -736,7 +737,7 @@ describe('downloadSmp', () => {
 
     const persisted = updateSpy.mock.calls.at(-1)?.[1] as
       Partial<SavedMap> | undefined;
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(persisted?.smpData as ArrayBuffer);
     const style = JSON.parse(
       (await merged.file('style.json')?.async('string')) ?? '{}',
     ) as {
@@ -812,7 +813,7 @@ describe('downloadSmp', () => {
 
     const persisted = updateSpy.mock.calls.at(-1)?.[1] as
       Partial<SavedMap> | undefined;
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(persisted?.smpData as ArrayBuffer);
     const style = JSON.parse(
       (await merged.file('style.json')?.async('string')) ?? '{}',
     ) as {
@@ -889,7 +890,7 @@ describe('downloadSmp', () => {
 
     const persisted = updateSpy.mock.calls.at(-1)?.[1] as
       Partial<SavedMap> | undefined;
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(persisted?.smpData as ArrayBuffer);
     const style = JSON.parse(
       (await merged.file('style.json')?.async('string')) ?? '{}',
     ) as {
@@ -970,7 +971,7 @@ describe('downloadSmp', () => {
 
     const persisted = updateSpy.mock.calls.at(-1)?.[1] as
       Partial<SavedMap> | undefined;
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(persisted?.smpData as ArrayBuffer);
     const style = JSON.parse(
       (await merged.file('style.json')?.async('string')) ?? '{}',
     ) as {

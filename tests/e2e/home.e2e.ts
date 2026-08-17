@@ -35,8 +35,10 @@ async function createProject(
 }
 
 /**
- * Import GeoJSON via the Import Data button's file chooser.
+ * Import GeoJSON through the Import Data control's real file input.
  *
+ * Driving the input directly avoids browser-specific `filechooser` event
+ * behavior while exercising the same onChange import path as the button.
  * The success message ("N imported, N skipped") is transient — the
  * onImportComplete callback triggers a coverage refresh that remounts
  * the ImportDataButton, resetting its state. Instead of waiting for the
@@ -44,11 +46,10 @@ async function createProject(
  * written to IndexedDB.
  */
 async function importGeoJson(page: import('@playwright/test').Page) {
-  const [fileChooser] = await Promise.all([
-    page.waitForEvent('filechooser'),
-    page.getByRole('button', { name: 'Import Data' }).click(),
-  ]);
-  await fileChooser.setFiles(GEOJSON_FIXTURE);
+  await page
+    .locator('input[type="file"][accept=".geojson,.json,.zip"]')
+    .first()
+    .setInputFiles(GEOJSON_FIXTURE);
 
   // Verify observations were written to the app database (up to 10s).
   await expect

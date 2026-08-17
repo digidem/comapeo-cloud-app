@@ -235,8 +235,15 @@ export interface SavedMap {
   maxZoom: number; // Default 14
   attribution?: string;
   scheme?: 'xyz' | 'tms'; // Raster only
-  smpBlob?: Blob; // Set when status='ready' (Phase 1c writes this)
-  smpSize?: number; // Blob byte length
+  /**
+   * Runtime SMP blob. Older records may persist this field directly; newer
+   * records persist `smpData` and reconstruct the Blob through the maps reading
+   * hook for WebKit-compatible IndexedDB storage.
+   */
+  smpBlob?: Blob;
+  /** Portable persisted SMP bytes for browsers that cannot store Blob in IDB. */
+  smpData?: ArrayBuffer;
+  smpSize?: number; // SMP byte length
   status: 'draft' | 'downloading' | 'ready' | 'error';
   errorMessage?: string;
   createdAt: string; // ISO 8601
@@ -511,6 +518,16 @@ class AppDatabase extends Dexie {
     // version upgrade cleanly. Matches the additive iconCache pattern in v11.
     this.version(12).stores({
       maps: '&id, projectLocalId, [projectLocalId+updatedAt], status',
+    });
+
+    this.maps.hook('reading', (map) => {
+      if (map && !map.smpBlob && map.smpData) {
+        return {
+          ...map,
+          smpBlob: new Blob([map.smpData], { type: 'application/zip' }),
+        };
+      }
+      return map;
     });
   }
 }

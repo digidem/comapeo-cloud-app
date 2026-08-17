@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import JSZip from 'jszip';
 
 import {
-  e2eBlob,
+  e2eArrayBuffer,
   getAppDatabaseRecord,
   seedAppDatabase,
   updateAppDatabaseRecord,
@@ -141,7 +141,7 @@ async function seedLocalState(
         minZoom: 0,
         maxZoom: 0,
         status: 'ready',
-        smpBlob: e2eBlob(smpBytes, 'application/zip'),
+        smpData: e2eArrayBuffer(smpBytes),
         smpSize: smpBytes.length,
         createdAt: now,
         updatedAt: now,
@@ -316,10 +316,8 @@ test.describe('active SMP offline cold start', () => {
     // Corrupting the local package and starting the page again must produce an
     // intentional error state rather than a hang/crash or remote fallback.
     await updateAppDatabaseRecord(offlinePage, 'maps', ACTIVE_MAP_ID, {
-      smpBlob: e2eBlob(
-        new TextEncoder().encode('not a zip'),
-        'application/zip',
-      ),
+      smpBlob: undefined,
+      smpData: e2eArrayBuffer(new TextEncoder().encode('not a zip')),
       smpSize: 9,
       updatedAt: new Date().toISOString(),
     });

@@ -767,6 +767,34 @@ describe('maps table', () => {
     expect(retrieved!.bbox).toEqual([-73.0, -3.5, -70.0, -1.0]);
   });
 
+  it('rehydrates portable SMP bytes as a Blob when reading a saved map', async () => {
+    const db = getDb();
+    const smpBytes = new TextEncoder().encode('portable-smp-bytes').buffer;
+    const map: SavedMap & { smpData: ArrayBuffer } = {
+      id: 'map-portable-smp',
+      projectLocalId: 'proj-1',
+      name: 'Portable SMP',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      bbox: [-73.0, -3.5, -70.0, -1.0],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'ready',
+      smpData: smpBytes,
+      smpSize: smpBytes.byteLength,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+    };
+
+    await db.maps.add(map);
+    const retrieved = await db.maps.get(map.id);
+
+    expect(retrieved?.smpBlob).toBeInstanceOf(Blob);
+    expect(retrieved?.smpBlob?.type).toBe('application/zip');
+    expect(await retrieved?.smpBlob?.arrayBuffer()).toEqual(smpBytes);
+  });
+
   it('queries saved maps by projectLocalId', async () => {
     const db = getDb();
     await db.maps.bulkAdd([

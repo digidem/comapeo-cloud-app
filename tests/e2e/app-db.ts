@@ -19,11 +19,8 @@ export const APP_DB_TABLES = [
 
 export type AppDbTableName = (typeof APP_DB_TABLES)[number];
 
-export interface E2eBlobSeed {
-  readonly __e2eBlob: {
-    readonly bytes: readonly number[];
-    readonly type: string;
-  };
+export interface E2eArrayBufferSeed {
+  readonly __e2eArrayBuffer: readonly number[];
 }
 
 export type AppDbSeed = Partial<
@@ -32,6 +29,7 @@ export type AppDbSeed = Partial<
 
 type DbOperation =
   | { kind: 'seed'; seed: AppDbSeed }
+  | { kind: 'listTables' }
   | { kind: 'count'; table: AppDbTableName }
   | { kind: 'get'; table: AppDbTableName; key: IDBValidKey }
   | {
@@ -51,13 +49,8 @@ type DbOperationResult =
   | { ok: true; value?: unknown }
   | { ok: false; retryable: boolean; message: string };
 
-export function e2eBlob(bytes: Uint8Array, type: string): E2eBlobSeed {
-  return {
-    __e2eBlob: {
-      bytes: Array.from(bytes),
-      type,
-    },
-  };
+export function e2eArrayBuffer(bytes: Uint8Array): E2eArrayBufferSeed {
+  return { __e2eArrayBuffer: Array.from(bytes) };
 }
 
 async function executeDbOperation(
@@ -76,7 +69,9 @@ async function executeDbOperation(
         const requiredStores =
           operation.kind === 'seed'
             ? Object.keys(operation.seed)
-            : [operation.table];
+            : operation.kind === 'listTables'
+              ? []
+              : [operation.table];
 
         const databaseList = await indexedDB.databases();
         const existing = databaseList.find(
@@ -125,22 +120,12 @@ async function executeDbOperation(
           if (value === null || typeof value !== 'object') return value;
 
           const record = value as Record<string, unknown>;
-          const blobMarker = record.__e2eBlob;
+          const arrayBufferMarker = record.__e2eArrayBuffer;
           if (
-            blobMarker &&
-            typeof blobMarker === 'object' &&
-            !Array.isArray(blobMarker)
+            Array.isArray(arrayBufferMarker) &&
+            arrayBufferMarker.every((byte) => typeof byte === 'number')
           ) {
-            const marker = blobMarker as Record<string, unknown>;
-            if (
-              Array.isArray(marker.bytes) &&
-              marker.bytes.every((byte) => typeof byte === 'number') &&
-              typeof marker.type === 'string'
-            ) {
-              return new Blob([new Uint8Array(marker.bytes)], {
-                type: marker.type,
-              });
-            }
+            return new Uint8Array(arrayBufferMarker).buffer;
           }
 
           return Object.fromEntries(
@@ -153,9 +138,40 @@ async function executeDbOperation(
 
         const requestAsPromise = <T>(request: IDBRequest<T>): Promise<T> =>
           new Promise<T>((resolve, reject) => {
-            request.onerror = () => reject(request.error);
+            request.onerror = () =>
+              reject(request.error ?? new Error('IndexedDB request failed'));
             request.onsuccess = () => resolve(request.result);
           });
+
+        const assertSerializableResult = (
+          value: unknown,
+          path = 'result',
+        ): void => {
+          if (value instanceof Blob) {
+            throw new Error(
+              `Cannot return Blob at ${path} through the E2E database helper; read portable byte-backed fields instead`,
+            );
+          }
+          if (
+            value === null ||
+            typeof value !== 'object' ||
+            value instanceof ArrayBuffer ||
+            ArrayBuffer.isView(value)
+          ) {
+            return;
+          }
+          if (Array.isArray(value)) {
+            value.forEach((child, index) =>
+              assertSerializableResult(child, `${path}[${index}]`),
+            );
+            return;
+          }
+          for (const [key, child] of Object.entries(
+            value as Record<string, unknown>,
+          )) {
+            assertSerializableResult(child, `${path}.${key}`);
+          }
+        };
 
         try {
           if (operation.kind === 'seed') {
@@ -174,13 +190,23 @@ async function executeDbOperation(
             }
             await new Promise<void>((resolve, reject) => {
               transaction.oncomplete = () => resolve();
-              transaction.onerror = () => reject(transaction.error);
+              transaction.onerror = () =>
+                reject(
+                  transaction.error ?? new Error('Seed transaction failed'),
+                );
               transaction.onabort = () =>
                 reject(
                   transaction.error ?? new Error('Seed transaction aborted'),
                 );
             });
             return { ok: true };
+          }
+
+          if (operation.kind === 'listTables') {
+            return {
+              ok: true,
+              value: Array.from(database.objectStoreNames).sort(),
+            };
           }
 
           if (operation.kind === 'count') {
@@ -202,6 +228,7 @@ async function executeDbOperation(
             const value = await requestAsPromise(
               transaction.objectStore(operation.table).get(operation.key),
             );
+            assertSerializableResult(value);
             return { ok: true, value };
           }
 
@@ -216,6 +243,7 @@ async function executeDbOperation(
                 .index(operation.index)
                 .getAll(operation.value),
             );
+            assertSerializableResult(value);
             return { ok: true, value };
           }
 
@@ -236,7 +264,10 @@ async function executeDbOperation(
           });
           await new Promise<void>((resolve, reject) => {
             transaction.oncomplete = () => resolve();
-            transaction.onerror = () => reject(transaction.error);
+            transaction.onerror = () =>
+              reject(
+                transaction.error ?? new Error('Update transaction failed'),
+              );
             transaction.onabort = () =>
               reject(
                 transaction.error ?? new Error('Update transaction aborted'),
@@ -265,7 +296,9 @@ async function executeDbOperation(
       const detail =
         result && !result.ok
           ? result.message
-          : 'app database did not become ready';
+          : error instanceof Error
+            ? error.message
+            : String(error);
       throw new Error(
         `E2E database operation failed (${operation.kind}): ${detail}`,
         { cause: error },
@@ -286,6 +319,10 @@ export async function seedAppDatabase(
   seed: AppDbSeed,
 ): Promise<void> {
   await executeDbOperation(page, { kind: 'seed', seed });
+}
+
+export async function getAppDatabaseTableNames(page: Page): Promise<string[]> {
+  return (await executeDbOperation(page, { kind: 'listTables' })) as string[];
 }
 
 export async function countAppDatabaseRecords(

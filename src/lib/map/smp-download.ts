@@ -668,9 +668,11 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
   });
 
   try {
+    const smpData = await blob.arrayBuffer();
     if (criticalSkipped > 0) {
       await db.maps.update(map.id, {
-        smpBlob: blob,
+        smpBlob: undefined,
+        smpData,
         smpSize: totalSize,
         status: 'error',
         errorMessage: `${criticalSkipped} tiles could not be downloaded. The package is incomplete.`,
@@ -678,7 +680,8 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       });
     } else {
       await db.maps.update(map.id, {
-        smpBlob: blob,
+        smpBlob: undefined,
+        smpData,
         smpSize: totalSize,
         status: 'ready',
         errorMessage: undefined,

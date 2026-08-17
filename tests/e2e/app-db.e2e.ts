@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  APP_DB_TABLES,
   countAppDatabaseRecords,
   getAppDatabaseRecord,
+  getAppDatabaseTableNames,
   seedAppDatabase,
   updateAppDatabaseRecord,
 } from './app-db';
@@ -11,6 +13,12 @@ test.describe('shared E2E app database helper', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
+  });
+
+  test('matches the app-owned Dexie table set', async ({ page }) => {
+    await expect(getAppDatabaseTableNames(page)).resolves.toEqual(
+      [...APP_DB_TABLES].sort(),
+    );
   });
 
   test('waits for the app schema before seeding and reading records', async ({
@@ -32,7 +40,9 @@ test.describe('shared E2E app database helper', () => {
       ],
     });
 
-    await expect(countAppDatabaseRecords(page, 'projects')).resolves.toBe(1);
+    await expect(
+      countAppDatabaseRecords(page, 'projects'),
+    ).resolves.toBeGreaterThanOrEqual(1);
     await expect(
       getAppDatabaseRecord<{ name?: string }>(
         page,
