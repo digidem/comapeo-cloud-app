@@ -102,6 +102,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
         const packageAvailable = await hasSavedMapSmpPackage({
           id: map.id,
           smpBlob: map.smpBlob,
+          smpSize: map.smpSize,
         });
         if (cancelled) return;
         if (packageAvailable) {

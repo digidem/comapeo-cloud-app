@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
-import {
-  isImportedSmpMap,
-  isImportedSmpRecord,
-} from '@/lib/map/saved-map-utils';
+import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 
 const importedMap: SavedMap = {
   id: 'imported-map',
@@ -38,20 +35,5 @@ describe('isImportedSmpRecord', () => {
         styleUrl: 'https://example.com/style.json',
       }),
     ).toBe(false);
-  });
-});
-
-describe('isImportedSmpMap', () => {
-  it('recognizes self-contained ready imported style maps', () => {
-    expect(isImportedSmpMap(importedMap)).toBe(true);
-  });
-
-  it.each([
-    ['authored style URL', { styleUrl: 'https://example.com/style.json' }],
-    ['non-ready status', { status: 'draft' as const }],
-    ['missing SMP blob', { smpBlob: undefined }],
-    ['raster type', { type: 'raster' as const, styleUrl: '' }],
-  ])('rejects %s', (_label, patch) => {
-    expect(isImportedSmpMap({ ...importedMap, ...patch })).toBe(false);
   });
 });

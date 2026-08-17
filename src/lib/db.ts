@@ -663,11 +663,13 @@ export async function updateSavedMapWithPackage(
     'rw',
     [db.maps, db.mapPackages, db.mapPackageChunks],
     async () => {
+      const existingMap = await db.maps.get(mapId);
+      if (!existingMap) throw new Error('Map no longer exists');
+
       const updatedAt = updates.updatedAt ?? new Date().toISOString();
       await writeSavedMapPackageChunks(db, mapId, blob, updatedAt, signal);
       throwIfPackageWriteAborted(signal);
-      const updated = await db.maps.update(mapId, { ...updates, updatedAt });
-      if (updated !== 1) throw new Error('Map no longer exists');
+      await db.maps.update(mapId, { ...updates, updatedAt });
     },
   );
 }
@@ -696,10 +698,15 @@ export async function hasSavedMapSmpPackage(
     .count();
   const expectedChunkCount = storedPackage.chunkCount;
   const expectedSize = storedPackage.size ?? map.smpSize;
+  const sizeMatchesMap =
+    map.smpSize === undefined ||
+    storedPackage.size === undefined ||
+    storedPackage.size === map.smpSize;
   return (
     expectedChunkCount !== undefined &&
     expectedSize !== undefined &&
     expectedSize > 0 &&
+    sizeMatchesMap &&
     storedChunkCount === expectedChunkCount
   );
 }

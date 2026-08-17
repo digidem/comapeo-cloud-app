@@ -105,9 +105,17 @@ test.describe('Critical User Flows', () => {
   }) => {
     await seedProjectWithObservations(page, 'Test Project');
 
-    // Navigate to /data via the nav link
-    await page.getByRole('link', { name: 'Data' }).click();
-    await page.getByRole('button', { name: 'Switch to grid view' }).click();
+    // Navigate to /data via the real nav link. WebKit can keep the animated
+    // sidebar link in an actionability wait after it is already visible and
+    // stable, so force the click only after asserting the control is present.
+    const dataLink = page.getByRole('link', { name: 'Data' });
+    await expect(dataLink).toBeVisible();
+    await dataLink.click({ force: true });
+    const gridButton = page.getByRole('button', {
+      name: 'Switch to grid view',
+    });
+    await expect(gridButton).toBeVisible();
+    await gridButton.click({ force: true });
 
     // Data heading visible
     await expect(

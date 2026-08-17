@@ -212,6 +212,7 @@ describe('DownloadPanel', () => {
         expect(availabilitySpy).toHaveBeenCalledWith({
           id: map.id,
           smpBlob: map.smpBlob,
+          smpSize: map.smpSize,
         }),
       );
       expect(fullBlobSpy).not.toHaveBeenCalled();

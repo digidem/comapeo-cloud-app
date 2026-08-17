@@ -935,6 +935,10 @@ describe('maps table', () => {
     await addSavedMapWithPackage(map, blob);
     expect(await hasSavedMapSmpPackage(map)).toBe(true);
 
+    await db.mapPackages.update(map.id, { size: blob.size - 1 });
+    expect(await hasSavedMapSmpPackage(map)).toBe(false);
+    await db.mapPackages.update(map.id, { size: blob.size });
+
     await db.mapPackageChunks.delete(`${map.id}:1`);
     expect(await hasSavedMapSmpPackage(map)).toBe(false);
     const missingSource = await getSavedMapPackageSource(map);
