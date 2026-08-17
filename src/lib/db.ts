@@ -595,7 +595,12 @@ async function writeSavedMapPackageChunks(
   await db.mapPackageChunks.where('mapId').equals(mapId).delete();
 
   const chunkCount = Math.ceil(blob.size / MAP_PACKAGE_CHUNK_SIZE);
-  for (let index = 0; index < chunkCount; index++) {
+
+  // Keep at most one chunk's ArrayBuffer in heap at a time. Promise.all here
+  // would recreate the whole-file memory spike this chunked format is designed
+  // to avoid for large offline map packages.
+  const writeChunk = async (index: number): Promise<void> => {
+    if (index >= chunkCount) return;
     const start = index * MAP_PACKAGE_CHUNK_SIZE;
     const end = Math.min(start + MAP_PACKAGE_CHUNK_SIZE, blob.size);
     const data = await Dexie.waitFor(blob.slice(start, end).arrayBuffer());
@@ -605,7 +610,9 @@ async function writeSavedMapPackageChunks(
       index,
       data,
     });
-  }
+    await writeChunk(index + 1);
+  };
+  await writeChunk(0);
 
   await db.mapPackages.put({
     mapId,
@@ -706,11 +713,16 @@ export async function getSavedMapPackageSource(
       const firstChunk = Math.floor(offset / chunkSize);
       const lastChunk = Math.floor((end - 1) / chunkSize);
       let outputOffset = 0;
+      const indexes = Array.from(
+        { length: lastChunk - firstChunk + 1 },
+        (_, position) => firstChunk + position,
+      );
+      const chunks = await db.mapPackageChunks.bulkGet(
+        indexes.map((index) => getMapPackageChunkId(map.id, index)),
+      );
 
-      for (let index = firstChunk; index <= lastChunk; index++) {
-        const chunk = await db.mapPackageChunks.get(
-          getMapPackageChunkId(map.id, index),
-        );
+      chunks.forEach((chunk, position) => {
+        const index = indexes[position]!;
         if (!chunk) throw new Error(`SMP package chunk ${index} is missing`);
 
         const chunkStart = index * chunkSize;
@@ -720,7 +732,7 @@ export async function getSavedMapPackageSource(
         const part = new Uint8Array(chunk.data, from, to - from);
         output.set(part, outputOffset);
         outputOffset += part.byteLength;
-      }
+      });
 
       return output;
     },

@@ -112,7 +112,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
           setExportMissing(true);
         }
       } catch {
-        setExportMissing(true);
+        if (!cancelled) setExportMissing(true);
       }
     })();
     return () => {
