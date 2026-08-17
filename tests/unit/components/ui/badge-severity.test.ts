@@ -15,14 +15,18 @@ const intl = {
 
 describe('badge severity helpers', () => {
   it.each([
-    ['high', 'high'],
-    ['HIGH', 'high'],
-    ['medium', 'medium'],
-    ['low', 'low'],
-  ] as const)('maps %s to the expected badge variant', (severity, expected) => {
-    expect(severityToVariant(severity)).toBe(expected);
-    expect(isKnownSeverity(severity)).toBe(true);
-  });
+    ['high', 'high', 'High'],
+    ['HIGH', 'high', 'High'],
+    ['medium', 'medium', 'Medium'],
+    ['low', 'low', 'Low'],
+  ] as const)(
+    'maps %s to the expected badge variant and label',
+    (severity, expectedVariant, expectedLabel) => {
+      expect(severityToVariant(severity)).toBe(expectedVariant);
+      expect(severityToLabel(severity, intl)).toBe(expectedLabel);
+      expect(isKnownSeverity(severity)).toBe(true);
+    },
+  );
 
   it.each([undefined, '', 'critical'])(
     'uses the unknown fallback for %s',
