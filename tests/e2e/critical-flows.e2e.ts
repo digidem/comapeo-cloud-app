@@ -2,6 +2,10 @@ import { expect, test } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  countAppDatabaseRecords,
+  getAppDatabaseRecordsByIndex,
+} from './app-db';
 import { setupMockServer } from './mock-server';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -55,38 +59,11 @@ async function seedProjectWithObservations(
   ]);
   await fileChooser.setFiles(GEOJSON_FIXTURE);
 
-  // Wait for observations to appear in IndexedDB
+  // Wait for observations to appear in the app database.
   await expect
-    .poll(
-      async () => {
-        return await page.evaluate(async () => {
-          return new Promise<number>((resolve) => {
-            const req = indexedDB.open('comapeo-cloud-app');
-            req.onsuccess = () => {
-              const db = req.result;
-              try {
-                const tx = db.transaction('observations', 'readonly');
-                const store = tx.objectStore('observations');
-                const countReq = store.count();
-                countReq.onsuccess = () => {
-                  resolve(countReq.result);
-                  db.close();
-                };
-                countReq.onerror = () => {
-                  resolve(0);
-                  db.close();
-                };
-              } catch {
-                resolve(0);
-                db.close();
-              }
-            };
-            req.onerror = () => resolve(0);
-          });
-        });
-      },
-      { timeout: 10_000 },
-    )
+    .poll(() => countAppDatabaseRecords(page, 'observations'), {
+      timeout: 10_000,
+    })
     .toBeGreaterThan(0);
 
   // Wait for selectedProjectId to be persisted to localStorage
@@ -210,37 +187,11 @@ test.describe('Critical User Flows', () => {
       page.getByRole('heading', { level: 1, name: 'Data' }),
     ).toBeVisible();
 
-    // Read the first observation's localId from IndexedDB
-    const observationLocalId = await page.evaluate(
-      (projectId) =>
-        new Promise<string | null>((resolve, reject) => {
-          const req = indexedDB.open('comapeo-cloud-app');
-          req.onsuccess = () => {
-            const db = req.result;
-            try {
-              const tx = db.transaction('observations', 'readonly');
-              const idx = tx
-                .objectStore('observations')
-                .index('projectLocalId');
-              const getReq = idx.getAll(projectId);
-              getReq.onsuccess = () => {
-                const first = getReq.result?.[0];
-                resolve(first?.localId ?? null);
-                db.close();
-              };
-              getReq.onerror = () => {
-                db.close();
-                reject(getReq.error);
-              };
-            } catch (err) {
-              db.close();
-              reject(err);
-            }
-          };
-          req.onerror = () => reject(req.error);
-        }),
-      projectLocalId,
-    );
+    // Read the first observation through the shared app-database helper.
+    const observations = await getAppDatabaseRecordsByIndex<{
+      localId: string;
+    }>(page, 'observations', 'projectLocalId', projectLocalId);
+    const observationLocalId = observations[0]?.localId ?? null;
     expect(observationLocalId).not.toBeNull();
 
     // Click the specific observation card matching the IndexedDB observation

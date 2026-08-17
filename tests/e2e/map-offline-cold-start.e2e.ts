@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 import JSZip from 'jszip';
 
+import {
+  e2eBlob,
+  getAppDatabaseRecord,
+  seedAppDatabase,
+  updateAppDatabaseRecord,
+} from './app-db';
+
 const TRANSPARENT_1X1_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
   'base64',
@@ -82,109 +89,81 @@ async function seedLocalState(
   page: import('@playwright/test').Page,
   smpBytes: Uint8Array,
 ): Promise<void> {
-  await page.evaluate(
-    async ({
-      bytes,
-      activeMapId,
-      activeMapName,
-      projectWithMap,
-      projectWithoutMap,
-    }) => {
-      const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('comapeo-cloud-app');
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
-      });
+  const now = new Date().toISOString();
+  await seedAppDatabase(page, {
+    projects: [
+      {
+        localId: PROJECT_WITH_MAP,
+        sourceType: 'local',
+        sourceId: `local:${PROJECT_WITH_MAP}`,
+        name: 'Offline Project With Map',
+        activeMapId: ACTIVE_MAP_ID,
+        createdAt: now,
+        updatedAt: now,
+        dirtyLocal: false,
+        deleted: false,
+      },
+      {
+        localId: PROJECT_WITHOUT_MAP,
+        sourceType: 'local',
+        sourceId: `local:${PROJECT_WITHOUT_MAP}`,
+        name: 'Offline Project Without Map',
+        activeMapId: null,
+        createdAt: now,
+        updatedAt: now,
+        dirtyLocal: false,
+        deleted: false,
+      },
+    ],
+    observations: [
+      {
+        localId: 'offline-map-point',
+        projectLocalId: PROJECT_WITH_MAP,
+        sourceType: 'local',
+        sourceId: 'local:offline-map-point',
+        lat: 1,
+        lon: 1,
+        createdAt: now,
+        updatedAt: now,
+        dirtyLocal: false,
+        deleted: false,
+      },
+    ],
+    maps: [
+      {
+        id: ACTIVE_MAP_ID,
+        projectLocalId: PROJECT_WITH_MAP,
+        name: ACTIVE_MAP_NAME,
+        type: 'style',
+        origin: 'imported',
+        styleUrl: '',
+        bbox: [-180, -85, 180, 85],
+        minZoom: 0,
+        maxZoom: 0,
+        status: 'ready',
+        smpBlob: e2eBlob(smpBytes, 'application/zip'),
+        smpSize: smpBytes.length,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+  });
 
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(
-            ['projects', 'maps', 'observations'],
-            'readwrite',
-          );
-          const now = new Date().toISOString();
-          tx.objectStore('projects').put({
-            localId: projectWithMap,
-            sourceType: 'local',
-            sourceId: `local:${projectWithMap}`,
-            name: 'Offline Project With Map',
-            activeMapId,
-            createdAt: now,
-            updatedAt: now,
-            dirtyLocal: false,
-            deleted: false,
-          });
-          tx.objectStore('projects').put({
-            localId: projectWithoutMap,
-            sourceType: 'local',
-            sourceId: `local:${projectWithoutMap}`,
-            name: 'Offline Project Without Map',
-            activeMapId: null,
-            createdAt: now,
-            updatedAt: now,
-            dirtyLocal: false,
-            deleted: false,
-          });
-          tx.objectStore('observations').put({
-            localId: 'offline-map-point',
-            projectLocalId: projectWithMap,
-            sourceType: 'local',
-            sourceId: 'local:offline-map-point',
-            lat: 1,
-            lon: 1,
-            createdAt: now,
-            updatedAt: now,
-            dirtyLocal: false,
-            deleted: false,
-          });
-          tx.objectStore('maps').put({
-            id: activeMapId,
-            projectLocalId: projectWithMap,
-            name: activeMapName,
-            type: 'style',
-            origin: 'imported',
-            styleUrl: '',
-            bbox: [-180, -85, 180, 85],
-            minZoom: 0,
-            maxZoom: 0,
-            status: 'ready',
-            smpBlob: new Blob([new Uint8Array(bytes)], {
-              type: 'application/zip',
-            }),
-            smpSize: bytes.length,
-            createdAt: now,
-            updatedAt: now,
-          });
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-          tx.onabort = () => reject(tx.error);
-        });
-      } finally {
-        db.close();
-      }
-
-      localStorage.setItem(
-        'comapeo-project',
-        JSON.stringify({
-          state: { selectedProjectId: projectWithMap, selectedServerId: null },
-          version: 0,
-        }),
-      );
-      // Deliberately omit activeMapId. A cold start must rehydrate it from the
-      // selected project's IndexedDB row rather than stale persisted Zustand.
-      localStorage.setItem(
-        'comapeo-map',
-        JSON.stringify({ state: { basemapId: 'carto-positron' }, version: 1 }),
-      );
-    },
-    {
-      bytes: Array.from(smpBytes),
-      activeMapId: ACTIVE_MAP_ID,
-      activeMapName: ACTIVE_MAP_NAME,
-      projectWithMap: PROJECT_WITH_MAP,
-      projectWithoutMap: PROJECT_WITHOUT_MAP,
-    },
-  );
+  await page.evaluate((projectWithMap) => {
+    localStorage.setItem(
+      'comapeo-project',
+      JSON.stringify({
+        state: { selectedProjectId: projectWithMap, selectedServerId: null },
+        version: 0,
+      }),
+    );
+    // Deliberately omit activeMapId. A cold start must rehydrate it from the
+    // selected project's IndexedDB row rather than stale persisted Zustand.
+    localStorage.setItem(
+      'comapeo-map',
+      JSON.stringify({ state: { basemapId: 'carto-positron' }, version: 1 }),
+    );
+  }, PROJECT_WITH_MAP);
 }
 
 async function waitForPwaControl(page: import('@playwright/test').Page) {
@@ -211,29 +190,10 @@ async function readProjectActiveMapId(
   page: import('@playwright/test').Page,
   projectLocalId: string,
 ): Promise<string | null | undefined> {
-  return page.evaluate(async (localId) => {
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('comapeo-cloud-app');
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result);
-    });
-    try {
-      return await new Promise<string | null | undefined>((resolve, reject) => {
-        const request = db
-          .transaction('projects', 'readonly')
-          .objectStore('projects')
-          .get(localId);
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () =>
-          resolve(
-            (request.result as { activeMapId?: string | null } | undefined)
-              ?.activeMapId,
-          );
-      });
-    } finally {
-      db.close();
-    }
-  }, projectLocalId);
+  const project = await getAppDatabaseRecord<{
+    activeMapId?: string | null;
+  }>(page, 'projects', projectLocalId);
+  return project?.activeMapId;
 }
 
 test.describe('active SMP offline cold start', () => {
@@ -355,33 +315,14 @@ test.describe('active SMP offline cold start', () => {
 
     // Corrupting the local package and starting the page again must produce an
     // intentional error state rather than a hang/crash or remote fallback.
-    await offlinePage.evaluate(async (mapId) => {
-      const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('comapeo-cloud-app');
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
-      });
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction('maps', 'readwrite');
-          const request = tx.objectStore('maps').get(mapId);
-          request.onerror = () => reject(request.error);
-          request.onsuccess = () => {
-            tx.objectStore('maps').put({
-              ...request.result,
-              smpBlob: new Blob(['not a zip'], { type: 'application/zip' }),
-              smpSize: 9,
-              updatedAt: new Date().toISOString(),
-            });
-          };
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-          tx.onabort = () => reject(tx.error);
-        });
-      } finally {
-        db.close();
-      }
-    }, ACTIVE_MAP_ID);
+    await updateAppDatabaseRecord(offlinePage, 'maps', ACTIVE_MAP_ID, {
+      smpBlob: e2eBlob(
+        new TextEncoder().encode('not a zip'),
+        'application/zip',
+      ),
+      smpSize: 9,
+      updatedAt: new Date().toISOString(),
+    });
 
     await offlinePage.close();
     const corruptPage = await context.newPage();

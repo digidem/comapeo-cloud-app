@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 import { presetsFixture } from '@tests/fixtures/presets';
 
+import { seedAppDatabase } from './app-db';
 import { setupMockServer } from './mock-server';
 
 const TEST_PROJECT_REMOTE_ID = 'test-project-id-1';
@@ -48,115 +49,47 @@ function registerSeedScript(page: Page) {
   );
 }
 
-/**
- * Seed IndexedDB via page.evaluate AFTER Dexie has created its stores.
- *
- * On webkit, Dexie's own `db.open()` (triggered by the app mounting) can
- * still be mid-upgrade when this code runs. Calling `indexedDB.open(name)`
- * with no version — before the database exists at all — would itself
- * create an empty v1 database and steal the upgrade race from Dexie. To
- * avoid that, first check for existence non-destructively via
- * `indexedDB.databases()`; only once the database is known to exist do we
- * open it (which, given it already exists, won't trigger a competing
- * upgrade) and verify the required object stores are present. Retry (via
- * `expect.toPass`) until both the database and its stores are ready.
- */
+/** Seed categories fixtures after the app has created its real Dexie schema. */
 async function seedDbAndHydrate(page: Page) {
-  const REQUIRED_STORES = ['remoteServers', 'projects', 'fields'] as const;
-  const DB_NAME = 'comapeo-cloud-app';
-
-  await expect(async () => {
-    const dbExists = await page.evaluate(async (name) => {
-      const dbs = await indexedDB.databases();
-      return dbs.some(
-        (entry) => entry.name === name && (entry.version ?? 0) > 0,
-      );
-    }, DB_NAME);
-
-    if (!dbExists) {
-      throw new Error('IndexedDB database not created yet');
-    }
-
-    await page.evaluate(
-      ({ now, remoteId, requiredStores, dbName }) =>
-        new Promise<void>((resolve, reject) => {
-          const req = indexedDB.open(dbName);
-          req.onsuccess = () => {
-            const db = req.result;
-            const missing = requiredStores.filter(
-              (name) => !db.objectStoreNames.contains(name),
-            );
-            if (missing.length > 0) {
-              db.close();
-              reject(
-                new Error(
-                  `IndexedDB stores not ready yet: ${missing.join(', ')}`,
-                ),
-              );
-              return;
-            }
-            try {
-              const tx = db.transaction(requiredStores, 'readwrite');
-              tx.objectStore('remoteServers').put({
-                id: 'server-1',
-                baseUrl: 'http://archive.test',
-                token: 'test-bearer-token',
-                status: 'connected',
-                lastSyncedAt: now,
-              });
-              tx.objectStore('projects').put({
-                localId: 'test-project-local-1',
-                sourceType: 'remoteArchive',
-                sourceId: 'server-1',
-                remoteId,
-                name: 'Test Project',
-                createdAt: now,
-                updatedAt: now,
-                dirtyLocal: false,
-                deleted: false,
-              });
-              tx.objectStore('fields').put({
-                localId: 'field-local-001',
-                projectLocalId: 'test-project-local-1',
-                sourceType: 'remoteArchive',
-                sourceId: 'server-1',
-                remoteId: 'field-001',
-                type: 'text',
-                key: 'notes',
-                label: 'Notes',
-                universal: false,
-                createdAt: now,
-                updatedAt: now,
-                dirtyLocal: false,
-                deleted: false,
-              });
-              tx.oncomplete = () => {
-                db.close();
-                resolve();
-              };
-              tx.onerror = () => {
-                db.close();
-                reject(tx.error);
-              };
-              tx.onabort = () => {
-                db.close();
-                reject(tx.error ?? new Error('Transaction aborted'));
-              };
-            } catch (err) {
-              db.close();
-              reject(err);
-            }
-          };
-          req.onerror = () => reject(req.error);
-        }),
+  const server = AUTH_SEED.servers[0]!;
+  await seedAppDatabase(page, {
+    remoteServers: [
       {
-        now: NOW,
-        remoteId: TEST_PROJECT_REMOTE_ID,
-        requiredStores: REQUIRED_STORES,
-        dbName: DB_NAME,
+        ...server,
+        lastSyncedAt: NOW,
       },
-    );
-  }).toPass({ timeout: 10_000, intervals: [100, 200, 500] });
+    ],
+    projects: [
+      {
+        localId: 'test-project-local-1',
+        sourceType: 'remoteArchive',
+        sourceId: server.id,
+        remoteId: TEST_PROJECT_REMOTE_ID,
+        name: 'Test Project',
+        createdAt: NOW,
+        updatedAt: NOW,
+        dirtyLocal: false,
+        deleted: false,
+      },
+    ],
+    fields: [
+      {
+        localId: 'field-local-001',
+        projectLocalId: 'test-project-local-1',
+        sourceType: 'remoteArchive',
+        sourceId: server.id,
+        remoteId: 'field-001',
+        type: 'text',
+        key: 'notes',
+        label: 'Notes',
+        universal: false,
+        createdAt: NOW,
+        updatedAt: NOW,
+        dirtyLocal: false,
+        deleted: false,
+      },
+    ],
+  });
 }
 
 async function setupCategoriesPage(page: Page) {

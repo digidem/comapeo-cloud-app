@@ -4,13 +4,6 @@ import { setupMockServer } from './mock-server';
 import { seedAlertMapState } from './seed-alert-map';
 
 test.describe('Alerts map and grid', () => {
-  test.beforeEach(({ browserName }) => {
-    test.skip(
-      browserName === 'webkit',
-      'WebKit skipped: these tests use the same raw IndexedDB seed pattern as the map download E2E. TODO(#255): migrate to the shared browser-safe seed helper.',
-    );
-  });
-
   test('defaults to map and preserves map/grid preference independently', async ({
     page,
   }) => {

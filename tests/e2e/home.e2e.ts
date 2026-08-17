@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { countAppDatabaseRecords } from './app-db';
 import { setupMockServer } from './mock-server';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -49,38 +50,11 @@ async function importGeoJson(page: import('@playwright/test').Page) {
   ]);
   await fileChooser.setFiles(GEOJSON_FIXTURE);
 
-  // Verify observations were written to IndexedDB (up to 10s)
+  // Verify observations were written to the app database (up to 10s).
   await expect
-    .poll(
-      async () => {
-        return await page.evaluate(async () => {
-          return new Promise<number>((resolve) => {
-            const req = indexedDB.open('comapeo-cloud-app');
-            req.onsuccess = () => {
-              const db = req.result;
-              try {
-                const tx = db.transaction('observations', 'readonly');
-                const store = tx.objectStore('observations');
-                const countReq = store.count();
-                countReq.onsuccess = () => {
-                  resolve(countReq.result);
-                  db.close();
-                };
-                countReq.onerror = () => {
-                  resolve(0);
-                  db.close();
-                };
-              } catch {
-                resolve(0);
-                db.close();
-              }
-            };
-            req.onerror = () => resolve(0);
-          });
-        });
-      },
-      { timeout: 10_000 },
-    )
+    .poll(() => countAppDatabaseRecords(page, 'observations'), {
+      timeout: 10_000,
+    })
     .toBeGreaterThan(0);
 }
 

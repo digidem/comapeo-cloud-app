@@ -1,5 +1,6 @@
 import { test } from '@playwright/test';
 
+import { seedAppDatabase } from './app-db';
 import { setupMockServer } from './mock-server';
 import {
   THEME_IDS,
@@ -20,72 +21,41 @@ async function seedObservationWithPhotos(
   const projectLocalId = 'test-proj-lightbox';
   const observationLocalId = 'test-obs-lightbox';
 
-  await page.evaluate(
-    ({ projectLocalId: pId, observationLocalId: oId }) => {
-      return new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open('comapeo-cloud-app');
-        req.onupgradeneeded = () => {
-          // DB may not exist yet; Dexie handles the schema on first open.
-        };
-        req.onsuccess = () => {
-          const db = req.result;
-          try {
-            const tx = db.transaction(
-              ['projects', 'observations'],
-              'readwrite',
-            );
-            const projectStore = tx.objectStore('projects');
-            const obsStore = tx.objectStore('observations');
-
-            projectStore.put({
-              localId: pId,
-              sourceType: 'local',
-              sourceId: 'local',
-              name: 'Lightbox Test Project',
-              createdAt: '2026-01-01T00:00:00Z',
-              updatedAt: '2026-01-01T00:00:00Z',
-              dirtyLocal: false,
-              deleted: false,
-            });
-
-            obsStore.put({
-              localId: oId,
-              projectLocalId: pId,
-              sourceType: 'local',
-              sourceId: 'local',
-              tags: {
-                category: 'Forest',
-                notes: 'Deforestation detected',
-                photoUrls:
-                  'https://example.com/attachments/photo1,https://example.com/attachments/photo2',
-                photoCount: '2',
-              },
-              lat: -8.35,
-              lon: -55.45,
-              createdAt: '2026-01-15T00:00:00Z',
-              updatedAt: '2026-01-15T12:00:00Z',
-              dirtyLocal: false,
-              deleted: false,
-            });
-
-            tx.oncomplete = () => {
-              db.close();
-              resolve();
-            };
-            tx.onerror = () => {
-              db.close();
-              reject(tx.error);
-            };
-          } catch (err) {
-            db.close();
-            reject(err);
-          }
-        };
-        req.onerror = () => reject(req.error);
-      });
-    },
-    { projectLocalId, observationLocalId },
-  );
+  await seedAppDatabase(page, {
+    projects: [
+      {
+        localId: projectLocalId,
+        sourceType: 'local',
+        sourceId: 'local',
+        name: 'Lightbox Test Project',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+        dirtyLocal: false,
+        deleted: false,
+      },
+    ],
+    observations: [
+      {
+        localId: observationLocalId,
+        projectLocalId,
+        sourceType: 'local',
+        sourceId: 'local',
+        tags: {
+          category: 'Forest',
+          notes: 'Deforestation detected',
+          photoUrls:
+            'https://example.com/attachments/photo1,https://example.com/attachments/photo2',
+          photoCount: '2',
+        },
+        lat: -8.35,
+        lon: -55.45,
+        createdAt: '2026-01-15T00:00:00Z',
+        updatedAt: '2026-01-15T12:00:00Z',
+        dirtyLocal: false,
+        deleted: false,
+      },
+    ],
+  });
 
   // Persist selectedProjectId in localStorage so the app knows which project is active
   await page.evaluate(
