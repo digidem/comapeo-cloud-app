@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
-import { getDb, getSavedMapSmpBlob } from '@/lib/db';
+import { getDb, getSavedMapSmpBlob, resetDb } from '@/lib/db';
 import {
   buildRasterStyleUrl,
   downloadSmp,
@@ -235,6 +235,11 @@ async function getPersistedPackageData(mapId = 'map-1'): Promise<Uint8Array> {
 }
 
 describe('downloadSmp', () => {
+  beforeEach(async () => {
+    await resetDb();
+    await getDb().maps.add(createMockMap());
+  });
+
   it('returns mapId on successful download', async () => {
     const updateSpy = vi.spyOn(getDb().maps, 'update').mockResolvedValue(1);
     mockDownload.mockReturnValue(
