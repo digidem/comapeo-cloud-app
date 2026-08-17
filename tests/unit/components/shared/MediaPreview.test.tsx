@@ -102,6 +102,47 @@ describe('MediaPreview', () => {
     expect(screen.getByTestId('audio-icon')).toBeInTheDocument();
   });
 
+  it('keeps photo attachments that follow audio attachments in a single pass', () => {
+    render(
+      <MediaPreview
+        observationLocalId="obs-1"
+        attachments={[
+          {
+            localId: 'att-audio',
+            projectLocalId: 'proj-1',
+            observationLocalId: 'obs-1',
+            sourceType: 'remoteArchive',
+            sourceId: 'server-1',
+            mediaType: 'audio',
+            createdAt: '',
+            updatedAt: '',
+            dirtyLocal: false,
+            deleted: false,
+          },
+          {
+            localId: 'att-photo',
+            projectLocalId: 'proj-1',
+            observationLocalId: 'obs-1',
+            sourceType: 'remoteArchive',
+            sourceId: 'server-1',
+            resolvedUrl: 'https://archive.example.com/after-audio.jpg',
+            mediaType: 'photo',
+            createdAt: '',
+            updatedAt: '',
+            dirtyLocal: false,
+            deleted: false,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('audio-icon')).toBeInTheDocument();
+    expect(screen.getByTestId('auth-img')).toHaveAttribute(
+      'src',
+      'https://archive.example.com/after-audio.jpg',
+    );
+  });
+
   it('renders 2 thumbnails when 2 photo URLs', () => {
     render(
       <MediaPreview

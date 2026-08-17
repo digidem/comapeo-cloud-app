@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import type { IntlShape } from 'react-intl';
+import { createIntl } from 'react-intl';
 
 import {
   isKnownSeverity,
   severityToLabel,
   severityToVariant,
 } from '@/components/ui/badge-severity';
+import { getMessages } from '@/i18n/load-messages';
 
-const intl = {
-  formatMessage: (descriptor: { defaultMessage?: string }) =>
-    descriptor.defaultMessage ?? '',
-} as unknown as IntlShape;
+const intl = createIntl({ locale: 'en', messages: getMessages('en') });
 
 describe('badge severity helpers', () => {
   it.each([
