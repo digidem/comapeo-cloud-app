@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
-import { getDb } from '@/lib/db';
+import { getDb, getSavedMapSmpBlob } from '@/lib/db';
 import {
   buildRasterStyleUrl,
   downloadSmp,
@@ -228,10 +228,10 @@ function streamOf(bytes: Uint8Array): ReadableStream<Uint8Array> {
 }
 
 async function getPersistedPackageData(mapId = 'map-1'): Promise<Uint8Array> {
-  const stored = await getDb().mapPackages.get(mapId);
-  expect(stored).toBeDefined();
-  expect(stored!.data.byteLength).toBeGreaterThan(0);
-  return new Uint8Array(stored!.data);
+  const blob = await getSavedMapSmpBlob({ id: mapId });
+  expect(blob).toBeDefined();
+  expect(blob!.size).toBeGreaterThan(0);
+  return new Uint8Array(await blob!.arrayBuffer());
 }
 
 describe('downloadSmp', () => {
@@ -264,6 +264,7 @@ describe('downloadSmp', () => {
   });
 
   it('merges global zoom 0-3 tiles into the regional SMP by default', async () => {
+    vi.spyOn(getDb().maps, 'update').mockResolvedValue(1);
     const globalZip = new JSZip();
     globalZip.file('VERSION', '1.0');
     globalZip.file(

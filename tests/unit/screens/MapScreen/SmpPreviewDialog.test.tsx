@@ -29,7 +29,7 @@ vi.mock('react-map-gl/maplibre', () => ({
 
 vi.mock('@/lib/map/smp-serve', () => ({
   registerSmpProtocol: vi.fn(),
-  getSmpReader: vi.fn(),
+  getSavedMapSmpReader: vi.fn(),
   resolveSmpStyle: vi.fn(),
   sanitizeImportedSmpStyle: vi.fn((style) => style),
   closeSmpReader: vi.fn().mockResolvedValue(undefined),
@@ -64,8 +64,10 @@ describe('SmpPreviewDialog', () => {
   });
 
   it('opens the SMP reader and renders the resolved map style', async () => {
-    const reader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
-    vi.mocked(smpServe.getSmpReader).mockResolvedValue(reader);
+    const reader = {} as Awaited<
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
+    >;
+    vi.mocked(smpServe.getSavedMapSmpReader).mockResolvedValue(reader);
     vi.mocked(smpServe.resolveSmpStyle).mockResolvedValue(style);
 
     render(<SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />);
@@ -81,9 +83,9 @@ describe('SmpPreviewDialog', () => {
       screen.getByRole('region', { name: 'Preview map' }),
     ).toBeInTheDocument();
     expect(smpServe.registerSmpProtocol).toHaveBeenCalled();
-    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+    const readerId = vi.mocked(smpServe.getSavedMapSmpReader).mock.calls[0]![0];
     expect(readerId).toMatch(/^preview:map-1:/);
-    expect(smpServe.getSmpReader).toHaveBeenCalledWith(readerId, map.smpBlob);
+    expect(smpServe.getSavedMapSmpReader).toHaveBeenCalledWith(readerId, map);
     expect(smpServe.resolveSmpStyle).toHaveBeenCalledWith(reader, readerId);
     expect(smpServe.sanitizeImportedSmpStyle).toHaveBeenCalledWith(style);
     expect(fitBounds).toHaveBeenCalledWith(
@@ -96,8 +98,10 @@ describe('SmpPreviewDialog', () => {
   });
 
   it('shows an error when an imported style is not safe for offline rendering', async () => {
-    const reader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
-    vi.mocked(smpServe.getSmpReader).mockResolvedValue(reader);
+    const reader = {} as Awaited<
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
+    >;
+    vi.mocked(smpServe.getSavedMapSmpReader).mockResolvedValue(reader);
     vi.mocked(smpServe.resolveSmpStyle).mockResolvedValue(style);
     vi.mocked(smpServe.sanitizeImportedSmpStyle).mockReturnValueOnce(null);
 
@@ -110,15 +114,17 @@ describe('SmpPreviewDialog', () => {
   });
 
   it('closes the transient reader when the dialog closes', async () => {
-    const reader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
-    vi.mocked(smpServe.getSmpReader).mockResolvedValue(reader);
+    const reader = {} as Awaited<
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
+    >;
+    vi.mocked(smpServe.getSavedMapSmpReader).mockResolvedValue(reader);
     vi.mocked(smpServe.resolveSmpStyle).mockResolvedValue(style);
 
     const { rerender } = render(
       <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
     );
     await screen.findByTestId('smp-preview-map');
-    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+    const readerId = vi.mocked(smpServe.getSavedMapSmpReader).mock.calls[0]![0];
 
     rerender(
       <SmpPreviewDialog open={false} onOpenChange={vi.fn()} map={map} />,
@@ -130,9 +136,11 @@ describe('SmpPreviewDialog', () => {
   });
 
   it('closes a reader that finishes opening after the dialog was closed', async () => {
-    const reader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
+    const reader = {} as Awaited<
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
+    >;
     let resolveReader!: (value: typeof reader) => void;
-    vi.mocked(smpServe.getSmpReader).mockReturnValue(
+    vi.mocked(smpServe.getSavedMapSmpReader).mockReturnValue(
       new Promise((resolve) => {
         resolveReader = resolve;
       }),
@@ -144,8 +152,10 @@ describe('SmpPreviewDialog', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Loading map preview…',
     );
-    await waitFor(() => expect(smpServe.getSmpReader).toHaveBeenCalledTimes(1));
-    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+    await waitFor(() =>
+      expect(smpServe.getSavedMapSmpReader).toHaveBeenCalledTimes(1),
+    );
+    const readerId = vi.mocked(smpServe.getSavedMapSmpReader).mock.calls[0]![0];
 
     rerender(
       <SmpPreviewDialog open={false} onOpenChange={vi.fn()} map={map} />,
@@ -162,8 +172,10 @@ describe('SmpPreviewDialog', () => {
   });
 
   it('swallows reader cleanup failures when the dialog closes', async () => {
-    const reader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
-    vi.mocked(smpServe.getSmpReader).mockResolvedValue(reader);
+    const reader = {} as Awaited<
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
+    >;
+    vi.mocked(smpServe.getSavedMapSmpReader).mockResolvedValue(reader);
     vi.mocked(smpServe.resolveSmpStyle).mockResolvedValue(style);
     vi.mocked(smpServe.closeSmpReader).mockRejectedValueOnce(
       new Error('close failed'),
@@ -173,7 +185,7 @@ describe('SmpPreviewDialog', () => {
       <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
     );
     await screen.findByTestId('smp-preview-map');
-    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+    const readerId = vi.mocked(smpServe.getSavedMapSmpReader).mock.calls[0]![0];
 
     rerender(
       <SmpPreviewDialog open={false} onOpenChange={vi.fn()} map={map} />,
@@ -185,24 +197,29 @@ describe('SmpPreviewDialog', () => {
   });
 
   it('uses a new reader cache key when reopened before the prior reader finishes', async () => {
-    const firstReader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
+    const firstReader = {} as Awaited<
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
+    >;
     let resolveFirstReader!: (value: typeof firstReader) => void;
-    vi.mocked(smpServe.getSmpReader)
+    vi.mocked(smpServe.getSavedMapSmpReader)
       .mockReturnValueOnce(
         new Promise((resolve) => {
           resolveFirstReader = resolve;
         }),
       )
       .mockResolvedValueOnce(
-        {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>,
+        {} as Awaited<ReturnType<typeof smpServe.getSavedMapSmpReader>>,
       );
     vi.mocked(smpServe.resolveSmpStyle).mockResolvedValue(style);
 
     const { rerender } = render(
       <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
     );
-    await waitFor(() => expect(smpServe.getSmpReader).toHaveBeenCalledTimes(1));
-    const firstReaderId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+    await waitFor(() =>
+      expect(smpServe.getSavedMapSmpReader).toHaveBeenCalledTimes(1),
+    );
+    const firstReaderId = vi.mocked(smpServe.getSavedMapSmpReader).mock
+      .calls[0]![0];
 
     rerender(
       <SmpPreviewDialog open={false} onOpenChange={vi.fn()} map={map} />,
@@ -210,7 +227,8 @@ describe('SmpPreviewDialog', () => {
     rerender(<SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />);
 
     expect(await screen.findByTestId('smp-preview-map')).toBeInTheDocument();
-    const secondReaderId = vi.mocked(smpServe.getSmpReader).mock.calls[1]![0];
+    const secondReaderId = vi.mocked(smpServe.getSavedMapSmpReader).mock
+      .calls[1]![0];
     expect(secondReaderId).not.toBe(firstReaderId);
 
     await act(async () => {
@@ -223,7 +241,11 @@ describe('SmpPreviewDialog', () => {
     expect(smpServe.closeSmpReader).not.toHaveBeenCalledWith(secondReaderId);
   });
 
-  it('shows an error instead of loading forever when a ready map has no SMP blob', async () => {
+  it('shows an error instead of loading forever when the saved package is unavailable', async () => {
+    vi.mocked(smpServe.getSavedMapSmpReader).mockRejectedValueOnce(
+      new Error('SMP package is missing'),
+    );
+
     render(
       <SmpPreviewDialog
         open
@@ -235,19 +257,21 @@ describe('SmpPreviewDialog', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Could not preview this SMP.',
     );
-    expect(smpServe.getSmpReader).not.toHaveBeenCalled();
+    expect(smpServe.getSavedMapSmpReader).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the current reader when an equivalent map record is refetched', async () => {
-    const reader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
-    vi.mocked(smpServe.getSmpReader).mockResolvedValue(reader);
+    const reader = {} as Awaited<
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
+    >;
+    vi.mocked(smpServe.getSavedMapSmpReader).mockResolvedValue(reader);
     vi.mocked(smpServe.resolveSmpStyle).mockResolvedValue(style);
 
     const { rerender } = render(
       <SmpPreviewDialog open onOpenChange={vi.fn()} map={map} />,
     );
     await screen.findByTestId('smp-preview-map');
-    const readerId = vi.mocked(smpServe.getSmpReader).mock.calls[0]![0];
+    const readerId = vi.mocked(smpServe.getSavedMapSmpReader).mock.calls[0]![0];
 
     rerender(
       <SmpPreviewDialog
@@ -258,13 +282,15 @@ describe('SmpPreviewDialog', () => {
     );
 
     expect(screen.getByTestId('smp-preview-map')).toBeInTheDocument();
-    expect(smpServe.getSmpReader).toHaveBeenCalledTimes(1);
+    expect(smpServe.getSavedMapSmpReader).toHaveBeenCalledTimes(1);
     expect(smpServe.closeSmpReader).not.toHaveBeenCalledWith(readerId);
   });
 
   it('shows loading rather than stale style when the preview target changes', async () => {
-    const firstReader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
-    vi.mocked(smpServe.getSmpReader).mockResolvedValueOnce(firstReader);
+    const firstReader = {} as Awaited<
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
+    >;
+    vi.mocked(smpServe.getSavedMapSmpReader).mockResolvedValueOnce(firstReader);
     vi.mocked(smpServe.resolveSmpStyle).mockResolvedValueOnce(style);
 
     const { rerender } = render(
@@ -279,10 +305,10 @@ describe('SmpPreviewDialog', () => {
       updatedAt: '2026-08-10T01:00:00.000Z',
     };
     const secondReader = {} as Awaited<
-      ReturnType<typeof smpServe.getSmpReader>
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
     >;
     let resolveSecondReader!: (value: typeof secondReader) => void;
-    vi.mocked(smpServe.getSmpReader).mockReturnValueOnce(
+    vi.mocked(smpServe.getSavedMapSmpReader).mockReturnValueOnce(
       new Promise((resolve) => {
         resolveSecondReader = resolve;
       }),
@@ -301,8 +327,10 @@ describe('SmpPreviewDialog', () => {
   });
 
   it('reopens the same map in loading state until its reader is ready', async () => {
-    const firstReader = {} as Awaited<ReturnType<typeof smpServe.getSmpReader>>;
-    vi.mocked(smpServe.getSmpReader).mockResolvedValueOnce(firstReader);
+    const firstReader = {} as Awaited<
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
+    >;
+    vi.mocked(smpServe.getSavedMapSmpReader).mockResolvedValueOnce(firstReader);
     vi.mocked(smpServe.resolveSmpStyle).mockResolvedValueOnce(style);
 
     const { rerender } = render(
@@ -315,10 +343,10 @@ describe('SmpPreviewDialog', () => {
     );
 
     const secondReader = {} as Awaited<
-      ReturnType<typeof smpServe.getSmpReader>
+      ReturnType<typeof smpServe.getSavedMapSmpReader>
     >;
     let resolveSecondReader!: (value: typeof secondReader) => void;
-    vi.mocked(smpServe.getSmpReader).mockReturnValueOnce(
+    vi.mocked(smpServe.getSavedMapSmpReader).mockReturnValueOnce(
       new Promise((resolve) => {
         resolveSecondReader = resolve;
       }),

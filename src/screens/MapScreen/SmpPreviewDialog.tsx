@@ -7,11 +7,11 @@ import { useIntl } from 'react-intl';
 import Map from 'react-map-gl/maplibre';
 
 import { Button } from '@/components/ui/button';
-import { type SavedMap, getSavedMapSmpBlob } from '@/lib/db';
+import type { SavedMap } from '@/lib/db';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import {
   closeSmpReader,
-  getSmpReader,
+  getSavedMapSmpReader,
   registerSmpProtocol,
   resolveSmpStyle,
   sanitizeImportedSmpStyle,
@@ -45,9 +45,7 @@ const PreviewSession = memo(function PreviewSession({
 
     void (async () => {
       try {
-        const smpBlob = await getSavedMapSmpBlob(map);
-        if (!smpBlob) throw new Error('SMP package is missing');
-        const reader = await getSmpReader(readerId, smpBlob);
+        const reader = await getSavedMapSmpReader(readerId, map);
         readerOpened = true;
 
         if (cancelled) {

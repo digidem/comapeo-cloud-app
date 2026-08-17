@@ -46,6 +46,29 @@ describe('useDownloadMap cache consistency', () => {
     vi.clearAllMocks();
   });
 
+  it('invalidates the exact map query when a download fails', async () => {
+    const map = createMap();
+    vi.mocked(downloadSmp).mockRejectedValueOnce(new Error('download failed'));
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+        mutations: { retry: false },
+      },
+    });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const wrapper = createWrapper(queryClient);
+    const { result } = renderHook(() => useDownloadMap(), { wrapper });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync({ map })).rejects.toThrow(
+        'download failed',
+      );
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['map', map.id] });
+  });
+
   it('refreshes project and all-project observers after download completion', async () => {
     const map = createMap();
     await getDb().maps.add(map);

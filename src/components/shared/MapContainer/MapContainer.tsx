@@ -17,13 +17,13 @@ import Map, { AttributionControl } from 'react-map-gl/maplibre';
 
 import { useQuery } from '@tanstack/react-query';
 
-import { type SavedMap, getSavedMapWithSmpBlob } from '@/lib/db';
+import { type SavedMap, getDb } from '@/lib/db';
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { BASEMAP_CATALOG, findBasemap } from '@/lib/map/basemaps';
-import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
+import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import {
   closeSmpReader,
-  getSmpReader,
+  getSavedMapSmpReader,
   registerSmpProtocol,
   resolveSmpStyle,
   sanitizeImportedSmpStyle,
@@ -147,16 +147,6 @@ const OFFLINE_PENDING_STYLE: StyleSpecification = {
   layers: [],
 };
 
-const smpBlobTokens = new WeakMap<Blob, string>();
-
-function getSmpBlobToken(blob: Blob): string {
-  const existing = smpBlobTokens.get(blob);
-  if (existing) return existing;
-  const token = uuid();
-  smpBlobTokens.set(blob, token);
-  return token;
-}
-
 function MapContainer({
   initialViewState,
   interactive = true,
@@ -189,44 +179,42 @@ function MapContainer({
   >({
     queryKey: ['map', activeMapId],
     queryFn: () =>
-      activeMapId
-        ? getSavedMapWithSmpBlob(activeMapId)
-        : Promise.resolve(undefined),
+      activeMapId ? getDb().maps.get(activeMapId) : Promise.resolve(undefined),
     enabled: !!activeMapId,
+    staleTime: Infinity,
   });
 
   const [smpStyleAttempt, setSmpStyleAttempt] = useState<{
     mapId: string;
-    blobToken: string;
+    packageToken: string;
     style: StyleSpecification;
   } | null>(null);
   const [smpLoadErrorAttempt, setSmpLoadErrorAttempt] = useState<{
     mapId: string;
-    blobToken: string;
+    packageToken: string;
   } | null>(null);
-  const isImportedActiveMap = isImportedSmpMap(activeSavedMap);
-  const activeBlobToken = activeSavedMap?.smpBlob
-    ? getSmpBlobToken(activeSavedMap.smpBlob)
+  const isImportedActiveMap = isImportedSmpRecord(activeSavedMap);
+  const activePackageToken = activeSavedMap
+    ? `${activeSavedMap.id}:${activeSavedMap.status}:${activeSavedMap.updatedAt}:${activeSavedMap.smpSize ?? ''}`
     : null;
   const smpStyle =
     smpStyleAttempt?.mapId === activeMapId &&
-    smpStyleAttempt.blobToken === activeBlobToken
+    smpStyleAttempt.packageToken === activePackageToken
       ? smpStyleAttempt.style
       : null;
   const smpLoadError =
     activeSavedMap?.status === 'ready' &&
     smpLoadErrorAttempt?.mapId === activeSavedMap.id &&
-    smpLoadErrorAttempt.blobToken === activeBlobToken;
+    smpLoadErrorAttempt.packageToken === activePackageToken;
   const isActiveMapHydrationPending =
     selectedProjectId !== null && activeProjectLocalId !== selectedProjectId;
   const isActiveMapRecordPending = activeMapId !== null && isActiveMapPending;
   const isActiveMapTransitionPending =
     isActiveMapHydrationPending || isActiveMapRecordPending;
-  const hasReadySmpBlob =
-    activeSavedMap?.status === 'ready' && activeSavedMap.smpBlob !== undefined;
+  const hasReadySmpPackage = activeSavedMap?.status === 'ready';
   const shouldHoldOfflineStyle =
     isActiveMapTransitionPending ||
-    (hasReadySmpBlob && !smpStyle && (!smpLoadError || isImportedActiveMap));
+    (hasReadySmpPackage && !smpStyle && (!smpLoadError || isImportedActiveMap));
 
   // Build an ImageryBasemap from the active map's saved style settings
   // so the user sees the same layer/settings across the app immediately
@@ -262,23 +250,24 @@ function MapContainer({
     }
   }, [defaultBasemapId, controlledBasemapId, storeSetBasemap]);
 
-  // SMP reader lifecycle — register protocol, open reader, resolve style.
-  // Only activates when the blob is downloaded (status === 'ready').
+  // SMP reader lifecycle — register protocol, open only the required package
+  // ranges from IndexedDB, and resolve the style for ready saved maps.
   useEffect(() => {
     const mapId = activeSavedMap?.id;
-    const smpBlob = activeSavedMap?.smpBlob;
     const status = activeSavedMap?.status;
+    const packageToken = activePackageToken;
 
-    if (!mapId || !smpBlob || status !== 'ready') return;
+    if (!mapId || !activeSavedMap || !packageToken || status !== 'ready') {
+      return;
+    }
 
-    const blobToken = getSmpBlobToken(smpBlob);
     const readerId = `active:${mapId}:${uuid()}`;
     let cancelled = false;
     let readerOpened = false;
     registerSmpProtocol();
     void (async () => {
       try {
-        const reader = await getSmpReader(readerId, smpBlob);
+        const reader = await getSavedMapSmpReader(readerId, activeSavedMap);
         readerOpened = true;
         if (cancelled) {
           await closeSmpReader(readerId);
@@ -294,16 +283,16 @@ function MapContainer({
             : style;
         if (!safeStyle) {
           setSmpStyleAttempt(null);
-          setSmpLoadErrorAttempt({ mapId, blobToken });
+          setSmpLoadErrorAttempt({ mapId, packageToken });
           return;
         }
 
         setSmpLoadErrorAttempt(null);
-        setSmpStyleAttempt({ mapId, blobToken, style: safeStyle });
+        setSmpStyleAttempt({ mapId, packageToken, style: safeStyle });
       } catch {
         if (!cancelled) {
           setSmpStyleAttempt(null);
-          setSmpLoadErrorAttempt({ mapId, blobToken });
+          setSmpLoadErrorAttempt({ mapId, packageToken });
         }
       }
     })();
@@ -317,12 +306,7 @@ function MapContainer({
       }
       setSmpStyleAttempt(null);
     };
-  }, [
-    activeSavedMap?.id,
-    activeSavedMap?.smpBlob,
-    activeSavedMap?.status,
-    isImportedActiveMap,
-  ]);
+  }, [activeSavedMap, activePackageToken, isImportedActiveMap]);
 
   // Controlled basemapId takes priority; uncontrolled uses the store
   const activeBasemapId = controlledBasemapId ?? storeBasemapId;

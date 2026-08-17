@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  addSavedMapWithPackage,
   getCachedIconBlob,
   getDb,
+  getSavedMapPackageSource,
   getSavedMapSmpBlob,
   getSavedMapWithSmpBlob,
   putCachedIconBlob,
   resetDb,
+  updateSavedMapWithPackage,
 } from '@/lib/db';
 import type { Field, Preset, SavedMap, Track } from '@/lib/db';
 
@@ -30,6 +33,7 @@ describe('AppDatabase', () => {
     expect(db.iconCache).toBeDefined();
     expect(db.maps).toBeDefined();
     expect(db.mapPackages).toBeDefined();
+    expect(db.mapPackageChunks).toBeDefined();
   });
 
   it('defines &localId as the primary key for projects', async () => {
@@ -517,16 +521,16 @@ describe('AppDatabase', () => {
     ]);
   });
 
-  it('declares version 13 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
+  it('declares version 14 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
     const db = getDb();
 
-    // The highest declared version is 13 (v8 no-op, v9 string→ref
+    // The highest declared version is 14 (v8 no-op, v9 string→ref
     // re-declared, v10 adds the v2 sync indexes and field migrations, v11
-    // adds iconCache, v12 adds maps, and v13 adds portable mapPackages).
-    // If any future change drops or renumbers versions, this test fails and
-    // forces the author to think about the upgrade path for users on prior
-    // builds (especially the post-#67 v9 build).
-    expect(db.verno).toBe(13);
+    // adds iconCache, v12 adds maps, v13 adds mapPackages, and v14 adds
+    // portable chunked package storage). If any future change drops or renumbers
+    // versions, this test fails and forces the author to think about the upgrade
+    // path for users on prior builds (especially the post-#67 v9 build).
+    expect(db.verno).toBe(14);
 
     // Verify the v2 sync indexes are present in the schema. These are
     // required for the index-based queries used by remote-archive.ts.
@@ -811,6 +815,70 @@ describe('maps table', () => {
     expect(hydrated?.smpBlob).toBeInstanceOf(Blob);
     expect(hydrated?.smpBlob?.type).toBe('application/zip');
     expect(await hydrated?.smpBlob?.arrayBuffer()).toEqual(smpBytes);
+  });
+
+  it('stores new SMP packages in chunks and supports cross-chunk range reads', async () => {
+    const db = getDb();
+    const bytes = new Uint8Array(4 * 1024 * 1024 + 8);
+    bytes.fill(7);
+    bytes.set([1, 2, 3, 4, 5, 6, 7, 8], bytes.length - 8);
+    const blob = new Blob([bytes], { type: 'application/zip' });
+    const map: SavedMap = {
+      id: 'map-chunked-smp',
+      projectLocalId: 'proj-1',
+      name: 'Chunked SMP',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      bbox: [-73.0, -3.5, -70.0, -1.0],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'ready',
+      smpSize: blob.size,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+    };
+
+    await addSavedMapWithPackage(map, blob);
+
+    expect(await db.maps.get(map.id)).toEqual(map);
+    const packageMetadata = await db.mapPackages.get(map.id);
+    expect(packageMetadata?.data).toBeUndefined();
+    expect(packageMetadata?.chunkCount).toBe(2);
+    expect(
+      await db.mapPackageChunks.where('mapId').equals(map.id).count(),
+    ).toBe(2);
+
+    const source = await getSavedMapPackageSource(map);
+    expect(source?.size).toBe(blob.size);
+    expect(await source?.read(4 * 1024 * 1024 - 2, 6)).toEqual(
+      new Uint8Array([7, 7, 1, 2, 3, 4]),
+    );
+
+    const hydrated = await getSavedMapWithSmpBlob(map.id);
+    expect(hydrated?.smpBlob?.size).toBe(blob.size);
+    expect(
+      new Uint8Array(await hydrated!.smpBlob!.arrayBuffer()).slice(-8),
+    ).toEqual(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]));
+  });
+
+  it('rolls back package chunks when a download finishes after its map was deleted', async () => {
+    const db = getDb();
+    const mapId = 'deleted-before-package-save';
+    const blob = new Blob(['late-package'], { type: 'application/zip' });
+
+    await expect(
+      updateSavedMapWithPackage(mapId, blob, {
+        status: 'ready',
+        smpSize: blob.size,
+        updatedAt: '2026-06-28T01:00:00Z',
+      }),
+    ).rejects.toThrow('Map no longer exists');
+
+    expect(await db.mapPackages.get(mapId)).toBeUndefined();
+    expect(await db.mapPackageChunks.where('mapId').equals(mapId).count()).toBe(
+      0,
+    );
   });
 
   it('keeps legacy Blob-backed map packages readable', async () => {

@@ -46,11 +46,9 @@ async function createProject(
  * written to IndexedDB.
  */
 async function importGeoJson(page: import('@playwright/test').Page) {
-  const importControl = page
-    .getByRole('button', { name: 'Import Data' })
-    .locator('..');
-  await importControl
-    .locator('input[type="file"]')
+  await page
+    .locator('input[type="file"][accept*=".geojson"]')
+    .first()
     .setInputFiles(GEOJSON_FIXTURE);
 
   // Verify observations were written to the app database (up to 10s).

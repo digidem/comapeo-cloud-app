@@ -114,7 +114,7 @@ describe('ImportSmpButton', () => {
         maxZoom: 12,
         attribution: 'Community imagery',
         status: 'ready',
-        smpData: expect.any(ArrayBuffer),
+        smpBlob: expect.any(Blob),
         smpSize: file.size,
       }),
     );
@@ -242,7 +242,7 @@ describe('ImportSmpButton', () => {
     );
   });
 
-  it('validates an application/zip blob but persists portable SMP bytes', async () => {
+  it('validates and passes the SMP Blob to chunked persistence', async () => {
     const user = userEvent.setup();
     const reader = readerWithStyle({ version: 8, sources: {}, layers: [] });
     vi.mocked(smpServe.getSmpReader).mockResolvedValue(
@@ -258,13 +258,10 @@ describe('ImportSmpButton', () => {
     expect(readerBlob).toBeInstanceOf(Blob);
     expect(readerBlob.type).toBe('application/zip');
 
-    const savedMap = mutateAsync.mock.calls[0]![0] as {
-      smpBlob?: Blob;
-      smpData?: ArrayBuffer;
-    };
-    expect(savedMap.smpBlob).toBeUndefined();
-    expect(savedMap.smpData).toBeInstanceOf(ArrayBuffer);
-    expect(savedMap.smpData?.byteLength).toBe(file.size);
+    const savedMap = mutateAsync.mock.calls[0]![0] as { smpBlob?: Blob };
+    expect(savedMap.smpBlob).toBeInstanceOf(Blob);
+    expect(savedMap.smpBlob?.type).toBe('application/zip');
+    expect(savedMap.smpBlob?.size).toBe(file.size);
   });
 
   it('shows an invalid-file error and creates nothing when the reader cannot open', async () => {

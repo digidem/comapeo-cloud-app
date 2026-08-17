@@ -4,6 +4,8 @@ import maplibregl from 'maplibre-gl';
 import { Reader } from 'styled-map-package-api/reader';
 import { createServer } from 'styled-map-package-api/server';
 
+import { type SavedMap, getSavedMapPackageSource } from '@/lib/db';
+
 const readerCache = new Map<string, Reader>();
 
 let registered = false;
@@ -177,16 +179,37 @@ export function sanitizeImportedSmpStyle(
   return sanitizeSmpStyleAttributions(style);
 }
 
-export async function getSmpReader(mapId: string, blob: Blob): Promise<Reader> {
-  const cached = readerCache.get(mapId);
+async function getSmpReaderFromSource(
+  readerId: string,
+  source: {
+    size: number;
+    read: (offset: number, length: number) => Promise<Uint8Array>;
+  },
+): Promise<Reader> {
+  const cached = readerCache.get(readerId);
   if (cached) return cached;
 
-  const source = blobToRandomAccessSource(blob);
   const zipReader = await ZipReader.from(source);
   const reader = new Reader(zipReader);
   await reader.opened();
-  readerCache.set(mapId, reader);
+  readerCache.set(readerId, reader);
   return reader;
+}
+
+export async function getSmpReader(
+  readerId: string,
+  blob: Blob,
+): Promise<Reader> {
+  return getSmpReaderFromSource(readerId, blobToRandomAccessSource(blob));
+}
+
+export async function getSavedMapSmpReader(
+  readerId: string,
+  map: Pick<SavedMap, 'id' | 'smpBlob' | 'smpSize'>,
+): Promise<Reader> {
+  const source = await getSavedMapPackageSource(map);
+  if (!source) throw new Error('SMP package is missing');
+  return getSmpReaderFromSource(readerId, source);
 }
 
 export async function closeSmpReader(mapId: string): Promise<void> {

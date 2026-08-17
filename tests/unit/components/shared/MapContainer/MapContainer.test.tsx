@@ -32,7 +32,7 @@ const mockSanitizeImportedSmpStyle = vi.fn((style) => style);
 
 vi.mock('@/lib/map/smp-serve', () => ({
   resolveSmpStyle: (...args: unknown[]) => mockResolveSmpStyle(...args),
-  getSmpReader: (...args: unknown[]) => mockGetSmpReader(...args),
+  getSavedMapSmpReader: (...args: unknown[]) => mockGetSmpReader(...args),
   registerSmpProtocol: (...args: unknown[]) => mockRegisterSmpProtocol(...args),
   sanitizeImportedSmpStyle: (style: unknown) =>
     mockSanitizeImportedSmpStyle(style),
@@ -42,7 +42,9 @@ vi.mock('@/lib/map/smp-serve', () => ({
 const mockDbGet = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@/lib/db', () => ({
-  getSavedMapWithSmpBlob: (...args: unknown[]) => mockDbGet(...args),
+  getDb: () => ({
+    maps: { get: (...args: unknown[]) => mockDbGet(...args) },
+  }),
 }));
 
 // Mock react-map-gl/maplibre
@@ -473,10 +475,8 @@ describe('MapContainer', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('hides a stale SMP error while the same map refetches with a fresh blob', async () => {
+  it('does not reload an errored SMP package just because window focus changes', async () => {
     focusManager.setFocused(false);
-    const firstBlob = new Blob(['first']);
-    const secondBlob = new Blob(['second']);
     const mapRecord = {
       id: 'retry-map',
       projectLocalId: 'proj-1',
@@ -485,17 +485,12 @@ describe('MapContainer', () => {
       origin: 'imported' as const,
       styleUrl: '',
       status: 'ready' as const,
+      updatedAt: '2026-08-10T00:00:00.000Z',
+      smpSize: 123,
     };
-    let resolveSecondReader!: (reader: object) => void;
-    mockDbGet
-      .mockResolvedValueOnce({ ...mapRecord, smpBlob: firstBlob })
-      .mockResolvedValue({ ...mapRecord, smpBlob: secondBlob });
+    mockDbGet.mockResolvedValue(mapRecord);
     mockSanitizeImportedSmpStyle.mockReturnValueOnce(null);
-    mockGetSmpReader
-      .mockResolvedValueOnce({})
-      .mockImplementationOnce(
-        () => new Promise<object>((resolve) => (resolveSecondReader = resolve)),
-      );
+    mockGetSmpReader.mockResolvedValueOnce({});
     useMapStore.setState({ activeMapId: mapRecord.id });
 
     try {
@@ -503,19 +498,16 @@ describe('MapContainer', () => {
       expect(
         await screen.findByTestId('map-active-map-error'),
       ).toBeInTheDocument();
+      expect(mockGetSmpReader).toHaveBeenCalledTimes(1);
 
-      focusManager.setFocused(true);
-      await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(2));
-      await waitFor(() =>
-        expect(
-          screen.queryByTestId('map-active-map-error'),
-        ).not.toBeInTheDocument(),
-      );
+      await act(async () => {
+        focusManager.setFocused(true);
+        await Promise.resolve();
+      });
 
-      resolveSecondReader({});
-      expect(
-        await screen.findByTestId('map-active-map-badge'),
-      ).toBeInTheDocument();
+      expect(mockDbGet).toHaveBeenCalledTimes(1);
+      expect(mockGetSmpReader).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('map-active-map-error')).toBeInTheDocument();
     } finally {
       focusManager.setFocused(undefined);
     }
@@ -574,14 +566,12 @@ describe('MapContainer', () => {
     expect(mockCloseSmpReader).toHaveBeenCalledWith(readerId);
   });
 
-  it('uses independent reader keys when the same active map refetches with a new blob', async () => {
+  it('keeps a resolved SMP reader stable across window focus changes', async () => {
     mockGetSmpReader.mockResolvedValue({});
     mockCloseSmpReader.mockClear();
     focusManager.setFocused(false);
 
     try {
-      const firstBlob = new Blob(['first']);
-      const secondBlob = new Blob(['second']);
       const mapRecord = {
         id: 'refetched-map',
         projectLocalId: 'proj-1',
@@ -590,27 +580,27 @@ describe('MapContainer', () => {
         origin: 'imported' as const,
         styleUrl: '',
         status: 'ready' as const,
+        updatedAt: '2026-08-10T00:00:00.000Z',
+        smpSize: 456,
       };
-      mockDbGet
-        .mockResolvedValueOnce({ ...mapRecord, smpBlob: firstBlob })
-        .mockResolvedValue({ ...mapRecord, smpBlob: secondBlob });
+      mockDbGet.mockResolvedValue(mapRecord);
       useMapStore.setState({ activeMapId: mapRecord.id });
 
       render(<MapContainer />);
 
       await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(1));
-      const firstReaderId = mockGetSmpReader.mock.calls[0]![0] as string;
-      expect(firstReaderId).toMatch(/^active:refetched-map:/);
+      const readerId = mockGetSmpReader.mock.calls[0]![0] as string;
+      expect(readerId).toMatch(/^active:refetched-map:/);
 
-      focusManager.setFocused(true);
-      await waitFor(() => expect(mockGetSmpReader).toHaveBeenCalledTimes(2));
-      const secondReaderId = mockGetSmpReader.mock.calls[1]![0] as string;
-      expect(secondReaderId).toMatch(/^active:refetched-map:/);
-      expect(secondReaderId).not.toBe(firstReaderId);
-      await waitFor(() =>
-        expect(mockCloseSmpReader).toHaveBeenCalledWith(firstReaderId),
-      );
-      expect(mockCloseSmpReader).not.toHaveBeenCalledWith(secondReaderId);
+      await act(async () => {
+        focusManager.setFocused(true);
+        await Promise.resolve();
+      });
+
+      expect(mockDbGet).toHaveBeenCalledTimes(1);
+      expect(mockGetSmpReader).toHaveBeenCalledTimes(1);
+      expect(mockCloseSmpReader).not.toHaveBeenCalledWith(readerId);
+      expect(screen.getByTestId('map-active-map-badge')).toBeInTheDocument();
     } finally {
       focusManager.setFocused(undefined);
     }
@@ -624,15 +614,15 @@ describe('MapContainer', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('falls back to basemap when activeSavedMap has no smpBlob', async () => {
+  it('falls back to basemap when a ready saved package cannot be opened', async () => {
     useMapStore.setState({ activeMapId: 'map-2' });
     mockDbGet.mockResolvedValue({
       id: 'map-2',
       projectLocalId: 'proj-1',
       name: 'Incomplete Map',
       status: 'ready',
-      // no smpBlob
     });
+    mockGetSmpReader.mockRejectedValueOnce(new Error('SMP package is missing'));
     render(<MapContainer />);
     await waitFor(() =>
       expect(screen.getByTestId('mock-map').dataset.mapStyle).toContain(

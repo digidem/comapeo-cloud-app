@@ -6,7 +6,11 @@ import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { useDownloadMap } from '@/hooks/useMaps';
 import { setComapeoStorageItem } from '@/lib/comapeo-local-storage';
-import { type SavedMap, getSavedMapWithSmpBlob } from '@/lib/db';
+import {
+  type SavedMap,
+  getSavedMapWithSmpBlob,
+  hasSavedMapSmpPackage,
+} from '@/lib/db';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import {
   checkStorageQuota,
@@ -87,7 +91,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const exportUrlRef = useRef<string | null>(null);
   const exportBlobNameRef = useRef<string>('');
 
-  // Check blob availability in IndexedDB without creating an object URL
+  // Check package availability without hydrating package bytes or creating an object URL.
   useEffect(() => {
     if (map.status !== 'ready') return;
     let cancelled = false;
@@ -95,9 +99,12 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     exportBlobNameRef.current = name;
     void (async () => {
       try {
-        const stored = await getSavedMapWithSmpBlob(map.id);
+        const packageAvailable = await hasSavedMapSmpPackage({
+          id: map.id,
+          smpBlob: map.smpBlob,
+        });
         if (cancelled) return;
-        if (stored?.smpBlob) {
+        if (packageAvailable) {
           setExportReady(true);
           setExportMissing(false);
         } else {
@@ -116,7 +123,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
       }
       setExportReady(false);
     };
-  }, [map.id, map.name, map.status, map.smpSize]);
+  }, [map.id, map.name, map.smpBlob, map.status, map.smpSize]);
 
   const estimatedBytes = estimateDownloadSize(
     map.bbox,

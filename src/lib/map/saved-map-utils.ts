@@ -23,7 +23,11 @@ export function isImportedSmpRecord(
   );
 }
 
-/** A renderable imported SMP additionally has a ready packaged blob. */
+/**
+ * Legacy/runtime helper for callers that already hold a fully hydrated Blob.
+ * Current persisted imported maps normally keep package bytes in the separate
+ * package/chunk tables and should use `isImportedSmpRecord` plus a package reader.
+ */
 export function isImportedSmpMap(
   map: SavedMap | null | undefined,
 ): map is ImportedSmpMap {

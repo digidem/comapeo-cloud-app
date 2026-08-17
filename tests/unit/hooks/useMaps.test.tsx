@@ -198,20 +198,18 @@ describe('useCreateMap', () => {
     expect(await getDb().maps.get(map.id)).toBeUndefined();
   });
 
-  it('persists ready imported SMP metadata separately from portable package bytes', async () => {
-    const smpData = new TextEncoder().encode('smp').buffer;
-    const map = {
-      ...createMap({
-        id: 'imported-map',
-        type: 'style',
-        origin: 'imported',
-        styleUrl: '',
-        scheme: undefined,
-        status: 'ready',
-        smpSize: smpData.byteLength,
-      }),
-      smpData,
-    };
+  it('persists ready imported SMP metadata separately from chunked package bytes', async () => {
+    const smpBlob = new Blob(['smp'], { type: 'application/zip' });
+    const map = createMap({
+      id: 'imported-map',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      scheme: undefined,
+      status: 'ready',
+      smpBlob,
+      smpSize: smpBlob.size,
+    });
     const { result } = renderHook(() => useCreateMap(), { wrapper });
 
     await act(async () => {
@@ -227,15 +225,19 @@ describe('useCreateMap', () => {
         type: 'style',
         styleUrl: '',
         status: 'ready',
-        smpSize: smpData.byteLength,
+        smpSize: smpBlob.size,
       }),
     );
     expect(storedMap?.smpBlob).toBeUndefined();
-    expect(storedMap).not.toHaveProperty('smpData');
 
     const storedPackage = await getDb().mapPackages.get(map.id);
-    expect(storedPackage?.data).toEqual(smpData);
+    expect(storedPackage?.data).toBeUndefined();
+    expect(storedPackage?.size).toBe(smpBlob.size);
+    expect(storedPackage?.chunkCount).toBe(1);
     expect(storedPackage?.contentType).toBe('application/zip');
+    expect(
+      await getDb().mapPackageChunks.where('mapId').equals(map.id).count(),
+    ).toBe(1);
   });
 });
 
@@ -252,9 +254,17 @@ describe('useDeleteMap', () => {
     await getDb().maps.add(createMap());
     await getDb().mapPackages.add({
       mapId: 'map-1',
-      data: new TextEncoder().encode('package').buffer,
       contentType: 'application/zip',
+      size: 7,
+      chunkSize: 7,
+      chunkCount: 1,
       updatedAt: '2026-06-28T00:00:00Z',
+    });
+    await getDb().mapPackageChunks.add({
+      id: 'map-1:0',
+      mapId: 'map-1',
+      index: 0,
+      data: new TextEncoder().encode('package').buffer,
     });
     useMapStore.getState().hydrateActiveMap('project-1', 'map-1');
 
@@ -268,6 +278,9 @@ describe('useDeleteMap', () => {
     expect(useMapStore.getState().activeMapId).toBeNull();
     expect(useMapStore.getState().activeProjectLocalId).toBe('project-1');
     expect(await getDb().mapPackages.get('map-1')).toBeUndefined();
+    expect(
+      await getDb().mapPackageChunks.where('mapId').equals('map-1').count(),
+    ).toBe(0);
   });
 
   it('clears the deleted map from whichever project is currently hydrated', async () => {

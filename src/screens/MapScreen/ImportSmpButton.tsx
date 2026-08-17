@@ -173,7 +173,6 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
       }
 
       const metadata = extractMetadata(style as unknown as SmpStyle, file.name);
-      const smpData = await smpBlob.arrayBuffer();
       const now = new Date().toISOString();
       await createMap.mutateAsync({
         id: importId,
@@ -186,7 +185,7 @@ export function ImportSmpButton({ projectLocalId }: ImportSmpButtonProps) {
         minZoom: metadata.minZoom,
         maxZoom: metadata.maxZoom,
         attribution: metadata.attribution,
-        smpData,
+        smpBlob,
         smpSize: smpBlob.size,
         status: 'ready',
         createdAt: now,

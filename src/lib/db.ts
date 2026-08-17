@@ -244,12 +244,32 @@ export interface SavedMap {
   updatedAt: string; // ISO 8601
 }
 
-/** Portable SMP package bytes stored separately from map-list metadata. */
+/** SMP package metadata stored separately from map-list metadata. */
 export interface SavedMapPackage {
   mapId: string;
-  data: ArrayBuffer;
+  /**
+   * Legacy v13 whole-package bytes. New writes use chunk rows so large imports
+   * never have to materialize the entire package in JavaScript heap at once.
+   */
+  data?: ArrayBuffer;
   contentType: string;
+  size?: number;
+  chunkSize?: number;
+  chunkCount?: number;
   updatedAt: string;
+}
+
+/** One portable ArrayBuffer chunk of an SMP package. */
+export interface SavedMapPackageChunk {
+  id: string;
+  mapId: string;
+  index: number;
+  data: ArrayBuffer;
+}
+
+export interface SavedMapPackageSource {
+  size: number;
+  read: (offset: number, length: number) => Promise<Uint8Array>;
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +289,7 @@ class AppDatabase extends Dexie {
   iconCache!: EntityTable<CachedIcon, 'url'>;
   maps!: EntityTable<SavedMap, 'id'>;
   mapPackages!: EntityTable<SavedMapPackage, 'mapId'>;
+  mapPackageChunks!: EntityTable<SavedMapPackageChunk, 'id'>;
 
   constructor() {
     super('comapeo-cloud-app');
@@ -530,6 +551,13 @@ class AppDatabase extends Dexie {
     this.version(13).stores({
       mapPackages: '&mapId',
     });
+
+    // v14: chunk new package writes so large File/Blob imports stay bounded in
+    // heap even on WebKit, which cannot persist Blob values in IndexedDB.
+    // Existing v13 whole-package ArrayBuffer records remain readable.
+    this.version(14).stores({
+      mapPackageChunks: '&id, mapId, [mapId+index]',
+    });
   }
 }
 
@@ -552,19 +580,187 @@ export function getDb(): AppDatabase {
   return _db;
 }
 
-/** Load an SMP package only when a consumer actually needs its bytes. */
+const MAP_PACKAGE_CHUNK_SIZE = 4 * 1024 * 1024;
+
+export function getMapPackageChunkId(mapId: string, index: number): string {
+  return `${mapId}:${index}`;
+}
+
+async function writeSavedMapPackageChunks(
+  db: AppDatabase,
+  mapId: string,
+  blob: Blob,
+  updatedAt: string,
+): Promise<void> {
+  await db.mapPackageChunks.where('mapId').equals(mapId).delete();
+
+  const chunkCount = Math.ceil(blob.size / MAP_PACKAGE_CHUNK_SIZE);
+  for (let index = 0; index < chunkCount; index++) {
+    const start = index * MAP_PACKAGE_CHUNK_SIZE;
+    const end = Math.min(start + MAP_PACKAGE_CHUNK_SIZE, blob.size);
+    const data = await Dexie.waitFor(blob.slice(start, end).arrayBuffer());
+    await db.mapPackageChunks.put({
+      id: getMapPackageChunkId(mapId, index),
+      mapId,
+      index,
+      data,
+    });
+  }
+
+  await db.mapPackages.put({
+    mapId,
+    contentType: blob.type || 'application/zip',
+    size: blob.size,
+    chunkSize: MAP_PACKAGE_CHUNK_SIZE,
+    chunkCount,
+    updatedAt,
+  });
+}
+
+/** Atomically create a map row and its chunked SMP package. */
+export async function addSavedMapWithPackage(
+  map: SavedMap,
+  blob: Blob,
+): Promise<void> {
+  const db = getDb();
+  await db.transaction(
+    'rw',
+    [db.maps, db.mapPackages, db.mapPackageChunks],
+    async () => {
+      await db.maps.add(map);
+      await writeSavedMapPackageChunks(db, map.id, blob, map.updatedAt);
+    },
+  );
+}
+
+/** Atomically replace an existing map package and update its map metadata. */
+export async function updateSavedMapWithPackage(
+  mapId: string,
+  blob: Blob,
+  updates: Partial<SavedMap>,
+): Promise<void> {
+  const db = getDb();
+  await db.transaction(
+    'rw',
+    [db.maps, db.mapPackages, db.mapPackageChunks],
+    async () => {
+      const updatedAt = updates.updatedAt ?? new Date().toISOString();
+      await writeSavedMapPackageChunks(db, mapId, blob, updatedAt);
+      const updated = await db.maps.update(mapId, { ...updates, updatedAt });
+      if (updated !== 1) throw new Error('Map no longer exists');
+    },
+  );
+}
+
+/** Check package availability without reading package bytes into memory. */
+export async function hasSavedMapSmpPackage(
+  map: Pick<SavedMap, 'id' | 'smpBlob'>,
+): Promise<boolean> {
+  if (map.smpBlob) return true;
+  return (await getDb().mapPackages.where(':id').equals(map.id).count()) > 0;
+}
+
+/**
+ * Return a random-access package source. New chunked packages read only the
+ * chunks needed for each ZIP range request; legacy v13 whole-buffer records and
+ * pre-v13 Blob-backed map rows remain readable.
+ */
+export async function getSavedMapPackageSource(
+  map: Pick<SavedMap, 'id' | 'smpBlob' | 'smpSize'>,
+): Promise<SavedMapPackageSource | undefined> {
+  if (map.smpBlob) {
+    return {
+      size: map.smpBlob.size,
+      read: async (offset, length) =>
+        new Uint8Array(
+          await map.smpBlob!.slice(offset, offset + length).arrayBuffer(),
+        ),
+    };
+  }
+
+  const db = getDb();
+  const storedPackage = await db.mapPackages.get(map.id);
+  if (!storedPackage) return undefined;
+
+  if (storedPackage.data) {
+    const data = storedPackage.data;
+    return {
+      size: data.byteLength,
+      read: async (offset, length) =>
+        new Uint8Array(
+          data.slice(offset, Math.min(offset + length, data.byteLength)),
+        ),
+    };
+  }
+
+  const size = storedPackage.size ?? map.smpSize;
+  const chunkSize = storedPackage.chunkSize;
+  if (size === undefined || !chunkSize || chunkSize <= 0) return undefined;
+
+  return {
+    size,
+    read: async (offset, length) => {
+      if (offset < 0 || length <= 0 || offset >= size) return new Uint8Array(0);
+      const end = Math.min(offset + length, size);
+      const output = new Uint8Array(end - offset);
+      const firstChunk = Math.floor(offset / chunkSize);
+      const lastChunk = Math.floor((end - 1) / chunkSize);
+      let outputOffset = 0;
+
+      for (let index = firstChunk; index <= lastChunk; index++) {
+        const chunk = await db.mapPackageChunks.get(
+          getMapPackageChunkId(map.id, index),
+        );
+        if (!chunk) throw new Error(`SMP package chunk ${index} is missing`);
+
+        const chunkStart = index * chunkSize;
+        const from = Math.max(offset, chunkStart) - chunkStart;
+        const to =
+          Math.min(end, chunkStart + chunk.data.byteLength) - chunkStart;
+        const part = new Uint8Array(chunk.data, from, to - from);
+        output.set(part, outputOffset);
+        outputOffset += part.byteLength;
+      }
+
+      return output;
+    },
+  };
+}
+
+/** Load the full SMP package only for explicit Blob consumers such as export. */
 export async function getSavedMapSmpBlob(
   map: Pick<SavedMap, 'id' | 'smpBlob'>,
 ): Promise<Blob | undefined> {
   if (map.smpBlob) return map.smpBlob;
-  const storedPackage = await getDb().mapPackages.get(map.id);
+  const db = getDb();
+  const storedPackage = await db.mapPackages.get(map.id);
   if (!storedPackage) return undefined;
-  return new Blob([storedPackage.data], {
-    type: storedPackage.contentType || 'application/zip',
-  });
+  if (storedPackage.data) {
+    return new Blob([storedPackage.data], {
+      type: storedPackage.contentType || 'application/zip',
+    });
+  }
+
+  const chunks = await db.mapPackageChunks
+    .where('mapId')
+    .equals(map.id)
+    .sortBy('index');
+  if (
+    storedPackage.chunkCount !== undefined &&
+    chunks.length !== storedPackage.chunkCount
+  ) {
+    throw new Error('SMP package chunks are incomplete');
+  }
+  if (chunks.length === 0 && (storedPackage.size ?? 0) > 0) {
+    throw new Error('SMP package chunks are missing');
+  }
+  return new Blob(
+    chunks.map((chunk) => chunk.data),
+    { type: storedPackage.contentType || 'application/zip' },
+  );
 }
 
-/** Fetch one map and attach its package blob without hydrating package bytes in list queries. */
+/** Fetch one map and attach its package blob for explicit full-Blob consumers. */
 export async function getSavedMapWithSmpBlob(
   mapId: string,
 ): Promise<SavedMap | undefined> {

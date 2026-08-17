@@ -149,9 +149,19 @@ async function seedLocalState(
     mapPackages: [
       {
         mapId: ACTIVE_MAP_ID,
-        data: e2eArrayBuffer(smpBytes),
         contentType: 'application/zip',
+        size: smpBytes.length,
+        chunkSize: smpBytes.length,
+        chunkCount: 1,
         updatedAt: now,
+      },
+    ],
+    mapPackageChunks: [
+      {
+        id: `${ACTIVE_MAP_ID}:0`,
+        mapId: ACTIVE_MAP_ID,
+        index: 0,
+        data: e2eArrayBuffer(smpBytes),
       },
     ],
   });
@@ -322,11 +332,14 @@ test.describe('active SMP offline cold start', () => {
 
     // Corrupting the local package and starting the page again must produce an
     // intentional error state rather than a hang/crash or remote fallback.
-    await updateAppDatabaseRecord(offlinePage, 'mapPackages', ACTIVE_MAP_ID, {
-      data: e2eArrayBuffer(new TextEncoder().encode('not a zip')),
-      contentType: 'application/zip',
-      updatedAt: new Date().toISOString(),
-    });
+    await updateAppDatabaseRecord(
+      offlinePage,
+      'mapPackageChunks',
+      `${ACTIVE_MAP_ID}:0`,
+      {
+        data: e2eArrayBuffer(new TextEncoder().encode('not a zip')),
+      },
+    );
 
     await offlinePage.close();
     const corruptPage = await context.newPage();

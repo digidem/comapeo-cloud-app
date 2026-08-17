@@ -16,6 +16,7 @@ export const APP_DB_TABLES = [
   'iconCache',
   'maps',
   'mapPackages',
+  'mapPackageChunks',
 ] as const;
 
 export type AppDbTableName = (typeof APP_DB_TABLES)[number];
@@ -50,6 +51,10 @@ type DbOperationResult =
   | { ok: true; value?: unknown }
   | { ok: false; retryable: boolean; message: string };
 
+/**
+ * Serialize small binary E2E fixtures through Playwright. Do not use this for
+ * production-sized packages: the marker expands every byte into a JSON number.
+ */
 export function e2eArrayBuffer(bytes: Uint8Array): E2eArrayBufferSeed {
   return { __e2eArrayBuffer: Array.from(bytes) };
 }
@@ -61,6 +66,9 @@ async function executeDbOperation(
   let result: DbOperationResult | undefined;
 
   await expect(async () => {
+    // Each toPass retry is independent. Clear any prior retry result so a
+    // Playwright evaluation failure cannot report stale diagnostics.
+    result = undefined;
     result = await page.evaluate<
       DbOperationResult,
       { dbName: string; operation: unknown }
