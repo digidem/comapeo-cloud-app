@@ -66,7 +66,10 @@ describe('useDownloadMap cache consistency', () => {
       );
     });
 
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['map', map.id] });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['map', map.id],
+      exact: true,
+    });
   });
 
   it('refreshes project and all-project observers after download completion', async () => {

@@ -113,7 +113,10 @@ export function useRenameMap() {
     },
     onSuccess: (_data, { mapId }) => {
       void queryClient.invalidateQueries({ queryKey: ['maps'] });
-      void queryClient.invalidateQueries({ queryKey: ['map', mapId] });
+      void queryClient.invalidateQueries({
+        queryKey: ['map', mapId],
+        exact: true,
+      });
     },
   });
 }
@@ -212,11 +215,17 @@ export function useDownloadMap() {
     },
     onSuccess: (_mapId, { map }) => {
       void queryClient.invalidateQueries({ queryKey: ['maps'] });
-      void queryClient.invalidateQueries({ queryKey: ['map', map.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ['map', map.id],
+        exact: true,
+      });
     },
     onError: (_error, { map }) => {
       void queryClient.invalidateQueries({ queryKey: ['maps'] });
-      void queryClient.invalidateQueries({ queryKey: ['map', map.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ['map', map.id],
+        exact: true,
+      });
     },
   });
 }

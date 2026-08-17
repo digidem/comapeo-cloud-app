@@ -586,11 +586,18 @@ export function getMapPackageChunkId(mapId: string, index: number): string {
   return `${mapId}:${index}`;
 }
 
+function throwIfPackageWriteAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('Package persistence cancelled', 'AbortError');
+  }
+}
+
 async function writeSavedMapPackageChunks(
   db: AppDatabase,
   mapId: string,
   blob: Blob,
   updatedAt: string,
+  signal?: AbortSignal,
 ): Promise<void> {
   await db.mapPackageChunks.where('mapId').equals(mapId).delete();
 
@@ -600,19 +607,23 @@ async function writeSavedMapPackageChunks(
   // would recreate the whole-file memory spike this chunked format is designed
   // to avoid for large offline map packages.
   const writeChunk = async (index: number): Promise<void> => {
+    throwIfPackageWriteAborted(signal);
     if (index >= chunkCount) return;
     const start = index * MAP_PACKAGE_CHUNK_SIZE;
     const end = Math.min(start + MAP_PACKAGE_CHUNK_SIZE, blob.size);
     const data = await Dexie.waitFor(blob.slice(start, end).arrayBuffer());
+    throwIfPackageWriteAborted(signal);
     await db.mapPackageChunks.put({
       id: getMapPackageChunkId(mapId, index),
       mapId,
       index,
       data,
     });
+    throwIfPackageWriteAborted(signal);
     await writeChunk(index + 1);
   };
   await writeChunk(0);
+  throwIfPackageWriteAborted(signal);
 
   await db.mapPackages.put({
     mapId,
@@ -645,6 +656,7 @@ export async function updateSavedMapWithPackage(
   mapId: string,
   blob: Blob,
   updates: Partial<SavedMap>,
+  signal?: AbortSignal,
 ): Promise<void> {
   const db = getDb();
   await db.transaction(
@@ -652,19 +664,44 @@ export async function updateSavedMapWithPackage(
     [db.maps, db.mapPackages, db.mapPackageChunks],
     async () => {
       const updatedAt = updates.updatedAt ?? new Date().toISOString();
-      await writeSavedMapPackageChunks(db, mapId, blob, updatedAt);
+      await writeSavedMapPackageChunks(db, mapId, blob, updatedAt, signal);
+      throwIfPackageWriteAborted(signal);
       const updated = await db.maps.update(mapId, { ...updates, updatedAt });
       if (updated !== 1) throw new Error('Map no longer exists');
     },
   );
 }
 
-/** Check package availability without reading package bytes into memory. */
+/** Check package availability and basic integrity without hydrating current v14 bytes. */
 export async function hasSavedMapSmpPackage(
-  map: Pick<SavedMap, 'id' | 'smpBlob'>,
+  map: Pick<SavedMap, 'id' | 'smpBlob' | 'smpSize'>,
 ): Promise<boolean> {
   if (map.smpBlob) return true;
-  return (await getDb().mapPackages.where(':id').equals(map.id).count()) > 0;
+
+  const db = getDb();
+  const storedChunkCount = await db.mapPackageChunks
+    .where('mapId')
+    .equals(map.id)
+    .count();
+  const storedPackage = await db.mapPackages.get(map.id);
+  if (!storedPackage) return false;
+
+  if (storedPackage.data) {
+    return (
+      storedPackage.data.byteLength > 0 &&
+      (map.smpSize === undefined ||
+        storedPackage.data.byteLength === map.smpSize)
+    );
+  }
+
+  const expectedChunkCount = storedPackage.chunkCount;
+  const expectedSize = storedPackage.size ?? map.smpSize;
+  return (
+    expectedChunkCount !== undefined &&
+    expectedSize !== undefined &&
+    expectedSize > 0 &&
+    storedChunkCount === expectedChunkCount
+  );
 }
 
 /**
@@ -717,6 +754,11 @@ export async function getSavedMapPackageSource(
         { length: lastChunk - firstChunk + 1 },
         (_, position) => firstChunk + position,
       );
+      const chunkCount = storedPackage.chunkCount;
+      if (chunkCount === undefined || lastChunk >= chunkCount) {
+        throw new Error('SMP package chunk metadata is inconsistent');
+      }
+
       const chunks = await db.mapPackageChunks.bulkGet(
         indexes.map((index) => getMapPackageChunkId(map.id, index)),
       );
@@ -726,14 +768,22 @@ export async function getSavedMapPackageSource(
         if (!chunk) throw new Error(`SMP package chunk ${index} is missing`);
 
         const chunkStart = index * chunkSize;
+        const expectedChunkLength =
+          index === chunkCount - 1 ? size - chunkStart : chunkSize;
+        if (chunk.data.byteLength !== expectedChunkLength) {
+          throw new Error(`SMP package chunk ${index} has an invalid length`);
+        }
+
         const from = Math.max(offset, chunkStart) - chunkStart;
-        const to =
-          Math.min(end, chunkStart + chunk.data.byteLength) - chunkStart;
+        const to = Math.min(end, chunkStart + expectedChunkLength) - chunkStart;
         const part = new Uint8Array(chunk.data, from, to - from);
         output.set(part, outputOffset);
         outputOffset += part.byteLength;
       });
 
+      if (outputOffset !== output.byteLength) {
+        throw new Error('SMP package range is incomplete');
+      }
       return output;
     },
   };

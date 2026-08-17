@@ -669,17 +669,35 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
 
   try {
     const updatedAt = new Date().toISOString();
-    await updateSavedMapWithPackage(map.id, blob, {
-      smpBlob: undefined,
-      smpSize: totalSize,
-      status: criticalSkipped > 0 ? 'error' : 'ready',
-      errorMessage:
-        criticalSkipped > 0
-          ? `${criticalSkipped} tiles could not be downloaded. The package is incomplete.`
-          : undefined,
-      updatedAt,
-    });
+    await updateSavedMapWithPackage(
+      map.id,
+      blob,
+      {
+        smpBlob: undefined,
+        smpSize: totalSize,
+        status: criticalSkipped > 0 ? 'error' : 'ready',
+        errorMessage:
+          criticalSkipped > 0
+            ? `${criticalSkipped} tiles could not be downloaded. The package is incomplete.`
+            : undefined,
+        updatedAt,
+      },
+      signal,
+    );
   } catch (storageError) {
+    if (
+      signal?.aborted ||
+      (storageError instanceof DOMException &&
+        storageError.name === 'AbortError')
+    ) {
+      await recoveryWrite(db, map.id, {
+        status: 'draft',
+        errorMessage: undefined,
+        updatedAt: new Date().toISOString(),
+      });
+      throw new DOMException('Download cancelled', 'AbortError');
+    }
+
     const message =
       storageError instanceof Error
         ? `Storage error: ${storageError.message}`
