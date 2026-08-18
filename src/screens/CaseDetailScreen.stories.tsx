@@ -61,17 +61,25 @@ export const Overview: Story = {};
 
 export const Activity: Story = {
   async play({ canvasElement }) {
-    await userEvent.click(
-      within(canvasElement).getByRole('tab', { name: 'Activity' }),
+    const page = within(canvasElement.ownerDocument.body);
+    const activityTab = await page.findByRole(
+      'tab',
+      { name: 'Activity' },
+      { timeout: 5_000 },
     );
+    await userEvent.click(activityTab);
   },
 };
 
 export const ReportState: Story = {
   async play({ canvasElement }) {
-    await userEvent.click(
-      within(canvasElement).getByRole('tab', { name: 'Report State' }),
+    const page = within(canvasElement.ownerDocument.body);
+    const reportStateTab = await page.findByRole(
+      'tab',
+      { name: 'Report State' },
+      { timeout: 5_000 },
     );
+    await userEvent.click(reportStateTab);
   },
 };
 
