@@ -820,6 +820,10 @@ describe('maps table', () => {
   });
 
   it('preserves a real v13 whole-buffer package when IndexedDB upgrades to v14', async () => {
+    const appDb = getDb();
+    appDb.close();
+    await Dexie.delete('comapeo-cloud-app');
+
     const legacy = new Dexie('comapeo-cloud-app');
     legacy.version(13).stores({
       maps: '&id, projectLocalId, [projectLocalId+updatedAt], status',
@@ -852,7 +856,8 @@ describe('maps table', () => {
     });
     legacy.close();
 
-    const upgraded = getDb();
+    await appDb.open();
+    const upgraded = appDb;
     const upgradedMap = await upgraded.maps.get(map.id);
     expect(upgraded.verno).toBe(14);
     expect(upgradedMap).toEqual(map);

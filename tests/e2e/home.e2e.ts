@@ -35,21 +35,19 @@ async function createProject(
 }
 
 /**
- * Import GeoJSON through the Import Data control's real file input.
+ * Import GeoJSON through the user-visible Import Data control.
  *
- * Driving the input directly avoids browser-specific `filechooser` event
- * behavior while exercising the same onChange import path as the button.
- * The success message ("N imported, N skipped") is transient — the
- * onImportComplete callback triggers a coverage refresh that remounts
- * the ImportDataButton, resetting its state. Instead of waiting for the
- * message, we verify the import by checking that observations were
- * written to IndexedDB.
+ * Keyboard activation avoids WebKit's MapLibre pointer-stability heuristic
+ * while still exercising the button → file chooser wiring and the real
+ * onChange import path. The success message ("N imported, N skipped") is
+ * transient because the coverage refresh remounts ImportDataButton, so the
+ * durable assertion is the observation written to IndexedDB.
  */
 async function importGeoJson(page: import('@playwright/test').Page) {
-  await page
-    .locator('input[type="file"][accept*=".geojson"]')
-    .first()
-    .setInputFiles(GEOJSON_FIXTURE);
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Import Data' }).press('Enter');
+  const chooser = await chooserPromise;
+  await chooser.setFiles(GEOJSON_FIXTURE);
 
   // Verify observations were written to the app database (up to 10s).
   await expect

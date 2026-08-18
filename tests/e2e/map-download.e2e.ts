@@ -216,24 +216,22 @@ test.describe('GeoJSON reference overlays (E2E)', () => {
       name: 'Hide mixed-reference.geojson',
     });
     await expect(hideButton).toBeVisible();
-    await hideButton.click({ force: true });
+    await hideButton.press('Enter');
     const showButton = page.getByRole('button', {
       name: 'Show mixed-reference.geojson',
     });
     await expect(showButton).toBeVisible();
 
-    // WebKit can keep this map-overlay control in a continuously "moving"
-    // layout state while MapLibre settles, even though it is visible/enabled.
-    // Force the click after the explicit visibility assertion so the test
-    // exercises the real control handler without depending on layout stability.
-    await showButton.click({ force: true });
+    // Keyboard activation keeps the real accessible control path while avoiding
+    // WebKit's MapLibre-specific pointer-stability heuristic.
+    await showButton.press('Enter');
     await expect(hideButton).toBeVisible();
 
     const removeButton = page.getByRole('button', {
       name: 'Remove mixed-reference.geojson',
     });
     await expect(removeButton).toBeVisible();
-    await removeButton.click({ force: true });
+    await removeButton.press('Enter');
     await expect(page.getByTitle('mixed-reference.geojson')).toHaveCount(0);
   });
 

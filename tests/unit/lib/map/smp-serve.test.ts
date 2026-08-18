@@ -1,26 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockAddProtocol, mockCreateServer, MockReader, mockZipReaderFrom } =
-  vi.hoisted(() => {
-    const MockReader = vi.fn().mockImplementation(function () {
-      return {
-        opened: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn().mockResolvedValue(undefined),
-        getStyle: vi.fn(),
-      };
-    });
-
+const {
+  mockAddProtocol,
+  mockCreateServer,
+  mockGetSavedMapPackageSource,
+  MockReader,
+  mockZipReaderFrom,
+} = vi.hoisted(() => {
+  const MockReader = vi.fn().mockImplementation(function () {
     return {
-      mockAddProtocol: vi.fn(),
-      mockCreateServer: vi.fn().mockReturnValue({
-        fetch: vi
-          .fn()
-          .mockResolvedValue(new Response(new ArrayBuffer(8), { status: 200 })),
-      }),
-      MockReader,
-      mockZipReaderFrom: vi.fn().mockResolvedValue({}),
+      opened: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+      getStyle: vi.fn(),
     };
   });
+
+  return {
+    mockAddProtocol: vi.fn(),
+    mockCreateServer: vi.fn().mockReturnValue({
+      fetch: vi
+        .fn()
+        .mockResolvedValue(new Response(new ArrayBuffer(8), { status: 200 })),
+    }),
+    mockGetSavedMapPackageSource: vi.fn(),
+    MockReader,
+    mockZipReaderFrom: vi.fn().mockResolvedValue({}),
+  };
+});
 
 vi.mock('maplibre-gl', () => ({
   default: { addProtocol: mockAddProtocol },
@@ -36,6 +42,11 @@ vi.mock('@gmaclennan/zip-reader', () => ({
   ZipReader: { from: mockZipReaderFrom },
 }));
 
+vi.mock('@/lib/db', () => ({
+  getSavedMapPackageSource: (...args: unknown[]) =>
+    mockGetSavedMapPackageSource(...args),
+}));
+
 function importModule() {
   return import('@/lib/map/smp-serve');
 }
@@ -44,6 +55,7 @@ beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
   mockAddProtocol.mockImplementation(() => {});
+  mockGetSavedMapPackageSource.mockReset();
   MockReader.mockImplementation(function () {
     return {
       opened: vi.fn().mockResolvedValue(undefined),
@@ -83,6 +95,34 @@ describe('getSmpReader', () => {
     await getSmpReader('map-b', createMockBlob());
 
     expect(MockReader).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('getSavedMapSmpReader', () => {
+  it('opens the reader from the saved-map package source', async () => {
+    const source = {
+      size: 4,
+      read: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4])),
+    };
+    mockGetSavedMapPackageSource.mockResolvedValue(source);
+    const map = { id: 'map-a', smpSize: 4 };
+    const { getSavedMapSmpReader } = await importModule();
+
+    await getSavedMapSmpReader('saved-map-a', map);
+
+    expect(mockGetSavedMapPackageSource).toHaveBeenCalledWith(map);
+    expect(mockZipReaderFrom).toHaveBeenCalledWith(source);
+    expect(MockReader).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails clearly when the saved-map package is missing', async () => {
+    mockGetSavedMapPackageSource.mockResolvedValue(undefined);
+    const { getSavedMapSmpReader } = await importModule();
+
+    await expect(
+      getSavedMapSmpReader('missing-map', { id: 'missing-map' }),
+    ).rejects.toThrow('SMP package is missing');
+    expect(mockZipReaderFrom).not.toHaveBeenCalled();
   });
 });
 

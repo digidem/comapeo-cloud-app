@@ -52,11 +52,11 @@ async function seedProjectWithObservations(
   // Create project
   await createProject(page, name);
 
-  // Import GeoJSON via file chooser
-  const [fileChooser] = await Promise.all([
-    page.waitForEvent('filechooser'),
-    page.getByRole('button', { name: 'Import Data' }).click(),
-  ]);
+  // Import GeoJSON through the visible button; keyboard activation avoids
+  // WebKit's MapLibre pointer-stability heuristic without bypassing wiring.
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Import Data' }).press('Enter');
+  const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles(GEOJSON_FIXTURE);
 
   // Wait for observations to appear in the app database.
@@ -110,12 +110,12 @@ test.describe('Critical User Flows', () => {
     // stable, so force the click only after asserting the control is present.
     const dataLink = page.getByRole('link', { name: 'Data' });
     await expect(dataLink).toBeVisible();
-    await dataLink.click({ force: true });
+    await dataLink.press('Enter');
     const gridButton = page.getByRole('button', {
       name: 'Switch to grid view',
     });
     await expect(gridButton).toBeVisible();
-    await gridButton.click({ force: true });
+    await gridButton.press('Enter');
 
     // Data heading visible
     await expect(
@@ -193,12 +193,12 @@ test.describe('Critical User Flows', () => {
     // visible, so force the click only after proving each control is present.
     const dataLink = page.getByRole('link', { name: 'Data' });
     await expect(dataLink).toBeVisible();
-    await dataLink.click({ force: true });
+    await dataLink.press('Enter');
     const gridButton = page.getByRole('button', {
       name: 'Switch to grid view',
     });
     await expect(gridButton).toBeVisible();
-    await gridButton.click({ force: true });
+    await gridButton.press('Enter');
     await expect(
       page.getByRole('heading', { level: 1, name: 'Data' }),
     ).toBeVisible();
@@ -217,7 +217,7 @@ test.describe('Critical User Flows', () => {
       `a[href="/data/observations/${observationLocalId}"]`,
     );
     await expect(observationLink).toBeVisible();
-    await observationLink.click({ force: true });
+    await observationLink.press('Enter');
 
     // Observation detail renders with h1 heading
     await expect(
