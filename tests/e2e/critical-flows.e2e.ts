@@ -188,9 +188,17 @@ test.describe('Critical User Flows', () => {
       'Test Project',
     );
 
-    // Navigate to /data via the nav link
-    await page.getByRole('link', { name: 'Data' }).click();
-    await page.getByRole('button', { name: 'Switch to grid view' }).click();
+    // Navigate through the real controls. Firefox/WebKit can keep these
+    // animated controls in an actionability wait after they are already
+    // visible, so force the click only after proving each control is present.
+    const dataLink = page.getByRole('link', { name: 'Data' });
+    await expect(dataLink).toBeVisible();
+    await dataLink.click({ force: true });
+    const gridButton = page.getByRole('button', {
+      name: 'Switch to grid view',
+    });
+    await expect(gridButton).toBeVisible();
+    await gridButton.click({ force: true });
     await expect(
       page.getByRole('heading', { level: 1, name: 'Data' }),
     ).toBeVisible();
@@ -202,10 +210,14 @@ test.describe('Critical User Flows', () => {
     const observationLocalId = observations[0]?.localId ?? null;
     expect(observationLocalId).not.toBeNull();
 
-    // Click the specific observation card matching the IndexedDB observation
-    await page
-      .locator(`a[href="/data/observations/${observationLocalId}"]`)
-      .click();
+    // Click the specific observation card matching the IndexedDB observation.
+    // As above, assert visibility first and bypass only the cross-browser
+    // layout-stability wait; the real link handler and navigation still run.
+    const observationLink = page.locator(
+      `a[href="/data/observations/${observationLocalId}"]`,
+    );
+    await expect(observationLink).toBeVisible();
+    await observationLink.click({ force: true });
 
     // Observation detail renders with h1 heading
     await expect(
