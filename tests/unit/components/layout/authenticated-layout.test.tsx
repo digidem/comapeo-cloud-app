@@ -116,9 +116,31 @@ describe('AuthenticatedLayout', () => {
   it('renders AppShell with navigation items', () => {
     render(<AuthenticatedLayout />);
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cases' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Alerts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Map' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
+  });
+
+  it('marks Cases nav active when on /cases route', () => {
+    mockRouterState.pathname = '/cases';
+    render(<AuthenticatedLayout />);
+    const casesLink = screen.getByRole('link', { name: 'Cases' });
+    expect(casesLink).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('marks Cases nav active when on /cases/$caseId route', () => {
+    mockRouterState.pathname = '/cases/case-123';
+    render(<AuthenticatedLayout />);
+    const casesLink = screen.getByRole('link', { name: 'Cases' });
+    expect(casesLink).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('marks Cases nav active when on /cases/new route', () => {
+    mockRouterState.pathname = '/cases/new';
+    render(<AuthenticatedLayout />);
+    const casesLink = screen.getByRole('link', { name: 'Cases' });
+    expect(casesLink).toHaveAttribute('aria-current', 'page');
   });
 
   it('renders CoMapeo Cloud branding in topbar', () => {
@@ -150,6 +172,7 @@ describe('AuthenticatedLayout', () => {
     await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
     // Drawer should contain nav items
     expect(screen.getAllByText('Home').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Cases').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Alerts').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Map').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1);

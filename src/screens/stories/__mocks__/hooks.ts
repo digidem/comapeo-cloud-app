@@ -222,6 +222,279 @@ export function useCreateAlert() {
 }
 
 // ---------------------------------------------------------------------------
+// Case hooks (local-only foundation for #268 — no remote Case sync)
+// ---------------------------------------------------------------------------
+
+export function useStoragePersist() {
+  const { caseStorageState } = useStorybookDataStore.getState();
+  const state = caseStorageState;
+  return {
+    state,
+    isPersisted: state === 'persisted' || state === 'quota-risk',
+    isLoading: false,
+    isEvictionRisk: state === 'denied' || state === 'quota-risk',
+    quota: state === 'quota-risk' ? 1000 : null,
+    usage: state === 'quota-risk' ? 900 : null,
+    usagePercent: state === 'quota-risk' ? 90 : null,
+  };
+}
+
+/**
+ * Mock Cases for Storybook stories. Mirrors the real Case shape from db.ts.
+ */
+interface MockCase {
+  localId: string;
+  projectLocalId: string;
+  title: string;
+  caseType:
+    | 'invasion_occupation'
+    | 'territorial_encroachment'
+    | 'deforestation_logging'
+    | 'illegal_mining'
+    | 'fire'
+    | 'wildlife_exploitation'
+    | 'pollution_contamination'
+    | 'threats_violence'
+    | 'rights_violation'
+    | 'other';
+  status: 'draft' | 'active' | 'closed';
+  createdAt: string;
+  updatedAt: string;
+  revision: number;
+  createdBy: string;
+  deleted: boolean;
+}
+
+export const MOCK_CASES: MockCase[] = [
+  {
+    localId: 'case-1',
+    projectLocalId: 'proj-1',
+    title: 'Illegal Logging Investigation',
+    caseType: 'illegal_mining',
+    status: 'active',
+    createdAt: '2025-01-15T10:30:00Z',
+    updatedAt: '2025-01-20T14:00:00Z',
+    revision: 3,
+    createdBy: 'local',
+    deleted: false,
+  },
+  {
+    localId: 'case-2',
+    projectLocalId: 'proj-1',
+    title: 'River Contamination Incident',
+    caseType: 'fire',
+    status: 'closed',
+    createdAt: '2025-02-10T08:00:00Z',
+    updatedAt: '2025-02-15T16:30:00Z',
+    revision: 5,
+    createdBy: 'local',
+    deleted: false,
+  },
+];
+
+/**
+ * Mock useCases — mirrors the real hook's return shape from useCases.ts.
+ * Returns MOCK_CASES by default; respects dataMode for loading/error/empty.
+ */
+export function useCases(projectLocalId: string | null) {
+  const { caseDataMode } = useStorybookDataStore.getState();
+  const { queryKey, queryFn } = resolveByMode<MockCase>(
+    MOCK_CASES,
+    projectLocalId,
+    'cases',
+    caseDataMode,
+  );
+  return useQuery({
+    queryKey,
+    queryFn,
+    select: (data: { data: MockCase[] }) => data.data,
+    enabled: projectLocalId !== null,
+  });
+}
+
+/**
+ * Mock useCase — mirrors the real hook's return shape from useCase.ts.
+ * Returns the matching MOCK_CASES entry (or null) by default; respects
+ * caseDetailDataMode for loading/error/not-found states.
+ */
+export function useCase(projectLocalId: string | null, caseId: string | null) {
+  const { caseDetailDataMode } = useStorybookDataStore.getState();
+  const queryKey = ['case', projectLocalId, caseId, caseDetailDataMode];
+  const enabled = projectLocalId !== null && caseId !== null;
+
+  return useQuery<MockCase | null>({
+    queryKey,
+    queryFn: () => {
+      if (caseDetailDataMode === 'loading') {
+        return new Promise<MockCase | null>(() => {});
+      }
+      if (caseDetailDataMode === 'error') {
+        return Promise.reject(
+          new Error('Mock network error (Storybook caseDetail)'),
+        );
+      }
+      if (caseDetailDataMode === 'not-found') {
+        return Promise.resolve(null);
+      }
+      const found = MOCK_CASES.find(
+        (c) => c.localId === caseId && c.projectLocalId === projectLocalId,
+      );
+      return Promise.resolve(found ?? null);
+    },
+    enabled,
+  });
+}
+
+/**
+ * Mock useCaseActivity — returns an empty array by default.
+ */
+interface MockCaseActivity {
+  localId: string;
+  caseLocalId: string;
+  projectLocalId: string;
+  event: string;
+  status?: string;
+  createdAt: string;
+}
+
+export const MOCK_CASE_ACTIVITY: MockCaseActivity[] = [
+  {
+    localId: 'act-1',
+    caseLocalId: 'case-1',
+    projectLocalId: 'proj-1',
+    event: 'created',
+    status: 'draft',
+    createdAt: '2025-01-15T10:30:00Z',
+  },
+  {
+    localId: 'act-2',
+    caseLocalId: 'case-1',
+    projectLocalId: 'proj-1',
+    event: 'status_changed',
+    status: 'active',
+    createdAt: '2025-01-20T14:00:00Z',
+  },
+];
+
+export function useCaseActivity(
+  projectLocalId: string | null,
+  caseId: string | null,
+) {
+  const { caseDataMode } = useStorybookDataStore.getState();
+  const { queryKey, queryFn } = resolveByMode<MockCaseActivity>(
+    MOCK_CASE_ACTIVITY,
+    projectLocalId,
+    'caseActivity',
+    caseDataMode,
+  );
+  return useQuery({
+    queryKey,
+    queryFn,
+    select: (data: { data: MockCaseActivity[] }) => data.data,
+    enabled: projectLocalId !== null && caseId !== null,
+  });
+}
+
+/**
+ * Mock useCaseReportStates — returns per-agency report states.
+ */
+interface MockCaseReportState {
+  localId: string;
+  caseLocalId: string;
+  projectLocalId: string;
+  agency: 'FUNAI' | 'IBAMA' | 'MPF' | 'PF';
+  status: 'incomplete' | 'complete' | 'error';
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const MOCK_CASE_REPORT_STATES: MockCaseReportState[] = [
+  {
+    localId: 'rs-1',
+    caseLocalId: 'case-1',
+    projectLocalId: 'proj-1',
+    agency: 'FUNAI',
+    status: 'complete',
+    revision: 1,
+    createdAt: '2025-01-15T10:30:00Z',
+    updatedAt: '2025-01-20T14:00:00Z',
+  },
+  {
+    localId: 'rs-2',
+    caseLocalId: 'case-1',
+    projectLocalId: 'proj-1',
+    agency: 'IBAMA',
+    status: 'incomplete',
+    revision: 1,
+    createdAt: '2025-01-15T10:30:00Z',
+    updatedAt: '2025-01-20T14:00:00Z',
+  },
+];
+
+export function useCaseReportStates(
+  projectLocalId: string | null,
+  caseId: string | null,
+) {
+  const { caseDataMode } = useStorybookDataStore.getState();
+  const { queryKey, queryFn } = resolveByMode<MockCaseReportState>(
+    MOCK_CASE_REPORT_STATES,
+    projectLocalId,
+    'caseReportStates',
+    caseDataMode,
+  );
+  return useQuery({
+    queryKey,
+    queryFn,
+    select: (data: { data: MockCaseReportState[] }) => data.data,
+    enabled: projectLocalId !== null && caseId !== null,
+  });
+}
+
+/**
+ * Mock mutation hooks — no-ops in Storybook (the data is fixture-driven).
+ */
+export function useCreateCase() {
+  return useMutation({
+    mutationFn: async (_data: unknown) => {
+      /* no-op */
+    },
+  });
+}
+
+export function useUpdateCase() {
+  return useMutation({
+    mutationFn: async (_data: unknown) => {
+      /* no-op */
+    },
+  });
+}
+
+export function useDeleteCase() {
+  return useMutation({
+    mutationFn: async (_data: unknown) => {
+      /* no-op */
+    },
+  });
+}
+
+export function useRecordCaseActivity() {
+  return useMutation({
+    mutationFn: async (_data: unknown) => {
+      /* no-op */
+    },
+  });
+}
+
+export function useUpsertCaseReportState() {
+  return useMutation({
+    mutationFn: async (_data: unknown) => {
+      /* no-op */
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Additional hooks used by HomeScreen / ArchiveBrowser
 // ---------------------------------------------------------------------------
 

@@ -3,20 +3,38 @@ import JSZip from 'jszip';
 
 import { extractPoints } from '@/lib/area-calculator/calculator';
 import { isValidCoord } from '@/lib/coords';
+import type {
+  Case,
+  CaseActivity,
+  CaseAgency,
+  CaseReportState,
+  CaseStatus,
+} from '@/lib/db';
+import type { CaseUpdates } from '@/lib/local-repositories';
 import {
-  createAttachment,
   createAlert as repoCreateAlert,
+  createAttachment as repoCreateAttachment,
+  createCase as repoCreateCase,
   createObservation as repoCreateObservation,
   createProject as repoCreateProject,
+  deleteCase as repoDeleteCase,
   deleteProject as repoDeleteProject,
   getAlerts as repoGetAlerts,
   getAttachmentsForProject as repoGetAttachmentsForProject,
+  getCase as repoGetCase,
+  getCaseActivity as repoGetCaseActivity,
+  getCaseReportState as repoGetCaseReportState,
+  getCaseReportStates as repoGetCaseReportStates,
+  getCases as repoGetCases,
   getFields as repoGetFields,
   getObservations as repoGetObservations,
   getPresets as repoGetPresets,
   getProjects as repoGetProjects,
   getTracks as repoGetTracks,
+  recordCaseActivity as repoRecordCaseActivity,
+  updateCase as repoUpdateCase,
   updateProject as repoUpdateProject,
+  upsertCaseReportState as repoUpsertCaseReportState,
 } from '@/lib/local-repositories';
 import {
   getLegacyDisplayName,
@@ -30,6 +48,11 @@ import { useAuthStore } from '@/stores/auth-store';
 export type {
   Alert,
   Attachment,
+  Case,
+  CaseActivity,
+  CaseAgency,
+  CaseReportState,
+  CaseStatus,
   Field,
   Observation,
   Preset,
@@ -231,7 +254,7 @@ export async function addAttachment(input: {
   contentType?: string;
   downloadStatus?: 'remote-only' | 'available' | 'failed';
 }) {
-  return createAttachment(input);
+  return repoCreateAttachment(input);
 }
 
 export async function getAttachmentsForProject(projectLocalId: string) {
@@ -323,4 +346,92 @@ export async function getObservationDisplayName(
   const preset = matchObservationToPreset(observation, presets);
   if (preset) return preset.name;
   return getLegacyDisplayName(observation.tags) ?? 'Observation';
+}
+
+// ---------------------------------------------------------------------------
+// Cases (local-only foundation for #268 — no remote Case sync)
+// ---------------------------------------------------------------------------
+
+export async function createCase(input: {
+  projectLocalId: string;
+  title: string;
+  caseType: Case['caseType'];
+  status?: CaseStatus;
+}) {
+  return repoCreateCase(input);
+}
+
+export async function getCases(projectLocalId: string) {
+  return repoGetCases(projectLocalId);
+}
+
+export async function getCase(projectLocalId: string, localId: string) {
+  return repoGetCase(projectLocalId, localId);
+}
+
+export async function updateCase(
+  projectLocalId: string,
+  localId: string,
+  updates: CaseUpdates,
+) {
+  return repoUpdateCase(projectLocalId, localId, updates);
+}
+
+export async function deleteCase(
+  projectLocalId: string,
+  localId: string,
+): Promise<boolean> {
+  return repoDeleteCase(projectLocalId, localId);
+}
+
+// ---------------------------------------------------------------------------
+// Case activity (metadata-only)
+// ---------------------------------------------------------------------------
+
+export async function recordCaseActivity(input: {
+  caseLocalId: string;
+  projectLocalId: string;
+  event: CaseActivity['event'];
+  status?: CaseStatus;
+  agency?: CaseAgency;
+  count?: number;
+}) {
+  return repoRecordCaseActivity(input);
+}
+
+export async function getCaseActivity(
+  projectLocalId: string,
+  caseLocalId: string,
+) {
+  return repoGetCaseActivity(projectLocalId, caseLocalId);
+}
+
+// ---------------------------------------------------------------------------
+// Per-agency report state (independent per agency)
+// ---------------------------------------------------------------------------
+
+export async function upsertCaseReportState(input: {
+  caseLocalId: string;
+  projectLocalId: string;
+  agency: CaseAgency;
+  status: CaseReportState['status'];
+  count?: number;
+  revision?: number;
+}) {
+  return repoUpsertCaseReportState(input);
+}
+
+export async function getCaseReportState(
+  projectLocalId: string,
+  caseLocalId: string,
+  agency: CaseAgency,
+) {
+  return repoGetCaseReportState(projectLocalId, caseLocalId, agency);
+}
+
+export async function getCaseReportStates(
+  projectLocalId: string,
+  caseLocalId: string,
+) {
+  return repoGetCaseReportStates(projectLocalId, caseLocalId);
 }

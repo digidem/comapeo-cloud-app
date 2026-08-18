@@ -27,14 +27,30 @@ interface StorybookLoadingState {
   dataMode: StorybookDataMode;
   /**
    * Separate mode for useProjects so that error / empty data-list stories
-   * still have a valid project in the store.  Defaults to 'normal'.
+   * still have a valid project.  Defaults to 'normal'.
    */
   projectDataMode: StorybookDataMode;
+  /**
+   * Mode for Case data hooks (useCases, useCaseActivity, useCaseReportStates).
+   * Defaults to 'normal'. Uses the same StorybookDataMode values.
+   */
+  caseDataMode: StorybookDataMode;
+  /**
+   * Mode for the Case detail hooks (useCase). Supports 'normal', 'loading',
+   * 'error', 'empty', and additionally 'not-found' (Case resolves to null).
+   */
+  caseDetailDataMode: 'normal' | 'loading' | 'error' | 'not-found';
+  /** Controllable persistent-storage state for Cases stories. */
+  caseStorageState:
+    'persisted' | 'denied' | 'unsupported' | 'error' | 'quota-risk';
 }
 
 export const useStorybookDataStore = create<StorybookLoadingState>()(() => ({
   dataMode: 'normal',
   projectDataMode: 'normal',
+  caseDataMode: 'normal',
+  caseDetailDataMode: 'normal',
+  caseStorageState: 'persisted',
 }));
 
 /**

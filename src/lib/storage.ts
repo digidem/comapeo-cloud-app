@@ -25,6 +25,9 @@ export interface StorageStats {
     attachments: TableStats;
     tracks: TableStats;
     fields: TableStats;
+    cases: TableStats;
+    caseActivity: TableStats;
+    caseReportState: TableStats;
     remoteServers: TableStats;
     syncMetadata: TableStats;
   };
@@ -64,6 +67,9 @@ export async function getStorageStats(): Promise<StorageStats> {
     attachments,
     tracks,
     fields,
+    cases,
+    caseActivity,
+    caseReportState,
     remoteServers,
     syncMetadata,
   ] = await Promise.all([
@@ -74,6 +80,9 @@ export async function getStorageStats(): Promise<StorageStats> {
     db.attachments.count(),
     db.tracks.count(),
     db.fields.count(),
+    db.cases.count(),
+    db.caseActivity.count(),
+    db.caseReportState.count(),
     db.remoteServers.count(),
     db.syncMetadata.count(),
   ]);
@@ -90,6 +99,9 @@ export async function getStorageStats(): Promise<StorageStats> {
       attachments: { count: attachments },
       tracks: { count: tracks },
       fields: { count: fields },
+      cases: { count: cases },
+      caseActivity: { count: caseActivity },
+      caseReportState: { count: caseReportState },
       remoteServers: { count: remoteServers },
       syncMetadata: { count: syncMetadata },
     },
@@ -113,16 +125,25 @@ export async function clearServerData(serverId: string): Promise<void> {
     const serverProjects = allProjects.filter((p) => p.sourceId === serverId);
     const projectIds = serverProjects.map((p) => p.localId);
 
-    for (const project of serverProjects) {
-      await db.projects.delete(project.localId);
-    }
-    for (const projectId of projectIds) {
-      await db.observations.where('projectLocalId').equals(projectId).delete();
-      await db.alerts.where('projectLocalId').equals(projectId).delete();
-      await db.attachments.where('projectLocalId').equals(projectId).delete();
-      await db.presets.where('projectLocalId').equals(projectId).delete();
-      await db.tracks.where('projectLocalId').equals(projectId).delete();
-      await db.fields.where('projectLocalId').equals(projectId).delete();
+    if (projectIds.length > 0) {
+      await db.projects.bulkDelete(projectIds);
+      await db.observations.where('projectLocalId').anyOf(projectIds).delete();
+      await db.alerts.where('projectLocalId').anyOf(projectIds).delete();
+      await db.attachments.where('projectLocalId').anyOf(projectIds).delete();
+      await db.presets.where('projectLocalId').anyOf(projectIds).delete();
+      await db.tracks.where('projectLocalId').anyOf(projectIds).delete();
+      await db.fields.where('projectLocalId').anyOf(projectIds).delete();
+
+      // Case-owned rows cascade only for this server's projects (local-only).
+      const caseIds = await db.cases
+        .where('projectLocalId')
+        .anyOf(projectIds)
+        .primaryKeys();
+      if (caseIds.length > 0) {
+        await db.caseActivity.where('caseLocalId').anyOf(caseIds).delete();
+        await db.caseReportState.where('caseLocalId').anyOf(caseIds).delete();
+      }
+      await db.cases.where('projectLocalId').anyOf(projectIds).delete();
     }
     await db.remoteServers.delete(serverId);
     await db.syncMetadata.where('serverId').equals(serverId).delete();
@@ -154,5 +175,16 @@ export async function clearProjectData(projectLocalId: string): Promise<void> {
     await db.presets.where('projectLocalId').equals(projectLocalId).delete();
     await db.tracks.where('projectLocalId').equals(projectLocalId).delete();
     await db.fields.where('projectLocalId').equals(projectLocalId).delete();
+
+    // Case-owned rows cascade only for this project's cases (local-only).
+    const caseIds = await db.cases
+      .where('projectLocalId')
+      .equals(projectLocalId)
+      .primaryKeys();
+    if (caseIds.length > 0) {
+      await db.caseActivity.where('caseLocalId').anyOf(caseIds).delete();
+      await db.caseReportState.where('caseLocalId').anyOf(caseIds).delete();
+    }
+    await db.cases.where('projectLocalId').equals(projectLocalId).delete();
   });
 }

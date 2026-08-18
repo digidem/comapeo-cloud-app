@@ -8,8 +8,11 @@ import {
 import { AuthenticatedLayout } from '@/components/layout/authenticated-layout';
 import { AlertDetailScreen } from '@/screens/AlertDetailScreen';
 import { AlertsScreen } from '@/screens/AlertsScreen';
+import { CaseDetailScreen } from '@/screens/CaseDetailScreen';
+import { CasesScreen } from '@/screens/CasesScreen';
 import { CategoriesEditorScreen } from '@/screens/CategoriesEditor';
 import { CreateAlertScreen } from '@/screens/CreateAlertScreen';
+import { CreateCaseScreen } from '@/screens/CreateCaseScreen';
 import { DataScreen } from '@/screens/DataScreen';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { InviteScreen } from '@/screens/InviteScreen';
@@ -56,6 +59,24 @@ const dataRoute = createRoute({
   getParentRoute: () => _authenticatedRoute,
   path: '/data',
   component: DataScreen,
+});
+
+const casesRoute = createRoute({
+  getParentRoute: () => _authenticatedRoute,
+  path: '/cases',
+  component: CasesScreen,
+});
+
+const createCaseRoute = createRoute({
+  getParentRoute: () => _authenticatedRoute,
+  path: '/cases/new',
+  component: CreateCaseScreen,
+});
+
+const caseDetailRoute = createRoute({
+  getParentRoute: () => _authenticatedRoute,
+  path: '/cases/$caseId',
+  component: CaseDetailScreen,
 });
 
 const observationDetailRoute = createRoute({
@@ -119,6 +140,9 @@ const routeTree = rootRoute.addChildren([
   _authenticatedRoute.addChildren([
     homeRoute,
     dataRoute,
+    casesRoute,
+    createCaseRoute,
+    caseDetailRoute,
     alertsRoute,
     mapRoute,
     observationDetailRoute,
@@ -145,6 +169,9 @@ export {
   loginRoute,
   inviteRoute,
   dataRoute,
+  casesRoute,
+  createCaseRoute,
+  caseDetailRoute,
   alertsRoute,
   mapRoute,
   observationDetailRoute,

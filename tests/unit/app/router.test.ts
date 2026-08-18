@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   _authenticatedRoute,
   alertsRoute,
+  caseDetailRoute,
+  casesRoute,
+  createCaseRoute,
   dataRoute,
   homeRoute,
   inviteRoute,
@@ -21,6 +24,11 @@ describe('router', () => {
       expect(loginRoute.path).toBe('login');
       expect(inviteRoute.path).toBe('invite');
       expect(dataRoute.path).toBe('data');
+      expect(casesRoute.path).toBe('cases');
+      expect(createCaseRoute.path).toBe('cases/new');
+      expect(caseDetailRoute.path).toBe('cases/$caseId');
+      expect(alertsRoute.path).toBe('alerts');
+      expect(mapRoute.path).toBe('map');
       expect(settingsRoute.path).toBe('settings');
       // Layout route uses id instead of path; TanStack Router prefixes with parent path
       expect(_authenticatedRoute.id).toBe('/_authenticated');
@@ -34,6 +42,9 @@ describe('router', () => {
         { path: '/login', route: loginRoute, name: 'Login' },
         { path: '/invite', route: inviteRoute, name: 'Invite' },
         { path: '/data', route: dataRoute, name: 'Data' },
+        { path: '/cases', route: casesRoute, name: 'Cases' },
+        { path: '/cases/new', route: createCaseRoute, name: 'CreateCase' },
+        { path: '/cases/$caseId', route: caseDetailRoute, name: 'CaseDetail' },
         { path: '/alerts', route: alertsRoute, name: 'Alerts' },
         { path: '/map', route: mapRoute, name: 'Map' },
         { path: '/settings', route: settingsRoute, name: 'Settings' },
@@ -83,6 +94,9 @@ describe('router', () => {
       );
       expect(authPaths).toContain('/');
       expect(authPaths).toContain('data');
+      expect(authPaths).toContain('cases');
+      expect(authPaths).toContain('cases/new');
+      expect(authPaths).toContain('cases/$caseId');
       expect(authPaths).toContain('alerts');
       expect(authPaths).toContain('map');
       expect(authPaths).toContain('settings');
@@ -106,6 +120,10 @@ describe('router', () => {
 
     it('settings is reachable without auth redirect', () => {
       expect(settingsRoute.options.beforeLoad).toBeUndefined();
+    });
+
+    it('cases is reachable without auth redirect', () => {
+      expect(casesRoute.options.beforeLoad).toBeUndefined();
     });
 
     it('login route does not gate access to other routes', () => {
