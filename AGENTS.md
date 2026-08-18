@@ -52,6 +52,14 @@ For any PR merge, follow the workspace `pr-cycle` skill. The execution that issu
 - In follow-up specs, explicitly reuse the canonical implementation, data model, or integration path that already exists; avoid parallel state, parsers, renderers, or persistence models unless an architectural decision requires them.
 - Do not promote proposed or unmerged follow-up designs into project-wide `AGENTS.md` architecture. Document durable architecture here only after it lands; keep pending design decisions in their issue/spec/ADR.
 
+## Issue Specification and Execution Boundaries
+
+Use `.agents/skills/issue-to-spec/SKILL.md` when turning an idea/issue into implementation-ready work.
+
+- **One executable issue must map to one independently mergeable implementation unit.** If a spec naturally requires “PR1 then PR2”, a hard internal merge gate, or independent foundation/consumer phases, split it into child issues before marking implementation-ready.
+- Parent/umbrella issues are tracking/architecture records only. Mark their body `parent tracker — do not implement directly` and never apply `agent:ready-for-implementation` or `lane:implementation` to them.
+- The skill owns the detailed label lifecycle, dependency/base verification, shared-contract ownership, reviewer fallback/timeout rules, publication/audit behavior, and cross-child review gate. Do not duplicate those policies here.
+
 ## TDD Workflow (MANDATORY)
 
 Every feature MUST follow this cycle:
