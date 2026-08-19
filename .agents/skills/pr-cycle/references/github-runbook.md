@@ -114,6 +114,28 @@ gh pr view <pr> --repo <owner/repo> --json state,mergedAt,mergeCommit,headRefNam
 
 Require `state` to be `MERGED` and record the merge commit SHA.
 
+## Ordered multi-PR merge sequences
+
+When the user explicitly authorizes multiple already-reviewed PRs to merge in a required order, treat each merge as a new target-branch boundary rather than one aggregate operation:
+
+1. Merge only the first PR with the exact-head guard and verify its merge commit.
+2. Fetch the target branch and capture the resulting live tip.
+3. Re-read the next PR against that tip. Because the previous merge moved the base, re-gate the next PR against that exact new base tip before issuing its guarded merge; do not rely on the previous mergeability, CI, or reviewer snapshot merely because the diffs appear disjoint.
+4. Repeat serially. Do not overlap merge commands or assume the remaining PRs stayed merge-ready while the base moved.
+
+After the final merge, fetch the target branch again, capture its exact SHA, and inspect the branch-triggered workflow runs for that SHA. The final target-branch CI is the integration truth for the combined state: require all repository-applicable post-merge checks such as full browser E2E, deployment, production smoke, Lighthouse, or visual regression to reach an acceptable terminal result before declaring the ordered sequence complete. PR CI and human QA establish confidence in each change independently but do not replace the final integrated-branch signal.
+
+A bounded way to locate the final target-branch run is:
+
+```bash
+git fetch origin <base>:refs/remotes/origin/<base>
+git rev-parse refs/remotes/origin/<base>
+gh run list --repo <owner/repo> --branch <base> --limit 20 \
+  --json databaseId,workflowName,status,conclusion,headSha,url,event
+```
+
+Select only runs whose `headSha` equals the captured final target SHA, then inspect those run IDs with `gh run view`. If the target branch moves again before verification finishes, repeat against the new live tip rather than attributing an older run to the current branch state.
+
 ## Scoped cleanup after verified merge
 
 Perform cleanup only for the merged PR branch and its isolated worktree.

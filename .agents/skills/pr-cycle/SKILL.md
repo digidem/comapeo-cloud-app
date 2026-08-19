@@ -117,6 +117,10 @@ Only after explicit authorization:
 7. Verify GitHub reports the PR merged and capture the resulting merge commit SHA. If the PR became merged without this execution issuing the merge command, report it as an external/concurrent merge and do not claim that this execution performed or was authorized to perform it.
 8. Do not begin branch/worktree cleanup until merge verification succeeds.
 
+When current-task authorization covers an ordered merge sequence of multiple PRs, execute the sequence serially. After each verified merge, fetch and re-read the live target branch, then re-establish the merge gate for the next PR against the new target tip before issuing its guarded merge. Never overlap merges or carry forward mergeability, CI, or reviewer evidence from before the previous merge.
+
+After the final PR in an authorized sequence lands, verify the resulting target-branch SHA and the applicable target-branch CI, deployment, smoke, and other repository-required post-merge checks. The final target-branch run is the integration truth for the combined state: individual PR CI and human QA remain important evidence, but they do not replace validation of the integrated branch after the sequence. Diagnose any final-branch failure against that exact target SHA before declaring the sequence complete.
+
 ## 7. Scoped cleanup
 
 Clean only resources belonging to the merged PR. Use the exact isolated worktree and local branch captured at cycle start; treat similarly named issue/feature worktrees or branches as unrelated unless exact identity and tip equivalence are proven.

@@ -6,6 +6,7 @@ import unittest
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SKILL = SKILL_DIR / "SKILL.md"
 RUNBOOK = SKILL_DIR / "references" / "github-runbook.md"
+TIMEOUT_STRATEGY = SKILL_DIR / "references" / "timeout-strategy.md"
 AGENTS = SKILL_DIR.parents[2] / "AGENTS.md"
 CI = SKILL_DIR.parents[2] / ".github" / "workflows" / "ci.yml"
 
@@ -69,6 +70,9 @@ def assert_policy_contract(
     test.assertIn("Keep the gate policy here", skill_text)
     test.assertIn("git push --no-verify origin --delete <branch>", skill_text)
     test.assertIn("Keep the safety policy here", skill_text)
+    test.assertIn("ordered merge sequence", skill_text)
+    test.assertIn("re-establish the merge gate for the next PR", skill_text)
+    test.assertIn("final target-branch run is the integration truth", skill_text)
 
     test.assertIn("## 8. Session lessons and documentation checkpoint", skill_text)
     test.assertIn("Before concluding every PR cycle", skill_text)
@@ -113,6 +117,14 @@ class PrCyclePolicyTests(unittest.TestCase):
         self.assertIn(
             "git push --no-verify origin --delete <head-branch>", runbook_text
         )
+
+    def test_ordered_merge_and_ci_wait_guidance_is_pinned(self) -> None:
+        runbook_text = RUNBOOK.read_text()
+        timeout_text = TIMEOUT_STRATEGY.read_text()
+        self.assertIn("## Ordered multi-PR merge sequences", runbook_text)
+        self.assertIn("re-gate the next PR against that exact new base tip", runbook_text)
+        self.assertIn("final target-branch CI is the integration truth", runbook_text)
+        self.assertIn("recent successful runs of the same workflow/job", timeout_text)
 
     def test_nit_improvement_policy_is_required(self) -> None:
         skill_text = SKILL.read_text().replace(
