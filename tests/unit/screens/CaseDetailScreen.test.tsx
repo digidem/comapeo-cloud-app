@@ -204,6 +204,26 @@ describe('CaseDetailScreen', () => {
   });
 
   describe('missing / invalid case', () => {
+    it('renders a no-project state instead of an endless skeleton when no project is selected', () => {
+      resetMocks();
+      mockSelectedProjectId = null;
+      mockCaseData = null;
+      // Mirrors TanStack Query v5 for an enabled:false query: status remains
+      // pending, but the screen must not treat that as an active load.
+      mockCaseIsPending = true;
+
+      render(<CaseDetailScreen />);
+
+      expect(
+        screen.getByText('Select a project from Home to view cases'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Go to Home' })).toHaveAttribute(
+        'href',
+        '/',
+      );
+      expect(screen.queryByTestId('skeleton')).not.toBeInTheDocument();
+    });
+
     it('renders "Case not found" when case resolves to null', () => {
       resetMocks();
       mockCaseData = null;

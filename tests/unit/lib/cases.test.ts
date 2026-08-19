@@ -498,6 +498,35 @@ describe('Case lifecycle transitions', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Concurrency integrity
+// ---------------------------------------------------------------------------
+
+describe('Case concurrency integrity', () => {
+  it('serializes concurrent updates so every write increments the revision', async () => {
+    const projectLocalId = await makeProject();
+    const c = await createCase({
+      projectLocalId,
+      title: 'Concurrent lifecycle',
+      caseType: 'illegal_mining',
+    });
+
+    await Promise.all([
+      updateCase(projectLocalId, c.localId, { status: 'active' }),
+      updateCase(projectLocalId, c.localId, { status: 'closed' }),
+    ]);
+
+    const fetched = await getCase(projectLocalId, c.localId);
+    expect(fetched).toBeDefined();
+    expect(fetched!.revision).toBe(3);
+
+    const lifecycleEvents = (
+      await getCaseActivity(projectLocalId, c.localId)
+    ).filter((activity) => activity.event === 'status_changed');
+    expect(lifecycleEvents).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Per-agency report state independence
 // ---------------------------------------------------------------------------
 
@@ -584,6 +613,36 @@ describe('Per-agency report state independence', () => {
     expect(
       (await getCaseReportState(projectLocalId, c.localId, 'IBAMA'))!.status,
     ).toBe('incomplete');
+  });
+
+  it('serializes concurrent upserts so an agency has exactly one monotonic row', async () => {
+    const projectLocalId = await makeProject();
+    const c = await createCase({
+      projectLocalId,
+      title: 'Concurrent report state',
+      caseType: 'illegal_mining',
+    });
+
+    await Promise.all([
+      upsertCaseReportState({
+        caseLocalId: c.localId,
+        projectLocalId,
+        agency: 'FUNAI',
+        status: 'incomplete',
+      }),
+      upsertCaseReportState({
+        caseLocalId: c.localId,
+        projectLocalId,
+        agency: 'FUNAI',
+        status: 'complete',
+      }),
+    ]);
+
+    const states = (
+      await getCaseReportStates(projectLocalId, c.localId)
+    ).filter((state) => state.agency === 'FUNAI');
+    expect(states).toHaveLength(1);
+    expect(states[0]?.revision).toBe(2);
   });
 
   it('stored report state contains no disallowed fields', async () => {

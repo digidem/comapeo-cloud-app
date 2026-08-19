@@ -689,52 +689,54 @@ export async function updateCase(
 ): Promise<Case | undefined> {
   return wrapDb(async () => {
     const db = getDb();
-    const existing = await db.cases.get(localId);
-    if (
-      !existing ||
-      existing.projectLocalId !== projectLocalId ||
-      existing.deleted
-    ) {
-      return undefined;
-    }
-    const nextRevision = existing.revision + 1;
-    // Build the patch from ONLY the allowlisted fields. Any extra properties
-    // in `updates` (e.g. via a runtime cast that bypasses TS) are silently
-    // dropped — they must never reach the database.
-    const patch: Partial<Case> = {
-      revision: nextRevision,
-      updatedAt: timestamp(),
-    };
-    // Only touch user-editable fields that were explicitly provided so partial
-    // updates never clobber existing Case data with `undefined`.
-    if (updates.title !== undefined) {
-      patch.title = updates.title;
-    }
-    if (updates.caseType !== undefined) {
-      patch.caseType = updates.caseType;
-    }
-    if (updates.status !== undefined) {
-      patch.status = updates.status;
-    }
-    await db.cases.update(localId, patch);
+    return db.transaction('rw', [db.cases, db.caseActivity], async () => {
+      const existing = await db.cases.get(localId);
+      if (
+        !existing ||
+        existing.projectLocalId !== projectLocalId ||
+        existing.deleted
+      ) {
+        return undefined;
+      }
+      const nextRevision = existing.revision + 1;
+      // Build the patch from ONLY the allowlisted fields. Any extra properties
+      // in `updates` (e.g. via a runtime cast that bypasses TS) are silently
+      // dropped — they must never reach the database.
+      const patch: Partial<Case> = {
+        revision: nextRevision,
+        updatedAt: timestamp(),
+      };
+      // Only touch user-editable fields that were explicitly provided so
+      // partial updates never clobber existing Case data with `undefined`.
+      if (updates.title !== undefined) {
+        patch.title = updates.title;
+      }
+      if (updates.caseType !== undefined) {
+        patch.caseType = updates.caseType;
+      }
+      if (updates.status !== undefined) {
+        patch.status = updates.status;
+      }
+      await db.cases.update(localId, patch);
 
-    // Record a metadata-only activity event when the lifecycle status changes.
-    // Reopen = transitioning out of Closed back to Active/Draft.
-    if (updates.status !== undefined && updates.status !== existing.status) {
-      const isReopen =
-        existing.status === 'closed' && updates.status !== 'closed';
-      const event = isReopen ? 'reopened' : 'status_changed';
-      await db.caseActivity.add({
-        localId: uuid(),
-        caseLocalId: localId,
-        projectLocalId,
-        event,
-        status: updates.status,
-        createdAt: timestamp(),
-      });
-    }
+      // Record a metadata-only activity event when the lifecycle status
+      // changes. Reopen = transitioning out of Closed back to Active/Draft.
+      if (updates.status !== undefined && updates.status !== existing.status) {
+        const isReopen =
+          existing.status === 'closed' && updates.status !== 'closed';
+        const event = isReopen ? 'reopened' : 'status_changed';
+        await db.caseActivity.add({
+          localId: uuid(),
+          caseLocalId: localId,
+          projectLocalId,
+          event,
+          status: updates.status,
+          createdAt: timestamp(),
+        });
+      }
 
-    return db.cases.get(localId);
+      return db.cases.get(localId);
+    });
   });
 }
 
@@ -863,43 +865,45 @@ export async function upsertCaseReportState(
 ): Promise<CaseReportState> {
   return wrapDb(async () => {
     const db = getDb();
-    const caze = await db.cases.get(input.caseLocalId);
-    if (!caze || caze.projectLocalId !== input.projectLocalId) {
-      throw new DbError(
-        'NOT_FOUND',
-        `Case with localId "${input.caseLocalId}" does not exist or does not belong to project "${input.projectLocalId}"`,
-      );
-    }
-    const now = timestamp();
-    const existing = await db.caseReportState
-      .where('[caseLocalId+agency]')
-      .equals([input.caseLocalId, input.agency])
-      .first();
-    if (existing) {
-      const nextRevision = input.revision ?? existing.revision + 1;
-      await db.caseReportState.update(existing.localId, {
+    return db.transaction('rw', [db.cases, db.caseReportState], async () => {
+      const caze = await db.cases.get(input.caseLocalId);
+      if (!caze || caze.projectLocalId !== input.projectLocalId) {
+        throw new DbError(
+          'NOT_FOUND',
+          `Case with localId "${input.caseLocalId}" does not exist or does not belong to project "${input.projectLocalId}"`,
+        );
+      }
+      const now = timestamp();
+      const existing = await db.caseReportState
+        .where('[caseLocalId+agency]')
+        .equals([input.caseLocalId, input.agency])
+        .first();
+      if (existing) {
+        const nextRevision = input.revision ?? existing.revision + 1;
+        await db.caseReportState.update(existing.localId, {
+          status: input.status,
+          count: input.count ?? existing.count,
+          revision: nextRevision,
+          updatedAt: now,
+        });
+        return db.caseReportState.get(
+          existing.localId,
+        ) as Promise<CaseReportState>;
+      }
+      const state: CaseReportState = {
+        localId: uuid(),
+        caseLocalId: input.caseLocalId,
+        projectLocalId: input.projectLocalId,
+        agency: input.agency,
         status: input.status,
-        count: input.count ?? existing.count,
-        revision: nextRevision,
+        count: input.count,
+        revision: input.revision ?? 1,
+        createdAt: now,
         updatedAt: now,
-      });
-      return db.caseReportState.get(
-        existing.localId,
-      ) as Promise<CaseReportState>;
-    }
-    const state: CaseReportState = {
-      localId: uuid(),
-      caseLocalId: input.caseLocalId,
-      projectLocalId: input.projectLocalId,
-      agency: input.agency,
-      status: input.status,
-      count: input.count,
-      revision: input.revision ?? 1,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await db.caseReportState.add(state);
-    return state;
+      };
+      await db.caseReportState.add(state);
+      return state;
+    });
   });
 }
 

@@ -28,6 +28,14 @@ const messages = defineMessages({
     id: 'cases.detail.notFound',
     defaultMessage: 'Case not found',
   },
+  noProject: {
+    id: 'cases.noProject',
+    defaultMessage: 'Select a project from Home to view cases',
+  },
+  noProjectLink: {
+    id: 'cases.noProjectLink',
+    defaultMessage: 'Go to Home',
+  },
   errorLoading: {
     id: 'cases.detail.errorLoading',
     defaultMessage: 'Failed to load case',
@@ -132,7 +140,6 @@ const messages = defineMessages({
     defaultMessage: 'Other violation of Indigenous or territorial rights',
   },
   typeOther: { id: 'cases.type.other', defaultMessage: 'Other' },
-  // Case status labels
   statusDraft: {
     id: 'cases.status.draft',
     defaultMessage: 'Draft',
@@ -145,7 +152,6 @@ const messages = defineMessages({
     id: 'cases.status.closed',
     defaultMessage: 'Closed',
   },
-  // Agency labels
   agencyFUNAI: {
     id: 'cases.agency.FUNAI',
     defaultMessage: 'FUNAI',
@@ -162,7 +168,6 @@ const messages = defineMessages({
     id: 'cases.agency.PF',
     defaultMessage: 'PF',
   },
-  // Report state labels
   reportStateComplete: {
     id: 'cases.reportState.complete',
     defaultMessage: 'Complete',
@@ -179,7 +184,6 @@ const messages = defineMessages({
     id: 'cases.reportState.pending',
     defaultMessage: 'Pending',
   },
-  // Activity event labels
   activityCreated: {
     id: 'cases.activity.created',
     defaultMessage: 'Created',
@@ -199,10 +203,6 @@ const messages = defineMessages({
   activityDeleted: {
     id: 'cases.activity.deleted',
     defaultMessage: 'Deleted',
-  },
-  activityUnknown: {
-    id: 'cases.activity.unknown',
-    defaultMessage: 'Event',
   },
 });
 
@@ -235,9 +235,9 @@ const STATUS_LABEL_DESCRIPTORS: Record<
   Case['status'],
   { id: string; defaultMessage: string }
 > = {
-  draft: { id: 'cases.status.draft', defaultMessage: 'Draft' },
-  active: { id: 'cases.status.active', defaultMessage: 'Active' },
-  closed: { id: 'cases.status.closed', defaultMessage: 'Closed' },
+  draft: messages.statusDraft,
+  active: messages.statusActive,
+  closed: messages.statusClosed,
 };
 
 const REPORT_STATUS_VARIANT: Record<CaseReportStatus, 'info' | 'high' | 'low'> =
@@ -251,51 +251,33 @@ const REPORT_STATUS_LABEL_DESCRIPTORS: Record<
   CaseReportStatus,
   { id: string; defaultMessage: string }
 > = {
-  complete: { id: 'cases.reportState.complete', defaultMessage: 'Complete' },
-  error: { id: 'cases.reportState.error', defaultMessage: 'Error' },
-  incomplete: {
-    id: 'cases.reportState.incomplete',
-    defaultMessage: 'Incomplete',
-  },
+  complete: messages.reportStateComplete,
+  error: messages.reportStateError,
+  incomplete: messages.reportStateIncomplete,
 };
 
 const AGENCY_LABEL_DESCRIPTORS: Record<
   CaseAgency,
   { id: string; defaultMessage: string }
 > = {
-  FUNAI: { id: 'cases.agency.FUNAI', defaultMessage: 'FUNAI' },
-  IBAMA: { id: 'cases.agency.IBAMA', defaultMessage: 'IBAMA' },
-  MPF: { id: 'cases.agency.MPF', defaultMessage: 'MPF' },
-  PF: { id: 'cases.agency.PF', defaultMessage: 'PF' },
+  FUNAI: messages.agencyFUNAI,
+  IBAMA: messages.agencyIBAMA,
+  MPF: messages.agencyMPF,
+  PF: messages.agencyPF,
 };
 
 const ACTIVITY_EVENT_LABEL_DESCRIPTORS: Record<
   CaseActivityEvent,
   { id: string; defaultMessage: string }
 > = {
-  created: { id: 'cases.activity.created', defaultMessage: 'Created' },
-  ['status_changed']: {
-    id: 'cases.activity.status_changed',
-    defaultMessage: 'Status Changed',
-  },
-  reopened: {
-    id: 'cases.activity.reopened',
-    defaultMessage: 'Reopened',
-  },
-  ['report_state_changed']: {
-    id: 'cases.activity.report_state_changed',
-    defaultMessage: 'Report State Changed',
-  },
-  deleted: {
-    id: 'cases.activity.deleted',
-    defaultMessage: 'Deleted',
-  },
+  created: messages.activityCreated,
+  ['status_changed']: messages.activityStatusChanged,
+  reopened: messages.activityReopened,
+  ['report_state_changed']: messages.activityReportStateChanged,
+  deleted: messages.activityDeleted,
 };
 
-const REPORT_STATUS_PENDING_DESCRIPTOR = {
-  id: 'cases.reportState.pending',
-  defaultMessage: 'Pending',
-};
+const REPORT_STATUS_PENDING_DESCRIPTOR = messages.reportStatePending;
 
 type CaseReportStatus = 'complete' | 'error' | 'incomplete';
 
@@ -599,6 +581,25 @@ export function CaseDetailScreen() {
     [selectedProjectId, topbarWorkspaceName],
   );
   useShellSlot(shellSlot);
+
+  // A disabled Case query remains pending in TanStack Query v5. Handle the
+  // missing-project route state before loading so deep links never hang on an
+  // endless skeleton in a fresh browser session.
+  if (!selectedProjectId) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+        <p className="text-text-muted text-sm">
+          {intl.formatMessage(messages.noProject)}
+        </p>
+        <Link
+          to="/"
+          className="text-primary text-sm font-medium hover:underline"
+        >
+          {intl.formatMessage(messages.noProjectLink)}
+        </Link>
+      </div>
+    );
+  }
 
   // Loading state
   if (caseQuery.isPending) {

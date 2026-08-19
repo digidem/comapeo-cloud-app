@@ -15,6 +15,22 @@ async function seedLocalProjectState(
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
 
+  // Let the application own IndexedDB creation/migrations. Opening the DB from
+  // the test before Dexie reaches v13 can create an empty v1 database and make
+  // the seed transaction race with schema initialization.
+  await page.waitForFunction(
+    async () => {
+      const databases = await indexedDB.databases();
+      return databases.some(
+        (database) =>
+          database.name === 'comapeo-cloud-app' &&
+          (database.version ?? 0) >= 13,
+      );
+    },
+    undefined,
+    { timeout: 10_000 },
+  );
+
   await page.evaluate(
     async ({ projectLocalId, projectName }) => {
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -87,6 +103,7 @@ for (const viewport of VIEWPORTS) {
     test('create, inspect, transition, isolate, and stay local', async ({
       page,
     }, testInfo) => {
+      testInfo.setTimeout(60_000);
       await setupMockServer(page);
 
       const caseNetworkRequests: string[] = [];
@@ -164,6 +181,33 @@ for (const viewport of VIEWPORTS) {
       await page.goto('/cases');
       await expect(page.getByText('Local Incident Case')).toBeVisible();
       await expect(page.getByText('Foreign Project Case')).not.toBeVisible();
+
+      const localCaseHref = await page
+        .getByRole('link', { name: /Local Incident Case/ })
+        .getAttribute('href');
+      expect(localCaseHref).toBeTruthy();
+
+      // A direct Case deep-link with no selected project must resolve to an
+      // explicit route state rather than hanging on TanStack Query's disabled
+      // pending state.
+      await page.evaluate(() => {
+        localStorage.setItem(
+          'comapeo-project',
+          JSON.stringify({
+            state: { selectedProjectId: null, selectedServerId: null },
+            version: 0,
+          }),
+        );
+      });
+      await page.goto(localCaseHref!);
+      await expect(
+        page.getByText('Select a project from Home to view cases'),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'Go to Home' }),
+      ).toHaveAttribute('href', '/');
+      await expectNoHorizontalOverflow(page);
+
       expect(caseNetworkRequests).toEqual([]);
     });
   });

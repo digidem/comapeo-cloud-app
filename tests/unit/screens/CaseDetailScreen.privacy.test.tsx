@@ -71,6 +71,13 @@ vi.mock('@/hooks/useProjects', () => ({
   })),
 }));
 
+vi.mock('@/stores/project-store', () => ({
+  useProjectStore: vi.fn(
+    (selector: (state: { selectedProjectId: string }) => string) =>
+      selector({ selectedProjectId: 'proj-1' }),
+  ),
+}));
+
 vi.mock('@/components/layout/shell-slot', () => ({
   useShellSlot: vi.fn(),
 }));

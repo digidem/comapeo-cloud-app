@@ -308,9 +308,6 @@
   "cases.activity.status_changed": {
     "defaultMessage": "Status Changed"
   },
-  "cases.activity.unknown": {
-    "defaultMessage": "Event"
-  },
   "cases.agency.FUNAI": {
     "defaultMessage": "FUNAI"
   },
@@ -397,9 +394,6 @@
   },
   "cases.detail.urgency": {
     "defaultMessage": "Urgency"
-  },
-  "cases.evidenceCount": {
-    "defaultMessage": "{count} evidence"
   },
   "cases.evidenceCountEmpty": {
     "defaultMessage": "0 evidence"

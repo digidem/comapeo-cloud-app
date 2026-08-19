@@ -44,10 +44,6 @@ const messages = defineMessages({
     id: 'cases.casesError',
     defaultMessage: 'Failed to load cases. Please try again.',
   },
-  evidenceCount: {
-    id: 'cases.evidenceCount',
-    defaultMessage: '{count} evidence',
-  },
   evidenceCountEmpty: {
     id: 'cases.evidenceCountEmpty',
     defaultMessage: '0 evidence',
