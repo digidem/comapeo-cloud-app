@@ -820,7 +820,7 @@ describe('maps table', () => {
     expect(await hydrated?.smpBlob?.arrayBuffer()).toEqual(smpBytes);
   });
 
-  it('preserves a real v13 whole-buffer package when IndexedDB upgrades to v14', async () => {
+  it('preserves a real v13 whole-buffer package when IndexedDB upgrades through v15', async () => {
     const appDb = getDb();
     appDb.close();
     await Dexie.delete('comapeo-cloud-app');
@@ -860,7 +860,7 @@ describe('maps table', () => {
     await appDb.open();
     const upgraded = appDb;
     const upgradedMap = await upgraded.maps.get(map.id);
-    expect(upgraded.verno).toBe(14);
+    expect(upgraded.verno).toBe(15);
     expect(upgradedMap).toEqual(map);
     expect(upgraded.mapPackageChunks).toBeDefined();
     expect(await upgraded.mapPackageChunks.count()).toBe(0);

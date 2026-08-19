@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { seedAppDatabase } from './app-db';
 import { setupMockServer } from './mock-server';
 
 const VIEWPORTS = [
@@ -15,76 +16,45 @@ async function seedLocalProjectState(
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
 
-  // Let the application own IndexedDB creation/migrations. Opening the DB from
-  // the test before Dexie reaches v13 can create an empty v1 database and make
-  // the seed transaction race with schema initialization.
-  await page.waitForFunction(
-    async () => {
-      const databases = await indexedDB.databases();
-      return databases.some(
-        (database) =>
-          database.name === 'comapeo-cloud-app' &&
-          (database.version ?? 0) >= 13,
-      );
-    },
-    undefined,
-    { timeout: 10_000 },
-  );
+  const now = new Date().toISOString();
+  await seedAppDatabase(page, {
+    projects: [
+      {
+        localId: projectLocalId,
+        sourceType: 'local',
+        sourceId: `local:${projectLocalId}`,
+        name: projectName,
+        createdAt: now,
+        updatedAt: now,
+        dirtyLocal: false,
+        deleted: false,
+      },
+    ],
+    cases: [
+      {
+        localId: 'foreign-case',
+        projectLocalId: 'other-project',
+        title: 'Foreign Project Case',
+        caseType: 'fire',
+        status: 'draft',
+        createdAt: now,
+        updatedAt: now,
+        revision: 1,
+        createdBy: 'local',
+        deleted: false,
+      },
+    ],
+  });
 
-  await page.evaluate(
-    async ({ projectLocalId, projectName }) => {
-      const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('comapeo-cloud-app');
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
-      });
-
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(['projects', 'cases'], 'readwrite');
-          const now = new Date().toISOString();
-
-          tx.objectStore('projects').put({
-            localId: projectLocalId,
-            sourceType: 'local',
-            sourceId: `local:${projectLocalId}`,
-            name: projectName,
-            createdAt: now,
-            updatedAt: now,
-            dirtyLocal: false,
-            deleted: false,
-          });
-          tx.objectStore('cases').put({
-            localId: 'foreign-case',
-            projectLocalId: 'other-project',
-            title: 'Foreign Project Case',
-            caseType: 'fire',
-            status: 'draft',
-            createdAt: now,
-            updatedAt: now,
-            revision: 1,
-            createdBy: 'local',
-            deleted: false,
-          });
-
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-          tx.onabort = () => reject(tx.error);
-        });
-      } finally {
-        db.close();
-      }
-
-      localStorage.setItem(
-        'comapeo-project',
-        JSON.stringify({
-          state: { selectedProjectId: projectLocalId, selectedServerId: null },
-          version: 0,
-        }),
-      );
-    },
-    { projectLocalId, projectName },
-  );
+  await page.evaluate((selectedProjectId) => {
+    localStorage.setItem(
+      'comapeo-project',
+      JSON.stringify({
+        state: { selectedProjectId, selectedServerId: null },
+        version: 0,
+      }),
+    );
+  }, projectLocalId);
 }
 
 async function expectNoHorizontalOverflow(
