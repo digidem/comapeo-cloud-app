@@ -7,6 +7,7 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 SKILL = SKILL_DIR / "SKILL.md"
 RUNBOOK = SKILL_DIR / "references" / "github-runbook.md"
 TIMEOUT_STRATEGY = SKILL_DIR / "references" / "timeout-strategy.md"
+CLAUDE_QWEN_REVIEW = SKILL_DIR / "references" / "claude-qwen-review.md"
 AGENTS = SKILL_DIR.parents[2] / "AGENTS.md"
 CI = SKILL_DIR.parents[2] / ".github" / "workflows" / "ci.yml"
 
@@ -74,6 +75,14 @@ def assert_policy_contract(
     test.assertIn("re-establish the merge gate for the next PR", skill_text)
     test.assertIn("final target-branch run is the integration truth", skill_text)
 
+    test.assertIn("live usage instrumentation", skill_text)
+    test.assertIn("codexbar usage", skill_text)
+    test.assertIn("plan-check json", skill_text)
+    test.assertIn("quota-heartbeat.json", skill_text)
+    test.assertIn("claude-qwen", skill_text)
+    test.assertIn("Qwen 3.8", skill_text)
+    test.assertIn("references/claude-qwen-review.md", skill_text)
+
     test.assertIn("## 8. Session lessons and documentation checkpoint", skill_text)
     test.assertIn("Before concluding every PR cycle", skill_text)
     test.assertIn("`.agents/skills/pr-cycle/` for reusable PR-cycle mechanics", skill_text)
@@ -125,6 +134,19 @@ class PrCyclePolicyTests(unittest.TestCase):
         self.assertIn("re-gate the next PR against that exact new base tip", runbook_text)
         self.assertIn("final target-branch CI is the integration truth", runbook_text)
         self.assertIn("recent successful runs of the same workflow/job", timeout_text)
+
+    def test_claude_qwen_fallback_and_usage_preflight_are_pinned(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text()
+        self.assertIn("Qwen 3.8", qwen_text)
+        self.assertIn("/home/coder/.local/bin/claude-qwen", qwen_text)
+        self.assertIn("api_error_status", qwen_text)
+        self.assertIn("429", qwen_text)
+        self.assertIn("codexbar usage", qwen_text)
+        self.assertIn("plan-check json", qwen_text)
+        self.assertIn("quota-heartbeat.json", qwen_text)
+        self.assertIn("stale", qwen_text)
+        self.assertIn("exact head/base-tip pair", qwen_text)
+        self.assertIn("do not repeatedly retry", qwen_text)
 
     def test_nit_improvement_policy_is_required(self) -> None:
         skill_text = SKILL.read_text().replace(

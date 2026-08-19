@@ -27,15 +27,15 @@ def assert_policy_contract(
 ) -> None:
     fallback = _paragraph_containing(skill_text, "When Opus 5 is unavailable")
     test.assertIn(
-        "and the user did **not** explicitly require Opus, fall back to **Kimi K3 via OpenCode Go**",
+        "and the user did **not** explicitly require Opus, fall back first to **Kimi K3 via OpenCode Go**",
         fallback,
     )
     test.assertIn(
-        "Keep the fallback review read-only, bind it to the exact head/base-tip pair, require a terminal verdict",
+        "Keep every fallback read-only, bind it to the exact head/base-tip pair, require a terminal verdict",
         fallback,
     )
     test.assertIn(
-        "If the user explicitly required Opus 5, do not substitute Kimi silently.",
+        "If the user explicitly required a named reviewer, do not silently substitute another model.",
         fallback,
     )
     test.assertIn("references/kimi-k3-review.md", fallback)
@@ -84,10 +84,10 @@ class ReviewerFallbackPolicyTests(unittest.TestCase):
             ci_text=CI.read_text(),
         )
 
-    def test_opus_substitution_blocked(self) -> None:
+    def test_named_reviewer_substitution_blocked(self) -> None:
         skill_text = SKILL.read_text().replace(
-            "If the user explicitly required Opus 5, do not substitute Kimi silently.",
-            "If the user explicitly required Opus 5, substitute Kimi silently.",
+            "If the user explicitly required a named reviewer, do not silently substitute another model.",
+            "If the user explicitly required a named reviewer, silently substitute another model.",
         )
         with self.assertRaises(AssertionError):
             assert_policy_contract(
