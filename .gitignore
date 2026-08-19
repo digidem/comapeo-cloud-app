@@ -32,15 +32,19 @@ _verify_translations.py
 # Agent / orchestrator scratch files
 .mcp.json
 .agents/
-# Keep workspace skills ignored by default, except the versioned PR-cycle contract.
+# Keep workspace skills ignored by default, except the versioned workflow contracts.
 !.agents/
 .agents/*
 !.agents/skills/
 .agents/skills/*
 !.agents/skills/pr-cycle/
 !.agents/skills/pr-cycle/**
+!.agents/skills/issue-to-spec/
+!.agents/skills/issue-to-spec/**
 .agents/skills/pr-cycle/**/__pycache__/
 .agents/skills/pr-cycle/**/*.pyc
+.agents/skills/issue-to-spec/**/__pycache__/
+.agents/skills/issue-to-spec/**/*.pyc
 .contrabass/
 .opencode/
 .sortie.db
