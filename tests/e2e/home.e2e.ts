@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { countAppDatabaseRecords } from './app-db';
 import { setupMockServer } from './mock-server';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,53 +35,25 @@ async function createProject(
 }
 
 /**
- * Import GeoJSON via the Import Data button's file chooser.
+ * Import GeoJSON through the user-visible Import Data control.
  *
- * The success message ("N imported, N skipped") is transient — the
- * onImportComplete callback triggers a coverage refresh that remounts
- * the ImportDataButton, resetting its state. Instead of waiting for the
- * message, we verify the import by checking that observations were
- * written to IndexedDB.
+ * Keyboard activation avoids WebKit's MapLibre pointer-stability heuristic
+ * while still exercising the button → file chooser wiring and the real
+ * onChange import path. The success message ("N imported, N skipped") is
+ * transient because the coverage refresh remounts ImportDataButton, so the
+ * durable assertion is the observation written to IndexedDB.
  */
 async function importGeoJson(page: import('@playwright/test').Page) {
-  const [fileChooser] = await Promise.all([
-    page.waitForEvent('filechooser'),
-    page.getByRole('button', { name: 'Import Data' }).click(),
-  ]);
-  await fileChooser.setFiles(GEOJSON_FIXTURE);
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Import Data' }).press('Enter');
+  const chooser = await chooserPromise;
+  await chooser.setFiles(GEOJSON_FIXTURE);
 
-  // Verify observations were written to IndexedDB (up to 10s)
+  // Verify observations were written to the app database (up to 10s).
   await expect
-    .poll(
-      async () => {
-        return await page.evaluate(async () => {
-          return new Promise<number>((resolve) => {
-            const req = indexedDB.open('comapeo-cloud-app');
-            req.onsuccess = () => {
-              const db = req.result;
-              try {
-                const tx = db.transaction('observations', 'readonly');
-                const store = tx.objectStore('observations');
-                const countReq = store.count();
-                countReq.onsuccess = () => {
-                  resolve(countReq.result);
-                  db.close();
-                };
-                countReq.onerror = () => {
-                  resolve(0);
-                  db.close();
-                };
-              } catch {
-                resolve(0);
-                db.close();
-              }
-            };
-            req.onerror = () => resolve(0);
-          });
-        });
-      },
-      { timeout: 10_000 },
-    )
+    .poll(() => countAppDatabaseRecords(page, 'observations'), {
+      timeout: 10_000,
+    })
     .toBeGreaterThan(0);
 }
 

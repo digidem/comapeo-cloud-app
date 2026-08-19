@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
-import { getDb } from '@/lib/db';
+import { getDb, getSavedMapSmpBlob, resetDb } from '@/lib/db';
 import {
   buildRasterStyleUrl,
   downloadSmp,
@@ -227,7 +227,19 @@ function streamOf(bytes: Uint8Array): ReadableStream<Uint8Array> {
   });
 }
 
+async function getPersistedPackageData(mapId = 'map-1'): Promise<Uint8Array> {
+  const blob = await getSavedMapSmpBlob({ id: mapId });
+  expect(blob).toBeDefined();
+  expect(blob!.size).toBeGreaterThan(0);
+  return new Uint8Array(await blob!.arrayBuffer());
+}
+
 describe('downloadSmp', () => {
+  beforeEach(async () => {
+    await resetDb();
+    await getDb().maps.add(createMockMap());
+  });
+
   it('returns mapId on successful download', async () => {
     const updateSpy = vi.spyOn(getDb().maps, 'update').mockResolvedValue(1);
     mockDownload.mockReturnValue(
@@ -247,16 +259,17 @@ describe('downloadSmp', () => {
     expect(result).toBe('map-1');
     expect(updateSpy).toHaveBeenCalledTimes(2);
     expect(updateSpy).toHaveBeenLastCalledWith('map-1', {
-      smpBlob: expect.any(Blob),
+      smpBlob: undefined,
       smpSize: 3,
       status: 'ready',
       errorMessage: undefined,
       updatedAt: expect.any(String),
     });
+    expect(await getPersistedPackageData()).toEqual(new Uint8Array([1, 2, 3]));
   });
 
   it('merges global zoom 0-3 tiles into the regional SMP by default', async () => {
-    const updateSpy = vi.spyOn(getDb().maps, 'update').mockResolvedValue(1);
+    vi.spyOn(getDb().maps, 'update').mockResolvedValue(1);
     const globalZip = new JSZip();
     globalZip.file('VERSION', '1.0');
     globalZip.file(
@@ -338,10 +351,7 @@ describe('downloadSmp', () => {
       expect.objectContaining({ bbox: [-75, -12, -45, 8], maxzoom: 4 }),
     );
 
-    const persisted = updateSpy.mock.calls.at(-1)?.[1] as
-      Partial<SavedMap> | undefined;
-    expect(persisted?.smpBlob).toBeInstanceOf(Blob);
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(await getPersistedPackageData());
     expect(merged.file('s/g0/0/0/0.png')).not.toBeNull();
     expect(merged.file('s/g0/3/7/7.png')).not.toBeNull();
     expect(merged.file('s/0/3/4/4.png')).toBeNull();
@@ -631,12 +641,9 @@ describe('downloadSmp', () => {
       return streamOf(bytes);
     });
 
-    const updateSpy = vi.spyOn(getDb().maps, 'update');
     await downloadSmp({ map: createMockMap({ maxZoom: 4 }) });
 
-    const persisted = updateSpy.mock.calls.at(-1)?.[1] as
-      Partial<SavedMap> | undefined;
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(await getPersistedPackageData());
     const style = JSON.parse(
       (await merged.file('style.json')?.async('string')) ?? '{}',
     ) as {
@@ -731,12 +738,9 @@ describe('downloadSmp', () => {
       return streamOf(bytes);
     });
 
-    const updateSpy = vi.spyOn(getDb().maps, 'update');
     await downloadSmp({ map: createMockMap({ maxZoom: 4 }) });
 
-    const persisted = updateSpy.mock.calls.at(-1)?.[1] as
-      Partial<SavedMap> | undefined;
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(await getPersistedPackageData());
     const style = JSON.parse(
       (await merged.file('style.json')?.async('string')) ?? '{}',
     ) as {
@@ -807,12 +811,9 @@ describe('downloadSmp', () => {
       return streamOf(bytes);
     });
 
-    const updateSpy = vi.spyOn(getDb().maps, 'update');
     await downloadSmp({ map: createMockMap({ maxZoom: 4 }) });
 
-    const persisted = updateSpy.mock.calls.at(-1)?.[1] as
-      Partial<SavedMap> | undefined;
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(await getPersistedPackageData());
     const style = JSON.parse(
       (await merged.file('style.json')?.async('string')) ?? '{}',
     ) as {
@@ -884,12 +885,9 @@ describe('downloadSmp', () => {
       return streamOf(bytes);
     });
 
-    const updateSpy = vi.spyOn(getDb().maps, 'update');
     await downloadSmp({ map: createMockMap({ maxZoom: 4 }) });
 
-    const persisted = updateSpy.mock.calls.at(-1)?.[1] as
-      Partial<SavedMap> | undefined;
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(await getPersistedPackageData());
     const style = JSON.parse(
       (await merged.file('style.json')?.async('string')) ?? '{}',
     ) as {
@@ -965,12 +963,9 @@ describe('downloadSmp', () => {
       return streamOf(bytes);
     });
 
-    const updateSpy = vi.spyOn(getDb().maps, 'update');
     await downloadSmp({ map: createMockMap({ maxZoom: 4 }) });
 
-    const persisted = updateSpy.mock.calls.at(-1)?.[1] as
-      Partial<SavedMap> | undefined;
-    const merged = await JSZip.loadAsync(persisted?.smpBlob as Blob);
+    const merged = await JSZip.loadAsync(await getPersistedPackageData());
     const style = JSON.parse(
       (await merged.file('style.json')?.async('string')) ?? '{}',
     ) as {

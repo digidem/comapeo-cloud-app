@@ -4,13 +4,6 @@ import { setupMockServer } from './mock-server';
 import { seedAlertMapState } from './seed-alert-map';
 
 test.describe('Alerts map and grid', () => {
-  test.beforeEach(({ browserName }) => {
-    test.skip(
-      browserName === 'webkit',
-      'WebKit skipped: these tests use the same raw IndexedDB seed pattern as the map download E2E. TODO(#255): migrate to the shared browser-safe seed helper.',
-    );
-  });
-
   test('defaults to map and preserves map/grid preference independently', async ({
     page,
   }) => {
@@ -85,7 +78,7 @@ test.describe('Alerts map and grid', () => {
     await seedAlertMapState(page);
     await page.goto('/alerts');
 
-    await page.getByRole('button', { name: /Add Alert/i }).click();
+    await page.getByRole('button', { name: /Add Alert/i }).press('Enter');
     const dialog = page.getByRole('dialog', { name: /Create Alert/i });
     await expect(dialog).toBeVisible();
 
@@ -95,7 +88,7 @@ test.describe('Alerts map and grid', () => {
     const latitude = dialog.getByLabel('Latitude');
     await longitude.fill('-51.25');
     await latitude.fill('-3.75');
-    await dialog.getByRole('button', { name: 'Add point' }).click();
+    await dialog.getByRole('button', { name: 'Add point' }).press('Enter');
     await expect(longitude).toHaveValue('-51.25');
     await expect(latitude).toHaveValue('-3.75');
 
@@ -103,12 +96,14 @@ test.describe('Alerts map and grid', () => {
     await dialog.getByLabel('Detection Date End').fill('2026-08-12');
     await dialog.getByLabel('Source ID').fill('e2e-inline');
     await dialog.getByLabel('Alert Type').fill('inline-e2e');
-    await dialog.getByRole('button', { name: 'Create' }).click();
+    await dialog.getByRole('button', { name: 'Create' }).press('Enter');
 
     await expect(dialog).toBeHidden();
     await expect(page).toHaveURL(/\/alerts$/);
 
-    await page.getByRole('button', { name: /Switch to grid view/i }).click();
+    await page
+      .getByRole('button', { name: /Switch to grid view/i })
+      .press('Enter');
     await expect(page.getByText('inline-e2e')).toBeVisible();
   });
 });

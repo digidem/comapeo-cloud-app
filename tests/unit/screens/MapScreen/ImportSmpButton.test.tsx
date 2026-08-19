@@ -114,7 +114,7 @@ describe('ImportSmpButton', () => {
         maxZoom: 12,
         attribution: 'Community imagery',
         status: 'ready',
-        smpBlob: file,
+        smpBlob: expect.any(Blob),
         smpSize: file.size,
       }),
     );
@@ -242,7 +242,7 @@ describe('ImportSmpButton', () => {
     );
   });
 
-  it('normalizes imported SMP files to an application/zip blob', async () => {
+  it('validates and passes the SMP Blob to chunked persistence', async () => {
     const user = userEvent.setup();
     const reader = readerWithStyle({ version: 8, sources: {}, layers: [] });
     vi.mocked(smpServe.getSmpReader).mockResolvedValue(
@@ -254,9 +254,14 @@ describe('ImportSmpButton', () => {
     await user.upload(screen.getByLabelText('Import SMP file'), file);
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    const savedMap = mutateAsync.mock.calls[0]![0] as { smpBlob: Blob };
+    const readerBlob = vi.mocked(smpServe.getSmpReader).mock.calls[0]![1];
+    expect(readerBlob).toBeInstanceOf(Blob);
+    expect(readerBlob.type).toBe('application/zip');
+
+    const savedMap = mutateAsync.mock.calls[0]![0] as { smpBlob?: Blob };
     expect(savedMap.smpBlob).toBeInstanceOf(Blob);
-    expect(savedMap.smpBlob.type).toBe('application/zip');
+    expect(savedMap.smpBlob?.type).toBe('application/zip');
+    expect(savedMap.smpBlob?.size).toBe(file.size);
   });
 
   it('shows an invalid-file error and creates nothing when the reader cannot open', async () => {

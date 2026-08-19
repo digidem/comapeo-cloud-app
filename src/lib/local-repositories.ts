@@ -108,6 +108,8 @@ export async function deleteProject(localId: string): Promise<string[]> {
         db.fields,
         db.presets,
         db.maps,
+        db.mapPackages,
+        db.mapPackageChunks,
       ],
       async () => {
         const removedMaps = await db.maps
@@ -123,6 +125,13 @@ export async function deleteProject(localId: string): Promise<string[]> {
         await db.tracks.where('projectLocalId').equals(localId).delete();
         await db.fields.where('projectLocalId').equals(localId).delete();
         await db.presets.where('projectLocalId').equals(localId).delete();
+        if (removedMapIds.length > 0) {
+          await db.mapPackageChunks
+            .where('mapId')
+            .anyOf(removedMapIds)
+            .delete();
+          await db.mapPackages.bulkDelete(removedMapIds);
+        }
         await db.maps.where('projectLocalId').equals(localId).delete();
 
         if (removedMapIdSet.size > 0) {

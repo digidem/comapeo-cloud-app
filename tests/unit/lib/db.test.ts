@@ -1,6 +1,18 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import Dexie from 'dexie';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getCachedIconBlob, getDb, putCachedIconBlob, resetDb } from '@/lib/db';
+import {
+  addSavedMapWithPackage,
+  getCachedIconBlob,
+  getDb,
+  getSavedMapPackageSource,
+  getSavedMapSmpBlob,
+  getSavedMapWithSmpBlob,
+  hasSavedMapSmpPackage,
+  putCachedIconBlob,
+  resetDb,
+  updateSavedMapWithPackage,
+} from '@/lib/db';
 import type { Field, Preset, SavedMap, Track } from '@/lib/db';
 
 beforeEach(async () => {
@@ -8,7 +20,7 @@ beforeEach(async () => {
 });
 
 describe('AppDatabase', () => {
-  it('exposes all 10 required tables', async () => {
+  it('exposes the application tables, including portable map packages', async () => {
     const db = getDb();
 
     expect(db.projects).toBeDefined();
@@ -20,7 +32,10 @@ describe('AppDatabase', () => {
     expect(db.remoteServers).toBeDefined();
     expect(db.syncMetadata).toBeDefined();
     expect(db.presets).toBeDefined();
+    expect(db.iconCache).toBeDefined();
     expect(db.maps).toBeDefined();
+    expect(db.mapPackages).toBeDefined();
+    expect(db.mapPackageChunks).toBeDefined();
   });
 
   it('defines &localId as the primary key for projects', async () => {
@@ -508,16 +523,16 @@ describe('AppDatabase', () => {
     ]);
   });
 
-  it('declares version 12 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
+  it('declares version 14 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
     const db = getDb();
 
-    // The highest declared version is 12 (v8 no-op, v9 string→ref
+    // The highest declared version is 14 (v8 no-op, v9 string→ref
     // re-declared, v10 adds the v2 sync indexes and field migrations, v11
-    // adds the iconCache table, v12 adds the maps table). If any future
-    // change drops or renumbers versions, this test fails and forces the
-    // author to think about the upgrade path for users on prior builds
-    // (especially the post-#67 v9 build).
-    expect(db.verno).toBe(12);
+    // adds iconCache, v12 adds maps, v13 adds mapPackages, and v14 adds
+    // portable chunked package storage). If any future change drops or renumbers
+    // versions, this test fails and forces the author to think about the upgrade
+    // path for users on prior builds (especially the post-#67 v9 build).
+    expect(db.verno).toBe(14);
 
     // Verify the v2 sync indexes are present in the schema. These are
     // required for the index-based queries used by remote-archive.ts.
@@ -765,6 +780,278 @@ describe('maps table', () => {
     expect(retrieved).toBeDefined();
     expect(retrieved!.name).toBe('Territory Basemap');
     expect(retrieved!.bbox).toEqual([-73.0, -3.5, -70.0, -1.0]);
+  });
+
+  it('keeps portable SMP bytes out of ordinary map metadata reads', async () => {
+    const db = getDb();
+    const smpBytes = new TextEncoder().encode('portable-smp-bytes').buffer;
+    const map: SavedMap = {
+      id: 'map-portable-smp',
+      projectLocalId: 'proj-1',
+      name: 'Portable SMP',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      bbox: [-73.0, -3.5, -70.0, -1.0],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'ready',
+      smpSize: smpBytes.byteLength,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+    };
+
+    await db.maps.add(map);
+    await db.mapPackages.add({
+      mapId: map.id,
+      data: smpBytes,
+      contentType: 'application/zip',
+      updatedAt: map.updatedAt,
+    });
+
+    const rawMap = await db.maps.get(map.id);
+    expect(rawMap).toEqual(map);
+    expect(rawMap?.smpBlob).toBeUndefined();
+
+    const hydrated = await getSavedMapWithSmpBlob(map.id);
+    expect(hydrated?.smpBlob).toBeInstanceOf(Blob);
+    expect(hydrated?.smpBlob?.type).toBe('application/zip');
+    expect(await hydrated?.smpBlob?.arrayBuffer()).toEqual(smpBytes);
+  });
+
+  it('preserves a real v13 whole-buffer package when IndexedDB upgrades to v14', async () => {
+    const appDb = getDb();
+    appDb.close();
+    await Dexie.delete('comapeo-cloud-app');
+
+    const legacy = new Dexie('comapeo-cloud-app');
+    legacy.version(13).stores({
+      maps: '&id, projectLocalId, [projectLocalId+updatedAt], status',
+      mapPackages: '&mapId',
+    });
+    await legacy.open();
+
+    const bytes = new TextEncoder().encode('v13-package').buffer;
+    const map: SavedMap = {
+      id: 'v13-upgrade-map',
+      projectLocalId: 'proj-v13',
+      name: 'V13 package',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      bbox: [-73, -3.5, -70, -1],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'ready',
+      smpSize: bytes.byteLength,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+    };
+    await legacy.table('maps').add(map);
+    await legacy.table('mapPackages').add({
+      mapId: map.id,
+      data: bytes,
+      contentType: 'application/zip',
+      updatedAt: map.updatedAt,
+    });
+    legacy.close();
+
+    await appDb.open();
+    const upgraded = appDb;
+    const upgradedMap = await upgraded.maps.get(map.id);
+    expect(upgraded.verno).toBe(14);
+    expect(upgradedMap).toEqual(map);
+    expect(upgraded.mapPackageChunks).toBeDefined();
+    expect(await upgraded.mapPackageChunks.count()).toBe(0);
+
+    const source = await getSavedMapPackageSource(map);
+    expect(await source?.read(0, bytes.byteLength)).toEqual(
+      new Uint8Array(bytes),
+    );
+    expect(await hasSavedMapSmpPackage(map)).toBe(true);
+  });
+
+  it('stores new SMP packages in chunks and supports cross-chunk range reads', async () => {
+    const db = getDb();
+    const bytes = new Uint8Array(4 * 1024 * 1024 + 8);
+    bytes.fill(7);
+    bytes.set([1, 2, 3, 4, 5, 6, 7, 8], bytes.length - 8);
+    const blob = new Blob([bytes], { type: 'application/zip' });
+    const map: SavedMap = {
+      id: 'map-chunked-smp',
+      projectLocalId: 'proj-1',
+      name: 'Chunked SMP',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      bbox: [-73.0, -3.5, -70.0, -1.0],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'ready',
+      smpSize: blob.size,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+    };
+
+    await addSavedMapWithPackage(map, blob);
+
+    expect(await db.maps.get(map.id)).toEqual(map);
+    const packageMetadata = await db.mapPackages.get(map.id);
+    expect(packageMetadata?.data).toBeUndefined();
+    expect(packageMetadata?.chunkCount).toBe(2);
+    expect(
+      await db.mapPackageChunks.where('mapId').equals(map.id).count(),
+    ).toBe(2);
+
+    const source = await getSavedMapPackageSource(map);
+    expect(source?.size).toBe(blob.size);
+    expect(await source?.read(4 * 1024 * 1024 - 2, 6)).toEqual(
+      new Uint8Array([7, 7, 1, 2, 3, 4]),
+    );
+
+    const hydrated = await getSavedMapWithSmpBlob(map.id);
+    expect(hydrated?.smpBlob?.size).toBe(blob.size);
+    expect(
+      new Uint8Array(await hydrated!.smpBlob!.arrayBuffer()).slice(-8),
+    ).toEqual(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]));
+  });
+
+  it('rejects missing or truncated v14 package chunks instead of serving zero-filled bytes', async () => {
+    const db = getDb();
+    const bytes = new Uint8Array(4 * 1024 * 1024 + 4);
+    bytes.fill(9);
+    const blob = new Blob([bytes], { type: 'application/zip' });
+    const map: SavedMap = {
+      id: 'map-corrupt-chunks',
+      projectLocalId: 'proj-1',
+      name: 'Corrupt Chunk Test',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      bbox: [-73, -3.5, -70, -1],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'ready',
+      smpSize: blob.size,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+    };
+
+    await addSavedMapWithPackage(map, blob);
+    expect(await hasSavedMapSmpPackage(map)).toBe(true);
+
+    await db.mapPackages.update(map.id, { size: blob.size - 1 });
+    expect(await hasSavedMapSmpPackage(map)).toBe(false);
+    await db.mapPackages.update(map.id, { size: blob.size });
+
+    await db.mapPackageChunks.delete(`${map.id}:1`);
+    expect(await hasSavedMapSmpPackage(map)).toBe(false);
+    const missingSource = await getSavedMapPackageSource(map);
+    await expect(missingSource!.read(4 * 1024 * 1024 - 2, 6)).rejects.toThrow(
+      'SMP package chunk 1 is missing',
+    );
+
+    await db.mapPackageChunks.put({
+      id: `${map.id}:1`,
+      mapId: map.id,
+      index: 1,
+      data: new Uint8Array([9, 9]).buffer,
+    });
+    const truncatedSource = await getSavedMapPackageSource(map);
+    await expect(truncatedSource!.read(4 * 1024 * 1024, 4)).rejects.toThrow(
+      'SMP package chunk 1 has an invalid length',
+    );
+  });
+
+  it('rolls back package writes when persistence is cancelled', async () => {
+    const db = getDb();
+    const map: SavedMap = {
+      id: 'cancelled-package-save',
+      projectLocalId: 'proj-1',
+      name: 'Cancelled package save',
+      type: 'style',
+      origin: 'authored',
+      styleUrl: 'https://example.com/style.json',
+      bbox: [-73, -3.5, -70, -1],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'downloading',
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+    };
+    await db.maps.add(map);
+    const controller = new AbortController();
+    const put = db.mapPackageChunks.put.bind(db.mapPackageChunks);
+    const putSpy = vi
+      .spyOn(db.mapPackageChunks, 'put')
+      .mockImplementation((...args) =>
+        put(...args).then((result) => {
+          controller.abort();
+          return result;
+        }),
+      );
+
+    try {
+      await expect(
+        updateSavedMapWithPackage(
+          map.id,
+          new Blob(['package'], { type: 'application/zip' }),
+          { status: 'ready', smpSize: 7 },
+          controller.signal,
+        ),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+    } finally {
+      putSpy.mockRestore();
+    }
+
+    expect(await db.mapPackages.get(map.id)).toBeUndefined();
+    expect(
+      await db.mapPackageChunks.where('mapId').equals(map.id).count(),
+    ).toBe(0);
+    expect((await db.maps.get(map.id))?.status).toBe('downloading');
+  });
+
+  it('rolls back package chunks when a download finishes after its map was deleted', async () => {
+    const db = getDb();
+    const mapId = 'deleted-before-package-save';
+    const blob = new Blob(['late-package'], { type: 'application/zip' });
+
+    await expect(
+      updateSavedMapWithPackage(mapId, blob, {
+        status: 'ready',
+        smpSize: blob.size,
+        updatedAt: '2026-06-28T01:00:00Z',
+      }),
+    ).rejects.toThrow('Map no longer exists');
+
+    expect(await db.mapPackages.get(mapId)).toBeUndefined();
+    expect(await db.mapPackageChunks.where('mapId').equals(mapId).count()).toBe(
+      0,
+    );
+  });
+
+  it('keeps legacy Blob-backed map packages readable', async () => {
+    const db = getDb();
+    const legacyBlob = new Blob(['legacy-smp'], { type: 'application/zip' });
+    const map: SavedMap = {
+      id: 'map-legacy-smp',
+      projectLocalId: 'proj-1',
+      name: 'Legacy SMP',
+      type: 'style',
+      origin: 'imported',
+      styleUrl: '',
+      bbox: [-73.0, -3.5, -70.0, -1.0],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'ready',
+      smpBlob: legacyBlob,
+      smpSize: legacyBlob.size,
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+    };
+
+    await db.maps.add(map);
+    expect(await getSavedMapSmpBlob(map)).toBe(legacyBlob);
   });
 
   it('queries saved maps by projectLocalId', async () => {

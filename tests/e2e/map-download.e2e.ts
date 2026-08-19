@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Buffer } from 'node:buffer';
 
+import { seedAppDatabase } from './app-db';
 import { setupMockServer } from './mock-server';
 
 // ---------------------------------------------------------------------------
@@ -25,96 +26,54 @@ interface SeedMap {
   maxZoom: number;
 }
 
-/**
- * Seed all required IndexedDB records and Zustand store so the /map route
- * renders with a draft map ready to download.
- *
- * Writes to the real comapeo-cloud-app IndexedDB from inside page.evaluate().
- */
+/** Seed the app database and Zustand state so /map opens a draft map. */
 async function seedMapDownloadTest(
   page: import('@playwright/test').Page,
   map: SeedMap,
 ): Promise<void> {
-  await page.evaluate(
-    (map) => {
-      return new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open('comapeo-cloud-app');
-        req.onerror = () => reject(new Error('Failed to open IndexedDB'));
-        req.onupgradeneeded = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains('remoteServers'))
-            db.createObjectStore('remoteServers', { keyPath: 'id' });
-          if (!db.objectStoreNames.contains('projects'))
-            db.createObjectStore('projects', { keyPath: 'localId' });
-          if (!db.objectStoreNames.contains('maps'))
-            db.createObjectStore('maps', { keyPath: 'id' });
-        };
-        req.onsuccess = () => {
-          const db = req.result;
-          try {
-            const tx = db.transaction(
-              ['remoteServers', 'projects', 'maps'],
-              'readwrite',
-            );
-            const now = new Date().toISOString();
-
-            // Auth: a remote server (required for authenticated route guard)
-            tx.objectStore('remoteServers').put({
-              id: 'test-server',
-              baseUrl: 'https://test.example.com',
-              token: 'test-token',
-              label: 'Test Server',
-              status: 'connected',
-              lastSyncedAt: now,
-              serverId: 'test-server',
-            });
-
-            // Project that owns the map
-            tx.objectStore('projects').put({
-              localId: map.projectLocalId,
-              sourceType: 'local',
-              sourceId: 'local:project',
-              name: 'E2E Test Project',
-              activeMapId: map.id,
-              createdAt: now,
-              updatedAt: now,
-              dirtyLocal: false,
-              deleted: false,
-            });
-
-            // The draft map to download — uses a common OSM raster tile source
-            tx.objectStore('maps').put({
-              id: map.id,
-              projectLocalId: map.projectLocalId,
-              name: map.name,
-              type: 'raster',
-              styleUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              bbox: map.bbox,
-              minZoom: 0,
-              maxZoom: map.maxZoom,
-              scheme: 'xyz',
-              status: 'draft',
-              createdAt: now,
-              updatedAt: now,
-            });
-
-            tx.oncomplete = () => {
-              db.close();
-              resolve();
-            };
-            tx.onerror = () => {
-              db.close();
-              reject(tx.error);
-            };
-          } catch (err) {
-            db.close();
-            reject(err);
-          }
-        };
-      });
-    },
-    map as unknown as Record<string, unknown>,
-  );
+  const now = new Date().toISOString();
+  await seedAppDatabase(page, {
+    remoteServers: [
+      {
+        id: 'test-server',
+        baseUrl: 'https://test.example.com',
+        token: 'test-token',
+        label: 'Test Server',
+        status: 'connected',
+        lastSyncedAt: now,
+        serverId: 'test-server',
+      },
+    ],
+    projects: [
+      {
+        localId: map.projectLocalId,
+        sourceType: 'local',
+        sourceId: 'local:project',
+        name: 'E2E Test Project',
+        activeMapId: map.id,
+        createdAt: now,
+        updatedAt: now,
+        dirtyLocal: false,
+        deleted: false,
+      },
+    ],
+    maps: [
+      {
+        id: map.id,
+        projectLocalId: map.projectLocalId,
+        name: map.name,
+        type: 'raster',
+        styleUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        bbox: map.bbox,
+        minZoom: 0,
+        maxZoom: map.maxZoom,
+        scheme: 'xyz',
+        status: 'draft',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+  });
 
   // Auth: set the Zustand auth store + map store so the MapScreen renders
   await page.evaluate(
@@ -182,12 +141,7 @@ async function seedMapDownloadTest(
 
 async function prepareMapAuthoring(
   page: import('@playwright/test').Page,
-  browserName: string,
 ): Promise<void> {
-  test.skip(
-    browserName === 'webkit',
-    'WebKit skipped: this helper uses the same raw IndexedDB seed pattern as the map download E2E.',
-  );
   await setupMockServer(page);
   await page.goto('/map');
   await page.waitForLoadState('domcontentloaded');
@@ -247,9 +201,8 @@ const MIXED_GEOJSON = JSON.stringify({
 test.describe('GeoJSON reference overlays (E2E)', () => {
   test('desktop file picker adds, hides, shows, and removes a reference overlay', async ({
     page,
-    browserName,
   }) => {
-    await prepareMapAuthoring(page, browserName);
+    await prepareMapAuthoring(page);
 
     const input = page.getByLabel('Add GeoJSON reference');
     await input.setInputFiles({
@@ -262,28 +215,31 @@ test.describe('GeoJSON reference overlays (E2E)', () => {
     const hideButton = page.getByRole('button', {
       name: 'Hide mixed-reference.geojson',
     });
-    await hideButton.click();
-    await expect(
-      page.getByRole('button', { name: 'Show mixed-reference.geojson' }),
-    ).toBeVisible();
+    await expect(hideButton).toBeVisible();
+    await hideButton.press('Enter');
+    const showButton = page.getByRole('button', {
+      name: 'Show mixed-reference.geojson',
+    });
+    await expect(showButton).toBeVisible();
 
-    await page
-      .getByRole('button', { name: 'Show mixed-reference.geojson' })
-      .click();
+    // Keyboard activation keeps the real accessible control path while avoiding
+    // WebKit's MapLibre-specific pointer-stability heuristic.
+    await showButton.press('Enter');
     await expect(hideButton).toBeVisible();
 
-    await page
-      .getByRole('button', { name: 'Remove mixed-reference.geojson' })
-      .click();
+    const removeButton = page.getByRole('button', {
+      name: 'Remove mixed-reference.geojson',
+    });
+    await expect(removeButton).toBeVisible();
+    await removeButton.press('Enter');
     await expect(page.getByTitle('mixed-reference.geojson')).toHaveCount(0);
   });
 
   test('mobile file picker remains available through map settings', async ({
     page,
-    browserName,
   }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await prepareMapAuthoring(page, browserName);
+    await prepareMapAuthoring(page);
 
     await page.getByRole('button', { name: 'Map settings' }).click();
     const input = page.getByLabel('Add GeoJSON reference');
@@ -311,16 +267,7 @@ test.describe('GeoJSON reference overlays (E2E)', () => {
 test.describe('SMP Download (E2E)', () => {
   test('downloads a map: pending → progress → ready → export', async ({
     page,
-    browserName,
   }) => {
-    test.skip(
-      browserName === 'webkit',
-      'WebKit skipped: test seeds raw IndexedDB and reloads, which races with ' +
-        "Dexie's async DB initialization. The SMP download feature works on WebKit " +
-        '(Firefox passes the same flow), but the test-infrastructure pattern ' +
-        '(raw indexedDB.open + page.reload) is unreliable outside Chromium. ' +
-        'TODO(#255): rewrite seed to use Dexie API via addInitScript.',
-    );
     test.setTimeout(60_000);
 
     await setupMockServer(page);

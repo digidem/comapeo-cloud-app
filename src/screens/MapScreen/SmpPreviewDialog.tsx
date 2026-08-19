@@ -8,10 +8,10 @@ import Map from 'react-map-gl/maplibre';
 
 import { Button } from '@/components/ui/button';
 import type { SavedMap } from '@/lib/db';
-import { isImportedSmpMap } from '@/lib/map/saved-map-utils';
+import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import {
   closeSmpReader,
-  getSmpReader,
+  getSavedMapSmpReader,
   registerSmpProtocol,
   resolveSmpStyle,
   sanitizeImportedSmpStyle,
@@ -36,7 +36,7 @@ const PreviewSession = memo(function PreviewSession({
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (map.status !== 'ready' || !map.smpBlob) return;
+    if (map.status !== 'ready') return;
 
     const readerId = `preview:${map.id}:${uuid()}`;
     let cancelled = false;
@@ -45,7 +45,7 @@ const PreviewSession = memo(function PreviewSession({
 
     void (async () => {
       try {
-        const reader = await getSmpReader(readerId, map.smpBlob!);
+        const reader = await getSavedMapSmpReader(readerId, map);
         readerOpened = true;
 
         if (cancelled) {
@@ -56,7 +56,7 @@ const PreviewSession = memo(function PreviewSession({
         const resolved = await resolveSmpStyle(reader, readerId);
         if (!cancelled) {
           if (resolved) {
-            const safeStyle = isImportedSmpMap(map)
+            const safeStyle = isImportedSmpRecord(map)
               ? sanitizeImportedSmpStyle(resolved)
               : resolved;
             if (safeStyle) setStyle(safeStyle);
@@ -80,7 +80,7 @@ const PreviewSession = memo(function PreviewSession({
     };
   }, [map]);
 
-  if (map.status !== 'ready' || !map.smpBlob || error) {
+  if (map.status !== 'ready' || error) {
     return (
       <div
         className="flex h-full items-center justify-center p-6 text-sm text-error"

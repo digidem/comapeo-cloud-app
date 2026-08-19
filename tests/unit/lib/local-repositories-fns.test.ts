@@ -153,6 +153,20 @@ describe('local-repositories functions — projects', () => {
       createdAt: timestamp,
       updatedAt: timestamp,
     });
+    await getDb().mapPackages.add({
+      mapId,
+      contentType: 'application/zip',
+      size: 3,
+      chunkSize: 3,
+      chunkCount: 1,
+      updatedAt: timestamp,
+    });
+    await getDb().mapPackageChunks.add({
+      id: `${mapId}:0`,
+      mapId,
+      index: 0,
+      data: new Uint8Array([1, 2, 3]).buffer,
+    });
     await getDb().projects.update(targetProject.localId, {
       activeMapId: mapId,
     });
@@ -161,6 +175,10 @@ describe('local-repositories functions — projects', () => {
 
     expect(removedMapIds).toEqual([mapId]);
     expect(await getDb().maps.get(mapId)).toBeUndefined();
+    expect(await getDb().mapPackages.get(mapId)).toBeUndefined();
+    expect(
+      await getDb().mapPackageChunks.where('mapId').equals(mapId).count(),
+    ).toBe(0);
     expect(
       (await getDb().projects.get(targetProject.localId))?.activeMapId,
     ).toBe(null);

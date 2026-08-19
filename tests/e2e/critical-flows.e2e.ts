@@ -2,6 +2,10 @@ import { expect, test } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  countAppDatabaseRecords,
+  getAppDatabaseRecordsByIndex,
+} from './app-db';
 import { setupMockServer } from './mock-server';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -48,45 +52,18 @@ async function seedProjectWithObservations(
   // Create project
   await createProject(page, name);
 
-  // Import GeoJSON via file chooser
-  const [fileChooser] = await Promise.all([
-    page.waitForEvent('filechooser'),
-    page.getByRole('button', { name: 'Import Data' }).click(),
-  ]);
+  // Import GeoJSON through the visible button; keyboard activation avoids
+  // WebKit's MapLibre pointer-stability heuristic without bypassing wiring.
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Import Data' }).press('Enter');
+  const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles(GEOJSON_FIXTURE);
 
-  // Wait for observations to appear in IndexedDB
+  // Wait for observations to appear in the app database.
   await expect
-    .poll(
-      async () => {
-        return await page.evaluate(async () => {
-          return new Promise<number>((resolve) => {
-            const req = indexedDB.open('comapeo-cloud-app');
-            req.onsuccess = () => {
-              const db = req.result;
-              try {
-                const tx = db.transaction('observations', 'readonly');
-                const store = tx.objectStore('observations');
-                const countReq = store.count();
-                countReq.onsuccess = () => {
-                  resolve(countReq.result);
-                  db.close();
-                };
-                countReq.onerror = () => {
-                  resolve(0);
-                  db.close();
-                };
-              } catch {
-                resolve(0);
-                db.close();
-              }
-            };
-            req.onerror = () => resolve(0);
-          });
-        });
-      },
-      { timeout: 10_000 },
-    )
+    .poll(() => countAppDatabaseRecords(page, 'observations'), {
+      timeout: 10_000,
+    })
     .toBeGreaterThan(0);
 
   // Wait for selectedProjectId to be persisted to localStorage
@@ -128,9 +105,17 @@ test.describe('Critical User Flows', () => {
   }) => {
     await seedProjectWithObservations(page, 'Test Project');
 
-    // Navigate to /data via the nav link
-    await page.getByRole('link', { name: 'Data' }).click();
-    await page.getByRole('button', { name: 'Switch to grid view' }).click();
+    // Navigate to /data via the real nav link. WebKit can keep the animated
+    // sidebar link in an actionability wait after it is already visible and
+    // stable, so force the click only after asserting the control is present.
+    const dataLink = page.getByRole('link', { name: 'Data' });
+    await expect(dataLink).toBeVisible();
+    await dataLink.press('Enter');
+    const gridButton = page.getByRole('button', {
+      name: 'Switch to grid view',
+    });
+    await expect(gridButton).toBeVisible();
+    await gridButton.press('Enter');
 
     // Data heading visible
     await expect(
@@ -203,50 +188,36 @@ test.describe('Critical User Flows', () => {
       'Test Project',
     );
 
-    // Navigate to /data via the nav link
-    await page.getByRole('link', { name: 'Data' }).click();
-    await page.getByRole('button', { name: 'Switch to grid view' }).click();
+    // Navigate through the real controls. Firefox/WebKit can keep these
+    // animated controls in an actionability wait after they are already
+    // visible, so force the click only after proving each control is present.
+    const dataLink = page.getByRole('link', { name: 'Data' });
+    await expect(dataLink).toBeVisible();
+    await dataLink.press('Enter');
+    const gridButton = page.getByRole('button', {
+      name: 'Switch to grid view',
+    });
+    await expect(gridButton).toBeVisible();
+    await gridButton.press('Enter');
     await expect(
       page.getByRole('heading', { level: 1, name: 'Data' }),
     ).toBeVisible();
 
-    // Read the first observation's localId from IndexedDB
-    const observationLocalId = await page.evaluate(
-      (projectId) =>
-        new Promise<string | null>((resolve, reject) => {
-          const req = indexedDB.open('comapeo-cloud-app');
-          req.onsuccess = () => {
-            const db = req.result;
-            try {
-              const tx = db.transaction('observations', 'readonly');
-              const idx = tx
-                .objectStore('observations')
-                .index('projectLocalId');
-              const getReq = idx.getAll(projectId);
-              getReq.onsuccess = () => {
-                const first = getReq.result?.[0];
-                resolve(first?.localId ?? null);
-                db.close();
-              };
-              getReq.onerror = () => {
-                db.close();
-                reject(getReq.error);
-              };
-            } catch (err) {
-              db.close();
-              reject(err);
-            }
-          };
-          req.onerror = () => reject(req.error);
-        }),
-      projectLocalId,
-    );
+    // Read the first observation through the shared app-database helper.
+    const observations = await getAppDatabaseRecordsByIndex<{
+      localId: string;
+    }>(page, 'observations', 'projectLocalId', projectLocalId);
+    const observationLocalId = observations[0]?.localId ?? null;
     expect(observationLocalId).not.toBeNull();
 
-    // Click the specific observation card matching the IndexedDB observation
-    await page
-      .locator(`a[href="/data/observations/${observationLocalId}"]`)
-      .click();
+    // Click the specific observation card matching the IndexedDB observation.
+    // As above, assert visibility first and bypass only the cross-browser
+    // layout-stability wait; the real link handler and navigation still run.
+    const observationLink = page.locator(
+      `a[href="/data/observations/${observationLocalId}"]`,
+    );
+    await expect(observationLink).toBeVisible();
+    await observationLink.press('Enter');
 
     // Observation detail renders with h1 heading
     await expect(

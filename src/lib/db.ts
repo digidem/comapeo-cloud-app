@@ -235,12 +235,41 @@ export interface SavedMap {
   maxZoom: number; // Default 14
   attribution?: string;
   scheme?: 'xyz' | 'tms'; // Raster only
-  smpBlob?: Blob; // Set when status='ready' (Phase 1c writes this)
-  smpSize?: number; // Blob byte length
+  /** Legacy/runtime SMP blob. New package bytes live in the mapPackages table. */
+  smpBlob?: Blob;
+  smpSize?: number; // SMP byte length
   status: 'draft' | 'downloading' | 'ready' | 'error';
   errorMessage?: string;
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
+}
+
+/** SMP package metadata stored separately from map-list metadata. */
+export interface SavedMapPackage {
+  mapId: string;
+  /**
+   * Legacy v13 whole-package bytes. New writes use chunk rows so large imports
+   * never have to materialize the entire package in JavaScript heap at once.
+   */
+  data?: ArrayBuffer;
+  contentType: string;
+  size?: number;
+  chunkSize?: number;
+  chunkCount?: number;
+  updatedAt: string;
+}
+
+/** One portable ArrayBuffer chunk of an SMP package. */
+export interface SavedMapPackageChunk {
+  id: string;
+  mapId: string;
+  index: number;
+  data: ArrayBuffer;
+}
+
+export interface SavedMapPackageSource {
+  size: number;
+  read: (offset: number, length: number) => Promise<Uint8Array>;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +288,8 @@ class AppDatabase extends Dexie {
   presets!: EntityTable<Preset, 'localId'>;
   iconCache!: EntityTable<CachedIcon, 'url'>;
   maps!: EntityTable<SavedMap, 'id'>;
+  mapPackages!: EntityTable<SavedMapPackage, 'mapId'>;
+  mapPackageChunks!: EntityTable<SavedMapPackageChunk, 'id'>;
 
   constructor() {
     super('comapeo-cloud-app');
@@ -512,6 +543,21 @@ class AppDatabase extends Dexie {
     this.version(12).stores({
       maps: '&id, projectLocalId, [projectLocalId+updatedAt], status',
     });
+
+    // v13: store SMP package bytes separately from map metadata. ArrayBuffer is
+    // portable across the Playwright browser engines, and separating package
+    // bytes keeps map-list queries from eagerly materializing large offline maps.
+    // Legacy map rows with smpBlob remain readable through getSavedMapSmpBlob().
+    this.version(13).stores({
+      mapPackages: '&mapId',
+    });
+
+    // v14: chunk new package writes so large File/Blob imports stay bounded in
+    // heap even on WebKit, which cannot persist Blob values in IndexedDB.
+    // Existing v13 whole-package ArrayBuffer records remain readable.
+    this.version(14).stores({
+      mapPackageChunks: '&id, mapId, [mapId+index]',
+    });
   }
 }
 
@@ -532,6 +578,265 @@ export function getDb(): AppDatabase {
     _db = new AppDatabase();
   }
   return _db;
+}
+
+const MAP_PACKAGE_CHUNK_SIZE = 4 * 1024 * 1024;
+
+export function getMapPackageChunkId(mapId: string, index: number): string {
+  return `${mapId}:${index}`;
+}
+
+function throwIfPackageWriteAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('Package persistence cancelled', 'AbortError');
+  }
+}
+
+async function writeSavedMapPackageChunks(
+  db: AppDatabase,
+  mapId: string,
+  blob: Blob,
+  updatedAt: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await db.mapPackageChunks.where('mapId').equals(mapId).delete();
+
+  const chunkCount = Math.ceil(blob.size / MAP_PACKAGE_CHUNK_SIZE);
+
+  // Keep at most one chunk's ArrayBuffer in heap at a time. Promise.all here
+  // would recreate the whole-file memory spike this chunked format is designed
+  // to avoid for large offline map packages.
+  const writeChunk = async (index: number): Promise<void> => {
+    throwIfPackageWriteAborted(signal);
+    if (index >= chunkCount) return;
+    const start = index * MAP_PACKAGE_CHUNK_SIZE;
+    const end = Math.min(start + MAP_PACKAGE_CHUNK_SIZE, blob.size);
+    const data = await Dexie.waitFor(blob.slice(start, end).arrayBuffer());
+    throwIfPackageWriteAborted(signal);
+    await db.mapPackageChunks.put({
+      id: getMapPackageChunkId(mapId, index),
+      mapId,
+      index,
+      data,
+    });
+    throwIfPackageWriteAborted(signal);
+    await writeChunk(index + 1);
+  };
+  await writeChunk(0);
+  throwIfPackageWriteAborted(signal);
+
+  await db.mapPackages.put({
+    mapId,
+    contentType: blob.type || 'application/zip',
+    size: blob.size,
+    chunkSize: MAP_PACKAGE_CHUNK_SIZE,
+    chunkCount,
+    updatedAt,
+  });
+}
+
+/** Atomically create a map row and its chunked SMP package. */
+export async function addSavedMapWithPackage(
+  map: SavedMap,
+  blob: Blob,
+): Promise<void> {
+  const db = getDb();
+  await db.transaction(
+    'rw',
+    [db.maps, db.mapPackages, db.mapPackageChunks],
+    async () => {
+      await db.maps.add(map);
+      await writeSavedMapPackageChunks(db, map.id, blob, map.updatedAt);
+    },
+  );
+}
+
+/** Atomically replace an existing map package and update its map metadata. */
+export async function updateSavedMapWithPackage(
+  mapId: string,
+  blob: Blob,
+  updates: Partial<SavedMap>,
+  signal?: AbortSignal,
+): Promise<void> {
+  const db = getDb();
+  await db.transaction(
+    'rw',
+    [db.maps, db.mapPackages, db.mapPackageChunks],
+    async () => {
+      const existingMap = await db.maps.get(mapId);
+      if (!existingMap) throw new Error('Map no longer exists');
+
+      const updatedAt = updates.updatedAt ?? new Date().toISOString();
+      await writeSavedMapPackageChunks(db, mapId, blob, updatedAt, signal);
+      throwIfPackageWriteAborted(signal);
+      await db.maps.update(mapId, { ...updates, updatedAt });
+    },
+  );
+}
+
+/** Check package availability and basic integrity without hydrating current v14 bytes. */
+export async function hasSavedMapSmpPackage(
+  map: Pick<SavedMap, 'id' | 'smpBlob' | 'smpSize'>,
+): Promise<boolean> {
+  if (map.smpBlob) return true;
+
+  const db = getDb();
+  const storedPackage = await db.mapPackages.get(map.id);
+  if (!storedPackage) return false;
+
+  if (storedPackage.data) {
+    return (
+      storedPackage.data.byteLength > 0 &&
+      (map.smpSize === undefined ||
+        storedPackage.data.byteLength === map.smpSize)
+    );
+  }
+
+  const storedChunkCount = await db.mapPackageChunks
+    .where('mapId')
+    .equals(map.id)
+    .count();
+  const expectedChunkCount = storedPackage.chunkCount;
+  const expectedSize = storedPackage.size ?? map.smpSize;
+  const sizeMatchesMap =
+    map.smpSize === undefined ||
+    storedPackage.size === undefined ||
+    storedPackage.size === map.smpSize;
+  return (
+    expectedChunkCount !== undefined &&
+    expectedSize !== undefined &&
+    expectedSize > 0 &&
+    sizeMatchesMap &&
+    storedChunkCount === expectedChunkCount
+  );
+}
+
+/**
+ * Return a random-access package source. New chunked packages read only the
+ * chunks needed for each ZIP range request; legacy v13 whole-buffer records and
+ * pre-v13 Blob-backed map rows remain readable.
+ */
+export async function getSavedMapPackageSource(
+  map: Pick<SavedMap, 'id' | 'smpBlob' | 'smpSize'>,
+): Promise<SavedMapPackageSource | undefined> {
+  if (map.smpBlob) {
+    return {
+      size: map.smpBlob.size,
+      read: async (offset, length) =>
+        new Uint8Array(
+          await map.smpBlob!.slice(offset, offset + length).arrayBuffer(),
+        ),
+    };
+  }
+
+  const db = getDb();
+  const storedPackage = await db.mapPackages.get(map.id);
+  if (!storedPackage) return undefined;
+
+  if (storedPackage.data) {
+    const data = storedPackage.data;
+    return {
+      size: data.byteLength,
+      read: async (offset, length) =>
+        new Uint8Array(
+          data.slice(offset, Math.min(offset + length, data.byteLength)),
+        ),
+    };
+  }
+
+  const size = storedPackage.size ?? map.smpSize;
+  const chunkSize = storedPackage.chunkSize;
+  if (size === undefined || !chunkSize || chunkSize <= 0) return undefined;
+
+  return {
+    size,
+    read: async (offset, length) => {
+      if (offset < 0 || length <= 0 || offset >= size) return new Uint8Array(0);
+      const end = Math.min(offset + length, size);
+      const output = new Uint8Array(end - offset);
+      const firstChunk = Math.floor(offset / chunkSize);
+      const lastChunk = Math.floor((end - 1) / chunkSize);
+      let outputOffset = 0;
+      const indexes = Array.from(
+        { length: lastChunk - firstChunk + 1 },
+        (_, position) => firstChunk + position,
+      );
+      const chunkCount = storedPackage.chunkCount;
+      if (chunkCount === undefined || lastChunk >= chunkCount) {
+        throw new Error('SMP package chunk metadata is inconsistent');
+      }
+
+      const chunks = await db.mapPackageChunks.bulkGet(
+        indexes.map((index) => getMapPackageChunkId(map.id, index)),
+      );
+
+      chunks.forEach((chunk, position) => {
+        const index = indexes[position]!;
+        if (!chunk) throw new Error(`SMP package chunk ${index} is missing`);
+
+        const chunkStart = index * chunkSize;
+        const expectedChunkLength =
+          index === chunkCount - 1 ? size - chunkStart : chunkSize;
+        if (chunk.data.byteLength !== expectedChunkLength) {
+          throw new Error(`SMP package chunk ${index} has an invalid length`);
+        }
+
+        const from = Math.max(offset, chunkStart) - chunkStart;
+        const to = Math.min(end, chunkStart + expectedChunkLength) - chunkStart;
+        const part = new Uint8Array(chunk.data, from, to - from);
+        output.set(part, outputOffset);
+        outputOffset += part.byteLength;
+      });
+
+      if (outputOffset !== output.byteLength) {
+        throw new Error('SMP package range is incomplete');
+      }
+      return output;
+    },
+  };
+}
+
+/** Load the full SMP package only for explicit Blob consumers such as export. */
+export async function getSavedMapSmpBlob(
+  map: Pick<SavedMap, 'id' | 'smpBlob'>,
+): Promise<Blob | undefined> {
+  if (map.smpBlob) return map.smpBlob;
+  const db = getDb();
+  const storedPackage = await db.mapPackages.get(map.id);
+  if (!storedPackage) return undefined;
+  if (storedPackage.data) {
+    return new Blob([storedPackage.data], {
+      type: storedPackage.contentType || 'application/zip',
+    });
+  }
+
+  const chunks = await db.mapPackageChunks
+    .where('mapId')
+    .equals(map.id)
+    .sortBy('index');
+  if (
+    storedPackage.chunkCount !== undefined &&
+    chunks.length !== storedPackage.chunkCount
+  ) {
+    throw new Error('SMP package chunks are incomplete');
+  }
+  if (chunks.length === 0 && (storedPackage.size ?? 0) > 0) {
+    throw new Error('SMP package chunks are missing');
+  }
+  return new Blob(
+    chunks.map((chunk) => chunk.data),
+    { type: storedPackage.contentType || 'application/zip' },
+  );
+}
+
+/** Fetch one map and attach its package blob for explicit full-Blob consumers. */
+export async function getSavedMapWithSmpBlob(
+  mapId: string,
+): Promise<SavedMap | undefined> {
+  const map = await getDb().maps.get(mapId);
+  if (!map) return undefined;
+  const smpBlob = await getSavedMapSmpBlob(map);
+  return smpBlob ? { ...map, smpBlob } : map;
 }
 
 /**

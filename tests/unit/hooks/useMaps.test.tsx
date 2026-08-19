@@ -198,7 +198,8 @@ describe('useCreateMap', () => {
     expect(await getDb().maps.get(map.id)).toBeUndefined();
   });
 
-  it('persists ready imported SMP records with an explicit imported origin', async () => {
+  it('persists ready imported SMP metadata separately from chunked package bytes', async () => {
+    const smpBlob = new Blob(['smp'], { type: 'application/zip' });
     const map = createMap({
       id: 'imported-map',
       type: 'style',
@@ -206,8 +207,8 @@ describe('useCreateMap', () => {
       styleUrl: '',
       scheme: undefined,
       status: 'ready',
-      smpBlob: new Blob(['smp']),
-      smpSize: 3,
+      smpBlob,
+      smpSize: smpBlob.size,
     });
     const { result } = renderHook(() => useCreateMap(), { wrapper });
 
@@ -216,16 +217,27 @@ describe('useCreateMap', () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(await getDb().maps.get(map.id)).toEqual(
+    const storedMap = await getDb().maps.get(map.id);
+    expect(storedMap).toEqual(
       expect.objectContaining({
         id: map.id,
         origin: 'imported',
         type: 'style',
         styleUrl: '',
         status: 'ready',
-        smpSize: 3,
+        smpSize: smpBlob.size,
       }),
     );
+    expect(storedMap?.smpBlob).toBeUndefined();
+
+    const storedPackage = await getDb().mapPackages.get(map.id);
+    expect(storedPackage?.data).toBeUndefined();
+    expect(storedPackage?.size).toBe(smpBlob.size);
+    expect(storedPackage?.chunkCount).toBe(1);
+    expect(storedPackage?.contentType).toBe('application/zip');
+    expect(
+      await getDb().mapPackageChunks.where('mapId').equals(map.id).count(),
+    ).toBe(1);
   });
 });
 
@@ -237,9 +249,23 @@ describe('useDeleteMap', () => {
     useMapDownloadStore.setState({ active: null });
   });
 
-  it('clears the active map in the store when the deleted map is active for the current project', async () => {
+  it('clears the active map and package bytes when the deleted map is active', async () => {
     await addProject('project-1', 'map-1');
     await getDb().maps.add(createMap());
+    await getDb().mapPackages.add({
+      mapId: 'map-1',
+      contentType: 'application/zip',
+      size: 7,
+      chunkSize: 7,
+      chunkCount: 1,
+      updatedAt: '2026-06-28T00:00:00Z',
+    });
+    await getDb().mapPackageChunks.add({
+      id: 'map-1:0',
+      mapId: 'map-1',
+      index: 0,
+      data: new TextEncoder().encode('package').buffer,
+    });
     useMapStore.getState().hydrateActiveMap('project-1', 'map-1');
 
     const { result } = renderHook(() => useDeleteMap(), {
@@ -251,6 +277,10 @@ describe('useDeleteMap', () => {
 
     expect(useMapStore.getState().activeMapId).toBeNull();
     expect(useMapStore.getState().activeProjectLocalId).toBe('project-1');
+    expect(await getDb().mapPackages.get('map-1')).toBeUndefined();
+    expect(
+      await getDb().mapPackageChunks.where('mapId').equals('map-1').count(),
+    ).toBe(0);
   });
 
   it('clears the deleted map from whichever project is currently hydrated', async () => {

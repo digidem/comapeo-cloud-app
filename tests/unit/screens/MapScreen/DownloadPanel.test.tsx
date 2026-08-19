@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useDownloadMap } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
+import * as db from '@/lib/db';
 import * as smpDownload from '@/lib/map/smp-download';
 import { DownloadPanel } from '@/screens/MapScreen/DownloadPanel';
 import { useMapDownloadStore } from '@/stores/map-download-store';
@@ -197,7 +198,34 @@ describe('DownloadPanel', () => {
     expect(screen.getByText(/downloaded successfully/i)).toBeInTheDocument();
   });
 
-  it('describes imported ready maps as imported instead of downloaded', () => {
+  it('checks package availability without hydrating the full SMP blob', async () => {
+    const availabilitySpy = vi
+      .spyOn(db, 'hasSavedMapSmpPackage')
+      .mockResolvedValue(true);
+    const fullBlobSpy = vi.spyOn(db, 'getSavedMapWithSmpBlob');
+    const map = createMockMap({ status: 'ready', smpSize: 1048576 });
+
+    try {
+      render(<DownloadPanel map={map} />);
+
+      await waitFor(() =>
+        expect(availabilitySpy).toHaveBeenCalledWith({
+          id: map.id,
+          smpBlob: map.smpBlob,
+          smpSize: map.smpSize,
+        }),
+      );
+      expect(fullBlobSpy).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole('button', { name: 'Download SMP File' }),
+      ).toBeEnabled();
+    } finally {
+      availabilitySpy.mockRestore();
+      fullBlobSpy.mockRestore();
+    }
+  });
+
+  it('describes imported ready maps as imported instead of downloaded', async () => {
     const map = createMockMap({
       status: 'ready',
       type: 'style',
@@ -215,6 +243,11 @@ describe('DownloadPanel', () => {
     expect(
       screen.queryByText(/downloaded successfully/i),
     ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Download SMP File' }),
+      ).toBeEnabled(),
+    );
   });
 
   it('does not offer regeneration when an imported ready map has lost its blob', async () => {

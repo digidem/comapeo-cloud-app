@@ -64,9 +64,10 @@ const statusSchema = v.union([
 /**
  * Scalar fields shared by both map types.
  *
- * `smpBlob` and `smpSize` are deliberately excluded — they are runtime-only
- * (the blob is written in Phase 1c once `status` reaches `'ready'`) and do not
- * round-trip through the schema boundary.
+ * `smpBlob` and `smpSize` are deliberately excluded from this scalar schema.
+ * `smpBlob` is a transient import/legacy runtime field; current package bytes
+ * live in separate IndexedDB package/chunk tables. `smpSize` is persisted map
+ * metadata but is preserved outside this validation boundary.
  */
 const baseFields = {
   id: v.string(),
@@ -104,10 +105,10 @@ const rasterSchema = v.pipe(
   v.check((value) => value.maxZoom >= value.minZoom, zoomOrderMessage),
 );
 
-// `smpBlob` is intentionally outside this scalar schema. Imported records are
-// identified explicitly by origin and must be ready with an empty styleUrl;
-// runtime consumers additionally use `isImportedSmpMap`, which requires the
-// actual SMP blob.
+// Package bytes are intentionally outside this scalar schema. Imported records
+// are identified explicitly by origin and must be ready with an empty styleUrl;
+// runtime consumers resolve their package from the separate package/chunk store
+// (or a legacy `smpBlob` when present).
 const styleSchema = v.pipe(
   v.object({
     ...baseFields,
