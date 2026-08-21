@@ -78,8 +78,10 @@ def assert_policy_contract(
     test.assertIn("Keep the safety policy here", skill_text)
     test.assertIn("ordered merge sequence", skill_text)
     test.assertIn("re-establish the merge gate for the next PR", skill_text)
-    test.assertIn("final target-branch run for the exact post-sequence target SHA is the integration truth", skill_text)
+    test.assertIn("complete repository-applicable set of target-branch runs/checks for the exact post-sequence target SHA is the integration truth", skill_text)
     test.assertIn("exact post-sequence target SHA", skill_text)
+    test.assertIn("git merge-base --is-ancestor", skill_text)
+    test.assertIn("every expected workflow/check", skill_text)
     test.assertIn("do not replace that integration subject with a newer unrelated tip", skill_text)
     test.assertIn("Apply the same terminal-state and soft-fail rules from the merge-ready gate", skill_text)
 
@@ -144,7 +146,9 @@ class PrCyclePolicyTests(unittest.TestCase):
         timeout_text = TIMEOUT_STRATEGY.read_text()
         self.assertIn("## Ordered multi-PR merge sequences", runbook_text)
         self.assertIn("re-gate the next PR against that exact new base tip", runbook_text)
-        self.assertIn("final target-branch CI for the exact post-sequence target SHA is the integration truth", runbook_text)
+        self.assertIn("complete repository-applicable set of target-branch runs/checks for the exact post-sequence target SHA is the integration truth", runbook_text)
+        self.assertIn("git merge-base --is-ancestor", runbook_text)
+        self.assertIn("every expected workflow/check", runbook_text)
         self.assertIn("recent successful runs of the same workflow/job", timeout_text)
 
     def test_claude_qwen_fallback_and_usage_preflight_are_pinned(self) -> None:
@@ -165,12 +169,25 @@ class PrCyclePolicyTests(unittest.TestCase):
         self.assertIn('--tools ""', qwen_text)
         self.assertIn("Do not use `--add-dir`", qwen_text)
         self.assertIn("<sanitized-prompt-file>", qwen_text)
+        self.assertIn("mode 0700", qwen_text)
+        self.assertIn("mode 0600", qwen_text)
+        self.assertIn("empty isolated working directory", qwen_text)
+        self.assertIn("through stdin", qwen_text)
         self.assertIn("no older than 15 minutes", qwen_text)
         self.assertIn("one bounded provider-specific liveness probe", qwen_text)
+        self.assertIn("plan-check json", qwen_text)
+        self.assertIn("parseable observation timestamp", qwen_text)
 
         invocation = _first_code_block_after(qwen_text, "Representative invocation")
+        self.assertIn('mktemp -d', invocation)
+        self.assertIn('chmod 700', invocation)
+        self.assertIn('chmod 600', invocation)
+        self.assertIn('cd "$WORK_DIR"', invocation)
         self.assertIn('--tools ""', invocation)
+        self.assertIn('-p < "$PROMPT_FILE"', invocation)
+        self.assertIn("trap", invocation)
         self.assertNotIn("--add-dir", invocation)
+        self.assertNotIn("$(cat", invocation)
         self.assertNotRegex(invocation, r"--tools\s+(?:Read|Grep|Glob|Bash|Edit|Write)")
 
     def test_ordered_merge_keeps_immutable_sequence_subject(self) -> None:
@@ -179,8 +196,13 @@ class PrCyclePolicyTests(unittest.TestCase):
             "## Scoped cleanup", 1
         )[0]
         self.assertIn("keep that immutable SHA as the integration subject", ordered)
+        self.assertIn("complete repository-applicable set of target-branch runs/checks", ordered)
+        self.assertIn("every expected workflow/check", ordered)
+        self.assertIn("git merge-base --is-ancestor", ordered)
         self.assertIn("same terminal-state and soft-fail rules as the merge-ready gate", ordered)
         self.assertIn("pre-mask step outcome or logs", ordered)
+        self.assertIn("Do not overlap merge commands", ordered)
+        self.assertNotRegex(ordered, re.compile(r"merge (?:the )?remaining PRs concurrently", re.I))
         self.assertNotIn("repeat against the new live tip", ordered)
         self.assertLess(
             ordered.index("use the merge commit SHA returned by verification of that final merge"),
@@ -201,8 +223,9 @@ class PrCyclePolicyTests(unittest.TestCase):
             usage.index("quota-heartbeat.json"),
             usage.index("one bounded provider-specific liveness probe"),
         )
-        self.assertIn("no older than 15 minutes", usage)
-        self.assertIn("no more than 5 minutes in the future", usage)
+        self.assertIn("accept `plan-check json` output only when it includes a parseable observation timestamp", usage)
+        self.assertGreaterEqual(usage.count("no older than 15 minutes"), 2)
+        self.assertGreaterEqual(usage.count("no more than 5 minutes in the future"), 2)
         self.assertIn("timeout, hang, or provider error", usage)
         self.assertIn("unavailable for this cycle without claiming quota exhaustion", usage)
 
