@@ -123,7 +123,7 @@ When the user explicitly authorizes multiple already-reviewed PRs to merge in a 
 3. Re-read the next PR against that tip. Because the previous merge moved the base, re-gate the next PR against that exact new base tip before issuing its guarded merge; do not rely on the previous mergeability, CI, or reviewer snapshot merely because the diffs appear disjoint.
 4. Repeat serially. Do not overlap merge commands or assume the remaining PRs stayed merge-ready while the base moved.
 
-After the final merge, fetch the target branch again, capture its exact SHA, and inspect the branch-triggered workflow runs for that SHA. The final target-branch CI is the integration truth for the combined state: require all repository-applicable post-merge checks such as full browser E2E, deployment, production smoke, Lighthouse, or visual regression to reach an acceptable terminal result before declaring the ordered sequence complete. PR CI and human QA establish confidence in each change independently but do not replace the final integrated-branch signal.
+After the final merge, use the merge commit SHA returned by verification of that final merge as the exact post-sequence target SHA and keep that immutable SHA as the integration subject. Fetch the target branch to confirm that commit is present; do not derive the sequence result from a later moving branch tip. Inspect branch-triggered workflow runs for that exact SHA. The final target-branch CI for the exact post-sequence target SHA is the integration truth for the combined state: require all repository-applicable post-merge checks such as full browser E2E, deployment, production smoke, Lighthouse, or visual regression to satisfy the same terminal-state and soft-fail rules as the merge-ready gate before declaring the ordered sequence complete. Required/relevant checks must be terminal green; skipped or neutral results require explicit adjudication as legitimate conditional behavior; cancelled, timed-out, action-required, or failing checks are unacceptable; and a workflow/job that masks failures with `continue-on-error` or equivalent logic requires inspection of the pre-mask step outcome or logs. PR CI and human QA establish confidence in each change independently but do not replace the final integrated-branch signal.
 
 A bounded way to locate the final target-branch run is:
 
@@ -134,7 +134,7 @@ gh run list --repo <owner/repo> --branch <base> --limit 20 \
   --json databaseId,workflowName,status,conclusion,headSha,url,event
 ```
 
-Select only runs whose `headSha` equals the captured final target SHA, then inspect those run IDs with `gh run view`. If the target branch moves again before verification finishes, repeat against the new live tip rather than attributing an older run to the current branch state.
+Select only runs whose `headSha` equals the captured exact post-sequence target SHA, then inspect those run IDs with `gh run view`. If the target branch moves again before verification finishes, report the newer tip as concurrent movement and optionally validate it as additional evidence, but do not replace the exact post-sequence target SHA as the integration subject or attribute the newer run to the authorized sequence.
 
 ## Scoped cleanup after verified merge
 

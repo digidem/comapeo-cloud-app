@@ -47,6 +47,12 @@ def assert_policy_contract(
         "fall back to **Qwen 3.8 via `claude-qwen`** as a final independent-review option",
         fallback,
     )
+    kimi_index = fallback.index("fall back first to **Kimi K3 via OpenCode Go**")
+    codex_index = fallback.index("including GPT-5.6 Sol through Codex when usable")
+    qwen_index = fallback.index("Qwen 3.8 via `claude-qwen`")
+    test.assertLess(kimi_index, codex_index)
+    test.assertLess(codex_index, qwen_index)
+    test.assertNotIn("Use Qwen first", fallback)
 
     contract = _paragraph_containing(reference_text, "Ask Kimi to review a fresh exact diff")
     test.assertIn("**exact head/base-tip pair**", contract)

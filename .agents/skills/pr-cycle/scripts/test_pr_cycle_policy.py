@@ -36,6 +36,11 @@ def _active_ci_commands(ci_text: str) -> set[str]:
     }
 
 
+def _first_code_block_after(text: str, marker: str) -> str:
+    tail = text.split(marker, 1)[1]
+    return tail.split("```bash", 1)[1].split("```", 1)[0]
+
+
 def assert_policy_contract(
     test: unittest.TestCase, *, skill_text: str, agents_text: str, ci_text: str
 ) -> None:
@@ -73,9 +78,16 @@ def assert_policy_contract(
     test.assertIn("Keep the safety policy here", skill_text)
     test.assertIn("ordered merge sequence", skill_text)
     test.assertIn("re-establish the merge gate for the next PR", skill_text)
-    test.assertIn("final target-branch run is the integration truth", skill_text)
+    test.assertIn("final target-branch run for the exact post-sequence target SHA is the integration truth", skill_text)
+    test.assertIn("exact post-sequence target SHA", skill_text)
+    test.assertIn("do not replace that integration subject with a newer unrelated tip", skill_text)
+    test.assertIn("Apply the same terminal-state and soft-fail rules from the merge-ready gate", skill_text)
 
     test.assertIn("live usage instrumentation", skill_text)
+    test.assertIn("no older than 15 minutes", skill_text)
+    test.assertIn("no more than 5 minutes in the future", skill_text)
+    test.assertIn("one bounded provider-specific liveness probe", skill_text)
+    test.assertIn("unavailable for this cycle without claiming quota exhaustion", skill_text)
     test.assertIn("codexbar usage", skill_text)
     test.assertIn("plan-check json", skill_text)
     test.assertIn("quota-heartbeat.json", skill_text)
@@ -132,7 +144,7 @@ class PrCyclePolicyTests(unittest.TestCase):
         timeout_text = TIMEOUT_STRATEGY.read_text()
         self.assertIn("## Ordered multi-PR merge sequences", runbook_text)
         self.assertIn("re-gate the next PR against that exact new base tip", runbook_text)
-        self.assertIn("final target-branch CI is the integration truth", runbook_text)
+        self.assertIn("final target-branch CI for the exact post-sequence target SHA is the integration truth", runbook_text)
         self.assertIn("recent successful runs of the same workflow/job", timeout_text)
 
     def test_claude_qwen_fallback_and_usage_preflight_are_pinned(self) -> None:
@@ -149,7 +161,50 @@ class PrCyclePolicyTests(unittest.TestCase):
         self.assertIn("exact head/base-tip pair", qwen_text)
         self.assertIn("do not repeatedly retry", qwen_text)
         self.assertIn("Never print, copy, grep, or embed the wrapper's credentials or API keys", qwen_text)
-        self.assertIn("<bundle-path>/diff.patch", qwen_text)
+        self.assertIn("No reviewer filesystem tools are allowed", qwen_text)
+        self.assertIn('--tools ""', qwen_text)
+        self.assertIn("Do not use `--add-dir`", qwen_text)
+        self.assertIn("<sanitized-prompt-file>", qwen_text)
+        self.assertIn("no older than 15 minutes", qwen_text)
+        self.assertIn("one bounded provider-specific liveness probe", qwen_text)
+
+        invocation = _first_code_block_after(qwen_text, "Representative invocation")
+        self.assertIn('--tools ""', invocation)
+        self.assertNotIn("--add-dir", invocation)
+        self.assertNotRegex(invocation, r"--tools\s+(?:Read|Grep|Glob|Bash|Edit|Write)")
+
+    def test_ordered_merge_keeps_immutable_sequence_subject(self) -> None:
+        runbook_text = RUNBOOK.read_text()
+        ordered = runbook_text.split("## Ordered multi-PR merge sequences", 1)[1].split(
+            "## Scoped cleanup", 1
+        )[0]
+        self.assertIn("keep that immutable SHA as the integration subject", ordered)
+        self.assertIn("same terminal-state and soft-fail rules as the merge-ready gate", ordered)
+        self.assertIn("pre-mask step outcome or logs", ordered)
+        self.assertNotIn("repeat against the new live tip", ordered)
+        self.assertLess(
+            ordered.index("use the merge commit SHA returned by verification of that final merge"),
+            ordered.index("Select only runs whose `headSha` equals"),
+        )
+
+    def test_usage_preflight_resolves_unknown_state_before_fallback(self) -> None:
+        skill_text = SKILL.read_text()
+        usage = next(
+            paragraph
+            for paragraph in re.split(r"\n\s*\n", skill_text)
+            if "live usage instrumentation" in paragraph
+        )
+        self.assertNotIn("fresh enough to represent this execution", usage)
+        self.assertLess(usage.index("codexbar usage"), usage.index("plan-check json"))
+        self.assertLess(usage.index("plan-check json"), usage.index("quota-heartbeat.json"))
+        self.assertLess(
+            usage.index("quota-heartbeat.json"),
+            usage.index("one bounded provider-specific liveness probe"),
+        )
+        self.assertIn("no older than 15 minutes", usage)
+        self.assertIn("no more than 5 minutes in the future", usage)
+        self.assertIn("timeout, hang, or provider error", usage)
+        self.assertIn("unavailable for this cycle without claiming quota exhaustion", usage)
 
     def test_nit_improvement_policy_is_required(self) -> None:
         skill_text = SKILL.read_text().replace(
