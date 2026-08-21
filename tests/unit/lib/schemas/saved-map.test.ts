@@ -1,6 +1,8 @@
+import { AUTHORED_VECTOR_LAYER_FIXTURE } from '@tests/fixtures/authored-layers';
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 
+import { MAX_AUTHORED_LAYERS } from '@/lib/map/authored-layers';
 import { savedMapSchema } from '@/lib/schemas/saved-map';
 
 describe('savedMapSchema', () => {
@@ -28,6 +30,77 @@ describe('savedMapSchema', () => {
       expect(result.output.name).toBe('Territory Basemap');
       expect(result.output.type).toBe('raster');
     }
+  });
+
+  it('accepts canonical authored layers and preserves their order', () => {
+    const result = v.safeParse(savedMapSchema, {
+      ...validRaster,
+      layers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.output.layers).toEqual([AUTHORED_VECTOR_LAYER_FIXTURE]);
+    }
+  });
+
+  it('returns the canonicalized authored layer produced by the shared parser', () => {
+    const candidate = structuredClone(AUTHORED_VECTOR_LAYER_FIXTURE);
+    const firstFragment = candidate.render.layers[0]!;
+    candidate.render.layers[0] = {
+      ...firstFragment,
+      layout: {},
+    };
+    const result = v.safeParse(savedMapSchema, {
+      ...validRaster,
+      layers: [candidate],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.output.layers?.[0]?.render.layers[0]).not.toHaveProperty(
+        'layout',
+      );
+    }
+  });
+
+  it('rejects a non-canonical authored layer through the strict shared validator', () => {
+    const invalidLayer = {
+      ...AUTHORED_VECTOR_LAYER_FIXTURE,
+      id: 'not-a-canonical-uuid',
+    };
+    expect(
+      v.safeParse(savedMapSchema, { ...validRaster, layers: [invalidLayer] })
+        .success,
+    ).toBe(false);
+  });
+
+  it('rejects more authored layers than the packaging boundary allows', () => {
+    const layers = Array.from(
+      { length: MAX_AUTHORED_LAYERS + 1 },
+      (_, index) => ({
+        ...AUTHORED_VECTOR_LAYER_FIXTURE,
+        id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      }),
+    );
+    expect(
+      v.safeParse(savedMapSchema, { ...validRaster, layers }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an authored-layer collection above the aggregate packaging JSON cap', () => {
+    const layers = Array.from({ length: MAX_AUTHORED_LAYERS }, (_, index) => ({
+      ...AUTHORED_VECTOR_LAYER_FIXTURE,
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      name: 'x'.repeat(170_000),
+    }));
+    expect(
+      v.safeParse(savedMapSchema, { ...validRaster, layers }).success,
+    ).toBe(false);
+  });
+
+  it('keeps legacy maps without layers valid', () => {
+    const result = v.safeParse(savedMapSchema, validRaster);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.output.layers).toBeUndefined();
   });
 
   it('validates a complete style saved map', () => {

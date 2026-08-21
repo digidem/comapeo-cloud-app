@@ -1,5 +1,12 @@
 import * as v from 'valibot';
 
+import {
+  MAX_AUTHORED_LAYERS,
+  MAX_AUTHORED_LAYERS_JSON_BYTES,
+  measureCanonicalJsonUtf8Bounded,
+} from '@/lib/map/authored-layers';
+import { parseAuthoredLayer } from '@/lib/schemas/authored-layer';
+
 // ---------------------------------------------------------------------------
 // Shared entry schemas
 // ---------------------------------------------------------------------------
@@ -61,6 +68,40 @@ const statusSchema = v.union([
   v.literal('error'),
 ]);
 
+const authoredLayerSchema = v.pipe(
+  v.unknown(),
+  v.rawTransform(({ dataset, addIssue, NEVER }) => {
+    try {
+      return parseAuthoredLayer(dataset.value);
+    } catch {
+      addIssue({
+        message: 'SavedMap.layers must contain canonical AuthoredLayer values',
+      });
+      return NEVER;
+    }
+  }),
+);
+
+const authoredLayersSchema = v.pipe(
+  v.array(authoredLayerSchema),
+  v.maxLength(
+    MAX_AUTHORED_LAYERS,
+    `SavedMap.layers supports at most ${MAX_AUTHORED_LAYERS} authored layers`,
+  ),
+  v.check((layers) => {
+    let aggregateBytes = 0n;
+    for (const layer of layers) {
+      const measured = measureCanonicalJsonUtf8Bounded(layer, {
+        maxBytes: MAX_AUTHORED_LAYERS_JSON_BYTES,
+      });
+      if (!measured.ok) return false;
+      aggregateBytes += measured.bytes;
+      if (aggregateBytes > BigInt(MAX_AUTHORED_LAYERS_JSON_BYTES)) return false;
+    }
+    return true;
+  }, `SavedMap.layers exceeds ${MAX_AUTHORED_LAYERS_JSON_BYTES} aggregate UTF-8 JSON bytes`),
+);
+
 /**
  * Scalar fields shared by both map types.
  *
@@ -78,6 +119,7 @@ const baseFields = {
   maxZoom: zoomSchema,
   attribution: v.optional(v.string()),
   origin: v.optional(v.union([v.literal('authored'), v.literal('imported')])),
+  layers: v.optional(authoredLayersSchema),
   status: statusSchema,
   errorMessage: v.optional(v.string()),
   createdAt: v.pipe(v.string(), v.isoTimestamp()),

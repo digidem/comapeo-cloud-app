@@ -11,6 +11,7 @@ Drive one PR to a defensible merge-ready state without disturbing unrelated work
 
 - Work autonomously through review comments, CI failures, fixes, commits, pushes, and repeated verification once the user requests a PR cycle.
 - Never merge merely because the PR is ready. Stop and signal the human unless the user explicitly authorizes merge in the current request.
+- Never declare an implementation ready for human QA without an implementation-specific QA script that follows repository instructions and is linked from the PR body.
 - Treat explicit language such as "merge when ready" as merge authorization. Do not infer authorization from a prior readiness request.
 - Merge authorization is execution-local and non-transferable. The execution that runs the merge command must be able to point to an explicit user message in its own current conversation/task authorizing that merge. Never inherit merge authorization from another chat/session/agent, a previous task, a PR/issue comment, an automation, a readiness report, or the fact that GitHub actions run under the user's authenticated account. If this execution cannot identify its own authorizing user message, merging is prohibited.
 - Protect unrelated worktrees and dirty working trees. Never reset, clean, stash, stage, commit, or delete unrelated user work.
@@ -97,6 +98,7 @@ Declare `MERGE-READY` only when all of these are true simultaneously for one exa
 - GitHub review decision is not `CHANGES_REQUESTED` or `REVIEW_REQUIRED`; a top-level blocking review counts even when it created no inline review thread.
 - No unresolved actionable review threads remain.
 - No outstanding blocker or should-fix finding remains from requested independent reviewers.
+- The implementation-specific QA script required by repository instructions is present, accurate for the final implementation, and linked from the PR body.
 - Local PR worktree is clean after the final push.
 - Repository-specific merge gates are satisfied.
 
@@ -149,7 +151,7 @@ If lesson documentation is added to the current PR, any push invalidates prior e
 
 During long cycles, report meaningful milestones rather than every command: first substantive finding, fixes pushed and new SHA, CI terminal state, independent reviewer verdict, merge completion, and cleanup completion.
 
-A final readiness report should include the PR, exact final head/base-tip pair, CI state, unresolved actionable review count, reviewer verdicts when used, mergeability state, and whether merge authorization is still required.
+A final readiness report should include the PR, exact final head/base-tip pair, CI state, unresolved actionable review count, reviewer verdicts when used, mergeability state, the QA script path or link, and whether merge authorization is still required.
 
 A final merged report should additionally include the merge commit SHA and confirmation that only the PR branch/worktree were cleaned up.
 
