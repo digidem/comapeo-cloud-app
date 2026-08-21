@@ -39,6 +39,14 @@ def assert_policy_contract(
         fallback,
     )
     test.assertIn("references/kimi-k3-review.md", fallback)
+    test.assertIn(
+        "If Kimi is unavailable, use another configured strong reviewer whose live quota is available, including GPT-5.6 Sol through Codex when usable.",
+        fallback,
+    )
+    test.assertIn(
+        "fall back to **Qwen 3.8 via `claude-qwen`** as a final independent-review option",
+        fallback,
+    )
 
     contract = _paragraph_containing(reference_text, "Ask Kimi to review a fresh exact diff")
     test.assertIn("**exact head/base-tip pair**", contract)
@@ -88,6 +96,20 @@ class ReviewerFallbackPolicyTests(unittest.TestCase):
         skill_text = SKILL.read_text().replace(
             "If the user explicitly required a named reviewer, do not silently substitute another model.",
             "If the user explicitly required a named reviewer, silently substitute another model.",
+        )
+        with self.assertRaises(AssertionError):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                reference_text=REFERENCE.read_text(),
+                timeout_text=TIMEOUT.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_fallback_ordering_is_required(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "If Kimi is unavailable, use another configured strong reviewer whose live quota is available, including GPT-5.6 Sol through Codex when usable. If those preferred paths are exhausted or unavailable, fall back to **Qwen 3.8 via `claude-qwen`** as a final independent-review option.",
+            "Use Qwen first, then try other reviewers later.",
         )
         with self.assertRaises(AssertionError):
             assert_policy_contract(

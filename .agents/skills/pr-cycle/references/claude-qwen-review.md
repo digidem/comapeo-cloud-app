@@ -1,6 +1,6 @@
 # Claude-Qwen fallback reviewer
 
-Use this path when the preferred independent reviewers are unavailable or exhausted, the user did not explicitly require a different named model, and `/home/coder/.local/bin/claude-qwen` is available. The wrapper routes Claude Code through Alibaba MaaS using **Qwen 3.8** (`qwen3.8-max-preview`), so its quota is distinct from the normal Claude subscription session window.
+Use this path when the preferred independent reviewers are unavailable or exhausted, the user did not explicitly require a different named model, and a `claude-qwen` wrapper is available. Resolve it with `command -v claude-qwen`; if the wrapper is not on `PATH`, check known local install locations such as `/home/coder/.local/bin/claude-qwen` without reading or exposing its credentials. The wrapper routes Claude Code through Alibaba MaaS using **Qwen 3.8** (`qwen3.8-max-preview`), so its quota is distinct from the normal Claude subscription session window.
 
 ## Availability and usage preflight
 
@@ -15,7 +15,7 @@ For other providers, use `codexbar usage --provider <provider> --json` only when
 
 If CodexBar cannot report a provider, try `plan-check json`. If that command fails, times out, or cannot parse current usage, do not treat its result as authoritative. A further fallback is `~/.hermes/state/quota-heartbeat.json`, but first inspect its timestamp: stale heartbeat state is historical evidence only and must never override a current provider response, a current CLI limit message, or a current successful dispatch.
 
-`/home/coder/.local/bin/claude-qwen --version` is a safe liveness probe for the wrapper, but it does **not** prove Qwen quota remains. A real Qwen dispatch may return JSON with `"api_error_status":429` and a `result` explaining that the token-plan quota is exhausted and giving a reset time. Record that reset and **do not repeatedly retry** the provider before the reset unless a newer live quota signal says it is available again.
+`claude-qwen --version` is a safe liveness probe for the resolved wrapper, but it does **not** prove Qwen quota remains. A real Qwen dispatch may return JSON with `"api_error_status":429` and a `result` explaining that the token-plan quota is exhausted and giving a reset time. Record that reset and **do not repeatedly retry** the provider before the reset unless a newer live quota signal says it is available again.
 
 Never print, copy, grep, or embed the wrapper's credentials or API keys in logs, prompts, PR comments, or reports.
 
@@ -31,13 +31,15 @@ Never print, copy, grep, or embed the wrapper's credentials or API keys in logs,
 Representative invocation when the exact diff bundle is already available to the reviewer:
 
 ```bash
-/home/coder/.local/bin/claude-qwen \
+QWEN_BIN="$(command -v claude-qwen)"
+"$QWEN_BIN" \
   --safe-mode --bare \
   --permission-mode dontAsk \
   --tools Read,Grep,Glob \
+  --add-dir <bundle-path> \
   --no-chrome --no-session-persistence \
   --output-format json \
-  -p "Review the supplied exact diff for HEAD <head-sha> against live base tip <base-tip-sha>. Read-only. Return reviewed_head_sha, reviewed_base_tip_sha, verdict READY or NOT_READY, blockers, should_fix, and nits."
+  -p "Read <bundle-path>/diff.patch and review only that frozen diff for HEAD <head-sha> against live base tip <base-tip-sha>. Read-only. Return reviewed_head_sha, reviewed_base_tip_sha, verdict READY or NOT_READY, blockers, should_fix, and nits."
 ```
 
 If the wrapper or current Claude Code version rejects a compatibility flag, remove only that unsupported flag while preserving the read-only tool boundary and exact-SHA contract.
