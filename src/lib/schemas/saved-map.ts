@@ -1,5 +1,7 @@
 import * as v from 'valibot';
 
+import { parseAuthoredLayer } from '@/lib/schemas/authored-layer';
+
 // ---------------------------------------------------------------------------
 // Shared entry schemas
 // ---------------------------------------------------------------------------
@@ -61,6 +63,20 @@ const statusSchema = v.union([
   v.literal('error'),
 ]);
 
+const authoredLayerSchema = v.pipe(
+  v.unknown(),
+  v.rawTransform(({ dataset, addIssue, NEVER }) => {
+    try {
+      return parseAuthoredLayer(dataset.value);
+    } catch {
+      addIssue({
+        message: 'SavedMap.layers must contain canonical AuthoredLayer values',
+      });
+      return NEVER;
+    }
+  }),
+);
+
 /**
  * Scalar fields shared by both map types.
  *
@@ -78,6 +94,7 @@ const baseFields = {
   maxZoom: zoomSchema,
   attribution: v.optional(v.string()),
   origin: v.optional(v.union([v.literal('authored'), v.literal('imported')])),
+  layers: v.optional(v.array(authoredLayerSchema)),
   status: statusSchema,
   errorMessage: v.optional(v.string()),
   createdAt: v.pipe(v.string(), v.isoTimestamp()),

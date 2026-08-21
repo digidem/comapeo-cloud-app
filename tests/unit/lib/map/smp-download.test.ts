@@ -321,10 +321,11 @@ describe('downloadSmp', () => {
     regionalZip.file('s/0/3/4/4.png', new Uint8Array([3]));
     regionalZip.file('s/0/4/8/8.png', new Uint8Array([4]));
 
-    const streams = [
-      await globalZip.generateAsync({ type: 'uint8array' }),
-      await regionalZip.generateAsync({ type: 'uint8array' }),
-    ];
+    const globalBytes = await globalZip.generateAsync({ type: 'uint8array' });
+    const regionalBytes = await regionalZip.generateAsync({
+      type: 'uint8array',
+    });
+    const streams = [globalBytes, regionalBytes];
     mockDownload.mockImplementation(() => {
       const bytes = streams.shift();
       if (!bytes) throw new Error('Unexpected download call');
@@ -336,8 +337,22 @@ describe('downloadSmp', () => {
       });
     });
 
-    await downloadSmp({ map: createMockMap({ maxZoom: 4 }) });
+    const arrayBufferSizes: number[] = [];
+    const nativeArrayBuffer = Blob.prototype.arrayBuffer;
+    const arrayBufferSpy = vi
+      .spyOn(Blob.prototype, 'arrayBuffer')
+      .mockImplementation(function (this: Blob) {
+        arrayBufferSizes.push(this.size);
+        return nativeArrayBuffer.call(this);
+      });
+    try {
+      await downloadSmp({ map: createMockMap({ maxZoom: 4 }) });
+    } finally {
+      arrayBufferSpy.mockRestore();
+    }
 
+    expect(arrayBufferSizes).not.toContain(globalBytes.byteLength);
+    expect(arrayBufferSizes).not.toContain(regionalBytes.byteLength);
     expect(mockDownload).toHaveBeenCalledTimes(2);
     expect(mockDownload).toHaveBeenNthCalledWith(
       1,
