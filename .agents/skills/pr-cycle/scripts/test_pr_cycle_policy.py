@@ -41,6 +41,80 @@ def _first_code_block_after(text: str, marker: str) -> str:
     return tail.split("```bash", 1)[1].split("```", 1)[0]
 
 
+def _section(text: str, start: str, end: str) -> str:
+    return text.split(start, 1)[1].split(end, 1)[0]
+
+
+def _bash_blocks(text: str) -> list[str]:
+    return re.findall(r"```bash\n(.*?)```", text, flags=re.DOTALL)
+
+
+def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> None:
+    availability = _section(
+        qwen_text, "## Availability and usage preflight", "## Exact-revision review contract"
+    )
+    test.assertIn("fresh provider query at read time", availability)
+    test.assertIn("provider-specific observation timestamp", availability)
+    test.assertGreaterEqual(availability.count("no older than 15 minutes"), 3)
+    test.assertGreaterEqual(availability.count("no more than 5 minutes in the future"), 3)
+    test.assertNotRegex(
+        availability,
+        re.compile(
+            r"cached CodexBar (?:results|data).*(?:accepted|authoritative)",
+            re.I | re.S,
+        ),
+    )
+
+    exact = _section(qwen_text, "## Exact-revision review contract", "## Fallback semantics")
+    blocks = _bash_blocks(exact)
+    reviewer_blocks = [
+        block for block in blocks if "claude-qwen" in block or "$QWEN_BIN" in block
+    ]
+    test.assertGreaterEqual(len(reviewer_blocks), 1)
+    for invocation in reviewer_blocks:
+        test.assertIn("mktemp -d", invocation)
+        test.assertIn('chmod 700 "$REVIEW_ROOT" || exit 1', invocation)
+        test.assertIn('chmod 600 "$PROMPT_FILE" || exit 1', invocation)
+        test.assertIn('chmod 700 "$WORK_DIR" || exit 1', invocation)
+        test.assertIn('cd "$WORK_DIR"', invocation)
+        test.assertIn('--tools ""', invocation)
+        test.assertIn('-p < "$PROMPT_FILE"', invocation)
+        test.assertIn("trap cleanup EXIT", invocation)
+        test.assertIn('rm -rf -- "$REVIEW_ROOT"', invocation)
+        test.assertLess(invocation.index("trap cleanup EXIT"), invocation.index("PROMPT_FILE="))
+        test.assertNotIn("--add-dir", invocation)
+        test.assertNotIn("$(cat", invocation)
+        test.assertNotRegex(invocation, r"--tools\s+(?:Read|Grep|Glob|Bash|Edit|Write)")
+
+
+def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) -> None:
+    ordered = _section(runbook_text, "## Ordered multi-PR merge sequences", "## Scoped cleanup")
+    test.assertIn("Do not overlap merge commands", ordered)
+    test.assertNotRegex(
+        ordered, re.compile(r"merge (?:the )?remaining PRs concurrently", re.I)
+    )
+    test.assertIn("keep that immutable SHA as the integration subject", ordered)
+    test.assertNotRegex(
+        ordered,
+        re.compile(
+            r"replace (?:the )?(?:integration subject|exact post-sequence target SHA).*(?:new|moving|latest) tip",
+            re.I | re.S,
+        ),
+    )
+    test.assertRegex(ordered, re.compile(r"first[- ]parent", re.I))
+    test.assertIn("exact gated base tip", ordered)
+    test.assertIn("git rev-parse <exact-post-sequence-sha>^1", ordered)
+    test.assertIn("git merge-base --is-ancestor", ordered)
+    test.assertIn("--paginate", ordered)
+    test.assertIn("check-runs?per_page=100", ordered)
+    test.assertIn("statuses?per_page=100", ordered)
+    test.assertIn("branch protection/rulesets", ordered)
+    test.assertIn("applicable workflow definitions", ordered)
+    test.assertIn("complete repository-applicable set of target-branch runs/checks", ordered)
+    test.assertIn("same terminal-state and soft-fail rules as the merge-ready gate", ordered)
+    test.assertIn("pre-mask step outcome or logs", ordered)
+
+
 def assert_policy_contract(
     test: unittest.TestCase, *, skill_text: str, agents_text: str, ci_text: str
 ) -> None:
@@ -176,19 +250,9 @@ class PrCyclePolicyTests(unittest.TestCase):
         self.assertIn("no older than 15 minutes", qwen_text)
         self.assertIn("one bounded provider-specific liveness probe", qwen_text)
         self.assertIn("plan-check json", qwen_text)
-        self.assertIn("parseable observation timestamp", qwen_text)
+        self.assertIn("parseable **provider-specific observation timestamp**", qwen_text)
 
-        invocation = _first_code_block_after(qwen_text, "Representative invocation")
-        self.assertIn('mktemp -d', invocation)
-        self.assertIn('chmod 700', invocation)
-        self.assertIn('chmod 600', invocation)
-        self.assertIn('cd "$WORK_DIR"', invocation)
-        self.assertIn('--tools ""', invocation)
-        self.assertIn('-p < "$PROMPT_FILE"', invocation)
-        self.assertIn("trap", invocation)
-        self.assertNotIn("--add-dir", invocation)
-        self.assertNotIn("$(cat", invocation)
-        self.assertNotRegex(invocation, r"--tools\s+(?:Read|Grep|Glob|Bash|Edit|Write)")
+        assert_qwen_security_contract(self, qwen_text)
 
     def test_ordered_merge_keeps_immutable_sequence_subject(self) -> None:
         runbook_text = RUNBOOK.read_text()
@@ -206,8 +270,9 @@ class PrCyclePolicyTests(unittest.TestCase):
         self.assertNotIn("repeat against the new live tip", ordered)
         self.assertLess(
             ordered.index("use the merge commit SHA returned by verification of that final merge"),
-            ordered.index("Select only runs whose `headSha` equals"),
+            ordered.index("Map the paginated check-runs and statuses plus workflow runs"),
         )
+        assert_ordered_merge_contract(self, runbook_text)
 
     def test_usage_preflight_resolves_unknown_state_before_fallback(self) -> None:
         skill_text = SKILL.read_text()
@@ -223,11 +288,55 @@ class PrCyclePolicyTests(unittest.TestCase):
             usage.index("quota-heartbeat.json"),
             usage.index("one bounded provider-specific liveness probe"),
         )
-        self.assertIn("accept `plan-check json` output only when it includes a parseable observation timestamp", usage)
+        self.assertIn("accept `plan-check json` output only when the selected provider's own usage record includes a parseable provider-specific observation timestamp", usage)
         self.assertGreaterEqual(usage.count("no older than 15 minutes"), 2)
         self.assertGreaterEqual(usage.count("no more than 5 minutes in the future"), 2)
         self.assertIn("timeout, hang, or provider error", usage)
         self.assertIn("unavailable for this cycle without claiming quota exhaustion", usage)
+
+    def test_qwen_security_contract_rejects_unsafe_second_invocation(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            """```bash
+claude-qwen --tools Read,Grep --add-dir ~/.config -p \"$(cat /tmp/prompt)\"
+```
+
+## Fallback semantics""",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_cached_codexbar_acceptance(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Exact-revision review contract",
+            "Cached CodexBar results are accepted as authoritative even without a fresh provider query.\n\n## Exact-revision review contract",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_ordered_merge_contract_rejects_moving_tip_substitution(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "Replace the integration subject with the latest moving tip if the branch advances.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_concurrent_merges(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "Do not overlap merge commands",
+            "Merge the remaining PRs concurrently",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_requires_external_checks_and_base_parent(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "git rev-parse <exact-post-sequence-sha>^1",
+            "git rev-parse <exact-post-sequence-sha>",
+        ).replace("check-runs?per_page=100", "actions-only-runs")
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
 
     def test_nit_improvement_policy_is_required(self) -> None:
         skill_text = SKILL.read_text().replace(

@@ -53,6 +53,10 @@ def assert_policy_contract(
     test.assertLess(kimi_index, codex_index)
     test.assertLess(codex_index, qwen_index)
     test.assertNotIn("Use Qwen first", fallback)
+    test.assertNotRegex(
+        fallback,
+        re.compile(r"(?:prefer|use|try) Qwen .*before .*Kimi", re.I),
+    )
 
     contract = _paragraph_containing(reference_text, "Ask Kimi to review a fresh exact diff")
     test.assertIn("**exact head/base-tip pair**", contract)
@@ -116,6 +120,20 @@ class ReviewerFallbackPolicyTests(unittest.TestCase):
         skill_text = SKILL.read_text().replace(
             "If Kimi is unavailable, use another configured strong reviewer whose live quota is available, including GPT-5.6 Sol through Codex when usable. If those preferred paths are exhausted or unavailable, fall back to **Qwen 3.8 via `claude-qwen`** as a final independent-review option.",
             "Use Qwen first, then try other reviewers later.",
+        )
+        with self.assertRaises(AssertionError):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                reference_text=REFERENCE.read_text(),
+                timeout_text=TIMEOUT.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_appended_qwen_before_kimi_contradiction_is_rejected(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "Keep every fallback read-only, bind it to the exact head/base-tip pair, require a terminal verdict",
+            "Prefer Qwen before Kimi when convenient. Keep every fallback read-only, bind it to the exact head/base-tip pair, require a terminal verdict",
         )
         with self.assertRaises(AssertionError):
             assert_policy_contract(
