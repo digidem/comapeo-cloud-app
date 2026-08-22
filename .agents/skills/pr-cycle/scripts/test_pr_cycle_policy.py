@@ -156,6 +156,10 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
         test.assertIn("ANTHROPIC_BASE_URL=*", invocation)
         test.assertIn("ANTHROPIC_API_URL=*", invocation)
         test.assertIn("ANTHROPIC_MODEL=*", invocation)
+        test.assertIn("(( ++base_url_count == 1 )) || exit 1", invocation)
+        test.assertIn("(( ++api_url_count == 1 )) || exit 1", invocation)
+        test.assertIn("(( ++model_count == 1 )) || exit 1", invocation)
+        test.assertIn("(( base_url_count == 1 && api_url_count == 1 && model_count == 1 )) || exit 1", invocation)
         test.assertIn("token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic", invocation)
         test.assertIn("qwen3.8-max", invocation)
         test.assertNotIn("QWEN_BIN", invocation)
@@ -509,6 +513,36 @@ zsh -ic 'claude-qwen --tools=Read -p=\"$PROMPT\"'
             "[[ ${alias_words[-1]} == claude ]] || exit 1",
             '[[ "$alias_body" == *"token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic"* ]] && [[ "$alias_body" == *"qwen3.8-max"* ]] && [[ "$alias_body" == *" claude"* ]] || exit 1',
         )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_duplicate_base_url_override_acceptance(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "(( ++base_url_count == 1 )) || exit 1",
+            "(( ++base_url_count >= 1 )) || exit 1",
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_duplicate_api_url_override_acceptance(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "(( ++api_url_count == 1 )) || exit 1",
+            "(( ++api_url_count >= 1 )) || exit 1",
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_duplicate_model_override_acceptance(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "(( ++model_count == 1 )) || exit 1",
+            "(( ++model_count >= 1 )) || exit 1",
+        )
+        self.assertNotEqual(qwen_text, original)
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
