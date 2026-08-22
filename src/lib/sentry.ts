@@ -12,6 +12,8 @@ import * as Sentry from '@sentry/react';
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
+import { sanitizeTelemetry } from './telemetry-redaction';
+
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 const APP_ORIGIN = import.meta.env.VITE_PUBLIC_APP_ORIGIN as string | undefined;
 const RELEASE = import.meta.env.VITE_APP_RELEASE as string | undefined;
@@ -39,6 +41,11 @@ export function initSentry(): void {
     release: RELEASE,
     integrations: [Sentry.browserTracingIntegration()],
     tracesSampleRate: 0.1,
+    sendDefaultPii: false,
+    beforeSend: (event) => sanitizeTelemetry(event),
+    beforeBreadcrumb: (breadcrumb) => sanitizeTelemetry(breadcrumb),
+    beforeSendTransaction: (event) => sanitizeTelemetry(event),
+    beforeSendSpan: (span) => sanitizeTelemetry(span),
     // Only capture errors from the app origin. Omit the filter entirely when
     // no origin is configured; an empty array would silently drop everything.
     ...(APP_ORIGIN ? { allowUrls: [APP_ORIGIN] } : {}),

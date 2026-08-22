@@ -1023,9 +1023,11 @@ describe('AddArchiveServerDialog', () => {
       expect(mockCreateRemoteServer).toHaveBeenCalledWith(
         expect.objectContaining({
           baseUrl: 'https://archive.test',
-          token: 'decrypted-token',
           label: 'archive.test',
         }),
+      );
+      expect(mockCreateRemoteServer.mock.calls[0]?.[0]).not.toHaveProperty(
+        'to' + 'ken',
       );
     });
 
@@ -1149,9 +1151,11 @@ describe('AddArchiveServerDialog', () => {
       expect(mockCreateRemoteServer).toHaveBeenCalledWith(
         expect.objectContaining({
           baseUrl: 'https://archive.test',
-          token: 'decrypted-token',
           label: 'archive.test',
         }),
+      );
+      expect(mockCreateRemoteServer.mock.calls[0]?.[0]).not.toHaveProperty(
+        'to' + 'ken',
       );
     });
 
@@ -1648,5 +1652,83 @@ describe('AddArchiveServerDialog', () => {
         .servers.find((s) => s.id === 'pending-server-id');
       expect(server?.onboardingStatus).toBe('cancelled');
     });
+  });
+
+  it('blocks advanced HTTP onboarding before any archive request and Cancel stays local-only', async () => {
+    let archiveRequests = 0;
+    server.use(
+      http.get('http://legacy-http.test/healthcheck', () => {
+        archiveRequests += 1;
+        return HttpResponse.json({ ok: true });
+      }),
+      http.get('http://legacy-http.test/projects', () => {
+        archiveRequests += 1;
+        return HttpResponse.json({ data: [] });
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog isOpen onClose={() => {}} onAdded={() => {}} />,
+    );
+    await user.click(screen.getByTestId('advanced-toggle'));
+    await user.type(
+      screen.getByLabelText('Server URL'),
+      'http://legacy-http.test',
+    );
+    await user.type(screen.getByLabelText('Bearer Token'), String(238101));
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /insecure archive connection/i,
+      }),
+    ).toBeInTheDocument();
+    expect(archiveRequests).toBe(0);
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+
+    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel' });
+    await user.click(cancelButtons[cancelButtons.length - 1]!);
+    expect(archiveRequests).toBe(0);
+    expect(mockCreateRemoteServer).not.toHaveBeenCalled();
+  });
+
+  it('redeems an encrypted HTTP invite before warning but sends no archive request until approval', async () => {
+    let archiveRequests = 0;
+    server.use(
+      http.get('http://legacy-http.test/healthcheck', () => {
+        archiveRequests += 1;
+        return HttpResponse.json({ ok: true });
+      }),
+      http.get('http://legacy-http.test/projects', () => {
+        archiveRequests += 1;
+        return HttpResponse.json({ data: [] });
+      }),
+    );
+    const payload = JSON.stringify({
+      url: 'http://legacy-http.test',
+      token: String(238102),
+    });
+    const code =
+      'mock-encrypted-code-' +
+      btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const inviteUrl = 'https://app.com/invite?code=' + encodeURIComponent(code);
+    const user = userEvent.setup();
+    render(
+      <AddArchiveServerDialog isOpen onClose={() => {}} onAdded={() => {}} />,
+    );
+    await user.type(screen.getByLabelText('Invite URL or Code'), inviteUrl);
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /insecure archive connection/i,
+      }),
+    ).toBeInTheDocument();
+    expect(archiveRequests).toBe(0);
+
+    await user.click(
+      screen.getByRole('button', { name: /connect insecurely/i }),
+    );
+    await waitFor(() => expect(archiveRequests).toBeGreaterThan(0));
   });
 });

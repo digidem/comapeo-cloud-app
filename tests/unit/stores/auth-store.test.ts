@@ -24,6 +24,7 @@ beforeEach(async () => {
     token: null,
     baseUrl: null,
     isAuthenticated: false,
+    hasHydratedServers: false,
   });
 });
 
@@ -464,7 +465,6 @@ describe('hydrateServers', () => {
       id: 'db-server-1',
       baseUrl: 'https://hydrated.example.com',
       label: 'Hydrated Server',
-      token: 'hydrated-token',
       status: 'connected',
       lastSyncedAt: '2024-01-01T00:00:00Z',
     });
@@ -484,7 +484,6 @@ describe('hydrateServers', () => {
       id: 'no-label-server',
       baseUrl: 'https://no-label.example.com',
       label: null as unknown as string,
-      token: 'tok',
       status: 'idle',
       lastSyncedAt: '',
     });
@@ -495,13 +494,12 @@ describe('hydrateServers', () => {
     expect(server.label).toBe('https://no-label.example.com');
   });
 
-  it('falls back to empty string when token is null', async () => {
+  it('hydrates persisted server as credential-locked', async () => {
     const db = (await import('@/lib/db')).getDb();
     await db.remoteServers.add({
       id: 'no-token-server',
       baseUrl: 'https://no-token.example.com',
       label: 'No Token',
-      token: null as unknown as string,
       status: 'idle',
       lastSyncedAt: '',
     });
@@ -509,7 +507,7 @@ describe('hydrateServers', () => {
     await useAuthStore.getState().hydrateServers();
 
     const server = useAuthStore.getState().servers[0]!;
-    expect(server.token).toBe('');
+    expect(server.token).toBeNull();
   });
 
   it('falls back to idle for unknown status values', async () => {
@@ -518,7 +516,6 @@ describe('hydrateServers', () => {
       id: 'bad-status-server',
       baseUrl: 'https://bad-status.example.com',
       label: 'Bad Status',
-      token: 'tok',
       status: 'invalid-status',
       lastSyncedAt: '',
     });
@@ -540,7 +537,6 @@ describe('hydrateServers', () => {
       id: 'auto-select-1',
       baseUrl: 'https://auto.example.com',
       label: 'Auto Server',
-      token: 'auto-token',
       status: 'idle',
       lastSyncedAt: '',
     });
@@ -550,7 +546,7 @@ describe('hydrateServers', () => {
     const state = useAuthStore.getState();
     expect(state.activeServerId).toBe('auto-select-1');
     expect(state.baseUrl).toBe('https://auto.example.com');
-    expect(state.token).toBe('auto-token');
+    expect(state.token).toBeNull();
   });
 
   it('does not override an already-active server on hydrate', async () => {
@@ -559,7 +555,6 @@ describe('hydrateServers', () => {
       id: 'existing-active',
       baseUrl: 'https://existing.example.com',
       label: 'Existing',
-      token: 'existing-token',
       status: 'idle',
       lastSyncedAt: '',
     });
@@ -567,7 +562,6 @@ describe('hydrateServers', () => {
       id: 'second-server',
       baseUrl: 'https://second.example.com',
       label: 'Second',
-      token: 'second-token',
       status: 'idle',
       lastSyncedAt: '',
     });
@@ -586,7 +580,7 @@ describe('hydrateServers', () => {
     const state = useAuthStore.getState();
     expect(state.activeServerId).toBe('second-server');
     expect(state.baseUrl).toBe('https://second.example.com');
-    expect(state.token).toBe('second-token');
+    expect(state.token).toBeNull();
   });
 });
 
@@ -762,7 +756,7 @@ describe('active archive identity and credential invariants', () => {
     );
   });
 
-  it('persists setToken through the remote-server repository', async () => {
+  it('keeps setToken runtime-only while the remote-server repository stays credential-free', async () => {
     const serverId = await useAuthStore.getState().addServer({
       label: 'Active',
       baseUrl: 'https://active.example.com',
@@ -772,7 +766,7 @@ describe('active archive identity and credential invariants', () => {
 
     await useAuthStore.getState().setToken('persisted-token');
 
-    expect((await getRemoteServer(serverId))?.token).toBe('persisted-token');
+    expect(await getRemoteServer(serverId)).not.toHaveProperty('token');
     expect(selectActiveToken(useAuthStore.getState())).toBe('persisted-token');
   });
 
@@ -809,7 +803,7 @@ describe('active archive identity and credential invariants', () => {
     expect(selectActiveToken(state)).toBe('first-token');
   });
 
-  it('hydrates the same active credentials after token and URL edits', async () => {
+  it('hydrates persisted metadata locked after a simulated page reload', async () => {
     const serverId = await useAuthStore.getState().addServer({
       label: 'Active',
       baseUrl: 'https://old.example.com',
@@ -831,7 +825,7 @@ describe('active archive identity and credential invariants', () => {
 
     const state = useAuthStore.getState();
     expect(selectActiveServer(state)?.id).toBe(serverId);
-    expect(selectActiveToken(state)).toBe('hydrated-token');
+    expect(selectActiveToken(state)).toBeNull();
     expect(selectActiveBaseUrl(state)).toBe('https://hydrated.example.com');
   });
 
@@ -873,7 +867,7 @@ describe('active archive identity and credential invariants', () => {
     );
   });
 
-  it('does not clear a newly selected server while 401 persistence is pending', async () => {
+  it('does not clear a newly selected server for a stale request identity', async () => {
     const { firstId, secondId } = await addTwoServers();
     useAuthStore.getState().setActiveServer(firstId);
     const clearIdentity = {
@@ -881,29 +875,9 @@ describe('active archive identity and credential invariants', () => {
       baseUrl: 'https://first.example.com',
       token: 'first-token',
     };
-    let releasePersistence!: () => void;
-    let markPersistenceStarted!: () => void;
-    const persistenceStarted = new Promise<void>((resolve) => {
-      markPersistenceStarted = resolve;
-    });
-    const persistenceRelease = new Promise<void>((resolve) => {
-      releasePersistence = resolve;
-    });
-
-    vi.spyOn(localRepositories, 'updateRemoteServer').mockImplementation(
-      async () => {
-        markPersistenceStarted();
-        await persistenceRelease;
-        return undefined;
-      },
-    );
-
-    const clear = useAuthStore.getState().clearAuth(clearIdentity);
-    await persistenceStarted;
 
     useAuthStore.getState().setActiveServer(secondId);
-    releasePersistence();
-    await clear;
+    await useAuthStore.getState().clearAuth(clearIdentity);
 
     const state = useAuthStore.getState();
     expect(state.activeServerId).toBe(secondId);
@@ -911,7 +885,7 @@ describe('active archive identity and credential invariants', () => {
     expect(selectActiveToken(state)).toBe('second-token');
   });
 
-  it('does not clear a rotated token while 401 persistence is pending', async () => {
+  it('does not clear a rotated token for a stale request identity', async () => {
     const serverId = await useAuthStore.getState().addServer({
       label: 'Active',
       baseUrl: 'https://active.example.com',
@@ -923,36 +897,9 @@ describe('active archive identity and credential invariants', () => {
       baseUrl: 'https://active.example.com',
       token: 'old-token',
     };
-    let releasePersistence!: () => void;
-    let markPersistenceStarted!: () => void;
-    const persistenceStarted = new Promise<void>((resolve) => {
-      markPersistenceStarted = resolve;
-    });
-    const persistenceRelease = new Promise<void>((resolve) => {
-      releasePersistence = resolve;
-    });
 
-    vi.spyOn(localRepositories, 'updateRemoteServer').mockImplementation(
-      async () => {
-        markPersistenceStarted();
-        await persistenceRelease;
-        return undefined;
-      },
-    );
-
-    const clear = useAuthStore.getState().clearAuth(clearIdentity);
-    await persistenceStarted;
-
-    useAuthStore.getState().setActiveServer(serverId);
-    useAuthStore.setState((state) => ({
-      servers: state.servers.map((server) =>
-        server.id === serverId ? { ...server, token: 'rotated-token' } : server,
-      ),
-      token: 'rotated-token',
-      isAuthenticated: true,
-    }));
-    releasePersistence();
-    await clear;
+    useAuthStore.getState().restoreServerToken(serverId, 'rotated-token');
+    await useAuthStore.getState().clearAuth(clearIdentity);
 
     const state = useAuthStore.getState();
     expect(state.activeServerId).toBe(serverId);

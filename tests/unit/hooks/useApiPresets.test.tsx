@@ -244,6 +244,7 @@ describe('useApiPresets', () => {
 
     expect(getPresets).toHaveBeenCalledWith(REMOTE_ID, {
       baseUrl: 'https://archive.example.org',
+      serverId: null,
       token: 'secret-token',
     });
   });
@@ -265,6 +266,7 @@ describe('useApiPresets', () => {
     await waitFor(() => expect(getPresets).toHaveBeenCalledTimes(2));
     expect(getPresets).toHaveBeenLastCalledWith(REMOTE_ID, {
       baseUrl: 'https://archive.example.org',
+      serverId: null,
       token: 'rotated-token',
     });
     expect(result.current.isSuccess).toBe(true);

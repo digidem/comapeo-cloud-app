@@ -3,11 +3,16 @@ import { defineMessages, useIntl } from 'react-intl';
 
 import { ConnectionProgress } from '@/components/shared/ConnectionProgress';
 import type { ConnectionStep } from '@/components/shared/ConnectionProgress';
+import {
+  InsecureArchiveTransportDialog,
+  useArchiveTransportApproval,
+} from '@/components/shared/InsecureArchiveTransportDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { InviteApiError, redeemEncryptedInvite } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
+import { withApprovedArchiveTransport } from '@/lib/archive-transport-gate';
 import { parseInviteUrl, warnLegacyInviteUrlOnce } from '@/lib/invite-url';
 import {
   type OnboardingSource,
@@ -278,6 +283,9 @@ function AddArchiveServerDialog({
   const intl = useIntl();
   const [state, dispatch] = useReducer(dialogReducer, { status: 'idle' });
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [transportBaseUrl, setTransportBaseUrl] = useState('');
+  const transportApproval = useArchiveTransportApproval(transportBaseUrl);
+  const cancelTransportApproval = transportApproval.cancel;
 
   // Connection progress state
   const [cpState, setCpState] =
@@ -310,9 +318,11 @@ function AddArchiveServerDialog({
     setTokenError(null);
     setInviteUrlError(null);
     setShowAdvanced(false);
+    setTransportBaseUrl('');
+    cancelTransportApproval();
     dispatch({ type: 'reset' });
     setCpState(INITIAL_CP_STATE);
-  }, []);
+  }, [cancelTransportApproval]);
 
   // Drive the connection progress steps
   useEffect(() => {
@@ -461,27 +471,50 @@ function AddArchiveServerDialog({
     label: string,
     source: OnboardingSource,
   ) {
-    const normalizedUrl = normalizeArchiveBaseUrl(baseUrl);
-    if (!normalizedUrl.ok) {
-      const urlMessage = getUrlValidationMessage(normalizedUrl.code);
+    setTransportBaseUrl(baseUrl);
+    const transportResult = await withApprovedArchiveTransport({
+      baseUrl,
+      confirmInsecure: transportApproval.confirmInsecure,
+      operation: async (normalizedUrl) => {
+        if (cancelledRef.current) return false;
+        dispatch({ type: 'success' });
+        startConnectionProgress(
+          normalizedUrl,
+          token,
+          label ||
+            (source === 'manual'
+              ? normalizedUrl
+              : new URL(normalizedUrl).hostname),
+          source,
+        );
+        return true;
+      },
+    });
+
+    if (transportResult.kind === 'invalid-url') {
       dispatch({
         type: 'error',
-        message: intl.formatMessage(urlMessage),
+        message: intl.formatMessage(
+          getUrlValidationMessage(transportResult.code),
+        ),
       });
       return;
     }
 
-    if (cancelledRef.current) return;
-    dispatch({ type: 'success' });
-    startConnectionProgress(
-      normalizedUrl.value,
-      token,
-      label ||
-        (source === 'manual'
-          ? normalizedUrl.value
-          : new URL(normalizedUrl.value).hostname),
-      source,
-    );
+    if (
+      transportResult.kind === 'cancelled' ||
+      transportResult.kind === 'stale-approval'
+    ) {
+      dispatch({ type: 'reset' });
+      return;
+    }
+
+    if (transportResult.kind === 'startup-blocked') {
+      dispatch({
+        type: 'error',
+        message: intl.formatMessage(messages.failed),
+      });
+    }
   }
 
   async function handleInviteSubmit() {
@@ -503,16 +536,6 @@ function AddArchiveServerDialog({
     if (parsed.kind === 'legacy') {
       // TODO(issue-#8): remove this legacy branch in the next release.
       warnLegacyInviteUrlOnce();
-      // For early validation, normalize first so we can show the field error
-      // (rather than a generic dialog error) for malformed legacy URLs.
-      const normalizedUrl = normalizeArchiveBaseUrl(parsed.baseUrl);
-      if (!normalizedUrl.ok) {
-        setInviteUrlError(
-          intl.formatMessage(getUrlValidationMessage(normalizedUrl.code)),
-        );
-        return;
-      }
-
       cancelledRef.current = false;
       dispatch({ type: 'submit' });
       await finalizeAddServer(parsed.baseUrl, parsed.token, '', 'invite');
@@ -578,18 +601,9 @@ function AddArchiveServerDialog({
       return;
     }
 
-    // Validate URL format and protocol
-    const normalizedUrl = normalizeArchiveBaseUrl(url);
-    if (!normalizedUrl.ok) {
-      setUrlError(
-        intl.formatMessage(getUrlValidationMessage(normalizedUrl.code)),
-      );
-      return;
-    }
-
     cancelledRef.current = false;
     dispatch({ type: 'submit' });
-    await finalizeAddServer(normalizedUrl.value, token, label, 'manual');
+    await finalizeAddServer(url, token, label, 'manual');
   }
 
   function handleSubmit() {
@@ -675,94 +689,97 @@ function AddArchiveServerDialog({
   }
 
   return (
-    <Modal
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) handleClose();
-      }}
-      title={intl.formatMessage(messages.title)}
-    >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSubmit();
+    <>
+      <Modal
+        open={isOpen}
+        onOpenChange={(open) => {
+          if (!open) handleClose();
         }}
-        className="flex flex-col gap-4"
+        title={intl.formatMessage(messages.title)}
       >
-        {!showAdvanced ? (
-          /* Default mode: Invite URL input */
-          <Input
-            ref={inviteUrlRef}
-            label={intl.formatMessage(messages.inviteUrl)}
-            type="text"
-            placeholder={intl.formatMessage(messages.inviteUrlPlaceholder)}
-            defaultValue=""
-            error={inviteUrlError ?? undefined}
-          />
-        ) : (
-          /* Advanced mode: Label + Server URL + Bearer Token */
-          <>
-            <Input
-              ref={labelRef}
-              label={intl.formatMessage(messages.label)}
-              type="text"
-              placeholder={intl.formatMessage(messages.labelPlaceholder)}
-              defaultValue=""
-            />
-            <Input
-              ref={urlRef}
-              label={intl.formatMessage(messages.url)}
-              type="text"
-              placeholder={intl.formatMessage(messages.urlPlaceholder)}
-              defaultValue=""
-              error={urlError ?? undefined}
-            />
-            <Input
-              ref={tokenRef}
-              label={intl.formatMessage(messages.token)}
-              type="password"
-              placeholder={intl.formatMessage(messages.tokenPlaceholder)}
-              defaultValue=""
-              error={tokenError ?? undefined}
-            />
-          </>
-        )}
-
-        {state.status === 'error' && (
-          <p className="text-sm text-error">{state.message}</p>
-        )}
-
-        {/* Advanced toggle */}
-        <button
-          type="button"
-          data-testid="advanced-toggle"
-          className="text-sm text-primary hover:text-primary-dark text-left"
-          onClick={() => setShowAdvanced((prev) => !prev)}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit();
+          }}
+          className="flex flex-col gap-4"
         >
-          {intl.formatMessage(messages.advanced)} —{' '}
-          {intl.formatMessage(messages.advancedDescription)}
-        </button>
+          {!showAdvanced ? (
+            /* Default mode: Invite URL input */
+            <Input
+              ref={inviteUrlRef}
+              label={intl.formatMessage(messages.inviteUrl)}
+              type="text"
+              placeholder={intl.formatMessage(messages.inviteUrlPlaceholder)}
+              defaultValue=""
+              error={inviteUrlError ?? undefined}
+            />
+          ) : (
+            /* Advanced mode: Label + Server URL + Bearer Token */
+            <>
+              <Input
+                ref={labelRef}
+                label={intl.formatMessage(messages.label)}
+                type="text"
+                placeholder={intl.formatMessage(messages.labelPlaceholder)}
+                defaultValue=""
+              />
+              <Input
+                ref={urlRef}
+                label={intl.formatMessage(messages.url)}
+                type="text"
+                placeholder={intl.formatMessage(messages.urlPlaceholder)}
+                defaultValue=""
+                error={urlError ?? undefined}
+              />
+              <Input
+                ref={tokenRef}
+                label={intl.formatMessage(messages.token)}
+                type="password"
+                placeholder={intl.formatMessage(messages.tokenPlaceholder)}
+                defaultValue=""
+                error={tokenError ?? undefined}
+              />
+            </>
+          )}
 
-        <div className="flex justify-end gap-2">
-          <Button
+          {state.status === 'error' && (
+            <p className="text-sm text-error">{state.message}</p>
+          )}
+
+          {/* Advanced toggle */}
+          <button
             type="button"
-            variant="secondary"
-            size="sm"
-            onClick={handleClose}
+            data-testid="advanced-toggle"
+            className="text-sm text-primary hover:text-primary-dark text-left"
+            onClick={() => setShowAdvanced((prev) => !prev)}
           >
-            {intl.formatMessage(messages.cancel)}
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            loading={state.status === 'loading'}
-          >
-            {intl.formatMessage(messages.add)}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+            {intl.formatMessage(messages.advanced)} —{' '}
+            {intl.formatMessage(messages.advancedDescription)}
+          </button>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleClose}
+            >
+              {intl.formatMessage(messages.cancel)}
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              loading={state.status === 'loading'}
+            >
+              {intl.formatMessage(messages.add)}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <InsecureArchiveTransportDialog controller={transportApproval} />
+    </>
   );
 }
 

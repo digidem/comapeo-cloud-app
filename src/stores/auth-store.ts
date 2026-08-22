@@ -8,6 +8,7 @@ import {
   getRemoteServers,
   updateRemoteServer,
 } from '@/lib/local-repositories';
+import { requireSecurityStartupReady } from '@/lib/security-startup-gate';
 
 // Types
 // ---------------------------------------------------------------------------
@@ -36,7 +37,7 @@ export interface RemoteArchiveServer {
   id: string;
   label: string;
   baseUrl: string;
-  token: string;
+  token: string | null;
   lastSyncedAt?: string;
   lastSuccessfulSyncAt?: string;
   onboardingStatus?: ArchiveLifecycleStatus;
@@ -70,8 +71,9 @@ export interface AuthState extends ActiveArchiveState {
   tier: AuthTier;
 
   // Compatibility fields for non-archive callers. When an archive is active,
-  // these are synchronized from the active persisted server record.
+  // these are synchronized from the active runtime server record.
   isAuthenticated: boolean;
+  hasHydratedServers: boolean;
 
   // Actions
   setTier: (tier: AuthTier) => void;
@@ -104,9 +106,11 @@ export interface AuthState extends ActiveArchiveState {
   hydrateServers: () => Promise<void>;
   clearAll: () => void;
 
-  // Backward-compatible aliases. Active archive edits use the persisted
-  // repository path; standalone values remain available for non-archive tiers.
+  // Backward-compatible aliases. Archive credentials remain runtime-only;
+  // non-secret archive metadata continues through the repository path.
   setToken: (token: string) => Promise<void>;
+  restoreServerToken: (id: string, token: string | null) => void;
+  lockServerCredential: (identity: AuthIdentity) => void;
   setBaseUrl: (url: string) => Promise<void>;
   clearAuth: (expectedIdentity?: AuthIdentity) => Promise<void>;
 }
@@ -208,10 +212,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   token: null,
   baseUrl: null,
   isAuthenticated: false,
+  hasHydratedServers: false,
 
   setTier: (tier) => set({ tier }),
 
   addServer: async (config) => {
+    requireSecurityStartupReady();
     const normalized = normalizeForIdentity(config.baseUrl);
     const existing = get().servers.find(
       (server) => normalizeForIdentity(server.baseUrl) === normalized,
@@ -223,7 +229,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       }
 
       if (existing.token !== config.token) {
-        await updateRemoteServer(existing.id, { token: config.token });
         set((state) => {
           const servers = state.servers.map((server) =>
             server.id === existing.id
@@ -243,7 +248,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     const server = await createRemoteServer({
       baseUrl: config.baseUrl,
       label: config.label,
-      token: config.token,
     });
     const newServer: RemoteArchiveServer = {
       id: server.id,
@@ -370,7 +374,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   updateServer: async (id, updates) => {
-    await updateRemoteServer(id, updates);
+    if (updates.token !== undefined) requireSecurityStartupReady();
+    const { token: _runtimeToken, ...metadataUpdates } = updates;
+    if (Object.keys(metadataUpdates).length > 0) {
+      await updateRemoteServer(id, metadataUpdates);
+    }
 
     set((state) => {
       const servers = state.servers.map((server) =>
@@ -387,11 +395,15 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   hydrateServers: async () => {
     try {
       const records = await getRemoteServers();
+      const currentState = get();
+      const runtimeTokens = new Map(
+        currentState.servers.map((server) => [server.id, server.token]),
+      );
       const servers: RemoteArchiveServer[] = records.map((record) => ({
         id: record.id,
         label: record.label ?? record.baseUrl,
         baseUrl: record.baseUrl,
-        token: record.token ?? '',
+        token: runtimeTokens.get(record.id) ?? null,
         status: ([
           'idle',
           'pending',
@@ -411,7 +423,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         errorMessage: record.errorMessage,
       }));
 
-      const currentActiveId = get().activeServerId;
+      const currentActiveId = currentState.activeServerId;
       const savedActiveId = localStorage.getItem(ACTIVE_SERVER_STORAGE_KEY);
       const activeServerId =
         (currentActiveId &&
@@ -428,6 +440,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       set({
         servers,
         activeServerId,
+        hasHydratedServers: true,
         ...deriveActiveFields(servers, activeServerId),
       });
     } catch (error) {
@@ -449,10 +462,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       token: null,
       baseUrl: null,
       isAuthenticated: false,
+      hasHydratedServers: false,
     });
   },
 
   setToken: async (token) => {
+    requireSecurityStartupReady();
     const state = get();
     if (state.activeServerId) {
       await state.updateServer(state.activeServerId, { token });
@@ -463,6 +478,46 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       token,
       isAuthenticated: Boolean(token && current.baseUrl),
     }));
+  },
+
+  restoreServerToken: (id, token) => {
+    set((state) => {
+      const servers = state.servers.map((server) =>
+        server.id === id ? { ...server, token } : server,
+      );
+      return {
+        servers,
+        ...deriveActiveFields(servers, state.activeServerId),
+      };
+    });
+  },
+
+  lockServerCredential: (identity) => {
+    if (!identity.activeServerId || !identity.baseUrl) return;
+
+    set((state) => {
+      const server = state.servers.find(
+        (candidate) => candidate.id === identity.activeServerId,
+      );
+      if (
+        !server ||
+        normalizeForIdentity(server.baseUrl) !==
+          normalizeForIdentity(identity.baseUrl ?? '') ||
+        server.token !== identity.token
+      ) {
+        return {};
+      }
+
+      const servers = state.servers.map((candidate) =>
+        candidate.id === identity.activeServerId
+          ? { ...candidate, token: null }
+          : candidate,
+      );
+      return {
+        servers,
+        ...deriveActiveFields(servers, state.activeServerId),
+      };
+    });
   },
 
   setBaseUrl: async (baseUrl) => {
@@ -479,29 +534,28 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   clearAuth: async (expectedIdentity) => {
-    let clearedServerId: string | null = null;
-
     set((state) => {
       if (expectedIdentity && !matchesAuthIdentity(state, expectedIdentity)) {
         return {};
       }
 
-      clearedServerId = state.activeServerId;
-      persistActiveServerId(null);
+      if (state.activeServerId) {
+        const servers = state.servers.map((server) =>
+          server.id === state.activeServerId
+            ? { ...server, token: null }
+            : server,
+        );
+        return {
+          servers,
+          ...deriveActiveFields(servers, state.activeServerId),
+        };
+      }
 
       return {
-        servers: state.servers.map((server) =>
-          server.id === clearedServerId ? { ...server, token: '' } : server,
-        ),
-        activeServerId: null,
         token: null,
         baseUrl: null,
         isAuthenticated: false,
       };
     });
-
-    if (clearedServerId) {
-      await updateRemoteServer(clearedServerId, { token: '' });
-    }
   },
 }));

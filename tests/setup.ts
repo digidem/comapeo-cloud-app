@@ -4,8 +4,14 @@ import { afterAll, afterEach, beforeAll } from 'vitest';
 
 import { server } from './mocks/node';
 
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => server.resetHandlers());
+beforeAll(() => {
+  server.listen({ onUnhandledRequest: 'error' });
+  document.documentElement.dataset.comapeoSecurityStartup = 'ready';
+});
+afterEach(() => {
+  server.resetHandlers();
+  document.documentElement.dataset.comapeoSecurityStartup = 'ready';
+});
 afterAll(() => server.close());
 
 // Mock browser APIs not available in jsdom

@@ -75,13 +75,19 @@ export function deduplicatePresetVersions<T extends PresetVersionLike>(
  * is provided. */
 export function useApiPresets(
   projectRemoteId: string | null,
-  serverConfig?: { baseUrl: string; token: string } | null,
+  serverConfig?: {
+    serverId?: string | null;
+    baseUrl: string;
+    token: string;
+  } | null,
 ) {
   const activeBaseUrl = useAuthStore(selectActiveBaseUrl);
   const activeToken = useAuthStore(selectActiveToken);
+  const activeServerId = useAuthStore((state) => state.activeServerId);
 
   const effectiveBaseUrl = serverConfig?.baseUrl ?? activeBaseUrl;
   const effectiveToken = serverConfig?.token ?? activeToken;
+  const effectiveServerId = serverConfig?.serverId ?? activeServerId;
 
   const enabled =
     projectRemoteId !== null &&
@@ -93,11 +99,13 @@ export function useApiPresets(
     queryKey: [
       'api-presets',
       projectRemoteId,
+      effectiveServerId,
       effectiveBaseUrl,
       effectiveToken,
     ],
     queryFn: () =>
       apiClient.getPresets(projectRemoteId!, {
+        serverId: effectiveServerId,
         baseUrl: effectiveBaseUrl!,
         token: effectiveToken!,
       } satisfies RequestConfig),

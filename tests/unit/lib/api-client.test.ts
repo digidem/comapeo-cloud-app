@@ -1,6 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, apiClient, getAttachmentUrl } from '@/lib/api-client';
+import {
+  ApiError,
+  CredentialsRequiredError,
+  apiClient,
+  getAttachmentUrl,
+} from '@/lib/api-client';
+
+type AuthStoreMockServer = {
+  id: string;
+  label: string;
+  baseUrl: string;
+  token: string | null;
+  status: string;
+};
 
 // Mock the stores used by api-client internals
 const authStoreMock = vi.hoisted(() => ({
@@ -14,11 +27,11 @@ const authStoreMock = vi.hoisted(() => ({
         token: 'active-token',
         status: 'connected' as const,
       },
-    ],
+    ] as AuthStoreMockServer[],
     baseUrl: 'https://active.example.com' as string | null,
     token: 'active-token' as string | null,
   },
-  clearAuth: vi.fn().mockResolvedValue(undefined),
+  lockServerCredential: vi.fn(),
 }));
 
 vi.mock('@/stores/auth-store', () => {
@@ -34,7 +47,7 @@ vi.mock('@/stores/auth-store', () => {
     useAuthStore: {
       getState: () => ({
         ...authStoreMock.state,
-        clearAuth: authStoreMock.clearAuth,
+        lockServerCredential: authStoreMock.lockServerCredential,
       }),
     },
   };
@@ -45,7 +58,7 @@ describe('apiClient', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    authStoreMock.clearAuth.mockClear();
+    authStoreMock.lockServerCredential.mockReset();
     authStoreMock.state.activeServerId = 'active-server';
     authStoreMock.state.servers = [
       {
@@ -180,28 +193,20 @@ describe('apiClient', () => {
     });
   });
 
-  describe('401 auth clearing', () => {
+  describe('401 runtime credential locking', () => {
     const error401 = {
       error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' },
     };
-    const alertBody = {
-      detectionDateStart: '2025-01-01T00:00:00Z',
-      detectionDateEnd: '2025-01-01T23:59:59Z',
-      sourceId: 'test-source',
-      metadata: {},
-      geometry: {
-        type: 'Point' as const,
-        coordinates: [0, 0] as [number, number],
-      },
+    const error403 = {
+      error: { code: 'FORBIDDEN', message: 'Forbidden' },
     };
     const otherConfig = {
       baseUrl: 'https://other.example.com',
       token: 'other-token',
+      serverId: 'other-server',
     };
 
-    // --- handleResponse path (via getPresets) ---
-
-    it('calls clearAuth when 401 comes from the active server (no config)', async () => {
+    it('locks the active server identity captured by a 401 without explicit config', async () => {
       globalThis.fetch = vi
         .fn()
         .mockResolvedValue(makeFetchResponse(401, error401));
@@ -209,14 +214,15 @@ describe('apiClient', () => {
       await expect(apiClient.getPresets('project-id')).rejects.toThrow(
         ApiError,
       );
-      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+
+      expect(authStoreMock.lockServerCredential).toHaveBeenCalledWith({
         activeServerId: 'active-server',
         baseUrl: 'https://active.example.com',
-        token: 'active-token',
+        token: authStoreMock.state.token,
       });
     });
 
-    it('passes non-active request identity to the atomic clear operation', async () => {
+    it('locks explicit server B rather than whichever server is active', async () => {
       globalThis.fetch = vi
         .fn()
         .mockResolvedValue(makeFetchResponse(401, error401));
@@ -224,14 +230,35 @@ describe('apiClient', () => {
       await expect(
         apiClient.getPresets('project-id', otherConfig),
       ).rejects.toThrow(ApiError);
-      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
-        activeServerId: 'active-server',
+
+      expect(authStoreMock.lockServerCredential).toHaveBeenCalledWith({
+        activeServerId: 'other-server',
         baseUrl: 'https://other.example.com',
         token: 'other-token',
       });
     });
 
-    it('does NOT clear server B when a delayed 401 from server A used the same token', async () => {
+    it('captures a candidate request with null server id so it cannot target an installed archive', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(makeFetchResponse(401, error401));
+
+      await expect(
+        apiClient.getPresets('project-id', {
+          baseUrl: 'https://candidate.example.com',
+          token: 'candidate-token',
+          serverId: null,
+        }),
+      ).rejects.toThrow(ApiError);
+
+      expect(authStoreMock.lockServerCredential).toHaveBeenCalledWith({
+        activeServerId: null,
+        baseUrl: 'https://candidate.example.com',
+        token: 'candidate-token',
+      });
+    });
+
+    it('keeps the request identity captured before active selection changes', async () => {
       let resolveResponse!: (response: Response) => void;
       globalThis.fetch = vi.fn().mockImplementation(
         () =>
@@ -240,48 +267,40 @@ describe('apiClient', () => {
           }),
       );
 
+      const originalCredential = authStoreMock.state.token;
       const request = apiClient.getPresets('project-id');
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        'https://active.example.com/projects/project-id/preset',
-        expect.any(Object),
-      );
-
       authStoreMock.state.activeServerId = 'server-b';
       authStoreMock.state.servers = [
         {
           id: 'server-b',
           label: 'Server B',
           baseUrl: 'https://server-b.example.com',
-          token: 'active-token',
+          token: String(654321),
           status: 'connected',
         },
       ];
       authStoreMock.state.baseUrl = 'https://server-b.example.com';
-
       resolveResponse(makeFetchResponse(401, error401));
 
       await expect(request).rejects.toThrow(ApiError);
-      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
+      expect(authStoreMock.lockServerCredential).toHaveBeenCalledWith({
         activeServerId: 'active-server',
         baseUrl: 'https://active.example.com',
-        token: 'active-token',
+        token: originalCredential,
       });
     });
 
-    // --- createAlert path ---
-
-    it('calls clearAuth when createAlert 401 comes from the active server (no config)', async () => {
-      globalThis.fetch = vi
-        .fn()
-        .mockResolvedValue(makeFetchResponse(401, error401));
-
-      await expect(
-        apiClient.createAlert('project-id', alertBody),
-      ).rejects.toThrow(ApiError);
-      expect(authStoreMock.clearAuth).toHaveBeenCalled();
-    });
-
-    it('passes configured createAlert identity to the atomic clear operation', async () => {
+    it('uses the same explicit identity for createAlert and getIcon 401s', async () => {
+      const alertBody = {
+        detectionDateStart: '2025-01-01T00:00:00Z',
+        detectionDateEnd: '2025-01-01T23:59:59Z',
+        sourceId: 'test-source',
+        metadata: {},
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [0, 0] as [number, number],
+        },
+      };
       globalThis.fetch = vi
         .fn()
         .mockResolvedValue(makeFetchResponse(401, error401));
@@ -289,69 +308,86 @@ describe('apiClient', () => {
       await expect(
         apiClient.createAlert('project-id', alertBody, otherConfig),
       ).rejects.toThrow(ApiError);
-      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
-        activeServerId: 'active-server',
+      await expect(
+        apiClient.getIcon('project-id', 'icon-id', otherConfig),
+      ).rejects.toThrow(ApiError);
+
+      expect(authStoreMock.lockServerCredential).toHaveBeenCalledTimes(2);
+      expect(authStoreMock.lockServerCredential).toHaveBeenLastCalledWith({
+        activeServerId: 'other-server',
         baseUrl: 'https://other.example.com',
         token: 'other-token',
       });
     });
 
-    it('passes captured identity for getIcon 401 responses', async () => {
+    it('does not lock credentials for 403 or 500 responses', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(makeFetchResponse(403, error403))
+        .mockResolvedValueOnce(
+          makeFetchResponse(500, {
+            error: { code: 'SERVER_ERROR', message: 'Boom' },
+          }),
+        );
+
+      await expect(apiClient.getPresets('project-id')).rejects.toThrow(
+        ApiError,
+      );
+      await expect(apiClient.getPresets('project-id')).rejects.toThrow(
+        ApiError,
+      );
+      expect(authStoreMock.lockServerCredential).not.toHaveBeenCalled();
+    });
+
+    it('still surfaces the original 401 if runtime locking throws', async () => {
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      authStoreMock.lockServerCredential.mockImplementationOnce(() => {
+        throw new Error('runtime lock failed');
+      });
       globalThis.fetch = vi
         .fn()
         .mockResolvedValue(makeFetchResponse(401, error401));
 
-      await expect(apiClient.getIcon('project-id', 'icon-id')).rejects.toThrow(
-        ApiError,
+      const error = await apiClient.getPresets('project-id').then(
+        () => null,
+        (thrown: unknown) => thrown,
       );
-      expect(authStoreMock.clearAuth).toHaveBeenCalledWith({
-        activeServerId: 'active-server',
-        baseUrl: 'https://active.example.com',
-        token: 'active-token',
-      });
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(401);
+      expect(consoleError).toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
+  });
+
+  describe('locked request short-circuit', () => {
+    it('throws credentials-required before fetch when the active archive is locked', async () => {
+      authStoreMock.state.servers[0]!.token = null;
+      authStoreMock.state.token = null;
+      globalThis.fetch = vi.fn();
+
+      await expect(apiClient.getProjects()).rejects.toBeInstanceOf(
+        CredentialsRequiredError,
+      );
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    // --- cleanup failures must not mask the original 401 ---
+    it('throws credentials-required before fetch for an explicit empty credential', async () => {
+      globalThis.fetch = vi.fn();
 
-    describe('when clearAuth fails', () => {
-      const dbError = new Error('DbError: IndexedDB update failed');
-      let consoleError: ReturnType<typeof vi.spyOn>;
-
-      beforeEach(() => {
-        consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-        globalThis.fetch = vi
-          .fn()
-          .mockResolvedValue(makeFetchResponse(401, error401));
+      await expect(
+        apiClient.getProjects({
+          baseUrl: 'https://locked.example.com',
+          token: '',
+          serverId: 'locked-server',
+        }),
+      ).rejects.toMatchObject({
+        code: 'credentials-required',
+        serverId: 'locked-server',
       });
-
-      afterEach(() => {
-        consoleError.mockRestore();
-      });
-
-      const expect401 = async (promise: Promise<unknown>) => {
-        const error = await promise.then(
-          () => null,
-          (thrown: unknown) => thrown,
-        );
-        expect(error).toBeInstanceOf(ApiError);
-        expect((error as ApiError).status).toBe(401);
-        expect(consoleError).toHaveBeenCalled();
-      };
-
-      it('still throws ApiError(401) from handleResponse', async () => {
-        authStoreMock.clearAuth.mockRejectedValueOnce(dbError);
-        await expect401(apiClient.getPresets('project-id'));
-      });
-
-      it('still throws ApiError(401) from createAlert', async () => {
-        authStoreMock.clearAuth.mockRejectedValueOnce(dbError);
-        await expect401(apiClient.createAlert('project-id', alertBody));
-      });
-
-      it('still throws ApiError(401) from getIcon', async () => {
-        authStoreMock.clearAuth.mockRejectedValueOnce(dbError);
-        await expect401(apiClient.getIcon('project-id', 'icon-id'));
-      });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
   });
 
