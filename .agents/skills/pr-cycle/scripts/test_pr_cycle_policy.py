@@ -52,6 +52,16 @@ def _sentences(text: str) -> list[str]:
     ]
 
 
+def _is_locally_negated(text: str, token_start: int) -> bool:
+    prefix = text[max(0, token_start - 32) : token_start]
+    return bool(
+        re.search(
+            r"(?:\bnever|\bnot|\bcannot|\bcan't|\bmust not|\bdo not)\s+$",
+            prefix,
+        )
+    )
+
+
 def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> None:
     availability = _section(
         qwen_text, "## Availability and usage preflight", "## Exact-revision review contract"
@@ -111,7 +121,11 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
             for line in block.splitlines()
             if line.strip() and not line.lstrip().startswith("#")
         ]
-        return bool(lines) and all(line.startswith("codexbar usage ") for line in lines)
+        allowed_commands = {
+            "codexbar usage --provider codex --source cli --json",
+            "codexbar usage --provider claude --source cli --json",
+        }
+        return bool(lines) and all(line in allowed_commands for line in lines)
 
     reviewer_blocks = [block for block in blocks if not is_usage_preflight_block(block)]
     test.assertGreaterEqual(len(reviewer_blocks), 1)
@@ -163,28 +177,32 @@ def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) ->
             r"(?:\bhead-only\b|\bhead only\b|\bonly (?:the )?(?:reviewed )?head\b|\b(?:the )?(?:reviewed )?head alone\b|\b(?:the )?(?:reviewed )?head by itself\b|\bguard(?:ing)? only (?:the )?(?:reviewed )?head\b|\blimited to (?:the )?(?:reviewed )?head\b|\b(?:guarding|protecting|checking) just (?:the )?(?:reviewed )?head\b|\bsolely (?:guarding|protecting|checking) (?:the )?(?:reviewed )?head\b)",
             lower,
         )
-        if head_only and re.search(
-            r"\b(?:sufficient|suffices?|enough|adequate|acceptable|safe|valid|works?)\b",
-            lower,
-        ):
-            test.assertRegex(
-                lower,
-                re.compile(
-                    r"\b(?:not|never|insufficient|inadequate|unsafe|invalid|cannot|can't|fails?)\b"
-                ),
-                msg=f"Head-only protection must never be described as sufficient: {sentence}",
+        if head_only:
+            adequacy_matches = list(
+                re.finditer(
+                    r"\b(?:sufficient|suffices?|enough|adequate|acceptable|safe|valid|works?)\b",
+                    lower,
+                )
             )
+            for adequacy in adequacy_matches:
+                test.assertTrue(
+                    _is_locally_negated(lower, adequacy.start()),
+                    msg=f"Head-only protection must never be affirmatively described as sufficient: {sentence}",
+                )
         if ("first parent" in lower or "first-parent" in lower) and (
             "mismatch" in lower or "differs" in lower
-        ) and re.search(
-            r"\b(?:continue|proceed|advance|resume|go on|merge the next|merge next)\b",
-            lower,
         ):
-            test.assertRegex(
-                lower,
-                re.compile(r"\b(?:stop|never|do not|must not|cannot|can't)\b"),
-                msg=f"A parent mismatch must never authorize a subsequent merge: {sentence}",
+            continuation_matches = list(
+                re.finditer(
+                    r"\b(?:continue|proceed|advance|resume|go on|merge the next|merge next)\b",
+                    lower,
+                )
             )
+            for continuation in continuation_matches:
+                test.assertTrue(
+                    _is_locally_negated(lower, continuation.start()),
+                    msg=f"A parent mismatch must never affirmatively authorize a subsequent merge: {sentence}",
+                )
     test.assertIn("keep that immutable SHA as the integration subject", ordered)
     test.assertNotRegex(
         ordered,
@@ -435,6 +453,14 @@ claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
+    def test_qwen_security_contract_rejects_preflight_line_with_trailing_command(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "codexbar usage --provider codex --source cli --json",
+            'codexbar usage --provider codex --source cli --json; "$REVIEWER_BIN" --tools=Read -p="$PROMPT"',
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
     def test_qwen_security_contract_rejects_cached_codexbar_acceptance(self) -> None:
         qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
             "## Exact-revision review contract",
@@ -499,10 +525,26 @@ claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
         with self.assertRaises(AssertionError):
             assert_ordered_merge_contract(self, runbook_text)
 
+    def test_ordered_merge_contract_rejects_unrelated_stop_negation_before_continue(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "If the first parent mismatches the gated base, do not stop; continue to the next merge.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
     def test_ordered_merge_contract_rejects_head_only_guard_as_sufficient(self) -> None:
         runbook_text = RUNBOOK.read_text().replace(
             "## Scoped cleanup after verified merge",
             "A head-only guard is sufficient for autonomous merging.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_unrelated_negation_after_sufficient(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "A head-only guard is sufficient, not optional.\n\n## Scoped cleanup after verified merge",
         )
         with self.assertRaises(AssertionError):
             assert_ordered_merge_contract(self, runbook_text)
