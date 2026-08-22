@@ -61,7 +61,6 @@ describe('primary database reset coordination', () => {
     await db.remoteServers.put({
       id: 'test-server-before-reset',
       baseUrl: 'https://example.invalid',
-      token: 'fake-test-token-before-reset',
       status: 'connected',
       lastSyncedAt: '2026-08-14T00:00:00.000Z',
     });
@@ -72,7 +71,6 @@ describe('primary database reset coordination', () => {
       db.remoteServers.put({
         id: 'test-server-after-close',
         baseUrl: 'https://example.invalid',
-        token: 'fake-test-token-after-close',
         status: 'connected',
         lastSyncedAt: '2026-08-14T00:00:01.000Z',
       }),

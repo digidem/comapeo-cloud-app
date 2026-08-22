@@ -20,6 +20,11 @@ export function resetLegacyWarningForTests(): void {
   legacyWarningEmitted = false;
 }
 
+export function isInvitePathname(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  return normalized.toLowerCase() === '/invite';
+}
+
 export function parseInviteUrl(input: string): ParseInviteResult {
   const trimmed = input.trim();
 
@@ -45,7 +50,7 @@ export function parseInviteUrl(input: string): ParseInviteResult {
     return { ok: false, code: 'INVALID_URL', message: 'Not a valid URL' };
   }
 
-  if (url.pathname !== '/invite') {
+  if (!isInvitePathname(url.pathname)) {
     return {
       ok: false,
       code: 'INVALID_PATH',

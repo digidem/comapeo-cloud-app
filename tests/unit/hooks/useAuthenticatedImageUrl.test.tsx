@@ -103,6 +103,179 @@ describe('useAuthenticatedImageUrl', () => {
     );
   });
 
+  it('fails closed without fetch when the matching configured archive is locked', async () => {
+    useAuthStore.setState({
+      tier: 'remoteArchive',
+      activeServerId: 'locked-server',
+      servers: [
+        {
+          id: 'locked-server',
+          label: 'Locked',
+          baseUrl: 'https://locked.example.com',
+          token: null,
+          status: 'connected' as const,
+        },
+      ],
+    });
+
+    const { useAuthenticatedImageUrl } =
+      await import('@/hooks/useAuthenticatedImageUrl');
+    const { result } = renderHook(() =>
+      useAuthenticatedImageUrl(
+        'https://locked.example.com/projects/p1/icon/icon.png',
+        { cache: true },
+      ),
+    );
+
+    await act(() => Promise.resolve());
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.error).toMatchObject({
+      code: 'credentials-required',
+    });
+  });
+
+  it.each(['storage-cleanup-required', 'worker-transition-required'] as const)(
+    'blocks matching remote archive images before cache or fetch when startup is %s',
+    async (startupState) => {
+      document.documentElement.dataset.comapeoSecurityStartup = startupState;
+      useAuthStore.setState({
+        tier: 'remoteArchive',
+        activeServerId: 'blocked-server',
+        servers: [
+          {
+            id: 'blocked-server',
+            label: 'Blocked',
+            baseUrl: 'https://blocked.example.com',
+            token: String(123238),
+            status: 'connected' as const,
+          },
+        ],
+      });
+      const db = await import('@/lib/db');
+      const cacheReadSpy = vi.spyOn(db, 'getCachedIconBlob');
+
+      const { useAuthenticatedImageUrl } =
+        await import('@/hooks/useAuthenticatedImageUrl');
+      const { result } = renderHook(() =>
+        useAuthenticatedImageUrl(
+          'https://blocked.example.com/projects/p1/icon/icon.png',
+          { cache: true },
+        ),
+      );
+
+      await act(() => Promise.resolve());
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(cacheReadSpy).not.toHaveBeenCalled();
+      expect(createUrlMock).not.toHaveBeenCalled();
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toMatchObject({
+        code: 'security-startup-blocked',
+        state: startupState,
+      });
+    },
+  );
+
+  it('keeps local image loading available while remote startup is blocked', async () => {
+    document.documentElement.dataset.comapeoSecurityStartup =
+      'storage-cleanup-required';
+    useAuthStore.setState({
+      tier: 'local',
+      token: String(456238),
+      baseUrl: 'http://localhost:3210',
+      servers: [],
+    });
+    fetchMock.mockResolvedValue(createMockImageResponse());
+
+    const { useAuthenticatedImageUrl } =
+      await import('@/hooks/useAuthenticatedImageUrl');
+    const { result } = renderHook(() =>
+      useAuthenticatedImageUrl('/projects/local/icon.png'),
+    );
+
+    await act(() => Promise.resolve());
+    await act(() => Promise.resolve());
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/projects/local/icon.png',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer ' + String(456238) },
+      }),
+    );
+    expect(result.current.error).toBeNull();
+  });
+
+  it('never attaches an active remote-archive credential to an unmatched cross-origin URL', async () => {
+    const runtimeValue = String(234567);
+    useAuthStore.setState({
+      tier: 'remoteArchive',
+      activeServerId: 'archive-server',
+      token: runtimeValue,
+      baseUrl: 'https://archive.example.com',
+      servers: [
+        {
+          id: 'archive-server',
+          label: 'Archive',
+          baseUrl: 'https://archive.example.com',
+          token: runtimeValue,
+          status: 'connected' as const,
+        },
+      ],
+    });
+    fetchMock.mockResolvedValue(createMockImageResponse());
+
+    const { useAuthenticatedImageUrl } =
+      await import('@/hooks/useAuthenticatedImageUrl');
+    renderHook(() =>
+      useAuthenticatedImageUrl('https://unmatched.example.net/icon.png'),
+    );
+    await act(() => Promise.resolve());
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://unmatched.example.net/icon.png',
+      expect.objectContaining({ headers: {} }),
+    );
+  });
+
+  it('locks only the matching runtime archive credential after an image 401', async () => {
+    const runtimeValue = String(345678);
+    useAuthStore.setState({
+      tier: 'remoteArchive',
+      activeServerId: 'image-server',
+      token: runtimeValue,
+      baseUrl: 'https://image.example.com',
+      servers: [
+        {
+          id: 'image-server',
+          label: 'Image Archive',
+          baseUrl: 'https://image.example.com',
+          token: runtimeValue,
+          status: 'connected' as const,
+        },
+      ],
+    });
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 401,
+      blob: () => Promise.resolve(new Blob()),
+    } as Response);
+
+    const { useAuthenticatedImageUrl } =
+      await import('@/hooks/useAuthenticatedImageUrl');
+    const { result } = renderHook(() =>
+      useAuthenticatedImageUrl('https://image.example.com/icon.png'),
+    );
+    await act(() => Promise.resolve());
+    await act(() => Promise.resolve());
+
+    expect(useAuthStore.getState().servers[0]?.token).toBeNull();
+    expect(result.current.error).toMatchObject({
+      code: 'credentials-required',
+    });
+  });
+
   it('removes the archive base path before routing an absolute URL through the proxy', async () => {
     useAuthStore.setState({
       servers: [

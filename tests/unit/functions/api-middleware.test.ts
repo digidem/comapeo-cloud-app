@@ -19,6 +19,14 @@ function createContext(
   return { request, next } as unknown as Parameters<typeof onRequest>[0];
 }
 
+function expectSecurityHeaders(response: Response) {
+  expect(response.headers.get('Strict-Transport-Security')).toBe(
+    'max-age=31536000',
+  );
+  expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+  expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
+}
+
 describe('api/_middleware', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -105,6 +113,113 @@ describe('api/_middleware', () => {
 
       expect(next).toHaveBeenCalledTimes(1);
       expect(res.status).toBe(405);
+    });
+  });
+
+  describe('security response boundary', () => {
+    it('decorates delegated tile responses without replacing public cache or MIME', async () => {
+      const next = vi.fn().mockResolvedValue(
+        new Response('tile-bytes', {
+          status: 206,
+          statusText: 'Partial Content',
+          headers: {
+            'Cache-Control': 'public, max-age=86400, s-maxage=604800',
+            'Content-Type': 'image/png',
+          },
+        }),
+      );
+      const req = createRequest(
+        'GET',
+        'http://localhost/api/tiles?url=https://basemaps.cartocdn.com/tile.png',
+      );
+
+      const res = await onRequest(createContext(req, next));
+
+      expectSecurityHeaders(res);
+      expect(res.status).toBe(206);
+      expect(res.statusText).toBe('Partial Content');
+      expect(res.headers.get('Cache-Control')).toBe(
+        'public, max-age=86400, s-maxage=604800',
+      );
+      expect(res.headers.get('Content-Type')).toContain('image/png');
+      expect(await res.text()).toBe('tile-bytes');
+    });
+
+    it('decorates delegated invite errors while preserving no-store and body', async () => {
+      const next = vi.fn().mockResolvedValue(
+        new Response('invite-error', {
+          status: 400,
+          statusText: 'Bad Request',
+          headers: { 'Cache-Control': 'no-store' },
+        }),
+      );
+      const req = createRequest('POST', 'http://localhost/api/invites/encrypt');
+
+      const res = await onRequest(createContext(req, next));
+
+      expectSecurityHeaders(res);
+      expect(res.status).toBe(400);
+      expect(res.statusText).toBe('Bad Request');
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      expect(await res.text()).toBe('invite-error');
+    });
+
+    it.each([
+      ['tile', 'GET', 'http://localhost/api/tiles'],
+      ['invite', 'POST', 'http://localhost/api/invites/decrypt'],
+    ])(
+      'converts a delegated %s throw into a generic decorated 500',
+      async (_kind, method, url) => {
+        const canaryDetail = 'CANARY_DELEGATED_ERROR_DETAIL';
+        const next = vi.fn().mockRejectedValue(new Error(canaryDetail));
+
+        const res = await onRequest(
+          createContext(createRequest(method, url), next),
+        );
+
+        expectSecurityHeaders(res);
+        expect(res.status).toBe(500);
+        expect(res.headers.get('Cache-Control')).toBe('no-store');
+        expect(await res.text()).not.toContain(canaryDetail);
+      },
+    );
+
+    it('decorates archive validation errors and preserves no-store', async () => {
+      const res = await onRequest(
+        createContext(
+          createRequest('GET', 'http://localhost/api/info'),
+          vi.fn(),
+        ),
+      );
+
+      expectSecurityHeaders(res);
+      expect(res.status).toBe(400);
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+    });
+
+    it('decorates archive upstream responses while preserving status, body, and no-store', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue(
+        new Response('archive-body', {
+          status: 202,
+          statusText: 'Accepted',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=60',
+          },
+        }),
+      );
+      globalThis.fetch = fetchSpy as unknown as typeof fetch;
+      const req = createRequest('GET', 'http://localhost/api/projects', {
+        'x-target-url': 'https://archive.example.com',
+      });
+
+      const res = await onRequest(createContext(req, vi.fn()));
+
+      expectSecurityHeaders(res);
+      expect(res.status).toBe(202);
+      expect(res.statusText).toBe('Accepted');
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      expect(await res.text()).toBe('archive-body');
     });
   });
 

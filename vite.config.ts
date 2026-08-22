@@ -424,30 +424,15 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
+        injectRegister: null,
         registerType: 'autoUpdate',
         includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
         manifest: false,
-        workbox: {
+        injectManifest: {
           globPatterns: ['**/*.{js,css,svg,png,html,webmanifest,woff2}'],
-          runtimeCaching: [
-            {
-              urlPattern: ({ url, sameOrigin }) =>
-                sameOrigin && url.pathname.startsWith('/api/'),
-              handler: 'NetworkOnly',
-            },
-            {
-              urlPattern: ({ url, sameOrigin }) =>
-                !sameOrigin && url.protocol === 'https:',
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'remote-api-cache',
-                expiration: {
-                  maxAgeSeconds: 60 * 60 * 24,
-                },
-                networkTimeoutSeconds: 10,
-              },
-            },
-          ],
         },
       }),
     ],

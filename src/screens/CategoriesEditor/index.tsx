@@ -99,19 +99,21 @@ export function CategoriesEditorScreen() {
   const owningServer = selectedProject
     ? (servers.find((s) => s.id === selectedProject.sourceId) ?? null)
     : null;
-  const serverConfig = owningServer
-    ? { baseUrl: owningServer.baseUrl, token: owningServer.token }
+  const serverConfig = owningServer?.token
+    ? {
+        serverId: owningServer.id,
+        baseUrl: owningServer.baseUrl,
+        token: owningServer.token,
+      }
     : null;
+  const projectRemoteId =
+    owningServer && !owningServer.token
+      ? null
+      : (selectedProject?.remoteId ?? null);
 
-  const presetsQuery = useApiPresets(
-    selectedProject?.remoteId ?? null,
-    serverConfig,
-  );
+  const presetsQuery = useApiPresets(projectRemoteId, serverConfig);
 
-  const fieldsQuery = useApiFields(
-    selectedProject?.remoteId ?? null,
-    serverConfig,
-  );
+  const fieldsQuery = useApiFields(projectRemoteId, serverConfig);
 
   // Build field lookup from API fields — used both for search label
   // resolution and for rendering resolved NormalizedField[] in the detail.

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { syncRemoteArchive } from '@/lib/data-layer';
-import { getRemoteServers } from '@/lib/local-repositories';
 import { useAuthStore } from '@/stores/auth-store';
 
 const DEFAULT_POLL_INTERVAL_MS = 5 * 60 * 1000;
@@ -21,15 +20,14 @@ export function useAutoSync(options?: { pollIntervalMs?: number }): void {
     isSyncingRef.current = true;
 
     try {
-      const records = await getRemoteServers();
       await useAuthStore.getState().hydrateServers();
-
-      const serversWithCredentials = records.filter(
-        (record): record is typeof record & { token: string } =>
+      const runtimeServers = useAuthStore.getState().servers;
+      const serversWithCredentials = runtimeServers.filter(
+        (server): server is typeof server & { token: string } =>
           Boolean(
-            record.baseUrl &&
-            record.token &&
-            record.onboardingStatus !== 'cancelled',
+            server.baseUrl &&
+            server.token &&
+            server.onboardingStatus !== 'cancelled',
           ),
       );
       const results = await Promise.allSettled(

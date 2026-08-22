@@ -650,7 +650,7 @@ function HomeScreen() {
     if (!server) return;
 
     // UX guard: skip if already syncing (the real lock is in sync.ts)
-    if (server.status === 'syncing') return;
+    if (server.status === 'syncing' || !server.token) return;
 
     void syncRemoteArchive(serverId, {
       baseUrl: server.baseUrl,

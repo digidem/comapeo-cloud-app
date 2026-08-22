@@ -364,6 +364,10 @@ jobs:
         run: |
           npx playwright test tests/e2e/app-db.e2e.ts tests/e2e/alerts-map.e2e.ts tests/e2e/categories.e2e.ts tests/e2e/critical-flows.e2e.ts tests/e2e/map-download.e2e.ts --project=firefox --project=webkit --reporter=list
           npx playwright test tests/e2e/home.e2e.ts --grep "7.1 first visit" --project=firefox --project=webkit --reporter=list
+          npx playwright test tests/e2e/security-credential-boundary.e2e.ts --project=firefox --project=webkit --reporter=list
+
+      - name: Security startup and service-worker production E2E
+        run: bun run test:e2e:security-production
 
       - name: PWA offline cold-start E2E
         env:

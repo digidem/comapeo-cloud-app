@@ -1,0 +1,25 @@
+# Browser credential security and offline data
+
+## English
+
+CoMapeo Cloud keeps remote archive bearer credentials in page memory only. Archive configuration metadata may remain in browser storage so configured archives and already-synced local data are still visible after a reload, but the credential itself is not persisted by the application. Reloading or opening a new tab therefore leaves a configured archive locked until a valid credential or still-valid invitation is supplied again.
+
+This protection is specifically about application-managed credential persistence. It does not protect a credential from JavaScript or a privileged browser extension while the current page is actively using that credential, and it cannot retroactively erase an invite URL from browser-managed history/autocomplete or platform/server access logs.
+
+Offline territorial data is different. Observations, alerts, tracks, attachments, maps, and precise coordinates are intentionally persisted for local-first/offline use. **They are not encrypted or confidential at rest by this browser hardening.** Automatically storing both ciphertext and a browser-recoverable key would not create the user-controlled security boundary we need. The dedicated follow-up is [#278 — security: design user-unlocked local data vault and app lock](https://github.com/digidem/comapeo-cloud-app/issues/278), which covers a genuinely user-unlocked vault, recovery, attachments/maps, key rotation, multi-tab behavior, and low-end-device performance.
+
+## Português
+
+O CoMapeo Cloud mantém as credenciais bearer de arquivos remotos somente na memória da página. Os metadados de configuração do arquivo podem permanecer armazenados no navegador para que arquivos configurados e dados locais já sincronizados continuem visíveis após recarregar a página, mas a credencial em si não é persistida pelo aplicativo. Portanto, ao recarregar a página ou abrir uma nova aba, o arquivo configurado volta a ficar bloqueado até que uma credencial válida ou um convite ainda válido seja fornecido novamente.
+
+Essa proteção trata especificamente da persistência de credenciais gerenciada pelo aplicativo. Ela não protege uma credencial contra JavaScript executando na origem da página ou uma extensão privilegiada do navegador enquanto a página atual estiver usando essa credencial, e não pode apagar retroativamente uma URL de convite do histórico/autocompletar gerenciado pelo navegador nem de logs de acesso da plataforma/servidor.
+
+Os dados territoriais offline são diferentes. Observações, alertas, trilhas, anexos, mapas e coordenadas precisas são persistidos intencionalmente para permitir uso local-first/offline. **Eles não são criptografados nem confidenciais em repouso por este endurecimento do navegador.** Armazenar automaticamente tanto o conteúdo cifrado quanto uma chave recuperável pelo próprio navegador não criaria a barreira de segurança controlada pelo usuário que precisamos. O trabalho dedicado continua em [#278 — security: design user-unlocked local data vault and app lock](https://github.com/digidem/comapeo-cloud-app/issues/278), que cobre cofre desbloqueado pelo usuário, recuperação, anexos/mapas, rotação de chaves, comportamento multiaba e desempenho em dispositivos de baixo custo.
+
+## Español
+
+CoMapeo Cloud mantiene las credenciales bearer de archivos remotos únicamente en la memoria de la página. Los metadatos de configuración del archivo pueden permanecer almacenados en el navegador para que los archivos configurados y los datos locales ya sincronizados sigan visibles después de recargar, pero la credencial en sí no se persiste por la aplicación. Por lo tanto, al recargar la página o abrir una pestaña nueva, el archivo configurado vuelve a quedar bloqueado hasta que se proporcione otra vez una credencial válida o una invitación aún vigente.
+
+Esta protección se refiere específicamente a la persistencia de credenciales gestionada por la aplicación. No protege una credencial frente a JavaScript que se ejecute en el origen de la página ni frente a una extensión privilegiada del navegador mientras la página actual esté usando esa credencial, y no puede borrar retroactivamente una URL de invitación del historial/autocompletado gestionado por el navegador ni de los registros de acceso de la plataforma/servidor.
+
+Los datos territoriales sin conexión son diferentes. Observaciones, alertas, recorridos, adjuntos, mapas y coordenadas precisas se persisten intencionalmente para permitir un uso local-first/offline. **Este endurecimiento del navegador no los cifra ni los hace confidenciales en reposo.** Almacenar automáticamente tanto el contenido cifrado como una clave recuperable por el propio navegador no crearía el límite de seguridad controlado por el usuario que necesitamos. El trabajo específico continúa en [#278 — security: design user-unlocked local data vault and app lock](https://github.com/digidem/comapeo-cloud-app/issues/278), que cubre una bóveda desbloqueada por el usuario, recuperación, adjuntos/mapas, rotación de claves, comportamiento entre pestañas y rendimiento en dispositivos de gama baja.

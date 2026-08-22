@@ -47,6 +47,10 @@ const messages = defineMessages({
     id: 'home.archive.retrySync',
     defaultMessage: 'Retry Sync',
   },
+  reconnect: {
+    id: 'home.archive.reconnect',
+    defaultMessage: 'Reconnect',
+  },
   staleToken: {
     id: 'home.archive.staleToken',
     defaultMessage: 'Token may be stale — no sync in over 24 hours',
@@ -77,6 +81,9 @@ function ArchiveStatusCard({
   const intl = useIntl();
   const status = resolveServerStatus(server);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editDialogMode, setEditDialogMode] = useState<'edit' | 'reconnect'>(
+    'edit',
+  );
   const [isConfirmRemoveOpen, setIsConfirmRemoveOpen] = useState(false);
 
   const authServers = useAuthStore((s) => s.servers);
@@ -90,7 +97,7 @@ function ArchiveStatusCard({
     id: server.id,
     label: server.label,
     baseUrl: server.baseUrl,
-    token: '',
+    token: null,
     status: 'idle',
   };
 
@@ -100,6 +107,13 @@ function ArchiveStatusCard({
 
   function handleEditClick(e: React.MouseEvent) {
     e.stopPropagation();
+    setEditDialogMode('edit');
+    setIsEditDialogOpen(true);
+  }
+
+  function handleReconnectClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditDialogMode('reconnect');
     setIsEditDialogOpen(true);
   }
 
@@ -162,6 +176,17 @@ function ArchiveStatusCard({
               {intl.formatMessage(messages.retrySync)}
             </Button>
           )}
+          {!server.hasCredentials && (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleReconnectClick}
+              className="min-h-[28px] px-2"
+            >
+              {intl.formatMessage(messages.reconnect)}
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -187,6 +212,7 @@ function ArchiveStatusCard({
         isOpen={isEditDialogOpen}
         onClose={() => setIsEditDialogOpen(false)}
         server={fullServer}
+        mode={editDialogMode}
       />
 
       <Modal
