@@ -64,6 +64,11 @@ async function addArchiveWithToken(
   await expect(dialog).toBeHidden({ timeout: 30_000 });
 }
 
+async function openArchiveDetails(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Archive actions' }).first().click();
+  await page.getByRole('button', { name: 'View Details' }).click();
+}
+
 async function serializePersistentSecuritySurfaces(
   page: Page,
 ): Promise<string> {
@@ -174,6 +179,7 @@ test('served production build sanitizes an encrypted invite before app bootstrap
   test.setTimeout(90_000);
   const probeValue = String(Date.now()) + '-238';
   const fragmentCanary = `prod-fragment-${Date.now()}`;
+  const credentialCacheCanary = `sw-auth-cache-${Date.now()}`;
   const code = makeInviteCode('https://archive.example.com', probeValue);
   const consoleMessages: string[] = [];
   page.on('console', (message) => consoleMessages.push(message.text()));
@@ -197,7 +203,19 @@ test('served production build sanitizes an encrypted invite before app bootstrap
       page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? ''),
     )
     .toContain('/sw.js');
-  expect(await readApiRequests(request)).toContain('/api/invites/decrypt');
+
+  await page.evaluate(async (canary) => {
+    const response = await fetch('/api/healthcheck?security-cache-probe=1', {
+      headers: { Authorization: `Bearer ${canary}` },
+    });
+    if (!response.ok) throw new Error('Synthetic worker request failed');
+  }, credentialCacheCanary);
+
+  const postWorkerSnapshot = await serializePersistentSecuritySurfaces(page);
+  expect(postWorkerSnapshot).not.toContain(credentialCacheCanary);
+  const apiRequests = await readApiRequests(request);
+  expect(apiRequests).toContain('/api/invites/decrypt');
+  expect(apiRequests).toContain(credentialCacheCanary);
 });
 
 test('old controller blocks credential entry until secure takeover, removes legacy credential cache, then reaches ready without caching the token', async ({
@@ -274,6 +292,77 @@ test('old controller blocks credential entry until secure takeover, removes lega
       .map((entry) => ({ name: entry.name, startTime: entry.startTime })),
   );
   console.log('[security-production] preflight marks', JSON.stringify(marks));
+});
+
+test('old controller blocks login, startup invite redemption, and reconnect archive traffic', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const initialCanary = `initial-runtime-${Date.now()}`;
+  const reconnectCanary = `blocked-reconnect-${Date.now()}`;
+  const loginCanary = `blocked-login-${Date.now()}`;
+  const inviteCanary = `blocked-invite-${Date.now()}`;
+
+  await page.goto('/');
+  await addArchiveWithToken(page, 'https://archive.example.com', initialCanary);
+
+  await setSecureWorkerAvailable(request, false);
+  await installLegacyWorker(page);
+  await clearApiRequests(request);
+  await page.goto('/');
+  await expect
+    .poll(() => readStartupState(page))
+    .toBe('worker-transition-required');
+
+  await openArchiveDetails(page);
+  await page
+    .getByRole('button', { name: /^reconnect$/i })
+    .first()
+    .click();
+  const reconnectDialog = page.getByRole('dialog', {
+    name: /reconnect archive/i,
+  });
+  await reconnectDialog.getByLabel('Bearer Token').fill(reconnectCanary);
+  await reconnectDialog.getByRole('button', { name: /^reconnect$/i }).click();
+  await expect(
+    reconnectDialog.getByText(
+      /secure startup must complete before reconnecting/i,
+    ),
+  ).toBeVisible();
+  expect(await readApiRequests(request)).not.toContain(reconnectCanary);
+
+  await page.goto('/login');
+  await page.getByLabel('Server URL').fill('https://archive.example.com');
+  await page.getByLabel('Bearer Token').fill(loginCanary);
+  await page.getByRole('button', { name: /^connect$/i }).click();
+  await expect(
+    page
+      .getByRole('alert')
+      .filter({ hasText: /something went wrong connecting/i }),
+  ).toBeVisible();
+  expect(await readApiRequests(request)).not.toContain(loginCanary);
+
+  const inviteCode = makeInviteCode(
+    'https://archive.example.com',
+    inviteCanary,
+  );
+  await page.goto(`/invite?code=${encodeURIComponent(inviteCode)}`);
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/invite');
+  await expect.poll(() => new URL(page.url()).search).toBe('');
+  await expect
+    .poll(() => readStartupState(page))
+    .toBe('worker-transition-required');
+  const apiRequests = await readApiRequests(request);
+  expect(apiRequests).not.toContain('/api/invites/decrypt');
+  expect(apiRequests).not.toContain(inviteCanary);
+
+  const snapshot = await serializePersistentSecuritySurfaces(page);
+  expect(snapshot).not.toContain(initialCanary);
+  expect(snapshot).not.toContain(reconnectCanary);
+  expect(snapshot).not.toContain(loginCanary);
+  expect(snapshot).not.toContain(inviteCanary);
+  expect(snapshot).not.toContain(inviteCode);
 });
 
 test('offline old-worker transition keeps the local shell usable and does not reload-loop', async ({
