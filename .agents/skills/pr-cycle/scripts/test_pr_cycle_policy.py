@@ -36,11 +36,6 @@ def _active_ci_commands(ci_text: str) -> set[str]:
     }
 
 
-def _first_code_block_after(text: str, marker: str) -> str:
-    tail = text.split(marker, 1)[1]
-    return tail.split("```bash", 1)[1].split("```", 1)[0]
-
-
 def _section(text: str, start: str, end: str) -> str:
     return text.split(start, 1)[1].split(end, 1)[0]
 
@@ -109,9 +104,16 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
                     msg=f"Prompt transport must not be permitted through argv: {sentence}",
                 )
     blocks = _bash_blocks(qwen_text)
-    reviewer_blocks = [
-        block for block in blocks if "claude-qwen" in block or "$QWEN_BIN" in block
-    ]
+
+    def is_usage_preflight_block(block: str) -> bool:
+        lines = [
+            line.strip()
+            for line in block.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        return bool(lines) and all(line.startswith("codexbar usage ") for line in lines)
+
+    reviewer_blocks = [block for block in blocks if not is_usage_preflight_block(block)]
     test.assertGreaterEqual(len(reviewer_blocks), 1)
     for invocation in reviewer_blocks:
         test.assertIn("mktemp -d", invocation)
@@ -158,15 +160,18 @@ def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) ->
     for sentence in _sentences(ordered):
         lower = sentence.lower()
         head_only = re.search(
-            r"(?:\bhead-only\b|\bonly (?:the )?(?:reviewed )?head\b|\b(?:the )?(?:reviewed )?head alone\b|\bguard(?:ing)? only (?:the )?(?:reviewed )?head\b)",
+            r"(?:\bhead-only\b|\bhead only\b|\bonly (?:the )?(?:reviewed )?head\b|\b(?:the )?(?:reviewed )?head alone\b|\b(?:the )?(?:reviewed )?head by itself\b|\bguard(?:ing)? only (?:the )?(?:reviewed )?head\b|\blimited to (?:the )?(?:reviewed )?head\b|\b(?:guarding|protecting|checking) just (?:the )?(?:reviewed )?head\b|\bsolely (?:guarding|protecting|checking) (?:the )?(?:reviewed )?head\b)",
             lower,
         )
         if head_only and re.search(
-            r"\b(?:sufficient|enough|acceptable|safe)\b", lower
+            r"\b(?:sufficient|suffices?|enough|adequate|acceptable|safe|valid|works?)\b",
+            lower,
         ):
             test.assertRegex(
                 lower,
-                re.compile(r"\b(?:not|never|insufficient|unsafe|cannot|can't)\b"),
+                re.compile(
+                    r"\b(?:not|never|insufficient|inadequate|unsafe|invalid|cannot|can't|fails?)\b"
+                ),
                 msg=f"Head-only protection must never be described as sufficient: {sentence}",
             )
         if ("first parent" in lower or "first-parent" in lower) and (
@@ -418,6 +423,18 @@ claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
+    def test_qwen_security_contract_rejects_alias_based_reviewer_invocation(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            """## Fallback semantics
+
+```bash
+\"$REVIEWER_BIN\" --tools=Read -p=\"$PROMPT\"
+```""",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
     def test_qwen_security_contract_rejects_cached_codexbar_acceptance(self) -> None:
         qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
             "## Exact-revision review contract",
@@ -494,6 +511,22 @@ claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
         runbook_text = RUNBOOK.read_text().replace(
             "## Scoped cleanup after verified merge",
             "Guarding only the reviewed head is sufficient for merging.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_head_limited_guard_as_adequate(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "A merge guard limited to the head is adequate for autonomous merging.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_just_head_as_sufficing(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "Protecting just the head suffices for merging.\n\n## Scoped cleanup after verified merge",
         )
         with self.assertRaises(AssertionError):
             assert_ordered_merge_contract(self, runbook_text)
