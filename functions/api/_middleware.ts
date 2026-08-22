@@ -43,13 +43,38 @@ interface PagesContext {
   next: () => Promise<Response>;
 }
 
+function withApiSecurityHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set('Strict-Transport-Security', 'max-age=31536000');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Referrer-Policy', 'no-referrer');
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+async function nextWithApiSecurityHeaders(
+  context: PagesContext,
+): Promise<Response> {
+  try {
+    return withApiSecurityHeaders(await context.next());
+  } catch {
+    return withApiSecurityHeaders(
+      jsonError(500, 'INTERNAL_SERVER_ERROR', 'Internal server error'),
+    );
+  }
+}
+
 export const onRequest: PagesFunction = async (context: PagesContext) => {
   const url = new URL(context.request.url);
 
   // Pass tiles requests through to functions/api/tiles/index.ts.
   // Tiles has its own static-segment handler — middleware must not shadow it.
   if (url.pathname === '/api/tiles' || url.pathname.startsWith('/api/tiles/')) {
-    return context.next();
+    return nextWithApiSecurityHeaders(context);
   }
 
   // Pass invite requests through to functions/api/invites/{encrypt,decrypt}.ts.
@@ -57,7 +82,7 @@ export const onRequest: PagesFunction = async (context: PagesContext) => {
     url.pathname === '/api/invites/encrypt' ||
     url.pathname === '/api/invites/decrypt'
   ) {
-    return context.next();
+    return nextWithApiSecurityHeaders(context);
   }
 
   // Everything else under /api/* is handled by the archive proxy.
@@ -67,7 +92,9 @@ export const onRequest: PagesFunction = async (context: PagesContext) => {
     upstreamPath,
   );
   if (!proxyRequest.ok) {
-    return jsonError(405, proxyRequest.code, proxyRequest.message);
+    return withApiSecurityHeaders(
+      jsonError(405, proxyRequest.code, proxyRequest.message),
+    );
   }
 
   const target = buildArchiveTargetUrl(
@@ -75,7 +102,9 @@ export const onRequest: PagesFunction = async (context: PagesContext) => {
     context.request.headers.get(ARCHIVE_TARGET_HEADER),
   );
   if (!target.ok) {
-    return jsonError(400, 'ARCHIVE_PROXY_BAD_TARGET', target.message);
+    return withApiSecurityHeaders(
+      jsonError(400, 'ARCHIVE_PROXY_BAD_TARGET', target.message),
+    );
   }
 
   const method = context.request.method.toUpperCase();
@@ -89,12 +118,14 @@ export const onRequest: PagesFunction = async (context: PagesContext) => {
   });
 
   try {
-    return withNoStore(await fetch(proxiedRequest));
+    return withApiSecurityHeaders(withNoStore(await fetch(proxiedRequest)));
   } catch {
-    return jsonError(
-      502,
-      'ARCHIVE_PROXY_UPSTREAM_FAILED',
-      'Archive server request failed',
+    return withApiSecurityHeaders(
+      jsonError(
+        502,
+        'ARCHIVE_PROXY_UPSTREAM_FAILED',
+        'Archive server request failed',
+      ),
     );
   }
 };

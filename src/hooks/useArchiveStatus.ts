@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import type { RemoteServer } from '@/lib/db';
 import { getRemoteServers } from '@/lib/local-repositories';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -20,84 +21,90 @@ export interface ArchiveStatus {
   anySyncing: boolean;
 }
 
+const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+
 export function useArchiveStatus(): ArchiveStatus {
-  const servers = useAuthStore((s) => s.servers);
-  const [cachedServers, setCachedServers] = useState<ArchiveServerStatus[]>([]);
+  const runtimeServers = useAuthStore((state) => state.servers);
+  const serversHydrated = useAuthStore((state) => state.hasHydratedServers);
+  const [cachedRecords, setCachedRecords] = useState<RemoteServer[]>([]);
   const [now, setNow] = useState(() => Date.now());
 
-  // Refresh the current timestamp every 60 seconds for stale detection
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(interval);
   }, []);
 
-  // Load remote servers from IndexedDB on mount
-
   useEffect(() => {
-    let cancelled = false;
+    if (serversHydrated) return;
 
-    getRemoteServers().then(
+    let cancelled = false;
+    void getRemoteServers().then(
       (records) => {
-        if (cancelled) return;
-        setCachedServers(
-          records.map((record) => ({
-            id: record.id,
-            label: record.label ?? record.baseUrl,
-            baseUrl: record.baseUrl,
-            isSyncing: record.status === 'syncing',
-            lastSyncedAt: record.lastSyncedAt ?? null,
-            error: record.status === 'error' ? 'Sync error' : null,
-            hasCredentials:
-              typeof record.token === 'string' && record.token.length > 0,
-            isStale:
-              record.lastSyncedAt !== null
-                ? now - new Date(record.lastSyncedAt).getTime() >
-                  24 * 60 * 60 * 1000
-                : true,
-          })),
-        );
+        if (!cancelled) setCachedRecords(records);
       },
       () => {
-        if (!cancelled) setCachedServers([]);
+        // Keep the last successful metadata fallback available for retry/UI.
       },
     );
 
     return () => {
       cancelled = true;
     };
-  }, [servers, now]);
+  }, [serversHydrated]);
 
-  const mapped: ArchiveServerStatus[] = useMemo(
+  const mappedRuntime = useMemo<ArchiveServerStatus[]>(
     () =>
-      servers.map((s) => ({
-        id: s.id,
-        label: s.label,
-        baseUrl: s.baseUrl,
-        isSyncing: s.status === 'syncing',
-        lastSyncedAt: s.lastSyncedAt ?? null,
+      runtimeServers.map((server) => ({
+        id: server.id,
+        label: server.label,
+        baseUrl: server.baseUrl,
+        isSyncing: server.status === 'syncing',
+        lastSyncedAt: server.lastSyncedAt ?? null,
         error:
-          s.status === 'error' ? (s.errorMessage ?? 'Unknown error') : null,
-        hasCredentials: typeof s.token === 'string' && s.token.length > 0,
-        isStale: s.lastSyncedAt
-          ? now - new Date(s.lastSyncedAt).getTime() > 24 * 60 * 60 * 1000
+          server.status === 'error'
+            ? (server.errorMessage ?? 'Unknown error')
+            : null,
+        hasCredentials:
+          typeof server.token === 'string' && server.token.length > 0,
+        isStale: server.lastSyncedAt
+          ? now - new Date(server.lastSyncedAt).getTime() > STALE_AFTER_MS
           : true,
       })),
-    [servers, now],
+    [runtimeServers, now],
+  );
+
+  const mappedFallback = useMemo<ArchiveServerStatus[]>(
+    () =>
+      cachedRecords.map((record) => ({
+        id: record.id,
+        label: record.label ?? record.baseUrl,
+        baseUrl: record.baseUrl,
+        isSyncing: record.status === 'syncing',
+        lastSyncedAt: record.lastSyncedAt ?? null,
+        error: record.status === 'error' ? 'Sync error' : null,
+        hasCredentials: false,
+        isStale: record.lastSyncedAt
+          ? now - new Date(record.lastSyncedAt).getTime() > STALE_AFTER_MS
+          : true,
+      })),
+    [cachedRecords, now],
   );
 
   const merged = useMemo(() => {
-    const authServerIds = new Set(mapped.map((s) => s.id));
+    if (serversHydrated) return mappedRuntime;
+
+    const runtimeIds = new Set(mappedRuntime.map((server) => server.id));
     return [
-      ...mapped,
-      ...cachedServers.filter((s) => !authServerIds.has(s.id)),
+      ...mappedRuntime,
+      ...mappedFallback.filter((server) => !runtimeIds.has(server.id)),
     ];
-  }, [mapped, cachedServers]);
+  }, [mappedFallback, mappedRuntime, serversHydrated]);
 
   return useMemo(
     () => ({
       servers: merged,
-      anyError: merged.some((s) => s.error !== null),
-      anySyncing: merged.some((s) => s.isSyncing),
+      anyError: merged.some((server) => server.error !== null),
+      anySyncing: merged.some((server) => server.isSyncing),
     }),
     [merged],
   );

@@ -30,6 +30,31 @@ describe('remote server repository', () => {
     expect(all).toHaveLength(2);
   });
 
+  it('projects credential fields out of create and update writes at runtime', async () => {
+    const unsafeCreate = {
+      baseUrl: 'https://archive.example.com',
+      label: 'Archive',
+      token: '[REDACTED_SECRET]',
+    } as unknown as Parameters<typeof createRemoteServer>[0];
+
+    const server = await createRemoteServer(unsafeCreate);
+    const created = (await getDb().remoteServers.get(server.id)) as unknown as
+      Record<string, unknown> | undefined;
+    expect(created).toBeDefined();
+    expect(created).not.toHaveProperty('token');
+
+    const unsafeUpdate = {
+      label: 'Renamed archive',
+      token: '[REDACTED_SECRET]',
+    } as unknown as Parameters<typeof updateRemoteServer>[1];
+    await updateRemoteServer(server.id, unsafeUpdate);
+
+    const updated = (await getDb().remoteServers.get(server.id)) as unknown as
+      Record<string, unknown> | undefined;
+    expect(updated?.label).toBe('Renamed archive');
+    expect(updated).not.toHaveProperty('token');
+  });
+
   it('updates server status and error message', async () => {
     const server = await createRemoteServer({
       baseUrl: 'https://archive.example.com',

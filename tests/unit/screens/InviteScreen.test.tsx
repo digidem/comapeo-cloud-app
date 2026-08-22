@@ -1,10 +1,27 @@
-import { render, screen, waitFor } from '@tests/mocks/test-utils';
+import {
+  act,
+  render,
+  screen,
+  userEvent,
+  waitFor,
+} from '@tests/mocks/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
 
-import { ApiError, apiClient } from '@/lib/api-client';
-import { resetDb } from '@/lib/db';
+import {
+  ApiError,
+  InviteApiError,
+  apiClient,
+  redeemEncryptedInvite,
+} from '@/lib/api-client';
+import { getDb, resetDb } from '@/lib/db';
+import {
+  INVITE_BOOTSTRAP_MAX_LIFETIME_MS,
+  clearInviteBootstrapCandidate,
+  consumeInviteBootstrapCandidate,
+  storeInviteBootstrapCandidate,
+} from '@/lib/invite-bootstrap-runtime';
 import { syncRemoteArchive } from '@/lib/sync';
 import type { SyncResult } from '@/lib/sync';
 import * as syncCoordinator from '@/lib/sync-coordinator';
@@ -132,12 +149,14 @@ describe('InviteScreen', () => {
     resetSyncCoordinatorForTests();
     await resetDb();
     await useAuthStore.getState().clearAll();
+    clearInviteBootstrapCandidate();
     vi.mocked(syncRemoteArchive).mockResolvedValue(readyResult());
   });
 
   afterEach(async () => {
     resetSyncCoordinatorForTests();
     vi.clearAllMocks();
+    clearInviteBootstrapCandidate();
     await useAuthStore.getState().clearAll();
   });
 
@@ -169,9 +188,12 @@ describe('InviteScreen', () => {
   it('shows Connected! success state after sync completes', async () => {
     setSearchParams('?hash=abc123&url=https%3A%2F%2Farchive.test');
     render(<InviteScreen />);
-    await waitFor(() => {
-      expect(screen.getByText('Connected!')).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText('Connected!')).toBeInTheDocument();
+      },
+      { timeout: 3_000 },
+    );
     expect(screen.getByText('Redirecting...')).toBeInTheDocument();
   });
 
@@ -516,6 +538,40 @@ describe('InviteScreen', () => {
     expect(useAuthStore.getState().servers[0]).toEqual(snapshot);
   });
 
+  it('restores a previously locked duplicate archive to null without persisting the replacement credential', async () => {
+    const serverId = await useAuthStore.getState().addServer({
+      label: 'archive.test',
+      baseUrl: 'https://archive.test',
+      token: 'initial-runtime-token',
+    });
+    useAuthStore.getState().restoreServerToken(serverId, null);
+    await useAuthStore.getState().updateServer(serverId, {
+      status: 'connected',
+      onboardingStatus: 'ready',
+    });
+    vi.mocked(syncRemoteArchive).mockResolvedValueOnce(
+      codedFailedResult('Invalid bearer credential', 'authorization'),
+    );
+
+    setSearchParams('?hash=new&url=https%3A%2F%2Farchive.test');
+    render(<InviteScreen />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Invalid token or unauthorized'),
+      ).toBeInTheDocument();
+    });
+
+    const runtime = useAuthStore
+      .getState()
+      .servers.find((server) => server.id === serverId);
+    expect(runtime?.token).toBeNull();
+    expect(runtime?.status).toBe('connected');
+    const persisted = (await getDb().remoteServers.get(serverId)) as unknown as
+      Record<string, unknown> | undefined;
+    expect(persisted).not.toHaveProperty('token');
+  });
+
   it('shows a distinct message for partial sync and rolls back the pending server', async () => {
     vi.mocked(syncRemoteArchive).mockResolvedValueOnce(partialResult());
 
@@ -693,6 +749,145 @@ describe('InviteScreen', () => {
       await waitFor(() => {
         expect(screen.getByText('Connected!')).toBeInTheDocument();
       });
+    });
+
+    it('consumes the private bootstrap candidate after location sanitization', async () => {
+      const code = makeEncryptedCode(
+        'https://archive.test',
+        'bootstrap-canary-238',
+      );
+      setSearchParams('');
+      storeInviteBootstrapCandidate(
+        'http://localhost:5173/invite?code=' + encodeURIComponent(code),
+      );
+
+      render(<InviteScreen />);
+
+      expect(consumeInviteBootstrapCandidate()).toEqual({ kind: 'empty' });
+      await waitFor(() => {
+        expect(screen.getByText('Connected!')).toBeInTheDocument();
+      });
+      expect(window.location.search).toBe('');
+    });
+
+    it('blocks an HTTP archive after decrypt until the exact warning is approved', async () => {
+      const code = makeEncryptedCode(
+        'http://archive-http.test',
+        'http-canary-238',
+      );
+      setSearchParams('');
+      storeInviteBootstrapCandidate(
+        'http://localhost:5173/invite?code=' + encodeURIComponent(code),
+      );
+      const healthSpy = vi
+        .spyOn(apiClient, 'healthCheck')
+        .mockResolvedValue(true);
+      const projectsSpy = vi
+        .spyOn(apiClient, 'getProjects')
+        .mockResolvedValue({ data: [] });
+      const user = userEvent.setup();
+
+      render(<InviteScreen />);
+
+      expect(
+        await screen.findByRole('heading', {
+          name: /insecure archive connection/i,
+        }),
+      ).toBeInTheDocument();
+      expect(healthSpy).not.toHaveBeenCalled();
+      expect(projectsSpy).not.toHaveBeenCalled();
+
+      await user.click(
+        screen.getByRole('button', { name: /connect insecurely/i }),
+      );
+      await waitFor(() => expect(healthSpy).toHaveBeenCalledOnce());
+      expect(await screen.findByText('Connected!')).toBeInTheDocument();
+      healthSpy.mockRestore();
+      projectsSpy.mockRestore();
+    });
+
+    it('retries a transient decrypt 5xx from component memory after the bootstrap helper was consumed', async () => {
+      const code = makeEncryptedCode(
+        'https://archive.test',
+        'retry-canary-238',
+      );
+      setSearchParams('');
+      storeInviteBootstrapCandidate(
+        'http://localhost:5173/invite?code=' + encodeURIComponent(code),
+      );
+      vi.mocked(redeemEncryptedInvite)
+        .mockRejectedValueOnce(
+          new InviteApiError('INVITE_REQUEST_FAILED', 'Temporary failure', 503),
+        )
+        .mockResolvedValueOnce({
+          baseUrl: 'https://archive.test',
+          token: 'retry-canary-238',
+        });
+      const healthSpy = vi
+        .spyOn(apiClient, 'healthCheck')
+        .mockResolvedValue(true);
+      const projectsSpy = vi
+        .spyOn(apiClient, 'getProjects')
+        .mockResolvedValue({ data: [] });
+      const user = userEvent.setup();
+
+      render(<InviteScreen />);
+
+      expect(consumeInviteBootstrapCandidate()).toEqual({ kind: 'empty' });
+      expect(
+        await screen.findByRole('button', { name: /try again/i }),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /try again/i }));
+
+      await waitFor(() =>
+        expect(redeemEncryptedInvite).toHaveBeenCalledTimes(2),
+      );
+      expect(await screen.findByText('Connected!')).toBeInTheDocument();
+      healthSpy.mockRestore();
+      projectsSpy.mockRestore();
+    });
+
+    it('does not extend the original bootstrap expiry across transient retry state', async () => {
+      vi.useFakeTimers();
+      try {
+        const code = makeEncryptedCode(
+          'https://archive.test',
+          'expiry-canary-238',
+        );
+        setSearchParams('');
+        storeInviteBootstrapCandidate(
+          'http://localhost:5173/invite?code=' + encodeURIComponent(code),
+        );
+        vi.mocked(redeemEncryptedInvite).mockRejectedValueOnce(
+          new TypeError('Failed to fetch'),
+        );
+
+        render(<InviteScreen />);
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+
+        expect(redeemEncryptedInvite).toHaveBeenCalledTimes(1);
+        expect(
+          screen.getByRole('button', { name: /try again/i }),
+        ).toBeInTheDocument();
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(INVITE_BOOTSTRAP_MAX_LIFETIME_MS);
+        });
+
+        expect(
+          screen.getByText(/this invite has expired/i),
+        ).toBeInTheDocument();
+        screen.getByRole('button', { name: /try again/i }).click();
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(redeemEncryptedInvite).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('shows expired message and does not add a server when code is expired', async () => {

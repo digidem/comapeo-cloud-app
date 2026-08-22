@@ -450,9 +450,10 @@ export async function getFields(projectLocalId: string): Promise<Field[]> {
 export interface CreateRemoteServerInput {
   baseUrl: string;
   label?: string;
-  token?: string;
   status?: string;
 }
+
+export type UpdateRemoteServerInput = Partial<Omit<RemoteServer, 'id'>>;
 
 export async function createRemoteServer(
   input: CreateRemoteServerInput,
@@ -463,7 +464,6 @@ export async function createRemoteServer(
       id: uuid(),
       baseUrl: input.baseUrl,
       label: input.label,
-      token: input.token,
       status: input.status ?? 'idle',
       lastSyncedAt: '',
     };
@@ -499,11 +499,29 @@ export async function getRemoteServerByBaseUrl(
 
 export async function updateRemoteServer(
   id: string,
-  updates: Partial<RemoteServer>,
+  updates: UpdateRemoteServerInput,
 ): Promise<RemoteServer | undefined> {
   return wrapDb(async () => {
     const db = getDb();
-    await db.remoteServers.update(id, updates);
+    const persistedUpdates: UpdateRemoteServerInput = {};
+
+    if ('baseUrl' in updates) persistedUpdates.baseUrl = updates.baseUrl;
+    if ('label' in updates) persistedUpdates.label = updates.label;
+    if ('status' in updates) persistedUpdates.status = updates.status;
+    if ('lastSyncedAt' in updates) {
+      persistedUpdates.lastSyncedAt = updates.lastSyncedAt;
+    }
+    if ('lastSuccessfulSyncAt' in updates) {
+      persistedUpdates.lastSuccessfulSyncAt = updates.lastSuccessfulSyncAt;
+    }
+    if ('onboardingStatus' in updates) {
+      persistedUpdates.onboardingStatus = updates.onboardingStatus;
+    }
+    if ('errorMessage' in updates) {
+      persistedUpdates.errorMessage = updates.errorMessage;
+    }
+
+    await db.remoteServers.update(id, persistedUpdates);
     return db.remoteServers.get(id);
   });
 }

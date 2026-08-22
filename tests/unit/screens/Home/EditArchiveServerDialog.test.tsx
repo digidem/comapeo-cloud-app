@@ -1,6 +1,7 @@
 import { render, screen, userEvent, waitFor } from '@tests/mocks/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { apiClient } from '@/lib/api-client';
 import { resetDb } from '@/lib/db';
 import { EditArchiveServerDialog } from '@/screens/Home/EditArchiveServerDialog';
 import type { RemoteArchiveServer } from '@/stores/auth-store';
@@ -31,6 +32,11 @@ const testServer: RemoteArchiveServer = {
   status: 'idle',
 };
 
+const lockedServer: RemoteArchiveServer = {
+  ...testServer,
+  token: null,
+};
+
 beforeEach(async () => {
   await resetDb();
   useAuthStore.setState({
@@ -43,10 +49,20 @@ beforeEach(async () => {
   });
   vi.clearAllMocks();
   mockUpdateRemoteServer.mockResolvedValue(undefined);
+  vi.spyOn(apiClient, 'healthCheck').mockResolvedValue(true);
+  vi.spyOn(apiClient, 'getProjects').mockResolvedValue({ data: [] });
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+async function enterFreshCredential(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText('Bearer Token'), String(987654));
+}
+
 describe('EditArchiveServerDialog', () => {
-  it('renders when open with pre-filled values', () => {
+  it('renders metadata pre-filled but never exposes the current credential', () => {
     render(
       <EditArchiveServerDialog
         isOpen={true}
@@ -59,7 +75,7 @@ describe('EditArchiveServerDialog', () => {
     expect(
       screen.getByDisplayValue('https://archive.example.com'),
     ).toBeInTheDocument();
-    expect(screen.getByDisplayValue('my-token')).toBeInTheDocument();
+    expect(screen.getByLabelText('Bearer Token')).toHaveValue('');
   });
 
   it('not rendered when closed', () => {
@@ -105,7 +121,27 @@ describe('EditArchiveServerDialog', () => {
     expect(screen.getByText('Server URL is required')).toBeInTheDocument();
   });
 
-  it('shows validation error when token is cleared', async () => {
+  it('requires a fresh credential in reconnect mode for a locked archive', async () => {
+    useAuthStore.setState({ servers: [lockedServer] });
+    const user = userEvent.setup();
+    render(
+      <EditArchiveServerDialog
+        isOpen={true}
+        onClose={() => {}}
+        server={lockedServer}
+        mode="reconnect"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /reconnect/i }));
+
+    expect(
+      screen.getByText(/enter a bearer token or invite/i),
+    ).toBeInTheDocument();
+    expect(apiClient.healthCheck).not.toHaveBeenCalled();
+  });
+
+  it('allows metadata-only edits without exposing or re-entering the current credential', async () => {
     const user = userEvent.setup();
     render(
       <EditArchiveServerDialog
@@ -115,11 +151,199 @@ describe('EditArchiveServerDialog', () => {
       />,
     );
 
-    const tokenInput = screen.getByLabelText('Bearer Token');
-    await user.clear(tokenInput);
+    const labelInput = screen.getByLabelText('Label (optional)');
+    await user.clear(labelInput);
+    await user.type(labelInput, 'Metadata Only');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(screen.getByText('Bearer Token is required')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockUpdateRemoteServer).toHaveBeenCalledWith(
+        'srv-1',
+        expect.objectContaining({ label: 'Metadata Only' }),
+      );
+    });
+    expect(apiClient.healthCheck).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Bearer Token')).toHaveValue('');
+  });
+
+  it('requires a fresh credential before activating a changed archive URL', async () => {
+    const user = userEvent.setup();
+    render(
+      <EditArchiveServerDialog isOpen onClose={() => {}} server={testServer} />,
+    );
+
+    const urlInput = screen.getByLabelText('Server URL');
+    await user.clear(urlInput);
+    await user.type(urlInput, 'https://new-archive.example.com');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      screen.getByText(/enter a bearer token or invite/i),
+    ).toBeInTheDocument();
+    expect(mockUpdateRemoteServer).not.toHaveBeenCalled();
+  });
+
+  it('validates and unlocks a locked archive with a fresh raw token without persisting it', async () => {
+    useAuthStore.setState({ servers: [lockedServer] });
+    const user = userEvent.setup();
+    render(
+      <EditArchiveServerDialog
+        isOpen
+        onClose={() => {}}
+        server={lockedServer}
+        mode="reconnect"
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Bearer Token'), String(238201));
+    await user.click(screen.getByRole('button', { name: /reconnect/i }));
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().servers[0]?.token).toBe(String(238201));
+    });
+    expect(apiClient.healthCheck).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: 'https://archive.example.com',
+        token: String(238201),
+        serverId: null,
+      }),
+    );
+    expect(JSON.stringify(mockUpdateRemoteServer.mock.calls)).not.toContain(
+      String(238201),
+    );
+  });
+
+  it('unlocks with an encrypted invite only when it targets the configured archive', async () => {
+    useAuthStore.setState({ servers: [lockedServer] });
+    const payload = JSON.stringify({
+      url: 'https://archive.example.com',
+      token: String(238202),
+    });
+    const code =
+      'mock-encrypted-code-' +
+      btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const user = userEvent.setup();
+    render(
+      <EditArchiveServerDialog
+        isOpen
+        onClose={() => {}}
+        server={lockedServer}
+        mode="reconnect"
+      />,
+    );
+
+    const inviteInput = screen.getByLabelText(/invite url or code/i);
+    await user.click(inviteInput);
+    await user.paste(
+      'https://app.example.com/invite?code=' + encodeURIComponent(code),
+    );
+    await user.click(screen.getByRole('button', { name: /reconnect/i }));
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().servers[0]?.token).toBe(String(238202));
+    });
+    expect(JSON.stringify(mockUpdateRemoteServer.mock.calls)).not.toContain(
+      String(238202),
+    );
+  });
+
+  it('rejects an encrypted invite for a different archive without adopting its token', async () => {
+    useAuthStore.setState({ servers: [lockedServer] });
+    const payload = JSON.stringify({
+      url: 'https://different.example.com',
+      token: String(238203),
+    });
+    const code =
+      'mock-encrypted-code-' +
+      btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const user = userEvent.setup();
+    render(
+      <EditArchiveServerDialog
+        isOpen
+        onClose={() => {}}
+        server={lockedServer}
+        mode="reconnect"
+      />,
+    );
+
+    const inviteInput = screen.getByLabelText(/invite url or code/i);
+    await user.click(inviteInput);
+    await user.paste(
+      'https://app.example.com/invite?code=' + encodeURIComponent(code),
+    );
+    await user.click(screen.getByRole('button', { name: /reconnect/i }));
+
+    expect(
+      await screen.findByText(/invitation is for a different archive/i),
+    ).toBeInTheDocument();
+    expect(useAuthStore.getState().servers[0]?.token).toBeNull();
+    expect(apiClient.healthCheck).not.toHaveBeenCalled();
+  });
+
+  it('shows fresh-invitation guidance when a reconnect invite is expired', async () => {
+    useAuthStore.setState({ servers: [lockedServer] });
+    const user = userEvent.setup();
+    render(
+      <EditArchiveServerDialog
+        isOpen
+        onClose={() => {}}
+        server={lockedServer}
+        mode="reconnect"
+      />,
+    );
+
+    const inviteInput = screen.getByLabelText(/invite url or code/i);
+    await user.click(inviteInput);
+    await user.paste('https://app.example.com/invite?code=expired');
+    await user.click(screen.getByRole('button', { name: /reconnect/i }));
+
+    expect(
+      await screen.findByText(/invite expired.*request a new invitation/i),
+    ).toBeInTheDocument();
+    expect(useAuthStore.getState().servers[0]?.token).toBeNull();
+  });
+
+  it('decrypts an HTTP reconnect invite first, then blocks archive requests until approval', async () => {
+    const httpLocked = {
+      ...lockedServer,
+      baseUrl: 'http://legacy.example.com',
+    };
+    useAuthStore.setState({ servers: [httpLocked] });
+    const payload = JSON.stringify({
+      url: 'http://legacy.example.com',
+      token: String(238204),
+    });
+    const code =
+      'mock-encrypted-code-' +
+      btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const user = userEvent.setup();
+    render(
+      <EditArchiveServerDialog
+        isOpen
+        onClose={() => {}}
+        server={httpLocked}
+        mode="reconnect"
+      />,
+    );
+
+    const inviteInput = screen.getByLabelText(/invite url or code/i);
+    await user.click(inviteInput);
+    await user.paste(
+      'https://app.example.com/invite?code=' + encodeURIComponent(code),
+    );
+    await user.click(screen.getByRole('button', { name: /reconnect/i }));
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /insecure archive connection/i,
+      }),
+    ).toBeInTheDocument();
+    expect(apiClient.healthCheck).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole('button', { name: /connect insecurely/i }),
+    );
+    await waitFor(() => expect(apiClient.healthCheck).toHaveBeenCalledOnce());
   });
 
   it('calls updateServer and onClose on successful save', async () => {
@@ -137,6 +361,7 @@ describe('EditArchiveServerDialog', () => {
     await user.clear(labelInput);
     await user.type(labelInput, 'Updated Server');
 
+    await enterFreshCredential(user);
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
@@ -162,6 +387,7 @@ describe('EditArchiveServerDialog', () => {
     await user.clear(labelInput);
     await user.type(labelInput, 'New Label');
 
+    await enterFreshCredential(user);
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
@@ -184,6 +410,7 @@ describe('EditArchiveServerDialog', () => {
       />,
     );
 
+    await enterFreshCredential(user);
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
@@ -203,6 +430,7 @@ describe('EditArchiveServerDialog', () => {
       />,
     );
 
+    await enterFreshCredential(user);
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
@@ -222,6 +450,7 @@ describe('EditArchiveServerDialog', () => {
       />,
     );
 
+    await enterFreshCredential(user);
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     const saveBtn = screen.getByRole('button', { name: /save/i });

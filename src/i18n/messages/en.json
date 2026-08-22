@@ -281,6 +281,21 @@
   "archiveOverflow.viewDetails": {
     "defaultMessage": "View Details"
   },
+  "archiveTransport.insecure.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "archiveTransport.insecure.confirm": {
+    "defaultMessage": "Connect insecurely"
+  },
+  "archiveTransport.insecure.description": {
+    "defaultMessage": "This archive uses HTTP. The connection from CoMapeo Cloud's proxy to the archive server is not encrypted."
+  },
+  "archiveTransport.insecure.title": {
+    "defaultMessage": "Insecure archive connection"
+  },
+  "archiveTransport.insecure.warning": {
+    "defaultMessage": "Your bearer token and archive data can be exposed in transit. HTTPS is strongly recommended."
+  },
   "audioPlayer.error": {
     "defaultMessage": "Failed to load audio"
   },
@@ -1053,7 +1068,40 @@
     "defaultMessage": "Reconnect"
   },
   "home.archive.reconnectDescription": {
-    "defaultMessage": "Server credentials are missing. Re-enter your token to restore sync."
+    "defaultMessage": "Server credentials are missing. Re-enter your token or use an invite to restore sync."
+  },
+  "home.archive.reconnectDialog.credentialChoice": {
+    "defaultMessage": "Use either a bearer token or an invite, not both"
+  },
+  "home.archive.reconnectDialog.credentialRequired": {
+    "defaultMessage": "Enter a bearer token or invite to reconnect"
+  },
+  "home.archive.reconnectDialog.invalidInvite": {
+    "defaultMessage": "This invitation is invalid. Request a new invitation."
+  },
+  "home.archive.reconnectDialog.invite": {
+    "defaultMessage": "Invite URL or Code"
+  },
+  "home.archive.reconnectDialog.inviteExpired": {
+    "defaultMessage": "Invite expired — request a new invitation"
+  },
+  "home.archive.reconnectDialog.inviteMismatch": {
+    "defaultMessage": "This invitation is for a different archive"
+  },
+  "home.archive.reconnectDialog.invitePlaceholder": {
+    "defaultMessage": "Paste an invitation instead of a bearer token"
+  },
+  "home.archive.reconnectDialog.reconnect": {
+    "defaultMessage": "Reconnect"
+  },
+  "home.archive.reconnectDialog.startupBlocked": {
+    "defaultMessage": "Secure startup must complete before reconnecting."
+  },
+  "home.archive.reconnectDialog.title": {
+    "defaultMessage": "Reconnect Archive"
+  },
+  "home.archive.reconnectDialog.unableToConnect": {
+    "defaultMessage": "Unable to connect. Check the archive and try again."
   },
   "home.archive.remove": {
     "defaultMessage": "Remove"
@@ -2023,6 +2071,24 @@
   },
   "photoGallery.viewPhoto": {
     "defaultMessage": "View {photoName}"
+  },
+  "security.startup.cleanup.description": {
+    "defaultMessage": "Local data remains available, but archive credentials stay locked until cleanup succeeds. Retry to run the secure startup check again."
+  },
+  "security.startup.cleanup.title": {
+    "defaultMessage": "Browser security cleanup must finish"
+  },
+  "security.startup.inviteRecovery": {
+    "defaultMessage": "If you opened CoMapeo from an invitation, return to the original message, app, or source containing the invitation link and open it again after this succeeds. Request a fresh invitation if you no longer have it or it has expired."
+  },
+  "security.startup.retry": {
+    "defaultMessage": "Retry"
+  },
+  "security.startup.worker.description": {
+    "defaultMessage": "Local data remains available while CoMapeo installs and verifies the security-fixed service worker. Archive credentials stay locked until the update completes."
+  },
+  "security.startup.worker.title": {
+    "defaultMessage": "Security update required — connect and retry"
   },
   "settings.backup.compensationFailed": {
     "defaultMessage": "Backup import could not restore your previous preferences. Reloading to reconcile browser state."

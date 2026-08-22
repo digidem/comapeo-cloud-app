@@ -45,6 +45,26 @@ describe('parseInviteUrl', () => {
     }
   });
 
+  it.each(['/invite/', '/INVITE', '/InViTe///'])(
+    'accepts normalized invite path variant %s',
+    (pathname) => {
+      const result = parseInviteUrl(
+        'https://app.com' + pathname + '?code=' + 'Y29kZQ',
+      );
+      expect(result).toEqual({
+        ok: true,
+        kind: 'encrypted',
+        code: 'Y29kZQ',
+      });
+    },
+  );
+
+  it('does not treat a URL fragment as an invite credential', () => {
+    const result = parseInviteUrl('https://app.com/invite#code=fragment-value');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('MISSING_URL');
+  });
+
   it('returns error when path is not /invite', () => {
     const result = parseInviteUrl(
       'https://app.com/other?hash=abc&url=https%3A%2F%2Farchive.test',

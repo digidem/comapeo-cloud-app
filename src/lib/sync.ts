@@ -33,7 +33,13 @@ export interface SyncOptions {
 }
 
 export type SyncStatus = 'ready' | 'partial' | 'error';
-export type SyncErrorCode = 'authorization' | 'connection' | 'partial';
+export type SyncErrorCode =
+  | 'authorization'
+  | 'connection'
+  | 'credentials-required'
+  | 'storage-cleanup-required'
+  | 'worker-transition-required'
+  | 'partial';
 export type SyncResource =
   'observations' | 'alerts' | 'presets' | 'tracks' | 'fields';
 
@@ -251,6 +257,7 @@ async function syncProject(
   const config = {
     baseUrl: options.baseUrl,
     token: options.token,
+    serverId,
     signal: options.signal,
   };
   const tasks: Array<{
@@ -396,6 +403,7 @@ async function doSync(
     const config = {
       baseUrl: options.baseUrl,
       token: options.token,
+      serverId,
       signal: options.signal,
     };
     const projects = await pullProjectsDetailed(serverId, config, {

@@ -529,15 +529,11 @@ export function useProjectCoverage(
   _projectLocalId: string | null,
   _params?: unknown,
 ) {
-  return useQuery({
-    queryKey: ['project-coverage', _projectLocalId],
-    queryFn: async () => ({
-      totalArea: 12500,
-      coveredArea: 8300,
-      percentage: 66.4,
-      method: 'grid' as const,
-    }),
-  });
+  return {
+    results: [],
+    isCalculating: false,
+    error: null,
+  };
 }
 
 /**

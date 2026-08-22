@@ -147,6 +147,7 @@ describe('useApiFields', () => {
 
     expect(getFields).toHaveBeenCalledWith(REMOTE_ID, {
       baseUrl: 'https://archive.example.org',
+      serverId: null,
       token: 'secret-token',
     });
   });
@@ -168,6 +169,7 @@ describe('useApiFields', () => {
     await waitFor(() => expect(getFields).toHaveBeenCalledTimes(2));
     expect(getFields).toHaveBeenLastCalledWith(REMOTE_ID, {
       baseUrl: 'https://archive.example.org',
+      serverId: null,
       token: 'rotated-token',
     });
     expect(result.current.isSuccess).toBe(true);

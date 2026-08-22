@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => {
       id: string;
       label: string;
       baseUrl: string;
-      token: string;
+      token: string | null;
       status: string;
       onboardingStatus?: string;
     }>,
@@ -83,6 +83,26 @@ describe('sync coordinator', () => {
     mocks.getProjects.mockReset().mockResolvedValue({ data: [] });
     mocks.syncRemoteArchive.mockReset().mockResolvedValue(readyResult);
     mocks.invalidateQueries.mockClear();
+  });
+
+  it('returns credentials-required for a locked archive before lifecycle mutation or sync', async () => {
+    mocks.state.servers[0] = {
+      ...mocks.state.servers[0]!,
+      token: null,
+      status: 'connected',
+      onboardingStatus: 'ready',
+    };
+
+    await expect(syncArchive('server-1')).resolves.toMatchObject({
+      success: false,
+      status: 'error',
+      serverId: 'server-1',
+      errorCode: 'credentials-required',
+    });
+
+    expect(mocks.syncRemoteArchive).not.toHaveBeenCalled();
+    expect(mocks.state.updateServerLifecycle).not.toHaveBeenCalled();
+    expect(mocks.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it('shares one underlying sync run for concurrent archive requests', async () => {
