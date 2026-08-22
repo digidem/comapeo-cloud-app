@@ -150,6 +150,12 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
     for invocation in reviewer_blocks:
         test.assertIn("zsh -ic", invocation)
         test.assertIn("aliases[claude-qwen]", invocation)
+        test.assertIn("alias_words=(${(z)alias_body})", invocation)
+        test.assertIn("[[ ${alias_words[-1]} == claude ]] || exit 1", invocation)
+        test.assertIn("^[A-Za-z_][A-Za-z0-9_]*=", invocation)
+        test.assertIn("ANTHROPIC_BASE_URL=*", invocation)
+        test.assertIn("ANTHROPIC_API_URL=*", invocation)
+        test.assertIn("ANTHROPIC_MODEL=*", invocation)
         test.assertIn("token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic", invocation)
         test.assertIn("qwen3.8-max", invocation)
         test.assertNotIn("QWEN_BIN", invocation)
@@ -494,6 +500,14 @@ zsh -ic 'alias claude-qwen'
 ```bash
 zsh -ic 'claude-qwen --tools=Read -p=\"$PROMPT\"'
 ```""",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_expected_substrings_with_non_claude_command(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "[[ ${alias_words[-1]} == claude ]] || exit 1",
+            '[[ "$alias_body" == *"token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic"* ]] && [[ "$alias_body" == *"qwen3.8-max"* ]] && [[ "$alias_body" == *" claude"* ]] || exit 1',
         )
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)

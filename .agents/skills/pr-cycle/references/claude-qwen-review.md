@@ -31,7 +31,7 @@ Never print, copy, grep, or embed the alias body, credentials, or API keys in lo
 2. Fetch the live target branch and confirm the clean PR worktree is at the exact head.
 3. The orchestrator—not Qwen—must construct a sanitized prompt containing only the exact head/base-tip metadata, the frozen diff for that pair, and the review instructions. Do not include environment values, credentials, arbitrary home-directory contents, or unrelated repository files.
 4. Before writing the frozen diff, create a private review root using symlink-safe exclusive `mktemp -d` creation, validate that it matches the intended private-template prefix, install cleanup **before any later allocation**, and make every permission change fail closed. Enforce mode 0700 on the root; create `<sanitized-prompt-file>` inside it with `mktemp` and enforce mode 0600; then create a separate empty isolated working directory inside the root with mode 0700. Cleanup must recursively remove only the exact validated review root so partial startup artifacts cannot prevent removal. Write the sanitized prompt only to that private file, never to logs or stdout.
-5. Invoke an interactive zsh from the empty isolated working directory so the user's `~/.zshrc` defines `claude-qwen`. Before invoking it, validate **inside that shell without printing the value** that `aliases[claude-qwen]` exists, references the expected Alibaba token-plan endpoint, selects `qwen3.8-max`, and ultimately invokes `claude`. If validation fails, treat Qwen as unavailable rather than guessing or reconstructing credentials.
+5. Invoke an interactive zsh from the empty isolated working directory so the user's `~/.zshrc` defines `claude-qwen`. Before invoking it, validate **inside that shell without printing the value** that `aliases[claude-qwen]` exists and parses as shell words where every token before the command is an environment assignment, the required `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_URL` assignments decode to the expected Alibaba token-plan endpoint, `ANTHROPIC_MODEL` decodes to `qwen3.8-max`, and the final/only command token is exactly `claude`. If validation fails, treat Qwen as unavailable rather than guessing or reconstructing credentials.
 6. Invoke `claude-qwen` with **no tools**. No reviewer filesystem tools are allowed: use `--tools ""`, do not use `--add-dir`, and do not grant Read/Grep/Glob/Bash/Edit/Write. Feed the complete sanitized prompt through stdin; never place the frozen diff or full prompt in process argv. The combination of `--bare`, an empty working directory, no Claude tools, private prompt transport, and stdin prevents prompt-injection text in the diff from reading repository or credential files through Claude Code.
 7. Bind the prompt to the **exact head/base-tip pair** and require a terminal verdict with reviewed head SHA, reviewed base-tip SHA, verdict, blockers, should-fix findings, and nits. Every actionable finding must include file/line evidence and a concrete failure scenario.
 8. Count the verdict only when the outer command succeeded, the result is terminal and well formed, both SHAs match, and there is no quota/auth/provider error.
@@ -61,10 +61,34 @@ chmod 700 "$WORK_DIR" || exit 1
   zsh -ic '
     [[ ${+aliases[claude-qwen]} -eq 1 ]] || exit 1
     alias_body="${aliases[claude-qwen]}"
-    [[ "$alias_body" == *"token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic"* ]] || exit 1
-    [[ "$alias_body" == *"qwen3.8-max"* ]] || exit 1
-    [[ "$alias_body" == *" claude"* ]] || exit 1
-    unset alias_body
+    alias_words=(${(z)alias_body})
+    (( ${#alias_words} >= 4 )) || exit 1
+    [[ ${alias_words[-1]} == claude ]] || exit 1
+    base_url_ok=0
+    api_url_ok=0
+    model_ok=0
+    for word in ${alias_words[1,-2]}; do
+      [[ "$word" =~ '"'"'^[A-Za-z_][A-Za-z0-9_]*='"'"' ]] || exit 1
+      case "$word" in
+        ANTHROPIC_BASE_URL=*)
+          value=${word#*=}
+          value=${(Q)value}
+          [[ "$value" == https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic ]] && base_url_ok=1
+          ;;
+        ANTHROPIC_API_URL=*)
+          value=${word#*=}
+          value=${(Q)value}
+          [[ "$value" == https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic ]] && api_url_ok=1
+          ;;
+        ANTHROPIC_MODEL=*)
+          value=${word#*=}
+          value=${(Q)value}
+          [[ "$value" == qwen3.8-max ]] && model_ok=1
+          ;;
+      esac
+    done
+    (( base_url_ok && api_url_ok && model_ok )) || exit 1
+    unset alias_body alias_words word value base_url_ok api_url_ok model_ok
     claude-qwen \
       --bare \
       --permission-mode dontAsk \
