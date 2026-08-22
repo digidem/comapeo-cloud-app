@@ -27,18 +27,36 @@ def assert_policy_contract(
 ) -> None:
     fallback = _paragraph_containing(skill_text, "When Opus 5 is unavailable")
     test.assertIn(
-        "and the user did **not** explicitly require Opus, fall back to **Kimi K3 via OpenCode Go**",
+        "and the user did **not** explicitly require Opus, fall back first to **Kimi K3 via OpenCode Go**",
         fallback,
     )
     test.assertIn(
-        "Keep the fallback review read-only, bind it to the exact head/base-tip pair, require a terminal verdict",
+        "Keep every fallback read-only, bind it to the exact head/base-tip pair, require a terminal verdict",
         fallback,
     )
     test.assertIn(
-        "If the user explicitly required Opus 5, do not substitute Kimi silently.",
+        "If the user explicitly required a named reviewer, do not silently substitute another model.",
         fallback,
     )
     test.assertIn("references/kimi-k3-review.md", fallback)
+    test.assertIn(
+        "If Kimi is unavailable, use another configured strong reviewer whose live quota is available, including GPT-5.6 Sol through Codex when usable.",
+        fallback,
+    )
+    test.assertIn(
+        "fall back to **Qwen 3.8 via `claude-qwen`** as a final independent-review option",
+        fallback,
+    )
+    kimi_index = fallback.index("fall back first to **Kimi K3 via OpenCode Go**")
+    codex_index = fallback.index("including GPT-5.6 Sol through Codex when usable")
+    qwen_index = fallback.index("Qwen 3.8 via `claude-qwen`")
+    test.assertLess(kimi_index, codex_index)
+    test.assertLess(codex_index, qwen_index)
+    test.assertNotIn("Use Qwen first", fallback)
+    test.assertNotRegex(
+        fallback,
+        re.compile(r"(?:prefer|use|try) Qwen .*before .*Kimi", re.I),
+    )
 
     contract = _paragraph_containing(reference_text, "Ask Kimi to review a fresh exact diff")
     test.assertIn("**exact head/base-tip pair**", contract)
@@ -84,10 +102,38 @@ class ReviewerFallbackPolicyTests(unittest.TestCase):
             ci_text=CI.read_text(),
         )
 
-    def test_opus_substitution_blocked(self) -> None:
+    def test_named_reviewer_substitution_blocked(self) -> None:
         skill_text = SKILL.read_text().replace(
-            "If the user explicitly required Opus 5, do not substitute Kimi silently.",
-            "If the user explicitly required Opus 5, substitute Kimi silently.",
+            "If the user explicitly required a named reviewer, do not silently substitute another model.",
+            "If the user explicitly required a named reviewer, silently substitute another model.",
+        )
+        with self.assertRaises(AssertionError):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                reference_text=REFERENCE.read_text(),
+                timeout_text=TIMEOUT.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_fallback_ordering_is_required(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "If Kimi is unavailable, use another configured strong reviewer whose live quota is available, including GPT-5.6 Sol through Codex when usable. If those preferred paths are exhausted or unavailable, fall back to **Qwen 3.8 via `claude-qwen`** as a final independent-review option.",
+            "Use Qwen first, then try other reviewers later.",
+        )
+        with self.assertRaises(AssertionError):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                reference_text=REFERENCE.read_text(),
+                timeout_text=TIMEOUT.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_appended_qwen_before_kimi_contradiction_is_rejected(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "Keep every fallback read-only, bind it to the exact head/base-tip pair, require a terminal verdict",
+            "Prefer Qwen before Kimi when convenient. Keep every fallback read-only, bind it to the exact head/base-tip pair, require a terminal verdict",
         )
         with self.assertRaises(AssertionError):
             assert_policy_contract(

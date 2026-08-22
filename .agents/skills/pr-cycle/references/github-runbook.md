@@ -114,6 +114,34 @@ gh pr view <pr> --repo <owner/repo> --json state,mergedAt,mergeCommit,headRefNam
 
 Require `state` to be `MERGED` and record the merge commit SHA.
 
+## Ordered multi-PR merge sequences
+
+When the user explicitly authorizes multiple already-reviewed PRs to merge in a required order, treat each merge as a new target-branch boundary rather than one aggregate operation:
+
+1. Before the first merge, require a **server-side** merge mechanism that **atomically guards both** the reviewed head SHA and the exact gated base tip, or an equivalent merge-queue/server-side proof that the merge can execute only on that pair. A head-only guard does not close the base-movement race. If the available merge path cannot provide this two-revision guarantee, **do not issue the merge**.
+2. Merge only after that atomic head+base precondition is established, then verify the resulting merge commit. For squash or merge-commit methods, check `git rev-parse <merge-commit>^1` equals the **exact gated base tip** used for that merge; this first-parent check is audit evidence, not a substitute for the pre-merge atomic base guard. A mismatch means concurrent movement occurred despite the expected guard: stop the ordered sequence immediately and never continue to another merge.
+3. Fetch the target branch and capture the resulting live tip.
+4. Re-read the next PR against that tip. Because the previous merge moved the base, re-gate the next PR against that exact new base tip before issuing its guarded merge; do not rely on the previous mergeability, CI, or reviewer snapshot merely because the diffs appear disjoint.
+5. Repeat serially. Do not overlap merge commands or assume the remaining PRs stayed merge-ready while the base moved. Re-establish the same atomic head+base precondition before every subsequent merge. If the repository's selected merge method cannot expose that pre-merge server-side guarantee, do not issue the merge and stop for a repository-specific safe merge mechanism.
+
+After the final merge, use the merge commit SHA returned by verification of that final merge as the exact post-sequence target SHA and keep that immutable SHA as the integration subject. Fetch the target branch; require `git rev-parse <exact-post-sequence-sha>^1` to equal the **exact gated base tip** for the final merge, and require `git merge-base --is-ancestor <exact-post-sequence-sha> refs/remotes/origin/<base>` to succeed. Merely having the commit object locally, or proving ancestry without the first-parent equality, does not prove the final PR landed on the reviewed base. Do not derive the sequence result from a later moving branch tip.
+
+Before evaluating results, derive the expected signal set from the repository's branch protection/rulesets and applicable workflow definitions for the target branch. Then enumerate **all** exact-SHA GitHub Checks check-runs and commit status contexts with pagination, plus the relevant workflow runs needed for logs/step-level soft-fail inspection. The complete repository-applicable set of target-branch runs/checks for the exact post-sequence target SHA is the integration truth for the combined state: one successful Actions run is insufficient when other expected CI, full browser E2E, deployment, production smoke, Lighthouse, visual regression, audit, external check, status-context, or repository-specific signals apply. Every expected workflow/check must be accounted for by an exact-SHA terminal result or explicit adjudication that it is legitimately non-applicable. Apply the same terminal-state and soft-fail rules as the merge-ready gate: required/relevant checks must be terminal green; skipped or neutral results require explicit adjudication as legitimate conditional behavior; cancelled, timed-out, action-required, or failing checks are unacceptable; and a workflow/job that masks failures with `continue-on-error` or equivalent logic requires inspection of the pre-mask step outcome or logs. PR CI and human QA establish confidence in each change independently but do not replace the final integrated-branch signal.
+
+A bounded exact-SHA verification pattern is:
+
+```bash
+git fetch origin <base>:refs/remotes/origin/<base>
+git rev-parse <exact-post-sequence-sha>^1
+git merge-base --is-ancestor <exact-post-sequence-sha> refs/remotes/origin/<base>
+gh api --paginate "repos/<owner/repo>/commits/<exact-post-sequence-sha>/check-runs?per_page=100"
+gh api --paginate "repos/<owner/repo>/commits/<exact-post-sequence-sha>/statuses?per_page=100"
+gh api --paginate "repos/<owner/repo>/actions/runs?branch=<base>&head_sha=<exact-post-sequence-sha>&per_page=100"
+gh api "repos/<owner/repo>/rules/branches/<base>"
+```
+
+Treat branch-protection/ruleset reads that require unavailable permissions according to repository policy: if you cannot determine the expected required set from branch protection/rulesets plus applicable workflow definitions, fail closed rather than assuming the visible subset is complete. Require the first-parent command to equal the exact gated base tip and the ancestry command to return zero. Map the paginated check-runs and statuses plus workflow runs against every expected workflow/check for the target branch; one matching success must not hide a missing or failing expected workflow or external status. If the target branch moves again before verification finishes, report the newer tip as concurrent movement and optionally validate it as additional evidence, but do not replace the exact post-sequence target SHA as the integration subject or attribute the newer run to the authorized sequence.
+
 ## Scoped cleanup after verified merge
 
 Perform cleanup only for the merged PR branch and its isolated worktree.
