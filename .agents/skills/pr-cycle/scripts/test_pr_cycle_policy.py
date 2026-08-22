@@ -93,6 +93,16 @@ def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) ->
     test.assertNotRegex(
         ordered, re.compile(r"merge (?:the )?remaining PRs concurrently", re.I)
     )
+    test.assertIn("server-side", ordered)
+    test.assertIn("atomically guards both", ordered)
+    test.assertIn("do not issue the merge", ordered)
+    test.assertNotRegex(
+        ordered,
+        re.compile(
+            r"(?:if|when) the first[- ]parent (?:differs|mismatches?)[^.]{0,160}\bcontinue(?: the sequence| to (?:the )?next merge)",
+            re.I,
+        ),
+    )
     test.assertIn("keep that immutable SHA as the integration subject", ordered)
     test.assertNotRegex(
         ordered,
@@ -108,6 +118,8 @@ def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) ->
     test.assertIn("--paginate", ordered)
     test.assertIn("check-runs?per_page=100", ordered)
     test.assertIn("statuses?per_page=100", ordered)
+    test.assertIn("actions/runs?branch=<base>&head_sha=<exact-post-sequence-sha>&per_page=100", ordered)
+    test.assertNotIn("gh run list --repo <owner/repo> --commit <exact-post-sequence-sha> --limit 100", ordered)
     test.assertIn("branch protection/rulesets", ordered)
     test.assertIn("applicable workflow definitions", ordered)
     test.assertIn("complete repository-applicable set of target-branch runs/checks", ordered)
@@ -152,6 +164,9 @@ def assert_policy_contract(
     test.assertIn("Keep the safety policy here", skill_text)
     test.assertIn("ordered merge sequence", skill_text)
     test.assertIn("re-establish the merge gate for the next PR", skill_text)
+    test.assertIn("atomically guards both the reviewed head and the exact gated base tip", skill_text)
+    test.assertIn("do not issue the merge", skill_text)
+    test.assertIn("audit evidence, not a substitute for the pre-merge atomic base guard", skill_text)
     test.assertIn("complete repository-applicable set of target-branch runs/checks for the exact post-sequence target SHA is the integration truth", skill_text)
     test.assertIn("exact post-sequence target SHA", skill_text)
     test.assertIn("git merge-base --is-ancestor", skill_text)
@@ -326,6 +341,14 @@ claude-qwen --tools Read,Grep --add-dir ~/.config -p \"$(cat /tmp/prompt)\"
         runbook_text = RUNBOOK.read_text().replace(
             "Do not overlap merge commands",
             "Merge the remaining PRs concurrently",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_continue_after_parent_mismatch(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "If the first parent differs from the gated base, continue the sequence anyway.\n\n## Scoped cleanup after verified merge",
         )
         with self.assertRaises(AssertionError):
             assert_ordered_merge_contract(self, runbook_text)

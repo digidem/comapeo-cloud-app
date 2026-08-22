@@ -118,11 +118,11 @@ Require `state` to be `MERGED` and record the merge commit SHA.
 
 When the user explicitly authorizes multiple already-reviewed PRs to merge in a required order, treat each merge as a new target-branch boundary rather than one aggregate operation:
 
-1. Merge only the first PR with the exact-head guard and verify its merge commit.
-2. For squash or merge-commit methods, verify `git rev-parse <merge-commit>^1` equals the **exact gated base tip** used for that merge. A mismatch means the base moved during the merge race: stop the ordered sequence immediately and do not claim that merge used the reviewed base.
+1. Before the first merge, require a **server-side** merge mechanism that **atomically guards both** the reviewed head SHA and the exact gated base tip, or an equivalent merge-queue/server-side proof that the merge can execute only on that pair. A head-only guard does not close the base-movement race. If the available merge path cannot provide this two-revision guarantee, **do not issue the merge**.
+2. Merge only after that atomic head+base precondition is established, then verify the resulting merge commit. For squash or merge-commit methods, check `git rev-parse <merge-commit>^1` equals the **exact gated base tip** used for that merge; this first-parent check is audit evidence, not a substitute for the pre-merge atomic base guard. A mismatch means concurrent movement occurred despite the expected guard: stop the ordered sequence immediately and never continue to another merge.
 3. Fetch the target branch and capture the resulting live tip.
 4. Re-read the next PR against that tip. Because the previous merge moved the base, re-gate the next PR against that exact new base tip before issuing its guarded merge; do not rely on the previous mergeability, CI, or reviewer snapshot merely because the diffs appear disjoint.
-5. Repeat serially. Do not overlap merge commands or assume the remaining PRs stayed merge-ready while the base moved. If the repository's selected merge method cannot expose an equivalent proof that the result was based on the exact gated base tip, do not use it for an autonomous ordered sequence; stop for a repository-specific atomic/base proof instead.
+5. Repeat serially. Do not overlap merge commands or assume the remaining PRs stayed merge-ready while the base moved. Re-establish the same atomic head+base precondition before every subsequent merge. If the repository's selected merge method cannot expose that pre-merge server-side guarantee, do not issue the merge and stop for a repository-specific safe merge mechanism.
 
 After the final merge, use the merge commit SHA returned by verification of that final merge as the exact post-sequence target SHA and keep that immutable SHA as the integration subject. Fetch the target branch; require `git rev-parse <exact-post-sequence-sha>^1` to equal the **exact gated base tip** for the final merge, and require `git merge-base --is-ancestor <exact-post-sequence-sha> refs/remotes/origin/<base>` to succeed. Merely having the commit object locally, or proving ancestry without the first-parent equality, does not prove the final PR landed on the reviewed base. Do not derive the sequence result from a later moving branch tip.
 
@@ -136,9 +136,8 @@ git rev-parse <exact-post-sequence-sha>^1
 git merge-base --is-ancestor <exact-post-sequence-sha> refs/remotes/origin/<base>
 gh api --paginate "repos/<owner/repo>/commits/<exact-post-sequence-sha>/check-runs?per_page=100"
 gh api --paginate "repos/<owner/repo>/commits/<exact-post-sequence-sha>/statuses?per_page=100"
+gh api --paginate "repos/<owner/repo>/actions/runs?branch=<base>&head_sha=<exact-post-sequence-sha>&per_page=100"
 gh api "repos/<owner/repo>/rules/branches/<base>"
-gh run list --repo <owner/repo> --commit <exact-post-sequence-sha> --limit 100 \
-  --json databaseId,workflowName,status,conclusion,headSha,url,event
 ```
 
 Treat branch-protection/ruleset reads that require unavailable permissions according to repository policy: if you cannot determine the expected required set from branch protection/rulesets plus applicable workflow definitions, fail closed rather than assuming the visible subset is complete. Require the first-parent command to equal the exact gated base tip and the ancestry command to return zero. Map the paginated check-runs and statuses plus workflow runs against every expected workflow/check for the target branch; one matching success must not hide a missing or failing expected workflow or external status. If the target branch moves again before verification finishes, report the newer tip as concurrent movement and optionally validate it as additional evidence, but do not replace the exact post-sequence target SHA as the integration subject or attribute the newer run to the authorized sequence.
