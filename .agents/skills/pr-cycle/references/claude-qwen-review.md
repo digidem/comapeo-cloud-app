@@ -1,6 +1,6 @@
 # Claude-Qwen fallback reviewer
 
-Use this path when the preferred independent reviewers are unavailable or exhausted and the user did not explicitly require a different named model. On this workstation, `claude-qwen` is a **zsh alias** defined in `~/.zshrc`, not a standalone executable. The alias supplies the Alibaba MaaS Anthropic-compatible endpoint and credentials, selects **Qwen 3.8** (`qwen3.8-max`), and invokes `claude`. Do not use `command -v claude-qwen` as an executable-resolution test. Check alias presence from an interactive zsh without printing its body, for example with `zsh -ic '[[ ${+aliases[claude-qwen]} -eq 1 ]]'`.
+Use this path when the preferred independent reviewers are unavailable or exhausted and the user did not explicitly require a different named model. On this workstation, `claude-qwen` is a **zsh alias** defined in `/home/coder/.zshrc`, not a standalone executable. The alias supplies the Alibaba MaaS Anthropic-compatible endpoint and credentials, selects **Qwen 3.8** (`qwen3.8-max`), and invokes `claude`. Do not use `command -v claude-qwen` as an executable-resolution test, and do not start a normal interactive `zsh -ic` merely to discover the alias: that would source `.zshrc` before tracing can be disabled. Use the protected no-RC bootstrap below, which disables tracing first, sources the fixed trusted `/home/coder/.zshrc` with startup output suppressed, disables tracing again, and only then inspects the alias without printing its body.
 
 ## Availability and usage preflight
 
@@ -18,7 +18,45 @@ If CodexBar cannot prove freshness for a provider, accept `plan-check json` only
 Alias availability does **not** prove Qwen quota. If no fresh provider-specific Qwen quota telemetry is available, run at most **one bounded provider-specific liveness probe** through the alias before attempting a review. The probe prompt is intentionally non-sensitive, so it may be supplied directly:
 
 ```bash
-zsh -ic 'claude-qwen --bare --permission-mode dontAsk --tools "" --no-chrome --no-session-persistence --output-format json -p "Reply only QWEN_OK"'
+zsh -f -c '
+  unsetopt XTRACE VERBOSE
+  source /home/coder/.zshrc >/dev/null 2>&1
+  unsetopt XTRACE VERBOSE
+  [[ ${+aliases[claude-qwen]} -eq 1 ]] || exit 1
+  alias_body="${aliases[claude-qwen]}"
+  alias_words=(${(z)alias_body})
+  (( ${#alias_words} >= 4 )) || exit 1
+  [[ ${alias_words[-1]} == claude ]] || exit 1
+  base_url_count=0
+  api_url_count=0
+  model_count=0
+  for word in ${alias_words[1,-2]}; do
+    [[ "$word" =~ '"'"'^[A-Za-z_][A-Za-z0-9_]*='"'"' ]] || exit 1
+    case "$word" in
+      ANTHROPIC_BASE_URL=*)
+        (( ++base_url_count == 1 )) || exit 1
+        value=${word#*=}
+        value=${(Q)value}
+        [[ "$value" == https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic ]] || exit 1
+        ;;
+      ANTHROPIC_API_URL=*)
+        (( ++api_url_count == 1 )) || exit 1
+        value=${word#*=}
+        value=${(Q)value}
+        [[ "$value" == https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic ]] || exit 1
+        ;;
+      ANTHROPIC_MODEL=*)
+        (( ++model_count == 1 )) || exit 1
+        value=${word#*=}
+        value=${(Q)value}
+        [[ "$value" == qwen3.8-max ]] || exit 1
+        ;;
+    esac
+  done
+  (( base_url_count == 1 && api_url_count == 1 && model_count == 1 )) || exit 1
+  unset alias_body alias_words word value base_url_count api_url_count model_count
+  eval '\''claude-qwen --bare --permission-mode dontAsk --tools "" --no-chrome --no-session-persistence --output-format json -p "Reply only QWEN_OK"'\''
+'
 ```
 
 A successful probe establishes Qwen availability for the cycle. A response with `"api_error_status":429` or another explicit token-plan quota/auth error establishes unavailability; record any reset time from the provider and **do not repeatedly retry** before that reset unless a newer live signal proves availability. A timeout, hang, or provider error without an explicit quota response means unavailable for this cycle without claiming quota exhaustion. `claude-qwen --version`, alias existence, and ordinary Claude subscription quota do not prove Alibaba token-plan quota.
@@ -31,7 +69,7 @@ Never print, copy, grep, or embed the alias body, credentials, or API keys in lo
 2. Fetch the live target branch and confirm the clean PR worktree is at the exact head.
 3. The orchestrator—not Qwen—must construct a sanitized prompt containing only the exact head/base-tip metadata, the frozen diff for that pair, and the review instructions. Do not include environment values, credentials, arbitrary home-directory contents, or unrelated repository files.
 4. Before writing the frozen diff, create a private review root using symlink-safe exclusive `mktemp -d` creation, validate that it matches the intended private-template prefix, install cleanup **before any later allocation**, and make every permission change fail closed. Enforce mode 0700 on the root; create `<sanitized-prompt-file>` inside it with `mktemp` and enforce mode 0600; then create a separate empty isolated working directory inside the root with mode 0700. Cleanup must recursively remove only the exact validated review root so partial startup artifacts cannot prevent removal. Write the sanitized prompt only to that private file, never to logs or stdout.
-5. Invoke an interactive zsh from the empty isolated working directory so the user's `~/.zshrc` defines `claude-qwen`. Immediately disable `XTRACE` and `VERBOSE` inside that shell **before reading or expanding the alias** so a debugging shell configuration cannot echo the secret-bearing alias body or expanded credentials. Then validate without printing the value that `aliases[claude-qwen]` exists and parses as shell words where every token before the command is an environment assignment; `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_URL`, and `ANTHROPIC_MODEL` each appear **exactly once**; every occurrence decodes immediately to the expected Alibaba token-plan endpoint or `qwen3.8-max`; and the final/only command token is exactly `claude`. Any duplicate required assignment or wrong required value must fail closed, even if an earlier occurrence was valid. If validation fails, treat Qwen as unavailable rather than guessing or reconstructing credentials.
+5. Start zsh with `-f` so it does **not** source user startup files automatically. Disable `XTRACE` and `VERBOSE` before any user shell configuration is loaded, source the fixed trusted `/home/coder/.zshrc` with both stdout and stderr suppressed, then disable `XTRACE` and `VERBOSE` again before reading or expanding the alias. This prevents either inherited options or options enabled by `.zshrc` from exposing the secret-bearing alias body. Then validate without printing the value that `aliases[claude-qwen]` exists and parses as shell words where every token before the command is an environment assignment; `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_URL`, and `ANTHROPIC_MODEL` each appear **exactly once**; every occurrence decodes immediately to the expected Alibaba token-plan endpoint or `qwen3.8-max`; and the final/only command token is exactly `claude`. Any duplicate required assignment or wrong required value must fail closed, even if an earlier occurrence was valid. If validation fails, treat Qwen as unavailable rather than guessing or reconstructing credentials.
 6. Invoke `claude-qwen` with **no tools**. No reviewer filesystem tools are allowed: use `--tools ""`, do not use `--add-dir`, and do not grant Read/Grep/Glob/Bash/Edit/Write. Feed the complete sanitized prompt through stdin; never place the frozen diff or full prompt in process argv. The combination of `--bare`, an empty working directory, no Claude tools, private prompt transport, and stdin prevents prompt-injection text in the diff from reading repository or credential files through Claude Code.
 7. Bind the prompt to the **exact head/base-tip pair** and require a terminal verdict with reviewed head SHA, reviewed base-tip SHA, verdict, blockers, should-fix findings, and nits. Every actionable finding must include file/line evidence and a concrete failure scenario.
 8. Count the verdict only when the outer command succeeded, the result is terminal and well formed, both SHAs match, and there is no quota/auth/provider error.
@@ -58,7 +96,9 @@ chmod 700 "$WORK_DIR" || exit 1
 # The orchestrator writes only the sanitized exact-SHA review prompt to $PROMPT_FILE.
 (
   cd "$WORK_DIR" || exit 1
-  zsh -ic '
+  zsh -f -c '
+    unsetopt XTRACE VERBOSE
+    source /home/coder/.zshrc >/dev/null 2>&1
     unsetopt XTRACE VERBOSE
     [[ ${+aliases[claude-qwen]} -eq 1 ]] || exit 1
     alias_body="${aliases[claude-qwen]}"
@@ -93,13 +133,13 @@ chmod 700 "$WORK_DIR" || exit 1
     done
     (( base_url_count == 1 && api_url_count == 1 && model_count == 1 )) || exit 1
     unset alias_body alias_words word value base_url_count api_url_count model_count
-    claude-qwen \
+    eval '\''claude-qwen \
       --bare \
       --permission-mode dontAsk \
       --tools "" \
       --no-chrome --no-session-persistence \
       --output-format json \
-      -p
+      -p'\''
   ' < "$PROMPT_FILE"
 )
 ```

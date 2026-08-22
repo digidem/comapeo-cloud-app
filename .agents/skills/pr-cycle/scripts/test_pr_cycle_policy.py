@@ -128,17 +128,50 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
         return bool(lines) and all(line in allowed_commands for line in lines)
 
     def is_qwen_quota_probe_block(block: str) -> bool:
-        return (
-            "zsh -ic" in block
-            and "claude-qwen" in block
-            and "Reply only QWEN_OK" in block
+        return "claude-qwen" in block and "Reply only QWEN_OK" in block
+
+    def assert_protected_zsh_bootstrap(block: str) -> None:
+        test.assertIn("zsh -f -c", block)
+        test.assertNotIn("zsh -ic", block)
+        test.assertIn("source /home/coder/.zshrc >/dev/null 2>&1", block)
+        first_unset = block.find("unsetopt XTRACE VERBOSE")
+        source_zshrc = block.find("source /home/coder/.zshrc >/dev/null 2>&1")
+        second_unset = block.find("unsetopt XTRACE VERBOSE", first_unset + 1)
+        alias_access = block.find("aliases[claude-qwen]")
+        test.assertGreaterEqual(first_unset, 0)
+        test.assertGreaterEqual(source_zshrc, 0)
+        test.assertGreaterEqual(second_unset, 0)
+        test.assertGreaterEqual(alias_access, 0)
+        test.assertLess(first_unset, source_zshrc)
+        test.assertLess(source_zshrc, second_unset)
+        test.assertLess(second_unset, alias_access)
+
+    def assert_validated_qwen_alias(block: str) -> None:
+        test.assertIn("aliases[claude-qwen]", block)
+        test.assertIn("alias_words=(${(z)alias_body})", block)
+        test.assertIn("[[ ${alias_words[-1]} == claude ]] || exit 1", block)
+        test.assertIn("^[A-Za-z_][A-Za-z0-9_]*=", block)
+        test.assertIn("ANTHROPIC_BASE_URL=*", block)
+        test.assertIn("ANTHROPIC_API_URL=*", block)
+        test.assertIn("ANTHROPIC_MODEL=*", block)
+        test.assertIn("(( ++base_url_count == 1 )) || exit 1", block)
+        test.assertIn("(( ++api_url_count == 1 )) || exit 1", block)
+        test.assertIn("(( ++model_count == 1 )) || exit 1", block)
+        test.assertIn(
+            "(( base_url_count == 1 && api_url_count == 1 && model_count == 1 )) || exit 1",
+            block,
         )
+        test.assertIn("token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic", block)
+        test.assertIn("qwen3.8-max", block)
 
     quota_probe_blocks = [block for block in blocks if is_qwen_quota_probe_block(block)]
     test.assertGreaterEqual(len(quota_probe_blocks), 1)
     for probe in quota_probe_blocks:
+        assert_protected_zsh_bootstrap(probe)
+        assert_validated_qwen_alias(probe)
         test.assertIn('--tools ""', probe)
         test.assertIn("--bare", probe)
+        test.assertIn("eval", probe)
         test.assertNotIn("$(cat", probe)
 
     reviewer_blocks = [
@@ -148,29 +181,9 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
     ]
     test.assertGreaterEqual(len(reviewer_blocks), 1)
     for invocation in reviewer_blocks:
-        test.assertIn("zsh -ic", invocation)
-        test.assertIn("unsetopt XTRACE VERBOSE", invocation)
-        test.assertIn("aliases[claude-qwen]", invocation)
-        test.assertLess(
-            invocation.index("unsetopt XTRACE VERBOSE"),
-            invocation.index('alias_body="${aliases[claude-qwen]}"'),
-        )
-        test.assertLess(
-            invocation.index("unsetopt XTRACE VERBOSE"),
-            invocation.index("    claude-qwen \\"),
-        )
-        test.assertIn("alias_words=(${(z)alias_body})", invocation)
-        test.assertIn("[[ ${alias_words[-1]} == claude ]] || exit 1", invocation)
-        test.assertIn("^[A-Za-z_][A-Za-z0-9_]*=", invocation)
-        test.assertIn("ANTHROPIC_BASE_URL=*", invocation)
-        test.assertIn("ANTHROPIC_API_URL=*", invocation)
-        test.assertIn("ANTHROPIC_MODEL=*", invocation)
-        test.assertIn("(( ++base_url_count == 1 )) || exit 1", invocation)
-        test.assertIn("(( ++api_url_count == 1 )) || exit 1", invocation)
-        test.assertIn("(( ++model_count == 1 )) || exit 1", invocation)
-        test.assertIn("(( base_url_count == 1 && api_url_count == 1 && model_count == 1 )) || exit 1", invocation)
-        test.assertIn("token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic", invocation)
-        test.assertIn("qwen3.8-max", invocation)
+        assert_protected_zsh_bootstrap(invocation)
+        assert_validated_qwen_alias(invocation)
+        test.assertIn("eval", invocation)
         test.assertNotIn("QWEN_BIN", invocation)
         test.assertIn("mktemp -d", invocation)
         test.assertIn('chmod 700 "$REVIEW_ROOT" || exit 1', invocation)
@@ -485,11 +498,27 @@ claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
             assert_qwen_security_contract(self, qwen_text)
 
     def test_qwen_security_contract_rejects_executable_wrapper_assumption(self) -> None:
-        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
-            "  zsh -ic '\n",
-            "  command -v claude-qwen '\n",
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace("zsh -f -c", "command -v claude-qwen", 1)
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_interactive_rc_startup(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace("zsh -f -c", "zsh -ic", 1)
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_unsuppressed_zshrc_source(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "source /home/coder/.zshrc >/dev/null 2>&1",
+            "source /home/coder/.zshrc",
             1,
         )
+        self.assertNotEqual(qwen_text, original)
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
