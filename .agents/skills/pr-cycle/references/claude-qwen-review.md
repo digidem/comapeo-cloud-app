@@ -34,7 +34,7 @@ Representative invocation after the orchestrator is ready to resolve an approved
 ```bash
 QWEN_BIN="$(command -v claude-qwen)" || exit 1
 case "$QWEN_BIN" in
-  "$HOME/.local/bin/claude-qwen"|/usr/local/bin/claude-qwen|/usr/bin/claude-qwen) ;;
+  /home/coder/.local/bin/claude-qwen|/usr/local/bin/claude-qwen|/usr/bin/claude-qwen) ;;
   *) exit 1 ;;
 esac
 [ -f "$QWEN_BIN" ] && [ -x "$QWEN_BIN" ] && [ ! -L "$QWEN_BIN" ] || exit 1
