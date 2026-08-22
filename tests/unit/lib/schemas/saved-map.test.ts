@@ -1,3 +1,4 @@
+import { AUTHORED_VECTOR_LAYER_FIXTURE } from '@tests/fixtures/authored-layers';
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 
@@ -28,6 +29,53 @@ describe('savedMapSchema', () => {
       expect(result.output.name).toBe('Territory Basemap');
       expect(result.output.type).toBe('raster');
     }
+  });
+
+  it('accepts canonical authored layers and preserves their order', () => {
+    const result = v.safeParse(savedMapSchema, {
+      ...validRaster,
+      layers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.output.layers).toEqual([AUTHORED_VECTOR_LAYER_FIXTURE]);
+    }
+  });
+
+  it('returns the canonicalized authored layer produced by the shared parser', () => {
+    const candidate = structuredClone(AUTHORED_VECTOR_LAYER_FIXTURE);
+    const firstFragment = candidate.render.layers[0]!;
+    candidate.render.layers[0] = {
+      ...firstFragment,
+      layout: {},
+    };
+    const result = v.safeParse(savedMapSchema, {
+      ...validRaster,
+      layers: [candidate],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.output.layers?.[0]?.render.layers[0]).not.toHaveProperty(
+        'layout',
+      );
+    }
+  });
+
+  it('rejects a non-canonical authored layer through the strict shared validator', () => {
+    const invalidLayer = {
+      ...AUTHORED_VECTOR_LAYER_FIXTURE,
+      id: 'not-a-canonical-uuid',
+    };
+    expect(
+      v.safeParse(savedMapSchema, { ...validRaster, layers: [invalidLayer] })
+        .success,
+    ).toBe(false);
+  });
+
+  it('keeps legacy maps without layers valid', () => {
+    const result = v.safeParse(savedMapSchema, validRaster);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.output.layers).toBeUndefined();
   });
 
   it('validates a complete style saved map', () => {
