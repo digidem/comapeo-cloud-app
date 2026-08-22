@@ -1,6 +1,6 @@
 # Claude-Qwen fallback reviewer
 
-Use this path when the preferred independent reviewers are unavailable or exhausted, the user did not explicitly require a different named model, and a `claude-qwen` wrapper is available. Resolve it with `command -v claude-qwen`; if the wrapper is not on `PATH`, check known local install locations such as `/home/coder/.local/bin/claude-qwen` without reading or exposing its credentials. The wrapper routes Claude Code through Alibaba MaaS using **Qwen 3.8** (`qwen3.8-max-preview`), so its quota is distinct from the normal Claude subscription session window.
+Use this path when the preferred independent reviewers are unavailable or exhausted and the user did not explicitly require a different named model. On this workstation, `claude-qwen` is a **zsh alias** defined in `~/.zshrc`, not a standalone executable. The alias supplies the Alibaba MaaS Anthropic-compatible endpoint and credentials, selects **Qwen 3.8** (`qwen3.8-max`), and invokes `claude`. Do not use `command -v claude-qwen` as an executable-resolution test. Check alias presence from an interactive zsh without printing its body, for example with `zsh -ic '[[ ${+aliases[claude-qwen]} -eq 1 ]]'`.
 
 ## Availability and usage preflight
 
@@ -15,29 +15,30 @@ Accept CodexBar as current only when the selected provider/source is documented 
 
 If CodexBar cannot prove freshness for a provider, accept `plan-check json` only when the selected provider's own usage record contains a parseable **provider-specific observation timestamp** that is no older than 15 minutes and no more than 5 minutes in the future at read time. A fresh global output/file timestamp does not make a stale provider record current. If `plan-check json` cannot provide that provider-specific freshness proof, use `~/.hermes/state/quota-heartbeat.json` only when the selected provider entry itself contains a parseable **provider-specific observation timestamp** that is no older than 15 minutes and no more than 5 minutes in the future at read time. A fresh heartbeat-file timestamp alone is insufficient. Anything outside those bounds is stale/invalid historical evidence and leaves quota **unknown**, not exhausted; it must never override a current provider response, a current CLI limit message, or a current successful dispatch.
 
-When quota remains unknown after instrumentation, use at most one bounded provider-specific liveness probe before falling through to the next reviewer. A successful probe establishes availability for the cycle. An explicit quota/auth/429 response establishes unavailability and any stated reset should be recorded. A timeout, hang, or provider error means unavailable for this cycle without claiming quota exhaustion; do not repeatedly probe the same unhealthy harness. `claude-qwen --version` is only a wrapper-liveness check and does **not** prove Qwen quota remains. A real Qwen dispatch may return JSON with `"api_error_status":429` and a `result` explaining that the token-plan quota is exhausted and giving a reset time. Record that reset and **do not repeatedly retry** the provider before the reset unless a newer live quota signal says it is available again.
+Alias availability does **not** prove Qwen quota. If no fresh provider-specific Qwen quota telemetry is available, run at most **one bounded provider-specific liveness probe** through the alias before attempting a review. The probe prompt is intentionally non-sensitive, so it may be supplied directly:
 
-Never print, copy, grep, or embed the wrapper's credentials or API keys in logs, prompts, PR comments, or reports.
+```bash
+zsh -ic 'claude-qwen --bare --permission-mode dontAsk --tools "" --no-chrome --no-session-persistence --output-format json -p "Reply only QWEN_OK"'
+```
+
+A successful probe establishes Qwen availability for the cycle. A response with `"api_error_status":429` or another explicit token-plan quota/auth error establishes unavailability; record any reset time from the provider and **do not repeatedly retry** before that reset unless a newer live signal proves availability. A timeout, hang, or provider error without an explicit quota response means unavailable for this cycle without claiming quota exhaustion. `claude-qwen --version`, alias existence, and ordinary Claude subscription quota do not prove Alibaba token-plan quota.
+
+Never print, copy, grep, or embed the alias body, credentials, or API keys in logs, prompts, PR comments, or reports. In particular, do not run a command that prints `alias claude-qwen` or the `aliases[claude-qwen]` value. The alias body is allowed to be inspected only inside the trusted local zsh process for non-output validation. This path necessarily trusts the user's `~/.zshrc` as the local credential/configuration source; if that shell configuration is not trusted or the alias shape cannot be validated, treat Qwen as unavailable.
 
 ## Exact-revision review contract
 
 1. Refresh `pr_snapshot.py` and record the exact pushed head SHA and current live target-branch tip.
 2. Fetch the live target branch and confirm the clean PR worktree is at the exact head.
-3. The orchestrator—not Qwen—must construct a sanitized prompt containing only the exact head/base-tip metadata, the frozen diff for that pair, and the review instructions. Do not include environment values, credentials, arbitrary home-directory contents, or unrelated repository files. Resolve the `claude-qwen` wrapper from an approved executable location; never honor an inherited `QWEN_BIN` or similar executable override. Validate the resolved path as a regular executable before giving it the prompt.
-4. Before writing the frozen diff, create a private review root using symlink-safe exclusive `mktemp -d` creation, validate that it matches the intended private-template prefix, install cleanup **before any later allocation**, and make every permission change fail closed. Enforce mode 0700 on the root; create `<sanitized-prompt-file>` inside it with `mktemp` and enforce mode 0600; then create a separate empty isolated working directory inside the root with mode 0700. Cleanup must recursively remove only the exact validated review root so partial wrapper/startup artifacts cannot prevent removal. Write the sanitized prompt only to that private file, never to logs or stdout.
-5. Invoke `claude-qwen` from the empty isolated working directory with **no tools**. No reviewer filesystem tools are allowed: use `--tools ""`, do not use `--add-dir`, and do not grant Read/Grep/Glob/Bash/Edit/Write. Feed the complete sanitized prompt through stdin; never place the frozen diff or full prompt in process argv. The combination of `--bare`, an empty working directory, no tools, private prompt transport, and stdin prevents prompt-injection text in the diff from reading local credentials or startup project state.
-6. Bind the prompt to the **exact head/base-tip pair** and require a terminal verdict with reviewed head SHA, reviewed base-tip SHA, verdict, blockers, should-fix findings, and nits. Every actionable finding must include file/line evidence and a concrete failure scenario.
-7. Count the verdict only when the outer command succeeded, the result is terminal and well formed, both SHAs match, and there is no quota/auth/provider error.
+3. The orchestrator—not Qwen—must construct a sanitized prompt containing only the exact head/base-tip metadata, the frozen diff for that pair, and the review instructions. Do not include environment values, credentials, arbitrary home-directory contents, or unrelated repository files.
+4. Before writing the frozen diff, create a private review root using symlink-safe exclusive `mktemp -d` creation, validate that it matches the intended private-template prefix, install cleanup **before any later allocation**, and make every permission change fail closed. Enforce mode 0700 on the root; create `<sanitized-prompt-file>` inside it with `mktemp` and enforce mode 0600; then create a separate empty isolated working directory inside the root with mode 0700. Cleanup must recursively remove only the exact validated review root so partial startup artifacts cannot prevent removal. Write the sanitized prompt only to that private file, never to logs or stdout.
+5. Invoke an interactive zsh from the empty isolated working directory so the user's `~/.zshrc` defines `claude-qwen`. Before invoking it, validate **inside that shell without printing the value** that `aliases[claude-qwen]` exists, references the expected Alibaba token-plan endpoint, selects `qwen3.8-max`, and ultimately invokes `claude`. If validation fails, treat Qwen as unavailable rather than guessing or reconstructing credentials.
+6. Invoke `claude-qwen` with **no tools**. No reviewer filesystem tools are allowed: use `--tools ""`, do not use `--add-dir`, and do not grant Read/Grep/Glob/Bash/Edit/Write. Feed the complete sanitized prompt through stdin; never place the frozen diff or full prompt in process argv. The combination of `--bare`, an empty working directory, no Claude tools, private prompt transport, and stdin prevents prompt-injection text in the diff from reading repository or credential files through Claude Code.
+7. Bind the prompt to the **exact head/base-tip pair** and require a terminal verdict with reviewed head SHA, reviewed base-tip SHA, verdict, blockers, should-fix findings, and nits. Every actionable finding must include file/line evidence and a concrete failure scenario.
+8. Count the verdict only when the outer command succeeded, the result is terminal and well formed, both SHAs match, and there is no quota/auth/provider error.
 
-Representative invocation after the orchestrator is ready to resolve an approved wrapper and write the frozen exact-SHA prompt:
+Representative invocation after the orchestrator has written the frozen exact-SHA prompt:
 
 ```bash
-QWEN_BIN="$(command -v claude-qwen)" || exit 1
-case "$QWEN_BIN" in
-  /home/coder/.local/bin/claude-qwen|/usr/local/bin/claude-qwen|/usr/bin/claude-qwen) ;;
-  *) exit 1 ;;
-esac
-[ -f "$QWEN_BIN" ] && [ -x "$QWEN_BIN" ] && [ ! -L "$QWEN_BIN" ] || exit 1
 REVIEW_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/claude-qwen-review.XXXXXX")" || exit 1
 case "$REVIEW_ROOT" in
   "${TMPDIR:-/tmp}"/claude-qwen-review.*) ;;
@@ -57,20 +58,28 @@ chmod 700 "$WORK_DIR" || exit 1
 # The orchestrator writes only the sanitized exact-SHA review prompt to $PROMPT_FILE.
 (
   cd "$WORK_DIR" || exit 1
-  "$QWEN_BIN" \
-    --bare \
-    --permission-mode dontAsk \
-    --tools "" \
-    --no-chrome --no-session-persistence \
-    --output-format json \
-    -p < "$PROMPT_FILE"
+  zsh -ic '
+    [[ ${+aliases[claude-qwen]} -eq 1 ]] || exit 1
+    alias_body="${aliases[claude-qwen]}"
+    [[ "$alias_body" == *"token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic"* ]] || exit 1
+    [[ "$alias_body" == *"qwen3.8-max"* ]] || exit 1
+    [[ "$alias_body" == *" claude"* ]] || exit 1
+    unset alias_body
+    claude-qwen \
+      --bare \
+      --permission-mode dontAsk \
+      --tools "" \
+      --no-chrome --no-session-persistence \
+      --output-format json \
+      -p
+  ' < "$PROMPT_FILE"
 )
 ```
 
-Do not use `--add-dir` for this reviewer. Do not replace stdin with `-p "$(cat ...)"` or any other argv expansion of the prompt. The tool-less/private-transport boundary is mandatory, not a compatibility preference: if the wrapper or current Claude Code version cannot enforce `--tools ""`, stdin prompt input, and the isolated working-directory pattern (or equivalents with the same confidentiality properties), treat Qwen as unavailable for this cycle rather than removing the boundary. Other compatibility flags may be removed only when doing so does not expand filesystem/tool access, expose prompt contents, or weaken the exact-SHA contract.
+Do not use `--add-dir` for this reviewer. Do not replace stdin with `-p "$(cat ...)"` or any other argv expansion of the confidential review prompt. Do not copy the alias body into a script, environment variable exported by the orchestrator, issue comment, or log. The tool-less/private-transport boundary is mandatory, not a compatibility preference: if the alias, zsh startup environment, or current Claude Code version cannot enforce `--tools ""`, stdin prompt input, and the isolated working-directory pattern (or equivalents with the same confidentiality properties), treat Qwen as unavailable for this cycle rather than removing the boundary.
 
 ## Fallback semantics
 
-Qwen is a substitute reviewer, not a relaxed gate. Use it after the preferred reviewer paths and other strong configured reviewers are unavailable or exhausted. Do not silently substitute Qwen when the user explicitly required Opus, Kimi, GPT-5.6 Sol, or another named reviewer.
+Qwen is a substitute reviewer, not a relaxed gate. Use it after the preferred reviewer paths and other strong configured reviewers are unavailable or exhausted. Check Qwen quota before review dispatch; do not spend a full frozen-diff review merely to discover a known exhausted token-plan. Do not silently substitute Qwen when the user explicitly required Opus, Kimi, GPT-5.6 Sol, or another named reviewer.
 
 A Qwen `READY` verdict is static-review evidence only. CI, mergeability, GitHub review state, unresolved threads, worktree cleanliness, and live revision coordinates still require independent verification. Any push or live base-tip movement invalidates the Qwen verdict and requires a fresh exact-revision review.

@@ -127,25 +127,39 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
         }
         return bool(lines) and all(line in allowed_commands for line in lines)
 
-    reviewer_blocks = [block for block in blocks if not is_usage_preflight_block(block)]
+    def is_qwen_quota_probe_block(block: str) -> bool:
+        return (
+            "zsh -ic" in block
+            and "claude-qwen" in block
+            and "Reply only QWEN_OK" in block
+        )
+
+    quota_probe_blocks = [block for block in blocks if is_qwen_quota_probe_block(block)]
+    test.assertGreaterEqual(len(quota_probe_blocks), 1)
+    for probe in quota_probe_blocks:
+        test.assertIn('--tools ""', probe)
+        test.assertIn("--bare", probe)
+        test.assertNotIn("$(cat", probe)
+
+    reviewer_blocks = [
+        block
+        for block in blocks
+        if not is_usage_preflight_block(block) and not is_qwen_quota_probe_block(block)
+    ]
     test.assertGreaterEqual(len(reviewer_blocks), 1)
     for invocation in reviewer_blocks:
-        test.assertIn('QWEN_BIN="$(command -v claude-qwen)" || exit 1', invocation)
-        test.assertNotIn("${QWEN_BIN:-", invocation)
-        test.assertIn('case "$QWEN_BIN" in', invocation)
-        test.assertIn('/home/coder/.local/bin/claude-qwen', invocation)
-        test.assertNotIn('$HOME/.local/bin/claude-qwen', invocation)
-        test.assertIn(
-            '[ -f "$QWEN_BIN" ] && [ -x "$QWEN_BIN" ] && [ ! -L "$QWEN_BIN" ] || exit 1',
-            invocation,
-        )
+        test.assertIn("zsh -ic", invocation)
+        test.assertIn("aliases[claude-qwen]", invocation)
+        test.assertIn("token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic", invocation)
+        test.assertIn("qwen3.8-max", invocation)
+        test.assertNotIn("QWEN_BIN", invocation)
         test.assertIn("mktemp -d", invocation)
         test.assertIn('chmod 700 "$REVIEW_ROOT" || exit 1', invocation)
         test.assertIn('chmod 600 "$PROMPT_FILE" || exit 1', invocation)
         test.assertIn('chmod 700 "$WORK_DIR" || exit 1', invocation)
         test.assertIn('cd "$WORK_DIR"', invocation)
         test.assertIn('--tools ""', invocation)
-        test.assertIn('-p < "$PROMPT_FILE"', invocation)
+        test.assertIn('< "$PROMPT_FILE"', invocation)
         test.assertIn("trap cleanup EXIT", invocation)
         test.assertIn('rm -rf -- "$REVIEW_ROOT"', invocation)
         test.assertLess(invocation.index("trap cleanup EXIT"), invocation.index("PROMPT_FILE="))
@@ -154,10 +168,6 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
         test.assertNotRegex(
             invocation,
             r"--tools(?:\s+|=)(?:Read|Grep|Glob|Bash|Edit|Write)",
-        )
-        test.assertNotRegex(
-            invocation,
-            re.compile(r"(?m)(?:^|\s)-p(?:\s+|=)(?!<\s*\"\$PROMPT_FILE\")\S+"),
         )
         tool_values = re.findall(r"--tools(?:\s+|=)([^\s\\]+)", invocation)
         test.assertGreaterEqual(len(tool_values), 1)
@@ -352,9 +362,14 @@ class PrCyclePolicyTests(unittest.TestCase):
     def test_claude_qwen_fallback_and_usage_preflight_are_pinned(self) -> None:
         qwen_text = CLAUDE_QWEN_REVIEW.read_text()
         self.assertIn("Qwen 3.8", qwen_text)
-        self.assertIn("command -v claude-qwen", qwen_text)
+        self.assertIn("qwen3.8-max", qwen_text)
+        self.assertIn("zsh alias", qwen_text)
+        self.assertIn("~/.zshrc", qwen_text)
+        self.assertNotIn("QWEN_BIN", qwen_text)
+        self.assertIn("Do not use `command -v claude-qwen` as an executable-resolution test", qwen_text)
         self.assertIn("api_error_status", qwen_text)
         self.assertIn("429", qwen_text)
+        self.assertIn("Reply only QWEN_OK", qwen_text)
         self.assertIn("codexbar usage", qwen_text)
         self.assertIn("plan-check json", qwen_text)
         self.assertIn("quota-heartbeat.json", qwen_text)
@@ -362,7 +377,7 @@ class PrCyclePolicyTests(unittest.TestCase):
         self.assertIn("stale", qwen_text)
         self.assertIn("exact head/base-tip pair", qwen_text)
         self.assertIn("do not repeatedly retry", qwen_text)
-        self.assertIn("Never print, copy, grep, or embed the wrapper's credentials or API keys", qwen_text)
+        self.assertIn("Never print, copy, grep, or embed the alias body, credentials, or API keys", qwen_text)
         self.assertIn("No reviewer filesystem tools are allowed", qwen_text)
         self.assertIn('--tools ""', qwen_text)
         self.assertIn("Do not use `--add-dir`", qwen_text)
@@ -450,29 +465,34 @@ claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
-    def test_qwen_security_contract_rejects_inherited_wrapper_override(self) -> None:
+    def test_qwen_security_contract_rejects_executable_wrapper_assumption(self) -> None:
         qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
-            'QWEN_BIN="$(command -v claude-qwen)" || exit 1',
-            'QWEN_BIN="${QWEN_BIN:-$(command -v claude-qwen)}"',
+            "  zsh -ic '\n",
+            "  command -v claude-qwen '\n",
+            1,
         )
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
-    def test_qwen_security_contract_rejects_inherited_home_wrapper_path(self) -> None:
+    def test_qwen_security_contract_rejects_printing_secret_bearing_alias_body(self) -> None:
         qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
-            "/home/coder/.local/bin/claude-qwen",
-            '"$HOME/.local/bin/claude-qwen"',
+            "## Fallback semantics",
+            """```bash
+zsh -ic 'alias claude-qwen'
+```
+
+## Fallback semantics""",
         )
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
-    def test_qwen_security_contract_rejects_alias_based_reviewer_invocation(self) -> None:
+    def test_qwen_security_contract_rejects_unguarded_alias_reviewer_invocation(self) -> None:
         qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
             "## Fallback semantics",
             """## Fallback semantics
 
 ```bash
-\"$REVIEWER_BIN\" --tools=Read -p=\"$PROMPT\"
+zsh -ic 'claude-qwen --tools=Read -p=\"$PROMPT\"'
 ```""",
         )
         with self.assertRaises(AssertionError):
