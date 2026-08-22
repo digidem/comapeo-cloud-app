@@ -49,6 +49,14 @@ def _bash_blocks(text: str) -> list[str]:
     return re.findall(r"```bash\n(.*?)```", text, flags=re.DOTALL)
 
 
+def _sentences(text: str) -> list[str]:
+    return [
+        " ".join(sentence.split())
+        for sentence in re.split(r"(?<=[.!?])\s+|\n+", text)
+        if sentence.strip()
+    ]
+
+
 def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> None:
     availability = _section(
         qwen_text, "## Availability and usage preflight", "## Exact-revision review contract"
@@ -64,8 +72,42 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
             re.I | re.S,
         ),
     )
+    for sentence in _sentences(availability):
+        lower = sentence.lower()
+        if "cached" in lower and re.search(
+            r"\b(?:accept(?:ed|able)?|authoritative|current|usable)\b", lower
+        ):
+            test.assertIn(
+                "provider-specific observation timestamp",
+                lower,
+                msg=f"Cached quota may only be accepted with provider-specific freshness: {sentence}",
+            )
+            test.assertNotRegex(
+                lower,
+                re.compile(
+                    r"\b(?:without|missing|no)\b.{0,80}provider-specific observation timestamp"
+                ),
+            )
 
     exact = _section(qwen_text, "## Exact-revision review contract", "## Fallback semantics")
+    for sentence in _sentences(exact):
+        lower = sentence.lower()
+        if re.search(r"\b(?:read|grep|glob|bash|edit|write)\b", lower) and re.search(
+            r"\b(?:allow|allows|allowed|permit|permits|permitted|grant|grants|granted|enable|enables|enabled|may use|can use)\b",
+            lower,
+        ):
+            test.assertRegex(
+                lower,
+                re.compile(r"\b(?:no|not|never|without|cannot|can't)\b"),
+                msg=f"Reviewer filesystem access must not be permitted: {sentence}",
+            )
+        if "prompt" in lower and ("argv" in lower or re.search(r"\s-p\b", lower)):
+            if re.search(r"\b(?:allow|allowed|permit|permitted|may|can|use|pass|place)\b", lower):
+                test.assertRegex(
+                    lower,
+                    re.compile(r"\b(?:no|not|never|without|cannot|can't)\b"),
+                    msg=f"Prompt transport must not be permitted through argv: {sentence}",
+                )
     blocks = _bash_blocks(exact)
     reviewer_blocks = [
         block for block in blocks if "claude-qwen" in block or "$QWEN_BIN" in block
@@ -85,6 +127,13 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
         test.assertNotIn("--add-dir", invocation)
         test.assertNotIn("$(cat", invocation)
         test.assertNotRegex(invocation, r"--tools\s+(?:Read|Grep|Glob|Bash|Edit|Write)")
+        test.assertNotRegex(
+            invocation,
+            re.compile(r"(?m)(?:^|\s)-p\s+(?!<\s*\"\$PROMPT_FILE\")\S+"),
+        )
+        tool_values = re.findall(r"--tools\s+([^\s\\]+)", invocation)
+        test.assertGreaterEqual(len(tool_values), 1)
+        test.assertTrue(all(value == '\"\"' for value in tool_values))
 
 
 def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) -> None:
@@ -99,10 +148,23 @@ def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) ->
     test.assertNotRegex(
         ordered,
         re.compile(
-            r"(?:if|when) the first[- ]parent (?:differs|mismatches?)[^.]{0,160}\bcontinue(?: the sequence| to (?:the )?next merge)",
+            r"head-only guard\s+(?:is|remains|can be|may be)\s+(?:sufficient|enough|acceptable|safe)",
             re.I,
         ),
     )
+    for sentence in _sentences(ordered):
+        lower = sentence.lower()
+        if ("first parent" in lower or "first-parent" in lower) and (
+            "mismatch" in lower or "differs" in lower
+        ) and re.search(
+            r"\b(?:continue|proceed|advance|resume|go on|merge the next|merge next)\b",
+            lower,
+        ):
+            test.assertRegex(
+                lower,
+                re.compile(r"\b(?:stop|never|do not|must not|cannot|can't)\b"),
+                msg=f"A parent mismatch must never authorize a subsequent merge: {sentence}",
+            )
     test.assertIn("keep that immutable SHA as the integration subject", ordered)
     test.assertNotRegex(
         ordered,
@@ -329,6 +391,30 @@ claude-qwen --tools Read,Grep --add-dir ~/.config -p \"$(cat /tmp/prompt)\"
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
+    def test_qwen_security_contract_rejects_cached_quota_without_provider_timestamp(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Exact-revision review contract",
+            "Cached quota without a provider-specific observation timestamp is current and usable.\n\n## Exact-revision review contract",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_prose_filesystem_permission(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            "Reviewers may use Read and Grep filesystem tools when useful.\n\n## Fallback semantics",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_prose_argv_prompt_transport(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            "The full prompt may be passed with -p \"$PROMPT\" on argv.\n\n## Fallback semantics",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
     def test_ordered_merge_contract_rejects_moving_tip_substitution(self) -> None:
         runbook_text = RUNBOOK.read_text().replace(
             "## Scoped cleanup after verified merge",
@@ -349,6 +435,22 @@ claude-qwen --tools Read,Grep --add-dir ~/.config -p \"$(cat /tmp/prompt)\"
         runbook_text = RUNBOOK.read_text().replace(
             "## Scoped cleanup after verified merge",
             "If the first parent differs from the gated base, continue the sequence anyway.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_proceed_after_parent_mismatch(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "If the first parent mismatches the gated base, proceed to the next PR.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_head_only_guard_as_sufficient(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "A head-only guard is sufficient for autonomous merging.\n\n## Scoped cleanup after verified merge",
         )
         with self.assertRaises(AssertionError):
             assert_ordered_merge_contract(self, runbook_text)
