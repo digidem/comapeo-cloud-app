@@ -149,7 +149,16 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
     test.assertGreaterEqual(len(reviewer_blocks), 1)
     for invocation in reviewer_blocks:
         test.assertIn("zsh -ic", invocation)
+        test.assertIn("unsetopt XTRACE VERBOSE", invocation)
         test.assertIn("aliases[claude-qwen]", invocation)
+        test.assertLess(
+            invocation.index("unsetopt XTRACE VERBOSE"),
+            invocation.index('alias_body="${aliases[claude-qwen]}"'),
+        )
+        test.assertLess(
+            invocation.index("unsetopt XTRACE VERBOSE"),
+            invocation.index("    claude-qwen \\"),
+        )
         test.assertIn("alias_words=(${(z)alias_body})", invocation)
         test.assertIn("[[ ${alias_words[-1]} == claude ]] || exit 1", invocation)
         test.assertIn("^[A-Za-z_][A-Za-z0-9_]*=", invocation)
@@ -505,6 +514,16 @@ zsh -ic 'alias claude-qwen'
 zsh -ic 'claude-qwen --tools=Read -p=\"$PROMPT\"'
 ```""",
         )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_alias_access_before_disabling_trace(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "    unsetopt XTRACE VERBOSE\n    [[ ${+aliases[claude-qwen]} -eq 1 ]] || exit 1",
+            "    [[ ${+aliases[claude-qwen]} -eq 1 ]] || exit 1",
+        )
+        self.assertNotEqual(qwen_text, original)
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
