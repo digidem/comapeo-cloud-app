@@ -22,6 +22,7 @@ let mockCaseIsError = false;
 let mockCaseActivityData: CaseActivity[] = [];
 let mockCaseActivityIsPending = false;
 let mockReportStatesData: CaseReportState[] = [];
+let mockReportStatesIsPending = false;
 let mockSelectedProjectId: string | null = 'proj-1';
 
 const mockUpdateCaseMutate = vi.fn();
@@ -70,7 +71,7 @@ vi.mock('@/hooks/useCaseActivity', () => ({
 vi.mock('@/hooks/useCaseReportStates', () => ({
   useCaseReportStates: vi.fn(() => ({
     data: mockReportStatesData,
-    isPending: false,
+    isPending: mockReportStatesIsPending,
   })),
 }));
 
@@ -179,6 +180,7 @@ function resetMocks() {
       updatedAt: '2024-03-15T14:00:00Z',
     },
   ];
+  mockReportStatesIsPending = false;
   mockSelectedProjectId = 'proj-1';
   mockUpdateCaseMutate.mockReset();
 }
@@ -278,8 +280,11 @@ describe('CaseDetailScreen', () => {
       expect(screen.getByText('Active')).toBeInTheDocument();
     });
 
-    it('renders created date', () => {
+    it('uses a level-2 non-duplicative section heading for record metadata', () => {
       render(<CaseDetailScreen />);
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'Record details' }),
+      ).toBeInTheDocument();
       expect(
         screen.getByText('Created', { selector: 'span' }),
       ).toBeInTheDocument();
@@ -415,16 +420,38 @@ describe('CaseDetailScreen', () => {
       ).toBeInTheDocument();
     });
 
+    it('shows a loading skeleton instead of an empty-state flash', async () => {
+      const user = userEvent.setup();
+      mockReportStatesData = [];
+      mockReportStatesIsPending = true;
+      render(<CaseDetailScreen />);
+
+      await user.click(screen.getByRole('tab', { name: 'Report State' }));
+
+      expect(screen.getByTestId('skeleton')).toBeInTheDocument();
+      expect(
+        screen.queryByText('No report state recorded yet'),
+      ).not.toBeInTheDocument();
+    });
+
     it('renders all four agency statuses independently', async () => {
       const user = userEvent.setup();
       render(<CaseDetailScreen />);
       // Click the Report State tab
       await user.click(screen.getByRole('tab', { name: 'Report State' }));
       // All four agencies should be present
-      expect(screen.getByText('FUNAI')).toBeInTheDocument();
-      expect(screen.getByText('IBAMA')).toBeInTheDocument();
-      expect(screen.getByText('MPF')).toBeInTheDocument();
-      expect(screen.getByText('PF')).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 3, name: 'FUNAI' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 3, name: 'IBAMA' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 3, name: 'MPF' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 3, name: 'PF' }),
+      ).toBeInTheDocument();
       // FUNAI is complete, others are incomplete
       expect(screen.getByText('Complete')).toBeInTheDocument();
       expect(screen.getAllByText('Incomplete').length).toBeGreaterThanOrEqual(

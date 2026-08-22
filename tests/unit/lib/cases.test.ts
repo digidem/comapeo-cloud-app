@@ -202,6 +202,34 @@ describe('Case CRUD', () => {
     expect(casesB[0]!.title).toBe('B1');
   });
 
+  it('getCases — orders cases by most recently updated first', async () => {
+    const projectLocalId = await makeProject();
+    const older = await createCase({
+      projectLocalId,
+      title: 'Older update',
+      caseType: 'illegal_mining',
+    });
+    const newer = await createCase({
+      projectLocalId,
+      title: 'Newer update',
+      caseType: 'fire',
+    });
+
+    const db = getDb();
+    await db.cases.update(older.localId, {
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await db.cases.update(newer.localId, {
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    });
+
+    const cases = await getCases(projectLocalId);
+    expect(cases.map((caze) => caze.localId)).toEqual([
+      newer.localId,
+      older.localId,
+    ]);
+  });
+
   it('updateCase — requires project scope and rejects cross-project update', async () => {
     const projA = await makeProject();
     const projB = await makeProject();

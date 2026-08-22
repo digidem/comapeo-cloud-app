@@ -142,8 +142,7 @@ export function CreateCaseScreen() {
       topbarWorkspaceName: selectedProjectId ? topbarWorkspaceName : undefined,
       topbarModeLabel: intl.formatMessage(messages.casesLabel),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedProjectId, topbarWorkspaceName],
+    [intl, selectedProjectId, topbarWorkspaceName],
   );
   useShellSlot(shellSlot);
 

@@ -48,10 +48,6 @@ const messages = defineMessages({
     id: 'cases.evidenceCountEmpty',
     defaultMessage: '0 evidence',
   },
-  reportState: {
-    id: 'cases.reportState',
-    defaultMessage: 'Report State',
-  },
   revision: { id: 'cases.revision', defaultMessage: 'Revision {revision}' },
   caseTypeInvasionOccupation: {
     id: 'cases.type.invasion_occupation',
@@ -87,18 +83,6 @@ const messages = defineMessages({
     defaultMessage: 'Other violation of Indigenous or territorial rights',
   },
   caseTypeOther: { id: 'cases.type.other', defaultMessage: 'Other' },
-  statusDraft: {
-    id: 'cases.status.draft',
-    defaultMessage: 'Draft',
-  },
-  statusActive: {
-    id: 'cases.status.active',
-    defaultMessage: 'Active',
-  },
-  statusClosed: {
-    id: 'cases.status.closed',
-    defaultMessage: 'Closed',
-  },
   updatedAtLabel: {
     id: 'cases.updatedAt',
     defaultMessage: 'Updated',
@@ -156,8 +140,7 @@ export function CasesScreen() {
       topbarWorkspaceName: selectedProjectId ? topbarWorkspaceName : undefined,
       topbarModeLabel: intl.formatMessage(messages.title),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedProjectId, topbarWorkspaceName],
+    [intl, selectedProjectId, topbarWorkspaceName],
   );
   useShellSlot(shellSlot);
 

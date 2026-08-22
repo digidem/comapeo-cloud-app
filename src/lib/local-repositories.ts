@@ -1,3 +1,5 @@
+import Dexie from 'dexie';
+
 import { isZeroZeroCoord } from '@/lib/coords';
 import { getDb } from '@/lib/db';
 import type {
@@ -646,8 +648,14 @@ export async function getCases(projectLocalId: string): Promise<Case[]> {
   return wrapDb(async () => {
     const db = getDb();
     return db.cases
-      .where('projectLocalId')
-      .equals(projectLocalId)
+      .where('[projectLocalId+updatedAt]')
+      .between(
+        [projectLocalId, Dexie.minKey],
+        [projectLocalId, Dexie.maxKey],
+        true,
+        true,
+      )
+      .reverse()
       .filter((c) => !c.deleted)
       .toArray();
   });

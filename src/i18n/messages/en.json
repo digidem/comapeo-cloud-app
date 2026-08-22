@@ -347,9 +347,6 @@
   "cases.detail.lifecycle": {
     "defaultMessage": "Lifecycle"
   },
-  "cases.detail.loading": {
-    "defaultMessage": "Loading..."
-  },
   "cases.detail.locationTerritory": {
     "defaultMessage": "Location & Territory"
   },
@@ -379,6 +376,9 @@
   },
   "cases.detail.peopleCommunity": {
     "defaultMessage": "People & Community"
+  },
+  "cases.detail.recordDetails": {
+    "defaultMessage": "Record details"
   },
   "cases.detail.reportState": {
     "defaultMessage": "Report State"
@@ -439,9 +439,6 @@
   },
   "cases.noProjectLink": {
     "defaultMessage": "Go to Home"
-  },
-  "cases.reportState": {
-    "defaultMessage": "Report State"
   },
   "cases.reportState.complete": {
     "defaultMessage": "Complete"

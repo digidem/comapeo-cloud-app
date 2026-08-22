@@ -47,6 +47,10 @@ const messages = defineMessages({
     defaultMessage: 'Report State',
   },
   created: { id: 'cases.detail.created', defaultMessage: 'Created' },
+  recordDetails: {
+    id: 'cases.detail.recordDetails',
+    defaultMessage: 'Record details',
+  },
   updatedAt: {
     id: 'cases.detail.updatedAt',
     defaultMessage: 'Last updated',
@@ -96,7 +100,6 @@ const messages = defineMessages({
     id: 'cases.detail.lifecycle',
     defaultMessage: 'Lifecycle',
   },
-  loading: { id: 'cases.detail.loading', defaultMessage: 'Loading...' },
   noActivity: {
     id: 'cases.detail.noActivity',
     defaultMessage: 'No activity yet',
@@ -317,9 +320,9 @@ function OverviewTab({
         </div>
 
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-text mb-3">
-            {intl.formatMessage(messages.created)}
-          </h3>
+          <h2 className="text-sm font-semibold text-text mb-3">
+            {intl.formatMessage(messages.recordDetails)}
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-xs text-text-muted">
@@ -360,9 +363,9 @@ function OverviewTab({
         </Card>
 
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-text mb-3">
+          <h2 className="text-sm font-semibold text-text mb-3">
             {intl.formatMessage(messages.incidentDate)}
-          </h3>
+          </h2>
           <div className="flex flex-col gap-2 text-sm">
             <span className="text-text-muted">
               {intl.formatMessage(messages.noIncidentDate)}
@@ -371,9 +374,9 @@ function OverviewTab({
         </Card>
 
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-text mb-3">
+          <h2 className="text-sm font-semibold text-text mb-3">
             {intl.formatMessage(messages.locationTerritory)}
-          </h3>
+          </h2>
           <div className="flex flex-col gap-2 text-sm">
             <span className="text-text-muted">
               {intl.formatMessage(messages.noLocation)}
@@ -382,9 +385,9 @@ function OverviewTab({
         </Card>
 
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-text mb-3">
+          <h2 className="text-sm font-semibold text-text mb-3">
             {intl.formatMessage(messages.peopleCommunity)}
-          </h3>
+          </h2>
           <div className="flex flex-col gap-2 text-sm">
             <span className="text-text-muted">
               {intl.formatMessage(messages.noPeople)}
@@ -393,9 +396,9 @@ function OverviewTab({
         </Card>
 
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-text mb-3">
+          <h2 className="text-sm font-semibold text-text mb-3">
             {intl.formatMessage(messages.urgency)}
-          </h3>
+          </h2>
           <div className="flex flex-col gap-2 text-sm">
             <span className="text-text-muted">
               {intl.formatMessage(messages.noUrgency)}
@@ -404,9 +407,9 @@ function OverviewTab({
         </Card>
 
         <Card className="p-4">
-          <h3 className="text-sm font-semibold text-text mb-3">
+          <h2 className="text-sm font-semibold text-text mb-3">
             {intl.formatMessage(messages.lifecycle)}
-          </h3>
+          </h2>
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -489,9 +492,10 @@ function ActivityTab({ activity, isPending }: ActivityTabProps) {
 
 interface ReportStateTabProps {
   reportStates: CaseReportState[] | undefined;
+  isPending: boolean;
 }
 
-function ReportStateTab({ reportStates }: ReportStateTabProps) {
+function ReportStateTab({ reportStates, isPending }: ReportStateTabProps) {
   const intl = useIntl();
 
   return (
@@ -500,7 +504,8 @@ function ReportStateTab({ reportStates }: ReportStateTabProps) {
         <h2 className="text-lg font-semibold text-text">
           {intl.formatMessage(messages.reportState)}
         </h2>
-        {reportStates && reportStates.length > 0 ? (
+        {isPending && <Skeleton height={80} className="rounded-card" />}
+        {!isPending && reportStates && reportStates.length > 0 && (
           <div className="flex flex-col gap-3">
             {AGENCIES.map((agency) => {
               const state =
@@ -517,9 +522,9 @@ function ReportStateTab({ reportStates }: ReportStateTabProps) {
               return (
                 <Card key={agency} className="p-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-text">
+                    <h3 className="text-sm font-semibold text-text">
                       {intl.formatMessage(AGENCY_LABEL_DESCRIPTORS[agency])}
-                    </h4>
+                    </h3>
                     {state ? (
                       <Badge variant={reportBadgeVariant ?? 'low'}>
                         {intl.formatMessage(
@@ -544,7 +549,8 @@ function ReportStateTab({ reportStates }: ReportStateTabProps) {
               );
             })}
           </div>
-        ) : (
+        )}
+        {!isPending && (!reportStates || reportStates.length === 0) && (
           <span className="text-text-muted text-sm">
             {intl.formatMessage(messages.noReportState)}
           </span>
@@ -577,8 +583,7 @@ export function CaseDetailScreen() {
       topbarWorkspaceName: selectedProjectId ? topbarWorkspaceName : undefined,
       topbarModeLabel: intl.formatMessage(messages.title),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedProjectId, topbarWorkspaceName],
+    [intl, selectedProjectId, topbarWorkspaceName],
   );
   useShellSlot(shellSlot);
 
@@ -708,7 +713,10 @@ export function CaseDetailScreen() {
           isPending={activityQuery.isPending}
         />
 
-        <ReportStateTab reportStates={reportStatesQuery.data} />
+        <ReportStateTab
+          reportStates={reportStatesQuery.data}
+          isPending={reportStatesQuery.isPending}
+        />
       </Tabs>
     </div>
   );
