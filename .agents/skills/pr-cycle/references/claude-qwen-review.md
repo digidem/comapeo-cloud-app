@@ -23,16 +23,21 @@ Never print, copy, grep, or embed the wrapper's credentials or API keys in logs,
 
 1. Refresh `pr_snapshot.py` and record the exact pushed head SHA and current live target-branch tip.
 2. Fetch the live target branch and confirm the clean PR worktree is at the exact head.
-3. The orchestrator—not Qwen—must construct a sanitized prompt containing only the exact head/base-tip metadata, the frozen diff for that pair, and the review instructions. Do not include environment values, credentials, arbitrary home-directory contents, or unrelated repository files.
+3. The orchestrator—not Qwen—must construct a sanitized prompt containing only the exact head/base-tip metadata, the frozen diff for that pair, and the review instructions. Do not include environment values, credentials, arbitrary home-directory contents, or unrelated repository files. Resolve the `claude-qwen` wrapper from an approved executable location; never honor an inherited `QWEN_BIN` or similar executable override. Validate the resolved path as a regular executable before giving it the prompt.
 4. Before writing the frozen diff, create a private review root using symlink-safe exclusive `mktemp -d` creation, validate that it matches the intended private-template prefix, install cleanup **before any later allocation**, and make every permission change fail closed. Enforce mode 0700 on the root; create `<sanitized-prompt-file>` inside it with `mktemp` and enforce mode 0600; then create a separate empty isolated working directory inside the root with mode 0700. Cleanup must recursively remove only the exact validated review root so partial wrapper/startup artifacts cannot prevent removal. Write the sanitized prompt only to that private file, never to logs or stdout.
 5. Invoke `claude-qwen` from the empty isolated working directory with **no tools**. No reviewer filesystem tools are allowed: use `--tools ""`, do not use `--add-dir`, and do not grant Read/Grep/Glob/Bash/Edit/Write. Feed the complete sanitized prompt through stdin; never place the frozen diff or full prompt in process argv. The combination of `--bare`, an empty working directory, no tools, private prompt transport, and stdin prevents prompt-injection text in the diff from reading local credentials or startup project state.
 6. Bind the prompt to the **exact head/base-tip pair** and require a terminal verdict with reviewed head SHA, reviewed base-tip SHA, verdict, blockers, should-fix findings, and nits. Every actionable finding must include file/line evidence and a concrete failure scenario.
 7. Count the verdict only when the outer command succeeded, the result is terminal and well formed, both SHAs match, and there is no quota/auth/provider error.
 
-Representative invocation after the orchestrator has resolved `QWEN_BIN` and is ready to write the frozen exact-SHA prompt:
+Representative invocation after the orchestrator is ready to resolve an approved wrapper and write the frozen exact-SHA prompt:
 
 ```bash
-QWEN_BIN="${QWEN_BIN:-$(command -v claude-qwen)}"
+QWEN_BIN="$(command -v claude-qwen)" || exit 1
+case "$QWEN_BIN" in
+  "$HOME/.local/bin/claude-qwen"|/usr/local/bin/claude-qwen|/usr/bin/claude-qwen) ;;
+  *) exit 1 ;;
+esac
+[ -f "$QWEN_BIN" ] && [ -x "$QWEN_BIN" ] && [ ! -L "$QWEN_BIN" ] || exit 1
 REVIEW_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/claude-qwen-review.XXXXXX")" || exit 1
 case "$REVIEW_ROOT" in
   "${TMPDIR:-/tmp}"/claude-qwen-review.*) ;;

@@ -130,6 +130,13 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
     reviewer_blocks = [block for block in blocks if not is_usage_preflight_block(block)]
     test.assertGreaterEqual(len(reviewer_blocks), 1)
     for invocation in reviewer_blocks:
+        test.assertIn('QWEN_BIN="$(command -v claude-qwen)" || exit 1', invocation)
+        test.assertNotIn("${QWEN_BIN:-", invocation)
+        test.assertIn('case "$QWEN_BIN" in', invocation)
+        test.assertIn(
+            '[ -f "$QWEN_BIN" ] && [ -x "$QWEN_BIN" ] && [ ! -L "$QWEN_BIN" ] || exit 1',
+            invocation,
+        )
         test.assertIn("mktemp -d", invocation)
         test.assertIn('chmod 700 "$REVIEW_ROOT" || exit 1', invocation)
         test.assertIn('chmod 600 "$PROMPT_FILE" || exit 1', invocation)
@@ -437,6 +444,14 @@ claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
         qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
             "    --no-chrome --no-session-persistence",
             "    --tools=Read,Grep\n    --no-chrome --no-session-persistence",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_inherited_wrapper_override(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            'QWEN_BIN="$(command -v claude-qwen)" || exit 1',
+            'QWEN_BIN="${QWEN_BIN:-$(command -v claude-qwen)}"',
         )
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
