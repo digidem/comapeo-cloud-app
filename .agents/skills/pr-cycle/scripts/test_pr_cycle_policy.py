@@ -90,7 +90,7 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
             )
 
     exact = _section(qwen_text, "## Exact-revision review contract", "## Fallback semantics")
-    for sentence in _sentences(exact):
+    for sentence in _sentences(qwen_text):
         lower = sentence.lower()
         if re.search(r"\b(?:read|grep|glob|bash|edit|write)\b", lower) and re.search(
             r"\b(?:allow|allows|allowed|permit|permits|permitted|grant|grants|granted|enable|enables|enabled|may use|can use)\b",
@@ -108,7 +108,7 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
                     re.compile(r"\b(?:no|not|never|without|cannot|can't)\b"),
                     msg=f"Prompt transport must not be permitted through argv: {sentence}",
                 )
-    blocks = _bash_blocks(exact)
+    blocks = _bash_blocks(qwen_text)
     reviewer_blocks = [
         block for block in blocks if "claude-qwen" in block or "$QWEN_BIN" in block
     ]
@@ -126,12 +126,15 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
         test.assertLess(invocation.index("trap cleanup EXIT"), invocation.index("PROMPT_FILE="))
         test.assertNotIn("--add-dir", invocation)
         test.assertNotIn("$(cat", invocation)
-        test.assertNotRegex(invocation, r"--tools\s+(?:Read|Grep|Glob|Bash|Edit|Write)")
         test.assertNotRegex(
             invocation,
-            re.compile(r"(?m)(?:^|\s)-p\s+(?!<\s*\"\$PROMPT_FILE\")\S+"),
+            r"--tools(?:\s+|=)(?:Read|Grep|Glob|Bash|Edit|Write)",
         )
-        tool_values = re.findall(r"--tools\s+([^\s\\]+)", invocation)
+        test.assertNotRegex(
+            invocation,
+            re.compile(r"(?m)(?:^|\s)-p(?:\s+|=)(?!<\s*\"\$PROMPT_FILE\")\S+"),
+        )
+        tool_values = re.findall(r"--tools(?:\s+|=)([^\s\\]+)", invocation)
         test.assertGreaterEqual(len(tool_values), 1)
         test.assertTrue(all(value == '\"\"' for value in tool_values))
 
@@ -154,6 +157,18 @@ def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) ->
     )
     for sentence in _sentences(ordered):
         lower = sentence.lower()
+        head_only = re.search(
+            r"(?:\bhead-only\b|\bonly (?:the )?(?:reviewed )?head\b|\b(?:the )?(?:reviewed )?head alone\b|\bguard(?:ing)? only (?:the )?(?:reviewed )?head\b)",
+            lower,
+        )
+        if head_only and re.search(
+            r"\b(?:sufficient|enough|acceptable|safe)\b", lower
+        ):
+            test.assertRegex(
+                lower,
+                re.compile(r"\b(?:not|never|insufficient|unsafe|cannot|can't)\b"),
+                msg=f"Head-only protection must never be described as sufficient: {sentence}",
+            )
         if ("first parent" in lower or "first-parent" in lower) and (
             "mismatch" in lower or "differs" in lower
         ) and re.search(
@@ -383,6 +398,26 @@ claude-qwen --tools Read,Grep --add-dir ~/.config -p \"$(cat /tmp/prompt)\"
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
+    def test_qwen_security_contract_rejects_unsafe_invocation_after_fallback_heading(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            """## Fallback semantics
+
+```bash
+claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
+```""",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_equals_syntax_nonempty_tools(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "    --no-chrome --no-session-persistence",
+            "    --tools=Read,Grep\n    --no-chrome --no-session-persistence",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
     def test_qwen_security_contract_rejects_cached_codexbar_acceptance(self) -> None:
         qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
             "## Exact-revision review contract",
@@ -451,6 +486,14 @@ claude-qwen --tools Read,Grep --add-dir ~/.config -p \"$(cat /tmp/prompt)\"
         runbook_text = RUNBOOK.read_text().replace(
             "## Scoped cleanup after verified merge",
             "A head-only guard is sufficient for autonomous merging.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_only_reviewed_head_as_sufficient(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "Guarding only the reviewed head is sufficient for merging.\n\n## Scoped cleanup after verified merge",
         )
         with self.assertRaises(AssertionError):
             assert_ordered_merge_contract(self, runbook_text)
