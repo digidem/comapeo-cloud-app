@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -68,8 +74,12 @@ export function useArchiveTransportApproval(
   const confirm = useCallback(() => {
     const pending = pendingRef.current;
     if (!pending) return;
+    if (normalizedOrNull(currentBaseUrl) !== pending.normalizedUrl) {
+      settle({ kind: 'cancelled' });
+      return;
+    }
     settle({ kind: 'approved', normalizedUrl: pending.normalizedUrl });
-  }, [settle]);
+  }, [currentBaseUrl, settle]);
 
   const confirmInsecure = useCallback((normalizedUrl: string) => {
     if (pendingRef.current) {
@@ -81,7 +91,7 @@ export function useArchiveTransportApproval(
     });
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const pending = pendingRef.current;
     if (!pending) return;
     if (normalizedOrNull(currentBaseUrl) !== pending.normalizedUrl) {

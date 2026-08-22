@@ -42,6 +42,28 @@ describe('useArchiveTransportApproval', () => {
     expect(result.current.pendingUrl).toBeNull();
   });
 
+  it('does not resurrect an invalidated approval if the URL later changes back', async () => {
+    const { result, rerender } = renderHook(
+      ({ url }) => useArchiveTransportApproval(url),
+      { initialProps: { url: 'http://archive.example.com' } },
+    );
+
+    let decisionPromise!: ReturnType<typeof result.current.confirmInsecure>;
+    act(() => {
+      decisionPromise = result.current.confirmInsecure(
+        'http://archive.example.com',
+      );
+    });
+
+    rerender({ url: 'http://different.example.com' });
+    await expect(decisionPromise).resolves.toEqual({ kind: 'cancelled' });
+    rerender({ url: 'http://archive.example.com' });
+
+    expect(result.current.pendingUrl).toBeNull();
+    act(() => result.current.confirm());
+    expect(result.current.pendingUrl).toBeNull();
+  });
+
   it('treats equivalent normalization as the same URL while confirmation is open', async () => {
     const { result, rerender } = renderHook(
       ({ url }) => useArchiveTransportApproval(url),
