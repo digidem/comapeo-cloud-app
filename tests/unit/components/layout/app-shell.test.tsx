@@ -1,4 +1,4 @@
-import { render, screen, userEvent } from '@tests/mocks/test-utils';
+import { act, render, screen, userEvent } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import React from 'react';
@@ -305,27 +305,24 @@ describe('AppShell', () => {
     ).toBeInTheDocument();
   });
 
-  it('closes mobile drawer when route changes', async () => {
-    const { rerender } = render(
-      <AppShell navItems={navItems} activeNavPath="/dashboard">
+  it('closes mobile drawer on browser back/forward within the same section', async () => {
+    render(
+      <AppShell navItems={navItems} activeNavPath="/cases">
         <div>Main content</div>
       </AppShell>,
     );
 
-    // Open the drawer first
     await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
     expect(
       screen.getByRole('button', { name: /close menu/i }),
     ).toBeInTheDocument();
 
-    // Re-render with a different activeNavPath (simulates route change)
-    rerender(
-      <AppShell navItems={navItems} activeNavPath="/settings">
-        <div>Main content</div>
-      </AppShell>,
-    );
+    // Browser back/forward does not invoke the drawer's onNavigate callback, and
+    // activeNavPath remains /cases for /cases ↔ /cases/:id.
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
 
-    // Drawer should close on route change
     expect(
       screen.queryByRole('button', { name: /close menu/i }),
     ).not.toBeInTheDocument();

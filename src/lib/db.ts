@@ -272,6 +272,95 @@ export interface SavedMapPackageSource {
   read: (offset: number, length: number) => Promise<Uint8Array>;
 }
 
+/**
+ * A local Case — a bounded, investigatory grouping of observations/alerts for a
+ * single owning project. Cases are created and edited fully offline; no remote
+ * Case sync is enabled in this foundation (#268).
+ *
+ * The `remoteProjectNamespace` / `remoteProjectId` fields are *derived* from the
+ * owning project when it originates from a remote archive. They are stored
+ * alongside the Case for provenance only — they do NOT enable remote Case sync.
+ */
+export type CaseStatus = 'draft' | 'active' | 'closed';
+
+export type CaseType =
+  | 'invasion_occupation'
+  | 'territorial_encroachment'
+  | 'deforestation_logging'
+  | 'illegal_mining'
+  | 'fire'
+  | 'wildlife_exploitation'
+  | 'pollution_contamination'
+  | 'threats_violence'
+  | 'rights_violation'
+  | 'other';
+
+export interface Case {
+  localId: string; // crypto.randomUUID()
+  projectLocalId: string; // Owning project
+  title: string;
+  caseType: CaseType;
+  status: CaseStatus;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+  revision: number;
+  createdBy: string;
+  deleted: boolean;
+  /** Source scope of the owning project (e.g. 'remoteArchive'), copied at creation. Undefined for local projects. */
+  remoteProjectNamespace?: string;
+  /** Remote project id from the owning project, copied at creation. Undefined for local projects. */
+  remoteProjectId?: string;
+}
+
+/**
+ * Metadata-only activity event tied to a Case lifecycle. Activity NEVER stores
+ * Case factual content, report text, prompts, transcripts, media, or fabricated
+ * actor names. Only opaque ids, timestamps, and count/status-like metadata.
+ */
+export type CaseActivityEvent =
+  | 'created'
+  | 'status_changed'
+  | 'reopened'
+  | 'report_state_changed'
+  | 'deleted';
+
+export type CaseAgency = 'FUNAI' | 'IBAMA' | 'MPF' | 'PF';
+
+export interface CaseActivity {
+  localId: string; // crypto.randomUUID()
+  caseLocalId: string;
+  projectLocalId: string;
+  event: CaseActivityEvent;
+  /**
+   * Opaque metadata-only payload. May carry status/agency/count-like values but
+   * never Case facts, report bodies, prompts, transcripts, media, or actor names.
+   */
+  status?: CaseStatus;
+  agency?: CaseAgency;
+  count?: number;
+  createdAt: string; // ISO 8601
+}
+
+/**
+ * Independent per-agency report *state* foundation. Each Case holds one row per
+ * agency (FUNAI/IBAMA/MPF/PF). This stores ONLY status/configuration/provenance
+ * placeholders needed by future report scopes. It deliberately does NOT store
+ * report bodies, templates, AI prompts, disclosure payloads, PDFs, or provider
+ * credentials.
+ */
+export interface CaseReportState {
+  localId: string; // crypto.randomUUID() — primary key
+  caseLocalId: string;
+  projectLocalId: string;
+  agency: CaseAgency;
+  status: 'incomplete' | 'complete' | 'error';
+  /** Number of records this agency's report covers, when known. */
+  count?: number;
+  revision: number;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
 // ---------------------------------------------------------------------------
 // Database class
 // ---------------------------------------------------------------------------
@@ -290,6 +379,9 @@ class AppDatabase extends Dexie {
   maps!: EntityTable<SavedMap, 'id'>;
   mapPackages!: EntityTable<SavedMapPackage, 'mapId'>;
   mapPackageChunks!: EntityTable<SavedMapPackageChunk, 'id'>;
+  cases!: EntityTable<Case, 'localId'>;
+  caseActivity!: EntityTable<CaseActivity, 'localId'>;
+  caseReportState!: EntityTable<CaseReportState, 'localId'>;
 
   constructor() {
     super('comapeo-cloud-app');
@@ -557,6 +649,19 @@ class AppDatabase extends Dexie {
     // Existing v13 whole-package ArrayBuffer records remain readable.
     this.version(14).stores({
       mapPackageChunks: '&id, mapId, [mapId+index]',
+    });
+
+    // v15: Case data foundation for #268. Purely additive — introduces the
+    // `cases` table, metadata-only `caseActivity`, and per-agency `caseReportState`
+    // foundation. No existing table or record shape is changed, so users on
+    // any prior version upgrade cleanly. These tables are local-only: they do
+    // NOT enable remote Case sync (#275) and contain no sync/tombstone columns.
+    this.version(15).stores({
+      cases:
+        '&localId, projectLocalId, [projectLocalId+status], [projectLocalId+updatedAt]',
+      caseActivity: '&localId, caseLocalId, projectLocalId, event, createdAt',
+      caseReportState:
+        '&localId, caseLocalId, projectLocalId, agency, [caseLocalId+agency], [projectLocalId+agency]',
     });
   }
 }

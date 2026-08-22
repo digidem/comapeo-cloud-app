@@ -25,6 +25,7 @@ import { useProjectStore } from '@/stores/project-store';
 
 const messages = defineMessages({
   home: { id: 'home.title', defaultMessage: 'Home' },
+  cases: { id: 'cases.title', defaultMessage: 'Cases' },
   data: { id: 'data.title', defaultMessage: 'Data' },
   alerts: { id: 'alerts.title', defaultMessage: 'Alerts' },
   map: { id: 'map.title', defaultMessage: 'Map' },
@@ -44,6 +45,21 @@ function HomeIcon(): ReactNode {
       aria-hidden="true"
     >
       <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7A1 1 0 003 11h1v6a1 1 0 001 1h4v-4h2v4h4a1 1 0 001-1v-6h1a1 1 0 00.707-1.707l-7-7z" />
+    </svg>
+  );
+}
+
+function CasesIcon(): ReactNode {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={20}
+      height={20}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M3 4a2 2 0 012-2h8a2 2 0 012 2v2H5a1 1 0 00-1 1v1H3V4zm0 5v7a2 2 0 002 2h8a2 2 0 002-2v-2H5a1 1 0 00-1 1v1H3V9h6V6h2v3h6V9a1 1 0 00-1-1h-1V6a1 1 0 00-1-1H7a1 1 0 00-1 1v2H3z" />
     </svg>
   );
 }
@@ -188,6 +204,15 @@ function AuthenticatedLayoutInner() {
   const { topbarWorkspaceName, topbarModeLabel, topbarActions } =
     useShellOverrides();
 
+  // Match top-level nav paths: /cases/$caseId and /cases/new should mark
+  // the /cases nav item as active.
+  const activeNavPath = useMemo(() => {
+    if (pathname === '/') return '/';
+    const parts = pathname.split('/').filter(Boolean);
+    if (parts.length === 0) return '/';
+    return `/${parts[0]}`;
+  }, [pathname]);
+
   // Hydrate the active saved map for the selected project from Dexie whenever
   // the active project changes. The `cancelled` flag guards against stale
   // async: if the user switches projects before the read resolves, the
@@ -259,6 +284,11 @@ function AuthenticatedLayoutInner() {
       icon: <DataIcon />,
     },
     {
+      path: '/cases',
+      label: intl.formatMessage(messages.cases),
+      icon: <CasesIcon />,
+    },
+    {
       path: '/alerts',
       label: intl.formatMessage(messages.alerts),
       icon: <AlertsIcon />,
@@ -287,7 +317,7 @@ function AuthenticatedLayoutInner() {
         topbarModeLabel={topbarModeLabel}
         topbarActions={topbarActions}
         navItems={NAV_ITEMS}
-        activeNavPath={pathname}
+        activeNavPath={activeNavPath}
         secondaryContent={
           <div className="flex flex-col gap-4 p-4">
             <ArchiveBrowser

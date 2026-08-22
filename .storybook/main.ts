@@ -62,6 +62,11 @@ const config: StorybookConfig = {
       // Mock data-fetching hooks with fixture data
       { find: '@/hooks/useProjects', replacement: `${mocksDir}hooks.ts` },
       { find: '@/hooks/useObservations', replacement: `${mocksDir}hooks.ts` },
+      { find: '@/hooks/useCases', replacement: `${mocksDir}hooks.ts` },
+      {
+        find: '@/hooks/useStoragePersist',
+        replacement: `${mocksDir}hooks.ts`,
+      },
       { find: '@/hooks/useAlerts', replacement: `${mocksDir}hooks.ts` },
       { find: '@/hooks/useCreateAlert', replacement: `${mocksDir}hooks.ts` },
       { find: '@/hooks/useArchiveStatus', replacement: `${mocksDir}hooks.ts` },
@@ -70,6 +75,24 @@ const config: StorybookConfig = {
         replacement: `${mocksDir}hooks.ts`,
       },
       { find: '@/hooks/useRemoteArchives', replacement: `${mocksDir}hooks.ts` },
+      // Mock Case hooks with fixture data
+      { find: '@/hooks/useCase', replacement: `${mocksDir}hooks.ts` },
+      { find: '@/hooks/useCaseActivity', replacement: `${mocksDir}hooks.ts` },
+      {
+        find: '@/hooks/useCaseReportStates',
+        replacement: `${mocksDir}hooks.ts`,
+      },
+      { find: '@/hooks/useCreateCase', replacement: `${mocksDir}hooks.ts` },
+      { find: '@/hooks/useUpdateCase', replacement: `${mocksDir}hooks.ts` },
+      { find: '@/hooks/useDeleteCase', replacement: `${mocksDir}hooks.ts` },
+      {
+        find: '@/hooks/useRecordCaseActivity',
+        replacement: `${mocksDir}hooks.ts`,
+      },
+      {
+        find: '@/hooks/useUpsertCaseReportState',
+        replacement: `${mocksDir}hooks.ts`,
+      },
       // Mock API client and data layer
       { find: '@/lib/api-client', replacement: `${mocksDir}api-client.ts` },
       { find: '@/lib/data-layer', replacement: `${mocksDir}data-layer.ts` },

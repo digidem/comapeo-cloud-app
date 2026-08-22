@@ -1,8 +1,15 @@
+import Dexie from 'dexie';
+
 import { isZeroZeroCoord } from '@/lib/coords';
 import { getDb } from '@/lib/db';
 import type {
   Alert,
   Attachment,
+  Case,
+  CaseActivity,
+  CaseAgency,
+  CaseReportState,
+  CaseStatus,
   Field,
   Observation,
   Preset,
@@ -110,6 +117,9 @@ export async function deleteProject(localId: string): Promise<string[]> {
         db.maps,
         db.mapPackages,
         db.mapPackageChunks,
+        db.cases,
+        db.caseActivity,
+        db.caseReportState,
       ],
       async () => {
         const removedMaps = await db.maps
@@ -133,6 +143,24 @@ export async function deleteProject(localId: string): Promise<string[]> {
           await db.mapPackages.bulkDelete(removedMapIds);
         }
         await db.maps.where('projectLocalId').equals(localId).delete();
+
+        // Case-owned rows cascade only for this project's cases. This is a
+        // local-only cascade: no remote Case tombstones/sync (#275).
+        const caseLocalIds = await db.cases
+          .where('projectLocalId')
+          .equals(localId)
+          .primaryKeys();
+        if (caseLocalIds.length > 0) {
+          await db.caseActivity
+            .where('caseLocalId')
+            .anyOf(caseLocalIds)
+            .delete();
+          await db.caseReportState
+            .where('caseLocalId')
+            .anyOf(caseLocalIds)
+            .delete();
+        }
+        await db.cases.where('projectLocalId').equals(localId).delete();
 
         if (removedMapIdSet.size > 0) {
           const updatedAt = timestamp();
@@ -541,5 +569,395 @@ export async function getPresetByRemoteId(
       .equals([projectLocalId, remoteId])
       .filter((p) => !p.deleted)
       .first();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cases
+// ---------------------------------------------------------------------------
+
+export type { CaseStatus };
+
+export interface CreateCaseInput {
+  projectLocalId: string;
+  title: string;
+  caseType: Case['caseType'];
+  status?: CaseStatus;
+}
+
+export type CaseUpdates = {
+  title?: string;
+  caseType?: Case['caseType'];
+  status?: CaseStatus;
+};
+
+/**
+ * Create a new local Case. Requires title, caseType, projectLocalId, and a
+ * non-empty owning project. Copies the owning project's remote namespace/remoteId
+ * when available (provenance only — no remote Case sync).
+ */
+export async function createCase(input: CreateCaseInput): Promise<Case> {
+  return wrapDb(async () => {
+    const db = getDb();
+    const project = await db.projects.get(input.projectLocalId);
+    if (!project) {
+      throw new DbError(
+        'FK_VIOLATION',
+        `Project with localId "${input.projectLocalId}" does not exist`,
+      );
+    }
+
+    const now = timestamp();
+    const caseRecord: Case = {
+      localId: uuid(),
+      projectLocalId: input.projectLocalId,
+      title: input.title,
+      caseType: input.caseType,
+      status: input.status ?? 'draft',
+      createdAt: now,
+      updatedAt: now,
+      revision: 1,
+      createdBy: 'local',
+      deleted: false,
+      // Provenance: copy the owning project's remote namespace/remoteId only when
+      // the project actually has a remote identity. Local projects have no
+      // remoteId, so these fields stay undefined. These do NOT enable remote
+      // Case sync (#275).
+      remoteProjectNamespace: project.remoteId ? project.sourceType : undefined,
+      remoteProjectId: project.remoteId,
+    };
+    await db.transaction('rw', [db.cases, db.caseActivity], async () => {
+      await db.cases.add(caseRecord);
+      await db.caseActivity.add({
+        localId: uuid(),
+        caseLocalId: caseRecord.localId,
+        projectLocalId: caseRecord.projectLocalId,
+        event: 'created',
+        status: caseRecord.status,
+        createdAt: now,
+      });
+    });
+    return caseRecord;
+  });
+}
+
+/**
+ * List all (non-deleted) Cases for a project, scoped to `projectLocalId`.
+ */
+export async function getCases(projectLocalId: string): Promise<Case[]> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.cases
+      .where('[projectLocalId+updatedAt]')
+      .between(
+        [projectLocalId, Dexie.minKey],
+        [projectLocalId, Dexie.maxKey],
+        true,
+        true,
+      )
+      .reverse()
+      .filter((c) => !c.deleted)
+      .toArray();
+  });
+}
+
+/**
+ * Read a single Case by localId, scoped to its owning project. Returns
+ * `undefined` if the Case does not exist OR belongs to a different project.
+ */
+export async function getCase(
+  projectLocalId: string,
+  localId: string,
+): Promise<Case | undefined> {
+  return wrapDb(async () => {
+    const db = getDb();
+    const c = await db.cases.get(localId);
+    if (!c || c.projectLocalId !== projectLocalId || c.deleted) {
+      return undefined;
+    }
+    return c;
+  });
+}
+
+/**
+ * Update a Case, scoped to its owning project. Returns the updated Case, or
+ * `undefined` if the Case does not exist / belongs to a different project.
+ * Increments `revision` and stamps `updatedAt`.
+ *
+ * Only an explicit allowlist of user-editable foundation fields may be set:
+ * title, caseType, and status. Identity (localId), ownership (projectLocalId),
+ * provenance (createdBy, remoteProjectNamespace, remoteProjectId), and system
+ * fields (createdAt, revision, deleted) are never mutated through this API,
+ * even if a caller bypasses TypeScript.
+ */
+export async function updateCase(
+  projectLocalId: string,
+  localId: string,
+  updates: CaseUpdates,
+): Promise<Case | undefined> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.transaction('rw', [db.cases, db.caseActivity], async () => {
+      const existing = await db.cases.get(localId);
+      if (
+        !existing ||
+        existing.projectLocalId !== projectLocalId ||
+        existing.deleted
+      ) {
+        return undefined;
+      }
+      const nextRevision = existing.revision + 1;
+      // Build the patch from ONLY the allowlisted fields. Any extra properties
+      // in `updates` (e.g. via a runtime cast that bypasses TS) are silently
+      // dropped — they must never reach the database.
+      const patch: Partial<Case> = {
+        revision: nextRevision,
+        updatedAt: timestamp(),
+      };
+      // Only touch user-editable fields that were explicitly provided so
+      // partial updates never clobber existing Case data with `undefined`.
+      if (updates.title !== undefined) {
+        patch.title = updates.title;
+      }
+      if (updates.caseType !== undefined) {
+        patch.caseType = updates.caseType;
+      }
+      if (updates.status !== undefined) {
+        patch.status = updates.status;
+      }
+      await db.cases.update(localId, patch);
+
+      // Record a metadata-only activity event when the lifecycle status
+      // changes. Reopen = transitioning out of Closed back to Active/Draft.
+      if (updates.status !== undefined && updates.status !== existing.status) {
+        const isReopen =
+          existing.status === 'closed' && updates.status !== 'closed';
+        const event = isReopen ? 'reopened' : 'status_changed';
+        await db.caseActivity.add({
+          localId: uuid(),
+          caseLocalId: localId,
+          projectLocalId,
+          event,
+          status: updates.status,
+          createdAt: timestamp(),
+        });
+      }
+
+      return db.cases.get(localId);
+    });
+  });
+}
+
+/**
+ * Delete a single Case and its Case-owned rows (activity + report state),
+ * scoped to its owning project. Returns `true` if a row was deleted.
+ * This is a LOCAL-ONLY delete: it does not create tombstones, sync
+ * metadata, upload jobs, or any #275 remote-sync semantics.
+ */
+export async function deleteCase(
+  projectLocalId: string,
+  localId: string,
+): Promise<boolean> {
+  return wrapDb(async () => {
+    const db = getDb();
+    const existing = await db.cases.get(localId);
+    if (!existing || existing.projectLocalId !== projectLocalId) return false;
+    await db.transaction(
+      'rw',
+      [db.cases, db.caseActivity, db.caseReportState],
+      async () => {
+        await db.caseActivity.where('caseLocalId').equals(localId).delete();
+        await db.caseReportState.where('caseLocalId').equals(localId).delete();
+        await db.cases.delete(localId);
+      },
+    );
+    return true;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Case activity (metadata-only)
+// ---------------------------------------------------------------------------
+
+export interface CreateCaseActivityInput {
+  caseLocalId: string;
+  projectLocalId: string;
+  event: CaseActivity['event'];
+  status?: CaseStatus;
+  agency?: CaseAgency;
+  count?: number;
+}
+
+/**
+ * Record a metadata-only activity event for a Case. Activity never duplicates
+ * Case facts, report text, prompts, transcripts, media, or fabricated actor
+ * names — only opaque ids, timestamps, and status/agency/count-like metadata.
+ */
+export async function recordCaseActivity(
+  input: CreateCaseActivityInput,
+): Promise<CaseActivity> {
+  return wrapDb(async () => {
+    const db = getDb();
+    const caze = await db.cases.get(input.caseLocalId);
+    if (!caze || caze.projectLocalId !== input.projectLocalId || caze.deleted) {
+      throw new DbError(
+        'NOT_FOUND',
+        `Case with localId "${input.caseLocalId}" does not exist or does not belong to project "${input.projectLocalId}"`,
+      );
+    }
+    const activity: CaseActivity = {
+      localId: uuid(),
+      caseLocalId: input.caseLocalId,
+      projectLocalId: input.projectLocalId,
+      event: input.event,
+      status: input.status,
+      agency: input.agency,
+      count: input.count,
+      createdAt: timestamp(),
+    };
+    await db.caseActivity.add(activity);
+    return activity;
+  });
+}
+
+/**
+ * Timeline of metadata-only activity events for a Case, ordered by createdAt.
+ *
+ * Requires `projectLocalId` and enforces Case ownership: if the Case does not
+ * exist or belongs to a different project, returns an empty array.
+ */
+export async function getCaseActivity(
+  projectLocalId: string,
+  caseLocalId: string,
+): Promise<CaseActivity[]> {
+  return wrapDb(async () => {
+    const db = getDb();
+    const caze = await db.cases.get(caseLocalId);
+    if (!caze || caze.projectLocalId !== projectLocalId || caze.deleted) {
+      return [];
+    }
+    return db.caseActivity
+      .where('caseLocalId')
+      .equals(caseLocalId)
+      .filter((activity) => activity.projectLocalId === projectLocalId)
+      .sortBy('createdAt');
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Per-agency report state (independent per agency)
+// ---------------------------------------------------------------------------
+
+export interface UpsertCaseReportStateInput {
+  caseLocalId: string;
+  projectLocalId: string;
+  agency: CaseAgency;
+  status: CaseReportState['status'];
+  count?: number;
+  revision?: number;
+}
+
+/**
+ * Upsert independent per-agency report-state for a Case.
+ *
+ * Each agency (FUNAI/IBAMA/MPF/PF) has its own row. Updating one agency never
+ * mutates another. The stored shape is a status/configuration/provenance
+ * placeholder only — no report bodies, templates, AI prompts, disclosure
+ * payloads, PDFs, or provider credentials.
+ *
+ * Verifies that the Case exists and belongs to the supplied projectLocalId,
+ * rejecting mismatched or cross-project pairs.
+ */
+export async function upsertCaseReportState(
+  input: UpsertCaseReportStateInput,
+): Promise<CaseReportState> {
+  return wrapDb(async () => {
+    const db = getDb();
+    return db.transaction('rw', [db.cases, db.caseReportState], async () => {
+      const caze = await db.cases.get(input.caseLocalId);
+      if (!caze || caze.projectLocalId !== input.projectLocalId) {
+        throw new DbError(
+          'NOT_FOUND',
+          `Case with localId "${input.caseLocalId}" does not exist or does not belong to project "${input.projectLocalId}"`,
+        );
+      }
+      const now = timestamp();
+      const existing = await db.caseReportState
+        .where('[caseLocalId+agency]')
+        .equals([input.caseLocalId, input.agency])
+        .first();
+      if (existing) {
+        const nextRevision = input.revision ?? existing.revision + 1;
+        await db.caseReportState.update(existing.localId, {
+          status: input.status,
+          count: input.count ?? existing.count,
+          revision: nextRevision,
+          updatedAt: now,
+        });
+        return db.caseReportState.get(
+          existing.localId,
+        ) as Promise<CaseReportState>;
+      }
+      const state: CaseReportState = {
+        localId: uuid(),
+        caseLocalId: input.caseLocalId,
+        projectLocalId: input.projectLocalId,
+        agency: input.agency,
+        status: input.status,
+        count: input.count,
+        revision: input.revision ?? 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await db.caseReportState.add(state);
+      return state;
+    });
+  });
+}
+
+/**
+ * Read a single agency's report state for a Case.
+ *
+ * Requires `projectLocalId` and enforces Case ownership: if the Case does not
+ * exist or belongs to a different project, returns `undefined`.
+ */
+export async function getCaseReportState(
+  projectLocalId: string,
+  caseLocalId: string,
+  agency: CaseAgency,
+): Promise<CaseReportState | undefined> {
+  return wrapDb(async () => {
+    const db = getDb();
+    const caze = await db.cases.get(caseLocalId);
+    if (!caze || caze.projectLocalId !== projectLocalId) {
+      return undefined;
+    }
+    return db.caseReportState
+      .where('[caseLocalId+agency]')
+      .equals([caseLocalId, agency])
+      .first();
+  });
+}
+
+/**
+ * All per-agency report-state rows for a Case.
+ *
+ * Requires `projectLocalId` and enforces Case ownership: if the Case does not
+ * exist or belongs to a different project, returns an empty array.
+ */
+export async function getCaseReportStates(
+  projectLocalId: string,
+  caseLocalId: string,
+): Promise<CaseReportState[]> {
+  return wrapDb(async () => {
+    const db = getDb();
+    const caze = await db.cases.get(caseLocalId);
+    if (!caze || caze.projectLocalId !== projectLocalId) {
+      return [];
+    }
+    return db.caseReportState
+      .where('caseLocalId')
+      .equals(caseLocalId)
+      .toArray();
   });
 }
