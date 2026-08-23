@@ -94,7 +94,6 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
                 ),
             )
 
-    exact = _section(qwen_text, "## Exact-revision review contract", "## Fallback semantics")
     for sentence in _sentences(qwen_text):
         lower = sentence.lower()
         if re.search(r"\b(?:read|grep|glob|bash|edit|write)\b", lower) and re.search(
@@ -148,7 +147,7 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
 
     def assert_validated_qwen_alias(block: str) -> None:
         test.assertIn("aliases[claude-qwen]", block)
-        test.assertIn("alias_words=(${(z)alias_body})", block)
+        test.assertIn('alias_words=("${(@z)alias_body}")', block)
         test.assertIn("[[ ${alias_words[-1]} == claude ]] || exit 1", block)
         test.assertIn("^[A-Za-z_][A-Za-z0-9_]*=", block)
         test.assertIn("ANTHROPIC_BASE_URL=*", block)
@@ -184,6 +183,7 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
     for invocation in reviewer_blocks:
         assert_protected_zsh_bootstrap(invocation)
         assert_validated_qwen_alias(invocation)
+        test.assertIn("timeout --kill-after=15s 300s zsh -f -c", invocation)
         test.assertIn("eval", invocation)
         test.assertNotIn("QWEN_BIN", invocation)
         test.assertIn("mktemp -d", invocation)
@@ -205,6 +205,19 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
         tool_values = re.findall(r"--tools(?:\s+|=)([^\s\\]+)", invocation)
         test.assertGreaterEqual(len(tool_values), 1)
         test.assertTrue(all(value == '\"\"' for value in tool_values))
+
+
+def assert_single_merge_contract(test: unittest.TestCase, runbook_text: str) -> None:
+    single = _section(
+        runbook_text, "## Authorized squash merge", "## Ordered multi-PR merge sequences"
+    )
+    test.assertIn("server-side", single)
+    test.assertIn("atomically guards both", single)
+    test.assertIn("exact gated base tip", single)
+    test.assertIn("do not issue the merge", single)
+    test.assertIn("audit evidence, not a substitute", single)
+    test.assertNotIn("gh pr merge", single)
+    test.assertNotIn("--match-head-commit", single)
 
 
 def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) -> None:
@@ -391,6 +404,7 @@ class PrCyclePolicyTests(unittest.TestCase):
         self.assertIn("git merge-base --is-ancestor", runbook_text)
         self.assertIn("every expected workflow/check", runbook_text)
         self.assertIn("recent successful runs of the same workflow/job", timeout_text)
+        assert_single_merge_contract(self, runbook_text)
 
     def test_claude_qwen_fallback_and_usage_preflight_are_pinned(self) -> None:
         qwen_text = CLAUDE_QWEN_REVIEW.read_text()
@@ -545,6 +559,28 @@ claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
 
+    def test_qwen_security_contract_rejects_unquoted_alias_tokenization(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            'alias_words=("${(@z)alias_body}")',
+            "alias_words=(${(z)alias_body})",
+            1,
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_unbounded_full_review(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "timeout --kill-after=15s 300s zsh -f -c",
+            "zsh -f -c",
+            1,
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
     def test_qwen_security_contract_rejects_printing_secret_bearing_alias_body(self) -> None:
         qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
             "## Fallback semantics",
@@ -656,6 +692,21 @@ zsh -ic 'claude-qwen --tools=Read -p=\"$PROMPT\"'
         )
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
+
+    def test_single_merge_contract_rejects_head_only_merge_command(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Ordered multi-PR merge sequences",
+            """Use the atomic exact-head guard.
+
+```bash
+gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
+```
+
+## Ordered multi-PR merge sequences""",
+            1,
+        )
+        with self.assertRaises(AssertionError):
+            assert_single_merge_contract(self, runbook_text)
 
     def test_ordered_merge_contract_rejects_moving_tip_substitution(self) -> None:
         runbook_text = RUNBOOK.read_text().replace(

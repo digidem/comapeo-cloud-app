@@ -100,19 +100,15 @@ Immediately before an authorized merge, run the snapshot helper with both `--exp
 
 ## Authorized squash merge
 
-Use the atomic exact-head guard. If the installed GitHub tooling cannot enforce the reviewed SHA, stop instead of merging unguarded. Do not use an administrative merge override unless the user separately and explicitly authorizes bypassing repository protections:
+Before issuing any single-PR merge, require a **server-side** mechanism that **atomically guards both** the reviewed head SHA and the **exact gated base tip**, or an equivalent merge-queue/server-side proof that the merge can execute only against that reviewed pair. A head-only merge guard is insufficient. If the repository's available merge path cannot provide this two-revision guarantee, **do not issue the merge**; stop and report that a repository-specific safe merge mechanism is required. Do not use an administrative merge override unless the user separately and explicitly authorizes bypassing repository protections.
 
-```bash
-gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
-```
-
-Then verify the merge before cleanup:
+Only after such a server-side mechanism has performed the authorized merge, verify it before cleanup:
 
 ```bash
 gh pr view <pr> --repo <owner/repo> --json state,mergedAt,mergeCommit,headRefName,headRefOid,url
 ```
 
-Require `state` to be `MERGED` and record the merge commit SHA.
+Require `state` to be `MERGED` and record the merge commit SHA. For squash or merge-commit methods used by this workflow, verify the resulting commit's first parent equals the exact gated base tip. Treat first-parent equality as post-merge **audit evidence, not a substitute** for the pre-merge atomic head+base guard.
 
 ## Ordered multi-PR merge sequences
 

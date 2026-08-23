@@ -24,7 +24,7 @@ timeout --kill-after=5s 60s zsh -f -c '
   unsetopt XTRACE VERBOSE
   [[ ${+aliases[claude-qwen]} -eq 1 ]] || exit 1
   alias_body="${aliases[claude-qwen]}"
-  alias_words=(${(z)alias_body})
+  alias_words=("${(@z)alias_body}")
   (( ${#alias_words} >= 4 )) || exit 1
   [[ ${alias_words[-1]} == claude ]] || exit 1
   base_url_count=0
@@ -96,13 +96,13 @@ chmod 700 "$WORK_DIR" || exit 1
 # The orchestrator writes only the sanitized exact-SHA review prompt to $PROMPT_FILE.
 (
   cd "$WORK_DIR" || exit 1
-  zsh -f -c '
+  timeout --kill-after=15s 300s zsh -f -c '
     unsetopt XTRACE VERBOSE
     source /home/coder/.zshrc >/dev/null 2>&1
     unsetopt XTRACE VERBOSE
     [[ ${+aliases[claude-qwen]} -eq 1 ]] || exit 1
     alias_body="${aliases[claude-qwen]}"
-    alias_words=(${(z)alias_body})
+    alias_words=("${(@z)alias_body}")
     (( ${#alias_words} >= 4 )) || exit 1
     [[ ${alias_words[-1]} == claude ]] || exit 1
     base_url_count=0
@@ -144,7 +144,7 @@ chmod 700 "$WORK_DIR" || exit 1
 )
 ```
 
-Do not use `--add-dir` for this reviewer. Do not replace stdin with `-p "$(cat ...)"` or any other argv expansion of the confidential review prompt. Do not copy the alias body into a script, environment variable exported by the orchestrator, issue comment, or log. The tool-less/private-transport boundary is mandatory, not a compatibility preference: if the alias, zsh startup environment, or current Claude Code version cannot enforce `--tools ""`, stdin prompt input, and the isolated working-directory pattern (or equivalents with the same confidentiality properties), treat Qwen as unavailable for this cycle rather than removing the boundary.
+The full review is also hard-bounded: `timeout --kill-after=15s 300s` sends TERM after five minutes and forces KILL fifteen seconds later if needed. A timeout or partial result is not a verdict; treat Qwen as unavailable for this cycle and move to the next allowed reviewer path rather than extending the bound ad hoc. Do not use `--add-dir` for this reviewer. Do not replace stdin with `-p "$(cat ...)"` or any other argv expansion of the confidential review prompt. Do not copy the alias body into a script, environment variable exported by the orchestrator, issue comment, or log. The tool-less/private-transport boundary is mandatory, not a compatibility preference: if the alias, zsh startup environment, or current Claude Code version cannot enforce `--tools ""`, stdin prompt input, and the isolated working-directory pattern (or equivalents with the same confidentiality properties), treat Qwen as unavailable for this cycle rather than removing the boundary.
 
 ## Fallback semantics
 
