@@ -18,7 +18,7 @@ If CodexBar cannot prove freshness for a provider, accept `plan-check json` only
 Alias availability does **not** prove Qwen quota. If no fresh provider-specific Qwen quota telemetry is available, run at most **one bounded provider-specific liveness probe** through the alias before attempting a review. The probe prompt is intentionally non-sensitive, so it may be supplied directly:
 
 ```bash
-zsh -f -c '
+timeout 60s zsh -f -c '
   unsetopt XTRACE VERBOSE
   source /home/coder/.zshrc >/dev/null 2>&1
   unsetopt XTRACE VERBOSE

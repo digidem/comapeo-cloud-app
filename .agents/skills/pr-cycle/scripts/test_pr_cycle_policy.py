@@ -169,6 +169,7 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
     for probe in quota_probe_blocks:
         assert_protected_zsh_bootstrap(probe)
         assert_validated_qwen_alias(probe)
+        test.assertIn("timeout 60s zsh -f -c", probe)
         test.assertIn('--tools ""', probe)
         test.assertIn("--bare", probe)
         test.assertIn("eval", probe)
@@ -518,6 +519,13 @@ claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
             "source /home/coder/.zshrc",
             1,
         )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_unbounded_quota_probe(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace("timeout 60s zsh -f -c", "zsh -f -c", 1)
         self.assertNotEqual(qwen_text, original)
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
