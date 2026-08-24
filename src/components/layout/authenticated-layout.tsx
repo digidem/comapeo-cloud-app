@@ -56,10 +56,17 @@ function CasesIcon(): ReactNode {
       width={20}
       height={20}
       viewBox="0 0 20 20"
-      fill="currentColor"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      data-icon="case-file"
       aria-hidden="true"
     >
-      <path d="M3 4a2 2 0 012-2h8a2 2 0 012 2v2H5a1 1 0 00-1 1v1H3V4zm0 5v7a2 2 0 002 2h8a2 2 0 002-2v-2H5a1 1 0 00-1 1v1H3V9h6V6h2v3h6V9a1 1 0 00-1-1h-1V6a1 1 0 00-1-1H7a1 1 0 00-1 1v2H3z" />
+      <path d="M5 2.75h6l4 4v10.5H5V2.75z" />
+      <path d="M11 2.75v4h4" />
+      <path d="M7.5 10h5M7.5 13h5" />
     </svg>
   );
 }

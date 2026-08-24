@@ -143,6 +143,15 @@ describe('AuthenticatedLayout', () => {
     expect(casesLink).toHaveAttribute('aria-current', 'page');
   });
 
+  it('uses a case-file icon for Cases navigation', () => {
+    render(<AuthenticatedLayout />);
+
+    const casesLink = screen.getByRole('link', { name: 'Cases' });
+    expect(
+      casesLink.querySelector('svg[data-icon="case-file"]'),
+    ).toBeInTheDocument();
+  });
+
   it('renders CoMapeo Cloud branding in topbar', () => {
     render(<AuthenticatedLayout />);
     const label = screen.getByLabelText('CoMapeo Cloud');
