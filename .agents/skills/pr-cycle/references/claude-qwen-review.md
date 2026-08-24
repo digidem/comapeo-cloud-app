@@ -30,7 +30,7 @@ timeout --kill-after=5s 60s zsh -f -c '
   base_url_count=0
   api_url_count=0
   model_count=0
-  for word in ${alias_words[1,-2]}; do
+  for word in "${(@)alias_words[1,-2]}"; do
     [[ "$word" =~ '"'"'^[A-Za-z_][A-Za-z0-9_]*='"'"' ]] || exit 1
     case "$word" in
       ANTHROPIC_BASE_URL=*)
@@ -108,7 +108,7 @@ chmod 700 "$WORK_DIR" || exit 1
     base_url_count=0
     api_url_count=0
     model_count=0
-    for word in ${alias_words[1,-2]}; do
+    for word in "${(@)alias_words[1,-2]}"; do
       [[ "$word" =~ '"'"'^[A-Za-z_][A-Za-z0-9_]*='"'"' ]] || exit 1
       case "$word" in
         ANTHROPIC_BASE_URL=*)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import re
+import subprocess
 import unittest
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -37,7 +38,12 @@ def _active_ci_commands(ci_text: str) -> set[str]:
 
 
 def _section(text: str, start: str, end: str) -> str:
-    return text.split(start, 1)[1].split(end, 1)[0]
+    if start not in text:
+        raise AssertionError(f"missing policy section start: {start}")
+    remainder = text.split(start, 1)[1]
+    if end not in remainder:
+        raise AssertionError(f"missing policy section end: {end}")
+    return remainder.split(end, 1)[0]
 
 
 def _bash_blocks(text: str) -> list[str]:
@@ -148,6 +154,7 @@ def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> No
     def assert_validated_qwen_alias(block: str) -> None:
         test.assertIn("aliases[claude-qwen]", block)
         test.assertIn('alias_words=("${(@z)alias_body}")', block)
+        test.assertIn('for word in "${(@)alias_words[1,-2]}"; do', block)
         test.assertIn("[[ ${alias_words[-1]} == claude ]] || exit 1", block)
         test.assertIn("^[A-Za-z_][A-Za-z0-9_]*=", block)
         test.assertIn("ANTHROPIC_BASE_URL=*", block)
@@ -385,6 +392,12 @@ class PrCyclePolicyTests(unittest.TestCase):
             ci_text=CI.read_text(),
         )
 
+    def test_section_reports_missing_boundaries_as_assertions(self) -> None:
+        with self.assertRaisesRegex(AssertionError, "missing policy section start"):
+            _section("body", "## Missing", "## End")
+        with self.assertRaisesRegex(AssertionError, "missing policy section end"):
+            _section("## Start\nbody", "## Start", "## Missing")
+
     def test_runbook_soft_fail_and_cleanup_guidance_is_pinned(self) -> None:
         runbook_text = RUNBOOK.read_text()
         self.assertIn(
@@ -569,6 +582,83 @@ claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
         self.assertNotEqual(qwen_text, original)
         with self.assertRaises(AssertionError):
             assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_unquoted_alias_iteration(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            'for word in "${(@)alias_words[1,-2]}"; do',
+            "for word in ${alias_words[1,-2]}; do",
+            1,
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_alias_validator_executes_fail_closed_under_hostile_zsh_options(self) -> None:
+        validator = r'''setopt SH_WORD_SPLIT GLOB_SUBST
+alias_body=$1
+alias_words=("${(@z)alias_body}")
+(( ${#alias_words} >= 4 )) || exit 1
+[[ ${alias_words[-1]} == claude ]] || exit 1
+base_url_count=0
+api_url_count=0
+model_count=0
+for word in "${(@)alias_words[1,-2]}"; do
+  [[ "$word" =~ '^[A-Za-z_][A-Za-z0-9_]*=' ]] || exit 1
+  case "$word" in
+    ANTHROPIC_BASE_URL=*)
+      (( ++base_url_count == 1 )) || exit 1
+      value=${word#*=}
+      value=${(Q)value}
+      [[ "$value" == https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic ]] || exit 1
+      ;;
+    ANTHROPIC_API_URL=*)
+      (( ++api_url_count == 1 )) || exit 1
+      value=${word#*=}
+      value=${(Q)value}
+      [[ "$value" == https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic ]] || exit 1
+      ;;
+    ANTHROPIC_MODEL=*)
+      (( ++model_count == 1 )) || exit 1
+      value=${word#*=}
+      value=${(Q)value}
+      [[ "$value" == qwen3.8-max ]] || exit 1
+      ;;
+  esac
+done
+(( base_url_count == 1 && api_url_count == 1 && model_count == 1 )) || exit 1
+'''
+        endpoint = "https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic"
+        valid = (
+            "SAFE_EXTRA='two words * [x]' "
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' claude"
+        )
+        duplicate = (
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' claude"
+        )
+        alternate = (
+            f"ANTHROPIC_BASE_URL+='{endpoint}' "
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' claude"
+        )
+
+        def run(alias_body: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                ["zsh", "-f", "-c", validator, "validator", alias_body],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(run(valid).returncode, 0)
+        self.assertNotEqual(run(duplicate).returncode, 0)
+        self.assertNotEqual(run(alternate).returncode, 0)
 
     def test_qwen_security_contract_rejects_unbounded_full_review(self) -> None:
         original = CLAUDE_QWEN_REVIEW.read_text()
