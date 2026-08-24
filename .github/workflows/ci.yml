@@ -40,13 +40,18 @@ jobs:
           extra_args: --results=verified,unknown
 
   # -----------------------------------------------------------------------
-  # Agent skill helper tests (stdlib-only, no dependency install required)
+  # Agent skill helper tests (Python stdlib + zsh shell-contract execution)
   # -----------------------------------------------------------------------
   pr-cycle-skill-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
+
+      - name: Install zsh for shell-contract tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
 
       - name: PR cycle helper tests
         run: |

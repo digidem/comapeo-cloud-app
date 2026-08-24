@@ -377,9 +377,11 @@ def assert_policy_contract(
     test.assertIn("tracked artifacts under `screenshots/screenshot/`", agents_text)
     test.assertIn("restore incidental changes after exploratory runs", agents_text)
 
+    pr_cycle_commands = _active_ci_commands(_ci_job_block(ci_text, "pr-cycle-skill-tests"))
+    test.assertIn("sudo apt-get install -y zsh", pr_cycle_commands)
     test.assertIn(
         "python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py",
-        _active_ci_commands(_ci_job_block(ci_text, "pr-cycle-skill-tests")),
+        pr_cycle_commands,
     )
 
 
@@ -647,6 +649,27 @@ done
             f"ANTHROPIC_API_URL='{endpoint}' "
             "ANTHROPIC_MODEL='qwen3.8-max' claude"
         )
+        wrong_endpoint = (
+            "ANTHROPIC_BASE_URL='https://example.invalid' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' claude"
+        )
+        wrong_model = (
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='other-model' claude"
+        )
+        indexed = (
+            f"ANTHROPIC_BASE_URL[1]='{endpoint}' "
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' claude"
+        )
+        wrong_command = (
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' bash"
+        )
 
         def run(alias_body: str) -> subprocess.CompletedProcess[str]:
             return subprocess.run(
@@ -659,6 +682,10 @@ done
         self.assertEqual(run(valid).returncode, 0)
         self.assertNotEqual(run(duplicate).returncode, 0)
         self.assertNotEqual(run(alternate).returncode, 0)
+        self.assertNotEqual(run(wrong_endpoint).returncode, 0)
+        self.assertNotEqual(run(wrong_model).returncode, 0)
+        self.assertNotEqual(run(indexed).returncode, 0)
+        self.assertNotEqual(run(wrong_command).returncode, 0)
 
     def test_qwen_security_contract_rejects_unbounded_full_review(self) -> None:
         original = CLAUDE_QWEN_REVIEW.read_text()
