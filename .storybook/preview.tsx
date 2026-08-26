@@ -19,6 +19,15 @@ import type { Locale } from '@/stores/locale-store';
 // Import the app's global styles (Tailwind v4 + design tokens)
 import '../src/app/styles.css';
 
+// Storybook renders the application graph directly, without index.html's
+// security preflight entry. Default stories model a successfully completed
+// startup; blocked startup states are exercised explicitly in their focused
+// component/unit coverage. Publish only the same fixed non-secret enum marker
+// that production preflight would publish before rendering normal app UI.
+if (typeof document !== 'undefined') {
+  document.documentElement.dataset.comapeoSecurityStartup = 'ready';
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: false, gcTime: 0 },

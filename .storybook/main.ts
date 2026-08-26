@@ -96,6 +96,10 @@ const config: StorybookConfig = {
       // Mock API client and data layer
       { find: '@/lib/api-client', replacement: `${mocksDir}api-client.ts` },
       { find: '@/lib/data-layer', replacement: `${mocksDir}data-layer.ts` },
+      {
+        find: '@/lib/invite-bootstrap-runtime',
+        replacement: `${mocksDir}invite-bootstrap-runtime.ts`,
+      },
       { find: '@/lib/invite-url', replacement: `${mocksDir}invite-url.ts` },
       {
         find: '@/lib/geojson-export',

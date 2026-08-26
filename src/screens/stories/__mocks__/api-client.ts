@@ -21,6 +21,16 @@ export class NetworkError extends Error {
 }
 
 export const apiClient = {
+  async healthCheck(_config?: unknown): Promise<boolean> {
+    const storyId =
+      typeof window === 'undefined'
+        ? null
+        : new URLSearchParams(window.location.search).get('id');
+    if (storyId === 'screens-invite--loading') {
+      return new Promise<boolean>(() => {});
+    }
+    return true;
+  },
   async getProjects(_config?: unknown) {
     return { data: [] };
   },

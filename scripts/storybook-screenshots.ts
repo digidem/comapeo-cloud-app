@@ -169,6 +169,23 @@ async function captureViewport(
           timeout: 30_000,
         });
 
+        // Storybook's iframe can finish the document load while its preview
+        // loader is still waiting for the selected story chunk to mount. A
+        // screenshot taken in that window captures Storybook's spinner instead
+        // of the story and produces large, nondeterministic diffs. Require a
+        // mounted story root and the preparation loader to be gone first.
+        await page.waitForFunction(
+          () => {
+            const root = document.getElementById('storybook-root');
+            return (
+              document.body.classList.contains('sb-show-main') &&
+              Boolean(root?.firstElementChild)
+            );
+          },
+          undefined,
+          { timeout: 15_000 },
+        );
+
         // Wait for network to settle so async resources (map tiles, auth-img
         // fetches, MSW responses) are captured in the screenshot. Best-effort:
         // if the page never goes fully idle within 10s, proceed anyway so a

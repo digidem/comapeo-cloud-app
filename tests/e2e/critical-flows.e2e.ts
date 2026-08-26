@@ -8,6 +8,12 @@ import {
 } from './app-db';
 import { setupMockServer } from './mock-server';
 
+// This suite uses Playwright route mocks for archive/invite APIs. A controlling
+// service worker handles /api before page.route(), creating a race in mocked
+// flows. Service-worker behavior is covered separately by the production SW
+// security suite, so keep these user-flow tests deterministic.
+test.use({ serviceWorkers: 'block' });
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GEOJSON_FIXTURE = path.join(
   __dirname,

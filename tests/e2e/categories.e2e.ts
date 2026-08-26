@@ -5,25 +5,20 @@ import { presetsFixture } from '@tests/fixtures/presets';
 import { seedAppDatabase } from './app-db';
 import { setupMockServer } from './mock-server';
 
-const TEST_PROJECT_REMOTE_ID = 'test-project-id-1';
-const ARCHIVE_BASE_URL = 'http://archive.test';
-const ARCHIVE_TOKEN = 'test-bearer-token';
+// This suite uses Playwright route mocks for archive API responses. Requests
+// handled by a controlling service worker bypass page.route(), so keep SW
+// behavior isolated to the dedicated production-worker security suite.
+test.use({ serviceWorkers: 'block' });
 
-const AUTH_SEED = {
-  tier: 'remoteArchive',
-  servers: [
-    {
-      id: 'server-1',
-      label: 'Test Server',
-      baseUrl: ARCHIVE_BASE_URL,
-      token: ARCHIVE_TOKEN,
-      status: 'connected',
-    },
-  ],
-  activeServerId: 'server-1',
-  token: ARCHIVE_TOKEN,
+const TEST_PROJECT_REMOTE_ID = 'test-project-id-1';
+const ARCHIVE_BASE_URL = 'https://archive.test';
+const ARCHIVE_TOKEN = String(238_001);
+
+const SERVER_METADATA = {
+  id: 'server-1',
+  label: 'Test Server',
   baseUrl: ARCHIVE_BASE_URL,
-  isAuthenticated: true,
+  status: 'connected',
 };
 
 const PROJECT_SEED = {
@@ -34,24 +29,17 @@ const PROJECT_SEED = {
 const NOW = new Date().toISOString();
 
 function registerSeedScript(page: Page) {
-  return page.addInitScript(
-    ({ authSeed, projectSeed }) => {
-      localStorage.setItem(
-        'comapeo-auth',
-        JSON.stringify({ state: authSeed, version: 0 }),
-      );
-      localStorage.setItem(
-        'comapeo-project',
-        JSON.stringify({ state: projectSeed, version: 0 }),
-      );
-    },
-    { authSeed: AUTH_SEED, projectSeed: PROJECT_SEED },
-  );
+  return page.addInitScript((projectSeed) => {
+    localStorage.setItem(
+      'comapeo-project',
+      JSON.stringify({ state: projectSeed, version: 0 }),
+    );
+  }, PROJECT_SEED);
 }
 
 /** Seed categories fixtures after the app has created its real Dexie schema. */
-async function seedDbAndHydrate(page: Page) {
-  const server = AUTH_SEED.servers[0]!;
+async function seedDb(page: Page) {
+  const server = SERVER_METADATA;
   await seedAppDatabase(page, {
     remoteServers: [
       {
@@ -92,20 +80,49 @@ async function seedDbAndHydrate(page: Page) {
   });
 }
 
-async function setupCategoriesPage(page: Page) {
-  await setupMockServer(page);
-  await registerSeedScript(page);
-  // Load / first so Dexie creates IndexedDB stores.
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
-  // Seed IndexedDB and call hydrateServers() so the auth store picks up the seeded remoteServers.
-  await seedDbAndHydrate(page);
-  // Navigate to categories. React mounts fresh → useProjects refetches
-  // from IndexedDB (staleTime=0), useAuthStore is hydrated.
-  await page.goto('/categories', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(500);
+async function unlockSeededArchive(page: Page) {
+  // Reload after seeding so auth hydration sees the configured archive as
+  // metadata-only/locked, then reconnect through the real UI. The candidate
+  // credential enters Zustand page memory only; no test setup persists it.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('Test Server').first()).toBeVisible({
+    timeout: 10_000,
+  });
+
+  await page.getByRole('button', { name: 'Archive actions' }).first().click();
+  await page.getByRole('button', { name: 'View Details' }).click();
+  await page
+    .getByRole('button', { name: /^reconnect$/i })
+    .first()
+    .click();
+
+  const reconnectDialog = page.getByRole('dialog', {
+    name: /reconnect archive/i,
+  });
+  await reconnectDialog.getByLabel('Bearer Token').fill(ARCHIVE_TOKEN);
+  await reconnectDialog.getByRole('button', { name: /^reconnect$/i }).click();
+  await expect(reconnectDialog).toBeHidden({ timeout: 10_000 });
+}
+
+async function openCategoriesWithoutReload(page: Page) {
+  // A full navigation would intentionally discard the page-memory credential.
+  // Use the app's SPA navigation so this test exercises the unlocked session.
+  await page.getByRole('link', { name: 'Categories' }).click();
+  await page.waitForURL('**/categories');
   await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
     timeout: 10_000,
   });
+}
+
+async function setupCategoriesPage(page: Page) {
+  await setupMockServer(page);
+  await registerSeedScript(page);
+  // Load / first so Dexie creates IndexedDB stores, then seed only persisted
+  // metadata/content. Credentials are deliberately absent from the DB.
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await seedDb(page);
+  await unlockSeededArchive(page);
+  await openCategoriesWithoutReload(page);
 }
 
 // ---------------------------------------------------------------------------
@@ -166,12 +183,9 @@ test('empty state when no presets', async ({ page }) => {
   );
   await registerSeedScript(page);
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await seedDbAndHydrate(page);
-  await page.goto('/categories', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(500);
-  await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible({
-    timeout: 10_000,
-  });
+  await seedDb(page);
+  await unlockSeededArchive(page);
+  await openCategoriesWithoutReload(page);
   await expect(page.getByText('No categories found')).toBeVisible({
     timeout: 5_000,
   });
