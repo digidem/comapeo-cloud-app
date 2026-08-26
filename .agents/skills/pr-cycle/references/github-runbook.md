@@ -102,7 +102,22 @@ Immediately before an authorized merge, run the snapshot helper with both `--exp
 
 Before issuing any single-PR merge, require a **server-side** mechanism that **atomically guards both** the reviewed head SHA and the **exact gated base tip**, or an equivalent merge-queue/server-side proof that the merge can execute only against that reviewed pair. A head-only merge guard is insufficient. If the repository's available merge path cannot provide this two-revision guarantee, **do not issue the merge**; stop and report that a repository-specific safe merge mechanism is required. Do not use an administrative merge override unless the user separately and explicitly authorizes bypassing repository protections.
 
-Only after such a server-side mechanism has performed the authorized merge, verify it before cleanup:
+For this repository, the accepted non-queue mechanism is a protected target branch with **strict required status checks**, at least one required check context, and protection **enforced for administrators**. GitHub's strict status-check mode requires the PR branch to be up to date with the live base before the server permits merging; pairing that server-side base-freshness guard with `--match-head-commit` guards the reviewed head coordinate. Immediately before merge, verify the protection is still active:
+
+```bash
+gh api repos/<owner/repo>/branches/<base>/protection \
+  --jq '{strict:.required_status_checks.strict,contexts:.required_status_checks.contexts,enforce_admins:.enforce_admins.enabled}'
+```
+
+Require `strict == true`, a non-empty `contexts` array, and `enforce_admins == true`. Then, only while the final exact head/base snapshot is still current and all PR-cycle gates are satisfied, issue:
+
+```bash
+gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
+```
+
+Do not use that command if the protection preflight is missing or weaker. If the base advances after the final snapshot, strict protection must reject the merge until the PR is updated and its required checks pass again; if the head changes, `--match-head-commit` must reject it. This pair of server-side base freshness plus exact-head matching is the repository's supported two-coordinate merge guard.
+
+After the guarded merge succeeds, verify it before cleanup:
 
 ```bash
 gh pr view <pr> --repo <owner/repo> --json state,mergedAt,mergeCommit,headRefName,headRefOid,url

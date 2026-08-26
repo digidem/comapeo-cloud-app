@@ -223,8 +223,16 @@ def assert_single_merge_contract(test: unittest.TestCase, runbook_text: str) -> 
     test.assertIn("exact gated base tip", single)
     test.assertIn("do not issue the merge", single)
     test.assertIn("audit evidence, not a substitute", single)
-    test.assertNotIn("gh pr merge", single)
-    test.assertNotIn("--match-head-commit", single)
+    test.assertIn("strict required status checks", single)
+    test.assertIn(".required_status_checks.strict", single)
+    test.assertIn(".required_status_checks.contexts", single)
+    test.assertIn(".enforce_admins.enabled", single)
+    test.assertIn("a non-empty `contexts` array", single)
+    test.assertIn("Do not use that command if the protection preflight is missing or weaker", single)
+    test.assertIn("If the base advances after the final snapshot, strict protection must reject the merge", single)
+    test.assertIn("--match-head-commit <reviewed-sha>", single)
+    test.assertEqual(single.count("gh pr merge"), 1)
+    test.assertLess(single.index(".required_status_checks.strict"), single.index("gh pr merge"))
 
 
 def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) -> None:
