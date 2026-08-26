@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
 import { apiClient, redeemEncryptedInvite } from '@/lib/api-client';
+import { syncRemoteArchive } from '@/lib/data-layer';
 import { resetDb } from '@/lib/db';
 import {
   INVITE_BOOTSTRAP_MAX_LIFETIME_MS,
@@ -35,10 +36,18 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
   };
 });
 
-function encryptedCandidate(): { code: string; href: string } {
+vi.mock('@/lib/data-layer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/data-layer')>();
+  return { ...actual, syncRemoteArchive: vi.fn() };
+});
+
+function encryptedCandidate(baseUrl = 'https://archive.test'): {
+  code: string;
+  href: string;
+} {
   const opaque = ['expiry', 'fixture', '238'].join('-');
   const payload = JSON.stringify({
-    url: 'https://archive.test',
+    url: baseUrl,
     ['to' + 'ken']: opaque,
   });
   const encoded = btoa(payload)
@@ -101,5 +110,82 @@ describe('InviteScreen encrypted invite expiry', () => {
       await Promise.resolve();
     });
     expect(healthSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a pending HTTP transport approval at the original deadline', async () => {
+    vi.useFakeTimers();
+    const { code, href } = encryptedCandidate('http://archive.test');
+    storeInviteBootstrapCandidate(href);
+    vi.mocked(redeemEncryptedInvite).mockResolvedValue({
+      baseUrl: 'http://archive.test',
+      token: code,
+    });
+    const healthSpy = vi
+      .spyOn(apiClient, 'healthCheck')
+      .mockResolvedValue(true);
+
+    render(<InviteScreen />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole('heading', { name: /insecure archive connection/i }),
+    ).toBeInTheDocument();
+    expect(healthSpy).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INVITE_BOOTSTRAP_MAX_LIFETIME_MS);
+    });
+
+    expect(screen.getByText(/this invite has expired/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: /insecure archive connection/i }),
+    ).not.toBeInTheDocument();
+    expect(healthSpy).not.toHaveBeenCalled();
+  });
+
+  it('aborts pending sync and locks an adopted credential at the original deadline', async () => {
+    vi.useFakeTimers();
+    const { code, href } = encryptedCandidate();
+    storeInviteBootstrapCandidate(href);
+    vi.mocked(redeemEncryptedInvite).mockResolvedValue({
+      baseUrl: 'https://archive.test',
+      token: code,
+    });
+    vi.spyOn(apiClient, 'healthCheck').mockResolvedValue(true);
+    vi.spyOn(apiClient, 'getProjects').mockResolvedValue({ data: [] });
+
+    let syncSignal: AbortSignal | undefined;
+    vi.mocked(syncRemoteArchive).mockImplementation((_serverId, options) => {
+      syncSignal = options?.signal;
+      return new Promise(() => {});
+    });
+
+    render(<InviteScreen />);
+    // vi.waitFor drives Vitest fake timers; React state updates still need act().
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      await vi.waitFor(() => {
+        expect(syncRemoteArchive).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    expect(syncSignal?.aborted).toBe(false);
+    expect(
+      useAuthStore.getState().servers.some((server) => server.token === code),
+    ).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INVITE_BOOTSTRAP_MAX_LIFETIME_MS);
+    });
+
+    expect(syncSignal?.aborted).toBe(true);
+    expect(screen.getByText(/this invite has expired/i)).toBeInTheDocument();
+    expect(
+      useAuthStore.getState().servers.every((server) => server.token === null),
+    ).toBe(true);
   });
 });

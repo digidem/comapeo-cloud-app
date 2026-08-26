@@ -141,21 +141,19 @@ async function rollbackPersistedInviteServer(
 
   const previous = previousServers.find((server) => server.id === serverId);
   if (!previous) {
+    restoreServerToken(serverId, null);
     await removeServer(serverId);
     return;
   }
 
-  try {
-    await updateServer(serverId, {
-      status: previous.status,
-      onboardingStatus: previous.onboardingStatus,
-      errorMessage: previous.errorMessage,
-      lastSyncedAt: previous.lastSyncedAt,
-      lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
-    });
-  } finally {
-    restoreServerToken(serverId, previous.token);
-  }
+  restoreServerToken(serverId, previous.token);
+  await updateServer(serverId, {
+    status: previous.status,
+    onboardingStatus: previous.onboardingStatus,
+    errorMessage: previous.errorMessage,
+    lastSyncedAt: previous.lastSyncedAt,
+    lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
+  });
 }
 
 interface InitialInviteState {
@@ -234,6 +232,8 @@ export function InviteScreen() {
   } | null>(null);
   const [transportBaseUrl, setTransportBaseUrl] = useState('');
   const transportApproval = useArchiveTransportApproval(transportBaseUrl);
+  const confirmInsecureTransport = transportApproval.confirmInsecure;
+  const cancelTransportApproval = transportApproval.cancel;
 
   const [status, setStatus] = useState<FlowStatus>(() =>
     initialStatus(initialInviteState),
@@ -243,6 +243,11 @@ export function InviteScreen() {
   const cancelledRef = useRef(false);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inviteExpiryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const inviteSyncAbortRef = useRef<AbortController | null>(null);
+  const persistedInviteRef = useRef<{
+    serverId: string;
+    previousServers: RemoteArchiveServer[];
+  } | null>(null);
   const intlRef = useRef(intl);
   const effectGenerationRef = useRef(0);
 
@@ -251,6 +256,21 @@ export function InviteScreen() {
   useEffect(() => {
     intlRef.current = intl;
   });
+
+  const rollbackActivePersistedInvite = useCallback(async (finalize = true) => {
+    const rollback = persistedInviteRef.current;
+    if (!rollback) return;
+    try {
+      await rollbackPersistedInviteServer(
+        rollback.serverId,
+        rollback.previousServers,
+      );
+    } finally {
+      if (finalize && persistedInviteRef.current === rollback) {
+        persistedInviteRef.current = null;
+      }
+    }
+  }, []);
 
   // Build step objects for ConnectionProgress
   const stepLabels: Record<FlowStep, string> = {
@@ -316,19 +336,7 @@ export function InviteScreen() {
     setErrorMessage('');
 
     async function run(): Promise<void> {
-      let persistedInvite:
-        | { serverId: string; previousServers: RemoteArchiveServer[] }
-        | undefined;
-
-      const rollbackPersistedInvite = async () => {
-        if (!persistedInvite) return;
-        const rollback = persistedInvite;
-        persistedInvite = undefined;
-        await rollbackPersistedInviteServer(
-          rollback.serverId,
-          rollback.previousServers,
-        );
-      };
+      const rollbackPersistedInvite = rollbackActivePersistedInvite;
 
       try {
         setActiveStep('verify');
@@ -362,7 +370,7 @@ export function InviteScreen() {
 
         const transportResult = await withApprovedArchiveTransport({
           baseUrl: credential.baseUrl,
-          confirmInsecure: transportApproval.confirmInsecure,
+          confirmInsecure: confirmInsecureTransport,
           operation: async (normalizedUrl) => {
             const token = credential.token;
             setActiveStep('connect');
@@ -412,18 +420,32 @@ export function InviteScreen() {
               token,
               allowDuplicate: true,
             });
-            persistedInvite = { serverId, previousServers };
+            persistedInviteRef.current = { serverId, previousServers };
             if (cancelledRef.current) {
               await rollbackPersistedInvite();
               return false;
             }
 
             setActiveStep('sync');
-            const syncResult = await syncRemoteArchive(
-              serverId,
-              { baseUrl: normalizedUrl, token },
-              { isCancelled: () => cancelledRef.current },
-            );
+            const syncAbortController = new AbortController();
+            inviteSyncAbortRef.current = syncAbortController;
+            let syncResult:
+              Awaited<ReturnType<typeof syncRemoteArchive>> | undefined;
+            try {
+              syncResult = await syncRemoteArchive(
+                serverId,
+                {
+                  baseUrl: normalizedUrl,
+                  token,
+                  signal: syncAbortController.signal,
+                },
+                { isCancelled: () => cancelledRef.current },
+              );
+            } finally {
+              if (inviteSyncAbortRef.current === syncAbortController) {
+                inviteSyncAbortRef.current = null;
+              }
+            }
             if (cancelledRef.current) {
               await rollbackPersistedInvite();
               return false;
@@ -447,7 +469,7 @@ export function InviteScreen() {
               return false;
             }
 
-            persistedInvite = undefined;
+            persistedInviteRef.current = null;
             resolvedCredentialRef.current = null;
             inviteExpiresAtRef.current = null;
             if (inviteExpiryTimerRef.current !== undefined) {
@@ -464,6 +486,7 @@ export function InviteScreen() {
           },
         });
 
+        if (cancelledRef.current) return;
         if (
           transportResult.kind === 'cancelled' ||
           transportResult.kind === 'stale-approval'
@@ -508,7 +531,7 @@ export function InviteScreen() {
     }
 
     void run();
-  }, [navigate, transportApproval.confirmInsecure]);
+  }, [navigate, rollbackActivePersistedInvite, confirmInsecureTransport]);
 
   useEffect(() => {
     const expiresAt = inviteExpiresAtRef.current;
@@ -519,6 +542,10 @@ export function InviteScreen() {
       inviteExpiresAtRef.current = null;
       resolvedCredentialRef.current = null;
       cancelledRef.current = true;
+      inviteSyncAbortRef.current?.abort();
+      inviteSyncAbortRef.current = null;
+      cancelTransportApproval();
+      void rollbackActivePersistedInvite(false);
       inviteExpiryTimerRef.current = undefined;
       setStatus('expired');
     };
@@ -535,7 +562,7 @@ export function InviteScreen() {
         inviteExpiryTimerRef.current = undefined;
       }
     };
-  }, []);
+  }, [cancelTransportApproval, rollbackActivePersistedInvite]);
 
   useEffect(() => {
     // Reset the cancellation flag so the \"Try Again\" button (which calls
@@ -575,13 +602,17 @@ export function InviteScreen() {
         // cancel the destructive cleanup queued by StrictMode's synthetic pass.
         // eslint-disable-next-line react-hooks/exhaustive-deps
         if (cleanupGeneration !== effectGenerationRef.current) return;
+        inviteSyncAbortRef.current?.abort();
+        inviteSyncAbortRef.current = null;
+        cancelTransportApproval();
+        void rollbackActivePersistedInvite(false);
         inviteRef.current = null;
         inviteExpiresAtRef.current = null;
         resolvedCredentialRef.current = null;
         clearInviteBootstrapCandidate();
       });
     };
-  }, [runFlow]);
+  }, [cancelTransportApproval, rollbackActivePersistedInvite, runFlow]);
 
   // -----------------------------------------------------------------------
   // Render: Error states
