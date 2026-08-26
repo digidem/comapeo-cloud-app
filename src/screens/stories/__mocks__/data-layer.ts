@@ -5,6 +5,76 @@
  * cleanly; fill in if a specific story needs a non-empty data set).
  */
 
+// ---------------------------------------------------------------------------
+// Re-export Case types so screens importing them from '@/lib/data-layer'
+// resolve to the mock alias in Storybook.
+// ---------------------------------------------------------------------------
+export type Case = {
+  localId: string;
+  projectLocalId: string;
+  title: string;
+  caseType:
+    | 'invasion_occupation'
+    | 'territorial_encroachment'
+    | 'deforestation_logging'
+    | 'illegal_mining'
+    | 'fire'
+    | 'wildlife_exploitation'
+    | 'pollution_contamination'
+    | 'threats_violence'
+    | 'rights_violation'
+    | 'other';
+  status: 'draft' | 'active' | 'closed';
+  createdAt: string;
+  updatedAt: string;
+  revision: number;
+  createdBy: string;
+  deleted: boolean;
+  remoteProjectNamespace?: string;
+  remoteProjectId?: string;
+};
+
+export type CaseStatus = 'draft' | 'active' | 'closed';
+export type CaseType =
+  | 'invasion_occupation'
+  | 'territorial_encroachment'
+  | 'deforestation_logging'
+  | 'illegal_mining'
+  | 'fire'
+  | 'wildlife_exploitation'
+  | 'pollution_contamination'
+  | 'threats_violence'
+  | 'rights_violation'
+  | 'other';
+export type CaseAgency = 'FUNAI' | 'IBAMA' | 'MPF' | 'PF';
+export type CaseActivityEvent =
+  | 'created'
+  | 'status_changed'
+  | 'reopened'
+  | 'report_state_changed'
+  | 'deleted';
+export type CaseActivity = {
+  localId: string;
+  caseLocalId: string;
+  projectLocalId: string;
+  event: CaseActivityEvent;
+  status?: CaseStatus;
+  agency?: CaseAgency;
+  count?: number;
+  createdAt: string;
+};
+export type CaseReportState = {
+  localId: string;
+  caseLocalId: string;
+  projectLocalId: string;
+  agency: CaseAgency;
+  status: 'incomplete' | 'complete' | 'error';
+  count?: number;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 // `never[]` is assignable to any `T[]`, so empty arrays work as flexible
 // fixtures without needing an explicit element type.
 export async function getAttachmentsForProject(
