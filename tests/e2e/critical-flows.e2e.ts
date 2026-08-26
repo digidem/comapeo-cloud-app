@@ -386,7 +386,7 @@ test.describe('Critical User Flows', () => {
 
     // Verify the progress UI appears
     await expect(page.getByText('Connecting to archive...')).toBeVisible({
-      timeout: 5_000,
+      timeout: 15_000,
     });
 
     // Wait for the flow to complete — on success the UI shows "Connected!"

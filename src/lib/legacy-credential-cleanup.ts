@@ -137,6 +137,9 @@ export async function cleanupLegacyCredentialStorage(
   try {
     await Promise.race([cleanup, timeout]);
     if (timeoutId !== undefined) clearTimeout(timeoutId);
+    // Deliberate exception to the normal fenced storage helper: preflight must
+    // keep this module import-free and runs before the reset coordinator exists.
+    // This fixed version marker contains no user data or credential material.
     localStorage.setItem(
       CREDENTIAL_CLEANUP_MARKER_KEY,
       CREDENTIAL_CLEANUP_VERSION,

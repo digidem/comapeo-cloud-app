@@ -553,19 +553,29 @@ export function InviteScreen() {
     });
 
     return () => {
-      // Bump the generation so any microtask still pending from a
-      // previous invocation is silently dropped. Deliberate write to a
-      // stable generation counter; staleness is the point, not a hazard.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      effectGenerationRef.current++;
-      // Signal in-flight async work (inside run()) that the component
-      // is unmounting so it can short-circuit early.
+      // Bump the generation so any microtask still pending from a previous
+      // invocation is silently dropped. React StrictMode replays effects in
+      // development as setup -> cleanup -> setup while preserving component
+      // refs. The cleanup therefore must cancel work immediately but must not
+      // synchronously destroy the one-shot invite before the replayed setup can
+      // run. Defer destructive cleanup by one microtask and let the replayed
+      // setup invalidate it by advancing the generation again.
+      const cleanupGeneration = ++effectGenerationRef.current;
       cancelledRef.current = true;
-      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
-      inviteRef.current = null;
-      inviteExpiresAtRef.current = null;
-      resolvedCredentialRef.current = null;
-      clearInviteBootstrapCandidate();
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = undefined;
+      }
+      queueMicrotask(() => {
+        // Staleness is deliberate: a replayed setup advances this ref and must
+        // cancel the destructive cleanup queued by StrictMode's synthetic pass.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        if (cleanupGeneration !== effectGenerationRef.current) return;
+        inviteRef.current = null;
+        inviteExpiresAtRef.current = null;
+        resolvedCredentialRef.current = null;
+        clearInviteBootstrapCandidate();
+      });
     };
   }, [runFlow]);
 

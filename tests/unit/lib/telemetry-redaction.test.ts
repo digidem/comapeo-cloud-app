@@ -114,6 +114,29 @@ describe('telemetry redaction', () => {
     expect(serialized.length).toBeLessThan(MAX_SANITIZE_STRING_LENGTH + 3000);
   });
 
+  it('does not globally replace trivial numeric values collected from sensitive fields', () => {
+    const message = 'HTTP 200 in 10ms at 2026-08-26T01:01:00Z';
+    const result = sanitizeTelemetry({
+      message,
+      count: 0,
+      attempt: 1,
+      contexts: {
+        trace: {
+          data: {
+            coordinates: [0, 0],
+            projectId: '1',
+          },
+        },
+      },
+    });
+
+    expect(result.contexts.trace.data.coordinates).toBe(TELEMETRY_REDACTED);
+    expect(result.contexts.trace.data.projectId).toBe(TELEMETRY_REDACTED);
+    expect(result.message).toBe(message);
+    expect(result.count).toBe(0);
+    expect(result.attempt).toBe(1);
+  });
+
   it('bounds objects and arrays to at most 100 entries before a truncation marker', () => {
     const object = Object.fromEntries(
       Array.from({ length: 120 }, (_, index) => [`key-${index}`, index]),

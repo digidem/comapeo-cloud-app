@@ -33,17 +33,6 @@ async function seedMapDownloadTest(
 ): Promise<void> {
   const now = new Date().toISOString();
   await seedAppDatabase(page, {
-    remoteServers: [
-      {
-        id: 'test-server',
-        baseUrl: 'https://test.example.com',
-        token: 'test-token',
-        label: 'Test Server',
-        status: 'connected',
-        lastSyncedAt: now,
-        serverId: 'test-server',
-      },
-    ],
     projects: [
       {
         localId: map.projectLocalId,
@@ -75,31 +64,9 @@ async function seedMapDownloadTest(
     ],
   });
 
-  // Auth: set the Zustand auth store + map store so the MapScreen renders
+  // Seed only the persisted project/map selection required by MapScreen.
   await page.evaluate(
     ({ projectLocalId, mapId }) => {
-      // Auth store
-      const authSnapshot = JSON.stringify({
-        state: {
-          servers: [
-            {
-              id: 'test-server',
-              baseUrl: 'https://test.example.com',
-              token: 'test-token',
-              label: 'Test Server',
-              status: 'connected',
-              lastSyncedAt: new Date().toISOString(),
-            },
-          ],
-          activeServerId: 'test-server',
-          token: 'test-token',
-          baseUrl: 'https://test.example.com',
-          isAuthenticated: true,
-        },
-        version: 0,
-      });
-      localStorage.setItem('comapeo-auth', authSnapshot);
-
       // Project store — the MapScreen reads selectedProjectId from here
       localStorage.setItem(
         'comapeo-project',

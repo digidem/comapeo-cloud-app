@@ -5,6 +5,7 @@ export const TELEMETRY_CIRCULAR = '[Circular]' as const;
 export const MAX_SANITIZE_DEPTH = 8;
 export const MAX_SANITIZE_ENTRIES = 100;
 export const MAX_SANITIZE_STRING_LENGTH = 8192;
+const MIN_PROPAGATED_SENSITIVE_VALUE_LENGTH = 8;
 
 export const SECRET_TELEMETRY_KEYS = new Set([
   'authorization',
@@ -141,14 +142,32 @@ function collectSensitiveValues(
   if (depth > MAX_SANITIZE_DEPTH || output.size >= MAX_SANITIZE_ENTRIES) return;
   if (value === null || value === undefined) return;
 
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'bigint'
-  ) {
-    if (forceSensitive) output.add(String(value));
+  if (typeof value === 'string') {
+    const candidate = value.trim();
+    if (
+      forceSensitive &&
+      candidate.length >= MIN_PROPAGATED_SENSITIVE_VALUE_LENGTH &&
+      !/^[+-]?\d+$/.test(candidate)
+    ) {
+      output.add(candidate);
+    }
     return;
   }
+
+  if (typeof value === 'number') {
+    const candidate = String(value);
+    if (
+      forceSensitive &&
+      Number.isFinite(value) &&
+      !Number.isInteger(value) &&
+      candidate.length >= MIN_PROPAGATED_SENSITIVE_VALUE_LENGTH
+    ) {
+      output.add(candidate);
+    }
+    return;
+  }
+
+  if (typeof value === 'bigint') return;
 
   if (typeof value !== 'object') return;
   if (seen.has(value)) return;
