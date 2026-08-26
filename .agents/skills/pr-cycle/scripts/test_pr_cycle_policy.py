@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import re
+import subprocess
 import unittest
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SKILL = SKILL_DIR / "SKILL.md"
 RUNBOOK = SKILL_DIR / "references" / "github-runbook.md"
+TIMEOUT_STRATEGY = SKILL_DIR / "references" / "timeout-strategy.md"
+CLAUDE_QWEN_REVIEW = SKILL_DIR / "references" / "claude-qwen-review.md"
 AGENTS = SKILL_DIR.parents[2] / "AGENTS.md"
 CI = SKILL_DIR.parents[2] / ".github" / "workflows" / "ci.yml"
 
@@ -32,6 +35,276 @@ def _active_ci_commands(ci_text: str) -> set[str]:
         for line in ci_text.splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     }
+
+
+def _section(text: str, start: str, end: str) -> str:
+    if start not in text:
+        raise AssertionError(f"missing policy section start: {start}")
+    remainder = text.split(start, 1)[1]
+    if end not in remainder:
+        raise AssertionError(f"missing policy section end: {end}")
+    return remainder.split(end, 1)[0]
+
+
+def _bash_blocks(text: str) -> list[str]:
+    return re.findall(r"```bash\n(.*?)```", text, flags=re.DOTALL)
+
+
+def _sentences(text: str) -> list[str]:
+    return [
+        " ".join(sentence.split())
+        for sentence in re.split(r"(?<=[.!?])\s+|\n+", text)
+        if sentence.strip()
+    ]
+
+
+def _is_locally_negated(text: str, token_start: int) -> bool:
+    prefix = text[max(0, token_start - 32) : token_start]
+    return bool(
+        re.search(
+            r"(?:\bnever|\bnot|\bcannot|\bcan't|\bmust not|\bdo not)\s+$",
+            prefix,
+        )
+    )
+
+
+def assert_qwen_security_contract(test: unittest.TestCase, qwen_text: str) -> None:
+    availability = _section(
+        qwen_text, "## Availability and usage preflight", "## Exact-revision review contract"
+    )
+    test.assertIn("fresh provider query at read time", availability)
+    test.assertIn("provider-specific observation timestamp", availability)
+    test.assertGreaterEqual(availability.count("no older than 15 minutes"), 3)
+    test.assertGreaterEqual(availability.count("no more than 5 minutes in the future"), 3)
+    test.assertNotRegex(
+        availability,
+        re.compile(
+            r"cached CodexBar (?:results|data).*(?:accepted|authoritative)",
+            re.I | re.S,
+        ),
+    )
+    for sentence in _sentences(availability):
+        lower = sentence.lower()
+        if "cached" in lower and re.search(
+            r"\b(?:accept(?:ed|able)?|authoritative|current|usable)\b", lower
+        ):
+            test.assertIn(
+                "provider-specific observation timestamp",
+                lower,
+                msg=f"Cached quota may only be accepted with provider-specific freshness: {sentence}",
+            )
+            test.assertNotRegex(
+                lower,
+                re.compile(
+                    r"\b(?:without|missing|no)\b.{0,80}provider-specific observation timestamp"
+                ),
+            )
+
+    for sentence in _sentences(qwen_text):
+        lower = sentence.lower()
+        if re.search(r"\b(?:read|grep|glob|bash|edit|write)\b", lower) and re.search(
+            r"\b(?:allow|allows|allowed|permit|permits|permitted|grant|grants|granted|enable|enables|enabled|may use|can use)\b",
+            lower,
+        ):
+            test.assertRegex(
+                lower,
+                re.compile(r"\b(?:no|not|never|without|cannot|can't)\b"),
+                msg=f"Reviewer filesystem access must not be permitted: {sentence}",
+            )
+        if "prompt" in lower and ("argv" in lower or re.search(r"\s-p\b", lower)):
+            if re.search(r"\b(?:allow|allowed|permit|permitted|may|can|use|pass|place)\b", lower):
+                test.assertRegex(
+                    lower,
+                    re.compile(r"\b(?:no|not|never|without|cannot|can't)\b"),
+                    msg=f"Prompt transport must not be permitted through argv: {sentence}",
+                )
+    blocks = _bash_blocks(qwen_text)
+
+    def is_usage_preflight_block(block: str) -> bool:
+        lines = [
+            line.strip()
+            for line in block.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        allowed_commands = {
+            "codexbar usage --provider codex --source cli --json",
+            "codexbar usage --provider claude --source cli --json",
+        }
+        return bool(lines) and all(line in allowed_commands for line in lines)
+
+    def is_qwen_quota_probe_block(block: str) -> bool:
+        return "claude-qwen" in block and "Reply only QWEN_OK" in block
+
+    def assert_protected_zsh_bootstrap(block: str) -> None:
+        test.assertIn("zsh -f -c", block)
+        test.assertNotIn("zsh -ic", block)
+        test.assertIn("source /home/coder/.zshrc >/dev/null 2>&1", block)
+        first_unset = block.find("unsetopt XTRACE VERBOSE")
+        source_zshrc = block.find("source /home/coder/.zshrc >/dev/null 2>&1")
+        second_unset = block.find("unsetopt XTRACE VERBOSE", first_unset + 1)
+        alias_access = block.find("aliases[claude-qwen]")
+        test.assertGreaterEqual(first_unset, 0)
+        test.assertGreaterEqual(source_zshrc, 0)
+        test.assertGreaterEqual(second_unset, 0)
+        test.assertGreaterEqual(alias_access, 0)
+        test.assertLess(first_unset, source_zshrc)
+        test.assertLess(source_zshrc, second_unset)
+        test.assertLess(second_unset, alias_access)
+
+    def assert_validated_qwen_alias(block: str) -> None:
+        test.assertIn("aliases[claude-qwen]", block)
+        test.assertIn('alias_words=("${(@z)alias_body}")', block)
+        test.assertIn('for word in "${(@)alias_words[1,-2]}"; do', block)
+        test.assertIn("[[ ${alias_words[-1]} == claude ]] || exit 1", block)
+        test.assertIn("^[A-Za-z_][A-Za-z0-9_]*=", block)
+        test.assertIn("ANTHROPIC_BASE_URL=*", block)
+        test.assertIn("ANTHROPIC_API_URL=*", block)
+        test.assertIn("ANTHROPIC_MODEL=*", block)
+        test.assertIn("(( ++base_url_count == 1 )) || exit 1", block)
+        test.assertIn("(( ++api_url_count == 1 )) || exit 1", block)
+        test.assertIn("(( ++model_count == 1 )) || exit 1", block)
+        test.assertIn(
+            "(( base_url_count == 1 && api_url_count == 1 && model_count == 1 )) || exit 1",
+            block,
+        )
+        test.assertIn("token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic", block)
+        test.assertIn("qwen3.8-max", block)
+
+    quota_probe_blocks = [block for block in blocks if is_qwen_quota_probe_block(block)]
+    test.assertGreaterEqual(len(quota_probe_blocks), 1)
+    for probe in quota_probe_blocks:
+        assert_protected_zsh_bootstrap(probe)
+        assert_validated_qwen_alias(probe)
+        test.assertIn("timeout --kill-after=5s 60s zsh -f -c", probe)
+        test.assertIn('--tools ""', probe)
+        test.assertIn("--bare", probe)
+        test.assertIn("eval", probe)
+        test.assertNotIn("$(cat", probe)
+
+    reviewer_blocks = [
+        block
+        for block in blocks
+        if not is_usage_preflight_block(block) and not is_qwen_quota_probe_block(block)
+    ]
+    test.assertGreaterEqual(len(reviewer_blocks), 1)
+    for invocation in reviewer_blocks:
+        assert_protected_zsh_bootstrap(invocation)
+        assert_validated_qwen_alias(invocation)
+        test.assertIn("timeout --kill-after=15s 300s zsh -f -c", invocation)
+        test.assertIn("eval", invocation)
+        test.assertNotIn("QWEN_BIN", invocation)
+        test.assertIn("mktemp -d", invocation)
+        test.assertIn('chmod 700 "$REVIEW_ROOT" || exit 1', invocation)
+        test.assertIn('chmod 600 "$PROMPT_FILE" || exit 1', invocation)
+        test.assertIn('chmod 700 "$WORK_DIR" || exit 1', invocation)
+        test.assertIn('cd "$WORK_DIR"', invocation)
+        test.assertIn('--tools ""', invocation)
+        test.assertIn('< "$PROMPT_FILE"', invocation)
+        test.assertIn("trap cleanup EXIT", invocation)
+        test.assertIn('rm -rf -- "$REVIEW_ROOT"', invocation)
+        test.assertLess(invocation.index("trap cleanup EXIT"), invocation.index("PROMPT_FILE="))
+        test.assertNotIn("--add-dir", invocation)
+        test.assertNotIn("$(cat", invocation)
+        test.assertNotRegex(
+            invocation,
+            r"--tools(?:\s+|=)(?:Read|Grep|Glob|Bash|Edit|Write)",
+        )
+        tool_values = re.findall(r"--tools(?:\s+|=)([^\s\\]+)", invocation)
+        test.assertGreaterEqual(len(tool_values), 1)
+        test.assertTrue(all(value == '\"\"' for value in tool_values))
+
+
+def assert_single_merge_contract(test: unittest.TestCase, runbook_text: str) -> None:
+    single = _section(
+        runbook_text, "## Authorized squash merge", "## Ordered multi-PR merge sequences"
+    )
+    test.assertIn("server-side", single)
+    test.assertIn("atomically guards both", single)
+    test.assertIn("exact gated base tip", single)
+    test.assertIn("do not issue the merge", single)
+    test.assertIn("audit evidence, not a substitute", single)
+    test.assertIn("strict required status checks", single)
+    test.assertIn(".required_status_checks.strict", single)
+    test.assertIn(".required_status_checks.contexts", single)
+    test.assertIn(".enforce_admins.enabled", single)
+    test.assertIn("a non-empty `contexts` array", single)
+    test.assertIn("Do not use that command if the protection preflight is missing or weaker", single)
+    test.assertIn("If the base advances after the final snapshot, strict protection must reject the merge", single)
+    test.assertIn("--match-head-commit <reviewed-sha>", single)
+    test.assertEqual(single.count("gh pr merge"), 1)
+    test.assertLess(single.index(".required_status_checks.strict"), single.index("gh pr merge"))
+
+
+def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) -> None:
+    ordered = _section(runbook_text, "## Ordered multi-PR merge sequences", "## Scoped cleanup")
+    test.assertIn("Do not overlap merge commands", ordered)
+    test.assertNotRegex(
+        ordered, re.compile(r"merge (?:the )?remaining PRs concurrently", re.I)
+    )
+    test.assertIn("server-side", ordered)
+    test.assertIn("atomically guards both", ordered)
+    test.assertIn("do not issue the merge", ordered)
+    test.assertNotRegex(
+        ordered,
+        re.compile(
+            r"head-only guard\s+(?:is|remains|can be|may be)\s+(?:sufficient|enough|acceptable|safe)",
+            re.I,
+        ),
+    )
+    for sentence in _sentences(ordered):
+        lower = sentence.lower()
+        head_only = re.search(
+            r"(?:\bhead-only\b|\bhead only\b|\bonly (?:the )?(?:reviewed )?head\b|\b(?:the )?(?:reviewed )?head alone\b|\b(?:the )?(?:reviewed )?head by itself\b|\bguard(?:ing)? only (?:the )?(?:reviewed )?head\b|\blimited to (?:the )?(?:reviewed )?head\b|\b(?:guarding|protecting|checking) just (?:the )?(?:reviewed )?head\b|\bsolely (?:guarding|protecting|checking) (?:the )?(?:reviewed )?head\b)",
+            lower,
+        )
+        if head_only:
+            adequacy_matches = list(
+                re.finditer(
+                    r"\b(?:sufficient|suffices?|enough|adequate|acceptable|safe|valid|works?)\b",
+                    lower,
+                )
+            )
+            for adequacy in adequacy_matches:
+                test.assertTrue(
+                    _is_locally_negated(lower, adequacy.start()),
+                    msg=f"Head-only protection must never be affirmatively described as sufficient: {sentence}",
+                )
+        if ("first parent" in lower or "first-parent" in lower) and (
+            "mismatch" in lower or "differs" in lower
+        ):
+            continuation_matches = list(
+                re.finditer(
+                    r"\b(?:continue|proceed|advance|resume|go on|merge the next|merge next)\b",
+                    lower,
+                )
+            )
+            for continuation in continuation_matches:
+                test.assertTrue(
+                    _is_locally_negated(lower, continuation.start()),
+                    msg=f"A parent mismatch must never affirmatively authorize a subsequent merge: {sentence}",
+                )
+    test.assertIn("keep that immutable SHA as the integration subject", ordered)
+    test.assertNotRegex(
+        ordered,
+        re.compile(
+            r"replace (?:the )?(?:integration subject|exact post-sequence target SHA).*(?:new|moving|latest) tip",
+            re.I | re.S,
+        ),
+    )
+    test.assertRegex(ordered, re.compile(r"first[- ]parent", re.I))
+    test.assertIn("exact gated base tip", ordered)
+    test.assertIn("git rev-parse <exact-post-sequence-sha>^1", ordered)
+    test.assertIn("git merge-base --is-ancestor", ordered)
+    test.assertIn("--paginate", ordered)
+    test.assertIn("check-runs?per_page=100", ordered)
+    test.assertIn("statuses?per_page=100", ordered)
+    test.assertIn("actions/runs?branch=<base>&head_sha=<exact-post-sequence-sha>&per_page=100", ordered)
+    test.assertNotIn("gh run list --repo <owner/repo> --commit <exact-post-sequence-sha> --limit 100", ordered)
+    test.assertIn("branch protection/rulesets", ordered)
+    test.assertIn("applicable workflow definitions", ordered)
+    test.assertIn("complete repository-applicable set of target-branch runs/checks", ordered)
+    test.assertIn("same terminal-state and soft-fail rules as the merge-ready gate", ordered)
+    test.assertIn("pre-mask step outcome or logs", ordered)
 
 
 def assert_policy_contract(
@@ -69,6 +342,29 @@ def assert_policy_contract(
     test.assertIn("Keep the gate policy here", skill_text)
     test.assertIn("git push --no-verify origin --delete <branch>", skill_text)
     test.assertIn("Keep the safety policy here", skill_text)
+    test.assertIn("ordered merge sequence", skill_text)
+    test.assertIn("re-establish the merge gate for the next PR", skill_text)
+    test.assertIn("atomically guards both the reviewed head and the exact gated base tip", skill_text)
+    test.assertIn("do not issue the merge", skill_text)
+    test.assertIn("audit evidence, not a substitute for the pre-merge atomic base guard", skill_text)
+    test.assertIn("complete repository-applicable set of target-branch runs/checks for the exact post-sequence target SHA is the integration truth", skill_text)
+    test.assertIn("exact post-sequence target SHA", skill_text)
+    test.assertIn("git merge-base --is-ancestor", skill_text)
+    test.assertIn("every expected workflow/check", skill_text)
+    test.assertIn("do not replace that integration subject with a newer unrelated tip", skill_text)
+    test.assertIn("Apply the same terminal-state and soft-fail rules from the merge-ready gate", skill_text)
+
+    test.assertIn("live usage instrumentation", skill_text)
+    test.assertIn("no older than 15 minutes", skill_text)
+    test.assertIn("no more than 5 minutes in the future", skill_text)
+    test.assertIn("one bounded provider-specific liveness probe", skill_text)
+    test.assertIn("unavailable for this cycle without claiming quota exhaustion", skill_text)
+    test.assertIn("codexbar usage", skill_text)
+    test.assertIn("plan-check json", skill_text)
+    test.assertIn("quota-heartbeat.json", skill_text)
+    test.assertIn("claude-qwen", skill_text)
+    test.assertIn("Qwen 3.8", skill_text)
+    test.assertIn("references/claude-qwen-review.md", skill_text)
 
     test.assertIn("implementation-specific QA script", skill_text)
     test.assertIn("linked from the PR body", skill_text)
@@ -99,9 +395,11 @@ def assert_policy_contract(
     test.assertIn("`visual-regression-check`", agents_text)
     test.assertIn("`visual-regression-diff`", agents_text)
 
+    pr_cycle_commands = _active_ci_commands(_ci_job_block(ci_text, "pr-cycle-skill-tests"))
+    test.assertIn("sudo apt-get install -y zsh", pr_cycle_commands)
     test.assertIn(
         "python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py",
-        _active_ci_commands(_ci_job_block(ci_text, "pr-cycle-skill-tests")),
+        pr_cycle_commands,
     )
 
 
@@ -114,6 +412,12 @@ class PrCyclePolicyTests(unittest.TestCase):
             ci_text=CI.read_text(),
         )
 
+    def test_section_reports_missing_boundaries_as_assertions(self) -> None:
+        with self.assertRaisesRegex(AssertionError, "missing policy section start"):
+            _section("body", "## Missing", "## End")
+        with self.assertRaisesRegex(AssertionError, "missing policy section end"):
+            _section("## Start\nbody", "## Start", "## Missing")
+
     def test_runbook_soft_fail_and_cleanup_guidance_is_pinned(self) -> None:
         runbook_text = RUNBOOK.read_text()
         self.assertIn(
@@ -123,6 +427,509 @@ class PrCyclePolicyTests(unittest.TestCase):
         self.assertIn(
             "git push --no-verify origin --delete <head-branch>", runbook_text
         )
+
+    def test_ordered_merge_and_ci_wait_guidance_is_pinned(self) -> None:
+        runbook_text = RUNBOOK.read_text()
+        timeout_text = TIMEOUT_STRATEGY.read_text()
+        self.assertIn("## Ordered multi-PR merge sequences", runbook_text)
+        self.assertIn("re-gate the next PR against that exact new base tip", runbook_text)
+        self.assertIn("complete repository-applicable set of target-branch runs/checks for the exact post-sequence target SHA is the integration truth", runbook_text)
+        self.assertIn("git merge-base --is-ancestor", runbook_text)
+        self.assertIn("every expected workflow/check", runbook_text)
+        self.assertIn("recent successful runs of the same workflow/job", timeout_text)
+        assert_single_merge_contract(self, runbook_text)
+
+    def test_claude_qwen_fallback_and_usage_preflight_are_pinned(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text()
+        self.assertIn("Qwen 3.8", qwen_text)
+        self.assertIn("qwen3.8-max", qwen_text)
+        self.assertIn("zsh alias", qwen_text)
+        self.assertIn("~/.zshrc", qwen_text)
+        self.assertNotIn("QWEN_BIN", qwen_text)
+        self.assertIn("Do not use `command -v claude-qwen` as an executable-resolution test", qwen_text)
+        self.assertIn("api_error_status", qwen_text)
+        self.assertIn("429", qwen_text)
+        self.assertIn("Reply only QWEN_OK", qwen_text)
+        self.assertIn("codexbar usage", qwen_text)
+        self.assertIn("plan-check json", qwen_text)
+        self.assertIn("quota-heartbeat.json", qwen_text)
+        self.assertIn("unknown**, not exhausted", qwen_text)
+        self.assertIn("stale", qwen_text)
+        self.assertIn("exact head/base-tip pair", qwen_text)
+        self.assertIn("do not repeatedly retry", qwen_text)
+        self.assertIn("Never print, copy, grep, or embed the alias body, credentials, or API keys", qwen_text)
+        self.assertIn("No reviewer filesystem tools are allowed", qwen_text)
+        self.assertIn('--tools ""', qwen_text)
+        self.assertIn("Do not use `--add-dir`", qwen_text)
+        self.assertIn("<sanitized-prompt-file>", qwen_text)
+        self.assertIn("mode 0700", qwen_text)
+        self.assertIn("mode 0600", qwen_text)
+        self.assertIn("empty isolated working directory", qwen_text)
+        self.assertIn("through stdin", qwen_text)
+        self.assertIn("no older than 15 minutes", qwen_text)
+        self.assertIn("one bounded provider-specific liveness probe", qwen_text)
+        self.assertIn("plan-check json", qwen_text)
+        self.assertIn("parseable **provider-specific observation timestamp**", qwen_text)
+
+        assert_qwen_security_contract(self, qwen_text)
+
+    def test_ordered_merge_keeps_immutable_sequence_subject(self) -> None:
+        runbook_text = RUNBOOK.read_text()
+        ordered = runbook_text.split("## Ordered multi-PR merge sequences", 1)[1].split(
+            "## Scoped cleanup", 1
+        )[0]
+        self.assertIn("keep that immutable SHA as the integration subject", ordered)
+        self.assertIn("complete repository-applicable set of target-branch runs/checks", ordered)
+        self.assertIn("every expected workflow/check", ordered)
+        self.assertIn("git merge-base --is-ancestor", ordered)
+        self.assertIn("same terminal-state and soft-fail rules as the merge-ready gate", ordered)
+        self.assertIn("pre-mask step outcome or logs", ordered)
+        self.assertIn("Do not overlap merge commands", ordered)
+        self.assertNotRegex(ordered, re.compile(r"merge (?:the )?remaining PRs concurrently", re.I))
+        self.assertNotIn("repeat against the new live tip", ordered)
+        self.assertLess(
+            ordered.index("use the merge commit SHA returned by verification of that final merge"),
+            ordered.index("Map the paginated check-runs and statuses plus workflow runs"),
+        )
+        assert_ordered_merge_contract(self, runbook_text)
+
+    def test_usage_preflight_resolves_unknown_state_before_fallback(self) -> None:
+        skill_text = SKILL.read_text()
+        usage = next(
+            paragraph
+            for paragraph in re.split(r"\n\s*\n", skill_text)
+            if "live usage instrumentation" in paragraph
+        )
+        self.assertNotIn("fresh enough to represent this execution", usage)
+        self.assertLess(usage.index("codexbar usage"), usage.index("plan-check json"))
+        self.assertLess(usage.index("plan-check json"), usage.index("quota-heartbeat.json"))
+        self.assertLess(
+            usage.index("quota-heartbeat.json"),
+            usage.index("one bounded provider-specific liveness probe"),
+        )
+        self.assertIn("accept `plan-check json` output only when the selected provider's own usage record includes a parseable provider-specific observation timestamp", usage)
+        self.assertGreaterEqual(usage.count("no older than 15 minutes"), 2)
+        self.assertGreaterEqual(usage.count("no more than 5 minutes in the future"), 2)
+        self.assertIn("timeout, hang, or provider error", usage)
+        self.assertIn("unavailable for this cycle without claiming quota exhaustion", usage)
+
+    def test_qwen_security_contract_rejects_unsafe_second_invocation(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            """```bash
+claude-qwen --tools Read,Grep --add-dir ~/.config -p \"$(cat /tmp/prompt)\"
+```
+
+## Fallback semantics""",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_unsafe_invocation_after_fallback_heading(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            """## Fallback semantics
+
+```bash
+claude-qwen --tools=Read,Grep -p=\"$PROMPT\"
+```""",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_equals_syntax_nonempty_tools(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "    --no-chrome --no-session-persistence",
+            "    --tools=Read,Grep\n    --no-chrome --no-session-persistence",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_executable_wrapper_assumption(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace("zsh -f -c", "command -v claude-qwen", 1)
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_interactive_rc_startup(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace("zsh -f -c", "zsh -ic", 1)
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_unsuppressed_zshrc_source(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "source /home/coder/.zshrc >/dev/null 2>&1",
+            "source /home/coder/.zshrc",
+            1,
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_soft_only_quota_timeout(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "timeout --kill-after=5s 60s zsh -f -c",
+            "timeout 60s zsh -f -c",
+            1,
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_alternate_required_assignment_operator(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "^[A-Za-z_][A-Za-z0-9_]*=",
+            "^[A-Za-z_][A-Za-z0-9_]*\\+?=",
+            1,
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_unquoted_alias_tokenization(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            'alias_words=("${(@z)alias_body}")',
+            "alias_words=(${(z)alias_body})",
+            1,
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_unquoted_alias_iteration(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            'for word in "${(@)alias_words[1,-2]}"; do',
+            "for word in ${alias_words[1,-2]}; do",
+            1,
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_alias_validator_executes_fail_closed_under_hostile_zsh_options(self) -> None:
+        validator = r'''setopt SH_WORD_SPLIT GLOB_SUBST
+alias_body=$1
+alias_words=("${(@z)alias_body}")
+(( ${#alias_words} >= 4 )) || exit 1
+[[ ${alias_words[-1]} == claude ]] || exit 1
+base_url_count=0
+api_url_count=0
+model_count=0
+for word in "${(@)alias_words[1,-2]}"; do
+  [[ "$word" =~ '^[A-Za-z_][A-Za-z0-9_]*=' ]] || exit 1
+  case "$word" in
+    ANTHROPIC_BASE_URL=*)
+      (( ++base_url_count == 1 )) || exit 1
+      value=${word#*=}
+      value=${(Q)value}
+      [[ "$value" == https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic ]] || exit 1
+      ;;
+    ANTHROPIC_API_URL=*)
+      (( ++api_url_count == 1 )) || exit 1
+      value=${word#*=}
+      value=${(Q)value}
+      [[ "$value" == https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic ]] || exit 1
+      ;;
+    ANTHROPIC_MODEL=*)
+      (( ++model_count == 1 )) || exit 1
+      value=${word#*=}
+      value=${(Q)value}
+      [[ "$value" == qwen3.8-max ]] || exit 1
+      ;;
+  esac
+done
+(( base_url_count == 1 && api_url_count == 1 && model_count == 1 )) || exit 1
+'''
+        endpoint = "https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic"
+        valid = (
+            "SAFE_EXTRA='two words * [x]' "
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' claude"
+        )
+        duplicate = (
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' claude"
+        )
+        alternate = (
+            f"ANTHROPIC_BASE_URL+='{endpoint}' "
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' claude"
+        )
+        wrong_endpoint = (
+            "ANTHROPIC_BASE_URL='https://example.invalid' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' claude"
+        )
+        wrong_model = (
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='other-model' claude"
+        )
+        indexed = (
+            f"ANTHROPIC_BASE_URL[1]='{endpoint}' "
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' claude"
+        )
+        wrong_command = (
+            f"ANTHROPIC_BASE_URL='{endpoint}' "
+            f"ANTHROPIC_API_URL='{endpoint}' "
+            "ANTHROPIC_MODEL='qwen3.8-max' bash"
+        )
+
+        def run(alias_body: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                ["zsh", "-f", "-c", validator, "validator", alias_body],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(run(valid).returncode, 0)
+        self.assertNotEqual(run(duplicate).returncode, 0)
+        self.assertNotEqual(run(alternate).returncode, 0)
+        self.assertNotEqual(run(wrong_endpoint).returncode, 0)
+        self.assertNotEqual(run(wrong_model).returncode, 0)
+        self.assertNotEqual(run(indexed).returncode, 0)
+        self.assertNotEqual(run(wrong_command).returncode, 0)
+
+    def test_qwen_security_contract_rejects_unbounded_full_review(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "timeout --kill-after=15s 300s zsh -f -c",
+            "zsh -f -c",
+            1,
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_printing_secret_bearing_alias_body(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            """```bash
+zsh -ic 'alias claude-qwen'
+```
+
+## Fallback semantics""",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_unguarded_alias_reviewer_invocation(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            """## Fallback semantics
+
+```bash
+zsh -ic 'claude-qwen --tools=Read -p=\"$PROMPT\"'
+```""",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_alias_access_before_disabling_trace(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "    unsetopt XTRACE VERBOSE\n    [[ ${+aliases[claude-qwen]} -eq 1 ]] || exit 1",
+            "    [[ ${+aliases[claude-qwen]} -eq 1 ]] || exit 1",
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_expected_substrings_with_non_claude_command(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "[[ ${alias_words[-1]} == claude ]] || exit 1",
+            '[[ "$alias_body" == *"token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic"* ]] && [[ "$alias_body" == *"qwen3.8-max"* ]] && [[ "$alias_body" == *" claude"* ]] || exit 1',
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_duplicate_base_url_override_acceptance(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "(( ++base_url_count == 1 )) || exit 1",
+            "(( ++base_url_count >= 1 )) || exit 1",
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_duplicate_api_url_override_acceptance(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "(( ++api_url_count == 1 )) || exit 1",
+            "(( ++api_url_count >= 1 )) || exit 1",
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_duplicate_model_override_acceptance(self) -> None:
+        original = CLAUDE_QWEN_REVIEW.read_text()
+        qwen_text = original.replace(
+            "(( ++model_count == 1 )) || exit 1",
+            "(( ++model_count >= 1 )) || exit 1",
+        )
+        self.assertNotEqual(qwen_text, original)
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_preflight_line_with_trailing_command(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "codexbar usage --provider codex --source cli --json",
+            'codexbar usage --provider codex --source cli --json; "$REVIEWER_BIN" --tools=Read -p="$PROMPT"',
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_cached_codexbar_acceptance(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Exact-revision review contract",
+            "Cached CodexBar results are accepted as authoritative even without a fresh provider query.\n\n## Exact-revision review contract",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_cached_quota_without_provider_timestamp(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Exact-revision review contract",
+            "Cached quota without a provider-specific observation timestamp is current and usable.\n\n## Exact-revision review contract",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_prose_filesystem_permission(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            "Reviewers may use Read and Grep filesystem tools when useful.\n\n## Fallback semantics",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_qwen_security_contract_rejects_prose_argv_prompt_transport(self) -> None:
+        qwen_text = CLAUDE_QWEN_REVIEW.read_text().replace(
+            "## Fallback semantics",
+            "The full prompt may be passed with -p \"$PROMPT\" on argv.\n\n## Fallback semantics",
+        )
+        with self.assertRaises(AssertionError):
+            assert_qwen_security_contract(self, qwen_text)
+
+    def test_single_merge_contract_rejects_head_only_merge_command(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Ordered multi-PR merge sequences",
+            """Use the atomic exact-head guard.
+
+```bash
+gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
+```
+
+## Ordered multi-PR merge sequences""",
+            1,
+        )
+        with self.assertRaises(AssertionError):
+            assert_single_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_moving_tip_substitution(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "Replace the integration subject with the latest moving tip if the branch advances.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_concurrent_merges(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "Do not overlap merge commands",
+            "Merge the remaining PRs concurrently",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_continue_after_parent_mismatch(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "If the first parent differs from the gated base, continue the sequence anyway.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_proceed_after_parent_mismatch(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "If the first parent mismatches the gated base, proceed to the next PR.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_unrelated_stop_negation_before_continue(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "If the first parent mismatches the gated base, do not stop; continue to the next merge.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_head_only_guard_as_sufficient(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "A head-only guard is sufficient for autonomous merging.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_unrelated_negation_after_sufficient(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "A head-only guard is sufficient, not optional.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_only_reviewed_head_as_sufficient(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "Guarding only the reviewed head is sufficient for merging.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_head_limited_guard_as_adequate(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "A merge guard limited to the head is adequate for autonomous merging.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_rejects_just_head_as_sufficing(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "## Scoped cleanup after verified merge",
+            "Protecting just the head suffices for merging.\n\n## Scoped cleanup after verified merge",
+        )
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
+
+    def test_ordered_merge_contract_requires_external_checks_and_base_parent(self) -> None:
+        runbook_text = RUNBOOK.read_text().replace(
+            "git rev-parse <exact-post-sequence-sha>^1",
+            "git rev-parse <exact-post-sequence-sha>",
+        ).replace("check-runs?per_page=100", "actions-only-runs")
+        with self.assertRaises(AssertionError):
+            assert_ordered_merge_contract(self, runbook_text)
 
     def test_nit_improvement_policy_is_required(self) -> None:
         skill_text = SKILL.read_text().replace(
