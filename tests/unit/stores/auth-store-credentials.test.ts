@@ -100,6 +100,26 @@ describe('runtime-only archive credentials', () => {
     expect(selectActiveToken(useAuthStore.getState())).toBe('runtime-one');
   });
 
+  it('drops an unlocked runtime credential when persisted metadata changes the server URL for the same id', async () => {
+    const id = await useAuthStore.getState().addServer({
+      label: 'Archive',
+      baseUrl: 'https://archive.example.com',
+      token: 'runtime-one',
+    });
+    useAuthStore.getState().setActiveServer(id);
+
+    await getDb().remoteServers.update(id, {
+      baseUrl: 'https://replacement.example.com',
+    });
+    await useAuthStore.getState().hydrateServers();
+
+    const state = useAuthStore.getState();
+    expect(state.servers[0]?.baseUrl).toBe('https://replacement.example.com');
+    expect(state.servers[0]?.token).toBeNull();
+    expect(selectActiveToken(state)).toBeNull();
+    expect(state.isAuthenticated).toBe(false);
+  });
+
   it('preserves runtime state and keeps hydration incomplete when metadata read fails', async () => {
     useAuthStore.setState({
       servers: [

@@ -293,13 +293,15 @@ export function InviteScreen() {
   // Run the connection flow
   const runFlow = useCallback(() => {
     const expiresAt = inviteExpiresAtRef.current;
-    if (
-      !resolvedCredentialRef.current &&
-      expiresAt !== null &&
-      Date.now() >= expiresAt
-    ) {
+    if (expiresAt !== null && Date.now() >= expiresAt) {
       inviteRef.current = null;
       inviteExpiresAtRef.current = null;
+      resolvedCredentialRef.current = null;
+      cancelledRef.current = true;
+      if (inviteExpiryTimerRef.current !== undefined) {
+        clearTimeout(inviteExpiryTimerRef.current);
+        inviteExpiryTimerRef.current = undefined;
+      }
       setStatus('expired');
       return;
     }
@@ -353,11 +355,6 @@ export function InviteScreen() {
 
           resolvedCredentialRef.current = credential;
           inviteRef.current = null;
-          inviteExpiresAtRef.current = null;
-          if (inviteExpiryTimerRef.current !== undefined) {
-            clearTimeout(inviteExpiryTimerRef.current);
-            inviteExpiryTimerRef.current = undefined;
-          }
         }
 
         if (cancelledRef.current || !credential) return;
@@ -452,6 +449,11 @@ export function InviteScreen() {
 
             persistedInvite = undefined;
             resolvedCredentialRef.current = null;
+            inviteExpiresAtRef.current = null;
+            if (inviteExpiryTimerRef.current !== undefined) {
+              clearTimeout(inviteExpiryTimerRef.current);
+              inviteExpiryTimerRef.current = undefined;
+            }
             setActiveStep('prepare');
             if (cancelledRef.current) return false;
             setStatus('connected');
@@ -515,6 +517,8 @@ export function InviteScreen() {
     const expire = () => {
       inviteRef.current = null;
       inviteExpiresAtRef.current = null;
+      resolvedCredentialRef.current = null;
+      cancelledRef.current = true;
       inviteExpiryTimerRef.current = undefined;
       setStatus('expired');
     };

@@ -396,32 +396,42 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     try {
       const records = await getRemoteServers();
       const currentState = get();
-      const runtimeTokens = new Map(
-        currentState.servers.map((server) => [server.id, server.token]),
+      const runtimeServers = new Map(
+        currentState.servers.map((server) => [server.id, server]),
       );
-      const servers: RemoteArchiveServer[] = records.map((record) => ({
-        id: record.id,
-        label: record.label ?? record.baseUrl,
-        baseUrl: record.baseUrl,
-        token: runtimeTokens.get(record.id) ?? null,
-        status: ([
-          'idle',
-          'pending',
-          'syncing',
-          'connected',
-          'partial',
-          'offline',
-          'error',
-          'cancelled',
-        ].includes(record.status)
-          ? record.status
-          : 'idle') as RemoteArchiveServer['status'],
-        lastSyncedAt: record.lastSyncedAt || undefined,
-        lastSuccessfulSyncAt: record.lastSuccessfulSyncAt || undefined,
-        onboardingStatus: record.onboardingStatus as
-          ArchiveLifecycleStatus | undefined,
-        errorMessage: record.errorMessage,
-      }));
+      const servers: RemoteArchiveServer[] = records.map((record) => {
+        const runtimeServer = runtimeServers.get(record.id);
+        const runtimeToken =
+          runtimeServer &&
+          normalizeForIdentity(runtimeServer.baseUrl) ===
+            normalizeForIdentity(record.baseUrl)
+            ? runtimeServer.token
+            : null;
+
+        return {
+          id: record.id,
+          label: record.label ?? record.baseUrl,
+          baseUrl: record.baseUrl,
+          token: runtimeToken,
+          status: ([
+            'idle',
+            'pending',
+            'syncing',
+            'connected',
+            'partial',
+            'offline',
+            'error',
+            'cancelled',
+          ].includes(record.status)
+            ? record.status
+            : 'idle') as RemoteArchiveServer['status'],
+          lastSyncedAt: record.lastSyncedAt || undefined,
+          lastSuccessfulSyncAt: record.lastSuccessfulSyncAt || undefined,
+          onboardingStatus: record.onboardingStatus as
+            ArchiveLifecycleStatus | undefined,
+          errorMessage: record.errorMessage,
+        };
+      });
 
       const currentActiveId = currentState.activeServerId;
       const savedActiveId = localStorage.getItem(ACTIVE_SERVER_STORAGE_KEY);
