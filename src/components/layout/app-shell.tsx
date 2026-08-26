@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ContextualSubnav } from '@/components/layout/contextual-subnav';
 import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer';
@@ -64,16 +64,17 @@ function AppShell({
   children,
 }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const prevNavPathRef = useRef(activeNavPath);
   const isMapRoute = activeNavPath === '/map';
 
-  // Close drawer on route change (handles browser back/forward)
+  // Drawer navigation already closes through `onNavigate`. Browser history
+  // navigation does not invoke that callback, so close explicitly on popstate,
+  // including intra-section back/forward such as /cases ↔ /cases/:id.
   useEffect(() => {
-    if (prevNavPathRef.current !== activeNavPath) {
-      setMobileMenuOpen(false);
-      prevNavPathRef.current = activeNavPath;
-    }
-  }, [activeNavPath]);
+    const closeOnHistoryNavigation = () => setMobileMenuOpen(false);
+    window.addEventListener('popstate', closeOnHistoryNavigation);
+    return () =>
+      window.removeEventListener('popstate', closeOnHistoryNavigation);
+  }, []);
 
   return (
     <div className="flex h-dvh flex-col">

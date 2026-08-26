@@ -17,6 +17,9 @@ export const APP_DB_TABLES = [
   'maps',
   'mapPackages',
   'mapPackageChunks',
+  'cases',
+  'caseActivity',
+  'caseReportState',
 ] as const;
 
 export type AppDbTableName = (typeof APP_DB_TABLES)[number];

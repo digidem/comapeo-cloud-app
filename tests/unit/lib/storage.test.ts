@@ -139,6 +139,35 @@ describe('getStorageStats', () => {
       dirtyLocal: false,
       deleted: false,
     });
+    await db.cases.add({
+      localId: 'case-1',
+      projectLocalId: 'proj-1',
+      title: 'Case One',
+      caseType: 'other',
+      status: 'draft',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      revision: 1,
+      createdBy: 'local',
+      deleted: false,
+    });
+    await db.caseActivity.add({
+      localId: 'activity-1',
+      caseLocalId: 'case-1',
+      projectLocalId: 'proj-1',
+      event: 'created',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    await db.caseReportState.add({
+      localId: 'report-state-1',
+      caseLocalId: 'case-1',
+      projectLocalId: 'proj-1',
+      agency: 'FUNAI',
+      status: 'incomplete',
+      revision: 1,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    });
 
     const stats = await getStorageStats();
     expect(stats.tables.projects.count).toBe(2);
@@ -148,6 +177,9 @@ describe('getStorageStats', () => {
     expect(stats.tables.presets.count).toBe(0);
     expect(stats.tables.tracks.count).toBe(1);
     expect(stats.tables.fields.count).toBe(1);
+    expect(stats.tables.cases.count).toBe(1);
+    expect(stats.tables.caseActivity.count).toBe(1);
+    expect(stats.tables.caseReportState.count).toBe(1);
     expect(stats.tables.remoteServers.count).toBe(0);
     expect(stats.tables.syncMetadata.count).toBe(0);
   });

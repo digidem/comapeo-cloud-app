@@ -293,6 +293,222 @@
   "audioPlayer.play": {
     "defaultMessage": "Play"
   },
+  "cases.activity.created": {
+    "defaultMessage": "Created"
+  },
+  "cases.activity.deleted": {
+    "defaultMessage": "Deleted"
+  },
+  "cases.activity.reopened": {
+    "defaultMessage": "Reopened"
+  },
+  "cases.activity.report_state_changed": {
+    "defaultMessage": "Report State Changed"
+  },
+  "cases.activity.status_changed": {
+    "defaultMessage": "Status Changed"
+  },
+  "cases.agency.FUNAI": {
+    "defaultMessage": "FUNAI"
+  },
+  "cases.agency.IBAMA": {
+    "defaultMessage": "IBAMA"
+  },
+  "cases.agency.MPF": {
+    "defaultMessage": "MPF"
+  },
+  "cases.agency.PF": {
+    "defaultMessage": "PF"
+  },
+  "cases.casesError": {
+    "defaultMessage": "Failed to load cases. Please try again."
+  },
+  "cases.createTitle": {
+    "defaultMessage": "Create Case"
+  },
+  "cases.detail.activity": {
+    "defaultMessage": "Activity"
+  },
+  "cases.detail.changeStatus": {
+    "defaultMessage": "Change Status"
+  },
+  "cases.detail.created": {
+    "defaultMessage": "Created"
+  },
+  "cases.detail.currentStatus": {
+    "defaultMessage": "Current:"
+  },
+  "cases.detail.errorLoading": {
+    "defaultMessage": "Failed to load case"
+  },
+  "cases.detail.incidentDate": {
+    "defaultMessage": "Incident Date"
+  },
+  "cases.detail.lifecycle": {
+    "defaultMessage": "Lifecycle"
+  },
+  "cases.detail.locationTerritory": {
+    "defaultMessage": "Location & Territory"
+  },
+  "cases.detail.noActivity": {
+    "defaultMessage": "No activity yet"
+  },
+  "cases.detail.noIncidentDate": {
+    "defaultMessage": "Not specified"
+  },
+  "cases.detail.noLocation": {
+    "defaultMessage": "No location specified"
+  },
+  "cases.detail.noPeople": {
+    "defaultMessage": "No people/community info specified"
+  },
+  "cases.detail.noReportState": {
+    "defaultMessage": "No report state recorded yet"
+  },
+  "cases.detail.noUrgency": {
+    "defaultMessage": "No urgency info specified"
+  },
+  "cases.detail.notFound": {
+    "defaultMessage": "Case not found"
+  },
+  "cases.detail.overview": {
+    "defaultMessage": "Overview"
+  },
+  "cases.detail.peopleCommunity": {
+    "defaultMessage": "People & Community"
+  },
+  "cases.detail.recordDetails": {
+    "defaultMessage": "Record details"
+  },
+  "cases.detail.reportState": {
+    "defaultMessage": "Report State"
+  },
+  "cases.detail.revision": {
+    "defaultMessage": "Revision {revision}"
+  },
+  "cases.detail.title": {
+    "defaultMessage": "Case"
+  },
+  "cases.detail.updatedAt": {
+    "defaultMessage": "Last updated"
+  },
+  "cases.detail.urgency": {
+    "defaultMessage": "Urgency"
+  },
+  "cases.evidenceCountEmpty": {
+    "defaultMessage": "0 evidence"
+  },
+  "cases.form.create": {
+    "defaultMessage": "Create Case"
+  },
+  "cases.form.creationError": {
+    "defaultMessage": "Could not create the case. Try again."
+  },
+  "cases.form.noProject": {
+    "defaultMessage": "Select a project first"
+  },
+  "cases.form.primaryType": {
+    "defaultMessage": "Primary Type"
+  },
+  "cases.form.selectType": {
+    "defaultMessage": "Select a type"
+  },
+  "cases.form.title": {
+    "defaultMessage": "Title"
+  },
+  "cases.form.titleError": {
+    "defaultMessage": "Title is required"
+  },
+  "cases.form.titlePlaceholder": {
+    "defaultMessage": "Enter a descriptive title"
+  },
+  "cases.form.typeError": {
+    "defaultMessage": "Primary type is required"
+  },
+  "cases.loading": {
+    "defaultMessage": "Loading..."
+  },
+  "cases.newCase": {
+    "defaultMessage": "New Case"
+  },
+  "cases.noCases": {
+    "defaultMessage": "No cases yet"
+  },
+  "cases.noProject": {
+    "defaultMessage": "Select a project from Home to view cases"
+  },
+  "cases.noProjectLink": {
+    "defaultMessage": "Go to Home"
+  },
+  "cases.reportState.complete": {
+    "defaultMessage": "Complete"
+  },
+  "cases.reportState.error": {
+    "defaultMessage": "Error"
+  },
+  "cases.reportState.incomplete": {
+    "defaultMessage": "Incomplete"
+  },
+  "cases.reportState.pending": {
+    "defaultMessage": "Pending"
+  },
+  "cases.revision": {
+    "defaultMessage": "Revision {revision}"
+  },
+  "cases.status.active": {
+    "defaultMessage": "Active"
+  },
+  "cases.status.closed": {
+    "defaultMessage": "Closed"
+  },
+  "cases.status.draft": {
+    "defaultMessage": "Draft"
+  },
+  "cases.storageQuotaRiskWarning": {
+    "defaultMessage": "Your device is running low on storage. Cases may be lost if space is not freed."
+  },
+  "cases.storageRiskWarning": {
+    "defaultMessage": "Local storage is not protected from eviction. Your Cases may be removed when disk space is low."
+  },
+  "cases.title": {
+    "defaultMessage": "Cases"
+  },
+  "cases.type.deforestation_logging": {
+    "defaultMessage": "Deforestation / illegal logging"
+  },
+  "cases.type.fire": {
+    "defaultMessage": "Fire"
+  },
+  "cases.type.illegal_mining": {
+    "defaultMessage": "Illegal mining"
+  },
+  "cases.type.invasion_occupation": {
+    "defaultMessage": "Invasion / illegal occupation"
+  },
+  "cases.type.other": {
+    "defaultMessage": "Other"
+  },
+  "cases.type.pollution_contamination": {
+    "defaultMessage": "Pollution / contamination"
+  },
+  "cases.type.rights_violation": {
+    "defaultMessage": "Other violation of Indigenous or territorial rights"
+  },
+  "cases.type.territorial_encroachment": {
+    "defaultMessage": "Territorial encroachment or infrastructure impact"
+  },
+  "cases.type.threats_violence": {
+    "defaultMessage": "Threats / intimidation / violence"
+  },
+  "cases.type.wildlife_exploitation": {
+    "defaultMessage": "Illegal hunting / fishing / wildlife exploitation"
+  },
+  "cases.untitledProject": {
+    "defaultMessage": "Untitled Project"
+  },
+  "cases.updatedAt": {
+    "defaultMessage": "Updated"
+  },
   "categories.detail.backToCategories": {
     "defaultMessage": "Categories"
   },
