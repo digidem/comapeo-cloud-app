@@ -384,20 +384,12 @@ test.describe('Critical User Flows', () => {
     await page.goto(`/invite?code=${encodeURIComponent(code)}`);
     await page.waitForLoadState('domcontentloaded');
 
-    // Verify the progress UI appears
-    await expect(page.getByText('Connecting to archive...')).toBeVisible({
+    // Verify the durable end state rather than transient progress copy. The
+    // loading/success presentation is covered by component tests; this E2E owns
+    // the end-to-end redemption -> sync -> configured archive result.
+    await page.waitForURL('/', { timeout: 30_000 });
+    await expect(page.getByTestId('archive-toggle').first()).toBeVisible({
       timeout: 15_000,
     });
-
-    // Wait for the flow to complete — on success the UI shows "Connected!"
-    // and "Redirecting..." before navigating to home.
-    await expect(page.getByRole('heading', { name: 'Connected!' })).toBeVisible(
-      {
-        timeout: 15_000,
-      },
-    );
-
-    // Verify we end up on the home page after the redirect
-    await page.waitForURL('/', { timeout: 10_000 });
   });
 });
