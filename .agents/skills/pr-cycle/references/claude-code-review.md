@@ -105,6 +105,12 @@ claude --safe-mode -p \
 
 If the shell is interrupted, resume the same persisted session by UUID instead of restarting the review from scratch. Keep the prompt/diff bounded. `--bare` is acceptable only when `ANTHROPIC_API_KEY` or an explicit `apiKeyHelper` is intentionally configured.
 
+## Exact-model alternate-provider fallback
+
+If the user explicitly requires a named Opus model and the normal Claude Code subscription transport is quota-blocked or otherwise unavailable, do **not** silently substitute another model. An authorized alternate provider may be used only when it exposes the same exact requested model id and a trivial one-shot probe proves that model is actually callable. Record the provider and exact model id in the final report so the transport change is auditable.
+
+Keep the alternate-provider review fail-closed and bound to the same exact head/base-tip pair as the normal reviewer. For Hermes-based transport, use `--safe-mode --in <exact-pr-worktree> --no-restore-cwd`; `--in` alone is not sufficient protection against a runner restoring a stale cwd/session. The review prompt must make its first checks `pwd`, `git rev-parse HEAD`, and the live base-tip SHA, and must return `INVALID_REVISION` if any differs. If process inspection shows the reviewer executing in another clone/worktree, terminate it and discard the verdict even if the model later says the PR is ready. Never count an alternate-provider verdict unless the requested model, worktree, head, and base-tip are all independently verified.
+
 ## Explicit exclusions
 
 Do not invoke `claude ultrareview` or `/ultrareview` as part of the normal PR cycle. It uses a separate credit/cost surface outside the intended subscription workflow.

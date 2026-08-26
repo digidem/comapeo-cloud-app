@@ -241,6 +241,8 @@ Pattern for adding new screen screenshots:
 
 The review artifacts under `tests/e2e/screenshots/` are generated and gitignored. Separately, `takeScreenshot()` uses Argos and may write tracked artifacts under `screenshots/screenshot/` (`*.png` and `*.argos.json`). Local E2E or screenshot verification can therefore dirty those tracked files; restore incidental changes after exploratory runs unless the task intentionally updates visual baselines. Each Playwright project that runs E2E tests uses all 3 browsers; the `screenshot` project uses chromium only for deterministic rendering.
 
+Treat tracked Storybook visual baselines as **CI-environment artifacts**, not as whatever a local browser happens to render. If local baseline generation rewrites many unrelated files under `tests/e2e/storybook-screenshots-baseline/`, do not commit that churn. Restore pre-existing baselines, isolate only the intentionally new/changed stories, and inspect whether differences are caused by browser/font/platform metrics. When GitHub's Linux visual-regression job is authoritative and fails only because new/intentional baselines differ from local rendering, prefer the CI-produced screenshot artifact as the canonical source for those specific baselines, preserving all unrelated baseline files byte-for-byte. Re-run the CI visual check afterward; never relax thresholds merely to hide cross-platform drift.
+
 ## Commit Messages
 
 Use Conventional Commits format:
