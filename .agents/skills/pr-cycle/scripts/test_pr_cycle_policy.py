@@ -88,6 +88,9 @@ def assert_policy_contract(
     test.assertIn("Do not promote proposed or unmerged follow-up designs", agents_text)
     test.assertIn("tracked artifacts under `screenshots/screenshot/`", agents_text)
     test.assertIn("restore incidental changes after exploratory runs", agents_text)
+    test.assertIn("`npm run storybook:screenshots:check`", agents_text)
+    test.assertIn("`visual-regression-check`", agents_text)
+    test.assertIn("`visual-regression-diff`", agents_text)
 
     test.assertIn(
         "python3 .agents/skills/pr-cycle/scripts/test_pr_cycle_policy.py",
@@ -282,6 +285,21 @@ class PrCyclePolicyTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(
             AssertionError, "tracked artifacts under `screenshots/screenshot/`"
+        ):
+            assert_policy_contract(
+                self,
+                skill_text=SKILL.read_text(),
+                agents_text=agents_text,
+                ci_text=CI.read_text(),
+            )
+
+    def test_storybook_ci_baseline_guidance_is_required(self) -> None:
+        agents_text = AGENTS.read_text().replace(
+            "`npm run storybook:screenshots:check`",
+            "`npm run storybook:screenshots`",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "npm run storybook:screenshots:check"
         ):
             assert_policy_contract(
                 self,

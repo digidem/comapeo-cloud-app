@@ -6,6 +6,7 @@ import unittest
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SKILL = SKILL_DIR / "SKILL.md"
 REFERENCE = SKILL_DIR / "references" / "kimi-k3-review.md"
+CLAUDE_REFERENCE = SKILL_DIR / "references" / "claude-code-review.md"
 TIMEOUT = SKILL_DIR / "references" / "timeout-strategy.md"
 CI = SKILL_DIR.parents[2] / ".github" / "workflows" / "ci.yml"
 
@@ -22,6 +23,7 @@ def assert_policy_contract(
     *,
     skill_text: str,
     reference_text: str,
+    claude_reference_text: str,
     timeout_text: str,
     ci_text: str,
 ) -> None:
@@ -39,6 +41,24 @@ def assert_policy_contract(
         fallback,
     )
     test.assertIn("references/kimi-k3-review.md", fallback)
+    test.assertIn("same exact requested Opus model", fallback)
+
+    alternate = _paragraph_containing(
+        claude_reference_text, "If the user explicitly requires a named Opus model"
+    )
+    test.assertIn("same exact requested model id", alternate)
+    test.assertIn("one-shot probe", alternate)
+    alternate_contract = _paragraph_containing(
+        claude_reference_text, "Keep the alternate-provider review fail-closed"
+    )
+    test.assertIn(
+        "`--safe-mode --in <exact-pr-worktree> --no-restore-cwd`",
+        alternate_contract,
+    )
+    test.assertIn("read-only shell access", alternate_contract)
+    test.assertIn(
+        "`pwd`, `git rev-parse HEAD`, and the live base-tip SHA", alternate_contract
+    )
 
     contract = _paragraph_containing(reference_text, "Ask Kimi to review a fresh exact diff")
     test.assertIn("**exact head/base-tip pair**", contract)
@@ -80,6 +100,7 @@ class ReviewerFallbackPolicyTests(unittest.TestCase):
             self,
             skill_text=SKILL.read_text(),
             reference_text=REFERENCE.read_text(),
+            claude_reference_text=CLAUDE_REFERENCE.read_text(),
             timeout_text=TIMEOUT.read_text(),
             ci_text=CI.read_text(),
         )
@@ -94,6 +115,7 @@ class ReviewerFallbackPolicyTests(unittest.TestCase):
                 self,
                 skill_text=skill_text,
                 reference_text=REFERENCE.read_text(),
+                claude_reference_text=CLAUDE_REFERENCE.read_text(),
                 timeout_text=TIMEOUT.read_text(),
                 ci_text=CI.read_text(),
             )
@@ -108,6 +130,22 @@ class ReviewerFallbackPolicyTests(unittest.TestCase):
                 self,
                 skill_text=SKILL.read_text(),
                 reference_text=reference_text,
+                claude_reference_text=CLAUDE_REFERENCE.read_text(),
+                timeout_text=TIMEOUT.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_exact_model_alternate_provider_contract_is_required(self) -> None:
+        claude_reference_text = CLAUDE_REFERENCE.read_text().replace(
+            "read-only shell access",
+            "normal shell access",
+        )
+        with self.assertRaisesRegex(AssertionError, "read-only shell access"):
+            assert_policy_contract(
+                self,
+                skill_text=SKILL.read_text(),
+                reference_text=REFERENCE.read_text(),
+                claude_reference_text=claude_reference_text,
                 timeout_text=TIMEOUT.read_text(),
                 ci_text=CI.read_text(),
             )
