@@ -6,6 +6,7 @@ export const MAX_SANITIZE_DEPTH = 8;
 export const MAX_SANITIZE_ENTRIES = 100;
 export const MAX_SANITIZE_STRING_LENGTH = 8192;
 const MIN_PROPAGATED_SENSITIVE_VALUE_LENGTH = 8;
+const MIN_PROPAGATED_NUMERIC_SENSITIVE_VALUE_LENGTH = 6;
 
 export const SECRET_TELEMETRY_KEYS = new Set([
   'authorization',
@@ -122,7 +123,22 @@ export function sanitizeTelemetryString(
     (left, right) => right.length - left.length,
   )) {
     if (sensitiveValue.length === 0) continue;
-    sanitized = sanitized.split(sensitiveValue).join(TELEMETRY_REDACTED);
+    if (/^[+-]?\d+(?:\.\d+)?$/.test(sensitiveValue)) {
+      const escaped = sensitiveValue.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        (character) => '\\' + character,
+      );
+      const boundaryPattern = new RegExp(
+        `(^|[^\\d])${escaped}(?=$|[^\\d])`,
+        'g',
+      );
+      sanitized = sanitized.replace(
+        boundaryPattern,
+        (_match, prefix: string) => `${prefix}${TELEMETRY_REDACTED}`,
+      );
+    } else {
+      sanitized = sanitized.split(sensitiveValue).join(TELEMETRY_REDACTED);
+    }
   }
 
   if (sanitized.length > MAX_SANITIZE_STRING_LENGTH) {
@@ -144,11 +160,11 @@ function collectSensitiveValues(
 
   if (typeof value === 'string') {
     const candidate = value.trim();
-    if (
-      forceSensitive &&
-      candidate.length >= MIN_PROPAGATED_SENSITIVE_VALUE_LENGTH &&
-      !/^[+-]?\d+$/.test(candidate)
-    ) {
+    const isNumeric = /^[+-]?\d+(?:\.\d+)?$/.test(candidate);
+    const minimumLength = isNumeric
+      ? MIN_PROPAGATED_NUMERIC_SENSITIVE_VALUE_LENGTH
+      : MIN_PROPAGATED_SENSITIVE_VALUE_LENGTH;
+    if (forceSensitive && candidate.length >= minimumLength) {
       output.add(candidate);
     }
     return;
@@ -156,11 +172,13 @@ function collectSensitiveValues(
 
   if (typeof value === 'number') {
     const candidate = String(value);
+    const minimumLength = Number.isInteger(value)
+      ? MIN_PROPAGATED_NUMERIC_SENSITIVE_VALUE_LENGTH
+      : MIN_PROPAGATED_SENSITIVE_VALUE_LENGTH;
     if (
       forceSensitive &&
       Number.isFinite(value) &&
-      !Number.isInteger(value) &&
-      candidate.length >= MIN_PROPAGATED_SENSITIVE_VALUE_LENGTH
+      candidate.length >= minimumLength
     ) {
       output.add(candidate);
     }
