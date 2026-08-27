@@ -81,6 +81,17 @@ describe('buildCaseFacts', () => {
     });
   });
 
+  it('rejects a Case type that the selected template does not support', () => {
+    const template = {
+      ...getLatestReportTemplate('FUNAI'),
+      supportedCaseTypes: ['fire'] as const,
+    };
+
+    expect(() =>
+      buildCaseFacts({ case: testCase, template, approvedFacts: [] }),
+    ).toThrow(/not supported/i);
+  });
+
   it('pins the exact selected template identity and validates the result at runtime', () => {
     const template = getLatestReportTemplate('IBAMA');
     const result = buildCaseFacts({
@@ -216,7 +227,7 @@ describe('buildCaseFacts', () => {
           value: {
             kind: 'date-range',
             start: '2026-08-20',
-            end: '2026-08-22T10:00:00Z',
+            end: '2026-08-22T10:00:00-03:00',
           },
           source: { type: 'case-context', id: 'date-range' },
         },
@@ -245,12 +256,19 @@ describe('buildCaseFacts', () => {
     });
   });
 
-  it('rejects non-ISO dates and reversed date ranges', () => {
+  it('rejects non-ISO dates, UTC date-times without civil-time context, and reversed date ranges', () => {
     expect(
       v.safeParse(approvedCaseFactInputSchema, {
         key: 'incident.date',
         value: { kind: 'date', value: 'August 27 2026' },
         source: { type: 'case-context', id: 'incident-date' },
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(approvedCaseFactInputSchema, {
+        key: 'incident.date',
+        value: { kind: 'date', value: '2026-08-22T01:30:00.000Z' },
+        source: { type: 'observation', id: 'obs-utc' },
       }).success,
     ).toBe(false);
 
@@ -391,6 +409,14 @@ describe('buildCaseFacts', () => {
       severity: 'blocking',
     });
     expect(result.missingInformation).toContainEqual({
+      key: 'incident.date',
+      severity: 'review',
+    });
+    expect(result.missingInformation).not.toContainEqual({
+      key: 'incident.dateRange',
+      severity: 'review',
+    });
+    expect(result.missingInformation).toContainEqual({
       key: 'urgency.context',
       severity: 'review',
     });
@@ -400,6 +426,29 @@ describe('buildCaseFacts', () => {
     expect(JSON.stringify(result)).not.toMatch(
       /unknown|not provided|não informado/i,
     );
+  });
+
+  it('treats an approved incident date range as satisfying the template date review item', () => {
+    const result = buildCaseFacts({
+      case: testCase,
+      template: getLatestReportTemplate('FUNAI'),
+      approvedFacts: [
+        {
+          key: 'incident.dateRange',
+          value: {
+            kind: 'date-range',
+            start: '2026-08-20',
+            end: '2026-08-22',
+          },
+          source: { type: 'case-context', id: 'incident-range' },
+        },
+      ],
+    });
+
+    expect(result.missingInformation).not.toContainEqual({
+      key: 'incident.date',
+      severity: 'review',
+    });
   });
 
   it('is a synchronous pure transformation and never invokes fetch', () => {

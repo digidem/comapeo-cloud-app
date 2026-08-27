@@ -26,6 +26,7 @@ export {
   getLatestReportTemplate,
   getReportTemplate,
   getSubmissionGuidanceStatus,
+  REPORT_AGENCIES,
   REPORT_TEMPLATE_LOCALES,
   reportTemplateSchema,
 } from '@/lib/reports/template-registry';

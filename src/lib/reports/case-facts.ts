@@ -1,10 +1,11 @@
 import * as v from 'valibot';
 
-import type { Case, CaseAgency } from '@/lib/db';
+import type { Case } from '@/lib/db';
 import {
   CASE_FACT_KEYS,
   type CaseFactKey,
   type ImmutableReportTemplate,
+  REPORT_AGENCIES,
 } from '@/lib/reports/template-registry';
 import { geometrySchema } from '@/lib/schemas/geometry';
 
@@ -18,18 +19,12 @@ const SOURCE_TYPES = [
 
 export type CaseFactSourceType = (typeof SOURCE_TYPES)[number];
 
-const AGENCIES = [
-  'FUNAI',
-  'IBAMA',
-  'MPF',
-  'PF',
-] as const satisfies readonly CaseAgency[];
 const nonEmptyStringSchema = v.pipe(v.string(), v.trim(), v.nonEmpty());
 const caseFactKeySchema = v.picklist(CASE_FACT_KEYS);
 const sourceTypeSchema = v.picklist(SOURCE_TYPES);
 
-const ISO_DATE_TIME_RE =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
+const LOCAL_OFFSET_DATE_TIME_RE =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?([+-])(\d{2}):(\d{2})$/;
 
 function hasValidDateParts(year: number, month: number, day: number): boolean {
   const date = new Date(Date.UTC(year, month - 1, day));
@@ -50,14 +45,17 @@ function isDateLike(value: string): boolean {
     );
   }
 
-  const dateTime = ISO_DATE_TIME_RE.exec(value);
+  const dateTime = LOCAL_OFFSET_DATE_TIME_RE.exec(value);
   if (!dateTime) return false;
-  const [, year, month, day, hour, minute, second] = dateTime;
+  const [, year, month, day, hour, minute, second, , offsetHour, offsetMinute] =
+    dateTime;
   return (
     hasValidDateParts(Number(year), Number(month), Number(day)) &&
     Number(hour) <= 23 &&
     Number(minute) <= 59 &&
-    Number(second) <= 59 &&
+    (second === undefined || Number(second) <= 59) &&
+    Number(offsetHour) <= 23 &&
+    Number(offsetMinute) <= 59 &&
     Number.isFinite(Date.parse(value))
   );
 }
@@ -66,6 +64,10 @@ function normalizeDate(value: string): string {
   return value.slice(0, 10);
 }
 
+// A report date is a civil/calendar date, not a UTC instant. Callers may pass
+// YYYY-MM-DD directly or a date-time carrying the incident's explicit numeric
+// local offset. UTC `Z` instants must be converted upstream where timezone
+// context is known; guessing that timezone here could change the reported day.
 const normalizedDateSchema = v.pipe(
   v.string(),
   v.trim(),
@@ -150,6 +152,9 @@ export const caseFactSchema = v.object({
 
 export type CaseFact = v.InferOutput<typeof caseFactSchema>;
 
+// These keys may legitimately contain multiple independently sourced values.
+// Every other key is single-valued: callers must select/aggregate narrative
+// content upstream before it becomes one disclosure-approved Case Fact.
 const MULTI_VALUED_CASE_FACT_KEYS = new Set<CaseFactKey>([
   'case.secondaryTypes',
   'impact.affectedResources',
@@ -178,6 +183,10 @@ export const missingCaseFactSchema = v.object({
 
 export type MissingCaseFact = v.InferOutput<typeof missingCaseFactSchema>;
 
+// `caseLocalId`, `projectLocalId`, and provenance source IDs are audit/linkage
+// metadata for internal consumers. Report renderers must not present these raw
+// identifiers as submitted report content unless a later template explicitly
+// defines a user-visible representation.
 export const caseFactsSchema = v.object({
   schemaVersion: v.literal(1),
   caseLocalId: nonEmptyStringSchema,
@@ -185,7 +194,7 @@ export const caseFactsSchema = v.object({
   template: v.object({
     templateId: nonEmptyStringSchema,
     version: nonEmptyStringSchema,
-    agency: v.picklist(AGENCIES),
+    agency: v.picklist(REPORT_AGENCIES),
     outputLanguage: v.literal('pt-BR'),
   }),
   facts: v.pipe(
@@ -297,6 +306,16 @@ function mergeAndSortFacts(candidates: readonly CaseFact[]): CaseFact[] {
   });
 }
 
+function isFactSatisfied(
+  key: CaseFactKey,
+  presentKeys: ReadonlySet<CaseFactKey>,
+): boolean {
+  if (presentKeys.has(key)) return true;
+  if (key === 'incident.date') return presentKeys.has('incident.dateRange');
+  if (key === 'incident.dateRange') return presentKeys.has('incident.date');
+  return false;
+}
+
 function collectMissingInformation(
   template: ImmutableReportTemplate,
   facts: readonly CaseFact[],
@@ -305,10 +324,26 @@ function collectMissingInformation(
   const missing: MissingCaseFact[] = [];
 
   for (const key of template.requiredFacts) {
-    if (!presentKeys.has(key)) missing.push({ key, severity: 'blocking' });
+    if (
+      key === 'incident.dateRange' &&
+      template.requiredFacts.includes('incident.date')
+    ) {
+      continue;
+    }
+    if (!isFactSatisfied(key, presentKeys)) {
+      missing.push({ key, severity: 'blocking' });
+    }
   }
   for (const key of template.optionalFacts) {
-    if (!presentKeys.has(key)) missing.push({ key, severity: 'review' });
+    if (
+      key === 'incident.dateRange' &&
+      template.optionalFacts.includes('incident.date')
+    ) {
+      continue;
+    }
+    if (!isFactSatisfied(key, presentKeys)) {
+      missing.push({ key, severity: 'review' });
+    }
   }
 
   return missing.sort(
@@ -319,6 +354,12 @@ function collectMissingInformation(
 }
 
 export function buildCaseFacts(input: BuildCaseFactsInput): CaseFacts {
+  if (!input.template.supportedCaseTypes.includes(input.case.caseType)) {
+    throw new RangeError(
+      `Case type ${input.case.caseType} is not supported by template ${input.template.templateId}@${input.template.version}`,
+    );
+  }
+
   const candidates: CaseFact[] = [
     normalizeFact(
       'case.primaryType',
@@ -329,11 +370,7 @@ export function buildCaseFacts(input: BuildCaseFactsInput): CaseFacts {
 
   for (const approvedFact of input.approvedFacts) {
     const parsed = v.parse(approvedCaseFactInputSchema, approvedFact);
-    candidates.push({
-      key: parsed.key,
-      value: parsed.value,
-      provenance: [toProvenance(parsed.source)],
-    });
+    candidates.push(normalizeFact(parsed.key, parsed.value, parsed.source));
   }
 
   const facts = mergeAndSortFacts(candidates);

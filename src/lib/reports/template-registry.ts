@@ -1,6 +1,7 @@
 import * as v from 'valibot';
 
 import type { CaseAgency, CaseType } from '@/lib/db';
+import type { Locale } from '@/stores/locale-store';
 
 export const CASE_FACT_KEYS = [
   'case.title',
@@ -39,13 +40,13 @@ const CASE_TYPES = [
   'other',
 ] as const satisfies readonly CaseType[];
 
-const AGENCIES = [
+export const REPORT_AGENCIES = [
   'FUNAI',
   'IBAMA',
   'MPF',
   'PF',
 ] as const satisfies readonly CaseAgency[];
-const LOCALES = ['en', 'pt', 'es'] as const;
+const LOCALES = ['en', 'pt', 'es'] as const satisfies readonly Locale[];
 export type ReportTemplateLocale = (typeof LOCALES)[number];
 
 export const CURRENT_REPORT_TEMPLATE_VERSIONS = Object.freeze({
@@ -91,7 +92,7 @@ const localizedTextSchema = v.object({
 
 const caseTypeSchema = v.picklist(CASE_TYPES);
 const caseFactKeySchema = v.picklist(CASE_FACT_KEYS);
-const agencySchema = v.picklist(AGENCIES);
+const agencySchema = v.picklist(REPORT_AGENCIES);
 
 export const reportTemplateSchema = v.object({
   templateId: v.pipe(v.string(), v.regex(/^br\.[a-z]+\.report$/)),
@@ -183,6 +184,10 @@ const rawTemplates: ReportTemplate[] = [
     supportedCaseTypes: ALL_CASE_TYPES,
     requiredFacts: ['case.title', 'case.primaryType', 'impact.threats'],
     optionalFacts: [
+      'case.secondaryTypes',
+      'case.context',
+      'incident.date',
+      'incident.dateRange',
       'people.communityContext',
       'incident.chronology',
       'incident.recurrence',
@@ -240,6 +245,10 @@ const rawTemplates: ReportTemplate[] = [
     supportedCaseTypes: ALL_CASE_TYPES,
     requiredFacts: ['case.title', 'case.primaryType', 'incident.chronology'],
     optionalFacts: [
+      'case.secondaryTypes',
+      'case.context',
+      'incident.date',
+      'incident.dateRange',
       'impact.environmentalDamage',
       'impact.affectedResources',
       'incident.recurrence',
@@ -300,6 +309,10 @@ const rawTemplates: ReportTemplate[] = [
     supportedCaseTypes: ALL_CASE_TYPES,
     requiredFacts: ['case.title', 'case.primaryType', 'incident.chronology'],
     optionalFacts: [
+      'case.secondaryTypes',
+      'case.context',
+      'incident.date',
+      'incident.dateRange',
       'people.communityContext',
       'impact.threats',
       'impact.environmentalDamage',
@@ -364,6 +377,10 @@ const rawTemplates: ReportTemplate[] = [
     supportedCaseTypes: ALL_CASE_TYPES,
     requiredFacts: ['case.title', 'case.primaryType', 'incident.chronology'],
     optionalFacts: [
+      'case.secondaryTypes',
+      'case.context',
+      'incident.date',
+      'incident.dateRange',
       'incident.recurrence',
       'actors.documented',
       'equipment.documented',

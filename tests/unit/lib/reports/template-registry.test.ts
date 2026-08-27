@@ -39,6 +39,14 @@ describe('Brazil v1 report template registry', () => {
       expect(template.version).toBe('1.0.0');
       expect(template.lastReviewedAt).toBe('2026-08-27');
       expect(template.supportedCaseTypes).toEqual(caseTypes);
+      expect(template.optionalFacts).toEqual(
+        expect.arrayContaining([
+          'incident.date',
+          'incident.dateRange',
+          'case.context',
+          'case.secondaryTypes',
+        ]),
+      );
       expect(template.sections.length).toBeGreaterThan(0);
       expect(template.drafting.mayDiagnoseLegalViolation).toBe(false);
       expect(template.drafting.mayConcludeOffense).toBe(false);
