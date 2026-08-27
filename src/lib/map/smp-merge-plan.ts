@@ -144,6 +144,7 @@ export function mergeGlobalOverviewStyle(
     if (folder) usedFolders.add(folder);
   }
   const mappings: GlobalSourceMapping[] = [];
+  const usedGlobalFolders = new Set<string>();
   let globalIndex = 0;
 
   for (const [sourceId, globalSource] of Object.entries(globalStyle.sources)) {
@@ -157,6 +158,12 @@ export function mergeGlobalOverviewStyle(
         'global overview cannot use the authored resource prefix',
       );
     }
+    if (usedGlobalFolders.has(globalFolder)) {
+      throw smpMergeError(
+        `global overview source folder is shared by multiple sources: ${globalFolder}`,
+      );
+    }
+    usedGlobalFolders.add(globalFolder);
     const globalSourceId = `${sourceId}__global_overview`;
     if (Object.hasOwn(regionalStyle.sources, globalSourceId)) {
       throw smpMergeError(

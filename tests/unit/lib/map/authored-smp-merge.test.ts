@@ -446,6 +446,50 @@ describe('mergeSmpWithAuthoredLayers', () => {
     },
   );
 
+  it('fails closed when global overview sources share one source folder', () => {
+    const regionalStyle = {
+      version: 8 as const,
+      sources: {
+        basemap: {
+          type: 'raster',
+          tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.png'],
+        },
+        labels: {
+          type: 'raster',
+          tiles: ['smp://maps.v1/s/1/{z}/{x}/{y}.png'],
+        },
+      },
+      layers: [
+        { id: 'basemap', type: 'raster' as const, source: 'basemap' },
+        { id: 'labels', type: 'raster' as const, source: 'labels' },
+      ],
+      metadata: {
+        'smp:sourceFolders': { basemap: 's/0', labels: 's/1' },
+      },
+    };
+    const globalStyle = {
+      version: 8 as const,
+      sources: {
+        basemap: {
+          type: 'raster',
+          tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.png'],
+        },
+        labels: {
+          type: 'raster',
+          tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.png'],
+        },
+      },
+      layers: [
+        { id: 'basemap', type: 'raster' as const, source: 'basemap' },
+        { id: 'labels', type: 'raster' as const, source: 'labels' },
+      ],
+    };
+
+    expect(() => mergeGlobalOverviewStyle(regionalStyle, globalStyle)).toThrow(
+      /global overview.*folder/i,
+    );
+  });
+
   it('preserves the composed effective raster zoom range when replacing a Writer source', async () => {
     const sourceId = sourceLayerIdForAuthoredLayer(
       AUTHORED_RASTER_LAYER_FIXTURE.id,
@@ -536,6 +580,18 @@ describe('mergeSmpWithAuthoredLayers', () => {
       );
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it('writes the canonical ZIP timestamp in UTC', async () => {
+    const finalBlob = await mergeSmpWithAuthoredLayers({
+      regionalBlob: await makeRegionalZip(),
+      authoredLayers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+      map: MAP,
+    });
+    const finalZip = await JSZip.loadAsync(await finalBlob.arrayBuffer());
+    for (const file of Object.values(finalZip.files)) {
+      expect(file.date.toISOString()).toBe('1980-01-01T00:00:00.000Z');
     }
   });
 

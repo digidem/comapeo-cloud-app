@@ -82,7 +82,7 @@ function abortIfNeeded(signal?: AbortSignal): void {
   if (signal?.aborted) throw mergeAbortError(signal);
 }
 
-const DETERMINISTIC_ZIP_DATE = new Date(1980, 0, 1, 0, 0, 0);
+const DETERMINISTIC_ZIP_DATE = new Date(Date.UTC(1980, 0, 1));
 
 async function generateMergedArchive(
   output: JSZip,
