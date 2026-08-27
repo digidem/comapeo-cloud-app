@@ -232,6 +232,24 @@ describe('api/_middleware', () => {
       globalThis.fetch = originalFetch;
     });
 
+    it('blocks legacy credential-bearing proxy requests before they reach the archive', async () => {
+      const fetchSpy = vi
+        .fn()
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+      globalThis.fetch = fetchSpy as unknown as typeof fetch;
+      const req = createRequest('GET', 'http://localhost/api/projects', {
+        'x-target-url': 'https://archive.example.com',
+        Authorization: 'Bearer ' + String(238_004),
+      });
+
+      const res = await onRequest(createContext(req, vi.fn()));
+
+      expect(res.status).toBe(428);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      const body = (await res.json()) as { error: { code: string } };
+      expect(body.error.code).toBe('ARCHIVE_CLIENT_SECURITY_UPDATE_REQUIRED');
+    });
+
     it('rejects /api/info without x-target-url with 400', async () => {
       const next = vi.fn();
       const req = createRequest('GET', 'http://localhost/api/info');

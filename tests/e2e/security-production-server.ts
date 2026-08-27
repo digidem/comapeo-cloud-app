@@ -6,16 +6,26 @@ import {
 } from 'node:http';
 import path from 'node:path';
 
+import {
+  ARCHIVE_CREDENTIAL_REVISION,
+  ARCHIVE_CREDENTIAL_REVISION_HEADER,
+} from '../../src/lib/archive-proxy';
+
 const root = process.cwd();
 const distDir = path.join(root, 'dist');
+const legacyDistDir = process.env.SECURITY_E2E_LEGACY_DIST_DIR
+  ? path.resolve(process.env.SECURITY_E2E_LEGACY_DIST_DIR)
+  : null;
 const port = Number(process.env.SECURITY_E2E_PORT ?? 4174);
 let allowSecureWorker = true;
+let deploymentMode: 'current' | 'legacy' = 'current';
 const apiRequests: Array<{
   method: string;
   url: string;
   authorization: string | null;
   target: string | null;
 }> = [];
+const archiveForwards: typeof apiRequests = [];
 
 const MIME: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -93,7 +103,7 @@ async function handleApi(
   response: ServerResponse,
   url: URL,
 ): Promise<void> {
-  apiRequests.push({
+  const requestRecord = {
     method: request.method ?? 'GET',
     url: url.pathname + url.search,
     authorization:
@@ -101,10 +111,11 @@ async function handleApi(
         ? request.headers.authorization
         : null,
     target:
-      typeof request.headers['x-comapeo-archive-target'] === 'string'
-        ? request.headers['x-comapeo-archive-target']
+      typeof request.headers['x-target-url'] === 'string'
+        ? request.headers['x-target-url']
         : null,
-  });
+  };
+  apiRequests.push(requestRecord);
 
   if (url.pathname === '/api/invites/decrypt' && request.method === 'POST') {
     let body: Record<string, unknown>;
@@ -133,6 +144,29 @@ async function handleApi(
     send(response, 200, JSON.stringify(decoded), 'application/json');
     return;
   }
+
+  // Generic archive API calls model a request that would be forwarded by the
+  // deployed Pages Function. Once the secure deployment is active, stale
+  // clients may still send their historical persisted bearer to same-origin
+  // /api, but the Pages boundary must not forward it to the archive unless the
+  // request proves it came from the hardened credential client revision.
+  if (
+    deploymentMode === 'current' &&
+    requestRecord.authorization &&
+    request.headers[ARCHIVE_CREDENTIAL_REVISION_HEADER] !==
+      ARCHIVE_CREDENTIAL_REVISION
+  ) {
+    send(
+      response,
+      428,
+      JSON.stringify({
+        error: { code: 'ARCHIVE_CLIENT_SECURITY_UPDATE_REQUIRED' },
+      }),
+      'application/json',
+    );
+    return;
+  }
+  archiveForwards.push(requestRecord);
 
   if (url.pathname === '/api/healthcheck') {
     send(response, 200, JSON.stringify({ ok: true }), 'application/json');
@@ -181,12 +215,31 @@ const server = createServer(async (request, response) => {
     );
     return;
   }
+  if (url.pathname === '/__security_e2e__/deployment') {
+    const requestedMode = url.searchParams.get('mode');
+    if (requestedMode !== 'current' && requestedMode !== 'legacy') {
+      send(response, 400, JSON.stringify({ error: 'invalid deployment mode' }));
+      return;
+    }
+    if (requestedMode === 'legacy' && !legacyDistDir) {
+      send(response, 409, JSON.stringify({ error: 'legacy dist unavailable' }));
+      return;
+    }
+    deploymentMode = requestedMode;
+    send(response, 200, JSON.stringify({ deploymentMode }), 'application/json');
+    return;
+  }
   if (url.pathname === '/__security_e2e__/requests') {
     send(response, 200, JSON.stringify(apiRequests), 'application/json');
     return;
   }
+  if (url.pathname === '/__security_e2e__/forwards') {
+    send(response, 200, JSON.stringify(archiveForwards), 'application/json');
+    return;
+  }
   if (url.pathname === '/__security_e2e__/requests/clear') {
     apiRequests.length = 0;
+    archiveForwards.length = 0;
     send(response, 200, JSON.stringify({ ok: true }), 'application/json');
     return;
   }
@@ -208,7 +261,11 @@ const server = createServer(async (request, response) => {
     );
     return;
   }
-  if (url.pathname === '/sw.js' && !allowSecureWorker) {
+  if (
+    url.pathname === '/sw.js' &&
+    deploymentMode !== 'legacy' &&
+    !allowSecureWorker
+  ) {
     send(
       response,
       503,
@@ -222,8 +279,10 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  const activeDistDir =
+    deploymentMode === 'legacy' && legacyDistDir ? legacyDistDir : distDir;
   const requestedPath = url.pathname === '/' ? '/index.html' : url.pathname;
-  const candidate = path.join(distDir, requestedPath.replace(/^\//, ''));
+  const candidate = path.join(activeDistDir, requestedPath.replace(/^\//, ''));
   try {
     const candidateStat = await stat(candidate);
     if (candidateStat.isFile()) {
@@ -240,7 +299,7 @@ const server = createServer(async (request, response) => {
     // SPA fallback below.
   }
 
-  const index = await readFile(path.join(distDir, 'index.html'));
+  const index = await readFile(path.join(activeDistDir, 'index.html'));
   send(response, 200, index, 'text/html; charset=utf-8');
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ARCHIVE_CREDENTIAL_REVISION_HEADER,
   ARCHIVE_TARGET_HEADER,
   buildArchiveTargetUrl,
   createForwardHeaders,
@@ -63,6 +64,7 @@ describe('archive proxy helpers', () => {
 
   it('filters routing and hop-by-hop headers but preserves Authorization', () => {
     const input = new Headers({
+      [ARCHIVE_CREDENTIAL_REVISION_HEADER]: '1',
       [ARCHIVE_TARGET_HEADER]: 'https://archive.example.com',
       Authorization: 'Bearer token',
       Connection: 'keep-alive',
@@ -76,6 +78,7 @@ describe('archive proxy helpers', () => {
     const output = createForwardHeaders(input);
 
     expect(output.get(ARCHIVE_TARGET_HEADER)).toBeNull();
+    expect(output.get(ARCHIVE_CREDENTIAL_REVISION_HEADER)).toBeNull();
     expect(output.get('Connection')).toBeNull();
     expect(output.get('Cookie')).toBeNull();
     expect(output.get('Host')).toBeNull();

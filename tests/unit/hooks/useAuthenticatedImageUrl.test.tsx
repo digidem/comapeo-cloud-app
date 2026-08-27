@@ -3,7 +3,11 @@ import { setupBlobUrlMocks } from '@tests/mocks/blob-url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetImageBlobCacheForTests } from '@/hooks/useAuthenticatedImageUrl';
-import { ARCHIVE_TARGET_HEADER } from '@/lib/archive-proxy';
+import {
+  ARCHIVE_CREDENTIAL_REVISION,
+  ARCHIVE_CREDENTIAL_REVISION_HEADER,
+  ARCHIVE_TARGET_HEADER,
+} from '@/lib/archive-proxy';
 import { useAuthStore } from '@/stores/auth-store';
 
 /**
@@ -97,6 +101,7 @@ describe('useAuthenticatedImageUrl', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer tok1',
+          [ARCHIVE_CREDENTIAL_REVISION_HEADER]: ARCHIVE_CREDENTIAL_REVISION,
           [ARCHIVE_TARGET_HEADER]: 'https://archive.example.com',
         }),
       }),

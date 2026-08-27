@@ -30,6 +30,8 @@
  * or we would shadow their handlers.
  */
 import {
+  ARCHIVE_CREDENTIAL_REVISION,
+  ARCHIVE_CREDENTIAL_REVISION_HEADER,
   ARCHIVE_TARGET_HEADER,
   buildArchiveTargetUrl,
   createForwardHeaders,
@@ -94,6 +96,21 @@ export const onRequest: PagesFunction = async (context: PagesContext) => {
   if (!proxyRequest.ok) {
     return withApiSecurityHeaders(
       jsonError(405, proxyRequest.code, proxyRequest.message),
+    );
+  }
+
+  const authorization = context.request.headers.get('authorization');
+  if (
+    authorization &&
+    context.request.headers.get(ARCHIVE_CREDENTIAL_REVISION_HEADER) !==
+      ARCHIVE_CREDENTIAL_REVISION
+  ) {
+    return withApiSecurityHeaders(
+      jsonError(
+        428,
+        'ARCHIVE_CLIENT_SECURITY_UPDATE_REQUIRED',
+        'Reload CoMapeo Cloud before connecting to an archive server',
+      ),
     );
   }
 

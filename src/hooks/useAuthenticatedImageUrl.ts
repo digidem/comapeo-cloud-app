@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { ARCHIVE_TARGET_HEADER } from '@/lib/archive-proxy';
+import {
+  ARCHIVE_CREDENTIAL_REVISION,
+  ARCHIVE_CREDENTIAL_REVISION_HEADER,
+  ARCHIVE_TARGET_HEADER,
+} from '@/lib/archive-proxy';
 import { getCachedIconBlob, putCachedIconBlob } from '@/lib/db';
 import { type CacheKey, createImageBlobCache } from '@/lib/image-blob-cache';
 import { requireSecurityStartupReady } from '@/lib/security-startup-gate';
@@ -270,6 +274,7 @@ export function useAuthenticatedImageUrl(
       fetchUrl = '/api' + proxyPath + parsedUrl.search;
       fetchHeaders = {
         Authorization: 'Bearer ' + matchingServer.token,
+        [ARCHIVE_CREDENTIAL_REVISION_HEADER]: ARCHIVE_CREDENTIAL_REVISION,
         [ARCHIVE_TARGET_HEADER]: matchingServer.baseUrl,
       };
     } else {

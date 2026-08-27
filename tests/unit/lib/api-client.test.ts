@@ -411,6 +411,7 @@ describe('apiClient', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: 'Bearer active-token',
+            'x-comapeo-credential-revision': '1',
           }),
         }),
       );

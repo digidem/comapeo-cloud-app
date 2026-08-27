@@ -1,6 +1,8 @@
 import * as v from 'valibot';
 
 import {
+  ARCHIVE_CREDENTIAL_REVISION,
+  ARCHIVE_CREDENTIAL_REVISION_HEADER,
   ARCHIVE_TARGET_HEADER,
   normalizeArchiveBaseUrl,
 } from '@/lib/archive-proxy';
@@ -195,7 +197,10 @@ function getAuthHeaders(
 ): Record<string, string> {
   const { token } = credentials;
   if (!token) return {};
-  return { Authorization: `Bearer ${token}` };
+  return {
+    Authorization: `Bearer ${token}`,
+    [ARCHIVE_CREDENTIAL_REVISION_HEADER]: ARCHIVE_CREDENTIAL_REVISION,
+  };
 }
 
 const NETWORK_ERROR_RE = /failed to fetch|networkerror|load failed/i;

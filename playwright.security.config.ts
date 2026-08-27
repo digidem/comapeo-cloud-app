@@ -19,7 +19,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'bun x tsx tests/e2e/security-production-server.ts',
+    command: 'bun tests/e2e/security-production-server.ts',
     url: 'http://127.0.0.1:4174/__security_e2e__/blank',
     reuseExistingServer: false,
     timeout: 30_000,

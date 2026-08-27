@@ -353,6 +353,25 @@ jobs:
           path: dist/
           retention-days: 3
 
+      # Security rollout regression fixture: this is the last known main build
+      # that persisted archive bearer credentials and shipped the generated
+      # Workbox navigation cache. Keep the SHA immutable so future CI continues
+      # proving upgrades from an actually vulnerable installed PWA, rather than
+      # accidentally testing the current secure build as its own "legacy" app.
+      - name: Checkout last credential-persisting PWA
+        uses: actions/checkout@v6
+        with:
+          ref: 5f5e0685cf88866773e5ed661964debf48013d14
+          path: .security-legacy-base
+
+      - name: Build last credential-persisting PWA fixture
+        working-directory: .security-legacy-base
+        env:
+          VITE_PUBLIC_APP_ORIGIN: https://app.comapeo.cloud
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          bun run build:ci
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
@@ -372,6 +391,8 @@ jobs:
           npx playwright test tests/e2e/security-credential-boundary.e2e.ts --project=firefox --project=webkit --reporter=list
 
       - name: Security startup and service-worker production E2E
+        env:
+          SECURITY_E2E_LEGACY_DIST_DIR: ${{ github.workspace }}/.security-legacy-base/dist
         run: bun run test:e2e:security-production
 
       - name: PWA offline cold-start E2E

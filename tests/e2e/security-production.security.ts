@@ -5,7 +5,17 @@ import {
   test,
 } from '@playwright/test';
 
+import {
+  ARCHIVE_CREDENTIAL_REVISION,
+  ARCHIVE_CREDENTIAL_REVISION_HEADER,
+} from '../../src/lib/archive-proxy';
+import {
+  SERVICE_WORKER_SECURITY_PROBE,
+  SERVICE_WORKER_SECURITY_REVISION,
+} from '../../src/lib/service-worker-security';
+
 const BASE_URL = 'http://127.0.0.1:4174';
+const HAS_REAL_LEGACY_BUILD = Boolean(process.env.SECURITY_E2E_LEGACY_DIST_DIR);
 
 function makeInviteCode(url: string, token: string): string {
   return `e2e-${Buffer.from(JSON.stringify({ url, token }), 'utf8').toString('base64url')}`;
@@ -20,12 +30,29 @@ async function setSecureWorkerAvailable(
   );
 }
 
+async function setDeploymentMode(
+  request: APIRequestContext,
+  mode: 'current' | 'legacy',
+): Promise<void> {
+  const response = await request.get(
+    `${BASE_URL}/__security_e2e__/deployment?mode=${mode}`,
+  );
+  expect(response.ok()).toBe(true);
+}
+
 async function clearApiRequests(request: APIRequestContext): Promise<void> {
   await request.get(`${BASE_URL}/__security_e2e__/requests/clear`);
 }
 
 async function readApiRequests(request: APIRequestContext): Promise<string> {
   const response = await request.get(`${BASE_URL}/__security_e2e__/requests`);
+  return JSON.stringify(await response.json());
+}
+
+async function readArchiveForwards(
+  request: APIRequestContext,
+): Promise<string> {
+  const response = await request.get(`${BASE_URL}/__security_e2e__/forwards`);
   return JSON.stringify(await response.json());
 }
 
@@ -45,6 +72,57 @@ async function installLegacyWorker(page: Page): Promise<void> {
       page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? ''),
     )
     .toContain('/legacy-sw.js');
+}
+
+async function installDeploymentWorker(page: Page): Promise<void> {
+  await page.goto('/__security_e2e__/blank');
+  await page.evaluate(async () => {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(
+      registrations.map((registration) => registration.unregister()),
+    );
+    await navigator.serviceWorker.register('/sw.js', {
+      scope: '/',
+      updateViaCache: 'none',
+    });
+    await navigator.serviceWorker.ready;
+  });
+  await page.goto('/');
+  await expect
+    .poll(() =>
+      page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? ''),
+    )
+    .toContain('/sw.js');
+}
+
+async function readControllingWorkerSecurityRevision(
+  page: Page,
+): Promise<string | null> {
+  return page.evaluate(
+    async ({ probe, expectedRevision }) => {
+      const controller = navigator.serviceWorker.controller;
+      if (!controller) return null;
+      const channel = new MessageChannel();
+      const result = new Promise<string | null>((resolve) => {
+        const timeout = setTimeout(() => resolve(null), 1_500);
+        channel.port1.onmessage = (event) => {
+          clearTimeout(timeout);
+          const value = event.data as { type?: string; revision?: string };
+          resolve(
+            value?.type === probe && value.revision === expectedRevision
+              ? value.revision
+              : null,
+          );
+        };
+      });
+      controller.postMessage({ type: probe }, [channel.port2]);
+      return result;
+    },
+    {
+      probe: SERVICE_WORKER_SECURITY_PROBE,
+      expectedRevision: SERVICE_WORKER_SECURITY_REVISION,
+    },
+  );
 }
 
 async function addArchiveWithToken(
@@ -156,6 +234,7 @@ async function readStartupState(page: Page): Promise<string | undefined> {
 }
 
 test.beforeEach(async ({ page, request }) => {
+  await setDeploymentMode(request, 'current');
   await setSecureWorkerAvailable(request, true);
   await clearApiRequests(request);
   await page.addInitScript(() => {
@@ -204,18 +283,124 @@ test('served production build sanitizes an encrypted invite before app bootstrap
     )
     .toContain('/sw.js');
 
-  await page.evaluate(async (canary) => {
-    const response = await fetch('/api/healthcheck?security-cache-probe=1', {
-      headers: { Authorization: `Bearer ${canary}` },
-    });
-    if (!response.ok) throw new Error('Synthetic worker request failed');
-  }, credentialCacheCanary);
+  await page.evaluate(
+    async ({ canary, revisionHeader, revision }) => {
+      const response = await fetch('/api/healthcheck?security-cache-probe=1', {
+        headers: {
+          Authorization: `Bearer ${canary}`,
+          [revisionHeader]: revision,
+        },
+      });
+      if (!response.ok) throw new Error('Synthetic worker request failed');
+    },
+    {
+      canary: credentialCacheCanary,
+      revisionHeader: ARCHIVE_CREDENTIAL_REVISION_HEADER,
+      revision: ARCHIVE_CREDENTIAL_REVISION,
+    },
+  );
 
   const postWorkerSnapshot = await serializePersistentSecuritySurfaces(page);
   expect(postWorkerSnapshot).not.toContain(credentialCacheCanary);
   const apiRequests = await readApiRequests(request);
   expect(apiRequests).toContain('/api/invites/decrypt');
   expect(apiRequests).toContain(credentialCacheCanary);
+});
+
+test('current controlling worker never persists a sensitive invite navigation', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90_000);
+  const probeValue = `controlled-invite-token-${Date.now()}`;
+  const fragmentCanary = `controlled-fragment-${Date.now()}`;
+  const code = makeInviteCode('https://archive.example.com', probeValue);
+  const consoleMessages: string[] = [];
+  page.on('console', (message) => consoleMessages.push(message.text()));
+
+  await installDeploymentWorker(page);
+  await expect
+    .poll(() => readControllingWorkerSecurityRevision(page), {
+      timeout: 30_000,
+    })
+    .toBe(SERVICE_WORKER_SECURITY_REVISION);
+  await clearApiRequests(request);
+
+  await page.goto(`/invite?code=${encodeURIComponent(code)}#${fragmentCanary}`);
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/invite');
+  await expect.poll(() => new URL(page.url()).search).toBe('');
+  await expect.poll(() => new URL(page.url()).hash).toBe('');
+
+  await expect
+    .poll(() => readApiRequests(request), { timeout: 30_000 })
+    .toContain('/api/invites/decrypt');
+
+  const snapshot = await serializePersistentSecuritySurfaces(page);
+  expect(snapshot).not.toContain(probeValue);
+  expect(snapshot).not.toContain(code);
+  expect(snapshot).not.toContain(fragmentCanary);
+  expect(consoleMessages.join('\n')).not.toContain(probeValue);
+  expect(consoleMessages.join('\n')).not.toContain(code);
+});
+
+test('a real previous-build worker cannot forward a persisted credential after the secure deployment rolls out', async ({
+  page,
+  request,
+}) => {
+  test.skip(
+    !HAS_REAL_LEGACY_BUILD,
+    'Set SECURITY_E2E_LEGACY_DIST_DIR to run the real previous-build transition proof',
+  );
+  test.setTimeout(120_000);
+  const legacyCanary = `real-legacy-token-${Date.now()}`;
+
+  await setDeploymentMode(request, 'legacy');
+  await setSecureWorkerAvailable(request, true);
+  await installDeploymentWorker(page);
+  await addArchiveWithToken(page, 'https://archive.example.com', legacyCanary);
+  expect(await serializePersistentSecuritySurfaces(page)).toContain(
+    legacyCanary,
+  );
+
+  // Deploy the new server-side boundary while the browser is still controlled
+  // by the genuinely old worker/cache. Holding the new worker unavailable makes
+  // the stale application execute long enough to exercise its old auto-sync.
+  await clearApiRequests(request);
+  await setSecureWorkerAvailable(request, false);
+  await setDeploymentMode(request, 'current');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  await expect
+    .poll(() => readApiRequests(request), { timeout: 30_000 })
+    .toContain(legacyCanary);
+  expect(await readArchiveForwards(request)).not.toContain(legacyCanary);
+
+  // Once the secure worker becomes available, takeover loads the current app;
+  // its v16 migration/cleanup must remove the historical persisted credential.
+  await setSecureWorkerAvailable(request, true);
+  await page.evaluate(async () => {
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    await registration?.update();
+  });
+  await expect
+    .poll(
+      async () => {
+        try {
+          return await readControllingWorkerSecurityRevision(page);
+        } catch {
+          return null;
+        }
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(SERVICE_WORKER_SECURITY_REVISION);
+  await page.reload();
+  await expect
+    .poll(() => readStartupState(page), { timeout: 30_000 })
+    .toBe('ready');
+  await expect
+    .poll(() => serializePersistentSecuritySurfaces(page), { timeout: 30_000 })
+    .not.toContain(legacyCanary);
 });
 
 test('old controller blocks credential entry until secure takeover, removes legacy credential cache, then reaches ready without caching the token', async ({

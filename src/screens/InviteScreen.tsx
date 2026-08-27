@@ -593,6 +593,11 @@ export function InviteScreen() {
       // setup invalidate it by advancing the generation again.
       const cleanupGeneration = ++effectGenerationRef.current;
       cancelledRef.current = true;
+      // Abort network I/O synchronously. StrictMode-sensitive credential/ref
+      // destruction remains deferred below, but a real unmount must not leave
+      // an authenticated sync request alive until the cleanup microtask runs.
+      inviteSyncAbortRef.current?.abort();
+      inviteSyncAbortRef.current = null;
       if (redirectTimerRef.current) {
         clearTimeout(redirectTimerRef.current);
         redirectTimerRef.current = undefined;
@@ -602,8 +607,6 @@ export function InviteScreen() {
         // cancel the destructive cleanup queued by StrictMode's synthetic pass.
         // eslint-disable-next-line react-hooks/exhaustive-deps
         if (cleanupGeneration !== effectGenerationRef.current) return;
-        inviteSyncAbortRef.current?.abort();
-        inviteSyncAbortRef.current = null;
         cancelTransportApproval();
         void rollbackActivePersistedInvite(false);
         inviteRef.current = null;

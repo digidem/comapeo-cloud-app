@@ -391,12 +391,15 @@ describe('InviteScreen', () => {
       expect(syncArchiveSpy).toHaveBeenCalled();
     });
 
+    const options = syncArchiveSpy.mock.calls[0]![1];
     const control = syncArchiveSpy.mock.calls[0]![2];
     expect(control?.isCancelled).toBeTypeOf('function');
     expect(control?.isCancelled?.()).toBe(false);
+    expect(options?.signal?.aborted).toBe(false);
 
     unmount();
     expect(control?.isCancelled?.()).toBe(true);
+    expect(options?.signal?.aborted).toBe(true);
   });
 
   // -----------------------------------------------------------------------
