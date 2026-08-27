@@ -20,11 +20,20 @@ npm test -- --run \
   tests/unit/lib/map/smp-zip.test.ts \
   tests/unit/lib/schemas/saved-map.test.ts
 
-echo "==> QA #279: Raw DEFLATE support in Chromium, Firefox, and WebKit"
+echo "==> QA #279: Production PWA build"
+npm run build:ci
+
+echo "==> QA #279: Production SMP ZIP reader raw DEFLATE in Chromium, Firefox, and WebKit"
 npx playwright test tests/e2e/smp-deflate-raw.e2e.ts \
   --project=chromium \
   --project=firefox \
   --project=webkit \
+  --reporter=list
+
+echo "==> QA #279: Real buildSmpBlob package through offline PWA lifecycle"
+VITE_PREVIEW=1 npx playwright test tests/e2e/map-offline-cold-start.e2e.ts \
+  --project=chromium \
+  --project=firefox \
   --reporter=list
 
 echo

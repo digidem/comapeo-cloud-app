@@ -299,6 +299,30 @@ describe('bounded SMP ZIP entry reads', () => {
     },
   );
 
+  it('rejects unexplained bytes in the local-entry region', async () => {
+    const blob = await makeZip('STORE');
+    const inspection = await inspectSmpZipCentralDirectory(blob);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const mutated = new Uint8Array(bytes.byteLength + 1);
+    mutated.set(bytes.slice(0, inspection.centralDirectoryOffset), 0);
+    mutated[inspection.centralDirectoryOffset] = 0;
+    mutated.set(
+      bytes.slice(inspection.centralDirectoryOffset),
+      inspection.centralDirectoryOffset + 1,
+    );
+    const shiftedEocd = inspection.eocdOffset + 1;
+    new DataView(mutated.buffer).setUint32(
+      shiftedEocd + 16,
+      inspection.centralDirectoryOffset + 1,
+      true,
+    );
+    const padded = new Blob([mutated]);
+    const paddedInspection = await inspectSmpZipCentralDirectory(padded);
+    await expect(
+      validateSmpZipLocalEntryLayout(padded, paddedInspection),
+    ).rejects.toThrow(/gap|unexplained|contiguous/i);
+  });
+
   it('rejects overlapping local entry/data ranges', async () => {
     const blob = await makeZip('STORE');
     const inspection = await inspectSmpZipCentralDirectory(blob);
@@ -411,6 +435,33 @@ describe('bounded SMP ZIP entry reads', () => {
         inspection,
       ),
     ).rejects.toMatchObject({ cause: 'zip-stop' });
+  });
+
+  it('rejects a corrupted real Writer data descriptor', async () => {
+    const blob = await makeWriterZip();
+    const inspection = await inspectSmpZipCentralDirectory(blob);
+    const entry = inspection.entries.find(
+      (candidate) => (candidate.generalPurposeFlags & 0x0008) !== 0,
+    );
+    expect(entry).toBeDefined();
+    if (!entry) return;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const nameLength = view.getUint16(entry.localHeaderOffset + 26, true);
+    const extraLength = view.getUint16(entry.localHeaderOffset + 28, true);
+    const dataEnd =
+      entry.localHeaderOffset +
+      30 +
+      nameLength +
+      extraLength +
+      entry.compressedSize;
+    const mutated = bytes.slice();
+    mutated[dataEnd] = (mutated[dataEnd] ?? 0) ^ 0xff;
+    const corrupted = new Blob([mutated]);
+    const corruptedInspection = await inspectSmpZipCentralDirectory(corrupted);
+    await expect(
+      validateSmpZipLocalEntryLayout(corrupted, corruptedInspection),
+    ).rejects.toThrow(/descriptor|CRC|size/i);
   });
 
   it('accepts and reads the real Writer data-descriptor form', async () => {

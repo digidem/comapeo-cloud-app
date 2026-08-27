@@ -170,6 +170,44 @@ describe('composeAuthoredStyle', () => {
     );
   });
 
+  it.each([
+    [
+      'duplicate layer ids',
+      {
+        ...baseStyle(),
+        layers: [
+          { id: 'duplicate', type: 'raster', source: 'basemap' },
+          { id: 'duplicate', type: 'raster', source: 'basemap' },
+        ],
+      },
+    ],
+    [
+      'missing layer source',
+      {
+        ...baseStyle(),
+        layers: [{ id: 'broken', type: 'raster', source: 'missing' }],
+      },
+    ],
+    [
+      'invalid layer type',
+      {
+        ...baseStyle(),
+        layers: [{ id: 'broken', type: 'not-a-maplibre-layer' }],
+      },
+    ],
+  ])(
+    'rejects a MapLibre-invalid base style: %s',
+    (_label, invalidBaseStyle) => {
+      expect(() =>
+        composeAuthoredStyle({
+          baseStyle: invalidBaseStyle,
+          authoredLayers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+          map: MAP,
+        }),
+      ).toThrow(/MapLibre|style/i);
+    },
+  );
+
   it('advertises only the effective raster zoom range that will actually be packaged', () => {
     const result = createAuthoredOnlyStyle({
       authoredLayers: [AUTHORED_RASTER_LAYER_FIXTURE],

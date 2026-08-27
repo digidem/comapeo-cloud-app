@@ -207,7 +207,7 @@ type JsonMeasureFrame =
  * Measure exact JSON UTF-8 bytes without materializing a complete JSON string
  * or a complete object-key list. Only canonical JSON values are accepted.
  */
-export function measureCanonicalJsonUtf8Bounded(
+function measureCanonicalJsonUtf8BoundedInternal(
   value: unknown,
   limits: Partial<CanonicalJsonMeasurementLimits> = {},
 ): CanonicalJsonMeasurementResult {
@@ -274,18 +274,30 @@ export function measureCanonicalJsonUtf8Bounded(
 
     if (frame.kind === 'array') {
       if (frame.index >= frame.value.length) continue;
-      if (!Object.hasOwn(frame.value, frame.index)) {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        frame.value,
+        String(frame.index),
+      );
+      if (!descriptor) {
         return {
           ok: false,
           code: 'UNSUPPORTED_VALUE',
           message: 'Sparse arrays are not canonical JSON values',
         };
       }
+      if (!('value' in descriptor)) {
+        return {
+          ok: false,
+          code: 'UNSUPPORTED_VALUE',
+          message:
+            'Accessor-backed array entries are not canonical JSON values',
+        };
+      }
       if (frame.index > 0) {
         const failed = addBytes(1n);
         if (failed) return failed;
       }
-      const item = frame.value[frame.index];
+      const item = descriptor.value;
       stack.push({ ...frame, index: frame.index + 1 });
       stack.push({ kind: 'value', value: item, depth: frame.depth + 1 });
       continue;
@@ -318,8 +330,18 @@ export function measureCanonicalJsonUtf8Bounded(
       const keyFailure = addBytes(encodedJsonStringBytes(key) + 1n);
       if (keyFailure) return keyFailure;
 
-      // Read the value only after the key has consumed its node/byte budget.
-      const child = frame.value[key];
+      // Read only data descriptors after the key has consumed its node/byte
+      // budget. Accessors are not canonical JSON and must never execute here.
+      const descriptor = Object.getOwnPropertyDescriptor(frame.value, key);
+      if (!descriptor || !('value' in descriptor)) {
+        return {
+          ok: false,
+          code: 'UNSUPPORTED_VALUE',
+          message:
+            'Accessor-backed object properties are not canonical JSON values',
+        };
+      }
+      const child = descriptor.value;
       stack.push({ ...frame, emitted: frame.emitted + 1 });
       stack.push({ kind: 'value', value: child, depth: frame.depth + 1 });
       continue;
@@ -449,6 +471,21 @@ export function measureCanonicalJsonUtf8Bounded(
   }
 
   return { ok: true, bytes, nodes };
+}
+
+export function measureCanonicalJsonUtf8Bounded(
+  value: unknown,
+  limits: Partial<CanonicalJsonMeasurementLimits> = {},
+): CanonicalJsonMeasurementResult {
+  try {
+    return measureCanonicalJsonUtf8BoundedInternal(value, limits);
+  } catch {
+    return {
+      ok: false,
+      code: 'UNSUPPORTED_VALUE',
+      message: 'JSON value could not be inspected safely',
+    };
+  }
 }
 
 export function sourceLayerIdForAuthoredLayer(layerId: string): string {
@@ -827,6 +864,27 @@ export function createGeoJsonAuthoredLayer(
   context: AuthoredLayerCommitContext,
   options: CreateGeoJsonAuthoredLayerOptions = {},
 ): PrepareAuthoredLayerResult {
+  const rawMeasurement = measureCanonicalJsonUtf8Bounded(normalizedInput, {
+    maxBytes: MAX_AUTHORED_LAYER_JSON_BYTES,
+    maxDepth: MAX_AUTHORED_JSON_DEPTH,
+    maxNodes: MAX_AUTHORED_JSON_NODES_PER_LAYER,
+    maxStringBytes: MAX_AUTHORED_JSON_STRING_BYTES,
+  });
+  if (!rawMeasurement.ok) {
+    return {
+      ok: false,
+      error: {
+        code: 'AUTHORED_LAYER_INVALID',
+        issues: [
+          {
+            code: `JSON_${rawMeasurement.code}`,
+            path: ['source', 'data'],
+            message: rawMeasurement.message,
+          },
+        ],
+      },
+    };
+  }
   const normalized = canonicalizeNormalizedGeoJson(
     normalizeGeoJson(normalizedInput),
   );

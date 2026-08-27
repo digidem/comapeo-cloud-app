@@ -11,10 +11,12 @@ This QA validates the authored-layer foundation added by issue #279:
 - bounded raster fetching and package-size/resource limits
 - global/regional SMP merge behavior
 - raster TMS-to-XYZ normalization and effective min/max zoom preservation
-- bounded ZIP parsing, STORE/DEFLATE reading, CRC verification, and unsafe archive rejection
+- bounded ZIP parsing, STORE/DEFLATE reading, data-descriptor/CRC verification, and unsafe archive rejection
+- deterministic and cancelable final SMP archive generation
 - SavedMap authored-layer schema scaffolding
 - no-authored-layer regression behavior
-- raw DEFLATE support in Chromium, Firefox, and WebKit
+- production SMP ZIP-reader raw DEFLATE support in Chromium, Firefox, and WebKit
+- real `buildSmpBlob()` output stored and reopened through the production offline PWA path in Chromium and Firefox
 
 This PR intentionally does **not** expose authored-layer creation or persistence in the production UI. That consumer is deferred to issue #280. Human QA for #279 is therefore technical/package QA, not a preview click-through flow.
 
@@ -41,11 +43,13 @@ bash scripts/qa/279-authored-smp-packaging.sh
 
 ### Expected result
 
-The script must exit with status `0` and all three phases must pass:
+The script must exit with status `0` and all five phases must pass:
 
 1. TypeScript strict type checking.
 2. Authored-layer/SMP unit and integration tests.
-3. `smp-deflate-raw.e2e.ts` in Chromium, Firefox, and WebKit.
+3. Production PWA build.
+4. `smp-deflate-raw.e2e.ts` in Chromium, Firefox, and WebKit, executing the exact production `src/lib/map/smp-zip.ts` parser against raw-DEFLATE input and corruption.
+5. `map-offline-cold-start.e2e.ts` in Chromium and Firefox, using actual `buildSmpBlob()` output stored in IndexedDB and reopened after the browser is switched fully offline. Chromium additionally asserts rendered authored polygon, line, point, and raster pixels.
 
 Any failed test, browser assertion failure, uncaught exception, timeout caused by the implementation, or non-zero exit status after prerequisites are satisfied is a QA failure. A browser launch failure that names missing host libraries is an environment-setup failure: install the dependencies or use exact-SHA CI evidence for that browser before deciding product QA.
 
@@ -59,7 +63,9 @@ After the automated script passes, review its output and confirm each behavior b
 - RFC 7946 geometry `bbox` and foreign members are normalized away before persistence/package preparation.
 - Raster render fragments reject unsupported `filter` values.
 - SavedMap authored-layer scaffolding rejects collections above 128 layers or 20 MiB aggregate canonical JSON, matching the packaging boundary.
-- Invalid, over-sized, cyclic, prototype-polluting, class-instance, and non-finite JSON payloads fail closed.
+- Invalid, over-sized, cyclic, prototype-polluting, class-instance, accessor-backed, proxy-hostile, and non-finite JSON payloads fail closed.
+- Raw GeoJSON is structurally bounded before normalization, so hostile/oversized candidates cannot force unbounded normalization work.
+- MapLibre-invalid base, prospective, authored-only, or post-Writer final styles fail closed.
 
 Relevant tests: `authored-layers.test.ts`, `saved-map.test.ts`.
 
@@ -82,6 +88,8 @@ Relevant tests: `authored-raster.test.ts`, `authored-payload-estimate.test.ts`, 
 - Effective raster `minzoom`/`maxzoom` survives replacement of the online source with Writer output.
 - Global overview merging does not mutate caller-owned nested `smp:sourceFolders` metadata.
 - Global/regional bounds metadata remains coherent and no `undefined` metadata is serialized.
+- Equivalent inputs produce byte-identical merged SMP output regardless of wall-clock time or source ZIP entry ordering.
+- Cancellation during final ZIP generation returns promptly without waiting for complete archive materialization.
 - The legacy `Failed to create download package: ...` error context is preserved when final Blob construction fails.
 
 Relevant tests: `authored-layers-smp.test.ts`, `authored-smp-merge.test.ts`, `authored-style.test.ts`, `authored-writer.test.ts`, `smp-download.test.ts`.
@@ -90,13 +98,14 @@ Relevant tests: `authored-layers-smp.test.ts`, `authored-smp-merge.test.ts`, `au
 
 - Unsafe names/path traversal are rejected.
 - Duplicate/colliding entries are rejected.
-- ZIP64, multi-disk, unsupported flags, malformed EOCD/local ranges, CRC mismatch, and declared-size mismatch fail closed.
+- ZIP64, multi-disk, unsupported flags, malformed EOCD/local ranges, CRC mismatch, declared-size mismatch, corrupted data descriptors, and unexplained local-region padding fail closed.
+- The pinned `styled-map-package-api@5.0.0-pre.5` Writer data-descriptor form remains readable without accepting arbitrary padding.
 - STORE and raw-DEFLATE entries are read under per-entry and aggregate emitted-byte caps.
 - A compressed bomb cannot escape the emitted-byte bound even with dishonest headers.
 
 Relevant test: `smp-zip.test.ts`.
 
-### 5. Cross-browser offline primitive
+### 5. Cross-browser production SMP ZIP reader
 
 Confirm the Playwright output contains a passing line for:
 
@@ -104,9 +113,13 @@ Confirm the Playwright output contains a passing line for:
 - `[firefox] ... smp-deflate-raw.e2e.ts`
 - `[webkit] ... smp-deflate-raw.e2e.ts`
 
-All three are required. A browser-specific skip or failure is not acceptable for #279.
+This test executes the exact production `src/lib/map/smp-zip.ts` implementation in each browser, reads a real raw-DEFLATE ZIP entry through the bounded parser, and proves corrupted compressed input is rejected. All three engines are required. A browser-specific skip or product failure is not acceptable for #279.
 
-### 6. No-authored-layer regression
+### 6. Production package offline round trip
+
+Confirm `map-offline-cold-start.e2e.ts` passes in Chromium and Firefox. The fixture must be produced by the public `buildSmpBlob()` boundary, persisted in the real app package tables, reopened after the browser context is switched offline, and complete without external requests. Chromium additionally proves authored polygon fill, line, point-circle, and raster pixels appear on the real MapLibre canvas. Firefox proves the same generated package and offline lifecycle; its headless WebGL screenshot surface is not used as a pixel oracle.
+
+### 7. No-authored-layer regression
 
 Confirm the download-path tests still cover the existing package behavior when `authoredLayers` is absent/empty. Existing regional/global download behavior must remain unchanged apart from the new authored path being available to future callers.
 
@@ -133,9 +146,11 @@ Record the following in the PR or handoff note:
 - tester:
 - date:
 - automated QA script: PASS / FAIL
-- Chromium DEFLATE: PASS / FAIL
-- Firefox DEFLATE: PASS / FAIL
-- WebKit DEFLATE: PASS / FAIL
+- Chromium production-reader DEFLATE: PASS / FAIL
+- Firefox production-reader DEFLATE: PASS / FAIL
+- WebKit production-reader DEFLATE: PASS / FAIL
+- Chromium `buildSmpBlob()` offline PWA round trip/render: PASS / FAIL
+- Firefox `buildSmpBlob()` offline PWA round trip: PASS / FAIL
 - human checklist: PASS / FAIL
 - notes / defects found:
 

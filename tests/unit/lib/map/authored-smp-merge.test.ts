@@ -36,6 +36,7 @@ async function makeRegionalZip(
     unexpected?: boolean;
     omitMetadata?: boolean;
     omitBounds?: boolean;
+    reverseTiles?: boolean;
   } = {},
 ): Promise<Blob> {
   const zip = new JSZip();
@@ -79,8 +80,15 @@ async function makeRegionalZip(
           }),
     }),
   );
-  zip.file('s/0/0/0/0.png', new Uint8Array([9]));
-  zip.file('s/0/4/8/8.png', new Uint8Array([10]));
+  const regionalTiles = [
+    ['s/0/0/0/0.png', new Uint8Array([9])],
+    ['s/0/4/8/8.png', new Uint8Array([10])],
+  ] as const;
+  for (const [name, bytes] of options.reverseTiles
+    ? [...regionalTiles].reverse()
+    : regionalTiles) {
+    zip.file(name, bytes);
+  }
   if (options.collisionFolder) {
     zip.file(`s/${options.collisionFolder}/0/0/0.png`, new Uint8Array([8]));
   }
@@ -207,6 +215,37 @@ describe('mergeSmpWithAuthoredLayers', () => {
       'https://tiles.example.com',
     );
     expect(JSON.stringify(finalStyle)).not.toContain('blob:');
+  });
+
+  it('rejects a MapLibre-invalid final style introduced by Writer source rewriting', async () => {
+    const authoredBlob = await makeAuthoredRasterSmp();
+    const writerZip = await JSZip.loadAsync(await authoredBlob.arrayBuffer());
+    const writerStyleFile = writerZip.file('style.json');
+    expect(writerStyleFile).not.toBeNull();
+    const writerStyle = JSON.parse(await writerStyleFile!.async('string')) as {
+      sources: Record<string, Record<string, unknown>>;
+    };
+    const sourceId = sourceLayerIdForAuthoredLayer(
+      AUTHORED_RASTER_LAYER_FIXTURE.id,
+    );
+    writerStyle.sources[sourceId] = {
+      ...writerStyle.sources[sourceId],
+      type: 'not-a-maplibre-source',
+    };
+    writerZip.file('style.json', JSON.stringify(writerStyle));
+    const malformedWriterBlob = await writerZip.generateAsync({
+      type: 'blob',
+      compression: 'STORE',
+    });
+
+    await expect(
+      mergeSmpWithAuthoredLayers({
+        regionalBlob: await makeRegionalZip(),
+        authoredBlob: malformedWriterBlob,
+        authoredLayers: [AUTHORED_RASTER_LAYER_FIXTURE],
+        map: MAP,
+      }),
+    ).rejects.toThrow(/MapLibre|style/i);
   });
 
   it('supports vector-only authored merge when the regional style has no metadata', async () => {
@@ -474,6 +513,96 @@ describe('mergeSmpWithAuthoredLayers', () => {
         map: MAP,
       }),
     ).rejects.toThrow(/unexpected/i);
+  });
+
+  it('emits byte-identical output across wall-clock time', async () => {
+    const regionalBlob = await makeRegionalZip();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      const first = await mergeSmpWithAuthoredLayers({
+        regionalBlob,
+        authoredLayers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+        map: MAP,
+      });
+      vi.setSystemTime(new Date('2030-06-01T12:34:56Z'));
+      const second = await mergeSmpWithAuthoredLayers({
+        regionalBlob,
+        authoredLayers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+        map: MAP,
+      });
+      expect(new Uint8Array(await second.arrayBuffer())).toEqual(
+        new Uint8Array(await first.arrayBuffer()),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('emits byte-identical output for equivalent input ZIP entry orderings', async () => {
+    const first = await mergeSmpWithAuthoredLayers({
+      regionalBlob: await makeRegionalZip(),
+      authoredLayers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+      map: MAP,
+    });
+    const second = await mergeSmpWithAuthoredLayers({
+      regionalBlob: await makeRegionalZip({ reverseTiles: true }),
+      authoredLayers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+      map: MAP,
+    });
+    expect(new Uint8Array(await second.arrayBuffer())).toEqual(
+      new Uint8Array(await first.arrayBuffer()),
+    );
+  });
+
+  it('aborts promptly while final ZIP generation is still pending', async () => {
+    const handlers = new Map<string, (...args: unknown[]) => void>();
+    const pause = vi.fn();
+    const fakeStream = {
+      on(event: string, handler: (...args: unknown[]) => void) {
+        handlers.set(event, handler);
+        return this;
+      },
+      resume() {
+        return this;
+      },
+      pause,
+      accumulate() {
+        return new Promise<never>(() => undefined);
+      },
+    };
+    const regionalBlob = await makeRegionalZip();
+    const generateSpy = vi
+      .spyOn(JSZip.prototype, 'generateInternalStream')
+      .mockReturnValue(fakeStream as never);
+    const controller = new AbortController();
+    const reason = new Error('cancel-final-generation');
+    const pending = mergeSmpWithAuthoredLayers({
+      regionalBlob,
+      authoredLayers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+      map: MAP,
+      signal: controller.signal,
+    });
+    for (
+      let attempt = 0;
+      attempt < 100 && !generateSpy.mock.calls.length;
+      attempt += 1
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(generateSpy).toHaveBeenCalled();
+    controller.abort(reason);
+    const outcome = await Promise.race([
+      pending.then(
+        () => 'resolved' as const,
+        (error: unknown) => error,
+      ),
+      new Promise<'timed-out'>((resolve) =>
+        setTimeout(() => resolve('timed-out'), 100),
+      ),
+    ]);
+    expect(outcome).toBe(reason);
+    expect(pause).toHaveBeenCalled();
   });
 
   it('enforces the conservative and actual 256 MiB output limits arithmetically', () => {

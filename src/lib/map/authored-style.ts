@@ -1,4 +1,9 @@
 import {
+  type StyleSpecification,
+  validateStyleMin,
+} from '@maplibre/maplibre-gl-style-spec';
+
+import {
   AUTHORED_LAYER_ID_PREFIX,
   type AuthoredLayer,
   type AuthoredLayerValidationIssue,
@@ -96,6 +101,19 @@ function measureStyle(value: unknown, maxBytes: number, label: string): bigint {
     );
   }
   return measured.bytes;
+}
+
+export function assertValidMapLibreStyle(
+  style: MapLibreStyleLike,
+  label: string,
+): void {
+  const errors = validateStyleMin(style as unknown as StyleSpecification);
+  if (errors.length === 0) return;
+  const summary = errors
+    .slice(0, 3)
+    .map((error) => error.message)
+    .join('; ');
+  throw styleError(`${label} is not a valid MapLibre style: ${summary}`);
 }
 
 function prepareCompleteCollection(
@@ -218,6 +236,7 @@ export function composeAuthoredStyle(config: {
     'base style',
   );
   const baseStyle = parseBaseStyle(config.baseStyle);
+  assertValidMapLibreStyle(baseStyle, 'base style');
   const layers = prepareCompleteCollection(config.authoredLayers, config.map);
   assertBaseNamespaceAvailable(baseStyle, layers);
 
@@ -247,6 +266,7 @@ export function composeAuthoredStyle(config: {
     MAX_FINAL_STYLE_BYTES,
     'prospective final style',
   );
+  assertValidMapLibreStyle(style, 'prospective final style');
   return {
     style,
     layers,
@@ -289,5 +309,6 @@ export function createAuthoredOnlyStyle(config: {
     MAX_FINAL_STYLE_BYTES,
     'authored-only style',
   );
+  assertValidMapLibreStyle(style, 'authored-only style');
   return { style, layers, rasterLayerIds, finalStyleUtf8Bytes };
 }

@@ -303,6 +303,21 @@ describe('createGeoJsonAuthoredLayer', () => {
     });
   });
 
+  it('rejects an oversized raw GeoJSON candidate before normalization work', () => {
+    const features: unknown[] = [];
+    features.length = MAX_AUTHORED_JSON_NODES_PER_LAYER + 1;
+    const result = createGeoJsonAuthoredLayer(
+      { type: 'FeatureCollection', features },
+      { minZoom: 0, maxZoom: 14 },
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        issues: [expect.objectContaining({ code: 'JSON_MAX_NODES' })],
+      },
+    });
+  });
+
   it('assigns a fresh UUIDv4 for each new layer', () => {
     const input = {
       type: 'FeatureCollection',
@@ -1132,6 +1147,39 @@ describe('bounded JSON measurement limits', () => {
   ])('rejects unsupported canonical JSON value %#', (value) => {
     const measured = measureCanonicalJsonUtf8Bounded(value);
     expect(measured).toMatchObject({ ok: false, code: 'UNSUPPORTED_VALUE' });
+  });
+
+  it('rejects accessor-backed values without invoking their getters', () => {
+    let getterCalls = 0;
+    const value: Record<string, unknown> = {};
+    Object.defineProperty(value, 'secret', {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        throw new Error('getter must not run');
+      },
+    });
+    expect(measureCanonicalJsonUtf8Bounded(value)).toMatchObject({
+      ok: false,
+      code: 'UNSUPPORTED_VALUE',
+    });
+    expect(getterCalls).toBe(0);
+  });
+
+  it('turns hostile proxy reflection into a structured unsupported-value result', () => {
+    const value = new Proxy(
+      {},
+      {
+        getPrototypeOf() {
+          throw new Error('proxy trap');
+        },
+      },
+    );
+    expect(() => measureCanonicalJsonUtf8Bounded(value)).not.toThrow();
+    expect(measureCanonicalJsonUtf8Bounded(value)).toMatchObject({
+      ok: false,
+      code: 'UNSUPPORTED_VALUE',
+    });
   });
 
   it('rejects objects with own symbols and dangerous prototype keys', () => {

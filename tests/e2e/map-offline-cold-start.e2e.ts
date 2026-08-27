@@ -1,8 +1,7 @@
 import { expect, test } from '@playwright/test';
-import JSZip from 'jszip';
-import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 
+import { buildSmpBlob } from '../../src/lib/map/smp-download';
 import {
   AUTHORED_RASTER_LAYER_FIXTURE,
   AUTHORED_VECTOR_LAYER_FIXTURE,
@@ -25,26 +24,6 @@ const ACTIVE_MAP_ID = 'offline-cold-start-map';
 const ACTIVE_MAP_NAME = 'Offline Cold Start Map';
 
 async function buildOfflineSmp(): Promise<Uint8Array> {
-  const zip = new JSZip();
-  const vectorSourceId = `comapeo-authored:${AUTHORED_VECTOR_LAYER_FIXTURE.id}:source`;
-  const rasterSourceId = `comapeo-authored:${AUTHORED_RASTER_LAYER_FIXTURE.id}:source`;
-  const rasterFolder = `comapeo-authored-${createHash('sha256')
-    .update(AUTHORED_RASTER_LAYER_FIXTURE.id)
-    .digest('hex')}`;
-  const authoredVectorData =
-    AUTHORED_VECTOR_LAYER_FIXTURE.source.type === 'geojson'
-      ? {
-          ...AUTHORED_VECTOR_LAYER_FIXTURE.source.data,
-          features: [
-            ...AUTHORED_VECTOR_LAYER_FIXTURE.source.data.features,
-            {
-              type: 'Feature' as const,
-              properties: { name: 'point-render-canary' },
-              geometry: { type: 'Point' as const, coordinates: [-59.5, -3] },
-            },
-          ],
-        }
-      : { type: 'FeatureCollection' as const, features: [] };
   const authoredRasterPng = await sharp({
     create: {
       width: 1,
@@ -55,103 +34,80 @@ async function buildOfflineSmp(): Promise<Uint8Array> {
   })
     .png()
     .toBuffer();
-  const authoredVectorLayers = AUTHORED_VECTOR_LAYER_FIXTURE.render.layers.map(
-    (fragment, index) => ({
-      ...fragment,
-      id: `comapeo-authored:${AUTHORED_VECTOR_LAYER_FIXTURE.id}:layer:${index}`,
-      source: vectorSourceId,
-      layout: { ...(fragment.layout ?? {}), visibility: 'visible' as const },
-    }),
-  );
-  const authoredRasterLayers = AUTHORED_RASTER_LAYER_FIXTURE.render.layers.map(
-    (fragment, index) => ({
-      ...fragment,
-      id: `comapeo-authored:${AUTHORED_RASTER_LAYER_FIXTURE.id}:layer:${index}`,
-      source: rasterSourceId,
-      layout: { ...(fragment.layout ?? {}), visibility: 'visible' as const },
-    }),
-  );
-  zip.file('VERSION', '1.0');
-  zip.file(
-    'style.json',
-    JSON.stringify({
-      version: 8,
-      glyphs: 'smp://maps.v1/fonts/{fontstack}/{range}.pbf',
-      sprite: 'smp://maps.v1/sprites/sprite',
-      sources: {
-        raster: {
-          type: 'raster',
-          tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.png'],
-          tileSize: 256,
-          minzoom: 0,
-          maxzoom: 0,
-        },
-        label: {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: [
-              {
-                type: 'Feature',
-                geometry: { type: 'Point', coordinates: [0, 0] },
-                properties: { name: 'Offline' },
-              },
-            ],
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const href =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
+    if (href.startsWith('blob:')) return originalFetch(input, init);
+    const method =
+      init?.method ?? (input instanceof Request ? input.method : 'GET');
+    if (href === 'https://style.example.com/style.json') {
+      const style = JSON.stringify({
+        version: 8,
+        sources: {
+          basemap: {
+            type: 'raster',
+            tiles: ['https://basemap.example.com/{z}/{x}/{y}.png'],
+            tileSize: 256,
           },
         },
-        [vectorSourceId]: {
-          type: 'geojson',
-          data: authoredVectorData,
+        layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
+      });
+      const response = new Response(method === 'HEAD' ? null : style, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': String(Buffer.byteLength(style)),
         },
-        [rasterSourceId]: {
-          type: 'raster',
-          tiles: [`smp://maps.v1/s/${rasterFolder}/{z}/{x}/{y}.png`],
-          tileSize: 256,
-          scheme: 'xyz',
-          minzoom: 0,
-          maxzoom: 0,
-        },
+      });
+      Object.defineProperty(response, 'url', { value: href });
+      return response;
+    }
+    const isAuthoredRaster = href.startsWith('https://tiles.example.com/');
+    const isBasemap = href.startsWith('https://basemap.example.com/');
+    if (!isAuthoredRaster && !isBasemap) {
+      throw new Error(`Unexpected package-generation request: ${href}`);
+    }
+    const bytes = isAuthoredRaster ? authoredRasterPng : TRANSPARENT_1X1_PNG;
+    const response = new Response(method === 'HEAD' ? null : bytes, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/png',
+        'Content-Length': String(bytes.byteLength),
       },
-      layers: [
-        { id: 'raster', type: 'raster', source: 'raster' },
-        {
-          id: 'label',
-          type: 'symbol',
-          source: 'label',
-          layout: {
-            'icon-image': 'marker',
-            'text-field': ['get', 'name'],
-            'text-font': ['Open Sans Regular'],
-          },
-        },
-        ...authoredRasterLayers,
-        ...authoredVectorLayers,
+    });
+    Object.defineProperty(response, 'url', { value: href });
+    return response;
+  }) as typeof fetch;
+
+  try {
+    const built = await buildSmpBlob({
+      map: {
+        type: 'style',
+        styleUrl: 'https://style.example.com/style.json',
+        bbox: [-62, -5, -54, 1],
+        minZoom: 0,
+        maxZoom: 0,
+        scheme: 'xyz',
+      },
+      // The canonical fixtures are intentionally hidden. This browser render
+      // canary flips only the outer visibility value so actual package output
+      // can prove the same canonical geometry/style payloads render offline.
+      authoredLayers: [
+        { ...AUTHORED_RASTER_LAYER_FIXTURE, visible: true },
+        { ...AUTHORED_VECTOR_LAYER_FIXTURE, visible: true },
       ],
-      metadata: {
-        name: ACTIVE_MAP_NAME,
-        'smp:bounds': [-180, -85, 180, 85],
-        'smp:maxzoom': 0,
-        'smp:sourceFolders': {
-          raster: 's/0',
-          [rasterSourceId]: `s/${rasterFolder}`,
-        },
-      },
-    }),
-  );
-  zip.file('s/0/0/0/0.png', TRANSPARENT_1X1_PNG);
-  zip.file(`s/${rasterFolder}/0/0/0.png`, authoredRasterPng);
-  zip.file(
-    'sprites/sprite.json',
-    JSON.stringify({
-      marker: { width: 1, height: 1, x: 0, y: 0, pixelRatio: 1 },
-    }),
-  );
-  zip.file('sprites/sprite.png', TRANSPARENT_1X1_PNG);
-  // An empty PBF is a valid empty protobuf message. It is sufficient for this
-  // fixture because the test is proving packaged-resource routing, not glyph
-  // rasterization correctness.
-  zip.file('fonts/Open Sans Regular/0-255.pbf', new Uint8Array());
-  return zip.generateAsync({ type: 'uint8array' });
+      bufferTiles: 0,
+      includeGlobalOverview: false,
+    });
+    return new Uint8Array(await built.blob.arrayBuffer());
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }
 
 async function seedLocalState(

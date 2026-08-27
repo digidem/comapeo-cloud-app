@@ -11,6 +11,7 @@ import {
 import {
   type AuthoredStyleMapContext,
   type MapLibreStyleLike,
+  assertValidMapLibreStyle,
   composeAuthoredStyle,
 } from '@/lib/map/authored-style';
 import {
@@ -69,12 +70,75 @@ export type MergeSmpWithAuthoredLayersConfig = {
   signal?: AbortSignal;
 };
 
-function abortIfNeeded(signal?: AbortSignal): void {
-  if (!signal?.aborted) return;
-  if (signal.reason instanceof Error) throw signal.reason;
-  throw new Error('Authored SMP merge failed', {
+function mergeAbortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  return new Error('Authored SMP merge failed', {
     cause:
       signal.reason ?? new DOMException('Download cancelled', 'AbortError'),
+  });
+}
+
+function abortIfNeeded(signal?: AbortSignal): void {
+  if (signal?.aborted) throw mergeAbortError(signal);
+}
+
+const DETERMINISTIC_ZIP_DATE = new Date(1980, 0, 1, 0, 0, 0);
+
+async function generateMergedArchive(
+  output: JSZip,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const stream = output.generateInternalStream({
+    type: 'uint8array',
+    compression: 'STORE',
+  });
+  return new Promise<Blob>((resolve, reject) => {
+    let settled = false;
+    let totalBytes = 0;
+    const chunks: Uint8Array[] = [];
+    const cleanup = () => signal?.removeEventListener('abort', onAbort);
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try {
+        stream.pause();
+      } catch {
+        // Best-effort stop: the caller-visible failure must remain primary.
+      }
+      reject(
+        error instanceof Error
+          ? error
+          : new Error('Authored SMP merge failed', { cause: error }),
+      );
+    };
+    const onAbort = () => {
+      if (signal) fail(mergeAbortError(signal));
+    };
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+    stream
+      .on('data', (chunk: Uint8Array) => {
+        if (settled) return;
+        totalBytes += chunk.byteLength;
+        if (totalBytes > MAX_SMP_MERGED_OUTPUT_BYTES) {
+          fail(smpMergeError('final SMP output exceeds 256 MiB'));
+          return;
+        }
+        chunks.push(chunk);
+      })
+      .on('error', fail)
+      .on('end', () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(new Blob(chunks as BlobPart[], { type: 'application/zip' }));
+      });
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    stream.resume();
   });
 }
 
@@ -269,6 +333,7 @@ export async function mergeSmpWithAuthoredLayers(
     writerStyle,
     composed.layers,
   );
+  assertValidMapLibreStyle(finalStyle, 'final merged style');
   const finalStyleBytes = measureFinalStyle(finalStyle);
   abortIfNeeded(config.signal);
 
@@ -280,7 +345,11 @@ export async function mergeSmpWithAuthoredLayers(
     ...(authoredArchive
       ? planAuthoredEntries(authoredArchive, authoredMappings)
       : []),
-  ];
+  ].sort((left, right) => {
+    if (left.targetName < right.targetName) return -1;
+    if (left.targetName > right.targetName) return 1;
+    return 0;
+  });
   proveMergePlanUnique(plans, MAX_SMP_MERGE_ENTRIES);
 
   const materialized: Array<{ targetName: string; bytes: Uint8Array }> = [];
@@ -308,6 +377,7 @@ export async function mergeSmpWithAuthoredLayers(
       binary: true,
       compression: 'STORE',
       createFolders: false,
+      date: DETERMINISTIC_ZIP_DATE,
     });
   }
   const styleJson = JSON.stringify(finalStyle);
@@ -319,11 +389,9 @@ export async function mergeSmpWithAuthoredLayers(
   output.file('style.json', styleJson, {
     compression: 'STORE',
     createFolders: false,
+    date: DETERMINISTIC_ZIP_DATE,
   });
-  const blob = await output.generateAsync({
-    type: 'blob',
-    compression: 'STORE',
-  });
+  const blob = await generateMergedArchive(output, config.signal);
   assertActualMergedSmpSize(blob.size);
   abortIfNeeded(config.signal);
   return blob;

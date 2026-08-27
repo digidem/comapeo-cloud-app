@@ -10,6 +10,7 @@ export const SMP_ZIP_STREAM_CLEANUP_TIMEOUT_MS = 5_000;
 const EOCD_SIGNATURE = 0x06054b50;
 const CENTRAL_SIGNATURE = 0x02014b50;
 const LOCAL_SIGNATURE = 0x04034b50;
+const DATA_DESCRIPTOR_SIGNATURE = 0x08074b50;
 const CLASSIC_EOCD_BYTES = 22;
 const MAX_ZIP_COMMENT_BYTES = 65_535;
 const SUPPORTED_FLAGS = 0x0008 | 0x0800;
@@ -490,6 +491,87 @@ export async function inspectSmpZipCentralDirectory(
   };
 }
 
+async function validateDataDescriptor(
+  blob: Blob,
+  entry: SmpZipEntry,
+  dataEnd: number,
+  centralDirectoryOffset: number,
+): Promise<number> {
+  if ((entry.generalPurposeFlags & DATA_DESCRIPTOR_FLAG) === 0) return dataEnd;
+
+  const available = centralDirectoryOffset - dataEnd;
+  if (available < 12) {
+    throw zipError(
+      'SMP_ZIP_DATA_DESCRIPTOR_TRUNCATED',
+      `Truncated ZIP data descriptor for ${entry.name}`,
+    );
+  }
+  const probeLength = Math.min(28, available);
+  const bytes = new Uint8Array(
+    await blob.slice(dataEnd, dataEnd + probeLength).arrayBuffer(),
+  );
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const hasSignature =
+    bytes.byteLength >= 4 &&
+    view.getUint32(0, true) === DATA_DESCRIPTOR_SIGNATURE;
+  const fieldOffset = hasSignature ? 4 : 0;
+  const descriptorLength = hasSignature ? 16 : 12;
+  if (bytes.byteLength < descriptorLength) {
+    throw zipError(
+      'SMP_ZIP_DATA_DESCRIPTOR_TRUNCATED',
+      `Truncated ZIP data descriptor for ${entry.name}`,
+    );
+  }
+  const crc32 = view.getUint32(fieldOffset, true);
+  const compressedSize = view.getUint32(fieldOffset + 4, true);
+  const uncompressedSize = view.getUint32(fieldOffset + 8, true);
+  if (
+    crc32 !== entry.crc32 ||
+    compressedSize !== entry.compressedSize ||
+    uncompressedSize !== entry.uncompressedSize
+  ) {
+    throw zipError(
+      'SMP_ZIP_DATA_DESCRIPTOR_MISMATCH',
+      `ZIP data descriptor does not match the central directory for ${entry.name}`,
+    );
+  }
+
+  let descriptorEnd = dataEnd + descriptorLength;
+  // styled-map-package-api@5.0.0-pre.5 emits eight zero bytes after its
+  // signed classic descriptor. Accept only that exact pinned public-observable
+  // form, and only when it is immediately followed by another ZIP record.
+  if (hasSignature && bytes.byteLength >= descriptorLength + 8) {
+    let writerPadding = true;
+    for (
+      let index = descriptorLength;
+      index < descriptorLength + 8;
+      index += 1
+    ) {
+      if (bytes[index] !== 0) {
+        writerPadding = false;
+        break;
+      }
+    }
+    const paddingEndsAtCentralDirectory = available === descriptorLength + 8;
+    const followedByZipRecord =
+      bytes.byteLength >= descriptorLength + 12 &&
+      (() => {
+        const nextSignature = view.getUint32(descriptorLength + 8, true);
+        return (
+          nextSignature === LOCAL_SIGNATURE ||
+          nextSignature === CENTRAL_SIGNATURE
+        );
+      })();
+    if (
+      writerPadding &&
+      (paddingEndsAtCentralDirectory || followedByZipRecord)
+    ) {
+      descriptorEnd += 8;
+    }
+  }
+  return descriptorEnd;
+}
+
 async function inspectLocalEntry(
   blob: Blob,
   entry: SmpZipEntry,
@@ -614,11 +696,23 @@ async function inspectLocalEntry(
       `Compressed data range is invalid for ${entry.name}`,
     );
   }
+  const rangeEnd = await validateDataDescriptor(
+    blob,
+    entry,
+    dataEnd,
+    inspection.centralDirectoryOffset,
+  );
+  if (rangeEnd > inspection.centralDirectoryOffset || rangeEnd > blob.size) {
+    throw zipError(
+      'SMP_ZIP_DATA_DESCRIPTOR_RANGE_INVALID',
+      `ZIP data descriptor range is invalid for ${entry.name}`,
+    );
+  }
   return {
     dataStart,
     dataEnd,
     rangeStart: entry.localHeaderOffset,
-    rangeEnd: dataEnd,
+    rangeEnd,
   };
 }
 
@@ -633,6 +727,21 @@ export async function validateSmpZipLocalEntryLayout(
     ranges.push({ ...layout, name: entry.name });
   }
   ranges.sort((left, right) => left.rangeStart - right.rangeStart);
+  if (ranges.length === 0) {
+    if (inspection.centralDirectoryOffset !== 0) {
+      throw zipError(
+        'SMP_ZIP_LOCAL_RANGE_GAP',
+        'ZIP local-entry region contains unexplained bytes before the central directory',
+      );
+    }
+    return;
+  }
+  if (ranges[0]!.rangeStart !== 0) {
+    throw zipError(
+      'SMP_ZIP_LOCAL_RANGE_GAP',
+      'ZIP local-entry region must start at byte zero with no unexplained prefix',
+    );
+  }
   for (let index = 1; index < ranges.length; index += 1) {
     const previous = ranges[index - 1]!;
     const current = ranges[index]!;
@@ -642,6 +751,18 @@ export async function validateSmpZipLocalEntryLayout(
         `ZIP local/data ranges overlap: ${previous.name} and ${current.name}`,
       );
     }
+    if (current.rangeStart > previous.rangeEnd) {
+      throw zipError(
+        'SMP_ZIP_LOCAL_RANGE_GAP',
+        `ZIP local-entry region contains an unexplained gap after ${previous.name}`,
+      );
+    }
+  }
+  if (ranges.at(-1)!.rangeEnd !== inspection.centralDirectoryOffset) {
+    throw zipError(
+      'SMP_ZIP_LOCAL_RANGE_GAP',
+      'ZIP local-entry region contains unexplained bytes before the central directory',
+    );
   }
 }
 
