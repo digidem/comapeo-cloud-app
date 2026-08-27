@@ -28,12 +28,15 @@ export {
   getSubmissionGuidanceStatus,
   REPORT_AGENCIES,
   REPORT_TEMPLATE_LOCALES,
+  reportTemplateReferenceSchema,
   reportTemplateSchema,
+  resolveReportTemplate,
 } from '@/lib/reports/template-registry';
 export type {
   CaseFactKey,
   ImmutableReportTemplate,
   ReportTemplate,
   ReportTemplateLocale,
+  ReportTemplateReference,
   SubmissionGuidanceStatus,
 } from '@/lib/reports/template-registry';

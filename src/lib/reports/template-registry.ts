@@ -94,7 +94,7 @@ const caseTypeSchema = v.picklist(CASE_TYPES);
 const caseFactKeySchema = v.picklist(CASE_FACT_KEYS);
 const agencySchema = v.picklist(REPORT_AGENCIES);
 
-export const reportTemplateSchema = v.object({
+const reportTemplateObjectSchema = v.object({
   templateId: v.pipe(v.string(), v.regex(/^br\.[a-z]+\.report$/)),
   version: v.pipe(v.string(), v.regex(/^\d+\.\d+\.\d+$/)),
   country: v.literal('BR'),
@@ -137,6 +137,32 @@ export const reportTemplateSchema = v.object({
   lastReviewedAt: isoDateSchema,
 });
 
+function hasUniqueItems(values: readonly string[]): boolean {
+  return new Set(values).size === values.length;
+}
+
+function isInternallyConsistentTemplate(
+  template: v.InferOutput<typeof reportTemplateObjectSchema>,
+): boolean {
+  const expectedTemplateId = `br.${template.agency.toLowerCase()}.report`;
+  const requiredFacts = new Set(template.requiredFacts);
+
+  return (
+    template.templateId === expectedTemplateId &&
+    hasUniqueItems(template.requiredFacts) &&
+    hasUniqueItems(template.optionalFacts) &&
+    !template.optionalFacts.some((fact) => requiredFacts.has(fact))
+  );
+}
+
+export const reportTemplateSchema = v.pipe(
+  reportTemplateObjectSchema,
+  v.check(
+    isInternallyConsistentTemplate,
+    'Report template identity and fact lists must be internally consistent',
+  ),
+);
+
 export type ReportTemplate = v.InferOutput<typeof reportTemplateSchema>;
 
 type DeepReadonly<T> = T extends (...args: never[]) => unknown
@@ -148,6 +174,16 @@ type DeepReadonly<T> = T extends (...args: never[]) => unknown
       : T;
 
 export type ImmutableReportTemplate = DeepReadonly<ReportTemplate>;
+
+export const reportTemplateReferenceSchema = v.object({
+  templateId: v.pipe(v.string(), v.regex(/^br\.[a-z]+\.report$/)),
+  version: v.pipe(v.string(), v.regex(/^\d+\.\d+\.\d+$/)),
+  agency: agencySchema,
+});
+
+export type ReportTemplateReference = v.InferOutput<
+  typeof reportTemplateReferenceSchema
+>;
 
 function deepFreeze<T>(value: T): DeepReadonly<T> {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -459,6 +495,19 @@ export function getLatestReportTemplate(
   return current;
 }
 
+export function resolveReportTemplate(
+  reference: ReportTemplateReference,
+): ImmutableReportTemplate {
+  const parsed = v.parse(reportTemplateReferenceSchema, reference);
+  const registered = getReportTemplate(parsed.agency, parsed.version);
+  if (!registered || registered.templateId !== parsed.templateId) {
+    throw new Error(
+      `No registered report template matches ${parsed.templateId}@${parsed.version} for ${parsed.agency}`,
+    );
+  }
+  return registered;
+}
+
 export interface SubmissionGuidanceStatus {
   stale: boolean;
   ageDays: number;
@@ -482,7 +531,10 @@ export function getSubmissionGuidanceStatus(
     now.getUTCMonth(),
     now.getUTCDate(),
   );
-  const ageDays = Math.max(0, Math.floor((currentDay - reviewedDay) / DAY_MS));
+  if (currentDay < reviewedDay) {
+    throw new RangeError('Report template review date is in the future');
+  }
+  const ageDays = Math.floor((currentDay - reviewedDay) / DAY_MS);
 
   return {
     stale: ageDays > 180,

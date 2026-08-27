@@ -6,6 +6,8 @@ import {
   type CaseFactKey,
   type ImmutableReportTemplate,
   REPORT_AGENCIES,
+  type ReportTemplateReference,
+  resolveReportTemplate,
 } from '@/lib/reports/template-registry';
 import { geometrySchema } from '@/lib/schemas/geometry';
 
@@ -47,15 +49,32 @@ function isDateLike(value: string): boolean {
 
   const dateTime = LOCAL_OFFSET_DATE_TIME_RE.exec(value);
   if (!dateTime) return false;
-  const [, year, month, day, hour, minute, second, , offsetHour, offsetMinute] =
-    dateTime;
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    offsetSign,
+    offsetHour,
+    offsetMinute,
+  ] = dateTime;
+  const offsetHours = Number(offsetHour);
+  const offsetMinutes = Number(offsetMinute);
+  const offsetTotalMinutes = offsetHours * 60 + offsetMinutes;
+  const isUnknownOffset =
+    offsetSign === '-' && offsetHours === 0 && offsetMinutes === 0;
+
   return (
     hasValidDateParts(Number(year), Number(month), Number(day)) &&
     Number(hour) <= 23 &&
     Number(minute) <= 59 &&
     (second === undefined || Number(second) <= 59) &&
-    Number(offsetHour) <= 23 &&
-    Number(offsetMinute) <= 59 &&
+    offsetMinutes <= 59 &&
+    offsetTotalMinutes <= 14 * 60 &&
+    !isUnknownOffset &&
     Number.isFinite(Date.parse(value))
   );
 }
@@ -115,6 +134,39 @@ export const caseFactValueSchema = v.variant('kind', [
 
 export type CaseFactValue = v.InferOutput<typeof caseFactValueSchema>;
 
+type CaseFactValueKind = CaseFactValue['kind'];
+
+const CASE_FACT_VALUE_KINDS = {
+  'case.title': ['text'],
+  'case.primaryType': ['text'],
+  'case.secondaryTypes': ['text'],
+  'case.context': ['text'],
+  'incident.date': ['date'],
+  'incident.dateRange': ['date-range'],
+  'incident.chronology': ['text'],
+  'incident.recurrence': ['boolean'],
+  'location.summary': ['location-summary'],
+  'location.geometry': ['geometry'],
+  'people.communityContext': ['text'],
+  'impact.threats': ['text'],
+  'impact.environmentalDamage': ['text'],
+  'impact.affectedResources': ['text'],
+  'actors.documented': ['text'],
+  'equipment.documented': ['text'],
+  'action.requested': ['text'],
+  'urgency.context': ['text'],
+  'evidence.summary': ['text'],
+} as const satisfies Record<CaseFactKey, readonly CaseFactValueKind[]>;
+
+function hasCompatibleCaseFactValue(input: {
+  key: CaseFactKey;
+  value: CaseFactValue;
+}): boolean {
+  return (
+    CASE_FACT_VALUE_KINDS[input.key] as readonly CaseFactValueKind[]
+  ).includes(input.value.kind);
+}
+
 export const caseFactSourceInputSchema = v.object({
   type: sourceTypeSchema,
   id: nonEmptyStringSchema,
@@ -125,11 +177,17 @@ export type CaseFactSourceInput = v.InferOutput<
   typeof caseFactSourceInputSchema
 >;
 
-export const approvedCaseFactInputSchema = v.object({
-  key: caseFactKeySchema,
-  value: caseFactValueSchema,
-  source: caseFactSourceInputSchema,
-});
+export const approvedCaseFactInputSchema = v.pipe(
+  v.object({
+    key: caseFactKeySchema,
+    value: caseFactValueSchema,
+    source: caseFactSourceInputSchema,
+  }),
+  v.check(
+    (input) => hasCompatibleCaseFactValue(input),
+    'Case Fact value kind does not match its semantic key',
+  ),
+);
 
 export type ApprovedCaseFactInput = v.InferOutput<
   typeof approvedCaseFactInputSchema
@@ -144,11 +202,17 @@ export const caseFactProvenanceSchema = v.object({
 
 export type CaseFactProvenance = v.InferOutput<typeof caseFactProvenanceSchema>;
 
-export const caseFactSchema = v.object({
-  key: caseFactKeySchema,
-  value: caseFactValueSchema,
-  provenance: v.pipe(v.array(caseFactProvenanceSchema), v.minLength(1)),
-});
+export const caseFactSchema = v.pipe(
+  v.object({
+    key: caseFactKeySchema,
+    value: caseFactValueSchema,
+    provenance: v.pipe(v.array(caseFactProvenanceSchema), v.minLength(1)),
+  }),
+  v.check(
+    (input) => hasCompatibleCaseFactValue(input),
+    'Case Fact value kind does not match its semantic key',
+  ),
+);
 
 export type CaseFact = v.InferOutput<typeof caseFactSchema>;
 
@@ -211,13 +275,13 @@ export type CaseFacts = v.InferOutput<typeof caseFactsSchema>;
 
 export interface BuildCaseFactsInput {
   case: Pick<Case, 'localId' | 'projectLocalId' | 'caseType'>;
-  template: ImmutableReportTemplate;
+  template: ReportTemplateReference;
   /**
    * Facts already selected, report-approved, and disclosure-transformed by the
-   * evidence/disclosure owner (#269). Sensitive Case context such as the title
-   * must enter through this list as an approved fact; this layer deliberately
-   * makes no disclosure decision and has no access to project storage or the
-   * network.
+   * evidence/disclosure owner (#269). Report-visible Case context, including
+   * title and primary type, must enter through this list as approved facts; this
+   * layer deliberately makes no disclosure decision and has no access to
+   * project storage or the network.
    */
   approvedFacts: readonly ApprovedCaseFactInput[];
 }
@@ -262,13 +326,12 @@ function normalizeFact(
   value: unknown,
   source: unknown,
 ): CaseFact {
-  const parsedValue = v.parse(caseFactValueSchema, value);
   const parsedSource = v.parse(caseFactSourceInputSchema, source);
-  return {
+  return v.parse(caseFactSchema, {
     key,
-    value: parsedValue,
+    value,
     provenance: [toProvenance(parsedSource)],
-  };
+  });
 }
 
 function mergeAndSortFacts(candidates: readonly CaseFact[]): CaseFact[] {
@@ -354,22 +417,26 @@ function collectMissingInformation(
 }
 
 export function buildCaseFacts(input: BuildCaseFactsInput): CaseFacts {
-  if (!input.template.supportedCaseTypes.includes(input.case.caseType)) {
+  const template = resolveReportTemplate(input.template);
+  if (!template.supportedCaseTypes.includes(input.case.caseType)) {
     throw new RangeError(
-      `Case type ${input.case.caseType} is not supported by template ${input.template.templateId}@${input.template.version}`,
+      `Case type ${input.case.caseType} is not supported by template ${template.templateId}@${template.version}`,
     );
   }
 
-  const candidates: CaseFact[] = [
-    normalizeFact(
-      'case.primaryType',
-      { kind: 'text', value: input.case.caseType },
-      { type: 'case-context', id: 'primary-type' },
-    ),
-  ];
+  const candidates: CaseFact[] = [];
 
   for (const approvedFact of input.approvedFacts) {
     const parsed = v.parse(approvedCaseFactInputSchema, approvedFact);
+    if (
+      parsed.key === 'case.primaryType' &&
+      (parsed.value.kind !== 'text' ||
+        parsed.value.value !== input.case.caseType)
+    ) {
+      throw new RangeError(
+        'Approved case.primaryType must match the current Case primary type',
+      );
+    }
     candidates.push(normalizeFact(parsed.key, parsed.value, parsed.source));
   }
 
@@ -379,13 +446,13 @@ export function buildCaseFacts(input: BuildCaseFactsInput): CaseFacts {
     caseLocalId: input.case.localId,
     projectLocalId: input.case.projectLocalId,
     template: {
-      templateId: input.template.templateId,
-      version: input.template.version,
-      agency: input.template.agency,
-      outputLanguage: input.template.outputLanguage,
+      templateId: template.templateId,
+      version: template.version,
+      agency: template.agency,
+      outputLanguage: template.outputLanguage,
     },
     facts,
-    missingInformation: collectMissingInformation(input.template, facts),
+    missingInformation: collectMissingInformation(template, facts),
   };
 
   return v.parse(caseFactsSchema, result);

@@ -23,7 +23,7 @@ const testCase: Case = {
 };
 
 describe('buildCaseFacts', () => {
-  it('includes only non-sensitive Case classification by default and treats title as disclosure-gated', () => {
+  it('keeps all report-visible Case classification and title behind the disclosure-approved boundary', () => {
     const result = buildCaseFacts({
       case: testCase,
       template: getLatestReportTemplate('FUNAI'),
@@ -32,22 +32,18 @@ describe('buildCaseFacts', () => {
 
     expect(result.caseLocalId).toBe('case-001');
     expect(result.projectLocalId).toBe('project-001');
-    expect(result.facts).toContainEqual({
-      key: 'case.primaryType',
-      value: { kind: 'text', value: 'illegal_mining' },
-      provenance: [
-        {
-          id: 'case-context:primary-type',
-          sourceType: 'case-context',
-          sourceId: 'primary-type',
-        },
-      ],
-    });
+    expect(result.facts.some((fact) => fact.key === 'case.primaryType')).toBe(
+      false,
+    );
     expect(result.facts.some((fact) => fact.key === 'case.title')).toBe(false);
-    expect(result.missingInformation).toContainEqual({
-      key: 'case.title',
-      severity: 'blocking',
-    });
+    expect(result.missingInformation).toEqual(
+      expect.arrayContaining([
+        { key: 'case.primaryType', severity: 'blocking' },
+        { key: 'case.title', severity: 'blocking' },
+      ]),
+    );
+    expect(JSON.stringify(result)).not.toContain('illegal_mining');
+    expect(JSON.stringify(result)).not.toContain('Garimpo no rio');
   });
 
   it('uses the disclosure-approved Case title without leaking the raw Case title', () => {
@@ -81,15 +77,79 @@ describe('buildCaseFacts', () => {
     });
   });
 
-  it('rejects a Case type that the selected template does not support', () => {
+  it('accepts the disclosure-approved primary type only when it matches the current Case', () => {
+    const approved = {
+      key: 'case.primaryType' as const,
+      value: { kind: 'text' as const, value: 'illegal_mining' },
+      source: { type: 'case-context' as const, id: 'primary-type' },
+    };
+    const result = buildCaseFacts({
+      case: testCase,
+      template: getLatestReportTemplate('FUNAI'),
+      approvedFacts: [approved],
+    });
+
+    expect(result.facts).toContainEqual({
+      key: 'case.primaryType',
+      value: { kind: 'text', value: 'illegal_mining' },
+      provenance: [
+        {
+          id: 'case-context:primary-type',
+          sourceType: 'case-context',
+          sourceId: 'primary-type',
+        },
+      ],
+    });
+    expect(result.missingInformation).not.toContainEqual({
+      key: 'case.primaryType',
+      severity: 'blocking',
+    });
+    expect(() =>
+      buildCaseFacts({
+        case: testCase,
+        template: getLatestReportTemplate('FUNAI'),
+        approvedFacts: [
+          {
+            ...approved,
+            value: { kind: 'text', value: 'fire' },
+          },
+        ],
+      }),
+    ).toThrow(/primary type/i);
+  });
+
+  it('uses only a registered immutable template version, ignoring caller-mutated template policy fields', () => {
     const template = {
       ...getLatestReportTemplate('FUNAI'),
+      requiredFacts: [] as const,
+      optionalFacts: [] as const,
       supportedCaseTypes: ['fire'] as const,
+    };
+
+    const result = buildCaseFacts({
+      case: testCase,
+      template,
+      approvedFacts: [],
+    });
+
+    expect(result.missingInformation).toEqual(
+      expect.arrayContaining([
+        { key: 'case.title', severity: 'blocking' },
+        { key: 'case.primaryType', severity: 'blocking' },
+        { key: 'impact.threats', severity: 'blocking' },
+      ]),
+    );
+  });
+
+  it('rejects a template identity that is not registered exactly', () => {
+    const template = {
+      ...getLatestReportTemplate('FUNAI'),
+      version: '1.0.1',
     };
 
     expect(() =>
       buildCaseFacts({ case: testCase, template, approvedFacts: [] }),
-    ).toThrow(/not supported/i);
+    ).toThrow(/registered|template/i);
   });
 
   it('pins the exact selected template identity and validates the result at runtime', () => {
@@ -271,6 +331,20 @@ describe('buildCaseFacts', () => {
         source: { type: 'observation', id: 'obs-utc' },
       }).success,
     ).toBe(false);
+    expect(
+      v.safeParse(approvedCaseFactInputSchema, {
+        key: 'incident.date',
+        value: { kind: 'date', value: '2026-08-21T23:30:00-00:00' },
+        source: { type: 'observation', id: 'obs-unknown-offset' },
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(approvedCaseFactInputSchema, {
+        key: 'incident.date',
+        value: { kind: 'date', value: '2026-08-21T23:30:00+14:01' },
+        source: { type: 'observation', id: 'obs-invalid-offset' },
+      }).success,
+    ).toBe(false);
 
     expect(
       v.safeParse(approvedCaseFactInputSchema, {
@@ -358,6 +432,35 @@ describe('buildCaseFacts', () => {
         ],
       }),
     ).toThrow(/conflicting/i);
+  });
+
+  it('rejects fact values whose semantic kind does not match the Case Fact key', () => {
+    const invalidFacts = [
+      {
+        key: 'incident.date',
+        value: { kind: 'text', value: 'ontem' },
+      },
+      {
+        key: 'incident.chronology',
+        value: { kind: 'boolean', value: true },
+      },
+      {
+        key: 'case.title',
+        value: {
+          kind: 'geometry',
+          value: { type: 'Point', coordinates: [-48.5, -1.4] },
+        },
+      },
+    ];
+
+    for (const fact of invalidFacts) {
+      expect(
+        v.safeParse(approvedCaseFactInputSchema, {
+          ...fact,
+          source: { type: 'observation', id: 'obs-invalid' },
+        }).success,
+      ).toBe(false);
+    }
   });
 
   it('rejects arbitrary objects, binary values, blank source IDs, and invalid geometry', () => {

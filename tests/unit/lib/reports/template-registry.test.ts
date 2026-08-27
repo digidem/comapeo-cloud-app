@@ -116,7 +116,7 @@ describe('Brazil v1 report template registry', () => {
     expect(getLatestReportTemplate('FUNAI')).toBe(funai);
   });
 
-  it('rejects malformed template data at the runtime boundary', () => {
+  it('rejects malformed or internally inconsistent template data at the runtime boundary', () => {
     const valid = getLatestReportTemplate('IBAMA');
     const malformed = {
       ...valid,
@@ -140,6 +140,24 @@ describe('Brazil v1 report template registry', () => {
       v.safeParse(reportTemplateSchema, {
         ...valid,
         submission: { ...valid.submission, officialSourceUrl: 'not a url' },
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(reportTemplateSchema, {
+        ...valid,
+        agency: 'PF',
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(reportTemplateSchema, {
+        ...valid,
+        requiredFacts: [...valid.requiredFacts, valid.requiredFacts[0]],
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(reportTemplateSchema, {
+        ...valid,
+        optionalFacts: [...valid.optionalFacts, valid.requiredFacts[0]],
       }).success,
     ).toBe(false);
   });
@@ -178,12 +196,18 @@ describe('submission guidance staleness', () => {
     });
   });
 
-  it('fails closed when the current date is invalid', () => {
+  it('fails closed when the current date is invalid or precedes the maintained review date', () => {
     expect(() =>
       getSubmissionGuidanceStatus(
         getLatestReportTemplate('FUNAI'),
         new Date(Number.NaN),
       ),
     ).toThrow(RangeError);
+    expect(() =>
+      getSubmissionGuidanceStatus(
+        getLatestReportTemplate('FUNAI'),
+        new Date('2026-08-26T23:59:59Z'),
+      ),
+    ).toThrow(/future|review/i);
   });
 });
