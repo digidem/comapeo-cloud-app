@@ -1,3 +1,7 @@
+import {
+  type StyleSpecification,
+  validateStyleMin,
+} from '@maplibre/maplibre-gl-style-spec';
 import type { Position } from 'geojson';
 import * as v from 'valibot';
 
@@ -15,6 +19,8 @@ import {
   MAX_AUTHORED_RENDER_FRAGMENTS,
   MAX_AUTHORED_RENDER_JSON_BYTES,
   MAX_AUTHORED_VECTOR_FEATURES,
+  SUPPORTED_AUTHORED_LAYER_RENDER_TYPES,
+  SUPPORTED_AUTHORED_LAYER_SOURCE_TYPES,
   canonicalizeRasterTileTemplate,
   measureCanonicalJsonUtf8Bounded,
 } from '@/lib/map/authored-layers';
@@ -292,7 +298,7 @@ function buildCurrentLayerSchema() {
     features: v.array(featureSchema),
   });
   const geoJsonSourceSchema = v.strictObject({
-    type: v.literal('geojson'),
+    type: v.literal(SUPPORTED_AUTHORED_LAYER_SOURCE_TYPES[0]),
     data: featureCollectionSchema,
   });
   const zoomSchema = v.pipe(
@@ -302,7 +308,7 @@ function buildCurrentLayerSchema() {
     v.maxValue(22),
   );
   const rasterSourceSchema = v.strictObject({
-    type: v.literal('raster-tiles'),
+    type: v.literal(SUPPORTED_AUTHORED_LAYER_SOURCE_TYPES[1]),
     tiles: v.tuple([v.pipe(v.string(), v.minLength(1))]),
     tileSize: v.union([v.literal(256), v.literal(512)]),
     scheme: v.union([v.literal('xyz'), v.literal('tms')]),
@@ -312,13 +318,7 @@ function buildCurrentLayerSchema() {
   });
   const fragmentZoomSchema = v.pipe(v.number(), v.minValue(0), v.maxValue(24));
   const renderFragmentSchema = v.strictObject({
-    type: v.union([
-      v.literal('fill'),
-      v.literal('line'),
-      v.literal('circle'),
-      v.literal('symbol'),
-      v.literal('raster'),
-    ]),
+    type: v.picklist(SUPPORTED_AUTHORED_LAYER_RENDER_TYPES),
     filter: v.optional(v.array(v.unknown())),
     minzoom: v.optional(fragmentZoomSchema),
     maxzoom: v.optional(fragmentZoomSchema),
@@ -377,9 +377,10 @@ function isSupportedExpression(value: unknown, depth = 0): boolean {
 
 function isSupportedFilter(value: readonly unknown[]): boolean {
   if (value.length < 2 || typeof value[0] !== 'string') return false;
-  if (!FILTER_OPERATORS.has(value[0])) return false;
+  const operator = value[0];
+  if (!FILTER_OPERATORS.has(operator)) return false;
   if (
-    value[0] === 'in' &&
+    operator === 'in' &&
     value.length === 3 &&
     value[1] === '$type' &&
     (value[2] === 'Point' ||
@@ -388,6 +389,24 @@ function isSupportedFilter(value: readonly unknown[]): boolean {
   ) {
     return true;
   }
+  if ((operator === 'has' || operator === '!has') && value.length !== 2) {
+    return false;
+  }
+  if (
+    (operator === '==' ||
+      operator === '!=' ||
+      operator === '<' ||
+      operator === '<=' ||
+      operator === '>' ||
+      operator === '>=') &&
+    value.length !== 3
+  ) {
+    return false;
+  }
+  if ((operator === 'in' || operator === '!in') && value.length < 3) {
+    return false;
+  }
+  if (operator === '!' && value.length !== 2) return false;
   return value.slice(1).every((entry) => {
     if (Array.isArray(entry)) return isSupportedFilter(entry);
     return (
@@ -397,6 +416,34 @@ function isSupportedFilter(value: readonly unknown[]): boolean {
       (typeof entry === 'number' && Number.isFinite(entry))
     );
   });
+}
+
+function validateMapLibreFragment(fragment: AuthoredRenderLayer): string[] {
+  const source =
+    fragment.type === 'raster'
+      ? {
+          type: 'raster' as const,
+          tiles: ['https://tiles.example.com/{z}/{x}/{y}.png'],
+          tileSize: 256,
+        }
+      : {
+          type: 'geojson' as const,
+          data: { type: 'FeatureCollection' as const, features: [] },
+        };
+  const style = {
+    version: 8 as const,
+    sources: { '__comapeo-authored-validation-source': source },
+    layers: [
+      {
+        id: '__comapeo-authored-validation-layer',
+        source: '__comapeo-authored-validation-source',
+        ...fragment,
+      },
+    ],
+  };
+  return validateStyleMin(style as unknown as StyleSpecification).map(
+    (error) => error.message,
+  );
 }
 
 function validateRenderSubset(
@@ -538,12 +585,19 @@ function validateRenderSubset(
     }
 
     const { layout: _persistedLayout, ...fragmentWithoutLayout } = fragment;
-    canonicalFragments.push({
+    const canonicalFragment: AuthoredRenderLayer = {
       ...fragmentWithoutLayout,
       ...(Object.keys(canonicalLayout).length > 0
         ? { layout: canonicalLayout }
         : {}),
-    });
+    };
+    const mapLibreErrors = validateMapLibreFragment(canonicalFragment);
+    if (mapLibreErrors.length > 0) {
+      issues.push(
+        issue('INVALID_MAPLIBRE_RENDER_VALUE', path, mapLibreErrors.join('; ')),
+      );
+    }
+    canonicalFragments.push(canonicalFragment);
   }
 
   return {

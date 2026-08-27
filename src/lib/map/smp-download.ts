@@ -10,6 +10,8 @@ import {
 } from '@/lib/map/authored-layers';
 import {
   AUTHORED_RASTER_CONCURRENCY,
+  AuthoredRasterError,
+  MAX_AUTHORED_RASTER_TOTAL_BYTES,
   enumerateAuthoredRasterLayers,
   headAnonymousRasterTileSize,
 } from '@/lib/map/authored-raster';
@@ -552,13 +554,60 @@ function rasterInputsFromLayers(layers: readonly AuthoredLayer[]) {
   );
 }
 
-function throwIfCallerAborted(signal?: AbortSignal): void {
-  if (!signal?.aborted) return;
-  if (signal.reason instanceof Error) throw signal.reason;
-  throw new Error('Download cancelled', {
+function callerAbortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  return new Error('Download cancelled', {
     cause:
       signal.reason ?? new DOMException('Download cancelled', 'AbortError'),
   });
+}
+
+function throwIfCallerAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw callerAbortError(signal);
+}
+
+async function raceWithCallerAbort<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  void promise.catch(() => undefined);
+  if (!signal) return promise;
+  throwIfCallerAborted(signal);
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(callerAbortError(signal));
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener('abort', onAbort);
+  }
+}
+
+function createLinkedOperationController(signal?: AbortSignal): {
+  controller: AbortController;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  let onAbort: (() => void) | undefined;
+  if (signal?.aborted) {
+    controller.abort(
+      signal.reason ?? new DOMException('Download cancelled', 'AbortError'),
+    );
+  } else if (signal) {
+    onAbort = () =>
+      controller.abort(
+        signal.reason ?? new DOMException('Download cancelled', 'AbortError'),
+      );
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
+  return {
+    controller,
+    cleanup: () => {
+      if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+    },
+  };
 }
 
 function blobFromChunks(chunks: Uint8Array[]): Blob {
@@ -776,26 +825,130 @@ async function loadEstimateBaseStyle(
   return (await downloader.getStyle()) as unknown as MapLibreStyleLike;
 }
 
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  operation: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
+function mergeGlobalOverviewEstimateStyle(
+  baseStyle: MapLibreStyleLike,
+): MapLibreStyleLike {
+  const sources: MapLibreStyleLike['sources'] = { ...baseStyle.sources };
+  const sourceMappings = new Map<string, string>();
+  for (const [sourceId, source] of Object.entries(baseStyle.sources)) {
+    if (
+      source.type !== 'raster' &&
+      source.type !== 'vector' &&
+      source.type !== 'raster-dem'
+    ) {
+      continue;
+    }
+    const globalSourceId = `${sourceId}__global_overview`;
+    if (Object.hasOwn(sources, globalSourceId)) {
+      throw new Error(`Global overview source ID collision: ${globalSourceId}`);
+    }
+    sources[globalSourceId] = { ...source };
+    sourceMappings.set(sourceId, globalSourceId);
+  }
+
+  const usedLayerIds = new Set(baseStyle.layers.map((layer) => layer.id));
+  const layers: MapLibreStyleLike['layers'] = [];
+  const splitZoom = GLOBAL_OVERVIEW_MAX_ZOOM + 1;
+  for (const layer of baseStyle.layers) {
+    const globalSourceId = layer.source
+      ? sourceMappings.get(layer.source)
+      : undefined;
+    if (!globalSourceId) {
+      layers.push(layer);
+      continue;
+    }
+    const minZoom = typeof layer.minzoom === 'number' ? layer.minzoom : 0;
+    const maxZoom = typeof layer.maxzoom === 'number' ? layer.maxzoom : 24;
+    if (minZoom < splitZoom) {
+      const globalLayerId = `${layer.id}__global_overview`;
+      if (usedLayerIds.has(globalLayerId)) {
+        throw new Error(`Global overview layer ID collision: ${globalLayerId}`);
+      }
+      usedLayerIds.add(globalLayerId);
+      layers.push({
+        ...layer,
+        id: globalLayerId,
+        source: globalSourceId,
+        maxzoom: Math.min(maxZoom, splitZoom),
+      });
+    }
+    if (maxZoom > splitZoom) {
+      layers.push({ ...layer, minzoom: Math.max(minZoom, splitZoom) });
+    }
+  }
+
+  return {
+    ...baseStyle,
+    sources,
+    layers,
+    ...(baseStyle.metadata ? { metadata: { ...baseStyle.metadata } } : {}),
+  };
+}
+
+async function estimateAuthoredRasterHeadBytes(
+  ownedTiles: readonly { requestHref: string }[],
+  operationController: AbortController,
+  callerSignal?: AbortSignal,
+): Promise<{
+  authoredRasterBytesKnown: boolean;
+  authoredRasterKnownBytes: bigint;
+}> {
+  const memo = new Map<
+    string,
+    Promise<Awaited<ReturnType<typeof headAnonymousRasterTileSize>>>
+  >();
   let cursor = 0;
+  let authoredRasterBytesKnown = true;
+  let authoredRasterKnownBytes = 0n;
+  let firstFailure: unknown;
+
+  const recordFailure = (error: unknown) => {
+    if (firstFailure !== undefined) return;
+    firstFailure = error;
+    if (!operationController.signal.aborted) operationController.abort(error);
+  };
+
   const workers = Array.from(
-    { length: Math.min(concurrency, items.length) },
+    { length: Math.min(AUTHORED_RASTER_CONCURRENCY, ownedTiles.length) },
     async () => {
-      while (true) {
+      while (!operationController.signal.aborted) {
         const index = cursor++;
-        const item = items[index];
-        if (item === undefined) return;
-        results[index] = await operation(item);
+        const tile = ownedTiles[index];
+        if (!tile) return;
+        try {
+          let pending = memo.get(tile.requestHref);
+          if (!pending) {
+            pending = headAnonymousRasterTileSize(
+              tile.requestHref,
+              operationController.signal,
+            );
+            memo.set(tile.requestHref, pending);
+          }
+          const result = await pending;
+          if (!result.known) {
+            authoredRasterBytesKnown = false;
+            continue;
+          }
+          authoredRasterKnownBytes += result.bytes;
+          if (
+            authoredRasterKnownBytes > BigInt(MAX_AUTHORED_RASTER_TOTAL_BYTES)
+          ) {
+            throw new AuthoredRasterError(
+              'AUTHORED_RASTER_TOTAL_BYTES_EXCEEDED',
+              `Declared authored raster bytes exceed ${MAX_AUTHORED_RASTER_TOTAL_BYTES} bytes`,
+            );
+          }
+        } catch (error) {
+          recordFailure(error);
+          return;
+        }
       }
     },
   );
-  await Promise.all(workers);
-  return results;
+  await Promise.allSettled(workers);
+  if (callerSignal?.aborted) throw callerAbortError(callerSignal);
+  if (firstFailure !== undefined) throw firstFailure;
+  return { authoredRasterBytesKnown, authoredRasterKnownBytes };
 }
 
 /** Deterministic pre-download authored payload estimate. */
@@ -815,80 +968,81 @@ export async function estimateAuthoredPayload(config: {
     mapboxAccessToken,
   } = config;
   throwIfCallerAborted(signal);
-  const numericBasemap = estimateDownloadSize(
-    map.bbox,
-    map.minZoom,
-    map.maxZoom,
-    { includeGlobalOverview },
-  );
-  if (
-    !Number.isFinite(numericBasemap) ||
-    !Number.isSafeInteger(numericBasemap) ||
-    numericBasemap < 0
-  ) {
-    throw new RangeError(
-      'Basemap payload estimate is not a non-negative safe integer',
+  const { controller: operationController, cleanup } =
+    createLinkedOperationController(signal);
+  try {
+    const numericBasemap = estimateDownloadSize(
+      map.bbox,
+      map.minZoom,
+      map.maxZoom,
+      { includeGlobalOverview },
     );
-  }
-  const basemapTileBytes = BigInt(numericBasemap);
+    if (
+      !Number.isFinite(numericBasemap) ||
+      !Number.isSafeInteger(numericBasemap) ||
+      numericBasemap < 0
+    ) {
+      throw new RangeError(
+        'Basemap payload estimate is not a non-negative safe integer',
+      );
+    }
+    const basemapTileBytes = BigInt(numericBasemap);
 
-  const baseStyle = await loadEstimateBaseStyle(map, mapboxAccessToken);
-  throwIfCallerAborted(signal);
-  const composed = composeAuthoredStyle({ baseStyle, authoredLayers, map });
-  const rasterInputs = rasterInputsFromLayers(composed.layers);
-  const enumerated =
-    rasterInputs.length === 0
-      ? []
-      : enumerateAuthoredRasterLayers(map, rasterInputs);
-  const ownedTiles = enumerated.flatMap((layer) => layer.tiles);
-  const memo = new Map<
-    string,
-    Promise<Awaited<ReturnType<typeof headAnonymousRasterTileSize>>>
-  >();
-  const headResults = await mapWithConcurrency(
-    ownedTiles,
-    AUTHORED_RASTER_CONCURRENCY,
-    async (tile) => {
-      throwIfCallerAborted(signal);
-      let pending = memo.get(tile.requestHref);
-      if (!pending) {
-        pending = headAnonymousRasterTileSize(
-          tile.requestHref,
-          signal ?? new AbortController().signal,
-        );
-        memo.set(tile.requestHref, pending);
-      }
-      return pending;
-    },
-  );
-  throwIfCallerAborted(signal);
+    const baseStyle = await raceWithCallerAbort(
+      loadEstimateBaseStyle(map, mapboxAccessToken),
+      signal,
+    );
+    throwIfCallerAborted(signal);
+    const shouldMergeGlobalOverview =
+      includeGlobalOverview &&
+      (map.maxZoom > GLOBAL_OVERVIEW_MAX_ZOOM || authoredLayers.length > 0);
+    const prospectiveBaseStyle = shouldMergeGlobalOverview
+      ? mergeGlobalOverviewEstimateStyle(baseStyle)
+      : baseStyle;
+    const composed = composeAuthoredStyle({
+      baseStyle: prospectiveBaseStyle,
+      authoredLayers,
+      map,
+    });
+    const rasterInputs = rasterInputsFromLayers(composed.layers);
+    const enumerated =
+      rasterInputs.length === 0
+        ? []
+        : enumerateAuthoredRasterLayers(map, rasterInputs);
+    const ownedTiles = enumerated.flatMap((layer) => layer.tiles);
+    const { authoredRasterBytesKnown, authoredRasterKnownBytes } =
+      await estimateAuthoredRasterHeadBytes(
+        ownedTiles,
+        operationController,
+        signal,
+      );
+    throwIfCallerAborted(signal);
 
-  let authoredRasterBytesKnown = true;
-  let authoredRasterKnownBytes = 0n;
-  for (const result of headResults) {
-    if (result.known) authoredRasterKnownBytes += result.bytes;
-    else authoredRasterBytesKnown = false;
+    const knownLowerBoundBytes =
+      basemapTileBytes +
+      composed.finalStyleUtf8Bytes +
+      authoredRasterKnownBytes;
+    const fullyKnown = authoredRasterBytesKnown;
+    const fitsSafeInteger =
+      knownLowerBoundBytes <= BigInt(Number.MAX_SAFE_INTEGER);
+    const safeTotalBytes =
+      fullyKnown && fitsSafeInteger ? Number(knownLowerBoundBytes) : undefined;
+    const requiresLargeDownloadConfirmation =
+      !fullyKnown ||
+      !fitsSafeInteger ||
+      knownLowerBoundBytes > BigInt(100 * 1024 * 1024);
+    return {
+      basemapTileBytes,
+      finalStyleUtf8Bytes: composed.finalStyleUtf8Bytes,
+      authoredRasterBytesKnown,
+      authoredRasterKnownBytes,
+      knownLowerBoundBytes,
+      ...(safeTotalBytes === undefined ? {} : { safeTotalBytes }),
+      requiresLargeDownloadConfirmation,
+    };
+  } finally {
+    cleanup();
   }
-  const knownLowerBoundBytes =
-    basemapTileBytes + composed.finalStyleUtf8Bytes + authoredRasterKnownBytes;
-  const fullyKnown = authoredRasterBytesKnown;
-  const fitsSafeInteger =
-    knownLowerBoundBytes <= BigInt(Number.MAX_SAFE_INTEGER);
-  const safeTotalBytes =
-    fullyKnown && fitsSafeInteger ? Number(knownLowerBoundBytes) : undefined;
-  const requiresLargeDownloadConfirmation =
-    !fullyKnown ||
-    !fitsSafeInteger ||
-    knownLowerBoundBytes > BigInt(100 * 1024 * 1024);
-  return {
-    basemapTileBytes,
-    finalStyleUtf8Bytes: composed.finalStyleUtf8Bytes,
-    authoredRasterBytesKnown,
-    authoredRasterKnownBytes,
-    knownLowerBoundBytes,
-    ...(safeTotalBytes === undefined ? {} : { safeTotalBytes }),
-    requiresLargeDownloadConfirmation,
-  };
 }
 
 /**

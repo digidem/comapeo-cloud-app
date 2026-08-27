@@ -339,6 +339,74 @@ describe('mergeSmpWithAuthoredLayers', () => {
     );
   });
 
+  it.each([
+    ['source ID', 'source'],
+    ['layer ID', 'layer'],
+    ['folder', 'folder'],
+  ] as const)(
+    'fails closed on deterministic global-overview %s collisions',
+    (_label, kind) => {
+      const regionalStyle = {
+        version: 8 as const,
+        sources: {
+          basemap: {
+            type: 'raster',
+            tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.png'],
+          },
+          ...(kind === 'source'
+            ? {
+                basemap__global_overview: {
+                  type: 'raster',
+                  tiles: ['smp://maps.v1/s/9/{z}/{x}/{y}.png'],
+                },
+              }
+            : {}),
+          ...(kind === 'folder'
+            ? {
+                collision: {
+                  type: 'raster',
+                  tiles: ['smp://maps.v1/s/g0/{z}/{x}/{y}.png'],
+                },
+              }
+            : {}),
+        },
+        layers: [
+          { id: 'basemap', type: 'raster', source: 'basemap' },
+          ...(kind === 'layer'
+            ? [
+                {
+                  id: 'basemap__global_overview',
+                  type: 'raster' as const,
+                  source: 'basemap',
+                },
+              ]
+            : []),
+        ],
+        metadata: {
+          'smp:sourceFolders': {
+            basemap: 's/0',
+            ...(kind === 'source' ? { basemap__global_overview: 's/9' } : {}),
+            ...(kind === 'folder' ? { collision: 's/g0' } : {}),
+          },
+        },
+      };
+      const globalStyle = {
+        version: 8 as const,
+        sources: {
+          basemap: {
+            type: 'raster',
+            tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.png'],
+          },
+        },
+        layers: [{ id: 'basemap', type: 'raster' as const, source: 'basemap' }],
+      };
+
+      expect(() =>
+        mergeGlobalOverviewStyle(regionalStyle, globalStyle),
+      ).toThrow(/collision/i);
+    },
+  );
+
   it('preserves the composed effective raster zoom range when replacing a Writer source', async () => {
     const sourceId = sourceLayerIdForAuthoredLayer(
       AUTHORED_RASTER_LAYER_FIXTURE.id,

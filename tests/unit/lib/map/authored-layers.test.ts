@@ -394,6 +394,52 @@ describe('prepareAuthoredLayer', () => {
     expect(result.ok).toBe(false);
   });
 
+  it.each([
+    ['out-of-range opacity', { paint: { 'fill-opacity': 100 } }],
+    ['invalid color object', { paint: { 'fill-color': {} } }],
+    ['malformed expression arity', { paint: { 'fill-opacity': ['get'] } }],
+  ])('rejects MapLibre-invalid fill render values: %s', (_label, override) => {
+    const baseFragment = AUTHORED_VECTOR_LAYER_FIXTURE.render.layers[0]!;
+    const result = prepareAuthoredLayer(
+      {
+        ...AUTHORED_VECTOR_LAYER_FIXTURE,
+        render: {
+          layers: [{ ...baseFragment, ...override }],
+        },
+      },
+      ctx,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'INVALID_MAPLIBRE_RENDER_VALUE' }),
+        ]),
+      );
+    }
+  });
+
+  it('rejects MapLibre-invalid layout enum values', () => {
+    const lineFragment = AUTHORED_VECTOR_LAYER_FIXTURE.render.layers[1]!;
+    const result = prepareAuthoredLayer(
+      {
+        ...AUTHORED_VECTOR_LAYER_FIXTURE,
+        render: {
+          layers: [{ ...lineFragment, layout: { 'line-cap': 17 } }],
+        },
+      },
+      ctx,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'INVALID_MAPLIBRE_RENDER_VALUE' }),
+        ]),
+      );
+    }
+  });
+
   it('rejects an invalid UUID id', () => {
     const result = prepareAuthoredLayer(
       { ...AUTHORED_VECTOR_LAYER_FIXTURE, id: 'not-a-uuid' },
@@ -531,6 +577,31 @@ describe('prepareAuthoredLayer', () => {
       ctx,
     );
     expect(result.ok).toBe(true);
+  });
+
+  it('rejects malformed legacy filter arity', () => {
+    const result = prepareAuthoredLayer(
+      {
+        ...AUTHORED_VECTOR_LAYER_FIXTURE,
+        render: {
+          layers: [
+            {
+              ...AUTHORED_VECTOR_LAYER_FIXTURE.render.layers[0],
+              filter: ['in', 'kind'],
+            },
+          ],
+        },
+      },
+      ctx,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'UNSUPPORTED_RENDER_FILTER' }),
+        ]),
+      );
+    }
   });
 
   it('rejects filters on raster render fragments', () => {
@@ -785,6 +856,35 @@ describe('prepareAuthoredLayerBatch', () => {
     if (!result.ok) {
       // Second occurrence (index 1) should be the duplicate
       expect(result.errors[0]?.index).toBe(1);
+    }
+  });
+
+  it('still runs canonical validation for a duplicate candidate', () => {
+    const duplicateInvalid = {
+      ...AUTHORED_VECTOR_LAYER_FIXTURE,
+      render: {
+        layers: [
+          {
+            ...AUTHORED_VECTOR_LAYER_FIXTURE.render.layers[0],
+            paint: { 'fill-opacity': 100 },
+          },
+        ],
+      },
+    };
+    const result = prepareAuthoredLayerBatch(
+      [AUTHORED_VECTOR_LAYER_FIXTURE, duplicateInvalid],
+      ctx,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]?.index).toBe(1);
+      expect(result.errors[0]?.error.issues.map((entry) => entry.code)).toEqual(
+        expect.arrayContaining([
+          'DUPLICATE_ID_WITHIN_BATCH',
+          'INVALID_MAPLIBRE_RENDER_VALUE',
+        ]),
+      );
     }
   });
 

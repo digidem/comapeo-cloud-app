@@ -684,26 +684,15 @@ export function prepareAuthoredLayerBatch(
   for (let index = 0; index < inputs.length; index += 1) {
     const input = inputs[index];
     const id = candidateId(input);
-    if (id !== undefined) {
-      if (firstIndexById.has(id)) {
-        errors.push({
-          index,
-          candidateId: id,
-          error: {
-            code: 'AUTHORED_LAYER_INVALID',
-            issues: [
-              {
-                code: 'DUPLICATE_ID_WITHIN_BATCH',
-                path: ['id'],
-                message: `Authored layer ID ${id} appears more than once in the batch`,
-              },
-            ],
-          },
-        });
-        continue;
-      }
-      firstIndexById.set(id, index);
-    }
+    const duplicateIssue: AuthoredLayerValidationIssue | undefined =
+      id !== undefined && firstIndexById.has(id)
+        ? {
+            code: 'DUPLICATE_ID_WITHIN_BATCH',
+            path: ['id'],
+            message: `Authored layer ID ${id} appears more than once in the batch`,
+          }
+        : undefined;
+    if (id !== undefined && !duplicateIssue) firstIndexById.set(id, index);
 
     const measured = measureCanonicalJsonUtf8Bounded(input, {
       maxBytes: MAX_AUTHORED_LAYER_JSON_BYTES,
@@ -718,6 +707,7 @@ export function prepareAuthoredLayerBatch(
         error: {
           code: 'AUTHORED_LAYER_INVALID',
           issues: [
+            ...(duplicateIssue ? [duplicateIssue] : []),
             {
               code: `JSON_${measured.code}`,
               path: [],
@@ -736,6 +726,7 @@ export function prepareAuthoredLayerBatch(
         error: {
           code: 'AUTHORED_LAYER_INVALID',
           issues: [
+            ...(duplicateIssue ? [duplicateIssue] : []),
             {
               code: 'MAX_AUTHORED_LAYERS_JSON_BYTES_EXCEEDED',
               path: [],
@@ -752,7 +743,24 @@ export function prepareAuthoredLayerBatch(
       errors.push({
         index,
         ...(id === undefined ? {} : { candidateId: id }),
-        error: prepared.error,
+        error: {
+          code: 'AUTHORED_LAYER_INVALID',
+          issues: [
+            ...(duplicateIssue ? [duplicateIssue] : []),
+            ...prepared.error.issues,
+          ],
+        },
+      });
+      continue;
+    }
+    if (duplicateIssue) {
+      errors.push({
+        index,
+        ...(id === undefined ? {} : { candidateId: id }),
+        error: {
+          code: 'AUTHORED_LAYER_INVALID',
+          issues: [duplicateIssue],
+        },
       });
       continue;
     }

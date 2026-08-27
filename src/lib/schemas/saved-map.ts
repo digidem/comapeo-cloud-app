@@ -88,6 +88,10 @@ const authoredLayersSchema = v.pipe(
     MAX_AUTHORED_LAYERS,
     `SavedMap.layers supports at most ${MAX_AUTHORED_LAYERS} authored layers`,
   ),
+  v.check(
+    (layers) => new Set(layers.map((layer) => layer.id)).size === layers.length,
+    'SavedMap.layers must contain unique authored layer IDs',
+  ),
   v.check((layers) => {
     let aggregateBytes = 0n;
     for (const layer of layers) {

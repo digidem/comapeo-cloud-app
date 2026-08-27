@@ -157,12 +157,16 @@ export function mergeGlobalOverviewStyle(
         'global overview cannot use the authored resource prefix',
       );
     }
-    let globalSourceId = `${sourceId}__global_overview`;
-    while (Object.hasOwn(regionalStyle.sources, globalSourceId)) {
-      globalSourceId += '_';
+    const globalSourceId = `${sourceId}__global_overview`;
+    if (Object.hasOwn(regionalStyle.sources, globalSourceId)) {
+      throw smpMergeError(
+        `global overview source ID collision: ${globalSourceId}`,
+      );
     }
-    let mergedFolder = `g${globalIndex++}`;
-    while (usedFolders.has(mergedFolder)) mergedFolder = `g${globalIndex++}`;
+    const mergedFolder = `g${globalIndex++}`;
+    if (usedFolders.has(mergedFolder)) {
+      throw smpMergeError(`global overview folder collision: ${mergedFolder}`);
+    }
     usedFolders.add(mergedFolder);
     regionalStyle.sources[globalSourceId] = withSmpTileFolder(
       globalSource,
@@ -196,8 +200,12 @@ export function mergeGlobalOverviewStyle(
     const maxZoom = typeof layer.maxzoom === 'number' ? layer.maxzoom : 24;
     const splitZoom = GLOBAL_OVERVIEW_MAX_ZOOM_FOR_MERGE + 1;
     if (minZoom < splitZoom) {
-      let globalLayerId = `${layer.id}__global_overview`;
-      while (usedLayerIds.has(globalLayerId)) globalLayerId += '_';
+      const globalLayerId = `${layer.id}__global_overview`;
+      if (usedLayerIds.has(globalLayerId)) {
+        throw smpMergeError(
+          `global overview layer ID collision: ${globalLayerId}`,
+        );
+      }
       usedLayerIds.add(globalLayerId);
       mergedLayers.push({
         ...layer,

@@ -7,6 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MAX_BASE_STYLE_JSON_BYTES_FOR_AUTHORED } from '@/lib/map/authored-layers';
 import {
+  AUTHORED_RASTER_CONCURRENCY,
+  MAX_AUTHORED_RASTER_TILE_BYTES,
+  MAX_AUTHORED_RASTER_TOTAL_BYTES,
+} from '@/lib/map/authored-raster';
+import {
   buildSmpBlob,
   estimateAuthoredPayload,
   estimateDownloadSize,
@@ -408,6 +413,161 @@ describe('estimateAuthoredPayload', () => {
     });
     expect(head).toHaveBeenCalledTimes(1);
     expect(result.authoredRasterKnownBytes).toBe(20n);
+  });
+
+  it('fails hard when known authored raster HEAD bytes exceed the non-bypassable aggregate cap', async () => {
+    const perTileBytes = 2 * 1024 * 1024;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        responseWithUrl(
+          null,
+          {
+            status: 200,
+            headers: { 'Content-Length': String(perTileBytes) },
+          },
+          String(input),
+        ),
+      ),
+    );
+
+    await expect(
+      estimateAuthoredPayload({
+        map: map({ bbox: [-180, -85, 180, 85], maxZoom: 3 }),
+        authoredLayers: [AUTHORED_RASTER_LAYER_FIXTURE],
+        includeGlobalOverview: false,
+      }),
+    ).rejects.toMatchObject({ code: 'AUTHORED_RASTER_TOTAL_BYTES_EXCEEDED' });
+    expect(MAX_AUTHORED_RASTER_TOTAL_BYTES).toBeLessThan(85 * perTileBytes);
+  });
+
+  it('aborts sibling HEAD workers and stops claiming tuples after the first hard estimate failure', async () => {
+    const siblingSignals: AbortSignal[] = [];
+    const releaseSiblings: Array<() => void> = [];
+    let callCount = 0;
+    const head = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      callCount += 1;
+      const href = String(input);
+      if (callCount === 1) {
+        return Promise.resolve(
+          responseWithUrl(
+            null,
+            {
+              status: 200,
+              headers: {
+                'Content-Length': String(MAX_AUTHORED_RASTER_TILE_BYTES + 1),
+              },
+            },
+            href,
+          ),
+        );
+      }
+      const requestSignal = init?.signal;
+      if (!requestSignal)
+        throw new Error('HEAD request must have an operation signal');
+      siblingSignals.push(requestSignal);
+      return new Promise<Response>((resolve, reject) => {
+        const abort = () => reject(requestSignal.reason);
+        requestSignal.addEventListener('abort', abort, { once: true });
+        releaseSiblings.push(() => {
+          requestSignal.removeEventListener('abort', abort);
+          resolve(
+            responseWithUrl(
+              null,
+              { status: 200, headers: { 'Content-Length': '0' } },
+              href,
+            ),
+          );
+        });
+      });
+    });
+    vi.stubGlobal('fetch', head);
+
+    let rejected: unknown;
+    try {
+      await estimateAuthoredPayload({
+        map: map({ bbox: [-180, -85, 180, 85], maxZoom: 3 }),
+        authoredLayers: [AUTHORED_RASTER_LAYER_FIXTURE],
+        includeGlobalOverview: false,
+      });
+    } catch (error) {
+      rejected = error;
+    } finally {
+      for (const release of releaseSiblings) release();
+    }
+
+    expect(rejected).toMatchObject({
+      code: 'AUTHORED_RASTER_TILE_BYTES_EXCEEDED',
+    });
+    expect(siblingSignals.length).toBeGreaterThan(0);
+    expect(siblingSignals.every((requestSignal) => requestSignal.aborted)).toBe(
+      true,
+    );
+    expect(head.mock.calls.length).toBeLessThanOrEqual(
+      AUTHORED_RASTER_CONCURRENCY,
+    );
+  });
+
+  it('accounts for the global+regional merged base style before authored composition', async () => {
+    const baseStyle = {
+      version: 8,
+      sources: {
+        basemap: {
+          type: 'raster',
+          tiles: ['https://basemap.example.com/{z}/{x}/{y}.png'],
+        },
+      },
+      layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
+    };
+    mockGetStyle.mockResolvedValue(baseStyle);
+    const regionalOnly = await estimateAuthoredPayload({
+      map: styleMap({ maxZoom: 4 }),
+      authoredLayers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+      includeGlobalOverview: false,
+    });
+    const withGlobal = await estimateAuthoredPayload({
+      map: styleMap({ maxZoom: 4 }),
+      authoredLayers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+      includeGlobalOverview: true,
+    });
+
+    expect(withGlobal.finalStyleUtf8Bytes).toBeGreaterThan(
+      regionalOnly.finalStyleUtf8Bytes,
+    );
+  });
+
+  it('rejects promptly when the caller aborts while the style base is still loading', async () => {
+    let resolveStyle!: (style: unknown) => void;
+    mockGetStyle.mockReturnValue(
+      new Promise((resolve) => {
+        resolveStyle = resolve;
+      }),
+    );
+    const controller = new AbortController();
+    const pending = estimateAuthoredPayload({
+      map: styleMap(),
+      authoredLayers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+      includeGlobalOverview: false,
+      signal: controller.signal,
+    });
+    controller.abort('style-estimate-stop');
+
+    const outcome = await Promise.race([
+      pending.then(
+        () => 'resolved',
+        (error: unknown) =>
+          error instanceof Error && error.cause === 'style-estimate-stop'
+            ? 'aborted'
+            : 'other-error',
+      ),
+      new Promise<'timeout'>((resolve) =>
+        setTimeout(() => resolve('timeout'), 25),
+      ),
+    ]);
+    resolveStyle({ version: 8, sources: {}, layers: [] });
+    await pending.catch(() => undefined);
+
+    expect(outcome).toBe('aborted');
   });
 
   it('requires confirmation for a safely representable total above the existing 100 MiB threshold', async () => {

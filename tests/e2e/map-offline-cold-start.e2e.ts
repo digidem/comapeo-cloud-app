@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test';
 import JSZip from 'jszip';
+import { createHash } from 'node:crypto';
+import sharp from 'sharp';
 
+import {
+  AUTHORED_RASTER_LAYER_FIXTURE,
+  AUTHORED_VECTOR_LAYER_FIXTURE,
+} from '../fixtures/authored-layers';
 import {
   e2eArrayBuffer,
   getAppDatabaseRecord,
@@ -20,6 +26,51 @@ const ACTIVE_MAP_NAME = 'Offline Cold Start Map';
 
 async function buildOfflineSmp(): Promise<Uint8Array> {
   const zip = new JSZip();
+  const vectorSourceId = `comapeo-authored:${AUTHORED_VECTOR_LAYER_FIXTURE.id}:source`;
+  const rasterSourceId = `comapeo-authored:${AUTHORED_RASTER_LAYER_FIXTURE.id}:source`;
+  const rasterFolder = `comapeo-authored-${createHash('sha256')
+    .update(AUTHORED_RASTER_LAYER_FIXTURE.id)
+    .digest('hex')}`;
+  const authoredVectorData =
+    AUTHORED_VECTOR_LAYER_FIXTURE.source.type === 'geojson'
+      ? {
+          ...AUTHORED_VECTOR_LAYER_FIXTURE.source.data,
+          features: [
+            ...AUTHORED_VECTOR_LAYER_FIXTURE.source.data.features,
+            {
+              type: 'Feature' as const,
+              properties: { name: 'point-render-canary' },
+              geometry: { type: 'Point' as const, coordinates: [-59.5, -3] },
+            },
+          ],
+        }
+      : { type: 'FeatureCollection' as const, features: [] };
+  const authoredRasterPng = await sharp({
+    create: {
+      width: 1,
+      height: 1,
+      channels: 4,
+      background: { r: 40, g: 180, b: 80, alpha: 1 },
+    },
+  })
+    .png()
+    .toBuffer();
+  const authoredVectorLayers = AUTHORED_VECTOR_LAYER_FIXTURE.render.layers.map(
+    (fragment, index) => ({
+      ...fragment,
+      id: `comapeo-authored:${AUTHORED_VECTOR_LAYER_FIXTURE.id}:layer:${index}`,
+      source: vectorSourceId,
+      layout: { ...(fragment.layout ?? {}), visibility: 'visible' as const },
+    }),
+  );
+  const authoredRasterLayers = AUTHORED_RASTER_LAYER_FIXTURE.render.layers.map(
+    (fragment, index) => ({
+      ...fragment,
+      id: `comapeo-authored:${AUTHORED_RASTER_LAYER_FIXTURE.id}:layer:${index}`,
+      source: rasterSourceId,
+      layout: { ...(fragment.layout ?? {}), visibility: 'visible' as const },
+    }),
+  );
   zip.file('VERSION', '1.0');
   zip.file(
     'style.json',
@@ -48,6 +99,18 @@ async function buildOfflineSmp(): Promise<Uint8Array> {
             ],
           },
         },
+        [vectorSourceId]: {
+          type: 'geojson',
+          data: authoredVectorData,
+        },
+        [rasterSourceId]: {
+          type: 'raster',
+          tiles: [`smp://maps.v1/s/${rasterFolder}/{z}/{x}/{y}.png`],
+          tileSize: 256,
+          scheme: 'xyz',
+          minzoom: 0,
+          maxzoom: 0,
+        },
       },
       layers: [
         { id: 'raster', type: 'raster', source: 'raster' },
@@ -61,16 +124,22 @@ async function buildOfflineSmp(): Promise<Uint8Array> {
             'text-font': ['Open Sans Regular'],
           },
         },
+        ...authoredRasterLayers,
+        ...authoredVectorLayers,
       ],
       metadata: {
         name: ACTIVE_MAP_NAME,
         'smp:bounds': [-180, -85, 180, 85],
         'smp:maxzoom': 0,
-        'smp:sourceFolders': { raster: 's/0' },
+        'smp:sourceFolders': {
+          raster: 's/0',
+          [rasterSourceId]: `s/${rasterFolder}`,
+        },
       },
     }),
   );
   zip.file('s/0/0/0/0.png', TRANSPARENT_1X1_PNG);
+  zip.file(`s/${rasterFolder}/0/0/0.png`, authoredRasterPng);
   zip.file(
     'sprites/sprite.json',
     JSON.stringify({
@@ -116,18 +185,22 @@ async function seedLocalState(
       },
     ],
     observations: [
-      {
-        localId: 'offline-map-point',
+      ...[
+        ['offline-map-point-west', -4, -61],
+        ['offline-map-point-east', 0, -55],
+        ['offline-map-point-middle', -1, -58],
+      ].map(([localId, lat, lon]) => ({
+        localId: String(localId),
         projectLocalId: PROJECT_WITH_MAP,
-        sourceType: 'local',
-        sourceId: 'local:offline-map-point',
-        lat: 1,
-        lon: 1,
+        sourceType: 'local' as const,
+        sourceId: `local:${String(localId)}`,
+        lat: Number(lat),
+        lon: Number(lon),
         createdAt: now,
         updatedAt: now,
         dirtyLocal: false,
         deleted: false,
-      },
+      })),
     ],
     maps: [
       {
@@ -213,6 +286,39 @@ async function readProjectActiveMapId(
   return project?.activeMapId;
 }
 
+async function countCanonicalAuthoredColors(
+  page: import('@playwright/test').Page,
+): Promise<{ blue: number; navy: number; orange: number; green: number }> {
+  const canvas = page.locator('canvas.maplibregl-canvas').first();
+  if (!(await canvas.isVisible())) {
+    return { blue: 0, navy: 0, orange: 0, green: 0 };
+  }
+  const screenshot = await canvas.screenshot();
+  const { data, info } = await sharp(screenshot)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let blue = 0;
+  let navy = 0;
+  let orange = 0;
+  let green = 0;
+  for (let offset = 0; offset < data.length; offset += info.channels) {
+    const red = data[offset] ?? 0;
+    const pixelGreen = data[offset + 1] ?? 0;
+    const pixelBlue = data[offset + 2] ?? 0;
+    const alpha = data[offset + 3] ?? 0;
+    if (alpha < 20) continue;
+    if (red < 150 && pixelGreen > 60 && pixelGreen < 190 && pixelBlue > 150)
+      blue += 1;
+    if (red < 90 && pixelGreen < 110 && pixelBlue > 45 && pixelBlue < 180)
+      navy += 1;
+    if (red > 150 && pixelGreen > 40 && pixelGreen < 170 && pixelBlue < 130)
+      orange += 1;
+    if (red < 130 && pixelGreen > 120 && pixelBlue < 150) green += 1;
+  }
+  return { blue, navy, orange, green };
+}
+
 test.describe('active SMP offline cold start', () => {
   test.skip(
     !process.env.VITE_PREVIEW,
@@ -220,6 +326,7 @@ test.describe('active SMP offline cold start', () => {
   );
 
   test('rehydrates and renders packaged SMP resources after a clean offline restart', async ({
+    browserName,
     context,
     page,
   }) => {
@@ -285,6 +392,29 @@ test.describe('active SMP offline cold start', () => {
       ACTIVE_MAP_ID,
     );
     expect(offlineExternalRequests).toEqual([]);
+    // Chromium provides a stable headless WebGL screenshot surface here. Firefox
+    // still exercises the complete offline SMP lifecycle below, but its headless
+    // canvas screenshots do not reliably expose WebGL texture/circle pixels.
+    if (browserName === 'chromium') {
+      await expect
+        .poll(
+          async () => {
+            const colors = await countCanonicalAuthoredColors(offlinePage);
+            return (
+              colors.blue > 5 &&
+              colors.navy > 5 &&
+              colors.orange > 5 &&
+              colors.green > 50
+            );
+          },
+          {
+            timeout: 15_000,
+            message:
+              'canonical authored polygon/line/point/raster colors should render from the offline SMP',
+          },
+        )
+        .toBe(true);
+    }
 
     // The desktop archive list is visually overlapped by the main panel in this
     // test layout, so invoke the real button handler without pointer hit-testing.

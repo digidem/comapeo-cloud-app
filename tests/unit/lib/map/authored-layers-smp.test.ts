@@ -1,3 +1,4 @@
+import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import {
   AUTHORED_RASTER_LAYER_FIXTURE,
   AUTHORED_VECTOR_LAYER_FIXTURE,
@@ -50,6 +51,13 @@ vi.mock('react-map-gl/maplibre', () => ({
   AttributionControl: () =>
     createElement('div', { 'data-testid': 'attribution-control' }),
 }));
+
+const TRANSPARENT_1X1_PNG = Uint8Array.from(
+  Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
+    'base64',
+  ),
+);
 
 const MAP_CONFIG = {
   type: 'raster' as const,
@@ -141,12 +149,12 @@ async function buildCanonicalBlob() {
         href === 'https://tiles.example.com/0/0/0.png'
       ) {
         return responseWithUrl(
-          new Uint8Array([137, 80, 78, 71]),
+          TRANSPARENT_1X1_PNG,
           {
             status: 200,
             headers: {
               'Content-Type': 'image/png',
-              'Content-Length': '4',
+              'Content-Length': String(TRANSPARENT_1X1_PNG.byteLength),
             },
           },
           href,
@@ -194,6 +202,7 @@ describe('canonical authored-layer SMP round trip', () => {
     const style = await resolveSmpStyle(reader, 'authored-roundtrip');
     expect(style).not.toBeNull();
     if (!style) return;
+    expect(validateStyleMin(style)).toEqual([]);
 
     expect(networkAfterGeneration).not.toHaveBeenCalled();
     const vectorSourceId = sourceLayerIdForAuthoredLayer(
@@ -217,6 +226,15 @@ describe('canonical authored-layer SMP round trip', () => {
     expect(rasterSource.tiles?.[0]).toBe(
       `smp:///authored-roundtrip/s/${rasterFolder}/{z}/{x}/{y}.png`,
     );
+    const rasterResource = await reader.getResource(
+      `s/${rasterFolder}/0/0/0.png`,
+    );
+    expect(rasterResource.contentType).toBe('image/png');
+    expect(rasterResource.contentLength).toBe(TRANSPARENT_1X1_PNG.byteLength);
+    const packagedRasterBytes = new Uint8Array(
+      await new Response(rasterResource.stream).arrayBuffer(),
+    );
+    expect(packagedRasterBytes).toEqual(TRANSPARENT_1X1_PNG);
 
     const authoredFragments = style.layers.filter((layer) =>
       layer.id.startsWith('comapeo-authored:'),

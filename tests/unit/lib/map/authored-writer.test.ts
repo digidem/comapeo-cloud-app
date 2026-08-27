@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { Writer } from 'styled-map-package-api/writer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { MAX_AUTHORED_WRITER_OUTPUT_BYTES } from '@/lib/map/authored-layers';
 import type {
   EnumeratedAuthoredRasterLayer,
   FetchedAnonymousRasterTile,
@@ -408,6 +409,126 @@ describe('buildAuthoredWriterSmp', () => {
     await vi.advanceTimersByTimeAsync(WRITER_CLEANUP_TIMEOUT_MS);
     await assertion;
   });
+
+  it('fails at the bounded Writer output cap without retaining another oversized chunk', async () => {
+    const chunk = new Uint8Array(2 * 1024 * 1024);
+    const chunkCount =
+      Math.floor(MAX_AUTHORED_WRITER_OUTPUT_BYTES / chunk.byteLength) + 1;
+    const finish = vi.fn(async () => undefined);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let index = 0; index < chunkCount; index += 1) {
+          controller.enqueue(chunk);
+        }
+      },
+    });
+    await expect(
+      buildAuthoredWriterSmp({
+        authoredStyle: STYLE,
+        rasterLayers: [RASTER_LAYER],
+        writerFactory: vi.fn(() => fakeWriter({ stream, finish })),
+        fetchTile: vi.fn(async () => fetchedTile()),
+      }),
+    ).rejects.toThrow(/Writer output exceeds/);
+    expect(finish.mock.calls.length).toBeLessThanOrEqual(1);
+  });
+
+  it('aborts an in-flight sibling fetch when another tile fails', async () => {
+    const primary = new Error('first-fetch-failed');
+    const siblingSignals: AbortSignal[] = [];
+    const layer: EnumeratedAuthoredRasterLayer = {
+      ...RASTER_LAYER,
+      tiles: [
+        {
+          z: 3,
+          x: 4,
+          y: 2,
+          requestHref: 'https://tiles.example.com/3/4/5.png',
+        },
+        {
+          z: 3,
+          x: 5,
+          y: 2,
+          requestHref: 'https://tiles.example.com/3/5/5.png',
+        },
+      ],
+    };
+    const fetchTile = vi.fn(
+      (
+        requestHref: string,
+        signal: AbortSignal,
+      ): Promise<FetchedAnonymousRasterTile> => {
+        if (requestHref.includes('/3/4/5.png')) return Promise.reject(primary);
+        siblingSignals.push(signal);
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
+        });
+      },
+    );
+    await expect(
+      buildAuthoredWriterSmp({
+        authoredStyle: STYLE,
+        rasterLayers: [layer],
+        writerFactory: vi.fn(() =>
+          fakeWriter({
+            stream: new ReadableStream<Uint8Array>({
+              pull() {
+                return new Promise<void>(() => undefined);
+              },
+            }),
+          }),
+        ),
+        fetchTile,
+      }),
+    ).rejects.toBe(primary);
+    expect(siblingSignals).toHaveLength(1);
+    expect(siblingSignals[0]?.aborted).toBe(true);
+  });
+
+  it.each([
+    ['fetch-first', 'fetch' as const],
+    ['output-first', 'output' as const],
+  ])(
+    'preserves the first failure in a fetch/output race: %s',
+    async (_label, first) => {
+      vi.useFakeTimers();
+      let outputController:
+        ReadableStreamDefaultController<Uint8Array> | undefined;
+      let rejectFetch!: (reason: unknown) => void;
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          outputController = controller;
+        },
+      });
+      const fetchPrimary = new Error('fetch-race-primary');
+      const outputPrimary = new Error('output-race-primary');
+      const pending = buildAuthoredWriterSmp({
+        authoredStyle: STYLE,
+        rasterLayers: [RASTER_LAYER],
+        writerFactory: vi.fn(() => fakeWriter({ stream })),
+        fetchTile: vi.fn(
+          () =>
+            new Promise<FetchedAnonymousRasterTile>((_resolve, reject) => {
+              rejectFetch = reject;
+            }),
+        ),
+      });
+      while (!rejectFetch || !outputController) await Promise.resolve();
+      const expected = first === 'fetch' ? fetchPrimary : outputPrimary;
+      if (first === 'fetch') {
+        rejectFetch(fetchPrimary);
+        outputController.error(outputPrimary);
+      } else {
+        outputController.error(outputPrimary);
+        rejectFetch(fetchPrimary);
+      }
+      const assertion = expect(pending).rejects.toBe(expected);
+      await vi.advanceTimersByTimeAsync(WRITER_CLEANUP_TIMEOUT_MS);
+      await assertion;
+    },
+  );
 });
 
 describe('styled-map-package-api pre.5 source normalization', () => {
@@ -448,6 +569,24 @@ describe('styled-map-package-api pre.5 source normalization', () => {
 });
 
 describe('styled-map-package-api pre.5 cancellation regression', () => {
+  it('Writer.abort errors only the outer stream and does not cancel the underlying ZIP reader', async () => {
+    const writer = new Writer(STYLE, { dedupe: false });
+    const reader = writer.outputStream.getReader();
+    await writer.addTile(new Uint8Array([1, 2, 3]), {
+      z: 0,
+      x: 0,
+      y: 0,
+      sourceId: 'source',
+      format: 'png',
+    });
+    const finishPromise = writer.finish();
+    void finishPromise.catch(() => undefined);
+    const reason = new Error('abort-real-writer');
+    writer.abort(reason);
+    await expect(reader.read()).rejects.toBe(reason);
+    await expect(finishPromise).resolves.toBeUndefined();
+  });
+
   it('outputReader.cancel makes an otherwise-open real Writer finish settle/reject', async () => {
     const writer = new Writer(STYLE, { dedupe: false });
     const reader = writer.outputStream.getReader();

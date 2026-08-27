@@ -43,6 +43,14 @@ describe('savedMapSchema', () => {
     }
   });
 
+  it('rejects duplicate authored-layer IDs in a complete SavedMap collection', () => {
+    const result = v.safeParse(savedMapSchema, {
+      ...validRaster,
+      layers: [AUTHORED_VECTOR_LAYER_FIXTURE, AUTHORED_VECTOR_LAYER_FIXTURE],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('returns the canonicalized authored layer produced by the shared parser', () => {
     const candidate = structuredClone(AUTHORED_VECTOR_LAYER_FIXTURE);
     const firstFragment = candidate.render.layers[0]!;
