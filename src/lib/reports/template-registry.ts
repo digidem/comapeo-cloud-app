@@ -46,6 +46,14 @@ const AGENCIES = [
   'PF',
 ] as const satisfies readonly CaseAgency[];
 const LOCALES = ['en', 'pt', 'es'] as const;
+export type ReportTemplateLocale = (typeof LOCALES)[number];
+
+export const CURRENT_REPORT_TEMPLATE_VERSIONS = Object.freeze({
+  FUNAI: '1.0.0',
+  IBAMA: '1.0.0',
+  MPF: '1.0.0',
+  PF: '1.0.0',
+} as const satisfies Record<CaseAgency, string>);
 
 function isIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -334,9 +342,9 @@ const rawTemplates: ReportTemplate[] = [
     submission: {
       channel: 'mpf-servicos',
       guidance: {
-        en: 'MPF Serviços accepts identified online representations after gov.br authentication. The MPF states that anonymous representations must be sent by post to the appropriate MPF unit.',
-        pt: 'O MPF Serviços recebe representações identificadas pela internet após autenticação gov.br. O MPF informa que representações anônimas devem ser encaminhadas por via postal à unidade competente.',
-        es: 'MPF Serviços recibe representaciones identificadas por internet tras autenticación gov.br. El MPF informa que las representaciones anónimas deben enviarse por correo postal a la unidad competente.',
+        en: 'MPF Serviços accepts identified online representations after gov.br authentication; using that channel provides the reporter identity to the MPF. The MPF states that anonymous representations must be sent by post to the appropriate MPF unit.',
+        pt: 'O MPF Serviços recebe representações identificadas pela internet após autenticação gov.br; nesse canal, a identidade da pessoa que envia é informada ao MPF. O MPF informa que representações anônimas devem ser encaminhadas por via postal à unidade competente.',
+        es: 'MPF Serviços recibe representaciones identificadas por internet tras autenticación gov.br; ese canal proporciona al MPF la identidad de la persona remitente. El MPF informa que las representaciones anónimas deben enviarse por correo postal a la unidad competente.',
       },
       verifyWarning,
       destinationUrl:
@@ -425,14 +433,13 @@ export function getReportTemplate(
 export function getLatestReportTemplate(
   agency: CaseAgency,
 ): ImmutableReportTemplate {
-  const matching = BRAZIL_REPORT_TEMPLATES.filter(
-    (template) => template.agency === agency,
-  );
-  const latest = matching.at(-1);
-  if (!latest) {
+  const version = CURRENT_REPORT_TEMPLATE_VERSIONS[agency];
+  const current =
+    version === undefined ? undefined : getReportTemplate(agency, version);
+  if (!current) {
     throw new Error(`No report template registered for agency ${agency}`);
   }
-  return latest;
+  return current;
 }
 
 export interface SubmissionGuidanceStatus {

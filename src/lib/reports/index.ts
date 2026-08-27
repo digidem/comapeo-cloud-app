@@ -22,14 +22,17 @@ export type {
 export {
   BRAZIL_REPORT_TEMPLATES,
   CASE_FACT_KEYS,
+  CURRENT_REPORT_TEMPLATE_VERSIONS,
   getLatestReportTemplate,
   getReportTemplate,
   getSubmissionGuidanceStatus,
+  REPORT_TEMPLATE_LOCALES,
   reportTemplateSchema,
 } from '@/lib/reports/template-registry';
 export type {
   CaseFactKey,
   ImmutableReportTemplate,
   ReportTemplate,
+  ReportTemplateLocale,
   SubmissionGuidanceStatus,
 } from '@/lib/reports/template-registry';

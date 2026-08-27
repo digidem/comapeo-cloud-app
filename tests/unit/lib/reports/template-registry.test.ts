@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import type { CaseAgency, CaseType } from '@/lib/db';
 import {
   BRAZIL_REPORT_TEMPLATES,
+  CURRENT_REPORT_TEMPLATE_VERSIONS,
+  REPORT_TEMPLATE_LOCALES,
   getLatestReportTemplate,
   getReportTemplate,
   getSubmissionGuidanceStatus,
@@ -47,6 +49,7 @@ describe('Brazil v1 report template registry', () => {
   });
 
   it('keeps user-facing submission and disclosure guidance localized in en/pt/es', () => {
+    expect(REPORT_TEMPLATE_LOCALES).toEqual(['en', 'pt', 'es']);
     for (const template of BRAZIL_REPORT_TEMPLATES) {
       for (const locale of ['en', 'pt', 'es'] as const) {
         expect(template.submission.guidance[locale].trim()).not.toBe('');
@@ -89,11 +92,19 @@ describe('Brazil v1 report template registry', () => {
     expect(pf.drafting.mayConcludeOffense).toBe(false);
   });
 
+  it('makes the MPF identified-submission privacy trade-off explicit', () => {
+    const mpf = getLatestReportTemplate('MPF');
+
+    expect(mpf.submission.guidance.pt).toMatch(/identidade/i);
+    expect(mpf.submission.guidance.pt).toMatch(/anônim/i);
+  });
+
   it('retrieves an exact immutable version without silently migrating it', () => {
     const funai = getReportTemplate('FUNAI', '1.0.0');
 
     expect(funai).toBe(BRAZIL_REPORT_TEMPLATES[0]);
     expect(getReportTemplate('FUNAI', '2.0.0')).toBeUndefined();
+    expect(CURRENT_REPORT_TEMPLATE_VERSIONS.FUNAI).toBe('1.0.0');
     expect(getLatestReportTemplate('FUNAI')).toBe(funai);
   });
 

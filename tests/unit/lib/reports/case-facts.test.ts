@@ -23,7 +23,7 @@ const testCase: Case = {
 };
 
 describe('buildCaseFacts', () => {
-  it('always includes minimal Case identity facts with stable Case provenance', () => {
+  it('includes only non-sensitive Case classification by default and treats title as disclosure-gated', () => {
     const result = buildCaseFacts({
       case: testCase,
       template: getLatestReportTemplate('FUNAI'),
@@ -32,32 +32,53 @@ describe('buildCaseFacts', () => {
 
     expect(result.caseLocalId).toBe('case-001');
     expect(result.projectLocalId).toBe('project-001');
-    expect(result.facts).toEqual(
-      expect.arrayContaining([
+    expect(result.facts).toContainEqual({
+      key: 'case.primaryType',
+      value: { kind: 'text', value: 'illegal_mining' },
+      provenance: [
         {
-          key: 'case.primaryType',
-          value: { kind: 'text', value: 'illegal_mining' },
-          provenance: [
-            {
-              id: 'case-context:primary-type',
-              sourceType: 'case-context',
-              sourceId: 'primary-type',
-            },
-          ],
+          id: 'case-context:primary-type',
+          sourceType: 'case-context',
+          sourceId: 'primary-type',
         },
+      ],
+    });
+    expect(result.facts.some((fact) => fact.key === 'case.title')).toBe(false);
+    expect(result.missingInformation).toContainEqual({
+      key: 'case.title',
+      severity: 'blocking',
+    });
+  });
+
+  it('uses the disclosure-approved Case title without leaking the raw Case title', () => {
+    const result = buildCaseFacts({
+      case: testCase,
+      template: getLatestReportTemplate('FUNAI'),
+      approvedFacts: [
         {
           key: 'case.title',
-          value: { kind: 'text', value: 'Garimpo no rio' },
-          provenance: [
-            {
-              id: 'case-context:title',
-              sourceType: 'case-context',
-              sourceId: 'title',
-            },
-          ],
+          value: { kind: 'text', value: 'Atividade no território' },
+          source: { type: 'case-context', id: 'title' },
         },
-      ]),
-    );
+      ],
+    });
+
+    expect(result.facts).toContainEqual({
+      key: 'case.title',
+      value: { kind: 'text', value: 'Atividade no território' },
+      provenance: [
+        {
+          id: 'case-context:title',
+          sourceType: 'case-context',
+          sourceId: 'title',
+        },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain('Garimpo no rio');
+    expect(result.missingInformation).not.toContainEqual({
+      key: 'case.title',
+      severity: 'blocking',
+    });
   });
 
   it('pins the exact selected template identity and validates the result at runtime', () => {
@@ -212,7 +233,7 @@ describe('buildCaseFacts', () => {
 
     expect(
       result.facts.find((fact) => fact.key === 'incident.date')?.value,
-    ).toEqual({ kind: 'date', value: '2026-08-22' });
+    ).toEqual({ kind: 'date', value: '2026-08-21' });
     expect(
       result.facts.find((fact) => fact.key === 'incident.dateRange')?.value,
     ).toEqual({ kind: 'date-range', start: '2026-08-20', end: '2026-08-22' });
@@ -298,6 +319,27 @@ describe('buildCaseFacts', () => {
         )
         ?.provenance.map((source) => source.sourceVersionId),
     ).toEqual(['v1', 'v2']);
+  });
+
+  it('fails closed when one Case Fact key has conflicting approved values', () => {
+    expect(() =>
+      buildCaseFacts({
+        case: testCase,
+        template: getLatestReportTemplate('MPF'),
+        approvedFacts: [
+          {
+            key: 'incident.date',
+            value: { kind: 'date', value: '2026-08-20' },
+            source: { type: 'observation', id: 'obs-1' },
+          },
+          {
+            key: 'incident.date',
+            value: { kind: 'date', value: '2026-08-21' },
+            source: { type: 'observation', id: 'obs-2' },
+          },
+        ],
+      }),
+    ).toThrow(/conflicting/i);
   });
 
   it('rejects arbitrary objects, binary values, blank source IDs, and invalid geometry', () => {

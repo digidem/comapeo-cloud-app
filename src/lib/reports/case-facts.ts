@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 
-import type { Case } from '@/lib/db';
+import type { Case, CaseAgency } from '@/lib/db';
 import {
   CASE_FACT_KEYS,
   type CaseFactKey,
@@ -18,7 +18,12 @@ const SOURCE_TYPES = [
 
 export type CaseFactSourceType = (typeof SOURCE_TYPES)[number];
 
-const AGENCIES = ['FUNAI', 'IBAMA', 'MPF', 'PF'] as const;
+const AGENCIES = [
+  'FUNAI',
+  'IBAMA',
+  'MPF',
+  'PF',
+] as const satisfies readonly CaseAgency[];
 const nonEmptyStringSchema = v.pipe(v.string(), v.trim(), v.nonEmpty());
 const caseFactKeySchema = v.picklist(CASE_FACT_KEYS);
 const sourceTypeSchema = v.picklist(SOURCE_TYPES);
@@ -58,8 +63,7 @@ function isDateLike(value: string): boolean {
 }
 
 function normalizeDate(value: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  return new Date(value).toISOString().slice(0, 10);
+  return value.slice(0, 10);
 }
 
 const normalizedDateSchema = v.pipe(
@@ -146,6 +150,27 @@ export const caseFactSchema = v.object({
 
 export type CaseFact = v.InferOutput<typeof caseFactSchema>;
 
+const MULTI_VALUED_CASE_FACT_KEYS = new Set<CaseFactKey>([
+  'case.secondaryTypes',
+  'impact.affectedResources',
+  'actors.documented',
+  'equipment.documented',
+]);
+
+function hasNoConflictingSingleValueFacts(facts: CaseFact[]): boolean {
+  const valuesByKey = new Map<CaseFactKey, string>();
+
+  for (const fact of facts) {
+    if (MULTI_VALUED_CASE_FACT_KEYS.has(fact.key)) continue;
+    const value = JSON.stringify(fact.value);
+    const previous = valuesByKey.get(fact.key);
+    if (previous !== undefined && previous !== value) return false;
+    valuesByKey.set(fact.key, value);
+  }
+
+  return true;
+}
+
 export const missingCaseFactSchema = v.object({
   key: caseFactKeySchema,
   severity: v.picklist(['blocking', 'review']),
@@ -163,19 +188,27 @@ export const caseFactsSchema = v.object({
     agency: v.picklist(AGENCIES),
     outputLanguage: v.literal('pt-BR'),
   }),
-  facts: v.array(caseFactSchema),
+  facts: v.pipe(
+    v.array(caseFactSchema),
+    v.check(
+      hasNoConflictingSingleValueFacts,
+      'Case Facts contain conflicting values for a single-valued key',
+    ),
+  ),
   missingInformation: v.array(missingCaseFactSchema),
 });
 
 export type CaseFacts = v.InferOutput<typeof caseFactsSchema>;
 
 export interface BuildCaseFactsInput {
-  case: Pick<Case, 'localId' | 'projectLocalId' | 'title' | 'caseType'>;
+  case: Pick<Case, 'localId' | 'projectLocalId' | 'caseType'>;
   template: ImmutableReportTemplate;
   /**
    * Facts already selected, report-approved, and disclosure-transformed by the
-   * evidence/disclosure owner (#269). This layer deliberately makes no
-   * disclosure decision and has no access to project storage or the network.
+   * evidence/disclosure owner (#269). Sensitive Case context such as the title
+   * must enter through this list as an approved fact; this layer deliberately
+   * makes no disclosure decision and has no access to project storage or the
+   * network.
    */
   approvedFacts: readonly ApprovedCaseFactInput[];
 }
@@ -287,11 +320,6 @@ function collectMissingInformation(
 
 export function buildCaseFacts(input: BuildCaseFactsInput): CaseFacts {
   const candidates: CaseFact[] = [
-    normalizeFact(
-      'case.title',
-      { kind: 'text', value: input.case.title },
-      { type: 'case-context', id: 'title' },
-    ),
     normalizeFact(
       'case.primaryType',
       { kind: 'text', value: input.case.caseType },
