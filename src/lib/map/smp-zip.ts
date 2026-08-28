@@ -1,3 +1,5 @@
+// Keep this module import-free: the cross-browser production-reader E2E
+// transpiles this exact source as a standalone browser module.
 export const MAX_SMP_MERGE_INPUT_BYTES = 192 * 1024 * 1024;
 export const MAX_SMP_MERGE_ENTRIES = 20_000;
 export const MAX_SMP_CENTRAL_DIRECTORY_BYTES = 16 * 1024 * 1024;

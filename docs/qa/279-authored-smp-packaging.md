@@ -131,6 +131,7 @@ Relevant test: `smp-download.test.ts`.
 - GeoLibre integration is not part of this PR (#281/#282).
 - `estimateAuthoredPayload` may issue one HEAD request per raster tile up to the explicit 10,000-tile cap; that is the current #279 estimator contract.
 - The authored raster phase does not yet surface UI progress because there is no production caller in #279.
+- Authored text labels remain offline-capable, but if their `text-font` stack is absent from packaged SMP glyph resources MapLibre falls back to browser-local TinySDF glyph rendering; metrics can therefore differ from the packaged basemap font.
 
 These are not failures for this QA unless this PR accidentally introduces the deferred consumer behavior or breaks existing download flows.
 
