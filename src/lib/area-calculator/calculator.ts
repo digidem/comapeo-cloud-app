@@ -30,9 +30,7 @@ export function extractPoints(geojson: unknown): Feature<Point>[] {
 
   if (g.type === 'FeatureCollection') {
     const fc = g as FeatureCollection;
-    return fc.features
-      .filter((f) => f.geometry !== null)
-      .flatMap((feature) => explodePointFeature(feature));
+    return fc.features.flatMap((feature) => explodePointFeature(feature));
   }
 
   if (g.type === 'Feature') {
