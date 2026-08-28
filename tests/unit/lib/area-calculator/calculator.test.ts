@@ -34,6 +34,29 @@ describe('extractPoints', () => {
     }
   });
 
+  it('reads each FeatureCollection geometry only once', () => {
+    let geometryReads = 0;
+    const feature = {
+      type: 'Feature' as const,
+      properties: {},
+      get geometry() {
+        geometryReads += 1;
+        return {
+          type: 'Point' as const,
+          coordinates: [-74.006, 40.7128] as [number, number],
+        };
+      },
+    };
+
+    const result = extractPoints({
+      type: 'FeatureCollection',
+      features: [feature],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(geometryReads).toBe(1);
+  });
+
   it('handles a single Feature<Point>', () => {
     const feature = makePointFeature(-74.006, 40.7128);
     const result = extractPoints(feature);
