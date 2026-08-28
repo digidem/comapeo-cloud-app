@@ -182,6 +182,30 @@ describe('buildCaseFacts', () => {
     ).toBe(false);
   });
 
+  it('rejects runtime Case Facts that mark a present fact as missing', () => {
+    const result = buildCaseFacts({
+      case: testCase,
+      template: getLatestReportTemplate('MPF'),
+      approvedFacts: [
+        {
+          key: 'incident.chronology',
+          value: { kind: 'text', value: 'Fato documentado.' },
+          source: { type: 'observation', id: 'obs-present' },
+        },
+      ],
+    });
+
+    expect(
+      v.safeParse(caseFactsSchema, {
+        ...result,
+        missingInformation: [
+          ...result.missingInformation,
+          { key: 'incident.chronology', severity: 'blocking' },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects disclosure-approved facts outside the canonical template vocabulary', () => {
     expect(() =>
       buildCaseFacts({
@@ -496,6 +520,34 @@ describe('buildCaseFacts', () => {
     expect(chronology[0]?.provenance.map((source) => source.id)).toEqual([
       'observation:obs-nfc',
       'observation:obs-nfd',
+    ]);
+  });
+
+  it('preserves distinct approved values for explicitly multi-valued fact keys', () => {
+    const result = buildCaseFacts({
+      case: testCase,
+      template: getLatestReportTemplate('MPF'),
+      approvedFacts: [
+        {
+          key: 'actors.documented',
+          value: { kind: 'text', value: 'Pessoa A' },
+          source: { type: 'observation', id: 'obs-actor-a' },
+        },
+        {
+          key: 'actors.documented',
+          value: { kind: 'text', value: 'Pessoa B' },
+          source: { type: 'user-statement', id: 'statement-actor-b' },
+        },
+      ],
+    });
+
+    expect(
+      result.facts
+        .filter((fact) => fact.key === 'actors.documented')
+        .map((fact) => fact.value),
+    ).toEqual([
+      { kind: 'text', value: 'Pessoa A' },
+      { kind: 'text', value: 'Pessoa B' },
     ]);
   });
 

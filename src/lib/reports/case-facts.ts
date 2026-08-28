@@ -298,9 +298,14 @@ function hasOnlyTemplateDeclaredFacts(input: {
       ...template.requiredFacts,
       ...template.optionalFacts,
     ]);
+    const presentKeys = new Set(input.facts.map((fact) => fact.key));
     return (
       input.facts.every((fact) => allowedKeys.has(fact.key)) &&
-      input.missingInformation.every((missing) => allowedKeys.has(missing.key))
+      input.missingInformation.every(
+        (missing) =>
+          allowedKeys.has(missing.key) &&
+          !isFactSatisfied(missing.key, presentKeys),
+      )
     );
   } catch {
     return false;
