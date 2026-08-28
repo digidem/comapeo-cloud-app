@@ -3,6 +3,7 @@ import { tileIterator } from 'styled-map-package-api/tile-downloader';
 import {
   type RasterTilesAuthoredSource,
   canonicalizeRasterTileTemplate,
+  isExternalAnonymousRasterHostname,
 } from '@/lib/map/authored-layers';
 
 export const MAX_WEB_MERCATOR_LAT = 85.0511287798066;
@@ -110,18 +111,7 @@ function validateConcreteAnonymousRasterHref(requestHref: string): string {
       'Raster request URL cannot contain credentials, query parameters, or fragments',
     );
   }
-  const hostname = url.hostname.toLowerCase();
-  if (
-    !hostname ||
-    hostname === 'localhost' ||
-    !hostname.includes('.') ||
-    hostname.endsWith('.localhost') ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.internal') ||
-    hostname.endsWith('.home.arpa') ||
-    hostname.includes(':') ||
-    /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
-  ) {
+  if (!isExternalAnonymousRasterHostname(url.hostname)) {
     throw new AuthoredRasterError(
       'AUTHORED_RASTER_URL_INVALID',
       'Raster request URL must use an external DNS hostname',
@@ -439,7 +429,8 @@ export async function headAnonymousRasterTileSize(
     if (signal.aborted) throw abortReason(signal);
     if (
       error instanceof AuthoredRasterError &&
-      error.code === 'AUTHORED_RASTER_TILE_BYTES_EXCEEDED'
+      (error.code === 'AUTHORED_RASTER_TILE_BYTES_EXCEEDED' ||
+        error.code === 'AUTHORED_RASTER_URL_INVALID')
     ) {
       throw error;
     }

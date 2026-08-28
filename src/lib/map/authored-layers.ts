@@ -524,6 +524,23 @@ const RASTER_SENTINELS = {
   y: '__COMAPEO_Y__',
 } as const;
 
+export function isExternalAnonymousRasterHostname(
+  hostnameInput: string,
+): boolean {
+  const hostname = hostnameInput.toLowerCase().replace(/\.$/, '');
+  return Boolean(
+    hostname &&
+    hostname !== 'localhost' &&
+    hostname.includes('.') &&
+    !hostname.endsWith('.localhost') &&
+    !hostname.endsWith('.local') &&
+    !hostname.endsWith('.internal') &&
+    !hostname.endsWith('.home.arpa') &&
+    !hostname.includes(':') &&
+    !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname),
+  );
+}
+
 function validateAnonymousRasterUrl(url: URL): void {
   if (url.protocol !== 'https:') {
     throw new Error('Authored raster tile templates must use HTTPS');
@@ -539,21 +556,10 @@ function validateAnonymousRasterUrl(url: URL): void {
     );
   }
   // A terminal DNS root dot is semantically equivalent to the same hostname
-  // without it (for example `tiles.internal.`). Apply reserved-host policy to
-  // that normalized comparison form so the dot cannot bypass the V1 suffix
-  // restrictions, while preserving WHATWG serialization for accepted URLs.
-  const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
-  if (
-    !hostname ||
-    hostname === 'localhost' ||
-    !hostname.includes('.') ||
-    hostname.endsWith('.localhost') ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.internal') ||
-    hostname.endsWith('.home.arpa') ||
-    hostname.includes(':') ||
-    /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
-  ) {
+  // without it (for example `tiles.internal.`). Apply the shared reserved-host
+  // policy to that comparison form while preserving WHATWG serialization for
+  // accepted URLs.
+  if (!isExternalAnonymousRasterHostname(url.hostname)) {
     throw new Error(
       'Authored raster tile templates require an external DNS hostname',
     );

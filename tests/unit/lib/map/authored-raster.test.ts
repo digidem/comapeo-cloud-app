@@ -143,6 +143,19 @@ describe('raster request href', () => {
 });
 
 describe('anonymous raster HEAD/GET', () => {
+  it('rejects reserved concrete raster hosts even with a trailing DNS root dot', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(
+      headAnonymousRasterTileSize(
+        'https://tiles.internal./1/2/3.png',
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow(/external DNS hostname/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('HEAD uses the exact anonymous request policy and strict Content-Length', async () => {
     const href = 'https://tiles.example.com/1/2/3.png';
     const fetchMock = vi.fn(
