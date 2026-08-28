@@ -147,7 +147,14 @@ export function mergeGlobalOverviewStyle(
   const usedGlobalFolders = new Set<string>();
   let globalIndex = 0;
 
-  for (const [sourceId, globalSource] of Object.entries(globalStyle.sources)) {
+  const globalSourceEntries = Object.entries(globalStyle.sources).sort(
+    ([leftId], [rightId]) => {
+      if (leftId < rightId) return -1;
+      if (leftId > rightId) return 1;
+      return 0;
+    },
+  );
+  for (const [sourceId, globalSource] of globalSourceEntries) {
     const regionalSource = regionalStyle.sources[sourceId];
     if (!regionalSource) continue;
     const globalFolder = getSmpTileFolder(globalSource);

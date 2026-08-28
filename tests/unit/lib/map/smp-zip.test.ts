@@ -65,6 +65,61 @@ async function makeWriterZip(): Promise<Blob> {
   return new Blob(chunks as BlobPart[], { type: 'application/zip' });
 }
 
+function makeSignaturelessDescriptorZipWithSignatureCrc(): Blob {
+  const localSignature = 0x04034b50;
+  const centralSignature = 0x02014b50;
+  const eocdSignature = 0x06054b50;
+  const descriptorSignature = 0x08074b50;
+  const name = new TextEncoder().encode('x');
+  const data = new Uint8Array([0]);
+  const localSize = 30 + name.byteLength + data.byteLength + 12;
+  const centralSize = 46 + name.byteLength;
+  const bytes = new Uint8Array(localSize + centralSize + 22);
+  const view = new DataView(bytes.buffer);
+
+  let offset = 0;
+  view.setUint32(offset, localSignature, true);
+  view.setUint16(offset + 4, 20, true);
+  view.setUint16(offset + 6, 0x0008, true);
+  view.setUint16(offset + 8, 0, true);
+  view.setUint16(offset + 26, name.byteLength, true);
+  bytes.set(name, offset + 30);
+  bytes.set(data, offset + 30 + name.byteLength);
+  offset += 30 + name.byteLength + data.byteLength;
+
+  // Signatureless descriptor. Its CRC deliberately equals the optional
+  // descriptor signature, so the parser must validate both legal layouts.
+  view.setUint32(offset, descriptorSignature, true);
+  view.setUint32(offset + 4, data.byteLength, true);
+  view.setUint32(offset + 8, data.byteLength, true);
+  offset += 12;
+  const centralOffset = offset;
+
+  view.setUint32(offset, centralSignature, true);
+  view.setUint16(offset + 4, 20, true);
+  view.setUint16(offset + 6, 20, true);
+  view.setUint16(offset + 8, 0x0008, true);
+  view.setUint16(offset + 10, 0, true);
+  view.setUint32(offset + 16, descriptorSignature, true);
+  view.setUint32(offset + 20, data.byteLength, true);
+  view.setUint32(offset + 24, data.byteLength, true);
+  view.setUint16(offset + 28, name.byteLength, true);
+  view.setUint32(offset + 42, 0, true);
+  bytes.set(name, offset + 46);
+  offset += centralSize;
+
+  view.setUint32(offset, eocdSignature, true);
+  view.setUint16(offset + 4, 0, true);
+  view.setUint16(offset + 6, 0, true);
+  view.setUint16(offset + 8, 1, true);
+  view.setUint16(offset + 10, 1, true);
+  view.setUint32(offset + 12, centralSize, true);
+  view.setUint32(offset + 16, centralOffset, true);
+  view.setUint16(offset + 20, 0, true);
+
+  return new Blob([bytes], { type: 'application/zip' });
+}
+
 function mutateUint16(
   bytes: Uint8Array,
   offset: number,
@@ -435,6 +490,62 @@ describe('bounded SMP ZIP entry reads', () => {
         inspection,
       ),
     ).rejects.toMatchObject({ cause: 'zip-stop' });
+  });
+
+  it('aborts promptly while local-entry layout bytes are still pending', async () => {
+    const blob = await makeZip('STORE');
+    const inspection = await inspectSmpZipCentralDirectory(blob);
+    let releaseRead!: () => void;
+    let markStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const readReleased = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const blockingBlob = {
+      size: blob.size,
+      slice(start?: number, end?: number) {
+        const part = blob.slice(start, end);
+        return {
+          async arrayBuffer() {
+            markStarted();
+            await readReleased;
+            return part.arrayBuffer();
+          },
+        };
+      },
+    } as unknown as Blob;
+    const controller = new AbortController();
+    const pending = validateSmpZipLocalEntryLayout(
+      blockingBlob,
+      inspection,
+      controller.signal,
+    );
+    void pending.catch(() => undefined);
+    await readStarted;
+    controller.abort('layout-stop');
+    const outcome = await Promise.race([
+      pending.then(
+        () => 'resolved' as const,
+        () => 'rejected' as const,
+      ),
+      new Promise<'timed-out'>((resolve) =>
+        setTimeout(() => resolve('timed-out'), 25),
+      ),
+    ]);
+    releaseRead();
+    await pending.catch(() => undefined);
+    expect(outcome).toBe('rejected');
+  });
+
+  it('accepts a signatureless descriptor when its CRC equals the optional signature value', async () => {
+    const blob = makeSignaturelessDescriptorZipWithSignatureCrc();
+    const inspection = await inspectSmpZipCentralDirectory(blob);
+
+    await expect(
+      validateSmpZipLocalEntryLayout(blob, inspection),
+    ).resolves.toBeUndefined();
   });
 
   it('rejects a corrupted real Writer data descriptor', async () => {

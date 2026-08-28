@@ -77,6 +77,28 @@ function abortFailure(signal: AbortSignal): Error {
   );
 }
 
+async function readBlobSliceArrayBuffer(
+  blob: Blob,
+  start: number,
+  end: number,
+  signal?: AbortSignal,
+): Promise<ArrayBuffer> {
+  const pending = blob.slice(start, end).arrayBuffer();
+  void pending.catch(() => undefined);
+  if (!signal) return pending;
+  if (signal.aborted) throw abortFailure(signal);
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(abortFailure(signal));
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([pending, aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener('abort', onAbort);
+  }
+}
+
 function byteArraysEqual(left: Uint8Array, right: Uint8Array): boolean {
   if (left.byteLength !== right.byteLength) return false;
   for (let index = 0; index < left.byteLength; index += 1) {
@@ -496,6 +518,7 @@ async function validateDataDescriptor(
   entry: SmpZipEntry,
   dataEnd: number,
   centralDirectoryOffset: number,
+  signal?: AbortSignal,
 ): Promise<number> {
   if ((entry.generalPurposeFlags & DATA_DESCRIPTOR_FLAG) === 0) return dataEnd;
 
@@ -508,33 +531,42 @@ async function validateDataDescriptor(
   }
   const probeLength = Math.min(28, available);
   const bytes = new Uint8Array(
-    await blob.slice(dataEnd, dataEnd + probeLength).arrayBuffer(),
+    await readBlobSliceArrayBuffer(
+      blob,
+      dataEnd,
+      dataEnd + probeLength,
+      signal,
+    ),
   );
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const hasSignature =
+  const descriptorMatches = (fieldOffset: number): boolean =>
+    bytes.byteLength >= fieldOffset + 12 &&
+    view.getUint32(fieldOffset, true) === entry.crc32 &&
+    view.getUint32(fieldOffset + 4, true) === entry.compressedSize &&
+    view.getUint32(fieldOffset + 8, true) === entry.uncompressedSize;
+
+  // The optional classic descriptor signature has the same 32-bit shape as a
+  // CRC. A perfectly valid signatureless descriptor may therefore begin with
+  // 0x08074b50. Determine the form by validating both legal interpretations
+  // against the authoritative central-directory values instead of assuming a
+  // matching first word is necessarily a signature.
+  const signaturelessMatches = descriptorMatches(0);
+  const signedMatches =
     bytes.byteLength >= 4 &&
-    view.getUint32(0, true) === DATA_DESCRIPTOR_SIGNATURE;
-  const fieldOffset = hasSignature ? 4 : 0;
+    view.getUint32(0, true) === DATA_DESCRIPTOR_SIGNATURE &&
+    descriptorMatches(4);
+  if (signaturelessMatches === signedMatches) {
+    throw zipError(
+      signaturelessMatches
+        ? 'SMP_ZIP_DATA_DESCRIPTOR_AMBIGUOUS'
+        : 'SMP_ZIP_DATA_DESCRIPTOR_MISMATCH',
+      signaturelessMatches
+        ? `ZIP data descriptor is ambiguous for ${entry.name}`
+        : `ZIP data descriptor does not match the central directory for ${entry.name}`,
+    );
+  }
+  const hasSignature = signedMatches;
   const descriptorLength = hasSignature ? 16 : 12;
-  if (bytes.byteLength < descriptorLength) {
-    throw zipError(
-      'SMP_ZIP_DATA_DESCRIPTOR_TRUNCATED',
-      `Truncated ZIP data descriptor for ${entry.name}`,
-    );
-  }
-  const crc32 = view.getUint32(fieldOffset, true);
-  const compressedSize = view.getUint32(fieldOffset + 4, true);
-  const uncompressedSize = view.getUint32(fieldOffset + 8, true);
-  if (
-    crc32 !== entry.crc32 ||
-    compressedSize !== entry.compressedSize ||
-    uncompressedSize !== entry.uncompressedSize
-  ) {
-    throw zipError(
-      'SMP_ZIP_DATA_DESCRIPTOR_MISMATCH',
-      `ZIP data descriptor does not match the central directory for ${entry.name}`,
-    );
-  }
 
   let descriptorEnd = dataEnd + descriptorLength;
   // styled-map-package-api@5.0.0-pre.5 emits eight zero bytes after its
@@ -576,11 +608,15 @@ async function inspectLocalEntry(
   blob: Blob,
   entry: SmpZipEntry,
   inspection: SmpZipInspection,
+  signal?: AbortSignal,
 ): Promise<LocalEntryLayout> {
   const fixedHeaderBytes = new Uint8Array(
-    await blob
-      .slice(entry.localHeaderOffset, entry.localHeaderOffset + 30)
-      .arrayBuffer(),
+    await readBlobSliceArrayBuffer(
+      blob,
+      entry.localHeaderOffset,
+      entry.localHeaderOffset + 30,
+      signal,
+    ),
   );
   if (fixedHeaderBytes.byteLength !== 30) {
     throw zipError(
@@ -632,12 +668,12 @@ async function inspectLocalEntry(
     );
   }
   const variableBytes = new Uint8Array(
-    await blob
-      .slice(
-        entry.localHeaderOffset + 30,
-        entry.localHeaderOffset + 30 + nameLength + extraLength,
-      )
-      .arrayBuffer(),
+    await readBlobSliceArrayBuffer(
+      blob,
+      entry.localHeaderOffset + 30,
+      entry.localHeaderOffset + 30 + nameLength + extraLength,
+      signal,
+    ),
   );
   if (variableBytes.byteLength !== nameLength + extraLength) {
     throw zipError(
@@ -701,6 +737,7 @@ async function inspectLocalEntry(
     entry,
     dataEnd,
     inspection.centralDirectoryOffset,
+    signal,
   );
   if (rangeEnd > inspection.centralDirectoryOffset || rangeEnd > blob.size) {
     throw zipError(
@@ -720,10 +757,12 @@ async function inspectLocalEntry(
 export async function validateSmpZipLocalEntryLayout(
   blob: Blob,
   inspection: SmpZipInspection,
+  signal?: AbortSignal,
 ): Promise<void> {
   const ranges: Array<LocalEntryLayout & { name: string }> = [];
   for (const entry of inspection.entries) {
-    const layout = await inspectLocalEntry(blob, entry, inspection);
+    if (signal?.aborted) throw abortFailure(signal);
+    const layout = await inspectLocalEntry(blob, entry, inspection, signal);
     ranges.push({ ...layout, name: entry.name });
   }
   ranges.sort((left, right) => left.rangeStart - right.rangeStart);
@@ -906,7 +945,7 @@ export async function readBoundedSmpZipEntry(
 ): Promise<Uint8Array> {
   if (signal.aborted) throw abortFailure(signal);
   if (entry.isDirectory) return new Uint8Array();
-  const layout = await inspectLocalEntry(blob, entry, inspection);
+  const layout = await inspectLocalEntry(blob, entry, inspection, signal);
   if (signal.aborted) throw abortFailure(signal);
   const stream = await decompressedEntryStream(
     blob.slice(layout.dataStart, layout.dataEnd),

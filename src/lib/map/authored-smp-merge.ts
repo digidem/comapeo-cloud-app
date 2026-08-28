@@ -245,7 +245,7 @@ async function inspectInputs(
         'combined declared uncompressed bytes exceed 160 MiB',
       );
     }
-    await validateSmpZipLocalEntryLayout(input.blob, inspection);
+    await validateSmpZipLocalEntryLayout(input.blob, inspection, config.signal);
     archives.push({ ...input, inspection });
   }
   return archives;

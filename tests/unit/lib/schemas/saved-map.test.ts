@@ -94,6 +94,29 @@ describe('savedMapSchema', () => {
     ).toBe(false);
   });
 
+  it('rejects an oversized layers array before reflecting on any layer entry', () => {
+    let reflectionCalls = 0;
+    const hostileLayer = new Proxy(AUTHORED_VECTOR_LAYER_FIXTURE, {
+      ownKeys(target) {
+        reflectionCalls += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        reflectionCalls += 1;
+        return Reflect.getOwnPropertyDescriptor(target, property);
+      },
+    });
+    const layers = Array.from(
+      { length: MAX_AUTHORED_LAYERS + 1 },
+      () => hostileLayer,
+    );
+
+    expect(
+      v.safeParse(savedMapSchema, { ...validRaster, layers }).success,
+    ).toBe(false);
+    expect(reflectionCalls).toBe(0);
+  });
+
   it('rejects an authored-layer collection above the aggregate packaging JSON cap', () => {
     const layers = Array.from({ length: MAX_AUTHORED_LAYERS }, (_, index) => ({
       ...AUTHORED_VECTOR_LAYER_FIXTURE,

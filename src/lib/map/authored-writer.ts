@@ -4,8 +4,10 @@ import { MAX_AUTHORED_WRITER_OUTPUT_BYTES } from '@/lib/map/authored-layers';
 import {
   AUTHORED_RASTER_CONCURRENCY,
   type AuthoredRasterByteBudget,
+  AuthoredRasterError,
   type EnumeratedAuthoredRasterLayer,
   type FetchedAnonymousRasterTile,
+  MAX_AUTHORED_RASTER_TILE_REQUESTS,
   createAuthoredRasterByteBudget,
   fetchAnonymousRasterTile,
 } from '@/lib/map/authored-raster';
@@ -147,10 +149,15 @@ async function addTileWithTimeout(
   }
 }
 
+type FatalTerminalEvent = { source: 'fatal'; failure: FirstFailure };
+
 async function raceTerminalWithTimeout(
   finish: Promise<TerminalEvent>,
   drain: Promise<TerminalEvent>,
-): Promise<TerminalEvent | { source: 'terminal-timeout' }> {
+  fatal: Promise<FirstFailure>,
+): Promise<
+  TerminalEvent | FatalTerminalEvent | { source: 'terminal-timeout' }
+> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<{ source: 'terminal-timeout' }>((resolve) => {
     timer = setTimeout(
@@ -159,7 +166,12 @@ async function raceTerminalWithTimeout(
     );
   });
   try {
-    return await Promise.race([finish, drain, timeout]);
+    return await Promise.race([
+      finish,
+      drain,
+      fatal.then((failure) => ({ source: 'fatal' as const, failure })),
+      timeout,
+    ]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
@@ -167,8 +179,13 @@ async function raceTerminalWithTimeout(
 
 async function waitForCounterpart(
   promise: Promise<TerminalEvent>,
+  fatal: Promise<FirstFailure>,
   timeoutError: WriterSettlementTimeoutError,
-): Promise<TerminalEvent | { source: 'settlement-timeout'; error: Error }> {
+): Promise<
+  | TerminalEvent
+  | FatalTerminalEvent
+  | { source: 'settlement-timeout'; error: Error }
+> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<{
     source: 'settlement-timeout';
@@ -180,7 +197,11 @@ async function waitForCounterpart(
     );
   });
   try {
-    return await Promise.race([promise, timeout]);
+    return await Promise.race([
+      promise,
+      fatal.then((failure) => ({ source: 'fatal' as const, failure })),
+      timeout,
+    ]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
@@ -204,6 +225,17 @@ export async function buildAuthoredWriterSmp(
     );
   }
   if (rasterLayers.length === 0) return undefined;
+
+  let declaredTileCount = 0;
+  for (const layer of rasterLayers) {
+    declaredTileCount += layer.tiles.length;
+    if (declaredTileCount > MAX_AUTHORED_RASTER_TILE_REQUESTS) {
+      throw new AuthoredRasterError(
+        'AUTHORED_RASTER_TILE_LIMIT_EXCEEDED',
+        `Authored raster packaging supports at most ${MAX_AUTHORED_RASTER_TILE_REQUESTS} owned tile requests`,
+      );
+    }
+  }
 
   const operationController = new AbortController();
   let firstFailure: FirstFailure | undefined;
@@ -454,7 +486,11 @@ export async function buildAuthoredWriterSmp(
     const firstTerminal = await raceTerminalWithTimeout(
       finishObserved,
       drainObserved,
+      fatalPromise,
     );
+    if (firstTerminal.source === 'fatal') {
+      return await cleanupAndThrow(firstTerminal.failure, [finishPromise]);
+    }
     if (firstTerminal.source === 'terminal-timeout') {
       const failure = recordPrimaryFailure(new WriterTerminalTimeoutError());
       return await cleanupAndThrow(failure, [finishPromise]);
@@ -468,17 +504,22 @@ export async function buildAuthoredWriterSmp(
       firstTerminal.source === 'drain'
         ? await waitForCounterpart(
             finishObserved,
+            fatalPromise,
             new WriterSettlementTimeoutError(
               'finish did not settle after output EOF',
             ),
           )
         : await waitForCounterpart(
             drainObserved,
+            fatalPromise,
             new WriterSettlementTimeoutError(
               'output did not reach EOF after finish',
             ),
           );
 
+    if (counterpart.source === 'fatal') {
+      return await cleanupAndThrow(counterpart.failure, [finishPromise]);
+    }
     if (counterpart.source === 'settlement-timeout') {
       const failure = recordPrimaryFailure(counterpart.error);
       return await cleanupAndThrow(failure, [finishPromise]);

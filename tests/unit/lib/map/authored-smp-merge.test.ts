@@ -490,6 +490,57 @@ describe('mergeSmpWithAuthoredLayers', () => {
     );
   });
 
+  it('assigns global overview folders independently of source object key order', () => {
+    const regionalStyle = {
+      version: 8 as const,
+      sources: {
+        alpha: {
+          type: 'raster',
+          tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.png'],
+        },
+        beta: {
+          type: 'raster',
+          tiles: ['smp://maps.v1/s/1/{z}/{x}/{y}.png'],
+        },
+      },
+      layers: [
+        { id: 'alpha', type: 'raster' as const, source: 'alpha' },
+        { id: 'beta', type: 'raster' as const, source: 'beta' },
+      ],
+      metadata: { 'smp:sourceFolders': { alpha: 's/0', beta: 's/1' } },
+    };
+    const firstGlobal = {
+      version: 8 as const,
+      sources: {
+        alpha: {
+          type: 'raster',
+          tiles: ['smp://maps.v1/s/2/{z}/{x}/{y}.png'],
+        },
+        beta: {
+          type: 'raster',
+          tiles: ['smp://maps.v1/s/3/{z}/{x}/{y}.png'],
+        },
+      },
+      layers: [],
+    };
+    const secondGlobal = {
+      ...firstGlobal,
+      sources: {
+        beta: firstGlobal.sources.beta,
+        alpha: firstGlobal.sources.alpha,
+      },
+    };
+
+    const first = mergeGlobalOverviewStyle(regionalStyle, firstGlobal);
+    const second = mergeGlobalOverviewStyle(regionalStyle, secondGlobal);
+
+    expect(second.mappings).toEqual(first.mappings);
+    expect(second.style.sources).toEqual(first.style.sources);
+    expect(second.style.metadata?.['smp:sourceFolders']).toEqual(
+      first.style.metadata?.['smp:sourceFolders'],
+    );
+  });
+
   it('preserves the composed effective raster zoom range when replacing a Writer source', async () => {
     const sourceId = sourceLayerIdForAuthoredLayer(
       AUTHORED_RASTER_LAYER_FIXTURE.id,

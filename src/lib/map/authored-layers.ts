@@ -538,7 +538,11 @@ function validateAnonymousRasterUrl(url: URL): void {
       'Authored raster tile templates cannot contain query or fragment data',
     );
   }
-  const hostname = url.hostname.toLowerCase();
+  // A terminal DNS root dot is semantically equivalent to the same hostname
+  // without it (for example `tiles.internal.`). Apply reserved-host policy to
+  // that normalized comparison form so the dot cannot bypass the V1 suffix
+  // restrictions, while preserving WHATWG serialization for accepted URLs.
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
   if (
     !hostname ||
     hostname === 'localhost' ||
@@ -644,8 +648,22 @@ function candidateId(input: unknown): string | undefined {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     return undefined;
   }
-  const id = (input as Record<string, unknown>).id;
-  return typeof id === 'string' ? id : undefined;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(input, 'id');
+    if (!descriptor || !('value' in descriptor)) return undefined;
+    return typeof descriptor.value === 'string' ? descriptor.value : undefined;
+  } catch {
+    // Batch diagnostics are best-effort metadata. Hostile proxies/reflection
+    // failures must be handled by the canonical bounded validator instead of
+    // escaping or executing candidate code here.
+    return undefined;
+  }
+}
+
+function compareOrdinalStrings(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
 }
 
 function compareIssuePaths(
@@ -658,10 +676,10 @@ function compareIssuePaths(
     if (index >= b.path.length) return 1;
     const left = String(a.path[index]);
     const right = String(b.path[index]);
-    const compared = left.localeCompare(right);
+    const compared = compareOrdinalStrings(left, right);
     if (compared !== 0) return compared;
   }
-  return a.code.localeCompare(b.code);
+  return compareOrdinalStrings(a.code, b.code);
 }
 
 export function prepareAuthoredLayer(

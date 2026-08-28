@@ -434,6 +434,56 @@ describe('prepareAuthoredLayer', () => {
     }
   });
 
+  it('rejects authored symbol icons because V1 does not package sprite resources', () => {
+    const result = prepareAuthoredLayer(
+      {
+        ...AUTHORED_VECTOR_LAYER_FIXTURE,
+        render: {
+          layers: [
+            {
+              type: 'symbol',
+              layout: { 'icon-image': 'community-marker' },
+              paint: { 'icon-opacity': 0.8 },
+            },
+          ],
+        },
+      },
+      ctx,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.issues.map((entry) => entry.code)).toEqual(
+        expect.arrayContaining([
+          'UNSUPPORTED_LAYOUT_PROPERTY',
+          'UNSUPPORTED_PAINT_PROPERTY',
+        ]),
+      );
+    }
+  });
+
+  it('keeps authored text labels and text-font in the resource-independent V1 subset', () => {
+    const result = prepareAuthoredLayer(
+      {
+        ...AUTHORED_VECTOR_LAYER_FIXTURE,
+        render: {
+          layers: [
+            {
+              type: 'symbol',
+              layout: {
+                'text-field': ['get', 'name'],
+                'text-font': ['Noto Sans Regular'],
+                'text-size': 14,
+              },
+              paint: { 'text-color': '#123456' },
+            },
+          ],
+        },
+      },
+      ctx,
+    );
+    expect(result.ok).toBe(true);
+  });
+
   it('rejects MapLibre-invalid layout enum values', () => {
     const lineFragment = AUTHORED_VECTOR_LAYER_FIXTURE.render.layers[1]!;
     const result = prepareAuthoredLayer(
@@ -506,6 +556,22 @@ describe('prepareAuthoredLayer', () => {
         source: {
           type: 'raster-tiles',
           tiles: ['https://localhost/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          scheme: 'xyz',
+        },
+      },
+      ctx,
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects reserved raster hostnames even with a trailing DNS dot', () => {
+    const result = prepareAuthoredLayer(
+      {
+        ...AUTHORED_RASTER_LAYER_FIXTURE,
+        source: {
+          type: 'raster-tiles',
+          tiles: ['https://tiles.internal./{z}/{x}/{y}.png'],
           tileSize: 256,
           scheme: 'xyz',
         },
@@ -916,6 +982,40 @@ describe('prepareAuthoredLayerBatch', () => {
       expect(result.errors[0]?.index).toBe(0);
       expect(result.errors[0]?.candidateId).toBe('bad-id');
       expect(result.errors[0]?.error.code).toBe('AUTHORED_LAYER_INVALID');
+    }
+  });
+
+  it('does not invoke an accessor-backed candidate id while building batch diagnostics', () => {
+    let getterCalls = 0;
+    const candidate = {
+      ...AUTHORED_VECTOR_LAYER_FIXTURE,
+      get id() {
+        getterCalls += 1;
+        return AUTHORED_VECTOR_LAYER_FIXTURE.id;
+      },
+    };
+
+    const result = prepareAuthoredLayerBatch([candidate], ctx);
+
+    expect(result.ok).toBe(false);
+    expect(getterCalls).toBe(0);
+  });
+
+  it('orders structured issue paths by ordinal code unit, not host locale', () => {
+    const candidate = structuredClone(AUTHORED_VECTOR_LAYER_FIXTURE);
+    candidate.render.layers[0] = {
+      ...candidate.render.layers[0]!,
+      paint: { z: 1, é: 1 } as never,
+    };
+
+    const result = prepareAuthoredLayer(candidate, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const unsupported = result.error.issues.filter(
+        (entry) => entry.code === 'UNSUPPORTED_PAINT_PROPERTY',
+      );
+      expect(unsupported.map((entry) => entry.path.at(-1))).toEqual(['z', 'é']);
     }
   });
 

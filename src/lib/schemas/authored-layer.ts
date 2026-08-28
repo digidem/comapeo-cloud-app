@@ -127,12 +127,9 @@ const PAINT_PROPERTIES: Record<
     'circle-translate',
     'circle-translate-anchor',
   ]),
+  // V1 authored symbols are label-only. Icon paint requires sprite resources,
+  // and #279 has no authored-sprite ownership/packaging contract.
   symbol: new Set([
-    'icon-color',
-    'icon-halo-blur',
-    'icon-halo-color',
-    'icon-halo-width',
-    'icon-opacity',
     'text-color',
     'text-halo-blur',
     'text-halo-color',
@@ -166,10 +163,6 @@ const LAYOUT_PROPERTIES: Record<
   symbol: new Set([
     'symbol-placement',
     'symbol-spacing',
-    'icon-image',
-    'icon-size',
-    'icon-rotate',
-    'icon-allow-overlap',
     'text-field',
     'text-font',
     'text-size',
@@ -206,6 +199,12 @@ function issue(
   return { code, path, message };
 }
 
+function compareOrdinalStrings(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
 function compareIssues(
   left: AuthoredLayerValidationIssue,
   right: AuthoredLayerValidationIssue,
@@ -214,12 +213,13 @@ function compareIssues(
   for (let index = 0; index < length; index += 1) {
     if (index >= left.path.length) return -1;
     if (index >= right.path.length) return 1;
-    const compared = String(left.path[index]).localeCompare(
+    const compared = compareOrdinalStrings(
+      String(left.path[index]),
       String(right.path[index]),
     );
     if (compared !== 0) return compared;
   }
-  return left.code.localeCompare(right.code);
+  return compareOrdinalStrings(left.code, right.code);
 }
 
 function valibotPath(

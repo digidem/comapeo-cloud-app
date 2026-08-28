@@ -3,9 +3,10 @@ import { Writer } from 'styled-map-package-api/writer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MAX_AUTHORED_WRITER_OUTPUT_BYTES } from '@/lib/map/authored-layers';
-import type {
-  EnumeratedAuthoredRasterLayer,
-  FetchedAnonymousRasterTile,
+import {
+  type EnumeratedAuthoredRasterLayer,
+  type FetchedAnonymousRasterTile,
+  MAX_AUTHORED_RASTER_TILE_REQUESTS,
 } from '@/lib/map/authored-raster';
 import {
   type AuthoredWriterLike,
@@ -112,6 +113,31 @@ describe('buildAuthoredWriterSmp', () => {
         signal: controller.signal,
       }),
     ).rejects.toMatchObject({ cause: 'cancel-before-writer' });
+    expect(writerFactory).not.toHaveBeenCalled();
+  });
+
+  it('rejects more than the authored raster tile cap before Writer construction', async () => {
+    const writerFactory = vi.fn();
+    const oversizedLayer: EnumeratedAuthoredRasterLayer = {
+      ...RASTER_LAYER,
+      tiles: Array.from(
+        { length: MAX_AUTHORED_RASTER_TILE_REQUESTS + 1 },
+        (_, index) => ({
+          z: 14,
+          x: index,
+          y: 0,
+          requestHref: `https://tiles.example.com/14/${index}/0.png`,
+        }),
+      ),
+    };
+
+    await expect(
+      buildAuthoredWriterSmp({
+        authoredStyle: STYLE,
+        rasterLayers: [oversizedLayer],
+        writerFactory,
+      }),
+    ).rejects.toThrow(/10,000|10000|tile/i);
     expect(writerFactory).not.toHaveBeenCalled();
   });
 
@@ -278,6 +304,53 @@ describe('buildAuthoredWriterSmp', () => {
       WRITER_TERMINAL_TIMEOUT_MS + WRITER_CLEANUP_TIMEOUT_MS,
     );
     await assertion;
+  });
+
+  it('caller abort during finalization skips settlement/terminal waits and uses only bounded cleanup', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const stream = new ReadableStream<Uint8Array>({
+      pull() {
+        return new Promise<void>(() => undefined);
+      },
+    });
+    const finish = vi.fn(() => new Promise<void>(() => undefined));
+    const promise = buildAuthoredWriterSmp({
+      authoredStyle: STYLE,
+      rasterLayers: [RASTER_LAYER],
+      writerFactory: vi.fn(() => fakeWriter({ stream, finish })),
+      fetchTile: vi.fn(async () => fetchedTile()),
+      signal: controller.signal,
+    });
+    void promise.catch(() => undefined);
+    for (
+      let attempt = 0;
+      attempt < 10 && finish.mock.calls.length === 0;
+      attempt += 1
+    ) {
+      await Promise.resolve();
+    }
+    expect(finish).toHaveBeenCalledTimes(1);
+
+    let settled = false;
+    void promise
+      .finally(() => {
+        settled = true;
+      })
+      .catch(() => undefined);
+    controller.abort('caller-during-finalization');
+    await vi.advanceTimersByTimeAsync(WRITER_CLEANUP_TIMEOUT_MS + 1);
+    const settledWithinCleanupBound = settled;
+
+    // Let the old settlement+cleanup path drain too, so a RED run does not
+    // leave timers/promises behind after asserting the timing distinction.
+    await vi.advanceTimersByTimeAsync(
+      WRITER_SETTLEMENT_TIMEOUT_MS + WRITER_CLEANUP_TIMEOUT_MS + 1,
+    );
+    await expect(promise).rejects.toMatchObject({
+      cause: 'caller-during-finalization',
+    });
+    expect(settledWithinCleanupBound).toBe(true);
   });
 
   it('preserves a non-Error first failure as the sole normalized primary error', async () => {

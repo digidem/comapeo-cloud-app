@@ -82,28 +82,62 @@ const authoredLayerSchema = v.pipe(
   }),
 );
 
+const authoredLayerArraySchema = v.array(authoredLayerSchema);
+
 const authoredLayersSchema = v.pipe(
-  v.array(authoredLayerSchema),
-  v.maxLength(
-    MAX_AUTHORED_LAYERS,
-    `SavedMap.layers supports at most ${MAX_AUTHORED_LAYERS} authored layers`,
-  ),
-  v.check(
-    (layers) => new Set(layers.map((layer) => layer.id)).size === layers.length,
-    'SavedMap.layers must contain unique authored layer IDs',
-  ),
-  v.check((layers) => {
+  v.unknown(),
+  v.rawTransform(({ dataset, addIssue, NEVER }) => {
+    const value = dataset.value;
+    if (!Array.isArray(value)) {
+      addIssue({ message: 'SavedMap.layers must be an array' });
+      return NEVER;
+    }
+    // This declared-length guard intentionally runs before v.array parses any
+    // element. Persisted/adaptor input must not perform O(n) deep validation on
+    // a collection that already exceeds the hard V1 layer-count boundary.
+    if (value.length > MAX_AUTHORED_LAYERS) {
+      addIssue({
+        message: `SavedMap.layers supports at most ${MAX_AUTHORED_LAYERS} authored layers`,
+      });
+      return NEVER;
+    }
+
+    const parsed = v.safeParse(authoredLayerArraySchema, value);
+    if (!parsed.success) {
+      addIssue({
+        message: 'SavedMap.layers must contain canonical AuthoredLayer values',
+      });
+      return NEVER;
+    }
+    const layers = parsed.output;
+    if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
+      addIssue({
+        message: 'SavedMap.layers must contain unique authored layer IDs',
+      });
+      return NEVER;
+    }
+
     let aggregateBytes = 0n;
     for (const layer of layers) {
       const measured = measureCanonicalJsonUtf8Bounded(layer, {
         maxBytes: MAX_AUTHORED_LAYERS_JSON_BYTES,
       });
-      if (!measured.ok) return false;
+      if (!measured.ok) {
+        addIssue({
+          message: `SavedMap.layers exceeds ${MAX_AUTHORED_LAYERS_JSON_BYTES} aggregate UTF-8 JSON bytes`,
+        });
+        return NEVER;
+      }
       aggregateBytes += measured.bytes;
-      if (aggregateBytes > BigInt(MAX_AUTHORED_LAYERS_JSON_BYTES)) return false;
+      if (aggregateBytes > BigInt(MAX_AUTHORED_LAYERS_JSON_BYTES)) {
+        addIssue({
+          message: `SavedMap.layers exceeds ${MAX_AUTHORED_LAYERS_JSON_BYTES} aggregate UTF-8 JSON bytes`,
+        });
+        return NEVER;
+      }
     }
-    return true;
-  }, `SavedMap.layers exceeds ${MAX_AUTHORED_LAYERS_JSON_BYTES} aggregate UTF-8 JSON bytes`),
+    return layers;
+  }),
 );
 
 /**
