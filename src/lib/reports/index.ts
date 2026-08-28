@@ -27,6 +27,7 @@ export {
   getReportTemplate,
   getSubmissionGuidanceStatus,
   REPORT_AGENCIES,
+  REPORT_CASE_TYPES,
   REPORT_TEMPLATE_LOCALES,
   reportTemplateReferenceSchema,
   reportTemplateSchema,

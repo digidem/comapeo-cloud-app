@@ -27,7 +27,7 @@ export const CASE_FACT_KEYS = [
 
 export type CaseFactKey = (typeof CASE_FACT_KEYS)[number];
 
-const CASE_TYPES = [
+export const REPORT_CASE_TYPES = [
   'invasion_occupation',
   'territorial_encroachment',
   'deforestation_logging',
@@ -90,7 +90,7 @@ const localizedTextSchema = v.object({
   es: nonEmptyStringSchema,
 });
 
-const caseTypeSchema = v.picklist(CASE_TYPES);
+const caseTypeSchema = v.picklist(REPORT_CASE_TYPES);
 const caseFactKeySchema = v.picklist(CASE_FACT_KEYS);
 const agencySchema = v.picklist(REPORT_AGENCIES);
 
@@ -149,8 +149,10 @@ function isInternallyConsistentTemplate(
 
   return (
     template.templateId === expectedTemplateId &&
+    hasUniqueItems(template.supportedCaseTypes) &&
     hasUniqueItems(template.requiredFacts) &&
     hasUniqueItems(template.optionalFacts) &&
+    hasUniqueItems(template.sections.map((section) => section.id)) &&
     !template.optionalFacts.some((fact) => requiredFacts.has(fact))
   );
 }
@@ -195,7 +197,7 @@ function deepFreeze<T>(value: T): DeepReadonly<T> {
   return value as DeepReadonly<T>;
 }
 
-const ALL_CASE_TYPES = [...CASE_TYPES];
+const ALL_CASE_TYPES = [...REPORT_CASE_TYPES];
 
 const commonDisclosurePrompt = {
   en: 'Review identities, people, locations, photos, audio, and other sensitive fields before this agency report uses them.',

@@ -6,6 +6,7 @@ import {
   type CaseFactKey,
   type ImmutableReportTemplate,
   REPORT_AGENCIES,
+  REPORT_CASE_TYPES,
   type ReportTemplateReference,
   resolveReportTemplate,
 } from '@/lib/reports/template-registry';
@@ -162,9 +163,19 @@ function hasCompatibleCaseFactValue(input: {
   key: CaseFactKey;
   value: CaseFactValue;
 }): boolean {
-  return (
+  const kindMatches = (
     CASE_FACT_VALUE_KINDS[input.key] as readonly CaseFactValueKind[]
   ).includes(input.value.kind);
+  if (!kindMatches) return false;
+
+  if (
+    (input.key === 'case.primaryType' || input.key === 'case.secondaryTypes') &&
+    input.value.kind === 'text'
+  ) {
+    return (REPORT_CASE_TYPES as readonly string[]).includes(input.value.value);
+  }
+
+  return true;
 }
 
 export const caseFactSourceInputSchema = v.object({
@@ -247,29 +258,67 @@ export const missingCaseFactSchema = v.object({
 
 export type MissingCaseFact = v.InferOutput<typeof missingCaseFactSchema>;
 
-// `caseLocalId`, `projectLocalId`, and provenance source IDs are audit/linkage
-// metadata for internal consumers. Report renderers must not present these raw
-// identifiers as submitted report content unless a later template explicitly
-// defines a user-visible representation.
-export const caseFactsSchema = v.object({
-  schemaVersion: v.literal(1),
-  caseLocalId: nonEmptyStringSchema,
-  projectLocalId: nonEmptyStringSchema,
-  template: v.object({
+const caseFactsTemplateSchema = v.pipe(
+  v.object({
     templateId: nonEmptyStringSchema,
     version: nonEmptyStringSchema,
     agency: v.picklist(REPORT_AGENCIES),
     outputLanguage: v.literal('pt-BR'),
   }),
-  facts: v.pipe(
-    v.array(caseFactSchema),
-    v.check(
-      hasNoConflictingSingleValueFacts,
-      'Case Facts contain conflicting values for a single-valued key',
+  v.check((reference) => {
+    try {
+      const registered = resolveReportTemplate(reference);
+      return registered.outputLanguage === reference.outputLanguage;
+    } catch {
+      return false;
+    }
+  }, 'Case Facts must reference an exact registered report template'),
+);
+
+function hasOnlyTemplateDeclaredFacts(input: {
+  template: v.InferOutput<typeof caseFactsTemplateSchema>;
+  facts: CaseFact[];
+  missingInformation: MissingCaseFact[];
+}): boolean {
+  try {
+    const template = resolveReportTemplate(input.template);
+    const allowedKeys = new Set<CaseFactKey>([
+      ...template.requiredFacts,
+      ...template.optionalFacts,
+    ]);
+    return (
+      input.facts.every((fact) => allowedKeys.has(fact.key)) &&
+      input.missingInformation.every((missing) => allowedKeys.has(missing.key))
+    );
+  } catch {
+    return false;
+  }
+}
+
+// `caseLocalId`, `projectLocalId`, and provenance source IDs are audit/linkage
+// metadata for internal consumers. Report renderers must not present these raw
+// identifiers as submitted report content unless a later template explicitly
+// defines a user-visible representation.
+export const caseFactsSchema = v.pipe(
+  v.object({
+    schemaVersion: v.literal(1),
+    caseLocalId: nonEmptyStringSchema,
+    projectLocalId: nonEmptyStringSchema,
+    template: caseFactsTemplateSchema,
+    facts: v.pipe(
+      v.array(caseFactSchema),
+      v.check(
+        hasNoConflictingSingleValueFacts,
+        'Case Facts contain conflicting values for a single-valued key',
+      ),
     ),
+    missingInformation: v.array(missingCaseFactSchema),
+  }),
+  v.check(
+    (input) => hasOnlyTemplateDeclaredFacts(input),
+    'Case Facts contain facts not declared by the selected report template',
   ),
-  missingInformation: v.array(missingCaseFactSchema),
-});
+);
 
 export type CaseFacts = v.InferOutput<typeof caseFactsSchema>;
 
@@ -425,9 +474,18 @@ export function buildCaseFacts(input: BuildCaseFactsInput): CaseFacts {
   }
 
   const candidates: CaseFact[] = [];
+  const allowedFactKeys = new Set<CaseFactKey>([
+    ...template.requiredFacts,
+    ...template.optionalFacts,
+  ]);
 
   for (const approvedFact of input.approvedFacts) {
     const parsed = v.parse(approvedCaseFactInputSchema, approvedFact);
+    if (!allowedFactKeys.has(parsed.key)) {
+      throw new RangeError(
+        `Case Fact ${parsed.key} is not declared by template ${template.templateId}@${template.version}`,
+      );
+    }
     if (
       parsed.key === 'case.primaryType' &&
       (parsed.value.kind !== 'text' ||

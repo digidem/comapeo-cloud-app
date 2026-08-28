@@ -160,6 +160,21 @@ describe('Brazil v1 report template registry', () => {
         optionalFacts: [...valid.optionalFacts, valid.requiredFacts[0]],
       }).success,
     ).toBe(false);
+    expect(
+      v.safeParse(reportTemplateSchema, {
+        ...valid,
+        supportedCaseTypes: [
+          ...valid.supportedCaseTypes,
+          valid.supportedCaseTypes[0],
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(reportTemplateSchema, {
+        ...valid,
+        sections: [...valid.sections, valid.sections[0]],
+      }).success,
+    ).toBe(false);
   });
 
   it('fails closed for an agency that is not registered', () => {

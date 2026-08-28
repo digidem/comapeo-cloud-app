@@ -5,6 +5,7 @@ import type { Case } from '@/lib/db';
 import {
   approvedCaseFactInputSchema,
   buildCaseFacts,
+  caseFactSchema,
   caseFactsSchema,
 } from '@/lib/reports/case-facts';
 import { getLatestReportTemplate } from '@/lib/reports/template-registry';
@@ -167,6 +168,59 @@ describe('buildCaseFacts', () => {
       outputLanguage: 'pt-BR',
     });
     expect(v.safeParse(caseFactsSchema, result).success).toBe(true);
+    expect(
+      v.safeParse(caseFactsSchema, {
+        ...result,
+        template: { ...result.template, version: '9.9.9' },
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(caseFactsSchema, {
+        ...result,
+        template: { ...result.template, agency: 'PF' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects disclosure-approved facts outside the canonical template vocabulary', () => {
+    expect(() =>
+      buildCaseFacts({
+        case: testCase,
+        template: getLatestReportTemplate('PF'),
+        approvedFacts: [
+          {
+            key: 'people.communityContext',
+            value: { kind: 'text', value: 'Comunidade sensível' },
+            source: { type: 'user-statement', id: 'community-1' },
+          },
+        ],
+      }),
+    ).toThrow(/template|allowed|declared/i);
+
+    const valid = buildCaseFacts({
+      case: testCase,
+      template: getLatestReportTemplate('PF'),
+      approvedFacts: [],
+    });
+    expect(
+      v.safeParse(caseFactsSchema, {
+        ...valid,
+        facts: [
+          ...valid.facts,
+          {
+            key: 'people.communityContext',
+            value: { kind: 'text', value: 'Comunidade sensível' },
+            provenance: [
+              {
+                id: 'user-statement:community-1',
+                sourceType: 'user-statement',
+                sourceId: 'community-1',
+              },
+            ],
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 
   it('creates stable typed provenance IDs and preserves source versions', () => {
@@ -461,6 +515,29 @@ describe('buildCaseFacts', () => {
         }).success,
       ).toBe(false);
     }
+  });
+
+  it('rejects unknown Case type codes at both approved-input and Case-Fact runtime boundaries', () => {
+    expect(
+      v.safeParse(approvedCaseFactInputSchema, {
+        key: 'case.primaryType',
+        value: { kind: 'text', value: 'unknown_type' },
+        source: { type: 'case-context', id: 'primary-type' },
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(caseFactSchema, {
+        key: 'case.secondaryTypes',
+        value: { kind: 'text', value: 'unknown_type' },
+        provenance: [
+          {
+            id: 'case-context:secondary-type',
+            sourceType: 'case-context',
+            sourceId: 'secondary-type',
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects arbitrary objects, binary values, blank source IDs, and invalid geometry', () => {
