@@ -27,7 +27,16 @@ export const CASE_FACT_KEYS = [
 
 export type CaseFactKey = (typeof CASE_FACT_KEYS)[number];
 
-export const REPORT_CASE_TYPES = [
+type ExhaustiveCaseTypes<T extends readonly CaseType[]> =
+  Exclude<CaseType, T[number]> extends never ? T : never;
+
+function defineExhaustiveCaseTypes<const T extends readonly CaseType[]>(
+  types: ExhaustiveCaseTypes<T>,
+): T {
+  return types;
+}
+
+export const REPORT_CASE_TYPES = defineExhaustiveCaseTypes([
   'invasion_occupation',
   'territorial_encroachment',
   'deforestation_logging',
@@ -38,7 +47,7 @@ export const REPORT_CASE_TYPES = [
   'threats_violence',
   'rights_violation',
   'other',
-] as const satisfies readonly CaseType[];
+] as const);
 
 export const REPORT_AGENCIES = [
   'FUNAI',

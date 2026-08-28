@@ -23,6 +23,12 @@ const SOURCE_TYPES = [
 export type CaseFactSourceType = (typeof SOURCE_TYPES)[number];
 
 const nonEmptyStringSchema = v.pipe(v.string(), v.trim(), v.nonEmpty());
+const normalizedReportTextSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.transform((value) => value.normalize('NFC')),
+  v.nonEmpty(),
+);
 const caseFactKeySchema = v.picklist(CASE_FACT_KEYS);
 const sourceTypeSchema = v.picklist(SOURCE_TYPES);
 
@@ -98,7 +104,7 @@ const normalizedDateSchema = v.pipe(
 export const caseFactValueSchema = v.variant('kind', [
   v.object({
     kind: v.literal('text'),
-    value: nonEmptyStringSchema,
+    value: normalizedReportTextSchema,
   }),
   v.object({
     kind: v.literal('number'),
@@ -125,7 +131,7 @@ export const caseFactValueSchema = v.variant('kind', [
   ),
   v.object({
     kind: v.literal('location-summary'),
-    value: nonEmptyStringSchema,
+    value: normalizedReportTextSchema,
   }),
   v.object({
     kind: v.literal('geometry'),
@@ -237,18 +243,24 @@ const MULTI_VALUED_CASE_FACT_KEYS = new Set<CaseFactKey>([
   'equipment.documented',
 ]);
 
-function hasNoConflictingSingleValueFacts(facts: CaseFact[]): boolean {
+function getConflictingSingleValueFactKey(
+  facts: readonly CaseFact[],
+): CaseFactKey | undefined {
   const valuesByKey = new Map<CaseFactKey, string>();
 
   for (const fact of facts) {
     if (MULTI_VALUED_CASE_FACT_KEYS.has(fact.key)) continue;
     const value = JSON.stringify(fact.value);
     const previous = valuesByKey.get(fact.key);
-    if (previous !== undefined && previous !== value) return false;
+    if (previous !== undefined && previous !== value) return fact.key;
     valuesByKey.set(fact.key, value);
   }
 
-  return true;
+  return undefined;
+}
+
+function hasNoConflictingSingleValueFacts(facts: CaseFact[]): boolean {
+  return getConflictingSingleValueFactKey(facts) === undefined;
 }
 
 export const missingCaseFactSchema = v.object({
@@ -499,6 +511,13 @@ export function buildCaseFacts(input: BuildCaseFactsInput): CaseFacts {
   }
 
   const facts = mergeAndSortFacts(candidates);
+  const conflictingKey = getConflictingSingleValueFactKey(facts);
+  if (conflictingKey !== undefined) {
+    throw new RangeError(
+      `Case Facts contain conflicting values for single-valued key ${conflictingKey}`,
+    );
+  }
+
   const result: CaseFacts = {
     schemaVersion: 1,
     caseLocalId: input.case.localId,

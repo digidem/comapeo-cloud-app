@@ -467,6 +467,38 @@ describe('buildCaseFacts', () => {
     ).toEqual(['v1', 'v2']);
   });
 
+  it('normalizes approved report text to NFC before deterministic comparison', () => {
+    const result = buildCaseFacts({
+      case: testCase,
+      template: getLatestReportTemplate('MPF'),
+      approvedFacts: [
+        {
+          key: 'incident.chronology',
+          value: { kind: 'text', value: 'Café observado.' },
+          source: { type: 'observation', id: 'obs-nfc' },
+        },
+        {
+          key: 'incident.chronology',
+          value: { kind: 'text', value: 'Cafe\u0301 observado.' },
+          source: { type: 'observation', id: 'obs-nfd' },
+        },
+      ],
+    });
+
+    const chronology = result.facts.filter(
+      (fact) => fact.key === 'incident.chronology',
+    );
+    expect(chronology).toHaveLength(1);
+    expect(chronology[0]?.value).toEqual({
+      kind: 'text',
+      value: 'Café observado.',
+    });
+    expect(chronology[0]?.provenance.map((source) => source.id)).toEqual([
+      'observation:obs-nfc',
+      'observation:obs-nfd',
+    ]);
+  });
+
   it('fails closed when one Case Fact key has conflicting approved values', () => {
     expect(() =>
       buildCaseFacts({
@@ -485,7 +517,7 @@ describe('buildCaseFacts', () => {
           },
         ],
       }),
-    ).toThrow(/conflicting/i);
+    ).toThrow(/conflicting.*incident\.date|incident\.date.*conflicting/i);
   });
 
   it('rejects fact values whose semantic kind does not match the Case Fact key', () => {
