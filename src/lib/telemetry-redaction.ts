@@ -108,17 +108,45 @@ function sanitizeUrlsInString(value: string): string {
   return sanitized;
 }
 
+function telemetryKeyPriority(key: string): number {
+  const normalized = normalizeKey(key);
+  if (SECRET_TELEMETRY_KEYS.has(normalized)) return 0;
+  if (
+    GEOSPATIAL_TELEMETRY_KEYS.has(normalized) ||
+    SENSITIVE_DOMAIN_TELEMETRY_KEYS.has(normalized)
+  ) {
+    return 1;
+  }
+  return 2;
+}
+
 function selectBoundedObjectEntries(
   value: Record<string, unknown>,
 ): Array<[string, unknown]> {
   return Object.entries(value)
     .sort(([left], [right]) => {
       const sensitivityOrder =
-        Number(isSensitiveTelemetryKey(right)) -
-        Number(isSensitiveTelemetryKey(left));
+        telemetryKeyPriority(left) - telemetryKeyPriority(right);
       return sensitivityOrder || left.localeCompare(right);
     })
     .slice(0, MAX_SANITIZE_ENTRIES);
+}
+
+interface SensitiveValueCollection {
+  values: Set<string>;
+  saturated: boolean;
+}
+
+function addSensitiveValue(
+  collection: SensitiveValueCollection,
+  candidate: string,
+): void {
+  if (collection.values.has(candidate)) return;
+  if (collection.values.size >= MAX_SANITIZE_ENTRIES) {
+    collection.saturated = true;
+    return;
+  }
+  collection.values.add(candidate);
 }
 
 export function sanitizeTelemetryString(
@@ -171,9 +199,9 @@ function collectSensitiveValues(
   depth: number,
   forceSensitive: boolean,
   seen: WeakSet<object>,
-  output: Set<string>,
+  collection: SensitiveValueCollection,
 ): void {
-  if (depth > MAX_SANITIZE_DEPTH || output.size >= MAX_SANITIZE_ENTRIES) return;
+  if (depth > MAX_SANITIZE_DEPTH || collection.saturated) return;
   if (value === null || value === undefined) return;
 
   if (typeof value === 'string') {
@@ -183,7 +211,7 @@ function collectSensitiveValues(
       ? MIN_PROPAGATED_NUMERIC_SENSITIVE_VALUE_LENGTH
       : MIN_PROPAGATED_SENSITIVE_VALUE_LENGTH;
     if (forceSensitive && candidate.length >= minimumLength) {
-      output.add(candidate);
+      addSensitiveValue(collection, candidate);
     }
     return;
   }
@@ -198,7 +226,7 @@ function collectSensitiveValues(
       Number.isFinite(value) &&
       candidate.length >= minimumLength
     ) {
-      output.add(candidate);
+      addSensitiveValue(collection, candidate);
     }
     return;
   }
@@ -211,22 +239,24 @@ function collectSensitiveValues(
 
   if (Array.isArray(value)) {
     for (const item of value.slice(0, MAX_SANITIZE_ENTRIES)) {
-      collectSensitiveValues(item, depth + 1, forceSensitive, seen, output);
+      collectSensitiveValues(item, depth + 1, forceSensitive, seen, collection);
     }
+    if (value.length > MAX_SANITIZE_ENTRIES) collection.saturated = true;
     return;
   }
 
-  for (const [key, entryValue] of selectBoundedObjectEntries(
-    value as Record<string, unknown>,
-  )) {
+  const source = value as Record<string, unknown>;
+  const entries = selectBoundedObjectEntries(source);
+  for (const [key, entryValue] of entries) {
     collectSensitiveValues(
       entryValue,
       depth + 1,
       forceSensitive || isSensitiveTelemetryKey(key),
       seen,
-      output,
+      collection,
     );
   }
+  if (Object.keys(source).length > entries.length) collection.saturated = true;
 }
 
 function sanitizeValue(
@@ -234,16 +264,22 @@ function sanitizeValue(
   depth: number,
   seen: WeakSet<object>,
   sensitiveValues: ReadonlySet<string>,
+  redactPrimitives: boolean,
 ): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
-    return sanitizeTelemetryString(value, sensitiveValues);
+    return redactPrimitives
+      ? TELEMETRY_REDACTED
+      : sanitizeTelemetryString(value, sensitiveValues);
   }
   if (typeof value === 'number') {
+    if (redactPrimitives) return TELEMETRY_REDACTED;
     return sensitiveValues.has(String(value)) ? TELEMETRY_REDACTED : value;
   }
   if (typeof value === 'boolean') return value;
-  if (typeof value === 'bigint') return String(value);
+  if (typeof value === 'bigint') {
+    return redactPrimitives ? TELEMETRY_REDACTED : String(value);
+  }
   if (typeof value === 'function' || typeof value === 'symbol') {
     return TELEMETRY_REDACTED;
   }
@@ -255,6 +291,9 @@ function sanitizeValue(
 
   if (value instanceof Date) return value.toISOString();
   if (value instanceof Error) {
+    if (redactPrimitives) {
+      return { name: TELEMETRY_REDACTED, message: TELEMETRY_REDACTED };
+    }
     return {
       name: sanitizeTelemetryString(value.name, sensitiveValues),
       message: sanitizeTelemetryString(value.message, sensitiveValues),
@@ -264,7 +303,9 @@ function sanitizeValue(
   if (Array.isArray(value)) {
     const result = value
       .slice(0, MAX_SANITIZE_ENTRIES)
-      .map((item) => sanitizeValue(item, depth + 1, seen, sensitiveValues));
+      .map((item) =>
+        sanitizeValue(item, depth + 1, seen, sensitiveValues, redactPrimitives),
+      );
     if (value.length > MAX_SANITIZE_ENTRIES) {
       result.push(TELEMETRY_TRUNCATED);
     }
@@ -280,7 +321,13 @@ function sanitizeValue(
   for (const [key, entryValue] of entries) {
     result[key] = isSensitiveTelemetryKey(key)
       ? TELEMETRY_REDACTED
-      : sanitizeValue(entryValue, depth + 1, seen, sensitiveValues);
+      : sanitizeValue(
+          entryValue,
+          depth + 1,
+          seen,
+          sensitiveValues,
+          redactPrimitives,
+        );
   }
 
   if (Object.keys(source).length > MAX_SANITIZE_ENTRIES) {
@@ -291,13 +338,16 @@ function sanitizeValue(
 }
 
 export function sanitizeTelemetry<T>(value: T): T {
-  const sensitiveValues = new Set<string>();
-  collectSensitiveValues(
+  const collection: SensitiveValueCollection = {
+    values: new Set<string>(),
+    saturated: false,
+  };
+  collectSensitiveValues(value, 0, false, new WeakSet<object>(), collection);
+  return sanitizeValue(
     value,
     0,
-    false,
     new WeakSet<object>(),
-    sensitiveValues,
-  );
-  return sanitizeValue(value, 0, new WeakSet<object>(), sensitiveValues) as T;
+    collection.values,
+    collection.saturated,
+  ) as T;
 }

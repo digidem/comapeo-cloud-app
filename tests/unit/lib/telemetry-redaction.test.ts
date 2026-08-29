@@ -149,7 +149,7 @@ describe('telemetry redaction', () => {
     expect(result.attempt).toBe(1);
   });
 
-  it('prioritizes late sensitive keys when collecting values within the entry bound', () => {
+  it('fails closed when a late sensitive key competes with the entry bound', () => {
     const secret = ['synthetic', 'late', 'credential', '238'].join('-');
     const payload: Record<string, unknown> = {
       message: 'request failed for ' + secret,
@@ -161,7 +161,23 @@ describe('telemetry redaction', () => {
 
     const result = sanitizeTelemetry(payload);
     expect(JSON.stringify(result)).not.toContain(secret);
-    expect(result.message).toBe('request failed for [REDACTED]');
+    expect(result.message).toBe(TELEMETRY_REDACTED);
+  });
+
+  it('fails closed when sensitive containers saturate the value collection bound', () => {
+    const secret = ['synthetic', 'saturated', 'credential', '238'].join('-');
+    const coordinates = Array.from(
+      { length: MAX_SANITIZE_ENTRIES },
+      (_, index) => 'coordinate-' + String(index).padStart(3, '0'),
+    );
+    const result = sanitizeTelemetry({
+      coordinates,
+      message: 'request failed for ' + secret,
+      token: secret,
+    });
+
+    expect(JSON.stringify(result)).not.toContain(secret);
+    expect(result.message).toBe(TELEMETRY_REDACTED);
   });
 
   it('bounds objects and arrays to at most 100 entries before a truncation marker', () => {
