@@ -35,13 +35,25 @@ describe('telemetry redaction', () => {
     );
 
     expect(result).toContain(
-      'GET https://archive.example.com/api/projects/123',
+      'GET https://archive.example.com/api/projects/[REDACTED]',
     );
     expect(result).toContain('Bearer [REDACTED]');
     expect(result).not.toContain(invite);
     expect(result).not.toContain(secret);
     expect(result).not.toContain('?code=');
     expect(result).not.toContain('#token=');
+  });
+
+  it('redacts project identifiers embedded in URL paths without requiring a sibling projectId field', () => {
+    const projectId = ['synthetic', 'project', 'path', '238'].join('-');
+    const result = sanitizeTelemetryString(
+      'GET https://archive.example.com/api/projects/' +
+        projectId +
+        '/observations',
+    );
+
+    expect(result).toContain('/api/projects/[REDACTED]/observations');
+    expect(result).not.toContain(projectId);
   });
 
   it('sanitizes root transaction and child-span style payloads without removing safe diagnostics', () => {
@@ -135,6 +147,21 @@ describe('telemetry redaction', () => {
     expect(result.message).toBe(message);
     expect(result.count).toBe(0);
     expect(result.attempt).toBe(1);
+  });
+
+  it('prioritizes late sensitive keys when collecting values within the entry bound', () => {
+    const secret = ['synthetic', 'late', 'credential', '238'].join('-');
+    const payload: Record<string, unknown> = {
+      message: 'request failed for ' + secret,
+    };
+    for (let index = 0; index < MAX_SANITIZE_ENTRIES - 1; index += 1) {
+      payload['padding-' + String(index).padStart(3, '0')] = index;
+    }
+    payload.token = secret;
+
+    const result = sanitizeTelemetry(payload);
+    expect(JSON.stringify(result)).not.toContain(secret);
+    expect(result.message).toBe('request failed for [REDACTED]');
   });
 
   it('bounds objects and arrays to at most 100 entries before a truncation marker', () => {

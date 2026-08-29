@@ -100,7 +100,25 @@ function sanitizeUrlsInString(value: string): string {
       `${prefix}${stripUrlSecrets(route)}`,
   );
 
+  sanitized = sanitized.replace(
+    /(\/projects\/)[^/\s"'<>?#]+/gi,
+    (_match, prefix: string) => prefix + TELEMETRY_REDACTED,
+  );
+
   return sanitized;
+}
+
+function selectBoundedObjectEntries(
+  value: Record<string, unknown>,
+): Array<[string, unknown]> {
+  return Object.entries(value)
+    .sort(([left], [right]) => {
+      const sensitivityOrder =
+        Number(isSensitiveTelemetryKey(right)) -
+        Number(isSensitiveTelemetryKey(left));
+      return sensitivityOrder || left.localeCompare(right);
+    })
+    .slice(0, MAX_SANITIZE_ENTRIES);
 }
 
 export function sanitizeTelemetryString(
@@ -198,9 +216,9 @@ function collectSensitiveValues(
     return;
   }
 
-  for (const [key, entryValue] of Object.entries(
+  for (const [key, entryValue] of selectBoundedObjectEntries(
     value as Record<string, unknown>,
-  ).slice(0, MAX_SANITIZE_ENTRIES)) {
+  )) {
     collectSensitiveValues(
       entryValue,
       depth + 1,
@@ -254,9 +272,9 @@ function sanitizeValue(
   }
 
   const source = value as Record<string, unknown>;
-  const entries = Object.entries(source)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .slice(0, MAX_SANITIZE_ENTRIES);
+  const entries = selectBoundedObjectEntries(source).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
   const result: Record<string, unknown> = {};
 
   for (const [key, entryValue] of entries) {
