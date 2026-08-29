@@ -366,6 +366,10 @@ def assert_policy_contract(
     test.assertIn("Qwen 3.8", skill_text)
     test.assertIn("references/claude-qwen-review.md", skill_text)
 
+    test.assertIn("implementation-specific QA script", skill_text)
+    test.assertIn("linked from the PR body", skill_text)
+    test.assertIn("QA script path or link", skill_text)
+
     test.assertIn("## 8. Session lessons and documentation checkpoint", skill_text)
     test.assertIn("Before concluding every PR cycle", skill_text)
     test.assertIn("`.agents/skills/pr-cycle/` for reusable PR-cycle mechanics", skill_text)
@@ -377,6 +381,9 @@ def assert_policy_contract(
     test.assertIn("explicit merge authorization from a user message in its own current task", agents_text)
     test.assertIn("authorization never transfers across chats, sessions, agents", agents_text)
     test.assertIn("Without that current-task authorization, stop at merge-ready", agents_text)
+    test.assertIn("## Human QA Handoff Invariant", agents_text)
+    test.assertIn("docs/qa/<issue-or-pr>.md", agents_text)
+    test.assertIn("must be linked from the PR body", agents_text)
 
     test.assertIn("## Issue and PR Scope Continuity", agents_text)
     test.assertIn("search the existing GitHub backlog", agents_text)
@@ -1078,6 +1085,19 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
         with self.assertRaisesRegex(
             AssertionError, "## 8. Session lessons and documentation checkpoint"
         ):
+            assert_policy_contract(
+                self,
+                skill_text=skill_text,
+                agents_text=AGENTS.read_text(),
+                ci_text=CI.read_text(),
+            )
+
+    def test_human_qa_handoff_policy_is_required(self) -> None:
+        skill_text = SKILL.read_text().replace(
+            "implementation-specific QA script",
+            "optional QA notes",
+        )
+        with self.assertRaisesRegex(AssertionError, "implementation-specific QA script"):
             assert_policy_contract(
                 self,
                 skill_text=skill_text,

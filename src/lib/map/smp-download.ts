@@ -1,8 +1,30 @@
 import JSZip from 'jszip';
 import { download } from 'styled-map-package-api/download';
+import { StyleDownloader } from 'styled-map-package-api/style-downloader';
 
 import { getDb, updateSavedMapWithPackage } from '@/lib/db';
 import type { SavedMap } from '@/lib/db';
+import {
+  type AuthoredLayer,
+  sourceLayerIdForAuthoredLayer,
+} from '@/lib/map/authored-layers';
+import {
+  AUTHORED_RASTER_CONCURRENCY,
+  AuthoredRasterError,
+  MAX_AUTHORED_RASTER_TOTAL_BYTES,
+  enumerateAuthoredRasterLayers,
+  headAnonymousRasterTileSize,
+} from '@/lib/map/authored-raster';
+import {
+  mergeSmpWithAuthoredLayers,
+  preflightSmpWithAuthoredLayers,
+} from '@/lib/map/authored-smp-merge';
+import {
+  type MapLibreStyleLike,
+  composeAuthoredStyle,
+  createAuthoredOnlyStyle,
+} from '@/lib/map/authored-style';
+import { buildAuthoredWriterSmp } from '@/lib/map/authored-writer';
 import { normalizeTileUrl } from '@/lib/map/basemap-utils';
 import { clampLatitude } from '@/lib/map/bbox-utils';
 
@@ -38,9 +60,49 @@ export interface DownloadProgress {
   warning?: boolean;
 }
 
+export type SmpPackageMapConfig = Pick<
+  SavedMap,
+  | 'type'
+  | 'styleUrl'
+  | 'bbox'
+  | 'minZoom'
+  | 'maxZoom'
+  | 'attribution'
+  | 'scheme'
+>;
+
+export interface BuildSmpBlobConfig {
+  map: SmpPackageMapConfig;
+  authoredLayers: readonly AuthoredLayer[];
+  onProgress?: (progress: DownloadProgress) => void;
+  signal?: AbortSignal;
+  mapboxAccessToken?: string;
+  bufferTiles?: number;
+  includeGlobalOverview?: boolean;
+}
+
+export interface BuiltSmpBlob {
+  blob: Blob;
+  smpSize: number;
+  /** Basemap downloader skipped-tile count only; authored failures are fatal. */
+  skippedTiles: number;
+}
+
+export interface AuthoredPayloadEstimate {
+  basemapTileBytes: bigint;
+  finalStyleUtf8Bytes: bigint;
+  authoredRasterBytesKnown: boolean;
+  authoredRasterKnownBytes: bigint;
+  knownLowerBoundBytes: bigint;
+  safeTotalBytes?: number;
+  requiresLargeDownloadConfirmation: boolean;
+}
+
 export interface DownloadConfig {
   /** Map configuration to download tiles for. */
   map: SavedMap;
+  /** Canonical authored layers to package; defaults to [] until #280 wires persistence. */
+  authoredLayers?: readonly AuthoredLayer[];
   /** Callback fired on every progress update. */
   onProgress?: (progress: DownloadProgress) => void;
   /** AbortSignal for cancellation (native pre.5 support). */
@@ -116,7 +178,7 @@ export function buildRasterStyleUrl(
  * Get the style URL to pass to download(). For 'style' maps, use styleUrl directly.
  * For 'raster' maps, construct a synthetic style JSON blob URL.
  */
-function getDownloadStyleUrl(map: SavedMap): string {
+function getDownloadStyleUrl(map: SmpPackageMapConfig): string {
   if (map.type === 'style') return map.styleUrl;
   return buildRasterStyleUrl(
     map.styleUrl,
@@ -303,16 +365,16 @@ function throwIfAborted(signal?: AbortSignal): void {
 }
 
 async function mergeGlobalOverviewSmp(
-  globalChunks: Uint8Array[],
-  regionalChunks: Uint8Array[],
+  globalBlob: Blob,
+  regionalBlob: Blob,
   signal?: AbortSignal,
 ): Promise<Blob> {
-  // Load from Blob rather than concatenating chunks into a contiguous
-  // Uint8Array first — avoids a ~1x peak-heap copy on top of what JSZip
-  // and the final generateAsync() already allocate.
+  // Pass the already-buffered Blobs directly to JSZip rather than first
+  // materializing our own ArrayBuffer/Uint8Array copies. JSZip may still
+  // allocate internally while parsing; this only avoids an extra app-owned copy.
   const [globalZip, regionalZip] = await Promise.all([
-    JSZip.loadAsync(new Blob(globalChunks as BlobPart[])),
-    JSZip.loadAsync(new Blob(regionalChunks as BlobPart[])),
+    JSZip.loadAsync(globalBlob),
+    JSZip.loadAsync(regionalBlob),
   ]);
   throwIfAborted(signal);
   const globalStyleFile = globalZip.file('style.json');
@@ -462,60 +524,144 @@ async function collectDownloadChunks(
 ): Promise<Uint8Array[]> {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    return chunks;
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // Stream cleanup is best-effort on the legacy downloader path.
+    }
   }
-  return chunks;
 }
 
-/**
- * Download an SMP file for a map configuration and store the blob in Dexie.
- *
- * Returns the mapId on success. Throws on failure; caller should update status
- * to 'error' and surface the message.
- *
- * NOTE: The library's download() does NOT accept a 'minzoom' parameter — it
- * always downloads from zoom 0 to maxzoom. The user-configured minZoom is
- * used for size estimation and display only.
- */
-export async function downloadSmp(config: DownloadConfig): Promise<string> {
+function rasterInputsFromLayers(layers: readonly AuthoredLayer[]) {
+  return layers.flatMap((layer) =>
+    layer.source.type === 'raster-tiles'
+      ? [
+          {
+            layerId: layer.id,
+            sourceId: sourceLayerIdForAuthoredLayer(layer.id),
+            source: layer.source,
+          },
+        ]
+      : [],
+  );
+}
+
+function callerAbortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  return new Error('Download cancelled', {
+    cause:
+      signal.reason ?? new DOMException('Download cancelled', 'AbortError'),
+  });
+}
+
+function throwIfCallerAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw callerAbortError(signal);
+}
+
+async function raceWithCallerAbort<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  void promise.catch(() => undefined);
+  if (!signal) return promise;
+  throwIfCallerAborted(signal);
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(callerAbortError(signal));
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener('abort', onAbort);
+  }
+}
+
+function createLinkedOperationController(signal?: AbortSignal): {
+  controller: AbortController;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  let onAbort: (() => void) | undefined;
+  if (signal?.aborted) {
+    controller.abort(
+      signal.reason ?? new DOMException('Download cancelled', 'AbortError'),
+    );
+  } else if (signal) {
+    onAbort = () =>
+      controller.abort(
+        signal.reason ?? new DOMException('Download cancelled', 'AbortError'),
+      );
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
+  return {
+    controller,
+    cleanup: () => {
+      if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+    },
+  };
+}
+
+function blobFromChunks(chunks: Uint8Array[]): Blob {
+  try {
+    return new Blob(chunks as BlobPart[], { type: 'application/zip' });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to create download package: ${detail}`, {
+      cause: error,
+    });
+  }
+}
+
+type InternalBuiltSmpBlob = BuiltSmpBlob & { criticalSkipped: number };
+
+async function buildSmpBlobInternal(
+  config: BuildSmpBlobConfig,
+): Promise<InternalBuiltSmpBlob> {
   const {
     map,
+    authoredLayers,
     onProgress,
     signal,
     mapboxAccessToken,
     bufferTiles = 1,
     includeGlobalOverview = true,
   } = config;
-  const db = getDb();
+  throwIfCallerAborted(signal);
 
-  await db.maps.update(map.id, {
-    status: 'downloading',
-    errorMessage: undefined,
-    updatedAt: new Date().toISOString(),
-  });
+  // Validate/canonicalize the complete authored collection and enumerate every
+  // raster tuple before any downloader/Writer network work begins.
+  const authoredOnly = createAuthoredOnlyStyle({ authoredLayers, map });
+  const rasterInputs = rasterInputsFromLayers(authoredOnly.layers);
+  const enumeratedRaster =
+    rasterInputs.length === 0
+      ? []
+      : enumerateAuthoredRasterLayers(map, rasterInputs);
 
   let skippedTiles = 0;
   let styleUrl = '';
-  let blob: Blob | undefined;
-  let packageParts: Uint8Array[] | undefined;
-
-  // Seed both passes' totals upfront (from a tile-count estimate) so the
-  // combined denominator is stable from the first progress event, instead of
-  // spiking when the regional pass's real total replaces its seeded 0.
+  let regionalBlob: Blob | undefined;
+  let globalBlob: Blob | undefined;
   const globalMaxZoom = Math.min(GLOBAL_OVERVIEW_MAX_ZOOM, map.maxZoom);
   const runsGlobalPass = includeGlobalOverview;
   const runsRegionalPass =
-    !includeGlobalOverview || map.maxZoom > GLOBAL_OVERVIEW_MAX_ZOOM;
+    !includeGlobalOverview ||
+    map.maxZoom > GLOBAL_OVERVIEW_MAX_ZOOM ||
+    authoredLayers.length > 0;
   const estimatedGlobalTotal = runsGlobalPass
     ? countBboxTiles(GLOBAL_OVERVIEW_BBOX, 0, globalMaxZoom)
     : 0;
   const estimatedRegionalTotal = runsRegionalPass
     ? countBboxTiles(map.bbox, 0, map.maxZoom, bufferTiles)
     : 0;
-
   const passProgress = {
     global: {
       downloaded: 0,
@@ -536,8 +682,8 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     bbox: [number, number, number, number],
     maxzoom: number,
     passBufferTiles: number,
-  ): ReadableStream<Uint8Array> => {
-    return download({
+  ): ReadableStream<Uint8Array> =>
+    download({
       bbox,
       maxzoom,
       styleUrl,
@@ -551,46 +697,393 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
           bytes: progress.output.totalBytes,
           skipped: progress.tiles.skipped,
         };
-        const global = passProgress.global;
-        const regional = passProgress.regional;
-        skippedTiles = global.skipped + regional.skipped;
+        skippedTiles =
+          passProgress.global.skipped + passProgress.regional.skipped;
         onProgress?.({
-          downloaded: global.downloaded + regional.downloaded,
-          total: global.total + regional.total,
-          bytes: global.bytes + regional.bytes,
+          downloaded:
+            passProgress.global.downloaded + passProgress.regional.downloaded,
+          total: passProgress.global.total + passProgress.regional.total,
+          bytes: passProgress.global.bytes + passProgress.regional.bytes,
           skipped: skippedTiles,
         });
       },
     });
-  };
 
   try {
     styleUrl = getDownloadStyleUrl(map);
-    if (includeGlobalOverview) {
-      const globalChunks = await collectDownloadChunks(
-        startPass('global', GLOBAL_OVERVIEW_BBOX, globalMaxZoom, 0),
-      );
-      if (map.maxZoom <= GLOBAL_OVERVIEW_MAX_ZOOM) {
-        packageParts = globalChunks;
-      } else {
-        // download() has no minzoom option — it always fetches z0..maxzoom
-        // over `bbox`, so this regional pass re-downloads z0-3 (already
-        // covered by the global pass) only to have them discarded below.
-        // The wasted requests are a known tradeoff of the underlying library.
-        const regionalChunks = await collectDownloadChunks(
-          startPass('regional', map.bbox, map.maxZoom, bufferTiles),
-        );
-        blob = await mergeGlobalOverviewSmp(
-          globalChunks,
-          regionalChunks,
-          signal,
-        );
-      }
-    } else {
-      packageParts = await collectDownloadChunks(
-        startPass('regional', map.bbox, map.maxZoom, bufferTiles),
+    if (runsGlobalPass) {
+      globalBlob = blobFromChunks(
+        await collectDownloadChunks(
+          startPass('global', GLOBAL_OVERVIEW_BBOX, globalMaxZoom, 0),
+        ),
       );
     }
+    if (runsRegionalPass) {
+      regionalBlob = blobFromChunks(
+        await collectDownloadChunks(
+          startPass('regional', map.bbox, map.maxZoom, bufferTiles),
+        ),
+      );
+    }
+    throwIfCallerAborted(signal);
+
+    let blob: Blob;
+    if (authoredLayers.length === 0) {
+      if (globalBlob && regionalBlob) {
+        blob = await mergeGlobalOverviewSmp(globalBlob, regionalBlob, signal);
+      } else {
+        blob =
+          regionalBlob ??
+          globalBlob ??
+          (() => {
+            throw new Error('Download package is empty');
+          })();
+      }
+    } else {
+      if (!regionalBlob) {
+        throw new Error('Authored package requires a regional basemap pass');
+      }
+      // Bound and validate the actual downloaded base/global style together with
+      // the authored model before any authored raster GET/Writer work begins.
+      await preflightSmpWithAuthoredLayers({
+        regionalBlob,
+        ...(globalBlob ? { globalBlob } : {}),
+        authoredLayers: authoredOnly.layers,
+        map,
+        signal,
+      });
+      // Writer construction is skipped entirely for vector-only collections.
+      const authoredBlob = await buildAuthoredWriterSmp({
+        authoredStyle: authoredOnly.style,
+        rasterLayers: enumeratedRaster,
+        signal,
+      });
+      blob = await mergeSmpWithAuthoredLayers({
+        regionalBlob,
+        ...(globalBlob ? { globalBlob } : {}),
+        ...(authoredBlob ? { authoredBlob } : {}),
+        authoredLayers: authoredOnly.layers,
+        map,
+        signal,
+      });
+    }
+
+    const isGlobalOnlyPackage =
+      includeGlobalOverview &&
+      map.maxZoom <= GLOBAL_OVERVIEW_MAX_ZOOM &&
+      authoredLayers.length === 0;
+    const criticalSkipped = isGlobalOnlyPackage
+      ? skippedTiles
+      : passProgress.regional.skipped;
+    onProgress?.({
+      downloaded:
+        passProgress.global.downloaded + passProgress.regional.downloaded,
+      total: passProgress.global.total + passProgress.regional.total,
+      bytes: blob.size,
+      skipped: skippedTiles,
+      warning: criticalSkipped === 0 && skippedTiles > 0,
+    });
+    return { blob, smpSize: blob.size, skippedTiles, criticalSkipped };
+  } finally {
+    if (map.type === 'raster' && styleUrl) {
+      setTimeout(() => URL.revokeObjectURL(styleUrl), 5_000);
+    }
+  }
+}
+
+/** Pure package-construction boundary. It never writes Dexie/SavedMap state. */
+export async function buildSmpBlob(
+  config: BuildSmpBlobConfig,
+): Promise<BuiltSmpBlob> {
+  const { blob, smpSize, skippedTiles } = await buildSmpBlobInternal(config);
+  return { blob, smpSize, skippedTiles };
+}
+
+function rasterEstimateBaseStyle(map: SmpPackageMapConfig): MapLibreStyleLike {
+  const urls = normalizeTileUrl(map.styleUrl);
+  return {
+    version: 8,
+    sources: {
+      raster: {
+        type: 'raster',
+        tiles: urls,
+        tileSize: 256,
+        scheme: map.scheme ?? 'xyz',
+        ...(map.attribution ? { attribution: map.attribution } : {}),
+      },
+    },
+    layers: [{ id: 'raster', type: 'raster', source: 'raster' }],
+  };
+}
+
+async function loadEstimateBaseStyle(
+  map: SmpPackageMapConfig,
+  mapboxAccessToken?: string,
+): Promise<MapLibreStyleLike> {
+  if (map.type === 'raster') return rasterEstimateBaseStyle(map);
+  const downloader = new StyleDownloader(map.styleUrl, { mapboxAccessToken });
+  return (await downloader.getStyle()) as unknown as MapLibreStyleLike;
+}
+
+function mergeGlobalOverviewEstimateStyle(
+  baseStyle: MapLibreStyleLike,
+): MapLibreStyleLike {
+  const sources: MapLibreStyleLike['sources'] = { ...baseStyle.sources };
+  const sourceMappings = new Map<string, string>();
+  for (const [sourceId, source] of Object.entries(baseStyle.sources)) {
+    if (
+      source.type !== 'raster' &&
+      source.type !== 'vector' &&
+      source.type !== 'raster-dem'
+    ) {
+      continue;
+    }
+    const globalSourceId = `${sourceId}__global_overview`;
+    if (Object.hasOwn(sources, globalSourceId)) {
+      throw new Error(`Global overview source ID collision: ${globalSourceId}`);
+    }
+    sources[globalSourceId] = { ...source };
+    sourceMappings.set(sourceId, globalSourceId);
+  }
+
+  const usedLayerIds = new Set(baseStyle.layers.map((layer) => layer.id));
+  const layers: MapLibreStyleLike['layers'] = [];
+  const splitZoom = GLOBAL_OVERVIEW_MAX_ZOOM + 1;
+  for (const layer of baseStyle.layers) {
+    const globalSourceId = layer.source
+      ? sourceMappings.get(layer.source)
+      : undefined;
+    if (!globalSourceId) {
+      layers.push(layer);
+      continue;
+    }
+    const minZoom = typeof layer.minzoom === 'number' ? layer.minzoom : 0;
+    const maxZoom = typeof layer.maxzoom === 'number' ? layer.maxzoom : 24;
+    if (minZoom < splitZoom) {
+      const globalLayerId = `${layer.id}__global_overview`;
+      if (usedLayerIds.has(globalLayerId)) {
+        throw new Error(`Global overview layer ID collision: ${globalLayerId}`);
+      }
+      usedLayerIds.add(globalLayerId);
+      layers.push({
+        ...layer,
+        id: globalLayerId,
+        source: globalSourceId,
+        maxzoom: Math.min(maxZoom, splitZoom),
+      });
+    }
+    if (maxZoom > splitZoom) {
+      layers.push({ ...layer, minzoom: Math.max(minZoom, splitZoom) });
+    }
+  }
+
+  return {
+    ...baseStyle,
+    sources,
+    layers,
+    ...(baseStyle.metadata ? { metadata: { ...baseStyle.metadata } } : {}),
+  };
+}
+
+async function estimateAuthoredRasterHeadBytes(
+  ownedTiles: readonly { requestHref: string }[],
+  operationController: AbortController,
+  callerSignal?: AbortSignal,
+): Promise<{
+  authoredRasterBytesKnown: boolean;
+  authoredRasterKnownBytes: bigint;
+}> {
+  const memo = new Map<
+    string,
+    Promise<Awaited<ReturnType<typeof headAnonymousRasterTileSize>>>
+  >();
+  let cursor = 0;
+  let authoredRasterBytesKnown = true;
+  let authoredRasterKnownBytes = 0n;
+  let firstFailure: unknown;
+
+  const recordFailure = (error: unknown) => {
+    if (firstFailure !== undefined) return;
+    firstFailure = error;
+    if (!operationController.signal.aborted) operationController.abort(error);
+  };
+
+  const workers = Array.from(
+    { length: Math.min(AUTHORED_RASTER_CONCURRENCY, ownedTiles.length) },
+    async () => {
+      while (!operationController.signal.aborted) {
+        const index = cursor++;
+        const tile = ownedTiles[index];
+        if (!tile) return;
+        try {
+          let pending = memo.get(tile.requestHref);
+          if (!pending) {
+            pending = headAnonymousRasterTileSize(
+              tile.requestHref,
+              operationController.signal,
+            );
+            memo.set(tile.requestHref, pending);
+          }
+          const result = await pending;
+          if (!result.known) {
+            authoredRasterBytesKnown = false;
+            continue;
+          }
+          authoredRasterKnownBytes += result.bytes;
+          if (
+            authoredRasterKnownBytes > BigInt(MAX_AUTHORED_RASTER_TOTAL_BYTES)
+          ) {
+            throw new AuthoredRasterError(
+              'AUTHORED_RASTER_TOTAL_BYTES_EXCEEDED',
+              `Declared authored raster bytes exceed ${MAX_AUTHORED_RASTER_TOTAL_BYTES} bytes`,
+            );
+          }
+        } catch (error) {
+          recordFailure(error);
+          return;
+        }
+      }
+    },
+  );
+  await Promise.allSettled(workers);
+  if (callerSignal?.aborted) throw callerAbortError(callerSignal);
+  if (firstFailure !== undefined) throw firstFailure;
+  return { authoredRasterBytesKnown, authoredRasterKnownBytes };
+}
+
+/** Deterministic pre-download authored payload estimate. */
+export async function estimateAuthoredPayload(config: {
+  map: SmpPackageMapConfig;
+  authoredLayers: readonly AuthoredLayer[];
+  includeGlobalOverview?: boolean;
+  signal?: AbortSignal;
+  /** Style-fetch credential only; excluded from payload-size arithmetic. */
+  mapboxAccessToken?: string;
+}): Promise<AuthoredPayloadEstimate> {
+  const {
+    map,
+    authoredLayers,
+    includeGlobalOverview = true,
+    signal,
+    mapboxAccessToken,
+  } = config;
+  throwIfCallerAborted(signal);
+  const { controller: operationController, cleanup } =
+    createLinkedOperationController(signal);
+  try {
+    const numericBasemap = estimateDownloadSize(
+      map.bbox,
+      map.minZoom,
+      map.maxZoom,
+      { includeGlobalOverview },
+    );
+    if (
+      !Number.isFinite(numericBasemap) ||
+      !Number.isSafeInteger(numericBasemap) ||
+      numericBasemap < 0
+    ) {
+      throw new RangeError(
+        'Basemap payload estimate is not a non-negative safe integer',
+      );
+    }
+    const basemapTileBytes = BigInt(numericBasemap);
+
+    const baseStyle = await raceWithCallerAbort(
+      loadEstimateBaseStyle(map, mapboxAccessToken),
+      signal,
+    );
+    throwIfCallerAborted(signal);
+    const shouldMergeGlobalOverview =
+      includeGlobalOverview &&
+      (map.maxZoom > GLOBAL_OVERVIEW_MAX_ZOOM || authoredLayers.length > 0);
+    const prospectiveBaseStyle = shouldMergeGlobalOverview
+      ? mergeGlobalOverviewEstimateStyle(baseStyle)
+      : baseStyle;
+    const composed = composeAuthoredStyle({
+      baseStyle: prospectiveBaseStyle,
+      authoredLayers,
+      map,
+    });
+    const rasterInputs = rasterInputsFromLayers(composed.layers);
+    const enumerated =
+      rasterInputs.length === 0
+        ? []
+        : enumerateAuthoredRasterLayers(map, rasterInputs);
+    const ownedTiles = enumerated.flatMap((layer) => layer.tiles);
+    const { authoredRasterBytesKnown, authoredRasterKnownBytes } =
+      await estimateAuthoredRasterHeadBytes(
+        ownedTiles,
+        operationController,
+        signal,
+      );
+    throwIfCallerAborted(signal);
+
+    const knownLowerBoundBytes =
+      basemapTileBytes +
+      composed.finalStyleUtf8Bytes +
+      authoredRasterKnownBytes;
+    const fullyKnown = authoredRasterBytesKnown;
+    const fitsSafeInteger =
+      knownLowerBoundBytes <= BigInt(Number.MAX_SAFE_INTEGER);
+    const safeTotalBytes =
+      fullyKnown && fitsSafeInteger ? Number(knownLowerBoundBytes) : undefined;
+    const requiresLargeDownloadConfirmation =
+      !fullyKnown ||
+      !fitsSafeInteger ||
+      knownLowerBoundBytes > BigInt(100 * 1024 * 1024);
+    return {
+      basemapTileBytes,
+      finalStyleUtf8Bytes: composed.finalStyleUtf8Bytes,
+      authoredRasterBytesKnown,
+      authoredRasterKnownBytes,
+      knownLowerBoundBytes,
+      ...(safeTotalBytes === undefined ? {} : { safeTotalBytes }),
+      requiresLargeDownloadConfirmation,
+    };
+  } finally {
+    cleanup();
+  }
+}
+
+/**
+ * Download an SMP file for a map configuration and store the blob in Dexie.
+ *
+ * Returns the mapId on success. Throws on failure; caller should update status
+ * to 'error' and surface the message.
+ *
+ * NOTE: The library's download() does NOT accept a 'minzoom' parameter — it
+ * always downloads from zoom 0 to maxzoom. The user-configured minZoom is
+ * used for size estimation and display only.
+ */
+export async function downloadSmp(config: DownloadConfig): Promise<string> {
+  const {
+    map,
+    authoredLayers = [],
+    onProgress,
+    signal,
+    mapboxAccessToken,
+    bufferTiles = 1,
+    includeGlobalOverview = true,
+  } = config;
+  const db = getDb();
+
+  await db.maps.update(map.id, {
+    status: 'downloading',
+    errorMessage: undefined,
+    updatedAt: new Date().toISOString(),
+  });
+
+  let built: InternalBuiltSmpBlob;
+  try {
+    built = await buildSmpBlobInternal({
+      map,
+      authoredLayers,
+      onProgress,
+      signal,
+      mapboxAccessToken,
+      bufferTiles,
+      includeGlobalOverview,
+    });
   } catch (error) {
     if (
       signal?.aborted ||
@@ -610,10 +1103,6 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
       updatedAt: new Date().toISOString(),
     });
     throw error;
-  } finally {
-    if (map.type === 'raster' && styleUrl) {
-      setTimeout(() => URL.revokeObjectURL(styleUrl), 5_000);
-    }
   }
 
   if (signal?.aborted) {
@@ -625,60 +1114,18 @@ export async function downloadSmp(config: DownloadConfig): Promise<string> {
     throw new DOMException('Download cancelled', 'AbortError');
   }
 
-  if (!blob) {
-    try {
-      if (!packageParts) throw new Error('Download package is empty');
-      blob = new Blob(packageParts as unknown as BlobPart[], {
-        type: 'application/zip',
-      });
-    } catch (blobError) {
-      const message =
-        blobError instanceof Error
-          ? `Failed to create download package: ${blobError.message}`
-          : 'Failed to create download package';
-      await recoveryWrite(db, map.id, {
-        status: 'error',
-        errorMessage: message,
-        updatedAt: new Date().toISOString(),
-      });
-      throw blobError;
-    }
-  }
-
-  const totalSize = blob.size;
-  // The global overview pass hits ~85 world tiles (z0-3) from the same
-  // source. Sources with limited coverage (country WMTS, regional imagery,
-  // self-hosted) will 404 on most of them — that's expected and shouldn't
-  // block the export of an otherwise-complete regional package. Only treat
-  // skips as fatal when they come from the regional pass, or when the
-  // global pass *is* the entire package (map.maxZoom <= overview max zoom,
-  // so there was no regional pass to fall back on).
-  const isGlobalOnlyPackage =
-    includeGlobalOverview && map.maxZoom <= GLOBAL_OVERVIEW_MAX_ZOOM;
-  const criticalSkipped = isGlobalOnlyPackage
-    ? skippedTiles
-    : passProgress.regional.skipped;
-  onProgress?.({
-    downloaded:
-      passProgress.global.downloaded + passProgress.regional.downloaded,
-    total: passProgress.global.total + passProgress.regional.total,
-    bytes: totalSize,
-    skipped: skippedTiles,
-    warning: criticalSkipped === 0 && skippedTiles > 0,
-  });
-
   try {
     const updatedAt = new Date().toISOString();
     await updateSavedMapWithPackage(
       map.id,
-      blob,
+      built.blob,
       {
         smpBlob: undefined,
-        smpSize: totalSize,
-        status: criticalSkipped > 0 ? 'error' : 'ready',
+        smpSize: built.smpSize,
+        status: built.criticalSkipped > 0 ? 'error' : 'ready',
         errorMessage:
-          criticalSkipped > 0
-            ? `${criticalSkipped} tiles could not be downloaded. The package is incomplete.`
+          built.criticalSkipped > 0
+            ? `${built.criticalSkipped} tiles could not be downloaded. The package is incomplete.`
             : undefined,
         updatedAt,
       },
