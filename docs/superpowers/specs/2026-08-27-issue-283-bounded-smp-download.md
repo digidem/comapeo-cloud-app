@@ -107,7 +107,7 @@ Required behavior:
 - `commit()` is the single visibility point: in one short Dexie transaction, verify the map still exists and cancellation has not won, then write **one consistent metadata set** — package record `{ contentType, size (final byte count), chunkSize, chunkCount, generationId }`, map updates including `smpSize = size`, and removal of the v13 `data` field (a stale whole-buffer `data` would win the read order and permanently serve the old package) — and deletion of legacy `${mapId}:${index}` chunk rows for the map (legacy rows are not generations; leaving them leaks quota and risks ambiguity). `hasSavedMapSmpPackage()` compares stored package `size` with `map.smpSize` and reports *no package* when they disagree, so commit must never write one without the other;
 - cancellation is honored until that atomic promotion commits; after commit the operation is complete;
 - `abort()` awaits any in-flight chunk put, then deletes only this session's staged generation rows; it is idempotent and never throws over the caller's original error; it never deletes the active package;
-- after a successful promotion, delete superseded/unreferenced chunk generations for that map best-effort without hydrating their `data` (enumerate primary keys via the `mapId` index only — never the `[mapId+index]` compound index);
+- after a successful promotion, delete superseded/unreferenced chunk generations for that map best-effort without hydrating their `data` (enumerate primary keys via the `mapId` index only — never the `[mapId+index]` compound index; the reason is that `index` is ambiguous across generations, so the chunk-ID string is the sole authority for generation membership, as specified in the readers section);
 - on the existing interrupted-download Retry path, remove unreferenced generation rows before starting the replacement download so a prior crash cannot permanently consume quota;
 - a browser crash may leave hidden orphan generation rows until retry/next successful promotion, but those rows are never active/readable/exportable.
 
@@ -177,7 +177,7 @@ Then:
 3. start the canonical Writer-output pump into the IndexedDB package sink **before** adding any resource;
 4. add sprites once;
 5. when global overview is enabled, iterate world z0–3 tiles and map each yielded original `sourceId` to its prepared global-overview source id before `writer.addTile()`;
-6. for `maxZoom > 3`, iterate the regional pass; **`await stream.cancel()`** on every yielded z0–3 tile stream (cancel is the producer-release mechanism; draining would waste the bandwidth this design is removing, and leaving them unread would stall the downloader on backpressure). Cancelled duplicate z0–3 regional streams count as warnings, never toward `criticalSkipped`, and are excluded from progress `downloaded` counts; add only z4+ tiles under the original regional source id;
+6. for `maxZoom > 3`, iterate the regional pass; **`await stream.cancel()`** on every yielded z0–3 tile stream (cancel is the producer-release mechanism; draining would waste the bandwidth this design is removing, and leaving them unread would stall the downloader on backpressure). Cancelled duplicate z0–3 regional streams count as warnings, never toward `criticalSkipped`, and are excluded from **both** the progress `downloaded` count **and** the progress `total` denominator (the regional denominator is today seeded from `countBboxTiles(map.bbox, 0, map.maxZoom, ...)` which includes z0–3; leaving them in `total` while excluding them from `downloaded` would stall the bar below 100%). Add only z4+ tiles under the original regional source id;
 7. when overview is disabled, add the complete regional pass under original source ids;
 8. add glyphs once;
 9. finalize Writer and wait for both `finish()` and output EOF using #279's bounded terminal/cleanup rules;
@@ -225,7 +225,7 @@ const MAX_BASEMAP_SMP_ENTRIES = 20_000;
 
 Prefer factoring this into one canonical shared package-entry limit if #279's merged code already exposes an appropriate constant. The cap's purpose is bounding Writer central-directory/resource metadata, not payload bytes; if implementation shows the Writer metadata budget supports a higher derived limit, raise it to that derived value and document the derivation.
 
-**Preflight enforcement is mandatory:** before the first byte downloads, compute the projected entry count from `countBboxTiles()` for the selected bbox/zoom range (plus style/sprite/glyph resource entries) and fail with a typed/localized `SMP_DOWNLOAD_ENTRY_LIMIT` error instructing the user to reduce area or maximum zoom. A mid-download failure before entry 20,001 is added is a safety net, not the primary UX; the preflight failure happens before any user bandwidth is spent. This cap is not bypassable.
+**Preflight enforcement is mandatory:** before the first byte downloads, compute the projected entry count for the selected configuration and fail with a typed/localized `SMP_DOWNLOAD_ENTRY_LIMIT` error instructing the user to reduce area or maximum zoom. The projection mirrors `estimateDownloadSize()`'s pass split: global `0..min(3, maxZoom)` over `GLOBAL_OVERVIEW_BBOX` **plus** regional `4..maxZoom` over the map bbox (or a single `0..maxZoom` regional count when overview is off), plus style/sprite/glyph resource entries. Note `countBboxTiles()` is currently module-private; the implementation must export it (or relocate the projection helper) so the new basemap-writer module can consume it. A mid-download failure before entry 20,001 is added is a safety net, not the primary UX; the preflight failure happens before any user bandwidth is spent. "Not bypassable" means the user cannot skip it at runtime; the 20,000 value itself may change only through the documented derivation above, never per-download.
 
 The app-owned payload-buffer invariant is:
 
@@ -277,7 +277,7 @@ phase?: 'preparing' | 'downloading' | 'finalizing';
 
 Do not add a new persistent `SavedMap.status`; existing `draft | downloading | ready | error` remains the durable model. The Cancel action stays visible throughout the active operation.
 
-`DownloadProgress.bytes` on the streaming basemap path is the actual final SMP output bytes accepted by the package sink, not the sum of two temporary archive sizes. Because the seeded `total` derives from estimated input tile bytes, `bytes/total` is only meaningful within a phase: when `phase` is present, the progress bar resolves per-phase and the counter resets on each `preparing -> downloading -> finalizing` transition. If `phase` is not adopted, `total` must be re-seeded when the output sink accepts its first byte so the percentage tracks output bytes.
+`DownloadProgress.bytes` on the streaming basemap path is the actual final SMP output bytes accepted by the package sink, not the sum of two temporary archive sizes. The existing progress contract is preserved: `total` and `downloaded` remain **tile counts** (percentage = `downloaded/total` tiles), and `bytes` remains an independent byte counter that now reports real output bytes instead of summed temporary archive sizes. When `phase` is present it is informational for UX state; it does not redefine the denominators.
 
 ## Security and privacy
 
@@ -296,6 +296,7 @@ Do not add a new persistent `SavedMap.status`; existing `draft | downloading | r
 - Newly streamed generation packages render through existing random-access SMP serving and export through the existing explicit full-Blob path.
 - Existing already-generated global-overview packages with synthetic `__global_overview` sources remain valid; #283 does not rewrite stored SMPs.
 - Existing SMP import behavior stays intact.
+- **New user-visible restriction:** today a download's tile count is unlimited (it just takes long); #283 introduces the non-bypassable `MAX_BASEMAP_SMP_ENTRIES` preflight, so some very-large selections that previously "worked" will now fail closed with `SMP_DOWNLOAD_ENTRY_LIMIT`. The 20,000 scale is borrowed from #279's authored-merge entry budget, which is a different (smaller) budget than basemap tile entries; the documented derivation path exists to raise it if the Writer metadata budget allows.
 - Export remains an explicit full-Blob consumer; making very-large export itself streaming is out of scope, but generation-aware reads must introduce no regression for package sizes the browser can currently export.
 
 ## Required TDD and automated coverage
@@ -369,7 +370,7 @@ The QA runbook must exercise a >100 MiB confirmed download, cancellation + retry
 
 - [ ] Normal basemap download no longer calls `collectDownloadChunks()`, constructs a package-sized `Blob` before persistence, or uses JSZip to merge global/regional packages.
 - [ ] Entry-cap preflight (projected entries from `countBboxTiles()`) fails before the first byte when over `MAX_BASEMAP_SMP_ENTRIES`, and the mid-download cap check remains as a non-bypassable safety net.
-- [ ] Basemap package payload buffering is fixed-size and does not grow with final SMP bytes; Writer metadata is bounded by the explicit 20,000-entry limit.
+- [ ] Basemap package payload buffering is fixed-size and does not grow with final SMP bytes; Writer metadata is bounded by `MAX_BASEMAP_SMP_ENTRIES` (20,000 unless a documented derivation raises it).
 - [ ] Global z0–3 + regional z4+ behavior is produced in one Writer output and matches current offline rendering/initial-view semantics.
 - [ ] Final output streams directly into staged 4 MiB IndexedDB rows and becomes active only through one atomic promotion.
 - [ ] Cancellation/failure/quota exhaustion cannot expose partial bytes as ready or exportable.
