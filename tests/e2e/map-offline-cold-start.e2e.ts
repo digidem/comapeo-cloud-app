@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test';
-import JSZip from 'jszip';
+import sharp from 'sharp';
 
+import { buildSmpBlob } from '../../src/lib/map/smp-download';
+import {
+  AUTHORED_RASTER_LAYER_FIXTURE,
+  AUTHORED_VECTOR_LAYER_FIXTURE,
+} from '../fixtures/authored-layers';
 import {
   e2eArrayBuffer,
   getAppDatabaseRecord,
@@ -19,70 +24,90 @@ const ACTIVE_MAP_ID = 'offline-cold-start-map';
 const ACTIVE_MAP_NAME = 'Offline Cold Start Map';
 
 async function buildOfflineSmp(): Promise<Uint8Array> {
-  const zip = new JSZip();
-  zip.file('VERSION', '1.0');
-  zip.file(
-    'style.json',
-    JSON.stringify({
-      version: 8,
-      glyphs: 'smp://maps.v1/fonts/{fontstack}/{range}.pbf',
-      sprite: 'smp://maps.v1/sprites/sprite',
-      sources: {
-        raster: {
-          type: 'raster',
-          tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.png'],
-          tileSize: 256,
-          minzoom: 0,
-          maxzoom: 0,
-        },
-        label: {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: [
-              {
-                type: 'Feature',
-                geometry: { type: 'Point', coordinates: [0, 0] },
-                properties: { name: 'Offline' },
-              },
-            ],
+  const authoredRasterPng = await sharp({
+    create: {
+      width: 1,
+      height: 1,
+      channels: 4,
+      background: { r: 40, g: 180, b: 80, alpha: 1 },
+    },
+  })
+    .png()
+    .toBuffer();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const href =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
+    if (href.startsWith('blob:')) return originalFetch(input, init);
+    const method =
+      init?.method ?? (input instanceof Request ? input.method : 'GET');
+    if (href === 'https://style.example.com/style.json') {
+      const style = JSON.stringify({
+        version: 8,
+        sources: {
+          basemap: {
+            type: 'raster',
+            tiles: ['https://basemap.example.com/{z}/{x}/{y}.png'],
+            tileSize: 256,
           },
         },
+        layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
+      });
+      const response = new Response(method === 'HEAD' ? null : style, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': String(Buffer.byteLength(style)),
+        },
+      });
+      Object.defineProperty(response, 'url', { value: href });
+      return response;
+    }
+    const isAuthoredRaster = href.startsWith('https://tiles.example.com/');
+    const isBasemap = href.startsWith('https://basemap.example.com/');
+    if (!isAuthoredRaster && !isBasemap) {
+      throw new Error(`Unexpected package-generation request: ${href}`);
+    }
+    const bytes = isAuthoredRaster ? authoredRasterPng : TRANSPARENT_1X1_PNG;
+    const response = new Response(method === 'HEAD' ? null : bytes, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/png',
+        'Content-Length': String(bytes.byteLength),
       },
-      layers: [
-        { id: 'raster', type: 'raster', source: 'raster' },
-        {
-          id: 'label',
-          type: 'symbol',
-          source: 'label',
-          layout: {
-            'icon-image': 'marker',
-            'text-field': ['get', 'name'],
-            'text-font': ['Open Sans Regular'],
-          },
-        },
+    });
+    Object.defineProperty(response, 'url', { value: href });
+    return response;
+  }) as typeof fetch;
+
+  try {
+    const built = await buildSmpBlob({
+      map: {
+        type: 'style',
+        styleUrl: 'https://style.example.com/style.json',
+        bbox: [-62, -5, -54, 1],
+        minZoom: 0,
+        maxZoom: 0,
+        scheme: 'xyz',
+      },
+      // The canonical fixtures are intentionally hidden. This browser render
+      // canary flips only the outer visibility value so actual package output
+      // can prove the same canonical geometry/style payloads render offline.
+      authoredLayers: [
+        { ...AUTHORED_RASTER_LAYER_FIXTURE, visible: true },
+        { ...AUTHORED_VECTOR_LAYER_FIXTURE, visible: true },
       ],
-      metadata: {
-        name: ACTIVE_MAP_NAME,
-        'smp:bounds': [-180, -85, 180, 85],
-        'smp:maxzoom': 0,
-        'smp:sourceFolders': { raster: 's/0' },
-      },
-    }),
-  );
-  zip.file('s/0/0/0/0.png', TRANSPARENT_1X1_PNG);
-  zip.file(
-    'sprites/sprite.json',
-    JSON.stringify({
-      marker: { width: 1, height: 1, x: 0, y: 0, pixelRatio: 1 },
-    }),
-  );
-  zip.file('sprites/sprite.png', TRANSPARENT_1X1_PNG);
-  // An empty PBF is a valid empty protobuf message. It is sufficient for this
-  // fixture because the test is proving packaged-resource routing, not glyph
-  // rasterization correctness.
-  zip.file('fonts/Open Sans Regular/0-255.pbf', new Uint8Array());
-  return zip.generateAsync({ type: 'uint8array' });
+      bufferTiles: 0,
+      includeGlobalOverview: false,
+    });
+    return new Uint8Array(await built.blob.arrayBuffer());
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }
 
 async function seedLocalState(
@@ -116,18 +141,22 @@ async function seedLocalState(
       },
     ],
     observations: [
-      {
-        localId: 'offline-map-point',
+      ...[
+        ['offline-map-point-west', -4, -61],
+        ['offline-map-point-east', 0, -55],
+        ['offline-map-point-middle', -1, -58],
+      ].map(([localId, lat, lon]) => ({
+        localId: String(localId),
         projectLocalId: PROJECT_WITH_MAP,
-        sourceType: 'local',
-        sourceId: 'local:offline-map-point',
-        lat: 1,
-        lon: 1,
+        sourceType: 'local' as const,
+        sourceId: `local:${String(localId)}`,
+        lat: Number(lat),
+        lon: Number(lon),
         createdAt: now,
         updatedAt: now,
         dirtyLocal: false,
         deleted: false,
-      },
+      })),
     ],
     maps: [
       {
@@ -213,6 +242,39 @@ async function readProjectActiveMapId(
   return project?.activeMapId;
 }
 
+async function countCanonicalAuthoredColors(
+  page: import('@playwright/test').Page,
+): Promise<{ blue: number; navy: number; orange: number; green: number }> {
+  const canvas = page.locator('canvas.maplibregl-canvas').first();
+  if (!(await canvas.isVisible())) {
+    return { blue: 0, navy: 0, orange: 0, green: 0 };
+  }
+  const screenshot = await canvas.screenshot();
+  const { data, info } = await sharp(screenshot)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let blue = 0;
+  let navy = 0;
+  let orange = 0;
+  let green = 0;
+  for (let offset = 0; offset < data.length; offset += info.channels) {
+    const red = data[offset] ?? 0;
+    const pixelGreen = data[offset + 1] ?? 0;
+    const pixelBlue = data[offset + 2] ?? 0;
+    const alpha = data[offset + 3] ?? 0;
+    if (alpha < 20) continue;
+    if (red < 150 && pixelGreen > 60 && pixelGreen < 190 && pixelBlue > 150)
+      blue += 1;
+    if (red < 90 && pixelGreen < 110 && pixelBlue > 45 && pixelBlue < 180)
+      navy += 1;
+    if (red > 150 && pixelGreen > 40 && pixelGreen < 170 && pixelBlue < 130)
+      orange += 1;
+    if (red < 130 && pixelGreen > 120 && pixelBlue < 150) green += 1;
+  }
+  return { blue, navy, orange, green };
+}
+
 test.describe('active SMP offline cold start', () => {
   test.skip(
     !process.env.VITE_PREVIEW,
@@ -220,6 +282,7 @@ test.describe('active SMP offline cold start', () => {
   );
 
   test('rehydrates and renders packaged SMP resources after a clean offline restart', async ({
+    browserName,
     context,
     page,
   }) => {
@@ -285,6 +348,29 @@ test.describe('active SMP offline cold start', () => {
       ACTIVE_MAP_ID,
     );
     expect(offlineExternalRequests).toEqual([]);
+    // Chromium provides a stable headless WebGL screenshot surface here. Firefox
+    // still exercises the complete offline SMP lifecycle below, but its headless
+    // canvas screenshots do not reliably expose WebGL texture/circle pixels.
+    if (browserName === 'chromium') {
+      await expect
+        .poll(
+          async () => {
+            const colors = await countCanonicalAuthoredColors(offlinePage);
+            return (
+              colors.blue > 5 &&
+              colors.navy > 5 &&
+              colors.orange > 5 &&
+              colors.green > 50
+            );
+          },
+          {
+            timeout: 15_000,
+            message:
+              'canonical authored polygon/line/point/raster colors should render from the offline SMP',
+          },
+        )
+        .toBe(true);
+    }
 
     // The desktop archive list is visually overlapped by the main panel in this
     // test layout, so invoke the real button handler without pointer hit-testing.

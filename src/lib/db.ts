@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
+import type { AuthoredLayer } from '@/lib/map/authored-layers';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -235,6 +236,8 @@ export interface SavedMap {
   maxZoom: number; // Default 14
   attribution?: string;
   scheme?: 'xyz' | 'tms'; // Raster only
+  /** Ordered canonical authored layers. Missing on legacy records means []. */
+  layers?: AuthoredLayer[];
   /** Legacy/runtime SMP blob. New package bytes live in the mapPackages table. */
   smpBlob?: Blob;
   smpSize?: number; // SMP byte length

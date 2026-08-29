@@ -183,6 +183,15 @@ describe('closeAllSmpReaders', () => {
 });
 
 describe('registerSmpProtocol', () => {
+  it('disables empty-glyph fallback so MapLibre can render missing glyphs locally', async () => {
+    await importModule();
+
+    expect(mockCreateServer).toHaveBeenCalledWith({
+      base: '/smp',
+      fallbackGlyph: null,
+    });
+  });
+
   it('calls maplibregl.addProtocol on first invocation', async () => {
     const { registerSmpProtocol } = await importModule();
     registerSmpProtocol();
@@ -256,6 +265,25 @@ describe('protocol handler', () => {
 
     expect(mockFetch).toHaveBeenCalledOnce();
     expect(result.data.byteLength).toBe(4);
+  });
+
+  it('rejects missing glyph requests so MapLibre activates its local glyph fallback', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 404 }));
+    mockCreateServer.mockReturnValue({ fetch: mockFetch });
+
+    const { getSmpReader, registerSmpProtocol } = await importModule();
+    await getSmpReader('map-a', createMockBlob());
+    registerSmpProtocol();
+
+    const handler = mockAddProtocol.mock.calls[0]![1] as (
+      request: Request,
+    ) => Promise<{ data: ArrayBuffer }>;
+
+    await expect(
+      handler(new Request('smp:///map-a/fonts/Noto%20Sans/0-255.pbf.gz')),
+    ).rejects.toThrow(/glyph|SMP resource/i);
   });
 
   it('returns empty ArrayBuffer when handler throws', async () => {

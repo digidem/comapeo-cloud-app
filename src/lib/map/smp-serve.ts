@@ -9,7 +9,11 @@ import { type SavedMap, getSavedMapPackageSource } from '@/lib/db';
 const readerCache = new Map<string, Reader>();
 
 let registered = false;
-const smpServer = createServer({ base: '/smp' });
+// Missing packaged glyph ranges must surface as a failed protocol request so
+// MapLibre can use its built-in TinySDF local-glyph fallback. The SMP library's
+// default empty-glyph fallback would instead return a successful empty PBF and
+// can leave otherwise-valid authored text labels blank offline.
+const smpServer = createServer({ base: '/smp', fallbackGlyph: null });
 
 function blobToRandomAccessSource(blob: Blob) {
   const size = blob.size;
@@ -235,15 +239,18 @@ export function registerSmpProtocol(): void {
   registered = true;
 
   maplibregl.addProtocol('smp', async (request) => {
+    let glyphRequest = false;
     try {
       const url = new URL(request.url);
       // smp:///mapId/path → pathname is /mapId/path (triple-slash puts mapId in pathname)
       const segments = url.pathname.split('/').filter(Boolean);
       const mapId = segments[0] ?? '';
       const path = segments.slice(1).join('/');
+      glyphRequest = path.startsWith('fonts/');
 
       const reader = readerCache.get(mapId);
       if (!reader) {
+        if (glyphRequest) throw new Error('SMP glyph reader is unavailable');
         return { data: new ArrayBuffer(0) };
       }
 
@@ -251,9 +258,18 @@ export function registerSmpProtocol(): void {
         new Request(`http://localhost/smp/${path}`),
         reader,
       );
+      if (glyphRequest && !response.ok) {
+        throw new Error(
+          `SMP glyph resource is unavailable (${response.status})`,
+        );
+      }
       const data = await response.arrayBuffer();
       return { data };
-    } catch {
+    } catch (error) {
+      // Reject missing glyphs so MapLibre's GlyphManager falls back to local
+      // TinySDF rendering. Existing non-glyph protocol failures retain the
+      // established empty-resource behavior.
+      if (glyphRequest) throw error;
       return { data: new ArrayBuffer(0) };
     }
   });

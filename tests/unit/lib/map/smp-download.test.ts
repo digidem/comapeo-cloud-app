@@ -321,10 +321,11 @@ describe('downloadSmp', () => {
     regionalZip.file('s/0/3/4/4.png', new Uint8Array([3]));
     regionalZip.file('s/0/4/8/8.png', new Uint8Array([4]));
 
-    const streams = [
-      await globalZip.generateAsync({ type: 'uint8array' }),
-      await regionalZip.generateAsync({ type: 'uint8array' }),
-    ];
+    const globalBytes = await globalZip.generateAsync({ type: 'uint8array' });
+    const regionalBytes = await regionalZip.generateAsync({
+      type: 'uint8array',
+    });
+    const streams = [globalBytes, regionalBytes];
     mockDownload.mockImplementation(() => {
       const bytes = streams.shift();
       if (!bytes) throw new Error('Unexpected download call');
@@ -1075,6 +1076,34 @@ describe('downloadSmp', () => {
       errorMessage: undefined,
       updatedAt: expect.any(String),
     });
+  });
+
+  it('preserves the legacy package-construction error prefix', async () => {
+    const updateSpy = vi.spyOn(getDb().maps, 'update').mockResolvedValue(1);
+    mockDownload.mockReturnValue(streamOf(new Uint8Array([1, 2, 3])));
+    const NativeBlob = Blob;
+    class FailingZipBlob extends NativeBlob {
+      constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+        if (options?.type === 'application/zip') {
+          throw new Error('allocation failed');
+        }
+        super(parts, options);
+      }
+    }
+    vi.stubGlobal('Blob', FailingZipBlob);
+
+    try {
+      await expect(
+        downloadSmp({ map: createMockMap(), includeGlobalOverview: false }),
+      ).rejects.toThrow('Failed to create download package: allocation failed');
+      expect(updateSpy).toHaveBeenLastCalledWith('map-1', {
+        status: 'error',
+        errorMessage: 'Failed to create download package: allocation failed',
+        updatedAt: expect.any(String),
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('falls back to a generic error message when a non-Error is thrown mid-download', async () => {

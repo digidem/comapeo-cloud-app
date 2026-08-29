@@ -45,6 +45,10 @@ Use raw one-shot `claude` / `codex exec` only for small bounded jobs or read-onl
 
 For any PR merge, follow the workspace `pr-cycle` skill. The execution that issues the merge command must have explicit merge authorization from a user message in its own current task; authorization never transfers across chats, sessions, agents, automations, readiness reports, or shared GitHub credentials. Without that current-task authorization, stop at merge-ready.
 
+## Human QA Handoff Invariant
+
+Any implementation declared ready for human QA must include an implementation-specific QA script at `docs/qa/<issue-or-pr>.md`, and that QA script must be linked from the PR body before readiness is reported. The QA script must state the scope being validated, prerequisites, reproducible test steps, expected results, explicit failure conditions, cleanup/reset steps when relevant, and known limitations or intentionally untestable surfaces. Add a runnable helper under `scripts/qa/` when the important technical checks can be automated without hiding the human verification intent. If the implementation has no production UI surface yet, say so explicitly and make the handoff a technical QA procedure instead of inventing click-through steps.
+
 ## Issue and PR Scope Continuity
 
 - Before widening an implementation beyond its issue or PR scope, search the existing GitHub backlog and related PRs for overlapping or follow-up work.
