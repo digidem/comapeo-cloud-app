@@ -135,6 +135,17 @@ Relevant test: `smp-download.test.ts`.
 
 These are not failures for this QA unless this PR accidentally introduces the deferred consumer behavior or breaks existing download flows.
 
+## Engineering lessons for follow-on authored-layer work
+
+- Keep authored-layer limits at the earliest safe boundary. Count/size checks must happen before deep parsing, normalization, Writer construction, or network allocation; eventual rejection is not enough if expensive work already happened.
+- Treat canonical JSON as hostile input. Do not execute accessors while measuring/validating, and convert proxy/reflection failures into bounded structured errors.
+- Preserve the distinction between text and icon symbols. Text can remain offline-capable through MapLibre's local TinySDF fallback, while icons require a future explicit sprite ownership/packaging contract.
+- Keep archive compatibility exceptions exact and pinned. The current Writer's descriptor/zero-extension behavior is regression-tested; do not generalize it into permissive padding acceptance.
+- Test deterministic archives across timezone and input-order changes, not only repeated calls in one process. Canonical timestamps must be UTC-based.
+- Cancellation must race terminal Writer/ZIP finalization waits as well as fetches. A caller abort should not wait for the full watchdog timeout.
+- Cross-browser acceptance should exercise production code paths. Raw-DEFLATE support is proven through the production SMP ZIP reader; package round-trip is proven from `buildSmpBlob()` through persisted offline reopening rather than a hand-built fixture.
+- Preserve explicit #279 contracts when reviewing future optimizations. The existing basemap estimator inputs and the per-tile HEAD behavior were deliberate issue decisions, not accidental implementation details.
+
 ## Cleanup
 
 The QA script should not intentionally modify tracked files. If local Playwright/visual tooling leaves generated artifacts, verify them before deleting and restore only incidental generated changes. Never reset unrelated working-tree changes.
