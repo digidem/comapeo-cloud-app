@@ -27,6 +27,7 @@ Before drafting:
 3. Inspect the current implementation surfaces, schemas, tests, fixtures, deployment workflows, and persistence boundaries that constrain the feature.
 4. Verify external/upstream capabilities from primary sources when the feature depends on an external API/library/service. Do not invent private integration contracts when a supported/versioned boundary is required.
 5. Identify already-decided product behavior separately from technical implementation choices.
+6. Search current open PRs/issues for **unlinked overlapping work** touching the same files, interfaces, or dependency surfaces. Inspect changed filenames/patches when overlap is plausible. If active work already owns machinery the spec would otherwise define, consume that canonical boundary through an explicit dependency/implementation-start gate; do not independently specify a second equivalent mechanism.
 
 Do not ask the user to choose low-level implementation details that the codebase/upstream evidence can resolve safely.
 
@@ -62,7 +63,7 @@ When splitting:
 2. Give each child one objective and one clear ownership boundary.
 3. Write an explicit acyclic dependency graph.
 4. Keep shared canonical types/fixtures/functions owned by exactly one child; downstream children import them rather than recreating compatible-looking local contracts.
-5. Give every dependent child an explicit **implementation-start gate** against the merged target base (for example “depends on #279 merged/green” plus named required symbols/tests). A consumer child may be fully spec-reviewed and labeled implementation-ready before its foundation merges, but implementation must not begin until those dependency artifacts exist on the actual target base branch.
+5. Give every dependent child an explicit **implementation-start gate** against the merged target base (for example “depends on #279 merged/green” plus named required symbols/tests). A consumer child may be fully spec-reviewed and labeled implementation-ready before its foundation merges, but implementation must not begin until those dependency artifacts exist on the actual target base branch. When a dependency is still unmerged, do **not** apply implementation labels yet — hold the issue in the spec lane with a comment naming the exact merge gate; a prose gate in the body is not a gate, because agents read labels first.
 6. Convert the original issue into a concise parent tracker only during the final publication stage, after every child spec is terminal P1/P2-clear and the cross-child dependency/interface seam is also clear.
 
 A useful pattern is:
@@ -140,6 +141,22 @@ After all children are individually clear, run cross-child seam reviews for at l
 - external bridge vs product/deployment ownership;
 - rollout/rollback state if release engineering spans children.
 
+### Durable reviewed-spec checkpoint
+
+This repository has `docs/superpowers/specs/` for durable specification artifacts. The **spec file is the canonical single source of truth; the GitHub issue carries workflow state only.** Resolve the two-copy drift problem structurally, not by agent discipline.
+
+Publication procedure:
+
+1. Draft/review the spec as a **PR** adding `docs/superpowers/specs/YYYY-MM-DD-issue-N-slug.md`. The header carries the GitHub issue number, the base SHA/date used for review, and `Supersedes:` / `Superseded-by:` fields.
+2. The issue body becomes a **stub**: one-paragraph summary, a permalink to the spec blob **at the merged spec SHA**, and the acceptance-criteria checklist (the only intentional duplication — GitHub renders it as trackable tasks).
+3. Add the tiebreak sentence to the issue stub: *Where issue body and spec file disagree, the spec file at the linked SHA wins.*
+4. Label application (`agent:ready-for-implementation` + `lane:implementation`) is a **separate, retryable step after the spec PR merges**. Its failure is reported as `blocked: labels`, not `blocked: spec`. Never claim implementation readiness from an unmerged local/spec file alone.
+5. Material spec changes = a new commit to the spec file + updating the issue's pinned SHA link (and a `Supersedes` marker when replacing an older spec wholesale). Never maintain two independently-edited prose copies.
+
+This structure makes the known `403 Resource not accessible by integration` connector failure non-blocking for content: spec content lands via git (already-authorized path); only labels need the API. If a write-path failure does occur, preserve the exact reviewed artifact, stop mutations on that path, and use another already-authorized repository path only when one is actually available.
+
+Known failure modes to guard against: no supersession machine (old specs must be marked dead when rewritten); silent rot of the reviewed-against SHA; and conflating "spec is good" with "you may start now" — these are different states when an implementation-start gate depends on an unmerged dependency.
+
 ### Failed feasibility / abandoned split
 
 If a required spike proves the specified architecture infeasible or a requested reviewer finds a product/architecture decision that cannot be resolved safely without human input:
@@ -163,6 +180,8 @@ Before the first issue mutation, read the repository's live label taxonomy and r
 - parent tracker: **no spec/implementation workflow status label and no spec/implementation lane label**. Preserve ordinary classification labels such as `enhancement` and `difficulty:*`.
 
 If the repository's live taxonomy differs or one of those labels is absent, do not silently invent/create a parallel taxonomy. Use the established equivalent when unambiguous; otherwise block the mutation and report the mismatch.
+
+Treat the first write-path permission/integration failure as a publication failure, not a transient success. Stop further mutations on that path, keep the reviewed checkpoint intact, and use another already-authorized repository path only when one is actually available.
 
 For each reviewed child:
 
