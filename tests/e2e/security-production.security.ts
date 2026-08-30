@@ -228,9 +228,16 @@ async function seedLegacyCredentialCache(
 }
 
 async function readStartupState(page: Page): Promise<string | undefined> {
-  return page.evaluate(
-    () => document.documentElement.dataset.comapeoSecurityStartup,
-  );
+  try {
+    return await page.evaluate(
+      () => document.documentElement.dataset.comapeoSecurityStartup,
+    );
+  } catch {
+    // Worker takeover can replace the document between poll ticks. Treat that
+    // transient execution-context loss as not ready yet and let expect.poll
+    // observe the next document instead of making the transition flaky.
+    return undefined;
+  }
 }
 
 test.beforeEach(async ({ page, request }) => {
@@ -394,7 +401,9 @@ test('a real previous-build worker cannot forward a persisted credential after t
       { timeout: 30_000 },
     )
     .toBe(SERVICE_WORKER_SECURITY_REVISION);
-  await page.reload();
+  // The legacy build uses vite-plugin-pwa autoUpdate, so secure takeover itself
+  // reloads into the current application. Waiting for the current preflight
+  // state avoids racing a second manual reload against that navigation.
   await expect
     .poll(() => readStartupState(page), { timeout: 30_000 })
     .toBe('ready');
