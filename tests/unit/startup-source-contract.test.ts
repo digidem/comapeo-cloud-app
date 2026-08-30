@@ -43,6 +43,22 @@ describe('startup source contracts', () => {
     expect(states).toHaveLength(3);
   });
 
+  it('rechecks the live worker after installing the transition listener', () => {
+    const main = source('src/main.tsx');
+    const transitionStart = main.indexOf(
+      'function prepareSecureWorkerTransition',
+    );
+    const listenerIndex = main.indexOf("'controllerchange'", transitionStart);
+    const verifyIndex = main.indexOf(
+      'verifyControllingServiceWorker()',
+      listenerIndex,
+    );
+
+    expect(transitionStart).toBeGreaterThanOrEqual(0);
+    expect(listenerIndex).toBeGreaterThan(transitionStart);
+    expect(verifyIndex).toBeGreaterThan(listenerIndex);
+  });
+
   it('disables independent PWA registration injection', () => {
     expect(source('vite.config.ts')).toMatch(/injectRegister:\s*null/);
   });

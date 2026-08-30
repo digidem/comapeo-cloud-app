@@ -374,10 +374,14 @@ export function InviteScreen() {
           operation: async (normalizedUrl) => {
             const token = credential.token;
             setActiveStep('connect');
+            const validationAbortController = new AbortController();
+            inviteSyncAbortRef.current?.abort();
+            inviteSyncAbortRef.current = validationAbortController;
             const config = {
               baseUrl: normalizedUrl,
               token,
               serverId: null,
+              signal: validationAbortController.signal,
             };
 
             try {
@@ -386,6 +390,10 @@ export function InviteScreen() {
               );
               if (cancelledRef.current) return false;
               if (!healthy) {
+                validationAbortController.abort();
+                if (inviteSyncAbortRef.current === validationAbortController) {
+                  inviteSyncAbortRef.current = null;
+                }
                 setStatus('error');
                 setErrorMessage(
                   intlRef.current.formatMessage(messages.networkError),
@@ -393,7 +401,14 @@ export function InviteScreen() {
                 return false;
               }
               await withValidationTimeout(apiClient.getProjects(config));
+              if (inviteSyncAbortRef.current === validationAbortController) {
+                inviteSyncAbortRef.current = null;
+              }
             } catch (error) {
+              validationAbortController.abort();
+              if (inviteSyncAbortRef.current === validationAbortController) {
+                inviteSyncAbortRef.current = null;
+              }
               if (cancelledRef.current) return false;
               const errorStatus =
                 error && typeof error === 'object' && 'status' in error

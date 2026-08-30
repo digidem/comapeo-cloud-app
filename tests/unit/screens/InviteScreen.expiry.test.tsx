@@ -147,6 +147,41 @@ describe('InviteScreen encrypted invite expiry', () => {
     expect(healthSpy).not.toHaveBeenCalled();
   });
 
+  it('aborts pending pre-persistence validation at the original deadline', async () => {
+    vi.useFakeTimers();
+    const { code, href } = encryptedCandidate();
+    storeInviteBootstrapCandidate(href);
+    vi.mocked(redeemEncryptedInvite).mockResolvedValue({
+      baseUrl: 'https://archive.test',
+      token: code,
+    });
+
+    let validationSignal: AbortSignal | undefined;
+    vi.spyOn(apiClient, 'healthCheck').mockImplementation((config) => {
+      validationSignal = config?.signal;
+      return new Promise<boolean>(() => {});
+    });
+
+    render(<InviteScreen />);
+    // vi.waitFor drives Vitest fake timers; React state updates still need act().
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      await vi.waitFor(() => {
+        expect(apiClient.healthCheck).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    expect(validationSignal).toBeDefined();
+    expect(validationSignal?.aborted).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INVITE_BOOTSTRAP_MAX_LIFETIME_MS);
+    });
+
+    expect(validationSignal?.aborted).toBe(true);
+    expect(screen.getByText(/this invite has expired/i)).toBeInTheDocument();
+  });
+
   it('aborts pending sync and locks an adopted credential at the original deadline', async () => {
     vi.useFakeTimers();
     const { code, href } = encryptedCandidate();

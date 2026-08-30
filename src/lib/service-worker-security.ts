@@ -58,17 +58,12 @@ function currentController(): ControllerLike | null {
   return navigator.serviceWorker.controller;
 }
 
-export async function verifyControllingServiceWorker(
-  options: VerifyOptions = {},
+async function probeController(
+  controller: ControllerLike,
+  timeoutMs: number,
+  createMessageChannel: () => MessageChannel,
 ): Promise<ServiceWorkerSecurityVerification> {
-  const controller =
-    options.controller === undefined ? currentController() : options.controller;
-  if (!controller) return { kind: 'current' };
-
-  const createMessageChannel =
-    options.createMessageChannel ?? (() => new MessageChannel());
   const channel = createMessageChannel();
-  const timeoutMs = options.timeoutMs ?? 1_000;
 
   return new Promise<ServiceWorkerSecurityVerification>((resolve) => {
     let settled = false;
@@ -104,4 +99,40 @@ export async function verifyControllingServiceWorker(
       finish({ kind: 'transition-required' });
     }
   });
+}
+
+export async function verifyControllingServiceWorker(
+  options: VerifyOptions = {},
+): Promise<ServiceWorkerSecurityVerification> {
+  const usesLiveController = options.controller === undefined;
+  const controller = usesLiveController
+    ? currentController()
+    : options.controller;
+  if (!controller) return { kind: 'current' };
+
+  const createMessageChannel =
+    options.createMessageChannel ?? (() => new MessageChannel());
+  const timeoutMs = options.timeoutMs ?? 1_000;
+  const firstResult = await probeController(
+    controller,
+    timeoutMs,
+    createMessageChannel,
+  );
+  if (firstResult.kind === 'current' || !usesLiveController) {
+    return firstResult;
+  }
+
+  // A secure worker can claim the page while an old controller probe is in
+  // flight. Re-read the live controller before publishing a blocked state so
+  // preflight cannot miss a completed controllerchange and remain blocked until
+  // a manual reload. Bound this to one replacement probe.
+  const replacementController = currentController();
+  if (!replacementController || replacementController === controller) {
+    return firstResult;
+  }
+  return probeController(
+    replacementController,
+    timeoutMs,
+    createMessageChannel,
+  );
 }

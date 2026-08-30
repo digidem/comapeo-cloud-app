@@ -81,6 +81,53 @@ describe('service worker security revision probe', () => {
     ).resolves.toEqual({ kind: 'transition-required' });
   });
 
+  it('re-probes a replacement controller that takes over during a failed revision probe', async () => {
+    const firstChannel = channelFactory();
+    const secondChannel = channelFactory();
+    let activeController: { postMessage: ReturnType<typeof vi.fn> };
+
+    const currentController = {
+      postMessage: vi.fn(() => {
+        queueMicrotask(() => {
+          secondChannel.emit({
+            type: SERVICE_WORKER_SECURITY_PROBE,
+            revision: SERVICE_WORKER_SECURITY_REVISION,
+          });
+        });
+      }),
+    };
+    const oldController = {
+      postMessage: vi.fn(() => {
+        activeController = currentController;
+        queueMicrotask(() => {
+          firstChannel.emit({
+            type: SERVICE_WORKER_SECURITY_PROBE,
+            revision: 'old-revision',
+          });
+        });
+      }),
+    };
+    activeController = oldController;
+
+    vi.stubGlobal('navigator', {
+      serviceWorker: {
+        get controller() {
+          return activeController;
+        },
+      },
+    });
+    const channels = [firstChannel, secondChannel];
+
+    await expect(
+      verifyControllingServiceWorker({
+        createMessageChannel: () =>
+          channels.shift() as unknown as MessageChannel,
+      }),
+    ).resolves.toEqual({ kind: 'current' });
+    expect(oldController.postMessage).toHaveBeenCalledTimes(1);
+    expect(currentController.postMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('fails closed when the controller does not respond before the 1s deadline', async () => {
     vi.useFakeTimers();
     const channel = channelFactory();
