@@ -169,3 +169,4 @@ A final merged report should additionally include the merge commit SHA and confi
 - `references/claude-code-review.md` — subscription-safe Claude Code background review architecture, verdict contract, and foreground fallback.
 - `references/kimi-k3-review.md` — Kimi K3 via OpenCode Go / Oh My Pi fallback policy, read-only invocation patterns, and timeout/verdict rules.
 - `references/claude-qwen-review.md` — Qwen 3.8 via `claude-qwen` last-resort reviewer, live usage/quota preflight, exact-revision contract, and 429 cooldown rules.
+- `references/pr287-session-lessons.md` — concrete lessons from a long-running exact-SHA PR cycle: reviewer adjudication, browser/CI evidence, production-path QA, determinism, resource bounds, archive parsing, and documentation placement.
