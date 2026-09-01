@@ -69,8 +69,9 @@ describe('pullProjectsDetailed project detail fetches', () => {
     expect(result.warnings).toEqual([DETAIL_UNSUPPORTED_WARNING]);
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledWith(DETAIL_UNSUPPORTED_WARNING);
-    // Short-circuit: far fewer detail requests than listed projects.
-    expect(requests.value).toBeLessThanOrEqual(3);
+    // Short-circuit: with concurrency 2 the first two in-flight detail
+    // requests are all that can be issued before the flag flips.
+    expect(requests.value).toBeLessThanOrEqual(2);
   });
 
   it('degrades to the same basic-info row shape as the rejected path when details 404', async () => {
@@ -89,12 +90,12 @@ describe('pullProjectsDetailed project detail fetches', () => {
       dirtyLocal: false,
       deleted: false,
     });
+    // Bare 404 with no body — classify404's default branch labels this
+    // 'unsupported-endpoint', which is what licenses the short-circuit.
     server.use(
-      http.get(`${config.baseUrl}/projects/p1`, () =>
-        HttpResponse.json(
-          { message: 'project not found', statusCode: 404 },
-          { status: 404 },
-        ),
+      http.get(
+        `${config.baseUrl}/projects/p1`,
+        () => new HttpResponse(null, { status: 404 }),
       ),
     );
 
@@ -134,6 +135,101 @@ describe('pullProjectsDetailed project detail fetches', () => {
       'p1',
       'p2',
     ]);
+  });
+
+  it('keeps the per-project warning when a listed project 404s as PROJECT_NOT_FOUND', async () => {
+    const projectIds = ['p1', 'p2', 'p3', 'p4'];
+    mockProjectList(projectIds);
+    const successfulDetails = { value: 0 };
+    server.use(
+      http.get(`${config.baseUrl}/projects/p1`, () =>
+        HttpResponse.json(
+          { message: 'project not found', statusCode: 404 },
+          { status: 404 },
+        ),
+      ),
+      http.get(`${config.baseUrl}/projects/:projectId`, ({ params }) => {
+        successfulDetails.value += 1;
+        const projectId = String(params.projectId);
+        return HttpResponse.json({
+          data: {
+            projectId,
+            name: `Project ${projectId}`,
+            description: `Detail for ${projectId}`,
+          },
+        });
+      }),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await pullProjectsDetailed('server-1', config);
+
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain(
+      'Failed to fetch details for project p1',
+    );
+    expect(result.warnings).not.toContain(DETAIL_UNSUPPORTED_WARNING);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    // A missing project is not an unsupported endpoint, so the remaining
+    // detail fetches must not be short-circuited.
+    expect(successfulDetails.value).toBe(3);
+    expect(result.rows).toHaveLength(projectIds.length);
+    for (const projectId of ['p2', 'p3', 'p4']) {
+      expect(await getDb().projects.get(localIdFor(projectId))).toMatchObject({
+        remoteId: projectId,
+        description: `Detail for ${projectId}`,
+      });
+    }
+    expect(
+      (await getDb().projects.get(localIdFor('p1')))?.description,
+    ).toBeUndefined();
+  });
+
+  it('short-circuits the unsupported 404 while keeping the per-project warning for a sibling failure', async () => {
+    const projectIds = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'];
+    mockProjectList(projectIds);
+    const requests = { value: 0 };
+    server.use(
+      http.get(`${config.baseUrl}/projects/p1`, async () => {
+        requests.value += 1;
+        // Settle after p2 so p2's unsupported 404 flips the flag before any
+        // freed worker picks up p3 — otherwise the next fetch is an in-flight
+        // race, not the short-circuit.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return HttpResponse.json(
+          { error: { code: 'INTERNAL', message: 'boom' } },
+          { status: 500 },
+        );
+      }),
+      http.get(`${config.baseUrl}/projects/p2`, () => {
+        requests.value += 1;
+        return HttpResponse.json(
+          { message: 'Route GET:/projects/:projectId not found' },
+          { status: 404 },
+        );
+      }),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await pullProjectsDetailed('server-1', config, {
+      concurrency: 2,
+    });
+
+    expect(result.warnings).toEqual([
+      expect.stringContaining('Failed to fetch details for project p1'),
+      DETAIL_UNSUPPORTED_WARNING,
+    ]);
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    // Only p1 (500) and p2 (route-shaped 404) are issued; p3+ short-circuit.
+    expect(requests.value).toBe(2);
+    expect(result.rows).toHaveLength(projectIds.length);
+    for (const projectId of ['p1', 'p2']) {
+      expect(await getDb().projects.get(localIdFor(projectId))).toMatchObject({
+        remoteId: projectId,
+        deleted: false,
+        dirtyLocal: false,
+      });
+    }
   });
 
   it('rejects the pull when a detail fetch is aborted instead of storing degraded rows', async () => {

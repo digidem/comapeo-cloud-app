@@ -385,7 +385,14 @@ export async function pullProjectsDetailed(
         // Abort must keep propagating so the whole pull fails instead of
         // persisting a half-synced batch as degraded rows.
         if (isAbortError(reason) || config.signal?.aborted) throw reason;
-        if (reason instanceof ApiError && reason.status === 404) {
+        // Only a route-shaped 404 means the server lacks the endpoint. A
+        // missing-project 404 (deleted mid-sync) keeps the per-project warning
+        // and degraded fallback — mirroring api-client's unsupported-endpoint
+        // checks.
+        if (
+          reason instanceof ApiError &&
+          reason.kind === 'unsupported-endpoint'
+        ) {
           detailEndpointUnsupported = true;
           return { status: 'unsupported' } as const;
         }
