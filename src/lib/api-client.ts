@@ -1,6 +1,8 @@
 import * as v from 'valibot';
 
 import {
+  ARCHIVE_CREDENTIAL_REVISION,
+  ARCHIVE_CREDENTIAL_REVISION_HEADER,
   ARCHIVE_TARGET_HEADER,
   normalizeArchiveBaseUrl,
 } from '@/lib/archive-proxy';
@@ -16,6 +18,7 @@ import {
   serverInfoResponseSchema,
   tracksResponseSchema,
 } from '@/lib/schemas';
+import { requireSecurityStartupReady } from '@/lib/security-startup-gate';
 import {
   type AuthIdentity,
   selectActiveBaseUrl,
@@ -70,6 +73,7 @@ const ENDPOINT_CONTRACTS = {
 export interface RequestConfig {
   baseUrl: string;
   token: string;
+  serverId?: string | null;
   signal?: AbortSignal;
 }
 
@@ -110,6 +114,17 @@ export class NetworkError extends Error {
   }
 }
 
+export class CredentialsRequiredError extends Error {
+  readonly code = 'credentials-required';
+  readonly serverId: string | null;
+
+  constructor(serverId: string | null) {
+    super('Archive credentials required');
+    this.name = 'CredentialsRequiredError';
+    this.serverId = serverId;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Request resolution — determines baseUrl and extra headers per request
 // ---------------------------------------------------------------------------
@@ -122,6 +137,11 @@ export function resolveApiRequest(
   config?: RequestConfig,
   env?: ApiRuntimeEnv,
 ): { baseUrl: string; extraHeaders: Record<string, string> } {
+  const state = useAuthStore.getState();
+  if (config?.baseUrl || selectActiveBaseUrl(state)) {
+    requireSecurityStartupReady();
+  }
+
   const isVitest = env ? !!env.VITEST : !!import.meta.env.VITEST;
   if (config?.baseUrl) {
     if (!isVitest) {
@@ -148,12 +168,28 @@ export function resolveApiRequest(
 // ---------------------------------------------------------------------------
 
 function resolveRequestCredentials(config?: RequestConfig): RequestCredentials {
+  if (config) {
+    return {
+      activeServerId: config.serverId ?? null,
+      baseUrl: config.baseUrl,
+      token: config.token,
+    };
+  }
+
   const state = useAuthStore.getState();
   return {
     activeServerId: selectActiveServer(state)?.id ?? null,
-    baseUrl: config?.baseUrl ?? selectActiveBaseUrl(state),
-    token: config?.token ?? selectActiveToken(state),
+    baseUrl: selectActiveBaseUrl(state),
+    token: selectActiveToken(state),
   };
+}
+
+function requireRequestCredentials(config?: RequestConfig): RequestCredentials {
+  const credentials = resolveRequestCredentials(config);
+  if (credentials.baseUrl && !credentials.token?.trim()) {
+    throw new CredentialsRequiredError(credentials.activeServerId);
+  }
+  return credentials;
 }
 
 function getAuthHeaders(
@@ -161,7 +197,10 @@ function getAuthHeaders(
 ): Record<string, string> {
   const { token } = credentials;
   if (!token) return {};
-  return { Authorization: `Bearer ${token}` };
+  return {
+    Authorization: `Bearer ${token}`,
+    [ARCHIVE_CREDENTIAL_REVISION_HEADER]: ARCHIVE_CREDENTIAL_REVISION,
+  };
 }
 
 const NETWORK_ERROR_RE = /failed to fetch|networkerror|load failed/i;
@@ -175,21 +214,15 @@ function throwNetworkError(): never {
 }
 
 /**
- * Handle 401 responses: clear the active session only when the failing
- * request matches the active credentials exactly. Prevents a stale
- * configured token (e.g. from a different archive server) from clearing
- * a valid active session.
- *
- * Cleanup failures (e.g. IndexedDB errors) are logged and swallowed so the
- * caller still surfaces the original ApiError(401) rather than a storage error.
+ * Lock only the runtime credential that produced this 401. Explicit requests
+ * carry their own server id; candidate validation uses null and therefore
+ * cannot disturb an already-unlocked archive.
  */
-async function handle401(
-  requestCredentials: RequestCredentials,
-): Promise<void> {
+function handle401(requestCredentials: RequestCredentials): void {
   try {
-    await useAuthStore.getState().clearAuth(requestCredentials);
+    useAuthStore.getState().lockServerCredential(requestCredentials);
   } catch (error) {
-    console.error('Failed to clear credentials after 401 response:', error);
+    console.error('Failed to lock credentials after 401 response:', error);
   }
 }
 
@@ -342,7 +375,7 @@ export const apiClient = {
 
   async getProjects(config?: RequestConfig) {
     try {
-      const credentials = resolveRequestCredentials(config);
+      const credentials = requireRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(`${request.baseUrl}/projects`, {
         headers: { ...getAuthHeaders(credentials), ...request.extraHeaders },
@@ -363,7 +396,7 @@ export const apiClient = {
 
   async getProject(projectId: string, config?: RequestConfig) {
     try {
-      const credentials = resolveRequestCredentials(config);
+      const credentials = requireRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}`,
@@ -382,7 +415,7 @@ export const apiClient = {
 
   async getObservations(projectId: string, config?: RequestConfig) {
     try {
-      const credentials = resolveRequestCredentials(config);
+      const credentials = requireRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/observations`,
@@ -406,7 +439,7 @@ export const apiClient = {
 
   async getTracks(projectId: string, config?: RequestConfig) {
     try {
-      const credentials = resolveRequestCredentials(config);
+      const credentials = requireRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/track`,
@@ -436,7 +469,7 @@ export const apiClient = {
 
   async getAlerts(projectId: string, config?: RequestConfig) {
     try {
-      const credentials = resolveRequestCredentials(config);
+      const credentials = requireRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
@@ -464,7 +497,7 @@ export const apiClient = {
     config?: RequestConfig,
   ): Promise<{ success: true }> {
     try {
-      const credentials = resolveRequestCredentials(config);
+      const credentials = requireRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}${ALERTS_PATH}`,
@@ -512,7 +545,7 @@ export const apiClient = {
 
   async getPresets(projectId: string, config?: RequestConfig) {
     try {
-      const credentials = resolveRequestCredentials(config);
+      const credentials = requireRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/preset`,
@@ -542,7 +575,7 @@ export const apiClient = {
 
   async getFields(projectId: string, config?: RequestConfig) {
     try {
-      const credentials = resolveRequestCredentials(config);
+      const credentials = requireRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/field`,
@@ -576,7 +609,7 @@ export const apiClient = {
     config?: RequestConfig,
   ): Promise<Blob> {
     try {
-      const credentials = resolveRequestCredentials(config);
+      const credentials = requireRequestCredentials(config);
       const request = resolveApiRequest(config);
       const response = await fetch(
         `${request.baseUrl}/projects/${encodeURIComponent(projectId)}/icon/${encodeURIComponent(docId)}`,
@@ -620,11 +653,13 @@ export const apiClient = {
 
 export class InviteApiError extends Error {
   readonly code: string;
+  readonly status: number | undefined;
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, status?: number) {
     super(message);
     this.name = 'InviteApiError';
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -636,6 +671,7 @@ async function parseInviteError(response: Response): Promise<InviteApiError> {
       return new InviteApiError(
         parsed.output.error.code,
         parsed.output.error.message,
+        response.status,
       );
     }
   } catch {
@@ -644,6 +680,7 @@ async function parseInviteError(response: Response): Promise<InviteApiError> {
   return new InviteApiError(
     'INVITE_REQUEST_FAILED',
     `Invite request failed with status ${response.status}`,
+    response.status,
   );
 }
 
@@ -652,6 +689,7 @@ export async function createEncryptedInvite(
   token: string,
   ttlHours?: number,
 ): Promise<{ code: string }> {
+  requireSecurityStartupReady();
   const body: Record<string, unknown> = { url: baseUrl, token };
   if (ttlHours !== undefined) body.ttlHours = ttlHours;
 
@@ -691,6 +729,7 @@ export async function createEncryptedInvite(
 export async function redeemEncryptedInvite(
   code: string,
 ): Promise<{ baseUrl: string; token: string }> {
+  requireSecurityStartupReady();
   let response: Response;
   try {
     response = await fetch('/api/invites/decrypt', {

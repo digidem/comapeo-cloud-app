@@ -134,4 +134,31 @@ describe('useArchiveStatus', () => {
       spy.mockRestore();
     }
   });
+
+  it('does not read repository fallback after successful auth-store hydration', async () => {
+    setState({ servers: [], hasHydratedServers: true });
+    const spy = vi.spyOn(localRepos, 'getRemoteServers');
+
+    renderHook(() => useArchiveStatus());
+    await Promise.resolve();
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('does not re-read repository metadata when only stale-time changes', async () => {
+    vi.useFakeTimers();
+    setState({ servers: [], hasHydratedServers: false });
+    const spy = vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([]);
+
+    renderHook(() => useArchiveStatus());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    spy.mockRestore();
+    vi.useRealTimers();
+  });
 });

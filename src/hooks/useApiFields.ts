@@ -43,13 +43,19 @@ export function deduplicateFieldVersions<T extends PresetVersionLike>(
  */
 export function useApiFields(
   projectRemoteId: string | null,
-  serverConfig?: { baseUrl: string; token: string } | null,
+  serverConfig?: {
+    serverId?: string | null;
+    baseUrl: string;
+    token: string;
+  } | null,
 ) {
   const activeBaseUrl = useAuthStore(selectActiveBaseUrl);
   const activeToken = useAuthStore(selectActiveToken);
+  const activeServerId = useAuthStore((state) => state.activeServerId);
 
   const effectiveBaseUrl = serverConfig?.baseUrl ?? activeBaseUrl;
   const effectiveToken = serverConfig?.token ?? activeToken;
+  const effectiveServerId = serverConfig?.serverId ?? activeServerId;
 
   const enabled =
     projectRemoteId !== null &&
@@ -58,9 +64,16 @@ export function useApiFields(
     effectiveToken !== '';
 
   const queryResult = useQuery({
-    queryKey: ['api-fields', projectRemoteId, effectiveBaseUrl, effectiveToken],
+    queryKey: [
+      'api-fields',
+      projectRemoteId,
+      effectiveServerId,
+      effectiveBaseUrl,
+      effectiveToken,
+    ],
     queryFn: () =>
       apiClient.getFields(projectRemoteId!, {
+        serverId: effectiveServerId,
         baseUrl: effectiveBaseUrl!,
         token: effectiveToken!,
       } satisfies RequestConfig),

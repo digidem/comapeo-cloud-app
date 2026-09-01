@@ -1,4 +1,7 @@
 export const ARCHIVE_TARGET_HEADER = 'x-target-url';
+export const ARCHIVE_CREDENTIAL_REVISION_HEADER =
+  'x-comapeo-credential-revision';
+export const ARCHIVE_CREDENTIAL_REVISION = '1';
 
 type Result =
   | { ok: true; value: string }

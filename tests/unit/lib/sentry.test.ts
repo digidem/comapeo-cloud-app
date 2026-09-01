@@ -242,6 +242,126 @@ describe('sentry module', () => {
       });
     });
 
+    it('disables default PII and installs privacy hooks for errors, breadcrumbs, transactions, and spans', async () => {
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+
+      const options = (sentry.init as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1,
+      )?.[0] as Record<string, unknown> | undefined;
+      expect(options).toEqual(
+        expect.objectContaining({
+          sendDefaultPii: false,
+          beforeSend: expect.any(Function),
+          beforeBreadcrumb: expect.any(Function),
+          beforeSendTransaction: expect.any(Function),
+          beforeSendSpan: expect.any(Function),
+        }),
+      );
+    });
+
+    it('redacts credential, invite, URL query, geospatial, and project canaries from every Sentry hook', async () => {
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+      const options = (sentry.init as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1,
+      )?.[0] as Record<string, (...args: unknown[]) => unknown>;
+
+      const canaries = {
+        token: String(238001),
+        invite: 'invite-canary-238',
+        project: 'project-canary-238',
+        latitude: -1.238001,
+        longitude: -48.238002,
+      };
+      const payload = {
+        request: {
+          url:
+            'https://app.example.com/invite?code=' +
+            canaries.invite +
+            '#token=' +
+            canaries.token,
+          headers: { authorization: 'Bearer ' + canaries.token },
+        },
+        extra: {
+          token: canaries.token,
+          inviteCode: canaries.invite,
+          projectId: canaries.project,
+          geometry: {
+            type: 'Point',
+            coordinates: [canaries.longitude, canaries.latitude],
+          },
+        },
+        contexts: {
+          map: { latitude: canaries.latitude, longitude: canaries.longitude },
+        },
+      };
+
+      const hookInputs: Array<[string, unknown]> = [
+        ['beforeSend', { ...payload, message: 'failure ' + canaries.token }],
+        [
+          'beforeBreadcrumb',
+          {
+            category: 'navigation',
+            message: 'visit https://archive.test/path?token=' + canaries.token,
+            data: payload,
+          },
+        ],
+        [
+          'beforeSendTransaction',
+          { ...payload, transaction: canaries.project },
+        ],
+        [
+          'beforeSendSpan',
+          {
+            description: 'GET https://archive.test/api?code=' + canaries.invite,
+            data: payload,
+            origin: canaries.project,
+          },
+        ],
+      ];
+
+      for (const [hookName, input] of hookInputs) {
+        const result = options[hookName]!(input, {});
+        const serialized = JSON.stringify(result);
+        expect(serialized, hookName).not.toContain(canaries.token);
+        expect(serialized, hookName).not.toContain(canaries.invite);
+        expect(serialized, hookName).not.toContain(canaries.project);
+        expect(serialized, hookName).not.toContain(String(canaries.latitude));
+        expect(serialized, hookName).not.toContain(String(canaries.longitude));
+        expect(serialized, hookName).not.toContain('?code=');
+        expect(serialized, hookName).not.toContain('?token=');
+      }
+    });
+
+    it('sanitizes cycles and oversized telemetry deterministically without throwing', async () => {
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+      const options = (sentry.init as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1,
+      )?.[0] as Record<string, (...args: unknown[]) => unknown>;
+
+      const cyclic: Record<string, unknown> = {
+        token: String(238099),
+        huge: 'x'.repeat(20_000),
+        nested: { a: { b: { c: { d: { e: { f: 'too-deep-canary-238' } } } } } },
+      };
+      cyclic.self = cyclic;
+
+      const first = options.beforeSend!({ extra: cyclic }, {});
+      const second = options.beforeSend!({ extra: cyclic }, {});
+      const firstJson = JSON.stringify(first);
+      const secondJson = JSON.stringify(second);
+
+      expect(firstJson).toBe(secondJson);
+      expect(firstJson).not.toContain(String(238099));
+      expect(firstJson.length).toBeLessThan(10_000);
+      expect(firstJson).toContain('[Circular]');
+    });
+
     it('exports Sentry.ErrorBoundary when enabled', async () => {
       const { ErrorBoundary } = await import('@/lib/sentry');
       expect(ErrorBoundary).toBeInstanceOf(Function);

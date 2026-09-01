@@ -15,6 +15,8 @@ import {
   validateOrigin,
 } from './scripts/lib/metadata';
 import {
+  ARCHIVE_CREDENTIAL_REVISION,
+  ARCHIVE_CREDENTIAL_REVISION_HEADER,
   ARCHIVE_TARGET_HEADER,
   normalizeArchiveBaseUrl,
   shouldForwardArchiveHeader,
@@ -358,6 +360,24 @@ function archiveApiProxy(): Plugin {
           ? targetHeader[0]
           : targetHeader;
 
+        const credentialRevisionHeader =
+          req.headers[ARCHIVE_CREDENTIAL_REVISION_HEADER];
+        const credentialRevision = Array.isArray(credentialRevisionHeader)
+          ? credentialRevisionHeader[0]
+          : credentialRevisionHeader;
+        if (
+          req.headers.authorization &&
+          credentialRevision !== ARCHIVE_CREDENTIAL_REVISION
+        ) {
+          writeProxyError(
+            res,
+            428,
+            'ARCHIVE_CLIENT_SECURITY_UPDATE_REQUIRED',
+            'Reload CoMapeo Cloud before connecting to an archive server',
+          );
+          return;
+        }
+
         // Match the deployed Pages Function contract: generic /api/* requests
         // are archive proxy requests and require an explicit target. Static
         // routes such as /api/tiles and /api/invites/* were handled above.
@@ -424,30 +444,15 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
+        injectRegister: null,
         registerType: 'autoUpdate',
         includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
         manifest: false,
-        workbox: {
+        injectManifest: {
           globPatterns: ['**/*.{js,css,svg,png,html,webmanifest,woff2}'],
-          runtimeCaching: [
-            {
-              urlPattern: ({ url, sameOrigin }) =>
-                sameOrigin && url.pathname.startsWith('/api/'),
-              handler: 'NetworkOnly',
-            },
-            {
-              urlPattern: ({ url, sameOrigin }) =>
-                !sameOrigin && url.protocol === 'https:',
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'remote-api-cache',
-                expiration: {
-                  maxAgeSeconds: 60 * 60 * 24,
-                },
-                networkTimeoutSeconds: 10,
-              },
-            },
-          ],
         },
       }),
     ],

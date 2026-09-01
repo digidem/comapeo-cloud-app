@@ -48,7 +48,7 @@ interface RemoteArchiveServer {
   id: string;
   label: string;
   baseUrl: string;
-  token: string;
+  token: string | null;
   lastSyncedAt?: string;
   status: 'idle' | 'syncing' | 'connected' | 'offline' | 'error';
   errorMessage?: string;

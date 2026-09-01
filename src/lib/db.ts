@@ -164,7 +164,6 @@ export interface RemoteServer {
   id: string;
   baseUrl: string;
   label?: string;
-  token?: string;
   status: string;
   lastSyncedAt: string;
   lastSuccessfulSyncAt?: string;
@@ -528,6 +527,14 @@ class AppDatabase extends Dexie {
     // here only as a passing-through upgrade so that the version number
     // sequence (8 → 9 → 10) is monotonic for users on any prior build.
     this.version(9).upgrade(async (tx) => {
+      // Some pre-v10 databases never had the tracks table. Do not fail the
+      // whole historical upgrade path in that case; v10 creates the table and
+      // defensively re-applies this same coercion below.
+      const nativeTransaction = (
+        tx as unknown as { idbtrans: IDBTransaction | null }
+      ).idbtrans;
+      if (!nativeTransaction?.objectStoreNames.contains('tracks')) return;
+
       const table = tx.table('tracks');
       await table.toCollection().modify((track: Record<string, unknown>) => {
         if (typeof track.presetRef === 'string') {
@@ -665,6 +672,18 @@ class AppDatabase extends Dexie {
       caseActivity: '&localId, caseLocalId, projectLocalId, event, createdAt',
       caseReportState:
         '&localId, caseLocalId, projectLocalId, agency, [caseLocalId+agency], [projectLocalId+agency]',
+    });
+
+    // v16: archive credentials are runtime-only. Remove any historical token
+    // residue from persisted server metadata without touching configuration,
+    // lifecycle state, Case data, map packages, or any local/offline domain data.
+    this.version(16).upgrade(async (tx) => {
+      await tx
+        .table('remoteServers')
+        .toCollection()
+        .modify((server: Record<string, unknown>) => {
+          if ('token' in server) delete server.token;
+        });
     });
   }
 }

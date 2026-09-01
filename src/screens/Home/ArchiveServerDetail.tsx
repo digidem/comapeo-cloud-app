@@ -34,7 +34,7 @@ const messages = defineMessages({
   reconnectDescription: {
     id: 'home.archive.reconnectDescription',
     defaultMessage:
-      'Server credentials are missing. Re-enter your token to restore sync.',
+      'Server credentials are missing. Re-enter your token or use an invite to restore sync.',
   },
   sync: {
     id: 'home.archive.sync',
@@ -360,6 +360,9 @@ function ArchiveServerDetail({
   const queryClient = useQueryClient();
   const { data: projects = [] } = useProjects();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editDialogMode, setEditDialogMode] = useState<'edit' | 'reconnect'>(
+    'edit',
+  );
   const [isConfirmRemoveOpen, setIsConfirmRemoveOpen] = useState(false);
   const [isOverflowOpen, setIsOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
@@ -387,7 +390,7 @@ function ArchiveServerDetail({
     id: server.id,
     label: server.label,
     baseUrl: server.baseUrl,
-    token: '',
+    token: null,
     status: 'idle',
   };
 
@@ -476,6 +479,12 @@ function ArchiveServerDetail({
 
   function handleEdit() {
     setIsOverflowOpen(false);
+    setEditDialogMode('edit');
+    setIsEditDialogOpen(true);
+  }
+
+  function handleReconnect() {
+    setEditDialogMode('reconnect');
     setIsEditDialogOpen(true);
   }
 
@@ -503,11 +512,7 @@ function ArchiveServerDetail({
   function renderSyncButton() {
     if (!server.hasCredentials) {
       return (
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => setIsEditDialogOpen(true)}
-        >
+        <Button variant="primary" size="sm" onClick={handleReconnect}>
           {intl.formatMessage(messages.reconnect)}
         </Button>
       );
@@ -753,6 +758,7 @@ function ArchiveServerDetail({
         isOpen={isEditDialogOpen}
         onClose={() => setIsEditDialogOpen(false)}
         server={fullServer}
+        mode={editDialogMode}
       />
 
       <Modal

@@ -642,6 +642,7 @@ describe('CategoriesEditorScreen', () => {
     render(<CategoriesEditorScreen />);
     expect(vi.mocked(useApiPresets)).toHaveBeenCalledWith('base32proj1', {
       baseUrl: 'https://test-server.com',
+      serverId: 'server-1',
       token: 'test-token',
     });
   });
@@ -657,6 +658,7 @@ describe('CategoriesEditorScreen', () => {
     render(<CategoriesEditorScreen />);
     expect(vi.mocked(useApiFields)).toHaveBeenCalledWith('base32proj1', {
       baseUrl: 'https://test-server.com',
+      serverId: 'server-1',
       token: 'test-token',
     });
   });

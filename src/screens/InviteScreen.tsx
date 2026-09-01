@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { IntlShape, defineMessages, useIntl } from 'react-intl';
 
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -7,13 +7,22 @@ import {
   ConnectionProgress,
   type ConnectionStep,
 } from '@/components/shared/ConnectionProgress';
+import {
+  InsecureArchiveTransportDialog,
+  useArchiveTransportApproval,
+} from '@/components/shared/InsecureArchiveTransportDialog';
 import { Button } from '@/components/ui/button';
 import {
   InviteApiError,
   apiClient,
   redeemEncryptedInvite,
 } from '@/lib/api-client';
+import { withApprovedArchiveTransport } from '@/lib/archive-transport-gate';
 import { syncRemoteArchive } from '@/lib/data-layer';
+import {
+  clearInviteBootstrapCandidate,
+  consumeInviteBootstrapCandidate,
+} from '@/lib/invite-bootstrap-runtime';
 import {
   type ParseInviteResult,
   parseInviteUrl,
@@ -125,18 +134,20 @@ async function rollbackPersistedInviteServer(
   serverId: string,
   previousServers: RemoteArchiveServer[],
 ): Promise<void> {
-  const { servers, removeServer, updateServer } = useAuthStore.getState();
+  const { servers, removeServer, restoreServerToken, updateServer } =
+    useAuthStore.getState();
   const persisted = servers.find((server) => server.id === serverId);
   if (!persisted) return;
 
   const previous = previousServers.find((server) => server.id === serverId);
   if (!previous) {
+    restoreServerToken(serverId, null);
     await removeServer(serverId);
     return;
   }
 
+  restoreServerToken(serverId, previous.token);
   await updateServer(serverId, {
-    token: previous.token,
     status: previous.status,
     onboardingStatus: previous.onboardingStatus,
     errorMessage: previous.errorMessage,
@@ -145,17 +156,43 @@ async function rollbackPersistedInviteServer(
   });
 }
 
-function parseInviteFromLocation(): ParseInviteResult | null {
-  if (typeof window === 'undefined') return null;
-  const origin = window.location.origin;
-  const search = window.location.search;
-  const candidate = `${origin}/invite${search}`;
-  return parseInviteUrl(candidate);
+interface InitialInviteState {
+  invite: ParseInviteResult | null;
+  expiresAt: number | null;
+  expired: boolean;
 }
 
-function initialStatus(invite: ParseInviteResult | null): FlowStatus {
-  if (!invite) return 'error';
-  return invite.ok ? 'loading' : 'invalid';
+function parseInviteFromLocationForTests(): ParseInviteResult | null {
+  if (!import.meta.env.VITEST || typeof window === 'undefined') return null;
+  const origin = window.location.origin;
+  const search = window.location.search;
+  if (!search) return null;
+  return parseInviteUrl(origin + '/invite' + search);
+}
+
+function readInitialInviteState(): InitialInviteState {
+  const bootstrap = consumeInviteBootstrapCandidate();
+  if (bootstrap.kind === 'candidate') {
+    return {
+      invite: parseInviteUrl(bootstrap.value),
+      expiresAt: bootstrap.expiresAt,
+      expired: false,
+    };
+  }
+  if (bootstrap.kind === 'expired') {
+    return { invite: null, expiresAt: null, expired: true };
+  }
+  return {
+    invite: parseInviteFromLocationForTests(),
+    expiresAt: null,
+    expired: false,
+  };
+}
+
+function initialStatus(state: InitialInviteState): FlowStatus {
+  if (state.expired) return 'expired';
+  if (!state.invite) return 'error';
+  return state.invite.ok ? 'loading' : 'invalid';
 }
 
 // ---------------------------------------------------------------------------
@@ -182,13 +219,35 @@ function getErrorDisplayMessage(
 export function InviteScreen() {
   const intl = useIntl();
   const navigate = useNavigate();
-  const invite = useMemo(() => parseInviteFromLocation(), []);
+  const [initialInviteState] = useState<InitialInviteState>(
+    readInitialInviteState,
+  );
+  const inviteRef = useRef<ParseInviteResult | null>(initialInviteState.invite);
+  const inviteExpiresAtRef = useRef<number | null>(
+    initialInviteState.expiresAt,
+  );
+  const resolvedCredentialRef = useRef<{
+    baseUrl: string;
+    token: string;
+  } | null>(null);
+  const [transportBaseUrl, setTransportBaseUrl] = useState('');
+  const transportApproval = useArchiveTransportApproval(transportBaseUrl);
+  const confirmInsecureTransport = transportApproval.confirmInsecure;
+  const cancelTransportApproval = transportApproval.cancel;
 
-  const [status, setStatus] = useState<FlowStatus>(() => initialStatus(invite));
+  const [status, setStatus] = useState<FlowStatus>(() =>
+    initialStatus(initialInviteState),
+  );
   const [activeStep, setActiveStep] = useState<FlowStep>('verify');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const cancelledRef = useRef(false);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const inviteExpiryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const inviteSyncAbortRef = useRef<AbortController | null>(null);
+  const persistedInviteRef = useRef<{
+    serverId: string;
+    previousServers: RemoteArchiveServer[];
+  } | null>(null);
   const intlRef = useRef(intl);
   const effectGenerationRef = useRef(0);
 
@@ -197,6 +256,21 @@ export function InviteScreen() {
   useEffect(() => {
     intlRef.current = intl;
   });
+
+  const rollbackActivePersistedInvite = useCallback(async (finalize = true) => {
+    const rollback = persistedInviteRef.current;
+    if (!rollback) return;
+    try {
+      await rollbackPersistedInviteServer(
+        rollback.serverId,
+        rollback.previousServers,
+      );
+    } finally {
+      if (finalize && persistedInviteRef.current === rollback) {
+        persistedInviteRef.current = null;
+      }
+    }
+  }, []);
 
   // Build step objects for ConnectionProgress
   const stepLabels: Record<FlowStep, string> = {
@@ -238,14 +312,23 @@ export function InviteScreen() {
 
   // Run the connection flow
   const runFlow = useCallback(() => {
-    if (!invite || !invite.ok) return;
+    const expiresAt = inviteExpiresAtRef.current;
+    if (expiresAt !== null && Date.now() >= expiresAt) {
+      inviteRef.current = null;
+      inviteExpiresAtRef.current = null;
+      resolvedCredentialRef.current = null;
+      cancelledRef.current = true;
+      if (inviteExpiryTimerRef.current !== undefined) {
+        clearTimeout(inviteExpiryTimerRef.current);
+        inviteExpiryTimerRef.current = undefined;
+      }
+      setStatus('expired');
+      return;
+    }
 
-    // If the component unmounted between queueMicrotask scheduling and
-    // execution, bail out immediately — don't reset the cancellation flag.
+    const invite = inviteRef.current;
+    if (!resolvedCredentialRef.current && (!invite || !invite.ok)) return;
     if (cancelledRef.current) return;
-
-    // Capture the narrowed type so the closure can access it without `!`
-    const validInvite = invite;
 
     cancelledRef.current = false;
     setStatus('loading');
@@ -253,145 +336,200 @@ export function InviteScreen() {
     setErrorMessage('');
 
     async function run(): Promise<void> {
-      let persistedInvite:
-        | { serverId: string; previousServers: RemoteArchiveServer[] }
-        | undefined;
-
-      const rollbackPersistedInvite = async () => {
-        if (!persistedInvite) return;
-        const rollback = persistedInvite;
-        persistedInvite = undefined;
-        await rollbackPersistedInviteServer(
-          rollback.serverId,
-          rollback.previousServers,
-        );
-      };
+      const rollbackPersistedInvite = rollbackActivePersistedInvite;
 
       try {
-        // Step 1: Verify / redeem invite
         setActiveStep('verify');
-        let baseUrl: string;
-        let token: string;
+        let credential = resolvedCredentialRef.current;
 
-        if (validInvite.kind === 'encrypted') {
-          const redeemed = await redeemEncryptedInvite(validInvite.code);
-          if (cancelledRef.current) return;
-          baseUrl = redeemed.baseUrl;
-          token = redeemed.token;
-        } else {
-          // TODO(issue-#8): remove this legacy branch in the next release.
-          warnLegacyInviteUrlOnce();
-          baseUrl = validInvite.baseUrl;
-          token = validInvite.token;
-        }
-        if (cancelledRef.current) return;
+        if (!credential) {
+          const currentInvite = inviteRef.current;
+          if (!currentInvite || !currentInvite.ok) return;
 
-        // Step 2: Validate server + credentials BEFORE persisting anything.
-        // An invalid or malicious invite must never overwrite an existing
-        // working connection (issue #182): addServer() below persists the
-        // token, so it only runs once the server has proven reachable and the
-        // token authorized.
-        setActiveStep('connect');
-        const config = { baseUrl, token };
-        try {
-          const healthy = await withValidationTimeout(
-            apiClient.healthCheck(config),
-          );
-          if (cancelledRef.current) return;
-          if (!healthy) {
-            setStatus('error');
-            setErrorMessage(
-              intlRef.current.formatMessage(messages.networkError),
-            );
-            return;
+          if (currentInvite.kind === 'encrypted') {
+            const redeemed = await redeemEncryptedInvite(currentInvite.code);
+            if (cancelledRef.current) return;
+            credential = {
+              baseUrl: redeemed.baseUrl,
+              token: redeemed.token,
+            };
+          } else {
+            warnLegacyInviteUrlOnce();
+            credential = {
+              baseUrl: currentInvite.baseUrl,
+              token: currentInvite.token,
+            };
           }
 
-          await withValidationTimeout(apiClient.getProjects(config));
-        } catch (error) {
-          if (cancelledRef.current) return;
-          const errorStatus =
-            error && typeof error === 'object' && 'status' in error
-              ? Number(error.status)
-              : undefined;
-          setStatus('error');
-          setErrorMessage(
-            intlRef.current.formatMessage(
-              errorStatus === 401 || errorStatus === 403
-                ? messages.invalidToken
-                : messages.networkError,
-            ),
-          );
-          return;
+          resolvedCredentialRef.current = credential;
+          inviteRef.current = null;
         }
-        if (cancelledRef.current) return;
 
-        // Step 3: Add server (validation passed)
-        const previousServers = useAuthStore
-          .getState()
-          .servers.map((server) => ({ ...server }));
-        const serverId = await useAuthStore.getState().addServer({
-          label: new URL(baseUrl).hostname,
-          baseUrl,
-          token,
-          allowDuplicate: true,
+        if (cancelledRef.current || !credential) return;
+        setTransportBaseUrl(credential.baseUrl);
+
+        const transportResult = await withApprovedArchiveTransport({
+          baseUrl: credential.baseUrl,
+          confirmInsecure: confirmInsecureTransport,
+          operation: async (normalizedUrl) => {
+            const token = credential.token;
+            setActiveStep('connect');
+            const validationAbortController = new AbortController();
+            inviteSyncAbortRef.current?.abort();
+            inviteSyncAbortRef.current = validationAbortController;
+            const config = {
+              baseUrl: normalizedUrl,
+              token,
+              serverId: null,
+              signal: validationAbortController.signal,
+            };
+
+            try {
+              const healthy = await withValidationTimeout(
+                apiClient.healthCheck(config),
+              );
+              if (cancelledRef.current) return false;
+              if (!healthy) {
+                validationAbortController.abort();
+                if (inviteSyncAbortRef.current === validationAbortController) {
+                  inviteSyncAbortRef.current = null;
+                }
+                setStatus('error');
+                setErrorMessage(
+                  intlRef.current.formatMessage(messages.networkError),
+                );
+                return false;
+              }
+              await withValidationTimeout(apiClient.getProjects(config));
+              if (inviteSyncAbortRef.current === validationAbortController) {
+                inviteSyncAbortRef.current = null;
+              }
+            } catch (error) {
+              validationAbortController.abort();
+              if (inviteSyncAbortRef.current === validationAbortController) {
+                inviteSyncAbortRef.current = null;
+              }
+              if (cancelledRef.current) return false;
+              const errorStatus =
+                error && typeof error === 'object' && 'status' in error
+                  ? Number(error.status)
+                  : undefined;
+              setStatus('error');
+              setErrorMessage(
+                intlRef.current.formatMessage(
+                  errorStatus === 401 || errorStatus === 403
+                    ? messages.invalidToken
+                    : messages.networkError,
+                ),
+              );
+              return false;
+            }
+
+            if (cancelledRef.current) return false;
+            const previousServers = useAuthStore
+              .getState()
+              .servers.map((server) => ({ ...server }));
+            const serverId = await useAuthStore.getState().addServer({
+              label: new URL(normalizedUrl).hostname,
+              baseUrl: normalizedUrl,
+              token,
+              allowDuplicate: true,
+            });
+            persistedInviteRef.current = { serverId, previousServers };
+            if (cancelledRef.current) {
+              await rollbackPersistedInvite();
+              return false;
+            }
+
+            setActiveStep('sync');
+            const syncAbortController = new AbortController();
+            inviteSyncAbortRef.current = syncAbortController;
+            let syncResult:
+              Awaited<ReturnType<typeof syncRemoteArchive>> | undefined;
+            try {
+              syncResult = await syncRemoteArchive(
+                serverId,
+                {
+                  baseUrl: normalizedUrl,
+                  token,
+                  signal: syncAbortController.signal,
+                },
+                { isCancelled: () => cancelledRef.current },
+              );
+            } finally {
+              if (inviteSyncAbortRef.current === syncAbortController) {
+                inviteSyncAbortRef.current = null;
+              }
+            }
+            if (cancelledRef.current) {
+              await rollbackPersistedInvite();
+              return false;
+            }
+            if (!syncResult || !syncResult.success) {
+              await rollbackPersistedInvite();
+              setStatus('error');
+              const syncErrorCode =
+                syncResult?.status === 'partial'
+                  ? 'partial'
+                  : syncResult?.errorCode;
+              let syncErrorMessage = messages.error;
+              if (syncErrorCode === 'authorization') {
+                syncErrorMessage = messages.invalidToken;
+              } else if (syncErrorCode === 'connection') {
+                syncErrorMessage = messages.networkError;
+              } else if (syncErrorCode === 'partial') {
+                syncErrorMessage = messages.partialSync;
+              }
+              setErrorMessage(intlRef.current.formatMessage(syncErrorMessage));
+              return false;
+            }
+
+            persistedInviteRef.current = null;
+            resolvedCredentialRef.current = null;
+            inviteExpiresAtRef.current = null;
+            if (inviteExpiryTimerRef.current !== undefined) {
+              clearTimeout(inviteExpiryTimerRef.current);
+              inviteExpiryTimerRef.current = undefined;
+            }
+            setActiveStep('prepare');
+            if (cancelledRef.current) return false;
+            setStatus('connected');
+            redirectTimerRef.current = setTimeout(() => {
+              if (!cancelledRef.current) navigate({ to: '/' });
+            }, 1500);
+            return true;
+          },
         });
-        persistedInvite = { serverId, previousServers };
-        if (cancelledRef.current) {
-          await rollbackPersistedInvite();
-          return;
-        }
 
-        // Step 4: Sync — pass the cancellation control so unmount aborts it
-        setActiveStep('sync');
-        const syncResult = await syncRemoteArchive(
-          serverId,
-          { baseUrl, token },
-          { isCancelled: () => cancelledRef.current },
-        );
-        if (cancelledRef.current) {
-          await rollbackPersistedInvite();
-          return;
-        }
-        if (!syncResult || !syncResult.success) {
-          await rollbackPersistedInvite();
-          setStatus('error');
-          const syncErrorCode =
-            syncResult?.status === 'partial'
-              ? 'partial'
-              : syncResult?.errorCode;
-          let syncErrorMessage = messages.error;
-          if (syncErrorCode === 'authorization') {
-            syncErrorMessage = messages.invalidToken;
-          } else if (syncErrorCode === 'connection') {
-            syncErrorMessage = messages.networkError;
-          } else if (syncErrorCode === 'partial') {
-            syncErrorMessage = messages.partialSync;
-          }
-          setErrorMessage(intlRef.current.formatMessage(syncErrorMessage));
-          return;
-        }
-
-        // The coordinator already invalidated every affected query root.
-        persistedInvite = undefined;
-        setActiveStep('prepare');
         if (cancelledRef.current) return;
-
-        setStatus('connected');
-        redirectTimerRef.current = setTimeout(() => {
-          if (!cancelledRef.current) navigate({ to: '/' });
-        }, 1500);
+        if (
+          transportResult.kind === 'cancelled' ||
+          transportResult.kind === 'stale-approval'
+        ) {
+          setStatus('error');
+          setErrorMessage(intlRef.current.formatMessage(messages.error));
+        } else if (transportResult.kind === 'invalid-url') {
+          setStatus('invalid');
+        } else if (transportResult.kind === 'startup-blocked') {
+          setStatus('error');
+          setErrorMessage(intlRef.current.formatMessage(messages.error));
+        }
       } catch (err) {
         await rollbackPersistedInvite();
         if (cancelledRef.current) return;
         if (err instanceof InviteApiError) {
           if (err.code === 'INVITE_EXPIRED') {
+            inviteRef.current = null;
+            inviteExpiresAtRef.current = null;
             setStatus('expired');
+          } else if (err.status !== undefined && err.status >= 500) {
+            setStatus('error');
+            setErrorMessage(intlRef.current.formatMessage(messages.error));
           } else {
             setStatus('invalid');
           }
           return;
         }
-        // Check for network errors (includes Safari-specific messages)
         const isNetworkError =
           err instanceof TypeError &&
           (err.message === 'Failed to fetch' ||
@@ -408,7 +546,38 @@ export function InviteScreen() {
     }
 
     void run();
-  }, [invite, navigate]);
+  }, [navigate, rollbackActivePersistedInvite, confirmInsecureTransport]);
+
+  useEffect(() => {
+    const expiresAt = inviteExpiresAtRef.current;
+    if (expiresAt === null || !inviteRef.current) return;
+
+    const expire = () => {
+      inviteRef.current = null;
+      inviteExpiresAtRef.current = null;
+      resolvedCredentialRef.current = null;
+      cancelledRef.current = true;
+      inviteSyncAbortRef.current?.abort();
+      inviteSyncAbortRef.current = null;
+      cancelTransportApproval();
+      void rollbackActivePersistedInvite(false);
+      inviteExpiryTimerRef.current = undefined;
+      setStatus('expired');
+    };
+    const remaining = expiresAt - Date.now();
+    if (remaining <= 0) {
+      queueMicrotask(expire);
+      return;
+    }
+
+    inviteExpiryTimerRef.current = setTimeout(expire, remaining);
+    return () => {
+      if (inviteExpiryTimerRef.current !== undefined) {
+        clearTimeout(inviteExpiryTimerRef.current);
+        inviteExpiryTimerRef.current = undefined;
+      }
+    };
+  }, [cancelTransportApproval, rollbackActivePersistedInvite]);
 
   useEffect(() => {
     // Reset the cancellation flag so the \"Try Again\" button (which calls
@@ -430,17 +599,38 @@ export function InviteScreen() {
     });
 
     return () => {
-      // Bump the generation so any microtask still pending from a
-      // previous invocation is silently dropped. Deliberate write to a
-      // stable generation counter; staleness is the point, not a hazard.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      effectGenerationRef.current++;
-      // Signal in-flight async work (inside run()) that the component
-      // is unmounting so it can short-circuit early.
+      // Bump the generation so any microtask still pending from a previous
+      // invocation is silently dropped. React StrictMode replays effects in
+      // development as setup -> cleanup -> setup while preserving component
+      // refs. The cleanup therefore must cancel work immediately but must not
+      // synchronously destroy the one-shot invite before the replayed setup can
+      // run. Defer destructive cleanup by one microtask and let the replayed
+      // setup invalidate it by advancing the generation again.
+      const cleanupGeneration = ++effectGenerationRef.current;
       cancelledRef.current = true;
-      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+      // Abort network I/O synchronously. StrictMode-sensitive credential/ref
+      // destruction remains deferred below, but a real unmount must not leave
+      // an authenticated sync request alive until the cleanup microtask runs.
+      inviteSyncAbortRef.current?.abort();
+      inviteSyncAbortRef.current = null;
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = undefined;
+      }
+      queueMicrotask(() => {
+        // Staleness is deliberate: a replayed setup advances this ref and must
+        // cancel the destructive cleanup queued by StrictMode's synthetic pass.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        if (cleanupGeneration !== effectGenerationRef.current) return;
+        cancelTransportApproval();
+        void rollbackActivePersistedInvite(false);
+        inviteRef.current = null;
+        inviteExpiresAtRef.current = null;
+        resolvedCredentialRef.current = null;
+        clearInviteBootstrapCandidate();
+      });
     };
-  }, [runFlow]);
+  }, [cancelTransportApproval, rollbackActivePersistedInvite, runFlow]);
 
   // -----------------------------------------------------------------------
   // Render: Error states
@@ -523,11 +713,14 @@ export function InviteScreen() {
   // -----------------------------------------------------------------------
 
   return (
-    <div className="flex h-screen items-center justify-center bg-surface">
-      <ConnectionProgress
-        steps={buildSteps(activeStep, 'loading')}
-        heading={intl.formatMessage(messages.heading)}
-      />
-    </div>
+    <>
+      <div className="flex h-screen items-center justify-center bg-surface">
+        <ConnectionProgress
+          steps={buildSteps(activeStep, 'loading')}
+          heading={intl.formatMessage(messages.heading)}
+        />
+      </div>
+      <InsecureArchiveTransportDialog controller={transportApproval} />
+    </>
   );
 }

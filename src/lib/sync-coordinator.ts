@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
 import { queryClient } from '@/lib/query-client';
+import { readSecurityStartupState } from '@/lib/security-startup-gate';
 import {
   type SyncErrorCode,
   type SyncOptions,
@@ -68,6 +69,36 @@ function missingServerResult(serverId: string): SyncResult {
   };
 }
 
+function credentialsRequiredResult(serverId: string): SyncResult {
+  return {
+    success: false,
+    status: 'error',
+    serverId,
+    projects: [],
+    warnings: [],
+    error: 'Archive credentials required',
+    errorCode: 'credentials-required',
+  };
+}
+
+function startupBlockedResult(
+  serverId: string,
+  state: 'storage-cleanup-required' | 'worker-transition-required',
+): SyncResult {
+  return {
+    success: false,
+    status: 'error',
+    serverId,
+    projects: [],
+    warnings: [],
+    error:
+      state === 'worker-transition-required'
+        ? 'Security update required'
+        : 'Secure storage cleanup required',
+    errorCode: state,
+  };
+}
+
 function cancelledOnboardingResult(serverId: string): OnboardingResult {
   return {
     success: false,
@@ -125,6 +156,11 @@ export function syncArchive(
   options?: SyncOptions,
   control?: SyncArchiveControl,
 ): Promise<SyncResult> {
+  const startupState = readSecurityStartupState();
+  if (startupState !== 'ready') {
+    return Promise.resolve(startupBlockedResult(serverId, startupState));
+  }
+
   const existing = activeRuns.get(serverId);
   if (existing) {
     // Register the second caller's cancellation callback so it's not
@@ -141,26 +177,34 @@ export function syncArchive(
     .getState()
     .servers.find((candidate) => candidate.id === serverId);
 
-  // Bridge isCancelled polling to an AbortController so that the AbortSignal
-  // threaded through sync.ts / remote-archive.ts actually fires when the
-  // caller cancels. Without this, the entire abort path is dead code.
-  const abortController = new AbortController();
-  const resolvedOptions: SyncOptions | null =
-    options ??
-    (server
-      ? {
-          baseUrl: server.baseUrl,
-          token: server.token,
-          serverLabel: server.label,
-          signal: abortController.signal,
-        }
-      : null);
-
-  if (options && !options.signal) {
-    options.signal = abortController.signal;
+  if (options && !options.token.trim()) {
+    return Promise.resolve(credentialsRequiredResult(serverId));
   }
 
-  if (!resolvedOptions) return Promise.resolve(missingServerResult(serverId));
+  const abortController = new AbortController();
+  let resolvedOptions: SyncOptions | null = null;
+
+  if (options) {
+    resolvedOptions = {
+      ...options,
+      signal: options.signal ?? abortController.signal,
+    };
+  } else if (server?.token) {
+    resolvedOptions = {
+      baseUrl: server.baseUrl,
+      token: server.token,
+      serverLabel: server.label,
+      signal: abortController.signal,
+    };
+  }
+
+  if (!resolvedOptions) {
+    return Promise.resolve(
+      server
+        ? credentialsRequiredResult(serverId)
+        : missingServerResult(serverId),
+    );
+  }
 
   const run = (async () => {
     // Check cancellation before starting sync — abort immediately if cancelled
@@ -240,6 +284,11 @@ export function syncArchive(
 export async function onboardArchive(
   options: OnboardArchiveOptions,
 ): Promise<OnboardingResult> {
+  const startupState = readSecurityStartupState();
+  if (startupState !== 'ready') {
+    return startupBlockedResult('', startupState);
+  }
+
   options.onStateChange?.('validating');
   const normalized = normalizeArchiveBaseUrl(options.baseUrl);
   if (!normalized.ok) {

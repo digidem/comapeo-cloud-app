@@ -232,4 +232,87 @@ describe('LoginScreen', () => {
       screen.getByRole('button', { name: /connecting/i }),
     ).toBeInTheDocument();
   });
+
+  it('shows a blocking warning before any HTTP archive request and Cancel sends nothing', async () => {
+    let requestCount = 0;
+    loginServer.use(
+      http.get('http://legacy.example.com/projects', () => {
+        requestCount += 1;
+        return HttpResponse.json({ data: [] });
+      }),
+    );
+    const user = userEvent.setup();
+    render(<LoginScreen />);
+
+    await user.type(
+      screen.getByLabelText(/server url/i),
+      'http://legacy.example.com',
+    );
+    await user.type(screen.getByLabelText(/bearer token/i), String(238002));
+    await user.click(screen.getByRole('button', { name: /^connect$/i }));
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /insecure archive connection/i,
+      }),
+    ).toBeInTheDocument();
+    expect(requestCount).toBe(0);
+    expect(
+      useAuthStore
+        .getState()
+        .servers.some(
+          (server) => server.baseUrl === 'http://legacy.example.com',
+        ),
+    ).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: /insecure archive connection/i }),
+      ).not.toBeInTheDocument();
+    });
+    expect(requestCount).toBe(0);
+    expect(
+      useAuthStore
+        .getState()
+        .servers.some(
+          (server) => server.baseUrl === 'http://legacy.example.com',
+        ),
+    ).toBe(false);
+  });
+
+  it('sends the HTTP credential only after approving the exact displayed URL', async () => {
+    let requestCount = 0;
+    loginServer.use(
+      http.get('http://legacy.example.com/projects', () => {
+        requestCount += 1;
+        return HttpResponse.json({ data: [] });
+      }),
+    );
+    const user = userEvent.setup();
+    render(<LoginScreen />);
+
+    await user.type(
+      screen.getByLabelText(/server url/i),
+      'http://legacy.example.com/',
+    );
+    await user.type(screen.getByLabelText(/bearer token/i), String(238003));
+    await user.click(screen.getByRole('button', { name: /^connect$/i }));
+    expect(requestCount).toBe(0);
+
+    await user.click(
+      await screen.findByRole('button', { name: /connect insecurely/i }),
+    );
+
+    await waitFor(() => expect(requestCount).toBeGreaterThan(0));
+    await waitFor(() => {
+      expect(
+        useAuthStore
+          .getState()
+          .servers.some(
+            (server) => server.baseUrl === 'http://legacy.example.com',
+          ),
+      ).toBe(true);
+    });
+  });
 });

@@ -44,6 +44,27 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
+const RUNTIME_CREDENTIAL = String(123456);
+
+function setUnlockedRuntimeServers(
+  servers: Array<{
+    id: string;
+    baseUrl: string;
+    onboardingStatus?: 'cancelled';
+  }>,
+): void {
+  useAuthStore.setState({
+    servers: servers.map((server) => ({
+      id: server.id,
+      label: server.id,
+      baseUrl: server.baseUrl,
+      token: RUNTIME_CREDENTIAL,
+      status: server.onboardingStatus === 'cancelled' ? 'cancelled' : 'idle',
+      onboardingStatus: server.onboardingStatus,
+    })),
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   useAuthStore.setState({
@@ -68,13 +89,12 @@ describe('useAutoSync', () => {
     expect(mockSyncRemoteArchive).not.toHaveBeenCalled();
   });
 
-  it('syncs all servers with credentials from IndexedDB on mount', async () => {
+  it('syncs all servers with credentials unlocked in runtime on mount', async () => {
     vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
       {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
@@ -82,10 +102,13 @@ describe('useAutoSync', () => {
         id: 'server-2',
         baseUrl: 'https://archive2.example.com',
         label: 'Server 2',
-        token: 'token-2',
         status: 'idle',
         lastSyncedAt: '',
       },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
+      { id: 'server-2', baseUrl: 'https://archive2.example.com' },
     ]);
 
     renderHook(() => useAutoSync(), { wrapper });
@@ -96,21 +119,20 @@ describe('useAutoSync', () => {
 
     expect(mockSyncRemoteArchive).toHaveBeenCalledWith('server-1', {
       baseUrl: 'https://archive1.example.com',
-      token: 'token-1',
+      token: RUNTIME_CREDENTIAL,
     });
     expect(mockSyncRemoteArchive).toHaveBeenCalledWith('server-2', {
       baseUrl: 'https://archive2.example.com',
-      token: 'token-2',
+      token: RUNTIME_CREDENTIAL,
     });
   });
 
-  it('skips servers without token in IndexedDB', async () => {
+  it('skips configured servers that remain locked in runtime', async () => {
     vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
       {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
@@ -122,6 +144,9 @@ describe('useAutoSync', () => {
         lastSyncedAt: '',
       },
     ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
+    ]);
 
     renderHook(() => useAutoSync(), { wrapper });
 
@@ -131,8 +156,42 @@ describe('useAutoSync', () => {
 
     expect(mockSyncRemoteArchive).toHaveBeenCalledWith('server-1', {
       baseUrl: 'https://archive1.example.com',
-      token: 'token-1',
+      token: RUNTIME_CREDENTIAL,
     });
+  });
+
+  it('uses only an unlocked runtime credential after metadata hydration', async () => {
+    const runtimeValue = String(123456);
+    vi.spyOn(localRepos, 'getRemoteServers').mockResolvedValue([
+      {
+        id: 'server-runtime',
+        baseUrl: 'https://runtime.example.com',
+        label: 'Runtime',
+        status: 'idle',
+        lastSyncedAt: '',
+      },
+    ]);
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-runtime',
+          label: 'Runtime',
+          baseUrl: 'https://runtime.example.com',
+          token: runtimeValue,
+          status: 'idle',
+        },
+      ],
+    });
+
+    renderHook(() => useAutoSync(), { wrapper });
+
+    await waitFor(() => {
+      expect(mockSyncRemoteArchive).toHaveBeenCalledWith('server-runtime', {
+        baseUrl: 'https://runtime.example.com',
+        token: runtimeValue,
+      });
+    });
+    expect(localRepos.getRemoteServers).toHaveBeenCalledTimes(1);
   });
 
   it('hydrates auth store from IndexedDB on mount', async () => {
@@ -141,7 +200,6 @@ describe('useAutoSync', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
@@ -155,7 +213,7 @@ describe('useAutoSync', () => {
 
     const server = useAuthStore.getState().servers[0]!;
     expect(server.id).toBe('server-1');
-    expect(server.token).toBe('token-1');
+    expect(server.token).toBeNull();
     expect(server.baseUrl).toBe('https://archive1.example.com');
   });
 
@@ -165,10 +223,12 @@ describe('useAutoSync', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
     ]);
 
     const qc = new QueryClient({
@@ -200,10 +260,12 @@ describe('useAutoSync', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
     ]);
 
     const { rerender } = renderHook(() => useAutoSync(), { wrapper });
@@ -226,10 +288,12 @@ describe('useAutoSync', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
     ]);
 
     // Should not throw
@@ -248,7 +312,6 @@ describe('useAutoSync', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
@@ -256,10 +319,17 @@ describe('useAutoSync', () => {
         id: 'server-cancelled',
         baseUrl: 'https://cancelled.example.com',
         label: 'Cancelled Server',
-        token: 'token-cancelled',
         status: 'cancelled',
         onboardingStatus: 'cancelled',
         lastSyncedAt: '',
+      },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
+      {
+        id: 'server-cancelled',
+        baseUrl: 'https://cancelled.example.com',
+        onboardingStatus: 'cancelled',
       },
     ]);
 
@@ -272,7 +342,7 @@ describe('useAutoSync', () => {
 
     expect(mockSyncRemoteArchive).toHaveBeenCalledWith('server-1', {
       baseUrl: 'https://archive1.example.com',
-      token: 'token-1',
+      token: RUNTIME_CREDENTIAL,
     });
     expect(mockSyncRemoteArchive).not.toHaveBeenCalledWith(
       'server-cancelled',
@@ -321,10 +391,12 @@ describe('useAutoSync polling', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
     ]);
 
     renderHook(() => useAutoSync({ pollIntervalMs: 5 * 60 * 1000 }), {
@@ -361,10 +433,12 @@ describe('useAutoSync polling', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
     ]);
 
     renderHook(() => useAutoSync({ pollIntervalMs: 5 * 60 * 1000 }), {
@@ -399,10 +473,12 @@ describe('useAutoSync polling', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
     ]);
 
     renderHook(() => useAutoSync({ pollIntervalMs: 5 * 60 * 1000 }), {
@@ -461,10 +537,12 @@ describe('useAutoSync polling', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
     ]);
 
     renderHook(() => useAutoSync({ pollIntervalMs: 5 * 60 * 1000 }), {
@@ -506,10 +584,12 @@ describe('useAutoSync polling', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
     ]);
 
     const { unmount } = renderHook(
@@ -541,10 +621,12 @@ describe('useAutoSync polling', () => {
         id: 'server-1',
         baseUrl: 'https://archive1.example.com',
         label: 'Server 1',
-        token: 'token-1',
         status: 'idle',
         lastSyncedAt: '',
       },
+    ]);
+    setUnlockedRuntimeServers([
+      { id: 'server-1', baseUrl: 'https://archive1.example.com' },
     ]);
 
     renderHook(() => useAutoSync({ pollIntervalMs: 60_000 }), { wrapper });

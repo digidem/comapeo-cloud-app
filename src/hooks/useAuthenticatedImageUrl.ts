@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { ARCHIVE_TARGET_HEADER } from '@/lib/archive-proxy';
+import {
+  ARCHIVE_CREDENTIAL_REVISION,
+  ARCHIVE_CREDENTIAL_REVISION_HEADER,
+  ARCHIVE_TARGET_HEADER,
+} from '@/lib/archive-proxy';
 import { getCachedIconBlob, putCachedIconBlob } from '@/lib/db';
 import { type CacheKey, createImageBlobCache } from '@/lib/image-blob-cache';
+import { requireSecurityStartupReady } from '@/lib/security-startup-gate';
 import {
   selectActiveBaseUrl,
   selectActiveToken,
@@ -24,9 +29,25 @@ interface UseAuthenticatedImageUrlOptions {
   cache?: boolean;
 }
 
-interface ArchiveCredentials {
+interface ArchiveServerContext {
+  id: string;
   baseUrl: string;
+  token: string | null;
+}
+
+interface UnlockedArchiveServer extends ArchiveServerContext {
   token: string;
+}
+
+export class ImageCredentialsRequiredError extends Error {
+  readonly code = 'credentials-required';
+  readonly serverId: string;
+
+  constructor(serverId: string) {
+    super('Archive credentials required');
+    this.name = 'ImageCredentialsRequiredError';
+    this.serverId = serverId;
+  }
 }
 
 // Module-scope singleton: survives component unmount/remount
@@ -51,7 +72,7 @@ function removeArchiveBasePath(pathname: string, baseUrl: string): string {
   if (!basePath || basePath === '/') return pathname;
 
   if (pathname === basePath) return '/';
-  if (pathname.startsWith(`${basePath}/`)) {
+  if (pathname.startsWith(basePath + '/')) {
     return pathname.slice(basePath.length);
   }
   return pathname;
@@ -59,39 +80,58 @@ function removeArchiveBasePath(pathname: string, baseUrl: string): string {
 
 function findMatchingServer(
   parsedUrl: URL,
-  servers: ArchiveCredentials[],
-): ArchiveCredentials | undefined {
-  const sameOriginServers = servers.filter((server) => {
-    try {
-      return new URL(server.baseUrl).origin === parsedUrl.origin;
-    } catch {
-      return false;
-    }
-  });
+  servers: ArchiveServerContext[],
+): ArchiveServerContext | undefined {
+  let sameOriginCount = 0;
+  let onlySameOriginServer: ArchiveServerContext | undefined;
+  let bestPathMatch: ArchiveServerContext | undefined;
+  let bestPathLength = -1;
 
-  return (
-    sameOriginServers.find((server) => {
-      const basePath = getArchiveBasePath(server.baseUrl);
-      return (
-        basePath === '/' ||
-        parsedUrl.pathname === basePath ||
-        parsedUrl.pathname.startsWith(`${basePath}/`)
-      );
-    }) ?? sameOriginServers[0]
-  );
+  for (const server of servers) {
+    const basePath = getArchiveBasePath(server.baseUrl);
+    if (!basePath) continue;
+
+    try {
+      if (new URL(server.baseUrl).origin !== parsedUrl.origin) continue;
+    } catch {
+      continue;
+    }
+
+    sameOriginCount += 1;
+    onlySameOriginServer = server;
+
+    const matchesPath =
+      basePath === '/' ||
+      parsedUrl.pathname === basePath ||
+      parsedUrl.pathname.startsWith(basePath + '/');
+    if (matchesPath && basePath.length > bestPathLength) {
+      bestPathMatch = server;
+      bestPathLength = basePath.length;
+    }
+  }
+
+  if (bestPathMatch) return bestPathMatch;
+  return sameOriginCount === 1 ? onlySameOriginServer : undefined;
 }
 
-function getRelativeArchiveCredentials({
+function getRelativeArchiveServer({
   baseUrl,
   servers,
-  token,
 }: {
   baseUrl: string | null;
-  servers: ArchiveCredentials[];
-  token: string | null;
-}): ArchiveCredentials | null {
-  if (baseUrl && token) return { baseUrl, token };
+  servers: ArchiveServerContext[];
+}): ArchiveServerContext | null {
+  if (baseUrl) {
+    const activeServer = servers.find((server) => server.baseUrl === baseUrl);
+    if (activeServer) return activeServer;
+  }
   return servers.length === 1 ? servers[0]! : null;
+}
+
+function isUnlockedArchiveServer(
+  server: ArchiveServerContext | null,
+): server is UnlockedArchiveServer {
+  return Boolean(server && server.token);
 }
 
 /**
@@ -104,7 +144,7 @@ function getRelativeArchiveCredentials({
  */
 function buildImageCacheKey(
   url: string,
-  matchingServer: ArchiveCredentials | null,
+  matchingServer: UnlockedArchiveServer | null,
   localToken: string | null,
 ): CacheKey {
   if (matchingServer) {
@@ -147,10 +187,11 @@ export function useAuthenticatedImageUrl(
 
   const mountedRef = useRef(true);
 
-  // Subscribe to auth store to re-fetch when servers or token change
-  const servers = useAuthStore((s) => s.servers);
+  // Subscribe to auth store to re-fetch when archive/runtime auth changes.
+  const servers = useAuthStore((store) => store.servers);
   const token = useAuthStore(selectActiveToken);
   const baseUrl = useAuthStore(selectActiveBaseUrl);
+  const tier = useAuthStore((store) => store.tier);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -163,7 +204,6 @@ export function useAuthenticatedImageUrl(
       });
     };
 
-    // Early return for empty/invalid URL
     if (!url) {
       setImageState({ blobUrl: null, isLoading: false, error: null });
       return () => {
@@ -185,30 +225,63 @@ export function useAuthenticatedImageUrl(
       };
     }
 
-    const matchingServer = isRelativeUrl
-      ? getRelativeArchiveCredentials({ baseUrl, servers, token })
+    const matchingCandidate = isRelativeUrl
+      ? getRelativeArchiveServer({ baseUrl, servers })
       : (findMatchingServer(parsedUrl, servers) ?? null);
 
-    // Compute the in-memory cache key
-    const cacheKey = buildImageCacheKey(url, matchingServer, token);
+    if (matchingCandidate) {
+      try {
+        requireSecurityStartupReady();
+      } catch (error) {
+        setImageState({
+          blobUrl: null,
+          isLoading: false,
+          error:
+            error instanceof Error
+              ? error
+              : new Error('Secure startup blocked'),
+        });
+        return () => {
+          cancelled = true;
+        };
+      }
+    }
+
+    if (matchingCandidate && !isUnlockedArchiveServer(matchingCandidate)) {
+      setImageState({
+        blobUrl: null,
+        isLoading: false,
+        error: new ImageCredentialsRequiredError(matchingCandidate.id),
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const matchingServer = isUnlockedArchiveServer(matchingCandidate)
+      ? matchingCandidate
+      : null;
+    const localToken = tier === 'local' ? token : null;
+    const cacheKey = buildImageCacheKey(url, matchingServer, localToken);
 
     let fetchUrl: string;
     let fetchHeaders: Record<string, string>;
 
     if (matchingServer) {
-      // Remote archive: route through /api proxy
       const proxyPath = isRelativeUrl
         ? parsedUrl.pathname
         : removeArchiveBasePath(parsedUrl.pathname, matchingServer.baseUrl);
       fetchUrl = '/api' + proxyPath + parsedUrl.search;
       fetchHeaders = {
-        Authorization: `Bearer ${matchingServer.token}`,
+        Authorization: 'Bearer ' + matchingServer.token,
+        [ARCHIVE_CREDENTIAL_REVISION_HEADER]: ARCHIVE_CREDENTIAL_REVISION,
         [ARCHIVE_TARGET_HEADER]: matchingServer.baseUrl,
       };
     } else {
-      // Local server or unmatched: use URL as-is
       fetchUrl = url;
-      fetchHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      fetchHeaders = localToken
+        ? { Authorization: 'Bearer ' + localToken }
+        : {};
     }
 
     // === Path 1: cache hit on a resolved entry — reuse the blob URL ===
@@ -309,7 +382,7 @@ export function useAuthenticatedImageUrl(
     // Path 2 instead of starting its own IDB lookup.
     blobCache.set(cacheKey, {
       blobUrl: '',
-      serverToken: matchingServer?.token ?? token ?? '',
+      serverToken: matchingServer?.token ?? localToken ?? '',
       serverSignature: JSON.stringify(servers.map((s) => s.id)),
       inflight,
       controller,
@@ -334,7 +407,7 @@ export function useAuthenticatedImageUrl(
       blobCache.set(cacheKey, {
         blobUrl,
         blob,
-        serverToken: matchingServer?.token ?? token ?? '',
+        serverToken: matchingServer?.token ?? localToken ?? '',
         serverSignature: JSON.stringify(servers.map((s) => s.id)),
         refCount: preservedRefCount,
         // Keep the controller so that a later all-subscribers-unmount can
@@ -422,7 +495,15 @@ export function useAuthenticatedImageUrl(
           signal: controller.signal,
         });
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          if (response.status === 401 && matchingServer) {
+            useAuthStore.getState().lockServerCredential({
+              activeServerId: matchingServer.id,
+              baseUrl: matchingServer.baseUrl,
+              token: matchingServer.token,
+            });
+            throw new ImageCredentialsRequiredError(matchingServer.id);
+          }
+          throw new Error('HTTP ' + response.status);
         }
         const blob = await response.blob();
 
@@ -471,7 +552,7 @@ export function useAuthenticatedImageUrl(
       // attached, the fetch continues uninterrupted.
       blobCache.unref(cacheKey);
     };
-  }, [url, servers, token, baseUrl, cache]);
+  }, [url, servers, token, baseUrl, tier, cache]);
 
   return state;
 }

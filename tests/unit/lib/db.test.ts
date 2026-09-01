@@ -523,17 +523,17 @@ describe('AppDatabase', () => {
     ]);
   });
 
-  it('declares version 15 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
+  it('declares version 16 and exposes the v2 sync indexes (Greptile P1 regression test)', async () => {
     const db = getDb();
 
-    // The highest declared version is 15 (v8 no-op, v9 string→ref
+    // The highest declared version is 16 (v8 no-op, v9 string→ref
     // re-declared, v10 adds the v2 sync indexes and field migrations, v11
     // adds iconCache, v12 adds maps, v13 adds mapPackages, v14 adds portable
-    // chunked package storage, and v15 adds the local-only Case foundation
-    // tables: cases, caseActivity, caseReportState). If any future change drops
-    // or renumbers versions, this test fails and forces the author to think
-    // about the upgrade path for users on prior builds.
-    expect(db.verno).toBe(15);
+    // chunked package storage, v15 adds the local-only Case foundation tables,
+    // and v16 purges legacy archive tokens). If any future change drops or
+    // renumbers versions, this test fails and forces the author to think about
+    // the upgrade path for users on prior builds (especially the post-#67 v9 build).
+    expect(db.verno).toBe(16);
 
     // Verify the v2 sync indexes are present in the schema. These are
     // required for the index-based queries used by remote-archive.ts.
@@ -820,7 +820,7 @@ describe('maps table', () => {
     expect(await hydrated?.smpBlob?.arrayBuffer()).toEqual(smpBytes);
   });
 
-  it('preserves a real v13 whole-buffer package when IndexedDB upgrades through v15', async () => {
+  it('preserves a real v13 whole-buffer package when IndexedDB upgrades through v16', async () => {
     const appDb = getDb();
     appDb.close();
     await Dexie.delete('comapeo-cloud-app');
@@ -860,7 +860,7 @@ describe('maps table', () => {
     await appDb.open();
     const upgraded = appDb;
     const upgradedMap = await upgraded.maps.get(map.id);
-    expect(upgraded.verno).toBe(15);
+    expect(upgraded.verno).toBe(16);
     expect(upgradedMap).toEqual(map);
     expect(upgraded.mapPackageChunks).toBeDefined();
     expect(await upgraded.mapPackageChunks.count()).toBe(0);
