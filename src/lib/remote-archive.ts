@@ -335,14 +335,62 @@ export async function pullProjectsDetailed(
   const now = new Date().toISOString();
   const detailedProjects: Project[] = [];
 
+  // Degraded row used when per-project details are unavailable: it keeps the
+  // list-level name plus any detail fields already known locally, so the
+  // project still shows up in the list with what was previously synced.
+  const degradedProject = (
+    localId: string,
+    basic: (typeof response.data)[number],
+    existing: Project | undefined,
+  ): Project => {
+    const nameChanged = existing?.name !== basic.name;
+    return {
+      localId,
+      sourceType,
+      sourceId: serverId,
+      remoteId: basic.projectId,
+      name: basic.name,
+      description: existing?.description,
+      iconRef: existing?.iconRef,
+      serverUrl: baseUrl || undefined,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
+      dirtyLocal: false,
+      deleted: false,
+    };
+  };
+
   // Fetch detailed project information for each project with a concurrency
   // cap to avoid unbounded N+1 fan-out. Per-project detail failures must
   // NOT drop the basic project info — we keep the project with detail=null
   // and log a warning so the user can still see it in the project list.
+  //
+  // A 404 for a project that the list itself returned means this server does
+  // not implement GET /projects/:id — the list is authoritative that the
+  // project exists. Classify that once, stop issuing the remaining detail
+  // requests (they would 404 the same way), and report a single warning
+  // instead of one per project. Every other failure keeps the per-project
+  // warning and basic-info fallback.
+  let detailEndpointUnsupported = false;
   const projectDetails = await allSettledLimited(
     response.data.map((item) => async () => {
-      const detailResponse = await apiClient.getProject(item.projectId, config);
-      return { basic: item, detail: detailResponse.data };
+      if (detailEndpointUnsupported) return { status: 'unsupported' } as const;
+      try {
+        const detailResponse = await apiClient.getProject(
+          item.projectId,
+          config,
+        );
+        return { status: 'ok', detail: detailResponse.data } as const;
+      } catch (reason) {
+        // Abort must keep propagating so the whole pull fails instead of
+        // persisting a half-synced batch as degraded rows.
+        if (isAbortError(reason) || config.signal?.aborted) throw reason;
+        if (reason instanceof ApiError && reason.status === 404) {
+          detailEndpointUnsupported = true;
+          return { status: 'unsupported' } as const;
+        }
+        return { status: 'failed', reason } as const;
+      }
     }),
     options.concurrency ?? 5,
     config.signal,
@@ -352,30 +400,22 @@ export async function pullProjectsDetailed(
     const basic = response.data[index]!;
     const localId = `${sourceType}:${stableKey}:${basic.projectId}`;
     const existing = existingMap.get(localId);
+    const outcome =
+      result.status === 'rejected'
+        ? ({ status: 'failed', reason: result.reason } as const)
+        : result.value;
 
-    if (result.status === 'rejected') {
-      const warning = `Failed to fetch details for project ${basic.projectId}: ${String(result.reason)}`;
-      warnings.push(warning);
-      console.warn(warning);
-      const nameChanged = existing?.name !== basic.name;
-      detailedProjects.push({
-        localId,
-        sourceType,
-        sourceId: serverId,
-        remoteId: basic.projectId,
-        name: basic.name,
-        description: existing?.description,
-        iconRef: existing?.iconRef,
-        serverUrl: baseUrl || undefined,
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: nameChanged ? now : (existing?.updatedAt ?? now),
-        dirtyLocal: false,
-        deleted: false,
-      });
+    if (outcome.status !== 'ok') {
+      if (outcome.status === 'failed') {
+        const warning = `Failed to fetch details for project ${basic.projectId}: ${String(outcome.reason)}`;
+        warnings.push(warning);
+        console.warn(warning);
+      }
+      detailedProjects.push(degradedProject(localId, basic, existing));
       continue;
     }
 
-    const { detail } = result.value;
+    const { detail } = outcome;
     const nameChanged = existing?.name !== basic.name;
     const descriptionChanged = existing?.description !== detail?.description;
 
@@ -394,6 +434,13 @@ export async function pullProjectsDetailed(
       dirtyLocal: false,
       deleted: false,
     });
+  }
+
+  if (detailEndpointUnsupported) {
+    const warning =
+      'Project detail endpoint not supported by server — using basic project info';
+    warnings.push(warning);
+    console.warn(warning);
   }
 
   // Persist. Existing rows get a PARTIAL update so this sync never overwrites
