@@ -43,14 +43,16 @@ The `topLeft` slot renders one compact line in a `bg-surface-card` pill/row with
    - Chip `✕` buttons keep `min-h-[44px]`/adequate touch targets per repo convention (this makes the bar ~52px tall — accepted) and an accessible name (`data.filters.removeFilter` message, e.g. "Remove filter: {label}"). `topLeftPositionClassName` stays `top-[4.25rem] left-3 right-20` (still clears the basemap switcher at `top-[4.25rem] right-3`); no 44px relaxation for this pointer-first surface.
 3. **Result count** — right-aligned on the same line, existing `data.filters.resultCount` plural message.
 
-**Chip overflow (narrow desktop widths):** the line must remain a **single line**. The chip row gets `overflow-x-auto` (horizontal scroll) with `flex-nowrap`; the Filters button and result count are pinned (non-scrolling). Do NOT wrap to multiple lines and do NOT truncate chips with "+N" — horizontal scroll keeps every chip reachable and is deterministic to test (assert `flex-nowrap`/`overflow-x-auto` classes and no wrap). The scroll container gets `tabIndex={0}` and `aria-label` so keyboard users can scroll it.
+**Chip overflow (narrow desktop widths):** the line must remain a **single line**. The chip row gets `min-w-0 overflow-x-auto` (horizontal scroll — `min-w-0` is REQUIRED or the flex child cannot shrink and pushes the pinned result count out of `right-20`) with `flex-nowrap`; the Filters button and result count are pinned (non-scrolling). Do NOT wrap to multiple lines and do NOT truncate chips with "+N" — horizontal scroll keeps every chip reachable and is deterministic to test (assert `flex-nowrap`/`overflow-x-auto`/`min-w-0` classes and no wrap). The scroll container gets `tabIndex={0}` and `aria-label` so keyboard users can scroll it. jsdom has no layout, so overflow behavior is verified in `docs/qa/330.md` with a "many chips at ~800px viewport width" step (count stays visible, chip row scrolls).
 
 ### Filters drawer (desktop)
 
-Clicking **Filters** opens `FilterSheet` as a **right-side drawer**: `Dialog.Content` positioned `fixed right-0 top-0 bottom-0`, width `w-[min(380px,90vw)]`, full height (drop `max-h-[85vh]` and `rounded-t-card` in the right variant), slide-in-from-right animation (add a `slideInRight` keyframe alongside the existing `slideUp`/`fadeIn` in `src/app/styles.css`; expose it as a Tailwind animate utility like the existing `--animate-*` tokens, since the current animation is an inline style that cannot vary responsively; do not fork the component into a second Dialog). The drawer contains, in order: header (title + `Dialog.Close` ✕), category selection (the existing `CategoryFilterSheet` nested trigger row, as today), search input, From/To date inputs, result count — i.e. exactly the current sheet contents, repositioned. `showSort={false}` unchanged.
+Clicking **Filters** opens `FilterSheet` as a **right-side drawer**: `Dialog.Content` positioned `fixed right-0 top-0 bottom-0`, width `w-[min(380px,90vw)]`, full height (drop `max-h-[85vh]` and `rounded-t-card` in the right variant), slide-in-from-right animation (mirror the existing `slideInLeft` keyframe/util at `src/app/styles.css:263`; add `slideInRight` as a Tailwind animate utility). The drawer contains, in order: header (title + `Dialog.Close` ✕), category selection (the existing `CategoryFilterSheet` nested trigger row, as today), search input, From/To date inputs, result count — i.e. exactly the current sheet contents, repositioned. `showSort={false}` unchanged.
+
+**Nested `CategoryFilterSheet` in the right drawer (DECIDED):** `CategoryFilterSheet.tsx:84` hard-codes a viewport-fixed bottom sheet (`fixed bottom-0 left-0 right-0 max-h-[85vh] rounded-t-card`) rendered inline WITHOUT a Portal — its `position: fixed` resolves against the viewport, so unchanged it would slide across the whole desktop screen with its own `fixed inset-0` overlay dimming the drawer. Fix: add an optional `variant?: 'bottom' | 'drawer'` prop to `CategoryFilterSheet` (default `'bottom'`, existing call sites unaffected). When `variant === 'drawer'`, its container positions **within the drawer** (`absolute inset-0` against `Dialog.Content`, full height, no viewport-fixed classes, no separate viewport overlay) and FilterSheet passes `variant="drawer"` whenever its own variant is `"right"`. This is the issue's headline surface — "category selection moves to temporary side sheet" — so it is normative, and `docs/qa/330.md` must cover opening/closing category selection inside the right drawer.
 
 - Drawer closes on **Apply** ("Show results" button), **ESC**, and **outside-click** — all already provided by Radix `Dialog.Root`/`DismissableLayer`; do not re-implement.
-- **Single `FilterSheet` instance, JS-gated variant.** DataScreen renders exactly ONE `FilterSheet` in the map branch (portaled Radix content escapes `hidden md:block` wrappers, so CSS-hiding a duplicate is not viable — two portals would render at every viewport). The mobile `bottomLeft` `FilterSheet` and its wrapper are **removed**; one instance, positioned in the JSX where the mobile button is today, receives `variant={isDrawerDesktop ? 'right' : 'bottom'}` where `isDrawerDesktop = useMediaQuery('(min-width: 768px)')`. The mobile Filters button stays in `md:hidden` as-is; only the sheet instance is unified. No JS/CSS breakpoint drift: both gates use the same 768px md value, asserted in tests.
+- **Single `FilterSheet` instance, JS-gated variant, hoisted out of breakpoint wrappers.** DataScreen renders exactly ONE `FilterSheet` in the map branch, placed as a **sibling in the `bottomLeft` slot OUTSIDE the `md:hidden` wrapper** (portaled Radix content escapes `display:none` subtrees — do not nest the sheet inside `md:hidden` or `hidden md:block`; the visible button wrappers stay as-is). It receives `variant={isDrawerDesktop ? 'right' : 'bottom'}` where `isDrawerDesktop = useMediaQuery('(min-width: 768px)')`. The mobile Filters button stays in its `md:hidden` wrapper; the old mobile `FilterSheet` instance inside that wrapper is removed. No JS/CSS breakpoint drift: both gates use the same 768px md value, asserted in tests.
 - The existing `SelectPortalProvider` portal-container pattern (FilterSheet lines 55-57, 115-117, 147-149) is retained so Select clicks aren't intercepted by the DismissableLayer.
 
 ### Mobile (unchanged) and grid view (unchanged)
@@ -74,7 +76,7 @@ The desktop Filters-button badge = **number of active filter dimensions**, not t
 - `src/components/shared/MapScreenLayout/MapScreenLayout.tsx`: slots `topLeft`/`topRight`/`bottomLeft`/`bottomRight` are absolutely positioned divs (lines 42-72); `topLeftPositionClassName` overrides default. No changes needed here.
 - `src/hooks/useObservationFilters.ts`: the filter state owner — `setSearch`, `setStartDate`, `setEndDate`, `toggleCategory`, `setCategories`, `setSort`, `reset`, `isFiltering` (lines 13-25). `isFiltering` excludes sort (lines 94-101). **This hook is NOT modified.**
 - `src/hooks/useIsDesktop.ts` uses **lg (1024px)** — do not use it for this feature; the map-view desktop surface is `md`-scoped (768px) and stays `md`-scoped.
-- A **new hook `src/hooks/useMediaQuery.ts`** (`export function useMediaQuery(query: string): boolean`, named export, function declaration, `window.matchMedia` + `change` listener, SSR-safe `false` default) gates the desktop/mobile drawer variant. Unit tests mock this hook (or `window.matchMedia`) — jsdom ignores media queries and renders both breakpoint trees, so "mocking the viewport" is not a viable strategy.
+- A **new hook `src/hooks/useMediaQuery.ts`** (`export function useMediaQuery(query: string): boolean`, named export, function declaration, `window.matchMedia` + `change` listener; **lazily initialize from `matchMedia` on first render** — matching `useIsDesktop`/`useResponsivePageSize` — not a hard-coded `false`) gates the desktop/mobile drawer variant. Unit tests must `vi.spyOn(window, 'matchMedia')` because `tests/setup.ts:18` globally stubs it with `matches: false` and no-op listeners (precedent: `tests/unit/stores/theme-store.test.ts:44`); jsdom ignores media queries, so "mocking the viewport" is not a viable strategy.
 - i18n: messages live in `src/i18n/messages/{en,pt,es}.json`; extraction via `npm run extract-messages`; CI runs an i18n completeness check.
 - Existing animations: `slideUp`/`fadeIn` keyframes in `src/app/styles.css` (lines 242, 251).
 
@@ -116,8 +118,8 @@ The desktop Filters-button badge = **number of active filter dimensions**, not t
 
 **Wiring — `src/screens/DataScreen.tsx` map-view branch only (lines 332-465):**
 
-- Replace the `topLeft` `ObservationFilterBar` block (lines 336-354) with `CompactObservationFilterBar` inside the existing `hidden w-full md:block` wrapper; keep `topLeftPositionClassName` as `top-[4.25rem] left-3 right-20` (clears the basemap switcher).
-- Remove the mobile `bottomLeft` `FilterSheet` instance; render ONE `FilterSheet` (at the mobile instance's JSX position) with `variant={isDrawerDesktop ? 'right' : 'bottom'}` sharing the existing `filterDrawerOpen` state (lines 411-430 pattern, unified).
+- Replace the `topLeft` `ObservationFilterBar` block (lines 336-354) with `CompactObservationFilterBar` inside the existing `hidden w-full md:block` wrapper; keep `topLeftPositionClassName` as `top-[4.25rem] left-3 right-20 items-start` (preserving the current `items-start`, clears the basemap switcher).
+- Remove the mobile `FilterSheet` instance from inside the `md:hidden` wrapper; render ONE `FilterSheet` as a sibling in the `bottomLeft` slot (OUTSIDE any `hidden` wrapper) with `variant={isDrawerDesktop ? 'right' : 'bottom'}` sharing the existing `filterDrawerOpen` state (lines 411-430 pattern, unified).
 - `isDrawerDesktop` from new `useMediaQuery('(min-width: 768px)')`.
 - `activeFilterCount` computed in DataScreen from `obsFilters.filters` per the Badge semantics formula (using `DEFAULT_FILTERS`).
 
@@ -127,13 +129,15 @@ The desktop Filters-button badge = **number of active filter dimensions**, not t
 |---|---|
 | `src/hooks/useMediaQuery.ts` | NEW — `useMediaQuery('(min-width: 768px)')` gates drawer variant |
 | `src/components/shared/CompactObservationFilterBar.tsx` | NEW — compact line component |
-| `src/components/shared/FilterSheet.tsx` | add `variant?: 'bottom' \| 'right'` prop; right-drawer positioning + animation; hide drag handle in right variant |
-| `src/app/styles.css` | add `slideInRight` keyframe (and `fadeIn` reuse) |
+| `src/components/shared/FilterSheet.tsx` | add `variant?: 'bottom' \| 'right'` prop; right-drawer positioning + animation; hide drag handle in right variant; pass `variant="drawer"` to nested `CategoryFilterSheet` when right |
+| `src/components/shared/CategoryFilterSheet.tsx` | add `variant?: 'bottom' \| 'drawer'` prop (default `'bottom'`); `drawer` = `absolute inset-0` within `Dialog.Content`, no viewport-fixed classes/overlay |
+| `src/app/styles.css` | add `slideInRight` keyframe/util (mirror `slideInLeft` at line 263) |
 | `src/screens/DataScreen.tsx` | map-view `topLeft`: swap in `CompactObservationFilterBar`; unify to ONE `FilterSheet` with `variant` from `useMediaQuery`; compute `activeFilterCount`; remove mobile duplicate sheet |
 | `src/i18n/messages/en.json`, `pt.json`, `es.json` | new message IDs via `npm run extract-messages` |
 | `tests/unit/hooks/useMediaQuery.test.ts` | NEW — matchMedia mock: match/no-match/change/unmount |
 | `tests/unit/components/shared/CompactObservationFilterBar.test.tsx` | NEW |
-| `tests/unit/components/shared/FilterSheet.test.tsx` | extend for `variant="right"` |
+| `tests/unit/components/shared/FilterSheet.test.tsx` | extend for `variant="right"` incl. nested `CategoryFilterSheet` drawer positioning |
+| `tests/unit/components/shared/CategoryFilterSheet.test.tsx` | extend for `variant="drawer"` (existing default tests unchanged) |
 | `tests/unit/screens/DataScreen.test.tsx` (or existing DataScreen test location) | desktop map-view rendering, wiring, unchanged grid/mobile |
 
 New i18n message IDs (en defaultMessages; pt/es translated):
@@ -161,8 +165,9 @@ No new data paths; purely presentational over existing in-memory filters. No per
 7. Grid view desktop: full `ObservationFilterBar` renders exactly as before (snapshot/behavior test unchanged and passing).
 8. Exactly one `FilterSheet` mounted in the map branch at any viewport; variant per `useMediaQuery('(min-width: 768px)')` (right ≥768px, bottom <768px); mobile sheet behavior identical to current main; mobile badge still shows `filteredObs.length`.
 9. All user-facing strings via react-intl `defineMessages`; `en`/`pt`/`es` all carry every new ID; `npm run extract-messages` produces no diff beyond the new keys; i18n CI check green.
-10. Unit tests added/updated per the list below; `npm run test:coverage` ≥ 80% lines/functions/branches/statements for all touched files.
+10. Unit tests added/updated per the list below; `npm run test:coverage` passes (coverage thresholds are enforced **globally** per `vitest.config.ts:36` — keep global ≥ 80% lines/functions/branches/statements).
 11. `npm run lint:types`, `npm run lint:eslint`, `npm run lint:prettier` all clean.
+12. Reused message IDs (`data.filterButton`, `data.filters.resultCount`) must keep byte-identical `defaultMessage`s in the new component or `npm run check:i18n` fails; `npm run extract-messages` may only add the 7 new IDs.
 
 ## Required tests
 
@@ -180,10 +185,15 @@ No new data paths; purely presentational over existing in-memory filters. No per
 - chip row has nowrap + `overflow-x-auto` and a scrollable aria-labelled container
 - result count text via plural message
 
+`tests/unit/components/shared/CategoryFilterSheet.test.tsx` (EXTEND):
+
+- default (no variant) renders viewport-fixed bottom-sheet classes — existing tests pass unchanged
+- `variant="drawer"` renders `absolute inset-0`-style positioning within the parent, with no `fixed bottom-0 left-0 right-0` classes and no separate viewport overlay
+
 `tests/unit/components/shared/FilterSheet.test.tsx` (EXTEND):
 
 - default (no variant) renders bottom-sheet positioning — existing tests keep passing unchanged
-- `variant="right"` renders right-edge fixed positioning; drag handle absent; Apply closes; ESC closes; outside-click closes; nested `CategoryFilterSheet` still opens/closes
+- `variant="right"` renders right-edge fixed positioning; drag handle absent; Apply closes; ESC closes; outside-click closes; nested `CategoryFilterSheet` still opens/closes and receives `variant="drawer"`
 - `SelectPortalProvider` portal still renders inside `Dialog.Content` in right variant
 
 `tests/unit/screens/DataScreen.test.tsx` (EXTEND, map view cases; **strategy:** jsdom ignores media queries and Radix portals escape wrappers — do NOT "mock the viewport". Mock `useMediaQuery` (or `window.matchMedia`) at the module boundary: desktop cases = matchMedia true, mobile cases = false. Scope dialog queries with `within()`; expect two "Clear filters" buttons when both grid+sheet render, matching the existing suite's workaround at `DataScreen.test.tsx:744`):
@@ -204,8 +214,8 @@ No new data paths; purely presentational over existing in-memory filters. No per
 4. RED→GREEN: `useMediaQuery` hook tests, then the hook; then DataScreen map-view wiring tests (compact bar renders, drawer opens/closes, one sheet per viewport, chip dismiss hits setters, badge count, grid/mobile unchanged), then the DataScreen changes + `activeFilterCount`.
 5. `npm run extract-messages`; fill `pt.json`/`es.json`; i18n test/check.
 6. Full `npm test`, `npm run test:coverage` (≥80%), lints.
-7. **Storybook/visual baseline:** NO existing map-view Data story exists, so no current baselines change. If stories are added for `CompactObservationFilterBar` or the right variant, new required PNGs land under `tests/e2e/storybook-screenshots-baseline/{desktop,mobile}/` and must be committed with the PR — `visual-regression-check` is a blocking CI job.
-8. **QA deliverable:** write `docs/qa/330.md` (Human QA Handoff invariant) covering desktop drawer open/close, chip dismissal, mobile bottom-sheet regression, grid-view regression.
+7. **Storybook/visual baseline:** `src/screens/DataScreen.stories.tsx` EXISTS (7 stories; tracked `screens-data--*.png` baselines at both viewports; `view-mode-store.ts:19` defaults `viewMode: 'map'`, so the story hits the map branch, and the current desktop/mobile baselines already disagree). Therefore: run `npm run storybook:screenshots:check` locally, treat CI-rendered PNGs as canonical, and commit any updated/new baselines with the PR — `visual-regression-check` is a blocking CI job.
+8. **QA deliverable:** write `docs/qa/330.md` (Human QA Handoff invariant) covering desktop drawer open/close, opening/closing category selection INSIDE the right drawer (must not cover the screen), chip dismissal, chip-row overflow at ~800px width (count stays visible, row scrolls), mobile bottom-sheet regression, grid-view regression.
 
 ## Self-review (P1/P2 pass — resolved in this spec)
 
@@ -218,4 +228,5 @@ No new data paths; purely presentational over existing in-memory filters. No per
 - **P2 Drawer width/animation**: specified — `w-[min(380px,90vw)]`, full-height right drawer, `slideInRight` keyframe + Tailwind animate utility, z-index pattern unchanged (z-50 overlay / z-[51] content).
 - **P2 Chip accessible names / keyboard dismissibility**: specified — `data.filters.removeFilter` label per chip; chips are real buttons.
 - **P2 Chip-dismiss setter**: DECIDED — `toggleCategory(X)` normative; date chips render raw ISO strings.
-- **P2 Visual baselines / QA handoff**: specified — no existing map-view baseline changes; new stories add new baselines; `docs/qa/330.md` required.
+- **P2 Visual baselines / QA handoff**: specified — DataScreen map-branch baselines exist and will be re-rendered via `storybook:screenshots:check`; `docs/qa/330.md` required incl. in-drawer category selection and chip overflow at ~800px.
+- **P2 Nested `CategoryFilterSheet` in drawer**: DECIDED — `variant="drawer"` (`absolute inset-0` inside `Dialog.Content`), passed automatically when `FilterSheet variant="right"`.
