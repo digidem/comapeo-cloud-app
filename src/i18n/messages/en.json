@@ -713,8 +713,14 @@
   "data.filterSheetTitle": {
     "defaultMessage": "Filters"
   },
+  "data.filters.activeFilterCount": {
+    "defaultMessage": "{count, plural, one {# active filter} other {# active filters}}"
+  },
   "data.filters.categoryAll": {
     "defaultMessage": "All categories"
+  },
+  "data.filters.categoryChip": {
+    "defaultMessage": "Category: {name}"
   },
   "data.filters.categoryDeselectAll": {
     "defaultMessage": "Deselect all"
@@ -746,6 +752,9 @@
   "data.filters.categoryShowMore": {
     "defaultMessage": "+{count} more"
   },
+  "data.filters.chipRow": {
+    "defaultMessage": "Active filters"
+  },
   "data.filters.clear": {
     "defaultMessage": "Clear filters"
   },
@@ -755,11 +764,20 @@
   "data.filters.endDateLabel": {
     "defaultMessage": "To"
   },
+  "data.filters.fromDateChip": {
+    "defaultMessage": "From: {date}"
+  },
   "data.filters.noResults": {
     "defaultMessage": "No observations match your filters"
   },
+  "data.filters.removeFilter": {
+    "defaultMessage": "Remove filter: {label}"
+  },
   "data.filters.resultCount": {
     "defaultMessage": "{count, plural, one {# result} other {# results}}"
+  },
+  "data.filters.searchChip": {
+    "defaultMessage": "Search: {value}"
   },
   "data.filters.searchLabel": {
     "defaultMessage": "Search"
@@ -781,6 +799,9 @@
   },
   "data.filters.startDateLabel": {
     "defaultMessage": "From"
+  },
+  "data.filters.toDateChip": {
+    "defaultMessage": "To: {date}"
   },
   "data.loading": {
     "defaultMessage": "Loading..."

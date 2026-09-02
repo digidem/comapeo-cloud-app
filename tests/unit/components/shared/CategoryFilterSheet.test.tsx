@@ -163,3 +163,79 @@ describe('CategoryFilterSheet', () => {
     ).not.toBeDisabled();
   });
 });
+
+describe('CategoryFilterSheet variants', () => {
+  function getOverlay(container: HTMLElement) {
+    // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
+    const overlay = container.querySelector('[data-category-sheet-overlay]');
+    expect(overlay).not.toBeNull();
+    return overlay as HTMLElement;
+  }
+
+  function getContent(container: HTMLElement) {
+    // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
+    const content = container.querySelector('[role="dialog"]');
+    expect(content).not.toBeNull();
+    return content as HTMLElement;
+  }
+
+  it('renders the viewport-fixed bottom sheet by default', () => {
+    const { container } = renderSheet();
+
+    const content = getContent(container);
+    expect(content).toHaveClass(
+      'fixed',
+      'bottom-0',
+      'left-0',
+      'right-0',
+      'max-h-[85vh]',
+      'rounded-t-card',
+    );
+
+    const overlay = getOverlay(container);
+    expect(overlay.style.position).toBe('fixed');
+  });
+
+  it('renders absolute in-drawer positioning for variant="drawer"', () => {
+    const { container } = renderSheet({ variant: 'drawer' });
+
+    const content = getContent(container);
+    expect(content).toHaveClass('absolute', 'inset-0');
+    expect(content).not.toHaveClass('fixed');
+    expect(content).not.toHaveClass('bottom-0');
+    expect(content).not.toHaveClass('left-0');
+    expect(content).not.toHaveClass('right-0');
+    expect(content).not.toHaveClass('max-h-[85vh]');
+    expect(content).not.toHaveClass('rounded-t-card');
+  });
+
+  it('keeps an in-drawer overlay below the content and drops the viewport overlay for variant="drawer"', () => {
+    const { container } = renderSheet({ variant: 'drawer' });
+
+    const overlays = Array.from(
+      // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
+      container.querySelectorAll('[data-category-sheet-overlay]'),
+    ) as HTMLElement[];
+    expect(overlays).toHaveLength(1);
+
+    const overlay = overlays[0] as HTMLElement;
+    expect(overlay.style.position).toBe('absolute');
+    expect(overlay.style.zIndex).toBe('50');
+
+    const content = getContent(container);
+    expect(content).toHaveClass('z-[51]');
+  });
+
+  it('still toggles categories and closes from the drawer variant', async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+    const onOpenChange = vi.fn();
+    renderSheet({ variant: 'drawer', onToggle, onOpenChange });
+
+    await user.click(screen.getByRole('checkbox', { name: 'Wildlife' }));
+    expect(onToggle).toHaveBeenCalledWith('Wildlife');
+
+    await user.click(screen.getByRole('button', { name: 'Close categories' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
