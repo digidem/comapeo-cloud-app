@@ -133,6 +133,7 @@ export function CompactObservationFilterBar({
         {intl.formatMessage(messages.filterButton)}
         {showBadge && (
           <span
+            role="img"
             aria-label={intl.formatMessage(messages.activeFilterCount, {
               count: activeFilterCount,
             })}
@@ -188,7 +189,7 @@ export function CompactObservationFilterBar({
         </div>
       )}
 
-      <span className="shrink-0 text-sm whitespace-nowrap text-text-muted">
+      <span className="ml-auto shrink-0 text-sm whitespace-nowrap text-text-muted">
         {intl.formatMessage(messages.resultCount, { count: resultCount })}
       </span>
     </div>
