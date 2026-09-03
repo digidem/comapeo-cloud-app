@@ -353,7 +353,7 @@ export function DataScreen() {
 
     return (
       <MapScreenLayout
-        topLeftPositionClassName="top-[4.25rem] left-3 right-20 items-start"
+        topLeftPositionClassName="top-4 left-3 right-[4.25rem] items-start"
         topRightPositionClassName="top-4 right-3 z-30 items-center"
         topLeft={
           <div className="hidden w-full md:block">

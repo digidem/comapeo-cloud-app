@@ -775,7 +775,7 @@ describe('DataScreen', () => {
 
 function getTopLeftSlot(): HTMLElement {
   // eslint-disable-next-line testing-library/no-node-access
-  const slot = document.querySelector('.right-20');
+  const slot = document.querySelector('.right-\\[4\\.25rem\\]');
   expect(slot).not.toBeNull();
   return slot as HTMLElement;
 }
