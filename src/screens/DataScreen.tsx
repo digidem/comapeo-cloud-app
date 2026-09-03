@@ -4,6 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Link, useNavigate } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { CompactObservationFilterBar } from '@/components/shared/CompactObservationFilterBar';
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { FilterSheet } from '@/components/shared/FilterSheet';
 import { MapScreenLayout } from '@/components/shared/MapScreenLayout';
@@ -16,6 +17,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAttachmentsForProject } from '@/hooks/useAttachmentsForProject';
 import { useFields } from '@/hooks/useFields';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useObservationCategoryMetadata } from '@/hooks/useObservationCategoryMetadata';
 import { useObservationFilters } from '@/hooks/useObservationFilters';
 import { useObservations } from '@/hooks/useObservations';
@@ -23,7 +25,10 @@ import { usePaginatedItems } from '@/hooks/usePaginatedItems';
 import { useProjects } from '@/hooks/useProjects';
 import { useResponsivePageSize } from '@/hooks/useResponsivePageSize';
 import type { Field } from '@/lib/data-layer';
-import type { CategoryResolver } from '@/lib/observation-filters';
+import {
+  type CategoryResolver,
+  DEFAULT_FILTERS,
+} from '@/lib/observation-filters';
 import { resolveObservationListItemName } from '@/lib/observation-list-item';
 import { useProjectStore } from '@/stores/project-store';
 import { useViewModeStore } from '@/stores/view-mode-store';
@@ -123,6 +128,23 @@ export function DataScreen() {
   );
 
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
+  // Desktop map view is md-scoped (48rem) to match the `md:block`/`md:hidden`
+  // wrappers — NOT the lg-scoped useIsDesktop hook.
+  const isDrawerDesktop = useMediaQuery('(min-width: 48rem)');
+
+  // Number of active filter *dimensions* (0-4): search, start date, end date,
+  // categories (counted once regardless of how many are selected). Compared
+  // against DEFAULT_FILTERS so this badge and the filter hook cannot drift.
+  const { filters } = obsFilters;
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.search !== DEFAULT_FILTERS.search) count += 1;
+    if (filters.startDate !== DEFAULT_FILTERS.startDate) count += 1;
+    if (filters.endDate !== DEFAULT_FILTERS.endDate) count += 1;
+    if (filters.categories.length > 0) count += 1;
+    return count;
+  }, [filters]);
 
   // Inject project name + mode label into topbar (same pattern as HomeScreen)
   const topbarWorkspaceName =
@@ -331,24 +353,21 @@ export function DataScreen() {
 
     return (
       <MapScreenLayout
-        topLeftPositionClassName="top-[4.25rem] left-3 right-20 items-start"
-        topRightPositionClassName="top-4 right-3 z-30 items-center"
+        topLeftPositionClassName="top-10 left-3 right-[4.25rem] items-start"
+        topRightPositionClassName="top-10 right-3 z-30 items-center"
         topLeft={
           <div className="hidden w-full md:block">
-            <ObservationFilterBar
-              className="w-full rounded-card bg-surface-card p-3 shadow-card"
+            <CompactObservationFilterBar
+              className="w-full rounded-card bg-surface-card p-2 shadow-card"
               filters={obsFilters.filters}
-              availableCategories={obsFilters.availableCategories}
               resultCount={filteredObs.length}
               isFiltering={obsFilters.isFiltering}
-              onSearchChange={obsFilters.setSearch}
-              onStartDateChange={obsFilters.setStartDate}
-              onEndDateChange={obsFilters.setEndDate}
-              onCategoryToggle={obsFilters.toggleCategory}
-              onCategoriesClear={() => obsFilters.setCategories([])}
-              onSortChange={obsFilters.setSort}
-              showSort={false}
-              onClear={obsFilters.reset}
+              activeFilterCount={activeFilterCount}
+              onOpenFilters={() => setFilterDrawerOpen(true)}
+              onSearchClear={() => obsFilters.setSearch('')}
+              onStartDateClear={() => obsFilters.setStartDate(null)}
+              onEndDateClear={() => obsFilters.setEndDate(null)}
+              onCategoryRemove={obsFilters.toggleCategory}
             />
           </div>
         }
@@ -379,38 +398,43 @@ export function DataScreen() {
           </button>
         }
         bottomLeft={
-          <div className="md:hidden">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setFilterDrawerOpen(true)}
-              className="relative shadow-card"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-                className="mr-1.5"
+          <>
+            <div className="md:hidden">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setFilterDrawerOpen(true)}
+                className="relative shadow-card"
               >
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-              </svg>
-              {intl.formatMessage(messages.filterButton)}
-              {obsFilters.isFiltering && (
-                <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
-                  {filteredObs.length}
-                </span>
-              )}
-            </Button>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  className="mr-1.5"
+                >
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                </svg>
+                {intl.formatMessage(messages.filterButton)}
+                {obsFilters.isFiltering && (
+                  <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                    {filteredObs.length}
+                  </span>
+                )}
+              </Button>
+            </div>
 
+            {/* One sheet for both breakpoints — its Radix portal escapes the
+                hidden wrappers above, so the variant is JS-gated instead. */}
             <FilterSheet
               open={filterDrawerOpen}
               onOpenChange={setFilterDrawerOpen}
+              variant={isDrawerDesktop ? 'right' : 'bottom'}
               categoriesLoading={categoryMetadata.isLoading}
               filters={obsFilters.filters}
               availableCategories={obsFilters.availableCategories}
@@ -428,7 +452,7 @@ export function DataScreen() {
               showSort={false}
               onClear={obsFilters.reset}
             />
-          </div>
+          </>
         }
         bottomRight={
           <ExportObservationsButton
@@ -452,7 +476,7 @@ export function DataScreen() {
               })
             }
             height="h-full"
-            basemapSwitcherPositionClassName="top-[4.25rem] right-3"
+            basemapSwitcherPositionClassName="top-[5.75rem] right-3"
             showEmptyState={
               !observationsQuery.isPending && !observationsQuery.isError
             }

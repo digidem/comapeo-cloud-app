@@ -1,8 +1,23 @@
-import { fireEvent, render, screen } from '@tests/mocks/test-utils';
+import type { UserEvent } from '@testing-library/user-event';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DataScreen } from '@/screens/DataScreen';
 import { useViewModeStore } from '@/stores/view-mode-store';
+
+// jsdom ignores media queries, so the desktop/mobile drawer variant is
+// controlled through this module-boundary mock instead of a mocked viewport.
+const mediaQueryMock = vi.hoisted(() => ({ matches: false }));
+
+vi.mock('@/hooks/useMediaQuery', () => ({
+  useMediaQuery: vi.fn(() => mediaQueryMock.matches),
+}));
 
 // --- Shared mock factories ---
 
@@ -170,6 +185,7 @@ describe('DataScreen', () => {
       mockProjectsQuery = { data: undefined, isPending: true };
 
       render(<DataScreen />);
+      // eslint-disable-next-line testing-library/no-node-access
       const skeletons = document.querySelectorAll(
         '[class*="animate-pulse"], [class*="bg-muted"]',
       );
@@ -600,6 +616,7 @@ describe('DataScreen', () => {
         expect(screen.getByRole('status')).toHaveTextContent('Loading...');
         expect(screen.getByRole('status')).toHaveClass('z-20');
         expect(
+          // eslint-disable-next-line testing-library/no-node-access
           screen.getByRole('status').querySelector('.animate-pulse'),
         ).not.toBeNull();
       });
@@ -626,6 +643,7 @@ describe('DataScreen', () => {
         const gridToggle = screen.getByRole('button', {
           name: /switch to grid view/i,
         });
+        // eslint-disable-next-line testing-library/no-node-access
         expect(gridToggle.parentElement).toHaveClass('z-30');
 
         const { userEvent } = await import('@tests/mocks/test-utils');
@@ -641,9 +659,12 @@ describe('DataScreen', () => {
 
         render(<DataScreen />);
 
+        // Invariant: switcher top (top-[5.75rem] = 92px) must be greater than
+        // the grid toggle's bottom edge (top-10 = 40px + h-11 = 44px → 84px).
+        expect(92).toBeGreaterThan(84);
         expect(screen.getByTestId('observations-map')).toHaveAttribute(
           'data-basemap-switcher-position',
-          'top-[4.25rem] right-3',
+          'top-[5.75rem] right-3',
         );
         expect(
           screen.queryByRole('combobox', { name: 'Sort' }),
@@ -745,5 +766,309 @@ describe('DataScreen', () => {
         expect(clearButtons.length).toBeGreaterThanOrEqual(1);
       });
     });
+  });
+});
+
+// ---- Map view: compact filter bar + filters drawer ----
+//
+// jsdom has no layout: `hidden md:block` / `md:hidden` wrappers still render,
+// so map-view tests see TWO "Filters" buttons (compact bar in topLeft + the
+// mobile button in bottomLeft). Always disambiguate with `within()` slot
+// scoping rather than a global getByRole.
+
+function getTopLeftSlot(): HTMLElement {
+  // eslint-disable-next-line testing-library/no-node-access
+  const slot = document.querySelector('.top-10.left-3.right-\\[4\\.25rem\\]');
+  expect(slot).not.toBeNull();
+  return slot as HTMLElement;
+}
+
+function getBottomLeftSlot(): HTMLElement {
+  // eslint-disable-next-line testing-library/no-node-access
+  const slot = document.querySelector('.bottom-4.left-4');
+  expect(slot).not.toBeNull();
+  return slot as HTMLElement;
+}
+
+function getCompactFiltersButton() {
+  return within(getTopLeftSlot()).getByRole('button', { name: /^Filters/ });
+}
+
+// Category metadata that resolves the two default observations to distinct
+// category names, so `availableCategories` carries them into the sheet.
+function useCategoriesFixture() {
+  mockCategoryMetadata = {
+    categories: [
+      { id: 'forest', name: 'Forest' },
+      { id: 'mining', name: 'Mining' },
+    ],
+    categoryByObservationId: new Map([
+      ['obs-1', { id: 'forest', name: 'Forest' }],
+      ['obs-2', { id: 'mining', name: 'Mining' }],
+    ]),
+    displayNamesByObservationId: new Map([
+      ['obs-1', 'Forest'],
+      ['obs-2', 'Mining'],
+    ]),
+  };
+}
+
+async function applyFilters(
+  user: UserEvent,
+  filters: { search?: string; categories?: string[] },
+) {
+  await user.click(getCompactFiltersButton());
+  if (filters.search !== undefined) {
+    await user.type(screen.getByLabelText('Search'), filters.search);
+  }
+  if (filters.categories?.length) {
+    await user.click(screen.getByRole('button', { name: /Categories/ }));
+    for (const category of filters.categories) {
+      await user.click(screen.getByRole('checkbox', { name: category }));
+    }
+  }
+  // Radix hides the outer sheet's subtree while the nested category sheet is
+  // open, so role queries can't see Apply — query the element directly.
+  const outerDialog = screen.getAllByRole('dialog')[0] as HTMLElement;
+  fireEvent.click(within(outerDialog).getByText('Show results'));
+}
+
+describe('DataScreen map view filters', () => {
+  beforeEach(() => {
+    resetMocks();
+    mockSelectedProjectId = 'proj-1';
+    useViewModeStore.setState({ viewMode: 'map' });
+    mediaQueryMock.matches = true;
+  });
+
+  it('renders the compact filter bar without inline filter inputs on the map line', () => {
+    render(<DataScreen />);
+
+    const topLeft = within(getTopLeftSlot());
+    expect(
+      topLeft.getByRole('button', { name: /^Filters/ }),
+    ).toBeInTheDocument();
+    expect(topLeft.getByText('2 results')).toBeInTheDocument();
+    expect(topLeft.queryByLabelText('Search')).not.toBeInTheDocument();
+    expect(topLeft.queryByLabelText('From')).not.toBeInTheDocument();
+    expect(topLeft.queryByLabelText('To')).not.toBeInTheDocument();
+    expect(
+      within(getTopLeftSlot()).queryByText('Filter by category'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders no chips and no badge when nothing is filtered', () => {
+    render(<DataScreen />);
+
+    const topLeft = within(getTopLeftSlot());
+    expect(
+      topLeft.queryByRole('group', { name: 'Active filters' }),
+    ).not.toBeInTheDocument();
+    expect(topLeft.queryByLabelText(/active filter/)).not.toBeInTheDocument();
+  });
+
+  it('opens the right-side drawer when the viewport is ≥ 48rem', async () => {
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    render(<DataScreen />);
+
+    await user.click(getCompactFiltersButton());
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveClass('fixed', 'right-0', 'top-0', 'bottom-0');
+    expect(dialog).not.toHaveClass('rounded-t-card');
+  });
+
+  it('opens the bottom sheet when the viewport is < 48rem', async () => {
+    mediaQueryMock.matches = false;
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    render(<DataScreen />);
+
+    await user.click(getCompactFiltersButton());
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveClass('fixed', 'bottom-0', 'left-0', 'right-0');
+    expect(dialog).toHaveClass('max-h-[85vh]', 'rounded-t-card');
+    expect(dialog).not.toHaveClass('top-0');
+  });
+
+  it('mounts exactly one filter dialog per render at either viewport', async () => {
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    render(<DataScreen />);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(getCompactFiltersButton());
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes the drawer on Escape', async () => {
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    render(<DataScreen />);
+
+    await user.click(getCompactFiltersButton());
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes the drawer on Apply', async () => {
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    render(<DataScreen />);
+
+    await user.click(getCompactFiltersButton());
+    await user.click(screen.getByRole('button', { name: 'Show results' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes the drawer on outside pointer-down', async () => {
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    render(<DataScreen />);
+
+    await user.click(getCompactFiltersButton());
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    // Radix attaches the outside-pointer-down listener on a timeout and marks
+    // body pointer-events:none, so dispatch the pointer event directly.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('shows one chip per active filter dimension and a dimension-count badge', async () => {
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    useCategoriesFixture();
+    render(<DataScreen />);
+
+    // search (1 dimension) + categories (1 dimension) = 2; extra selected
+    // categories surface as their own chips, not as extra badge count.
+    await applyFilters(user, {
+      search: 'forest',
+      categories: ['Forest', 'Mining'],
+    });
+
+    const topLeft = within(getTopLeftSlot());
+    expect(topLeft.getByText('Search: forest')).toBeInTheDocument();
+    expect(topLeft.getByText('Category: Forest')).toBeInTheDocument();
+    expect(topLeft.getByText('Category: Mining')).toBeInTheDocument();
+    expect(topLeft.getByLabelText('2 active filters')).toHaveTextContent('2');
+  });
+
+  it('renders date chips with raw ISO dates and clears them via the setters', async () => {
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    render(<DataScreen />);
+
+    await user.click(getCompactFiltersButton());
+    await user.type(screen.getByLabelText('From'), '2024-03-01');
+    await user.type(screen.getByLabelText('To'), '2024-03-31');
+    fireEvent.click(screen.getByRole('button', { name: 'Show results' }));
+
+    const topLeft = within(getTopLeftSlot());
+    expect(topLeft.getByText('From: 2024-03-01')).toBeInTheDocument();
+    expect(topLeft.getByText('To: 2024-03-31')).toBeInTheDocument();
+
+    await user.click(
+      topLeft.getByRole('button', { name: 'Remove filter: From: 2024-03-01' }),
+    );
+    expect(topLeft.queryByText('From: 2024-03-01')).not.toBeInTheDocument();
+    expect(topLeft.getByText('To: 2024-03-31')).toBeInTheDocument();
+    // Chip dismissal never opens the sheet
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('removes exactly the selected category when a category chip is dismissed', async () => {
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    useCategoriesFixture();
+    render(<DataScreen />);
+
+    await applyFilters(user, { categories: ['Forest', 'Mining'] });
+
+    const topLeft = within(getTopLeftSlot());
+    await user.click(
+      topLeft.getByRole('button', { name: 'Remove filter: Category: Forest' }),
+    );
+
+    expect(topLeft.queryByText('Category: Forest')).not.toBeInTheDocument();
+    expect(topLeft.getByText('Category: Mining')).toBeInTheDocument();
+    // The drawer stays closed after a chip dismissal
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('keeps category selection inside the drawer for the right variant', async () => {
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    render(<DataScreen />);
+
+    await user.click(getCompactFiltersButton());
+    await user.click(screen.getByRole('button', { name: /Categories/ }));
+
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs).toHaveLength(2);
+    const categoryContent = dialogs[1] as HTMLElement;
+    expect(categoryContent).toHaveClass('absolute', 'inset-0');
+    expect(categoryContent).not.toHaveClass('fixed');
+
+    // In-drawer dim layer below the category content (no viewport-fixed layer)
+    // eslint-disable-next-line testing-library/no-node-access
+    const overlays = (dialogs[0] as HTMLElement).querySelectorAll(
+      '[data-category-sheet-overlay]',
+    );
+    expect(overlays).toHaveLength(1);
+    expect((overlays[0] as HTMLElement).style.position).toBe('absolute');
+  });
+
+  it('keeps the full filter bar in desktop grid view', () => {
+    useViewModeStore.setState({ viewMode: 'grid' });
+    mediaQueryMock.matches = true;
+    useCategoriesFixture();
+
+    render(<DataScreen />);
+
+    expect(screen.getByLabelText('Search')).toBeInTheDocument();
+    expect(screen.getByLabelText('From')).toBeInTheDocument();
+    expect(screen.getByLabelText('To')).toBeInTheDocument();
+    // Category selection stays inline in grid view (only the map view moved
+    // it inside the drawer).
+    const categoryGroup = screen.getByRole('group', {
+      name: 'Filter by category',
+    });
+    expect(
+      within(categoryGroup).getByRole('button', { name: 'Forest' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('observations-map')).not.toBeInTheDocument();
+  });
+
+  it('keeps the mobile map Filters button with its result-count badge and bottom sheet', async () => {
+    mediaQueryMock.matches = false;
+    const { userEvent } = await import('@tests/mocks/test-utils');
+    const user = userEvent.setup();
+    render(<DataScreen />);
+
+    // Search 'forest' matches 1 of 2 observations
+    await applyFilters(user, { search: 'forest' });
+
+    const bottomLeft = within(getBottomLeftSlot());
+    const mobileButton = bottomLeft.getByRole('button', { name: /^Filters/ });
+    expect(within(mobileButton).getByText('1')).toBeInTheDocument();
+
+    await user.click(mobileButton);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveClass('max-h-[85vh]', 'rounded-t-card');
+    expect(dialog).not.toHaveClass('top-0');
   });
 });

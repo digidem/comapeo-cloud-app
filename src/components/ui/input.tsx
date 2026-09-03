@@ -24,7 +24,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         ref={ref}
         id={inputId}
         type={type}
-        className={`w-full rounded-input border border-border bg-surface-card px-3 py-2 min-h-[44px] text-sm text-text placeholder:text-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:opacity-50 disabled:cursor-not-allowed ${error ? 'border-error focus-visible:ring-error focus-visible:border-error' : ''} ${className}`}
+        className={`w-full ${type === 'date' || type === 'time' ? 'cursor-pointer' : ''} rounded-input border border-border bg-surface-card px-3 py-2 min-h-[44px] text-sm text-text placeholder:text-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:opacity-50 disabled:cursor-not-allowed ${error ? 'border-error focus-visible:ring-error focus-visible:border-error' : ''} ${className}`}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${inputId}-error` : undefined}
         {...rest}

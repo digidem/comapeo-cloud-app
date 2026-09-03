@@ -42,6 +42,11 @@ interface FilterSheetProps extends ObservationFilterBarProps {
   onOpenChange: (open: boolean) => void;
   onCategoriesSelectAll: () => void;
   categoriesLoading?: boolean;
+  /**
+   * 'bottom' (default): viewport-fixed bottom sheet (mobile).
+   * 'right': full-height right-side drawer (desktop map view).
+   */
+  variant?: 'bottom' | 'right';
 }
 
 function FilterSheet({
@@ -49,6 +54,7 @@ function FilterSheet({
   onOpenChange,
   onCategoriesSelectAll,
   categoriesLoading,
+  variant = 'bottom',
   ...filterProps
 }: FilterSheetProps) {
   const intl = useIntl();
@@ -56,6 +62,7 @@ function FilterSheet({
     null,
   );
   const [categorySheetOpen, setCategorySheetOpen] = useState(false);
+  const isDrawer = variant === 'right';
 
   function handleOpenChange(next: boolean) {
     if (!next) setCategorySheetOpen(false);
@@ -81,22 +88,26 @@ function FilterSheet({
         />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed bottom-0 left-0 right-0 z-[51] flex max-h-[85vh] flex-col rounded-t-card bg-surface-card shadow-elevated focus:outline-none"
-          style={{
-            animation: 'slideUp 200ms ease-out',
-          }}
+          className={
+            isDrawer
+              ? 'fixed right-0 top-0 bottom-0 z-[51] flex w-[min(380px,90vw)] flex-col bg-surface-card shadow-elevated animate-slide-in-right focus:outline-none'
+              : 'fixed bottom-0 left-0 right-0 z-[51] flex max-h-[85vh] flex-col rounded-t-card bg-surface-card shadow-elevated focus:outline-none'
+          }
+          style={isDrawer ? undefined : { animation: 'slideUp 200ms ease-out' }}
         >
           <Dialog.Title className="sr-only">
             {intl.formatMessage(messages.sheetTitle)}
           </Dialog.Title>
 
-          {/* Drag handle */}
-          <div className="flex justify-center pt-3 pb-1">
-            <div
-              aria-hidden="true"
-              className="h-1 w-10 rounded-full bg-border"
-            />
-          </div>
+          {/* Drag handle (bottom-sheet affordance) */}
+          {!isDrawer && (
+            <div className="flex justify-center pt-3 pb-1">
+              <div
+                aria-hidden="true"
+                className="h-1 w-10 rounded-full bg-border"
+              />
+            </div>
+          )}
 
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border/20 px-5 py-3">
@@ -104,7 +115,7 @@ function FilterSheet({
               {intl.formatMessage(messages.sheetTitle)}
             </span>
             <Dialog.Close
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-text-muted hover:text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               aria-label={intl.formatMessage(messages.closeSheet)}
               style={{ touchAction: 'manipulation' }}
             >
@@ -121,6 +132,7 @@ function FilterSheet({
             <CategoryFilterSheet
               open={categorySheetOpen}
               onOpenChange={setCategorySheetOpen}
+              variant={isDrawer ? 'drawer' : 'bottom'}
               categories={filterProps.availableCategories}
               selected={filterProps.filters.categories}
               onToggle={filterProps.onCategoryToggle}
@@ -130,7 +142,7 @@ function FilterSheet({
               trigger={
                 <button
                   type="button"
-                  className="mb-3 flex w-full min-h-[44px] items-center justify-between rounded-btn border border-border bg-surface px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="mb-3 flex w-full min-h-[44px] items-center justify-between rounded-btn border border-border bg-surface px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer"
                   style={{ touchAction: 'manipulation' }}
                 >
                   <span>{intl.formatMessage(messages.categorySheetTitle)}</span>

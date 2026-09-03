@@ -1,5 +1,11 @@
 import userEvent from '@testing-library/user-event';
-import { fireEvent, render, screen, waitFor } from '@tests/mocks/test-utils';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@tests/mocks/test-utils';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { FilterSheetProps } from '@/components/shared/FilterSheet';
@@ -160,5 +166,113 @@ describe('FilterSheet', () => {
     await user.keyboard('{Enter}');
     await user.click(screen.getByRole('button', { name: 'Close categories' }));
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+});
+
+describe('FilterSheet variant="right" (desktop drawer)', () => {
+  function getDialogContent(): HTMLElement {
+    const dialogs = screen.getAllByRole('dialog');
+    // The outer sheet content precedes the nested category sheet content
+    return dialogs[0] as HTMLElement;
+  }
+
+  it('renders right-edge drawer positioning and drops bottom-sheet chrome', () => {
+    renderSheet({ variant: 'right' });
+
+    const content = getDialogContent();
+    expect(content).toHaveClass('fixed', 'right-0', 'top-0', 'bottom-0');
+    expect(content).toHaveClass('w-[min(380px,90vw)]');
+    expect(content).toHaveClass('animate-slide-in-right');
+    expect(content).not.toHaveClass('max-h-[85vh]');
+    expect(content).not.toHaveClass('rounded-t-card');
+
+    // The drag handle is a bottom-sheet affordance (content portals to body)
+    // eslint-disable-next-line testing-library/no-node-access
+    expect(document.body.querySelector('.h-1.w-10')).toBeNull();
+  });
+
+  it('keeps the bottom sheet as the default variant', () => {
+    renderSheet();
+
+    const content = getDialogContent();
+    expect(content).toHaveClass('fixed', 'bottom-0', 'left-0', 'right-0');
+    expect(content).toHaveClass('max-h-[85vh]', 'rounded-t-card');
+    expect(content).not.toHaveClass('top-0');
+    // eslint-disable-next-line testing-library/no-node-access
+    expect(document.body.querySelector('.h-1.w-10')).not.toBeNull();
+  });
+
+  it('closes on Apply while the right drawer is open', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    renderSheet({ variant: 'right', onOpenChange });
+
+    const apply = screen.getByRole('button', { name: 'Show results' });
+    await user.click(apply);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('closes on Escape', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    renderSheet({ variant: 'right', onOpenChange });
+
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('closes on outside pointer-down', async () => {
+    const onOpenChange = vi.fn();
+    renderSheet({ variant: 'right', onOpenChange });
+
+    // Radix attaches its outside-pointer-down listener on a timeout, and marks
+    // body pointer-events:none while the modal is open (so user-event refuses
+    // a click there) — let that timeout elapse, then dispatch the pointer
+    // event directly.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    fireEvent.pointerDown(document.body);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('opens the nested category sheet inside the drawer (variant="drawer")', async () => {
+    const user = userEvent.setup();
+    const onCategoryToggle = vi.fn();
+    renderSheet({ variant: 'right', onCategoryToggle });
+
+    await user.click(screen.getByRole('button', { name: /Categories/ }));
+
+    // Nested category sheet is the second dialog, positioned within the drawer
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs).toHaveLength(2);
+    const categoryContent = dialogs[1] as HTMLElement;
+    expect(categoryContent).toHaveClass('absolute', 'inset-0');
+    expect(categoryContent).not.toHaveClass('fixed');
+    expect(categoryContent).not.toHaveClass('bottom-0');
+
+    // In-drawer dim layer: absolute inside the drawer, below the category content
+    // eslint-disable-next-line testing-library/no-node-access
+    const drawerOverlays = (dialogs[0] as HTMLElement).querySelectorAll(
+      '[data-category-sheet-overlay]',
+    );
+    expect(drawerOverlays).toHaveLength(1);
+    const drawerOverlay = drawerOverlays[0] as HTMLElement;
+    expect(drawerOverlay.style.position).toBe('absolute');
+    // eslint-disable-next-line testing-library/no-node-access
+    expect(drawerOverlay.parentElement).toBe(categoryContent.parentElement);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Wildlife' }));
+    expect(onCategoryToggle).toHaveBeenCalledWith('Wildlife');
+  });
+
+  it('keeps the Select portal container inside the drawer content', async () => {
+    const user = userEvent.setup();
+    renderSheet({ variant: 'right', showSort: true });
+
+    const content = getDialogContent();
+    await user.click(screen.getByRole('combobox', { name: 'Sort' }));
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    expect(content.contains(screen.getByRole('listbox'))).toBe(true);
   });
 });

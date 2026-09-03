@@ -194,6 +194,7 @@
 
   /* Animations */
   --animate-fade-in: fadeIn 300ms ease-out forwards;
+  --animate-slide-in-right: slideInRight 200ms ease-out forwards;
 }
 
 /* Prevent flash of unstyled background during route transitions.
@@ -254,6 +255,20 @@ html {
   }
   to {
     opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Right drawer animation (FilterSheet desktop map view) — slide from right.
+   Tailwind v4 does not synthesize keyframes from --animate-*, so the keyframe
+   is declared explicitly alongside the @theme entry.
+   --------------------------------------------------------------------------- */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
   }
 }
 

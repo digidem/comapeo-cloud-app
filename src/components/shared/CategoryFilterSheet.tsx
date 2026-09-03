@@ -43,6 +43,12 @@ export interface CategoryFilterSheetProps {
   onSelectAll: () => void;
   onDeselectAll: () => void;
   trigger?: ReactNode;
+  /**
+   * 'bottom' (default): viewport-fixed bottom sheet.
+   * 'drawer': fills the nearest positioned ancestor (FilterSheet's right
+   * drawer) instead of the viewport, with an in-drawer dim layer.
+   */
+  variant?: 'bottom' | 'drawer';
 }
 
 function CategoryFilterSheet({
@@ -55,12 +61,14 @@ function CategoryFilterSheet({
   onSelectAll,
   onDeselectAll,
   trigger,
+  variant = 'bottom',
 }: CategoryFilterSheetProps) {
   const intl = useIntl();
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const allSelected =
     categories.length > 0 &&
     categories.every((category) => selectedSet.has(category));
+  const isDrawer = variant === 'drawer';
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -71,8 +79,9 @@ function CategoryFilterSheet({
           container and is required for the bottom-sheet use case where the
           sheet is nested inside another Dialog.Content (FilterSheet). */}
       <Dialog.Overlay
+        data-category-sheet-overlay=""
         style={{
-          position: 'fixed',
+          position: isDrawer ? 'absolute' : 'fixed',
           inset: 0,
           zIndex: 50,
           backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -81,19 +90,30 @@ function CategoryFilterSheet({
       />
       <Dialog.Content
         aria-describedby={undefined}
-        className="fixed bottom-0 left-0 right-0 z-[51] flex max-h-[85vh] flex-col rounded-t-card bg-surface-card shadow-elevated focus:outline-none"
+        className={
+          isDrawer
+            ? 'absolute inset-0 z-[51] flex flex-col bg-surface-card shadow-elevated focus:outline-none'
+            : 'fixed bottom-0 left-0 right-0 z-[51] flex max-h-[85vh] flex-col rounded-t-card bg-surface-card shadow-elevated focus:outline-none'
+        }
         style={{
-          animation: 'slideUp 200ms ease-out',
+          animation: isDrawer
+            ? 'fadeIn 200ms ease-out'
+            : 'slideUp 200ms ease-out',
         }}
       >
         <Dialog.Title className="sr-only">
           {intl.formatMessage(messages.sheetTitle)}
         </Dialog.Title>
 
-        {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div aria-hidden="true" className="h-1 w-10 rounded-full bg-border" />
-        </div>
+        {/* Drag handle (bottom-sheet affordance) */}
+        {!isDrawer && (
+          <div className="flex justify-center pt-3 pb-1">
+            <div
+              aria-hidden="true"
+              className="h-1 w-10 rounded-full bg-border"
+            />
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/20 px-5 py-3">
@@ -101,7 +121,7 @@ function CategoryFilterSheet({
             {intl.formatMessage(messages.sheetTitle)}
           </span>
           <Dialog.Close
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-text-muted hover:text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label={intl.formatMessage(messages.closeSheet)}
             style={{ touchAction: 'manipulation' }}
           >
@@ -156,7 +176,7 @@ function CategoryFilterSheet({
                         role="checkbox"
                         aria-checked={isSelected}
                         onClick={() => onToggle(category)}
-                        className="flex w-full min-h-[44px] items-center gap-3 rounded-btn px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        className="flex w-full min-h-[44px] items-center gap-3 rounded-btn px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer"
                         style={{ touchAction: 'manipulation' }}
                       >
                         {isSelected && (
