@@ -659,9 +659,16 @@ describe('DataScreen', () => {
 
         render(<DataScreen />);
 
-        // Invariant: switcher top (top-[5.75rem] = 92px) must be greater than
-        // the grid toggle's bottom edge (top-10 = 40px + h-11 = 44px → 84px).
-        expect(92).toBeGreaterThan(84);
+        // Invariant: switcher top (top-[5.75rem] = 92px) must exceed the grid
+        // toggle's bottom edge (top-10 = 40px + h-11 = 44px → 84px).
+        expect(
+          // eslint-disable-next-line testing-library/no-node-access
+          screen.getByRole('button', { name: /switch to grid view/i })
+            .parentElement,
+        ).toHaveClass('top-10', 'right-3');
+        expect(
+          screen.getByRole('button', { name: /switch to grid view/i }),
+        ).toHaveClass('h-11');
         expect(screen.getByTestId('observations-map')).toHaveAttribute(
           'data-basemap-switcher-position',
           'top-[5.75rem] right-3',
