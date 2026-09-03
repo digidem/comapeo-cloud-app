@@ -1,6 +1,7 @@
 import type { FeatureCollection, Geometry, Point } from 'geojson';
 import JSZip from 'jszip';
 
+import { apiClient } from '@/lib/api-client';
 import { extractPoints } from '@/lib/area-calculator/calculator';
 import { isValidCoord } from '@/lib/coords';
 import type {
@@ -29,6 +30,7 @@ import {
   getFields as repoGetFields,
   getObservations as repoGetObservations,
   getPresets as repoGetPresets,
+  getProject as repoGetProject,
   getProjects as repoGetProjects,
   getTracks as repoGetTracks,
   recordCaseActivity as repoRecordCaseActivity,
@@ -40,6 +42,7 @@ import {
   getLegacyDisplayName,
   matchObservationToPreset,
 } from '@/lib/preset-utils';
+import { pullAlertsDetailed } from '@/lib/remote-archive';
 import type { SyncOptions, SyncResult } from '@/lib/sync';
 import { syncArchive } from '@/lib/sync-coordinator';
 import { useAuthStore } from '@/stores/auth-store';
@@ -234,6 +237,152 @@ export async function createAlert(input: {
   sourceId?: string;
 }) {
   return repoCreateAlert(input);
+}
+
+export interface AlertToArchive {
+  projectLocalId: string;
+  geometry?: { type: string; coordinates: unknown };
+  metadata?: Record<string, unknown>;
+  detectionDateStart?: string;
+  detectionDateEnd?: string;
+  sourceId?: string;
+}
+
+/**
+ * Resolved, archive-backed create target for the selected project.
+ * Mirror of `CategoriesEditor`'s owning-server resolution: the project is
+ * archive-backed when it carries a `remoteId` (server projectPublicId) and an
+ * owning archive server with a token exists (keyed by `project.sourceId`).
+ */
+export interface ResolvedAlertArchiveTarget {
+  projectLocalId: string;
+  ownerServerId: string;
+  config: { serverId: string; baseUrl: string; token: string };
+  projectRemoteId: string;
+}
+
+export type AlertCreatePlan =
+  { kind: 'local' } | { kind: 'archive'; target: ResolvedAlertArchiveTarget };
+
+function sameGeometry(
+  a: { type: string; coordinates: unknown } | undefined,
+  b: unknown,
+): boolean {
+  if (a === undefined) return b === undefined;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Decide whether the project with `projectLocalId` is archive-backed (POST to
+ * its owning archive) or a pure-local project (local DB write).
+ */
+export async function resolveAlertCreatePlan(
+  projectLocalId: string,
+): Promise<AlertCreatePlan> {
+  const project = await repoGetProject(projectLocalId);
+  if (!project) throw new TypeError('Unknown project');
+
+  const projectRemoteId = project.remoteId ?? undefined;
+  if (!projectRemoteId) return { kind: 'local' };
+
+  const servers = useAuthStore.getState().servers;
+  const owner = servers.find((s) => s.id === project.sourceId);
+  if (!owner?.token) return { kind: 'local' };
+
+  return {
+    kind: 'archive',
+    target: {
+      projectLocalId,
+      ownerServerId: owner.id,
+      config: {
+        serverId: owner.id,
+        baseUrl: owner.baseUrl,
+        token: owner.token,
+      },
+      projectRemoteId,
+    },
+  };
+}
+
+function matchesEcho(
+  alert: import('@/lib/db').Alert,
+  input: AlertToArchive,
+): boolean {
+  return (
+    !alert.deleted &&
+    alert.sourceType === 'remoteArchive' &&
+    sameGeometry(alert.geometry, input.geometry) &&
+    (alert.remoteSourceId ?? undefined) === (input.sourceId || undefined)
+  );
+}
+
+// Build the archive POST body. `createAlertBodySchema` requires geometry,
+// metadata, detectionDate{Start,End}, and sourceId. Form submits always carry
+// geometry (the inline panel and standalone screen require a valid geometry
+// before submitting) and resolved ISO dates, but guard the optionals here so
+// the type is the schema's inferred input.
+type ApiAlertBody = Parameters<typeof apiClient.createAlert>[1];
+
+function apiClientBodyFrom(input: AlertToArchive): ApiAlertBody {
+  if (!input.geometry) {
+    throw new TypeError('Geometry is required to create an alert');
+  }
+  return {
+    geometry: input.geometry,
+    metadata: input.metadata ?? {},
+    detectionDateStart: input.detectionDateStart ?? '',
+    detectionDateEnd: input.detectionDateEnd ?? '',
+    sourceId: input.sourceId ?? '',
+  } as ApiAlertBody;
+}
+
+/**
+ * Internal: archive POST then a bounded wait until the server-generated alert
+ * is echoed into the selected project's local alert set. Because the archive
+ * POST returns an empty 201 and the server mints the alert docId internally
+ * (never returned), the only way to surface the canonical row is to re-fetch
+ * the project's alert collection (`pullAlertsDetailed`) and confirm our
+ * submission appears. No transient local-only row is written.
+ */
+const ECHO_ATTEMPTS = 5;
+const ECHO_RETRY_MS = 250;
+
+async function submitToArchive(
+  target: ResolvedAlertArchiveTarget,
+  input: AlertToArchive,
+): Promise<void> {
+  const body = apiClientBodyFrom(input);
+  await apiClient.createAlert(target.projectRemoteId, body, target.config);
+  for (let attempt = 0; attempt < ECHO_ATTEMPTS; attempt++) {
+    // Re-fetch the archive's alert collection on every attempt so a briefly
+    // not-yet-propagated POST is still confirmed as soon as the server echoes it.
+    await pullAlertsDetailed(
+      target.ownerServerId,
+      target.projectRemoteId,
+      target.projectLocalId,
+      target.config,
+    );
+    const alerts = await repoGetAlerts(target.projectLocalId);
+    if (alerts.some((alert) => matchesEcho(alert, input))) return;
+    await new Promise((resolve) => setTimeout(resolve, ECHO_RETRY_MS));
+  }
+  throw new Error(
+    'The alert was created on the archive but could not be confirmed yet.',
+  );
+}
+
+export async function createAlertForProject(
+  input: AlertToArchive,
+): Promise<
+  { kind: 'local'; alert: import('@/lib/db').Alert } | { kind: 'archive' }
+> {
+  const plan = await resolveAlertCreatePlan(input.projectLocalId);
+  if (plan.kind === 'local') {
+    const alert = await repoCreateAlert(input);
+    return { kind: 'local', alert };
+  }
+  await submitToArchive(plan.target, input);
+  return { kind: 'archive' };
 }
 
 export async function getAlerts(projectLocalId: string) {

@@ -7,14 +7,14 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { useCreateAlert } from '@/hooks/useCreateAlert';
-import { createAlert } from '@/lib/data-layer';
+import { createAlertForProject } from '@/lib/data-layer';
 import type { Alert } from '@/lib/db';
 
 vi.mock('@/lib/data-layer', () => ({
-  createAlert: vi.fn(),
+  createAlertForProject: vi.fn(),
 }));
 
-const mockCreateAlert = vi.mocked(createAlert);
+const mockCreateAlertForProject = vi.mocked(createAlertForProject);
 
 let lastClient: QueryClient | null = null;
 
@@ -33,11 +33,14 @@ describe('useCreateAlert', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     lastClient = null;
+    // Used by createAlertForProject's exported-signal tests below.
+    mockCreateAlertForProject.mockResolvedValue({
+      kind: 'local',
+      alert: { localId: 'alert-l' } as Alert,
+    });
   });
 
-  it('successful mutation calls createAlert and invalidates alerts query', async () => {
-    mockCreateAlert.mockResolvedValue(undefined as unknown as Alert);
-
+  it('successful mutation calls createAlertForProject and invalidates alerts query', async () => {
     const input = {
       projectLocalId: 'proj-1',
       geometry: { type: 'Point', coordinates: [0, 0] },
@@ -53,14 +56,14 @@ describe('useCreateAlert', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(mockCreateAlert).toHaveBeenCalledWith(input);
+    expect(mockCreateAlertForProject).toHaveBeenCalledWith(input);
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['alerts', 'proj-1'],
     });
   });
 
-  it('mutation passes geometry, metadata, and date fields through to createAlert', async () => {
-    mockCreateAlert.mockResolvedValue(undefined as unknown as Alert);
+  it('mutation passes geometry, metadata, and date fields through to createAlertForProject', async () => {
+    mockCreateAlertForProject.mockResolvedValue({ kind: 'archive' });
 
     const input = {
       projectLocalId: 'proj-2',
@@ -85,7 +88,26 @@ describe('useCreateAlert', () => {
     result.current.mutate(input);
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ kind: 'archive' });
+    expect(mockCreateAlertForProject).toHaveBeenCalledWith(input);
+  });
 
-    expect(mockCreateAlert).toHaveBeenCalledWith(input);
+  it('surfaces a mutation failure when createAlertForProject rejects', async () => {
+    mockCreateAlertForProject.mockRejectedValue(
+      new Error('archive unreachable'),
+    );
+
+    const { result } = renderHook(() => useCreateAlert(), { wrapper });
+    result.current.mutate({
+      projectLocalId: 'proj-3',
+      geometry: { type: 'Point', coordinates: [1, 2] },
+      metadata: {},
+      detectionDateStart: '2024-01-01T00:00:00Z',
+      detectionDateEnd: '2024-01-01T23:59:59Z',
+      sourceId: 's3',
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(Error);
   });
 });
