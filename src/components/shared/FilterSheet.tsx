@@ -115,7 +115,7 @@ function FilterSheet({
               {intl.formatMessage(messages.sheetTitle)}
             </span>
             <Dialog.Close
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-text-muted hover:text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               aria-label={intl.formatMessage(messages.closeSheet)}
               style={{ touchAction: 'manipulation' }}
             >
