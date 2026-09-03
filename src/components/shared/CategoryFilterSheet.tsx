@@ -176,7 +176,7 @@ function CategoryFilterSheet({
                         role="checkbox"
                         aria-checked={isSelected}
                         onClick={() => onToggle(category)}
-                        className="flex w-full min-h-[44px] items-center gap-3 rounded-btn px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        className="flex w-full min-h-[44px] items-center gap-3 rounded-btn px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer"
                         style={{ touchAction: 'manipulation' }}
                       >
                         {isSelected && (

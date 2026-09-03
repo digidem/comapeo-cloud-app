@@ -142,7 +142,7 @@ function FilterSheet({
               trigger={
                 <button
                   type="button"
-                  className="mb-3 flex w-full min-h-[44px] items-center justify-between rounded-btn border border-border bg-surface px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="mb-3 flex w-full min-h-[44px] items-center justify-between rounded-btn border border-border bg-surface px-4 py-2 text-left text-sm font-medium text-text hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer"
                   style={{ touchAction: 'manipulation' }}
                 >
                   <span>{intl.formatMessage(messages.categorySheetTitle)}</span>

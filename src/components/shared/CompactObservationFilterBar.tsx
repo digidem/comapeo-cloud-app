@@ -77,7 +77,7 @@ function FilterChip({ label, onRemove }: FilterChipProps) {
         type="button"
         aria-label={intl.formatMessage(messages.removeFilter, { label })}
         onClick={onRemove}
-        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-text-muted hover:bg-surface-hover hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-text-muted hover:bg-surface-hover hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer"
         style={{ touchAction: 'manipulation' }}
       >
         <CloseIcon size={14} />
