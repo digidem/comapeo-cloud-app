@@ -107,4 +107,54 @@ describe('useMediaQuery', () => {
     unmount();
     expect(mql.listenerCount).toBe(0);
   });
+
+  it('re-reads matches immediately when the query prop changes', () => {
+    // Per-query mock: each query string resolves to its own `matches` value,
+    // so switching the prop must consult the NEW query's list.
+    const listeners = new Set<ChangeListener>();
+    const matchesByQuery = new Map<string, boolean>([
+      ['(min-width: 48rem)', true],
+      ['(min-width: 64rem)', false],
+    ]);
+    vi.spyOn(window, 'matchMedia').mockImplementation(((query: string) => ({
+      matches: matchesByQuery.get(query) ?? false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: (
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        _options?: boolean | AddEventListenerOptions,
+      ) => {
+        if (type === 'change' && typeof listener === 'function') {
+          listeners.add(listener as unknown as ChangeListener);
+        }
+      },
+      removeEventListener: (
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        _options?: boolean | AddEventListenerOptions,
+      ) => {
+        if (type === 'change' && typeof listener === 'function') {
+          listeners.delete(listener as unknown as ChangeListener);
+        }
+      },
+      dispatchEvent: vi.fn(() => false),
+    })) as unknown as typeof window.matchMedia);
+
+    const { result, rerender } = renderHook(
+      ({ query }: { query: string }) => useMediaQuery(query),
+      { initialProps: { query: '(min-width: 48rem)' } },
+    );
+    expect(result.current).toBe(true);
+
+    // No change event fires between these renders — the effect itself must
+    // re-sync state from the new query's media list.
+    rerender({ query: '(min-width: 64rem)' });
+    expect(result.current).toBe(false);
+
+    rerender({ query: '(min-width: 48rem)' });
+    expect(result.current).toBe(true);
+  });
 });

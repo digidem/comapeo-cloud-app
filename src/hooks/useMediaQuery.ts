@@ -12,6 +12,8 @@ export function useMediaQuery(query: string): boolean {
 
   useEffect(() => {
     const mediaQueryList = window.matchMedia(query);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-sync with the external media list when `query` changes, before subscribing (lazy initializer only runs on mount)
+    setMatches(mediaQueryList.matches);
     const handleChange = (event: MediaQueryListEvent) => {
       setMatches(event.matches);
     };
