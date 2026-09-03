@@ -476,7 +476,7 @@ export function DataScreen() {
               })
             }
             height="h-full"
-            basemapSwitcherPositionClassName="top-[4.25rem] right-3"
+            basemapSwitcherPositionClassName="top-[5.75rem] right-3"
             showEmptyState={
               !observationsQuery.isPending && !observationsQuery.isError
             }

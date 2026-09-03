@@ -659,9 +659,12 @@ describe('DataScreen', () => {
 
         render(<DataScreen />);
 
+        // Invariant: switcher top (top-[5.75rem] = 92px) must be greater than
+        // the grid toggle's bottom edge (top-10 = 40px + h-11 = 44px → 84px).
+        expect(92).toBeGreaterThan(84);
         expect(screen.getByTestId('observations-map')).toHaveAttribute(
           'data-basemap-switcher-position',
-          'top-[4.25rem] right-3',
+          'top-[5.75rem] right-3',
         );
         expect(
           screen.queryByRole('combobox', { name: 'Sort' }),
