@@ -9,6 +9,11 @@ import { MapDownloadStatus } from '@/screens/MapScreen/MapDownloadStatus';
 
 interface AppShellProps {
   topbarActions?: ReactNode;
+  /**
+   * Layout-owned actions rendered beside `topbarActions` (route overrides).
+   * Kept separate so a route cannot displace the global sync control.
+   */
+  topbarPersistentActions?: ReactNode;
   topbarWorkspaceName?: string;
   topbarModeLabel?: string;
   navItems: Array<{ path: string; label: string; icon: ReactNode }>;
@@ -39,11 +44,14 @@ interface AppShellProps {
   onDrawerSelectProject?: (id: string) => void;
   /** Open archive settings dialog */
   onDrawerArchiveSettings?: (id: string) => void;
+  /** Manually sync an archive server from the drawer's overflow sheet */
+  onDrawerSyncServer?: (id: string) => void;
   children: ReactNode;
 }
 
 function AppShell({
   topbarActions,
+  topbarPersistentActions,
   topbarWorkspaceName,
   topbarModeLabel,
   navItems,
@@ -61,6 +69,7 @@ function AppShell({
   onDrawerSelectServer,
   onDrawerSelectProject,
   onDrawerArchiveSettings,
+  onDrawerSyncServer,
   children,
 }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -84,7 +93,15 @@ function AppShell({
         onMenuClick={() => setMobileMenuOpen((prev) => !prev)}
         isMenuOpen={mobileMenuOpen}
       >
-        {topbarActions}
+        {/* Single guarded expression: Topbar renders a divider only when it
+            receives children, so this must stay undefined when both slots
+            are empty rather than an empty fragment. */}
+        {(topbarActions ?? topbarPersistentActions) ? (
+          <>
+            {topbarActions}
+            {topbarPersistentActions}
+          </>
+        ) : undefined}
       </Topbar>
       <div className="flex min-h-0 flex-1 pt-14">
         <PrimaryNav items={navItems} activePath={activeNavPath} />
@@ -120,6 +137,7 @@ function AppShell({
         onSelectServer={onDrawerSelectServer}
         onSelectProject={onDrawerSelectProject}
         onArchiveSettings={onDrawerArchiveSettings}
+        onSyncServer={onDrawerSyncServer}
         onNavigate={() => setMobileMenuOpen(false)}
       />
     </div>
