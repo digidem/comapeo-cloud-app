@@ -353,8 +353,8 @@ function MapContainer({
   };
 
   const containerClassName = className
-    ? `relative overflow-hidden ${className}`
-    : 'relative overflow-hidden';
+    ? `relative isolate overflow-hidden ${className}`
+    : 'relative isolate overflow-hidden';
 
   const containerRef = useRef<HTMLDivElement>(null);
 
