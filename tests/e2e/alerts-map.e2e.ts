@@ -2,6 +2,10 @@ import { expect, test } from '@playwright/test';
 
 import { setupMockServer } from './mock-server';
 import { seedAlertMapState } from './seed-alert-map';
+import {
+  expectControlUnobscured,
+  installHighZMapBlocker,
+} from './stacking-utils';
 
 test.describe('Alerts map and grid', () => {
   test('defaults to map and preserves map/grid preference independently', async ({
@@ -60,6 +64,23 @@ test.describe('Alerts map and grid', () => {
     await expect(
       page.getByText('Tap the map to place the alert point', { exact: true }),
     ).toBeVisible();
+
+    await installHighZMapBlocker(page.getByTestId('map-container'));
+
+    const backToForm = page.getByRole('button', { name: 'Back to form' });
+    await expectControlUnobscured(backToForm);
+    await backToForm.click();
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Select on map' }).click();
+    await expect(dialog).toBeHidden();
+    await expectControlUnobscured(
+      page.getByRole('button', { name: 'Back to form' }),
+    );
+
+    await page.getByTestId('synthetic-maplibre-high-z').evaluate((blocker) => {
+      blocker.remove();
+    });
 
     const mapCanvas = page.locator('.maplibregl-canvas').first();
     await expect(mapCanvas).toBeVisible();

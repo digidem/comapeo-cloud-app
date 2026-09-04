@@ -401,7 +401,7 @@ export function MapAuthoringCanvas({
       role="region"
       aria-label={intl.formatMessage(mapMessages.canvasAria)}
       data-testid="map-authoring-canvas"
-      className="relative h-full min-h-0 overflow-hidden"
+      className="relative isolate h-full min-h-0 overflow-hidden"
       onDragEnter={(event) => {
         if (!Array.from(event.dataTransfer.types).includes('Files')) return;
         event.preventDefault();

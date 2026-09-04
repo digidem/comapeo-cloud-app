@@ -825,7 +825,7 @@ export function MapScreen() {
               <button
                 type="button"
                 onClick={handleUndoDraw}
-                className="min-h-[44px] text-sm font-semibold text-white underline"
+                className="min-h-[44px] min-w-[44px] text-sm font-semibold text-white underline"
                 style={{ touchAction: 'manipulation' }}
               >
                 {intl.formatMessage(mapMessages.undo)}
