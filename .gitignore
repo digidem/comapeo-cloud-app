@@ -41,6 +41,8 @@ _verify_translations.py
 !.agents/skills/pr-cycle/**
 !.agents/skills/issue-to-spec/
 !.agents/skills/issue-to-spec/**
+!.agents/skills/maintaining-agent-knowledge/
+!.agents/skills/maintaining-agent-knowledge/**
 .agents/skills/pr-cycle/**/__pycache__/
 .agents/skills/pr-cycle/**/*.pyc
 .agents/skills/issue-to-spec/**/__pycache__/

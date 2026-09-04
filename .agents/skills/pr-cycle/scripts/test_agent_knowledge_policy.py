@@ -90,6 +90,11 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
     def test_no_unneeded_global_copilot_policy_fork(self) -> None:
         self.assertFalse((ROOT / ".github" / "copilot-instructions.md").exists())
 
+    def test_new_canonical_skill_is_versioned_by_gitignore_policy(self) -> None:
+        gitignore = (ROOT / ".gitignore").read_text()
+        self.assertIn("!.agents/skills/maintaining-agent-knowledge/", gitignore)
+        self.assertIn("!.agents/skills/maintaining-agent-knowledge/**", gitignore)
+
     def test_affected_skill_resource_links_resolve(self) -> None:
         skill_paths = [PR_CYCLE_SKILL]
         if KNOWLEDGE_SKILL.is_file():
