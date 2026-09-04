@@ -6,6 +6,7 @@ import { CreateProjectNavAction } from '@/components/shared/CreateProjectNavActi
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useArchiveStatus } from '@/hooks/useArchiveStatus';
+import { useArchiveSyncTrigger } from '@/hooks/useArchiveSyncTrigger';
 import { useProjects } from '@/hooks/useProjects';
 import { useRemoteArchives } from '@/hooks/useRemoteArchives';
 import { commonMessages } from '@/i18n/common-messages';
@@ -90,6 +91,7 @@ function ArchiveBrowser({
   const { data: projects = [], isLoading } = useProjects();
   const servers = useAuthStore((s) => s.servers);
   const archiveStatus = useArchiveStatus();
+  const syncServer = useArchiveSyncTrigger();
 
   // Build a map of server status by baseUrl
   const statusMap = useMemo(() => {
@@ -358,7 +360,9 @@ function ArchiveBrowser({
           }
         }}
         onSync={() => {
-          // no-op for now
+          if (overflowArchive) {
+            syncServer(overflowArchive.id);
+          }
         }}
         onCopyUrl={() => {
           if (overflowArchive?.url) {

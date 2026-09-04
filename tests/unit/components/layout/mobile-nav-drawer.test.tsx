@@ -328,6 +328,32 @@ describe('MobileNavDrawer', () => {
     expect(onArchiveSettings).toHaveBeenCalledWith('srv-1');
   });
 
+  it('calls onSyncServer when overflow Sync Now is clicked', async () => {
+    const onSyncServer = vi.fn();
+    const archives = [
+      { id: 'srv-1', label: 'Archive', baseUrl: 'https://x.com' },
+    ];
+    render(
+      <MobileNavDrawer
+        open={true}
+        onOpenChange={() => {}}
+        navItems={navItems}
+        activePath="/"
+        onNavigate={() => {}}
+        archives={archives}
+        archiveProjects={{ 'srv-1': [] }}
+        onSyncServer={onSyncServer}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: /Archive actions/i }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Sync Now/i }));
+
+    expect(onSyncServer).toHaveBeenCalledOnce();
+    expect(onSyncServer).toHaveBeenCalledWith('srv-1');
+  });
+
   it('highlights active archive server', () => {
     const archives = [
       { id: 'srv-1', label: 'Active Archive', baseUrl: 'https://x.com' },

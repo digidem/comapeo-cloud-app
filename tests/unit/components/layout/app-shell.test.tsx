@@ -327,4 +327,91 @@ describe('AppShell', () => {
       screen.queryByRole('button', { name: /close menu/i }),
     ).not.toBeInTheDocument();
   });
+
+  it('renders topbarPersistentActions beside per-screen topbar actions', () => {
+    render(
+      <AppShell
+        navItems={navItems}
+        activeNavPath="/dashboard"
+        topbarActions={<div data-testid="screen-actions">Screen</div>}
+        topbarPersistentActions={
+          <div data-testid="persistent-actions">Persistent</div>
+        }
+      >
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByTestId('screen-actions')).toBeInTheDocument();
+    expect(screen.getByTestId('persistent-actions')).toBeInTheDocument();
+  });
+
+  it('renders topbarPersistentActions alone', () => {
+    render(
+      <AppShell
+        navItems={navItems}
+        activeNavPath="/dashboard"
+        topbarPersistentActions={
+          <div data-testid="persistent-actions">Persistent</div>
+        }
+      >
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByTestId('persistent-actions')).toBeInTheDocument();
+  });
+
+  it('renders no topbar divider when both action slots are undefined', () => {
+    render(
+      <AppShell navItems={navItems} activeNavPath="/dashboard">
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(document.querySelector('div.h-4.w-px')).toBeNull();
+  });
+
+  it('renders the topbar divider when a persistent action is present', () => {
+    render(
+      <AppShell
+        navItems={navItems}
+        activeNavPath="/dashboard"
+        topbarPersistentActions={
+          <div data-testid="persistent-actions">Persistent</div>
+        }
+      >
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    expect(document.querySelector('div.h-4.w-px')).not.toBeNull();
+  });
+
+  it('forwards onDrawerSyncServer to the drawer overflow Sync Now action', async () => {
+    const onDrawerSyncServer = vi.fn();
+    render(
+      <AppShell
+        navItems={navItems}
+        activeNavPath="/dashboard"
+        drawerArchives={[
+          { id: 'srv-1', label: 'Archive', baseUrl: 'https://x.com' },
+        ]}
+        onDrawerArchiveSettings={vi.fn()}
+        onDrawerSyncServer={onDrawerSyncServer}
+      >
+        <div>Main content</div>
+      </AppShell>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    await screen.findByRole('button', { name: /close menu/i });
+    await userEvent.click(
+      screen.getByRole('button', { name: /Archive actions/i }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Sync Now/i }));
+
+    expect(onDrawerSyncServer).toHaveBeenCalledWith('srv-1');
+  });
 });
