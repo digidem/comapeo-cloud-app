@@ -261,6 +261,29 @@ describe('sentry module', () => {
       );
     });
 
+    it('preserves root tag keys only for Sentry events and transactions', async () => {
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+      const options = (sentry.init as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1,
+      )?.[0] as Record<string, (...args: unknown[]) => unknown>;
+
+      const input = {
+        tags: { environment: 'staging', release: '2026.09.04' },
+      };
+
+      for (const hookName of ['beforeSend', 'beforeSendTransaction']) {
+        expect(options[hookName]!(input, {})).toEqual({
+          tags: { environment: '[REDACTED]', release: '[REDACTED]' },
+        });
+      }
+
+      for (const hookName of ['beforeBreadcrumb', 'beforeSendSpan']) {
+        expect(options[hookName]!(input, {})).toEqual({ tags: '[REDACTED]' });
+      }
+    });
+
     it('redacts credential, invite, URL query, geospatial, and project canaries from every Sentry hook', async () => {
       const sentry = await import('@sentry/react');
       const { initSentry } = await import('@/lib/sentry');

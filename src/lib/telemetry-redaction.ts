@@ -292,6 +292,7 @@ function sanitizeValue(
   seen: WeakSet<object>,
   sensitiveValues: ReadonlySet<string>,
   redactPrimitives: boolean,
+  preserveRootTagKeys: boolean,
 ): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
@@ -331,7 +332,14 @@ function sanitizeValue(
     const result = value
       .slice(0, MAX_SANITIZE_ENTRIES)
       .map((item) =>
-        sanitizeValue(item, depth + 1, seen, sensitiveValues, redactPrimitives),
+        sanitizeValue(
+          item,
+          depth + 1,
+          seen,
+          sensitiveValues,
+          redactPrimitives,
+          preserveRootTagKeys,
+        ),
       );
     if (value.length > MAX_SANITIZE_ENTRIES) {
       result.push(TELEMETRY_TRUNCATED);
@@ -347,7 +355,7 @@ function sanitizeValue(
 
   for (const [key, entryValue] of entries) {
     const normalizedKey = normalizeKey(key);
-    if (normalizedKey === 'tags') {
+    if (normalizedKey === 'tags' && depth === 0 && preserveRootTagKeys) {
       result[key] = sanitizeTagMap(entryValue);
     } else if (isSensitiveTelemetryKey(key)) {
       result[key] = TELEMETRY_REDACTED;
@@ -358,6 +366,7 @@ function sanitizeValue(
         seen,
         sensitiveValues,
         redactPrimitives,
+        preserveRootTagKeys,
       );
     }
   }
@@ -369,7 +378,10 @@ function sanitizeValue(
   return result;
 }
 
-export function sanitizeTelemetry<T>(value: T): T {
+export function sanitizeTelemetry<T>(
+  value: T,
+  options: { preserveRootTagKeys?: boolean } = {},
+): T {
   const collection: SensitiveValueCollection = {
     values: new Set<string>(),
     saturated: false,
@@ -381,5 +393,6 @@ export function sanitizeTelemetry<T>(value: T): T {
     new WeakSet<object>(),
     collection.values,
     collection.saturated,
+    options.preserveRootTagKeys ?? false,
   ) as T;
 }
