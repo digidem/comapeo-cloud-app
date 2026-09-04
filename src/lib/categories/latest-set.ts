@@ -81,7 +81,10 @@ export function selectLatestCategorySet<T extends PresetLike>(
   const newestCluster = clusters[0]!;
   const newestClusterIds = new Set(newestCluster.map((p) => p.docId));
 
-  return withTimestamps
-    .filter((entry) => newestClusterIds.has(entry.preset.docId))
-    .map((entry) => entry.preset);
+  return withTimestamps.reduce<T[]>((latest, entry) => {
+    if (newestClusterIds.has(entry.preset.docId)) {
+      latest.push(entry.preset);
+    }
+    return latest;
+  }, []);
 }

@@ -14,12 +14,14 @@ import {
   ShellSlotProvider,
   useShellOverrides,
 } from '@/components/layout/shell-slot';
+import { SyncAllButton } from '@/components/shared/SyncAllButton';
+import { useArchiveSyncTrigger } from '@/hooks/useArchiveSyncTrigger';
 import { useAutoSync } from '@/hooks/useAutoSync';
 import { useProjects } from '@/hooks/useProjects';
 import { getDb } from '@/lib/db';
 import { ArchiveBrowser } from '@/screens/Home/ArchiveBrowser';
 import { CreateProjectDialog } from '@/screens/Home/CreateProjectDialog';
-import { useAuthStore } from '@/stores/auth-store';
+import { selectSyncableServers, useAuthStore } from '@/stores/auth-store';
 import { useMapStore } from '@/stores/map-store';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -262,6 +264,13 @@ function AuthenticatedLayoutInner() {
   // Data for drawer archive/project sections.
   const servers = useAuthStore((s) => s.servers);
   const { data: projects = [] } = useProjects();
+  const syncServer = useArchiveSyncTrigger();
+
+  // The global sync control is layout-owned, so it survives route-level
+  // topbar overrides. Hidden entirely when nothing is syncable.
+  const syncableCount = useAuthStore(
+    (state) => selectSyncableServers(state).length,
+  );
 
   const drawerArchives = useMemo(
     () =>
@@ -323,6 +332,9 @@ function AuthenticatedLayoutInner() {
         topbarWorkspaceName={topbarWorkspaceName}
         topbarModeLabel={topbarModeLabel}
         topbarActions={topbarActions}
+        topbarPersistentActions={
+          syncableCount > 0 ? <SyncAllButton /> : undefined
+        }
         navItems={NAV_ITEMS}
         activeNavPath={activeNavPath}
         secondaryContent={
@@ -362,6 +374,7 @@ function AuthenticatedLayoutInner() {
           useProjectStore.getState().setSelectedServerId(id);
           navigate({ to: '/' });
         }}
+        onDrawerSyncServer={syncServer}
       >
         <Outlet />
       </AppShell>

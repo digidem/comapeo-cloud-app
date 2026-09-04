@@ -1,5 +1,9 @@
 import { calculateAllMethods, extractPoints } from './calculator';
-import type { WorkerInMessage, WorkerOutMessage } from './types';
+import type {
+  MethodDescriptor,
+  WorkerInMessage,
+  WorkerOutMessage,
+} from './types';
 
 export interface WorkerRequestState {
   latestRequestId: string | null;
@@ -30,31 +34,7 @@ export async function handleWorkerMessage(
     const pointFeatures = extractPoints(points);
     const methods = calculateAllMethods(pointFeatures, params);
 
-    for (const method of methods) {
-      if (!isLatestRequest(state, requestId)) return;
-      postMessage({
-        type: 'progress',
-        requestId,
-        methodId: method.id,
-        message: method.progress,
-      });
-
-      try {
-        const result = method.run();
-        if (!isLatestRequest(state, requestId)) return;
-        postMessage({ type: 'result', requestId, result });
-      } catch (err) {
-        if (!isLatestRequest(state, requestId)) return;
-        postMessage({
-          type: 'methodError',
-          requestId,
-          methodId: method.id,
-          message: errorMessage(err),
-        });
-      }
-
-      await Promise.resolve();
-    }
+    await processMethods(methods, requestId, postMessage, state);
   } catch (err) {
     if (!isLatestRequest(state, requestId)) return;
     postMessage({ type: 'error', requestId, message: errorMessage(err) });
@@ -63,6 +43,46 @@ export async function handleWorkerMessage(
 
   if (!isLatestRequest(state, requestId)) return;
   postMessage({ type: 'done', requestId });
+}
+
+async function processMethods(
+  methods: MethodDescriptor[],
+  requestId: string,
+  postMessage: (msg: WorkerOutMessage) => void,
+  state: WorkerRequestState,
+  index = 0,
+): Promise<void> {
+  const method = methods[index];
+  if (!method || !isLatestRequest(state, requestId)) return;
+
+  postMessage({
+    type: 'progress',
+    requestId,
+    methodId: method.id,
+    message: method.progress,
+  });
+
+  try {
+    const result = method.run();
+    if (!isLatestRequest(state, requestId)) return;
+    postMessage({ type: 'result', requestId, result });
+  } catch (err) {
+    if (!isLatestRequest(state, requestId)) return;
+    postMessage({
+      type: 'methodError',
+      requestId,
+      methodId: method.id,
+      message: errorMessage(err),
+    });
+  }
+
+  await yieldToWorkerTaskQueue();
+  if (!isLatestRequest(state, requestId)) return;
+  await processMethods(methods, requestId, postMessage, state, index + 1);
+}
+
+function yieldToWorkerTaskQueue(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function isFeatureCollection(value: unknown): boolean {

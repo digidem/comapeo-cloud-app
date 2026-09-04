@@ -1,9 +1,10 @@
 import { render, screen, userEvent } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import React from 'react';
+import React, { act } from 'react';
 
 import { AuthenticatedLayout } from '@/components/layout/authenticated-layout';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
 const { mockNavigate, mockPostAddSync, mockRouterState } = vi.hoisted(() => ({
@@ -111,6 +112,89 @@ describe('AuthenticatedLayout', () => {
       selectedProjectId: null,
       selectedServerId: null,
     });
+    // Default to no syncable archives so tests assert the divider-free topbar
+    // unless a test opts into an eligible archive.
+    useAuthStore.setState({ servers: [] });
+  });
+
+  it('renders the global Sync all control when an archive is syncable', () => {
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-1',
+          label: 'North Archive',
+          baseUrl: 'https://archive.example.com',
+          token: 'token-1',
+          status: 'idle',
+        },
+      ],
+    });
+
+    render(<AuthenticatedLayout />);
+
+    expect(
+      screen.getByRole('button', { name: 'Sync all archives now' }),
+    ).toBeInTheDocument();
+    expect(document.querySelector('div.h-4.w-px')).not.toBeNull();
+  });
+
+  it('hides the global Sync all control and its divider with no syncable archive', () => {
+    render(<AuthenticatedLayout />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Sync all archives now' }),
+    ).not.toBeInTheDocument();
+    expect(document.querySelector('div.h-4.w-px')).toBeNull();
+  });
+
+  it('reveals the Sync all control and its divider once an archive hydrates in', () => {
+    render(<AuthenticatedLayout />);
+
+    // Pre-hydration: no syncable archive, so neither control nor divider.
+    expect(
+      screen.queryByRole('button', { name: 'Sync all archives now' }),
+    ).not.toBeInTheDocument();
+    expect(document.querySelector('div.h-4.w-px')).toBeNull();
+
+    act(() => {
+      useAuthStore.setState({
+        servers: [
+          {
+            id: 'server-1',
+            label: 'North Archive',
+            baseUrl: 'https://archive.example.com',
+            token: 'token-1',
+            status: 'idle',
+          },
+        ],
+      });
+    });
+
+    expect(
+      screen.getByRole('button', { name: 'Sync all archives now' }),
+    ).toBeInTheDocument();
+    expect(document.querySelector('div.h-4.w-px')).not.toBeNull();
+  });
+
+  it('keeps the Sync all control hidden for a cancelled-onboarding archive', () => {
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-1',
+          label: 'North Archive',
+          baseUrl: 'https://archive.example.com',
+          token: 'token-1',
+          status: 'idle',
+          onboardingStatus: 'cancelled',
+        },
+      ],
+    });
+
+    render(<AuthenticatedLayout />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Sync all archives now' }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders AppShell with navigation items', () => {

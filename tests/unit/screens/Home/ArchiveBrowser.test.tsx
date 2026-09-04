@@ -6,6 +6,19 @@ import { useProjects } from '@/hooks/useProjects';
 import { ArchiveBrowser } from '@/screens/Home/ArchiveBrowser';
 import { useAuthStore } from '@/stores/auth-store';
 
+const { mockNavigate, mockSyncRemoteArchive } = vi.hoisted(() => ({
+  mockNavigate: vi.fn(),
+  mockSyncRemoteArchive: vi.fn(),
+}));
+
+vi.mock('@/lib/data-layer', () => ({
+  syncRemoteArchive: mockSyncRemoteArchive,
+}));
+
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 vi.mock('@/hooks/useArchiveStatus', () => ({
   useArchiveStatus: vi.fn(),
 }));
@@ -20,6 +33,13 @@ const mockUseProjects = vi.mocked(useProjects);
 describe('ArchiveBrowser', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSyncRemoteArchive.mockResolvedValue({
+      success: true,
+      status: 'ready',
+      serverId: 'server-1',
+      projects: [],
+      warnings: [],
+    });
     useAuthStore.setState({
       servers: [
         {
@@ -236,6 +256,29 @@ describe('ArchiveBrowser', () => {
     await user.click(screen.getByRole('button', { name: 'View Details' }));
 
     expect(onParentClick).toHaveBeenCalled();
+  });
+
+  it('syncs the archive when overflow Sync Now is clicked', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ArchiveBrowser
+        selectedProjectId={null}
+        onSelect={vi.fn()}
+        onCreateNew={vi.fn()}
+        onAddServer={vi.fn()}
+        onSelectServer={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Archive actions' }));
+    await user.click(screen.getByRole('button', { name: 'Sync Now' }));
+
+    expect(mockSyncRemoteArchive).toHaveBeenCalledOnce();
+    expect(mockSyncRemoteArchive).toHaveBeenCalledWith('server-1', {
+      baseUrl: 'https://archive.example.com',
+      token: 'token',
+    });
   });
 
   // Regression: commit dd11b75 — selectArchive outside state updater (Strict Mode safety)
