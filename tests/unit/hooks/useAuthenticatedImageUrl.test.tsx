@@ -212,10 +212,10 @@ describe('useAuthenticatedImageUrl', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('never attaches an active remote-archive credential to an unmatched cross-origin URL', async () => {
+  it('never attaches an active archive credential to an unmatched cross-origin URL while the legacy tier stays local', async () => {
     const runtimeValue = String(234567);
     useAuthStore.setState({
-      tier: 'remoteArchive',
+      tier: 'local',
       activeServerId: 'archive-server',
       token: runtimeValue,
       baseUrl: 'https://archive.example.com',

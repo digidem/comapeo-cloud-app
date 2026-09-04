@@ -21,6 +21,8 @@ describe('telemetry redaction', () => {
     expect(MAX_SANITIZE_STRING_LENGTH).toBe(8192);
     expect(SECRET_TELEMETRY_KEYS.has('authorization')).toBe(true);
     expect(SECRET_TELEMETRY_KEYS.has('accesstoken')).toBe(true);
+    expect(SECRET_TELEMETRY_KEYS.has('proxyauthorization')).toBe(true);
+    expect(SECRET_TELEMETRY_KEYS.has('xapikey')).toBe(true);
     expect(GEOSPATIAL_TELEMETRY_KEYS.has('coordinates')).toBe(true);
     expect(GEOSPATIAL_TELEMETRY_KEYS.has('geometry')).toBe(true);
     expect(SENSITIVE_DOMAIN_TELEMETRY_KEYS.has('tags')).toBe(true);
@@ -161,7 +163,7 @@ describe('telemetry redaction', () => {
 
     const result = sanitizeTelemetry(payload);
     expect(JSON.stringify(result)).not.toContain(secret);
-    expect(result.message).toBe(TELEMETRY_REDACTED);
+    expect(result.message).toBe('request failed for ' + TELEMETRY_REDACTED);
   });
 
   it('fails closed when sensitive containers saturate the value collection bound', () => {
@@ -178,6 +180,56 @@ describe('telemetry redaction', () => {
 
     expect(JSON.stringify(result)).not.toContain(secret);
     expect(result.message).toBe(TELEMETRY_REDACTED);
+  });
+
+  it('preserves safe event primitives when only non-sensitive containers exceed the collection bound', () => {
+    const oversizedValues: unknown[] = [
+      Array.from({ length: MAX_SANITIZE_ENTRIES + 1 }, (_, index) => ({
+        op: 'http.client',
+        index,
+      })),
+      Object.fromEntries(
+        Array.from({ length: MAX_SANITIZE_ENTRIES + 1 }, (_, index) => [
+          `entry-${index}`,
+          index,
+        ]),
+      ),
+    ];
+
+    for (const oversized of oversizedValues) {
+      const result = sanitizeTelemetry({
+        event_id: 'event-325',
+        timestamp: '2026-09-04T12:00:00.000Z',
+        platform: 'javascript',
+        oversized,
+      });
+
+      expect(result.event_id).toBe('event-325');
+      expect(result.timestamp).toBe('2026-09-04T12:00:00.000Z');
+      expect(result.platform).toBe('javascript');
+    }
+  });
+
+  it('preserves object-valued tag keys while redacting every tag value', () => {
+    const tagCanary = ['synthetic', 'tag', 'value', '325'].join('-');
+    const result = sanitizeTelemetry({
+      tags: {
+        environment: 'staging',
+        release: '2026.09.04',
+        attempt: 3,
+        enabled: true,
+        nested: { value: tagCanary },
+      },
+    });
+
+    expect(result.tags).toEqual({
+      attempt: TELEMETRY_REDACTED,
+      enabled: TELEMETRY_REDACTED,
+      environment: TELEMETRY_REDACTED,
+      nested: TELEMETRY_REDACTED,
+      release: TELEMETRY_REDACTED,
+    });
+    expect(JSON.stringify(result)).not.toContain(tagCanary);
   });
 
   it('bounds objects and arrays to at most 100 entries before a truncation marker', () => {
