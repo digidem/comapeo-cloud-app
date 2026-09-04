@@ -121,6 +121,11 @@ function telemetryKeyPriority(key: string): number {
   return 2;
 }
 
+function compareTelemetryKeys(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
 function selectBoundedObjectEntries(
   value: Record<string, unknown>,
 ): Array<[string, unknown]> {
@@ -128,7 +133,7 @@ function selectBoundedObjectEntries(
     .sort(([left], [right]) => {
       const sensitivityOrder =
         telemetryKeyPriority(left) - telemetryKeyPriority(right);
-      return sensitivityOrder || left.localeCompare(right);
+      return sensitivityOrder || compareTelemetryKeys(left, right);
     })
     .slice(0, MAX_SANITIZE_ENTRIES);
 }
@@ -268,19 +273,22 @@ function collectSensitiveValues(
   }
 }
 
-function sanitizeTagMap(value: unknown): unknown {
+function sanitizeTagMap(
+  value: unknown,
+  sensitiveValues: ReadonlySet<string>,
+): unknown {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return TELEMETRY_REDACTED;
   }
 
   const source = value as Record<string, unknown>;
   const entries = selectBoundedObjectEntries(source).sort(([left], [right]) =>
-    left.localeCompare(right),
+    compareTelemetryKeys(left, right),
   );
   const result: Record<string, unknown> = {};
 
   for (const [key] of entries) {
-    result[sanitizeTelemetryString(key)] = TELEMETRY_REDACTED;
+    result[sanitizeTelemetryString(key, sensitiveValues)] = TELEMETRY_REDACTED;
   }
 
   if (Object.keys(source).length > MAX_SANITIZE_ENTRIES) {
@@ -355,14 +363,14 @@ function sanitizeValue(
 
   const source = value as Record<string, unknown>;
   const entries = selectBoundedObjectEntries(source).sort(([left], [right]) =>
-    left.localeCompare(right),
+    compareTelemetryKeys(left, right),
   );
   const result: Record<string, unknown> = {};
 
   for (const [key, entryValue] of entries) {
     const normalizedKey = normalizeKey(key);
     if (normalizedKey === 'tags' && depth === 0 && preserveRootTagKeys) {
-      result[key] = sanitizeTagMap(entryValue);
+      result[key] = sanitizeTagMap(entryValue, sensitiveValues);
     } else if (isSensitiveTelemetryKey(key)) {
       result[key] = TELEMETRY_REDACTED;
     } else {

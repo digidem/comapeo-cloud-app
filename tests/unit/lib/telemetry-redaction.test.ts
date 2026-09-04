@@ -250,6 +250,21 @@ describe('telemetry redaction', () => {
     expect(keys.some((key) => key.endsWith(TELEMETRY_TRUNCATED))).toBe(true);
   });
 
+  it('echo-scrubs collected sensitive values from preserved root tag keys', () => {
+    const canary = ['sensitive', 'tag', 'key', '325'].join('-');
+    const result = sanitizeTelemetry(
+      {
+        projectId: canary,
+        tags: { ['phase-' + canary]: 'value' },
+      },
+      { preserveRootTagKeys: true },
+    );
+
+    expect(Object.keys(result.tags).some((key) => key.includes(canary))).toBe(
+      false,
+    );
+  });
+
   it('preserves a literal truncation-like tag key when adding the map truncation marker', () => {
     const tags: Record<string, unknown> = { __truncated__: 'user-value' };
     for (let index = 0; index < MAX_SANITIZE_ENTRIES; index += 1) {
@@ -304,7 +319,7 @@ describe('telemetry redaction', () => {
     ).toBe(true);
   });
 
-  it('truncates omitted non-sensitive array tails without serializing their nested values', () => {
+  it('omits non-sensitive array tails without learning their values for sibling echo-scrubbing', () => {
     const tailCanary = ['tail', 'canary', '325'].join('-');
     const oversized = Array.from(
       { length: MAX_SANITIZE_ENTRIES + 1 },
@@ -313,12 +328,12 @@ describe('telemetry redaction', () => {
     );
 
     const result = sanitizeTelemetry({
-      message: 'safe diagnostic',
+      message: 'safe diagnostic ' + tailCanary,
       oversized,
     });
 
-    expect(result.message).toBe('safe diagnostic');
-    expect(JSON.stringify(result)).not.toContain(tailCanary);
+    expect(result.message).toBe('safe diagnostic ' + tailCanary);
+    expect(JSON.stringify(result.oversized)).not.toContain(tailCanary);
   });
 
   it('bounds objects and arrays to at most 100 entries before a truncation marker', () => {
