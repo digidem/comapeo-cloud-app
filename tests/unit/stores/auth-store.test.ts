@@ -8,6 +8,7 @@ import {
   selectActiveServer,
   selectActiveToken,
   selectIsAuthenticated,
+  selectSyncableServers,
   useAuthStore,
 } from '@/stores/auth-store';
 
@@ -905,5 +906,84 @@ describe('active archive identity and credential invariants', () => {
     expect(state.activeServerId).toBe(serverId);
     expect(selectActiveToken(state)).toBe('rotated-token');
     expect(selectIsAuthenticated(state)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sync eligibility predicate (shared by useSyncAll / SyncAllButton)
+// ---------------------------------------------------------------------------
+
+describe('selectSyncableServers', () => {
+  it('keeps only servers with baseUrl, a token, and a non-cancelled lifecycle', () => {
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'syncable',
+          label: 'Syncable',
+          baseUrl: 'https://a.example.com',
+          token: 'token-a',
+          status: 'idle',
+        },
+        {
+          id: 'no-token',
+          label: 'No token',
+          baseUrl: 'https://b.example.com',
+          token: null,
+          status: 'idle',
+        },
+        {
+          id: 'no-url',
+          label: 'No url',
+          baseUrl: '',
+          token: 'token-c',
+          status: 'idle',
+        },
+        {
+          id: 'cancelled',
+          label: 'Cancelled',
+          baseUrl: 'https://d.example.com',
+          token: 'token-d',
+          status: 'cancelled',
+          onboardingStatus: 'cancelled',
+        },
+      ],
+    });
+
+    const syncable = selectSyncableServers(useAuthStore.getState());
+    expect(syncable.map((server) => server.id)).toEqual(['syncable']);
+    // The token is narrowed to a string so callers can pass it straight to
+    // syncRemoteArchive without re-checking.
+    expect(syncable[0]!.token).toBe('token-a');
+  });
+
+  it('keeps servers with any non-cancelled onboardingStatus, including undefined', () => {
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'pending',
+          label: 'Pending',
+          baseUrl: 'https://a.example.com',
+          token: 'token-a',
+          status: 'pending',
+          onboardingStatus: 'pending',
+        },
+        {
+          id: 'unspecified',
+          label: 'Unspecified',
+          baseUrl: 'https://b.example.com',
+          token: 'token-b',
+          status: 'idle',
+        },
+      ],
+    });
+
+    expect(
+      selectSyncableServers(useAuthStore.getState()).map((s) => s.id),
+    ).toEqual(['pending', 'unspecified']);
+  });
+
+  it('returns an empty list when no server is eligible', () => {
+    useAuthStore.setState({ servers: [] });
+    expect(selectSyncableServers(useAuthStore.getState())).toEqual([]);
   });
 });
