@@ -10,6 +10,7 @@ RUNBOOK = SKILL_DIR / "references" / "github-runbook.md"
 TIMEOUT_STRATEGY = SKILL_DIR / "references" / "timeout-strategy.md"
 CLAUDE_QWEN_REVIEW = SKILL_DIR / "references" / "claude-qwen-review.md"
 AGENTS = SKILL_DIR.parents[2] / "AGENTS.md"
+E2E_AGENTS = SKILL_DIR.parents[2] / "tests" / "e2e" / "AGENTS.md"
 CI = SKILL_DIR.parents[2] / ".github" / "workflows" / "ci.yml"
 
 
@@ -308,8 +309,15 @@ def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) ->
 
 
 def assert_policy_contract(
-    test: unittest.TestCase, *, skill_text: str, agents_text: str, ci_text: str
+    test: unittest.TestCase,
+    *,
+    skill_text: str,
+    agents_text: str,
+    ci_text: str,
+    e2e_agents_text: str | None = None,
 ) -> None:
+    if e2e_agents_text is None:
+        e2e_agents_text = E2E_AGENTS.read_text()
     test.assertIn("verify the claim against the exact current head", skill_text)
     test.assertIn("false positive, stale, duplicate, or already satisfied", skill_text)
     test.assertIn("reply with precise evidence", skill_text)
@@ -390,11 +398,12 @@ def assert_policy_contract(
     test.assertIn("search the existing GitHub backlog", agents_text)
     test.assertIn("reuse the canonical implementation, data model, or integration path", agents_text)
     test.assertIn("Do not promote proposed or unmerged follow-up designs", agents_text)
-    test.assertIn("tracked artifacts under `screenshots/screenshot/`", agents_text)
-    test.assertIn("restore incidental changes after exploratory runs", agents_text)
-    test.assertIn("`npm run storybook:screenshots:check`", agents_text)
-    test.assertIn("`visual-regression-check`", agents_text)
-    test.assertIn("`visual-regression-diff`", agents_text)
+    test.assertIn("read `tests/e2e/AGENTS.md`", agents_text)
+    test.assertIn("tracked Argos artifacts under `screenshots/screenshot/`", e2e_agents_text)
+    test.assertIn("restore incidental changes after exploratory runs", e2e_agents_text)
+    test.assertIn("`npm run storybook:screenshots:check`", e2e_agents_text)
+    test.assertIn("`visual-regression-diff`", e2e_agents_text)
+    test.assertIn("never relax thresholds", e2e_agents_text)
 
     pr_cycle_commands = _active_ci_commands(_ci_job_block(ci_text, "pr-cycle-skill-tests"))
     test.assertIn("sudo apt-get install -y zsh", pr_cycle_commands)
@@ -1107,22 +1116,23 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
             )
 
     def test_argos_artifact_guidance_is_required(self) -> None:
-        agents_text = AGENTS.read_text().replace(
-            "tracked artifacts under `screenshots/screenshot/`",
-            "ignored artifacts under `screenshots/screenshot/`",
+        e2e_agents_text = E2E_AGENTS.read_text().replace(
+            "tracked Argos artifacts under `screenshots/screenshot/`",
+            "ignored Argos artifacts under `screenshots/screenshot/`",
         )
         with self.assertRaisesRegex(
-            AssertionError, "tracked artifacts under `screenshots/screenshot/`"
+            AssertionError, "tracked Argos artifacts under `screenshots/screenshot/`"
         ):
             assert_policy_contract(
                 self,
                 skill_text=SKILL.read_text(),
-                agents_text=agents_text,
+                agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=e2e_agents_text,
             )
 
     def test_storybook_ci_baseline_guidance_is_required(self) -> None:
-        agents_text = AGENTS.read_text().replace(
+        e2e_agents_text = E2E_AGENTS.read_text().replace(
             "`npm run storybook:screenshots:check`",
             "`npm run storybook:screenshots`",
         )
@@ -1132,8 +1142,9 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
             assert_policy_contract(
                 self,
                 skill_text=SKILL.read_text(),
-                agents_text=agents_text,
+                agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=e2e_agents_text,
             )
 
     def test_agents_merge_authorization_fallback_is_required(self) -> None:
