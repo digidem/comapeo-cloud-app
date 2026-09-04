@@ -242,6 +242,10 @@ function collectSensitiveValues(
     for (const item of value.slice(0, MAX_SANITIZE_ENTRIES)) {
       collectSensitiveValues(item, depth + 1, forceSensitive, seen, collection);
     }
+    // Only sensitive-container truncation forces blanket primitive redaction.
+    // Non-sensitive tails are omitted by sanitizeValue too, so they cannot be
+    // serialized directly; their omitted values are intentionally not learned
+    // for echo-scrubbing of otherwise retained free-text siblings.
     if (forceSensitive && value.length > MAX_SANITIZE_ENTRIES) {
       collection.saturated = true;
     }
@@ -276,11 +280,13 @@ function sanitizeTagMap(value: unknown): unknown {
   const result: Record<string, unknown> = {};
 
   for (const [key] of entries) {
-    result[key] = TELEMETRY_REDACTED;
+    result[sanitizeTelemetryString(key)] = TELEMETRY_REDACTED;
   }
 
   if (Object.keys(source).length > MAX_SANITIZE_ENTRIES) {
-    result.__truncated__ = TELEMETRY_TRUNCATED;
+    let markerKey = '__truncated__';
+    while (Object.hasOwn(result, markerKey)) markerKey += '_';
+    result[markerKey] = TELEMETRY_TRUNCATED;
   }
 
   return result;

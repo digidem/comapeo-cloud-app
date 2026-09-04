@@ -235,6 +235,32 @@ describe('telemetry redaction', () => {
     expect(JSON.stringify(result)).not.toContain(tagCanary);
   });
 
+  it('sanitizes and bounds preserved root event tag keys', () => {
+    const canary = ['synthetic', 'tag', 'key', '325'].join('-');
+    const unsafeKey = ['https://example.com/path', '?', 'q=', canary].join('');
+    const longKey = 'k'.repeat(MAX_SANITIZE_STRING_LENGTH + 1);
+    const result = sanitizeTelemetry(
+      { tags: { [unsafeKey]: 'value', [longKey]: 'value' } },
+      { preserveRootTagKeys: true },
+    );
+    const keys = Object.keys(result.tags);
+
+    expect(keys).toContain('https://example.com/path');
+    expect(keys.some((key) => key.includes(canary))).toBe(false);
+    expect(keys.some((key) => key.endsWith(TELEMETRY_TRUNCATED))).toBe(true);
+  });
+
+  it('preserves a literal truncation-like tag key when adding the map truncation marker', () => {
+    const tags: Record<string, unknown> = { __truncated__: 'user-value' };
+    for (let index = 0; index < MAX_SANITIZE_ENTRIES; index += 1) {
+      tags['tag-' + String(index).padStart(3, '0')] = index;
+    }
+    const result = sanitizeTelemetry({ tags }, { preserveRootTagKeys: true });
+
+    expect(result.tags.__truncated__).toBe(TELEMETRY_REDACTED);
+    expect(Object.values(result.tags)).toContain(TELEMETRY_TRUNCATED);
+  });
+
   it('preserves only root event tag keys and redacts nested domain tag maps as a container', () => {
     const result = sanitizeTelemetry(
       {

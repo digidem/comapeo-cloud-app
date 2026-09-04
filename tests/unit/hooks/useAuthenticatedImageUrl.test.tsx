@@ -212,6 +212,32 @@ describe('useAuthenticatedImageUrl', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('uses fallback auth when the legacy tier says remote archive but the active base URL is not a configured archive', async () => {
+    const compatValue = String(456239);
+    useAuthStore.setState({
+      tier: 'remoteArchive',
+      activeServerId: null,
+      token: compatValue,
+      baseUrl: 'http://localhost:3210',
+      servers: [],
+    });
+    fetchMock.mockResolvedValue(createMockImageResponse());
+
+    const { useAuthenticatedImageUrl } =
+      await import('@/hooks/useAuthenticatedImageUrl');
+    renderHook(() => useAuthenticatedImageUrl('/projects/local/icon.png'));
+
+    await act(() => Promise.resolve());
+    await act(() => Promise.resolve());
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/projects/local/icon.png',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer ' + compatValue },
+      }),
+    );
+  });
+
   it('never attaches an active archive credential to an unmatched cross-origin URL while the legacy tier stays local', async () => {
     const runtimeValue = String(234567);
     useAuthStore.setState({
