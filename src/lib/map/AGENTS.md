@@ -6,6 +6,7 @@ These rules are local deltas for work under `src/lib/map/`. Root `AGENTS.md` sti
 
 - Enforce count, byte, node/depth, and output limits **before** avoidable expensive parsing, materialization, network work, or allocation whenever the contract permits early rejection.
 - Preserve defense-in-depth bounds at later allocation/output layers even when an earlier validator normally enforces the same ceiling.
+- Validation of untrusted JSON-like input must not execute accessors/getters. Use descriptor/reflection-safe reads where the current parser contract does, and convert reflection/proxy failures into bounded structured errors rather than running candidate code.
 - Do not mechanically parallelize deliberately serial work when serialization is part of cumulative resource accounting, deterministic ordering, or fail-fast behavior.
 
 ## Deterministic packages
@@ -21,6 +22,7 @@ These rules are local deltas for work under `src/lib/map/`. Root `AGENTS.md` sti
 ## Offline symbols
 
 - Preserve the explicit text-versus-icon resource distinction: text may use MapLibre browser-local TinySDF glyph fallback when packaged glyphs are unavailable, while authored icons require sprite resources.
+- A missing glyph resource must continue to surface as a failed request when that failure is what allows MapLibre to use its local TinySDF fallback; do not turn it into a successful empty PBF that suppresses fallback.
 - Until an explicit sprite ownership/packaging contract lands, do not silently accept authored icon properties that would produce syntactically valid but broken offline packages.
 
 ## Cancellation

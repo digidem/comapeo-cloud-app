@@ -119,6 +119,31 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
                     f"missing allowed disposition for {heading}",
                 )
 
+    def test_promoted_lessons_keep_their_material_invariants(self) -> None:
+        qa_text = QA_EVIDENCE.read_text()
+        review_text = REVIEW_EVIDENCE.read_text()
+        e2e_text = E2E_AGENTS.read_text()
+        map_text = MAP_AGENTS.read_text()
+        knowledge_text = KNOWLEDGE_SKILL.read_text()
+
+        self.assertIn("historical evidence, not canonical product state", qa_text)
+        self.assertIn("accessibility tree", qa_text)
+        self.assertIn("exact deployed artifact", qa_text)
+        self.assertIn("same integrated revision", qa_text)
+        self.assertIn("final tree that will be pushed/reviewed", qa_text)
+        self.assertIn("Findings are hypotheses, not commands", review_text)
+        self.assertIn("RED regression test", review_text)
+        self.assertIn("unavailable review transport", review_text)
+        self.assertIn("desktop-only element", e2e_text)
+        self.assertIn("continue-on-error", e2e_text)
+        self.assertIn("must not execute accessors/getters", map_text)
+        self.assertIn("UTC-based metadata/timestamps", map_text)
+        self.assertIn("compatibility exceptions must be exact, narrow", map_text)
+        self.assertIn("successful empty PBF", map_text)
+        self.assertIn("terminal/finalization waits", map_text)
+        self.assertIn("One normative rule should have one canonical home", knowledge_text)
+        self.assertIn("Never create permanent files named like", knowledge_text)
+
     def test_ci_runs_agent_knowledge_policy_under_existing_context(self) -> None:
         ci_text = CI.read_text()
         self.assertIn("  pr-cycle-skill-tests:", ci_text)

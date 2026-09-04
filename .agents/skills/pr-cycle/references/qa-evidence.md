@@ -40,6 +40,10 @@ Cross-browser coverage does not require identical low-level assertions when an e
 - Preserve lifecycle, persistence, protocol, and user-visible behavior coverage in engines where pixel sampling is not trustworthy.
 - Do not weaken every engine to the weakest common assertion merely for symmetry.
 
+## Validate the final published tree
+
+After formatting, conflict resolution, or base synchronization, rerun the narrow changed-area validation that proves the affected behavior. Evidence from a pre-format or pre-sync tree is not evidence for the final tree that will be pushed/reviewed.
+
 ## Responsive QA must re-resolve the UI
 
 When a test changes viewport or responsive mode:
