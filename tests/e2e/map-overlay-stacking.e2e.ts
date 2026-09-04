@@ -5,6 +5,7 @@ import { setupMockServer } from './mock-server';
 import {
   expectControlUnobscured,
   installHighZMapBlocker,
+  removeHighZMapBlocker,
 } from './stacking-utils';
 
 const PROJECT_ID = 'map-overlay-stacking-project';
@@ -62,33 +63,65 @@ test.describe('Mobile map authoring overlay stacking', () => {
     const drawBounds = page.getByRole('button', { name: 'Draw bounds' });
     await expectControlUnobscured(drawBounds);
     await drawBounds.click();
-    await installHighZMapBlocker(page.getByTestId('map-authoring-canvas'));
 
     await expect(
       page.getByText('Pan and zoom until the area fits inside the frame', {
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page.getByTestId('draw-frame')).toBeVisible();
+    const drawFrame = page.getByTestId('draw-frame');
+    await expect(drawFrame).toBeVisible();
 
     const cancelDrawing = page.getByRole('button', {
       name: 'Cancel',
       exact: true,
     });
+    const cancelDrawBounds = page.getByRole('button', {
+      name: 'Cancel drawing',
+    });
+
+    // The frame scrim is intentionally pointer-transparent in production. Make
+    // it pointer-active temporarily so browser hit-testing also proves the
+    // instruction and cancel controls paint above the scrim, not merely that
+    // clicks fall through it.
+    const frameOverlay = drawFrame.locator('..');
+    await frameOverlay.evaluate((element) => {
+      element.style.pointerEvents = 'auto';
+    });
+    await expectControlUnobscured(cancelDrawBounds);
+    await expectControlUnobscured(cancelDrawing);
+    await frameOverlay.evaluate((element) => {
+      element.style.pointerEvents = 'none';
+    });
+
+    const mapAuthoringCanvas = page.getByTestId('map-authoring-canvas');
+    await installHighZMapBlocker(mapAuthoringCanvas);
     await expectControlUnobscured(cancelDrawing);
 
     const setThisArea = page.getByRole('button', { name: 'Set this area' });
     await expectControlUnobscured(setThisArea);
+    await removeHighZMapBlocker(mapAuthoringCanvas);
     await setThisArea.click();
 
-    await expect(page.getByRole('status')).toContainText('Map area updated');
+    const areaUpdatedStatus = page
+      .getByRole('status')
+      .filter({ hasText: 'Map area updated' });
+    await expect(areaUpdatedStatus).toBeVisible();
     const undo = page.getByRole('button', { name: 'Undo' });
     await expectControlUnobscured(undo);
     await undo.click();
-    await expect(page.getByRole('status')).toHaveCount(0);
+    // A short timeout prevents the 6-second auto-hide timer from satisfying
+    // this assertion if Undo stops updating state.
+    await expect(areaUpdatedStatus).toBeHidden({ timeout: 1_000 });
 
-    await expectControlUnobscured(
-      page.getByRole('button', { name: 'Draw bounds' }),
-    );
+    // Prove Undo restored the actual previous bbox, not only the transient
+    // status UI. This fixture has no project observations, so the previous bbox
+    // is the canonical default [-75, -12, -45, 8].
+    await page.getByRole('button', { name: 'Map settings' }).click();
+    const settingsDialog = page.getByRole('dialog', { name: 'Map settings' });
+    await expect(settingsDialog.getByLabel('West')).toHaveValue('-75');
+    await expect(settingsDialog.getByLabel('South')).toHaveValue('-12');
+    await expect(settingsDialog.getByLabel('East')).toHaveValue('-45');
+    await expect(settingsDialog.getByLabel('North')).toHaveValue('8');
   });
 });

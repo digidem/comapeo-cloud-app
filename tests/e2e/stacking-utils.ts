@@ -46,3 +46,13 @@ export async function installHighZMapBlocker(
     wrapper.appendChild(blocker);
   });
 }
+
+export async function removeHighZMapBlocker(
+  mapWrapper: Locator,
+): Promise<void> {
+  await mapWrapper.evaluate((wrapper) => {
+    wrapper
+      .querySelector<HTMLElement>('[data-testid="synthetic-maplibre-high-z"]')
+      ?.remove();
+  });
+}
