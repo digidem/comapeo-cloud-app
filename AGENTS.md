@@ -147,6 +147,14 @@ Managed by Prettier via `@trivago/prettier-plugin-sort-imports`:
 - Use `@/` path alias for src imports, `@tests/` for test imports
 - Use `tests/mocks/test-utils.tsx` `render` in all component tests (wraps providers)
 
+### TanStack Query + local-first writes
+
+When a mutation persists a canonical local record and the UI must reflect that write immediately while offline, do not rely on `invalidateQueries()` alone. Invalidation is an eventual reconciliation signal and may not produce an immediate refetch without network access.
+
+- Update the affected TanStack Query cache synchronously from the canonical record returned by the persistence layer (`setQueryData` or the equivalent keyed update), then invalidate for later reconciliation.
+- Preserve one source of truth: cache the persisted record itself rather than reconstructing a second UI-only representation.
+- Add a regression for the offline read-after-write path when relevant, e.g. save locally while offline and immediately reopen/re-read the same entity without a network round trip.
+
 ### Storage reset safety invariants
 
 Changes that touch browser persistence or full local-data reset MUST preserve these data-loss guardrails:
