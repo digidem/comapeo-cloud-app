@@ -4,6 +4,7 @@ import { setupMockServer } from './mock-server';
 import { seedAlertMapState } from './seed-alert-map';
 import {
   expectControlUnobscured,
+  expectOverlayCoversControlHitPoints,
   installHighZMapBlocker,
   removeHighZMapBlocker,
 } from './stacking-utils';
@@ -70,6 +71,8 @@ test.describe('Alerts map and grid', () => {
     await installHighZMapBlocker(mapContainer);
     try {
       const backToForm = page.getByRole('button', { name: 'Back to form' });
+      const blocker = page.getByTestId('synthetic-maplibre-high-z');
+      await expectOverlayCoversControlHitPoints(blocker, backToForm);
       await expectControlUnobscured(backToForm);
       await backToForm.click();
       await expect(dialog).toBeVisible();

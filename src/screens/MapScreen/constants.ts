@@ -1,0 +1,1 @@
+export const MAP_AREA_UNDO_AUTO_HIDE_MS = 6_000;

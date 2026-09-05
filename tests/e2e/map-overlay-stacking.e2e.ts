@@ -1,5 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
+import { MAP_AREA_UNDO_AUTO_HIDE_MS } from '../../src/screens/MapScreen/constants';
 import { seedAppDatabase } from './app-db';
 import { setupMockServer } from './mock-server';
 import {
@@ -74,11 +75,11 @@ test.describe('Mobile map authoring overlay stacking', () => {
     const drawFrame = page.getByTestId('draw-frame');
     await expect(drawFrame).toBeVisible();
 
-    const cancelDrawing = page.getByRole('button', {
+    const cancelTextButton = page.getByRole('button', {
       name: 'Cancel',
       exact: true,
     });
-    const cancelDrawBounds = page.getByRole('button', {
+    const cancelDrawingToggle = page.getByRole('button', {
       name: 'Cancel drawing',
     });
     const setThisArea = page.getByRole('button', { name: 'Set this area' });
@@ -88,15 +89,18 @@ test.describe('Mobile map authoring overlay stacking', () => {
     // so browser hit-testing proves those controls paint above the scrim rather
     // than clicks merely falling through it.
     const frameOverlay = page.getByTestId('draw-frame-overlay');
-    await expectOverlayCoversControlHitPoints(frameOverlay, cancelDrawBounds);
-    await expectOverlayCoversControlHitPoints(frameOverlay, cancelDrawing);
+    await expectOverlayCoversControlHitPoints(
+      frameOverlay,
+      cancelDrawingToggle,
+    );
+    await expectOverlayCoversControlHitPoints(frameOverlay, cancelTextButton);
     await expectOverlayCoversControlHitPoints(frameOverlay, setThisArea);
     await frameOverlay.evaluate((element) => {
       element.style.pointerEvents = 'auto';
     });
     try {
-      await expectControlUnobscured(cancelDrawBounds);
-      await expectControlUnobscured(cancelDrawing);
+      await expectControlUnobscured(cancelDrawingToggle);
+      await expectControlUnobscured(cancelTextButton);
       await expectControlUnobscured(setThisArea);
     } finally {
       await frameOverlay.evaluate((element) => {
@@ -107,7 +111,8 @@ test.describe('Mobile map authoring overlay stacking', () => {
     const mapAuthoringCanvas = page.getByTestId('map-authoring-canvas');
     await installHighZMapBlocker(mapAuthoringCanvas);
     try {
-      await expectControlUnobscured(cancelDrawing);
+      await expectControlUnobscured(cancelDrawingToggle);
+      await expectControlUnobscured(cancelTextButton);
       await expectControlUnobscured(setThisArea);
     } finally {
       await removeHighZMapBlocker(mapAuthoringCanvas);
@@ -125,23 +130,23 @@ test.describe('Mobile map authoring overlay stacking', () => {
     await page.mouse.move(centerX + 70, centerY + 35, { steps: 5 });
     await page.mouse.up();
 
-    // Keep the app's 6-second Undo auto-hide timer from racing the intentionally
-    // adversarial hit-testing below. This patch is scoped to this disposable page
-    // and records when the app actually schedules the expected timer.
-    await page.evaluate(() => {
+    // Keep the Undo auto-hide timer from racing the intentionally adversarial
+    // hit-testing below. This patch is scoped to this disposable page and records
+    // when the app actually schedules the shared production duration.
+    await page.evaluate((undoAutoHideMs) => {
       const nativeSetTimeout = window.setTimeout.bind(window);
       window.setTimeout = ((
         handler: TimerHandler,
         timeout?: number,
         ...args: unknown[]
       ) => {
-        const adjustedTimeout = timeout === 6000 ? 60_000 : timeout;
-        if (timeout === 6000) {
+        const adjustedTimeout = timeout === undoAutoHideMs ? 60_000 : timeout;
+        if (timeout === undoAutoHideMs) {
           document.documentElement.dataset.mapOverlayAutoHidePatched = 'true';
         }
         return nativeSetTimeout(handler, adjustedTimeout, ...args);
       }) as typeof window.setTimeout;
-    });
+    }, MAP_AREA_UNDO_AUTO_HIDE_MS);
     await setThisArea.click();
     await expect(page.locator('html')).toHaveAttribute(
       'data-map-overlay-auto-hide-patched',
@@ -157,11 +162,10 @@ test.describe('Mobile map authoring overlay stacking', () => {
     // a no-op confirm followed by a no-op Undo could still end at the defaults.
     await page.getByRole('button', { name: 'Map settings' }).click();
     const settingsDialog = page.getByRole('dialog', { name: 'Map settings' });
-    const changedBbox = await Promise.all(
-      ['West', 'South', 'East', 'North'].map((label) =>
-        settingsDialog.getByLabel(label).inputValue(),
-      ),
-    );
+    const changedBbox: string[] = [];
+    for (const label of ['West', 'South', 'East', 'North']) {
+      changedBbox.push(await settingsDialog.getByLabel(label).inputValue());
+    }
     expect(changedBbox).not.toEqual(['-75', '-12', '-45', '8']);
     await settingsDialog
       .getByRole('button', { name: 'Close map settings' })

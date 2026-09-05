@@ -1,5 +1,13 @@
 import { type Locator, expect } from '@playwright/test';
 
+const HIT_POINTS = [
+  [0.5, 0.5],
+  [0.25, 0.5],
+  [0.75, 0.5],
+  [0.5, 0.25],
+  [0.5, 0.75],
+] as const;
+
 /**
  * Assert that a visible control meets the 44×44 touch-target minimum and that
  * several interior points are browser pointer hit targets. This catches controls
@@ -14,26 +22,22 @@ export async function expectControlUnobscured(control: Locator): Promise<void> {
   expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
 
-  const allPointsHitControl = await control.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    const points = [
-      [0.5, 0.5],
-      [0.25, 0.5],
-      [0.75, 0.5],
-      [0.5, 0.25],
-      [0.5, 0.75],
-    ] as const;
-
-    return points.every(([xRatio, yRatio]) => {
-      const hit = document.elementFromPoint(
-        rect.left + rect.width * xRatio,
-        rect.top + rect.height * yRatio,
-      );
-      return hit === element || (hit !== null && element.contains(hit));
-    });
-  });
-
-  expect(allPointsHitControl).toBe(true);
+  await expect
+    .poll(
+      () =>
+        control.evaluate((element, points) => {
+          const rect = element.getBoundingClientRect();
+          return points.every(([xRatio, yRatio]) => {
+            const hit = document.elementFromPoint(
+              rect.left + rect.width * xRatio,
+              rect.top + rect.height * yRatio,
+            );
+            return hit === element || (hit !== null && element.contains(hit));
+          });
+        }, HIT_POINTS),
+      { timeout: 2_000 },
+    )
+    .toBe(true);
 }
 
 /**
@@ -90,15 +94,7 @@ export async function expectOverlayCoversControlHitPoints(
     );
   }
 
-  const points = [
-    [0.5, 0.5],
-    [0.25, 0.5],
-    [0.75, 0.5],
-    [0.5, 0.25],
-    [0.5, 0.75],
-  ] as const;
-
-  for (const [xRatio, yRatio] of points) {
+  for (const [xRatio, yRatio] of HIT_POINTS) {
     const x = controlBox.x + controlBox.width * xRatio;
     const y = controlBox.y + controlBox.height * yRatio;
     expect(x).toBeGreaterThanOrEqual(overlayBox.x);
