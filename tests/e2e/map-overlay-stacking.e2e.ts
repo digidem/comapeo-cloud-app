@@ -134,24 +134,41 @@ test.describe('Mobile map authoring overlay stacking', () => {
     // hit-testing below. This patch is scoped to this disposable page and records
     // when the app actually schedules the shared production duration.
     await page.evaluate((undoAutoHideMs) => {
+      const testWindow = window as typeof window & {
+        __mapOverlayNativeSetTimeout?: typeof window.setTimeout;
+        __mapOverlayUndoTimerMatches?: number;
+      };
       const nativeSetTimeout = window.setTimeout.bind(window);
+      testWindow.__mapOverlayNativeSetTimeout = window.setTimeout;
+      testWindow.__mapOverlayUndoTimerMatches = 0;
       window.setTimeout = ((
         handler: TimerHandler,
         timeout?: number,
         ...args: unknown[]
       ) => {
-        const adjustedTimeout = timeout === undoAutoHideMs ? 60_000 : timeout;
         if (timeout === undoAutoHideMs) {
-          document.documentElement.dataset.mapOverlayAutoHidePatched = 'true';
+          testWindow.__mapOverlayUndoTimerMatches =
+            (testWindow.__mapOverlayUndoTimerMatches ?? 0) + 1;
+          return nativeSetTimeout(handler, 60_000, ...args);
         }
-        return nativeSetTimeout(handler, adjustedTimeout, ...args);
+        return nativeSetTimeout(handler, timeout, ...args);
       }) as typeof window.setTimeout;
     }, MAP_AREA_UNDO_AUTO_HIDE_MS);
     await setThisArea.click();
-    await expect(page.locator('html')).toHaveAttribute(
-      'data-map-overlay-auto-hide-patched',
-      'true',
-    );
+    const undoTimerMatches = await page.evaluate(() => {
+      const testWindow = window as typeof window & {
+        __mapOverlayNativeSetTimeout?: typeof window.setTimeout;
+        __mapOverlayUndoTimerMatches?: number;
+      };
+      const matches = testWindow.__mapOverlayUndoTimerMatches ?? 0;
+      if (testWindow.__mapOverlayNativeSetTimeout) {
+        window.setTimeout = testWindow.__mapOverlayNativeSetTimeout;
+      }
+      delete testWindow.__mapOverlayNativeSetTimeout;
+      delete testWindow.__mapOverlayUndoTimerMatches;
+      return matches;
+    });
+    expect(undoTimerMatches).toBe(1);
 
     const areaUpdatedStatus = page
       .getByRole('status')

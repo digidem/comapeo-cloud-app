@@ -130,7 +130,7 @@ export interface MapContainerProps extends MapPassthroughProps {
   /** Container height (default: '100%') */
   height?: string | number;
 
-  /** App-owned overlay rendered above the isolated map surface but below built-in controls. */
+  /** Full-surface, pointer-active app overlay rendered above the isolated map surface but below built-in z-10/z-20 controls. */
   mapContentOverlay?: ReactNode;
 
   /** Children (Source, Layer, Marker, Popup, etc.) */
@@ -404,6 +404,8 @@ function MapContainer({
         </Map>
       </div>
 
+      {/* z-[5] is intentionally between the isolated map surface and built-in
+          z-10/z-20 controls so blocking empty-state scrims never bury them. */}
       {mapContentOverlay ? (
         <div className="absolute inset-0 z-[5]">{mapContentOverlay}</div>
       ) : null}
