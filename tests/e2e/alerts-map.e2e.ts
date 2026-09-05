@@ -66,20 +66,23 @@ test.describe('Alerts map and grid', () => {
       page.getByText('Tap the map to place the alert point', { exact: true }),
     ).toBeVisible();
 
-    await installHighZMapBlocker(page.getByTestId('map-container'));
+    const mapContainer = page.getByTestId('map-container');
+    await installHighZMapBlocker(mapContainer);
+    try {
+      const backToForm = page.getByRole('button', { name: 'Back to form' });
+      await expectControlUnobscured(backToForm);
+      await backToForm.click();
+      await expect(dialog).toBeVisible();
 
-    const backToForm = page.getByRole('button', { name: 'Back to form' });
-    await expectControlUnobscured(backToForm);
-    await backToForm.click();
-    await expect(dialog).toBeVisible();
-
-    await dialog.getByRole('button', { name: 'Select on map' }).click();
-    await expect(dialog).toBeHidden();
-    await expectControlUnobscured(
-      page.getByRole('button', { name: 'Back to form' }),
-    );
-
-    await removeHighZMapBlocker(page.getByTestId('map-container'));
+      await dialog.getByRole('button', { name: 'Select on map' }).click();
+      await expect(dialog).toBeHidden();
+      await expectControlUnobscured(
+        page.getByRole('button', { name: 'Back to form' }),
+      );
+    } finally {
+      // Remove the synthetic blocker before exercising the real map canvas.
+      await removeHighZMapBlocker(mapContainer);
+    }
 
     const mapCanvas = page.locator('.maplibregl-canvas').first();
     await expect(mapCanvas).toBeVisible();

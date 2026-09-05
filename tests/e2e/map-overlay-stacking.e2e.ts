@@ -4,7 +4,7 @@ import { seedAppDatabase } from './app-db';
 import { setupMockServer } from './mock-server';
 import {
   expectControlUnobscured,
-  expectOverlayCoversControlCenter,
+  expectOverlayCoversControlHitPoints,
   installHighZMapBlocker,
   removeHighZMapBlocker,
 } from './stacking-utils';
@@ -88,9 +88,9 @@ test.describe('Mobile map authoring overlay stacking', () => {
     // so browser hit-testing proves those controls paint above the scrim rather
     // than clicks merely falling through it.
     const frameOverlay = page.getByTestId('draw-frame-overlay');
-    await expectOverlayCoversControlCenter(frameOverlay, cancelDrawBounds);
-    await expectOverlayCoversControlCenter(frameOverlay, cancelDrawing);
-    await expectOverlayCoversControlCenter(frameOverlay, setThisArea);
+    await expectOverlayCoversControlHitPoints(frameOverlay, cancelDrawBounds);
+    await expectOverlayCoversControlHitPoints(frameOverlay, cancelDrawing);
+    await expectOverlayCoversControlHitPoints(frameOverlay, setThisArea);
     await frameOverlay.evaluate((element) => {
       element.style.pointerEvents = 'auto';
     });
@@ -111,36 +111,60 @@ test.describe('Mobile map authoring overlay stacking', () => {
     await removeHighZMapBlocker(mapAuthoringCanvas);
 
     // Keep the app's 6-second Undo auto-hide timer from racing the intentionally
-    // adversarial hit-testing below. This patch is scoped to this disposable page.
+    // adversarial hit-testing below. This patch is scoped to this disposable page
+    // and records when the app actually schedules the expected timer.
     await page.evaluate(() => {
       const nativeSetTimeout = window.setTimeout.bind(window);
-      window.setTimeout = ((handler, timeout, ...args) =>
-        nativeSetTimeout(
-          handler,
-          timeout === 6000 ? 60_000 : timeout,
-          ...args,
-        )) as typeof window.setTimeout;
+      window.setTimeout = ((
+        handler: TimerHandler,
+        timeout?: number,
+        ...args: unknown[]
+      ) => {
+        const adjustedTimeout = timeout === 6000 ? 60_000 : timeout;
+        if (timeout === 6000) {
+          document.documentElement.dataset.mapOverlayAutoHidePatched = 'true';
+        }
+        return nativeSetTimeout(handler, adjustedTimeout, ...args);
+      }) as typeof window.setTimeout;
     });
     await setThisArea.click();
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-map-overlay-auto-hide-patched',
+      'true',
+    );
 
     const areaUpdatedStatus = page
       .getByRole('status')
       .filter({ hasText: 'Map area updated' });
     await expect(areaUpdatedStatus).toBeVisible();
+
+    // Prove Set this area changed the actual bbox before testing Undo; otherwise
+    // a no-op confirm followed by a no-op Undo could still end at the defaults.
+    await page.getByRole('button', { name: 'Map settings' }).click();
+    const settingsDialog = page.getByRole('dialog', { name: 'Map settings' });
+    const changedBbox = await Promise.all(
+      ['West', 'South', 'East', 'North'].map((label) =>
+        settingsDialog.getByLabel(label).inputValue(),
+      ),
+    );
+    expect(changedBbox).not.toEqual(['-75', '-12', '-45', '8']);
+    await settingsDialog
+      .getByRole('button', { name: 'Close map settings' })
+      .click();
+    await expect(settingsDialog).toBeHidden();
+    await expect(areaUpdatedStatus).toBeVisible();
+
     const undo = page.getByRole('button', { name: 'Undo' });
     await installHighZMapBlocker(mapAuthoringCanvas);
     await expectControlUnobscured(undo);
     await removeHighZMapBlocker(mapAuthoringCanvas);
     await undo.click();
-    // Keep this comfortably below the 6-second auto-hide timer while allowing
-    // enough headroom for a slow CI render after the Undo state update.
     await expect(areaUpdatedStatus).toBeHidden({ timeout: 3_000 });
 
     // Prove Undo restored the actual previous bbox, not only the transient
     // status UI. This fixture has no project observations, so the previous bbox
     // is the canonical default [-75, -12, -45, 8].
     await page.getByRole('button', { name: 'Map settings' }).click();
-    const settingsDialog = page.getByRole('dialog', { name: 'Map settings' });
     await expect(settingsDialog.getByLabel('West')).toHaveValue('-75');
     await expect(settingsDialog.getByLabel('South')).toHaveValue('-12');
     await expect(settingsDialog.getByLabel('East')).toHaveValue('-45');
