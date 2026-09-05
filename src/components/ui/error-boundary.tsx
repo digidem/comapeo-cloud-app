@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { captureException } from '@/lib/sentry';
 
 interface ErrorBoundaryProps {
   fallback?: ReactNode;
@@ -45,6 +46,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    captureException(error);
     const { onError } = this.props;
     if (onError) {
       onError(error, errorInfo.componentStack ?? '');

@@ -345,6 +345,7 @@ jobs:
           VITE_PUBLIC_APP_ORIGIN: ${{ github.ref == 'refs/heads/main' && 'https://app.comapeo.cloud' || github.ref == 'refs/heads/staging' && 'https://staging.comapeo.cloud' || format('https://{0}', vars.PAGES_DOMAIN || 'comapeo-cloud-app.pages.dev') }}
           VITE_APP_RELEASE: ${{ github.sha }}
           VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/staging' && 'staging' || 'preview' }}
+          VITE_SENTRY_DSN: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging') && vars.VITE_SENTRY_DSN || '' }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
