@@ -45,6 +45,8 @@ export async function expectControlUnobscured(control: Locator): Promise<void> {
 export async function installHighZMapBlocker(
   mapWrapper: Locator,
 ): Promise<void> {
+  // Deliberately require the wrapper itself to establish the containing block;
+  // relying on a positioned ancestor would make the fixture geometry ambiguous.
   const wrapperPosition = await mapWrapper.evaluate(
     (wrapper) => getComputedStyle(wrapper).position,
   );
