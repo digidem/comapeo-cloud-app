@@ -100,6 +100,29 @@ describe('ReportBrandingDialog', () => {
     });
   });
 
+  it('renders a preview for an existing report logo', () => {
+    render(
+      <ReportBrandingDialog
+        isOpen
+        project={makeProject({
+          reportBranding: {
+            schemaVersion: 1,
+            organizationName: 'Forest Guardians Association',
+            revision: 3,
+            updatedAt: '2026-09-03T10:00:00.000Z',
+            logo: makeLogo(),
+          },
+        })}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('img', { name: /organization logo/i }),
+    ).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=');
+  });
+
   it('removes an existing report logo without changing the project icon', async () => {
     const { updateProject } = await import('@/lib/data-layer');
     vi.mocked(updateProject).mockResolvedValue(makeProject());
@@ -193,6 +216,9 @@ describe('ReportBrandingDialog', () => {
     expect(
       await screen.findByText(/report logo configured/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: /organization logo/i }),
+    ).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=');
     await user.click(screen.getByRole('button', { name: /save branding/i }));
 
     await waitFor(() => {

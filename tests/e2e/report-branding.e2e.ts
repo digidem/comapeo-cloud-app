@@ -27,6 +27,9 @@ async function uploadLogo(page: Page) {
     buffer: ONE_PIXEL_PNG,
   });
   await expect(page.getByText('Report logo configured')).toBeVisible();
+  await expect(
+    page.getByRole('img', { name: 'Organization logo' }),
+  ).toBeVisible();
 }
 
 async function verifyPersistedBranding(page: Page, organizationName: string) {
@@ -35,6 +38,9 @@ async function verifyPersistedBranding(page: Page, organizationName: string) {
     page.getByRole('textbox', { name: 'Organization name' }),
   ).toHaveValue(organizationName);
   await expect(page.getByText('Report logo configured')).toBeVisible();
+  await expect(
+    page.getByRole('img', { name: 'Organization logo' }),
+  ).toBeVisible();
 }
 
 async function restoreOnline(context: BrowserContext) {

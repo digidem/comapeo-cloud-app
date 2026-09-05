@@ -46,6 +46,17 @@ function isAllowedLogoContentType(
   );
 }
 
+function logoDataUrl(logo: ReportBrandingLogoAsset): string {
+  const bytes = new Uint8Array(logo.data);
+  let binary = '';
+
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+
+  return `data:${logo.contentType};base64,${globalThis.btoa(binary)}`;
+}
+
 async function readImageDimensions(
   file: Blob,
 ): Promise<{ width: number; height: number }> {
@@ -202,6 +213,10 @@ export function ReportBrandingDialog({
   const [logo, setLogo] = useState<ReportBrandingLogoAsset | undefined>(
     current.logo,
   );
+  const logoPreviewUrl = useMemo(
+    () => (logo ? logoDataUrl(logo) : undefined),
+    [logo],
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessingLogo, setIsProcessingLogo] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -342,11 +357,22 @@ export function ReportBrandingDialog({
             {intl.formatMessage(messages.logo)}
           </span>
           <div className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-card bg-surface-muted px-3 py-3">
-            <span className="text-sm text-text-muted">
-              {intl.formatMessage(
-                logo ? messages.logoConfigured : messages.noLogo,
+            <div className="flex min-w-[160px] flex-1 items-center gap-3">
+              {logoPreviewUrl && (
+                <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-input border border-border bg-white p-2">
+                  <img
+                    src={logoPreviewUrl}
+                    alt={intl.formatMessage(messages.logo)}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
               )}
-            </span>
+              <span className="text-sm text-text-muted">
+                {intl.formatMessage(
+                  logo ? messages.logoConfigured : messages.noLogo,
+                )}
+              </span>
+            </div>
             <div className="flex flex-wrap gap-2">
               <label
                 htmlFor="report-branding-logo-upload"

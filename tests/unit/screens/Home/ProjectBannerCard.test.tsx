@@ -60,6 +60,24 @@ describe('ProjectBannerCard', () => {
     ).toBeInTheDocument();
   });
 
+  it('matches the Edit Project visual treatment and includes an icon', () => {
+    render(
+      <ProjectBannerCard
+        {...defaultProps}
+        onEdit={vi.fn()}
+        onEditBranding={vi.fn()}
+      />,
+    );
+
+    const editButton = screen.getByRole('button', { name: /edit project/i });
+    const brandingButton = screen.getByRole('button', {
+      name: /report branding/i,
+    });
+
+    expect(brandingButton.className).toBe(editButton.className);
+    expect(brandingButton.querySelector('svg')).not.toBeNull();
+  });
+
   it('calls onEditBranding when Report branding is clicked', async () => {
     const user = userEvent.setup();
     const onEditBranding = vi.fn();
@@ -69,6 +87,28 @@ describe('ProjectBannerCard', () => {
 
     await user.click(screen.getByRole('button', { name: /report branding/i }));
     expect(onEditBranding).toHaveBeenCalledOnce();
+  });
+
+  it('keeps all project action buttons aligned to a 44px touch height', () => {
+    render(
+      <ProjectBannerCard
+        {...defaultProps}
+        onEdit={vi.fn()}
+        onEditBranding={vi.fn()}
+        onDelete={vi.fn()}
+        isLocalProject
+        projectLocalId="p1"
+      />,
+    );
+
+    for (const button of [
+      screen.getByRole('button', { name: /edit project/i }),
+      screen.getByRole('button', { name: /report branding/i }),
+      screen.getByRole('button', { name: /import data/i }),
+      screen.getByRole('button', { name: /delete project/i }),
+    ]) {
+      expect(button).toHaveClass('min-h-[44px]');
+    }
   });
 
   it('renders Delete button when onDelete is provided', () => {

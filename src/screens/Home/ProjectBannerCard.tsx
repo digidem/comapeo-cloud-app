@@ -22,6 +22,9 @@ interface ProjectBannerCardProps {
   isAreaLoading?: boolean;
 }
 
+const PROJECT_ACTION_BUTTON_CLASSES =
+  'inline-flex min-h-[44px] items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-white/90 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+
 const messages = defineMessages({
   territoryArea: {
     id: 'dashboard.banner.territoryArea',
@@ -132,7 +135,7 @@ export function ProjectBannerCard({
               <button
                 type="button"
                 onClick={onEdit}
-                className="inline-flex items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-white/90 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className={PROJECT_ACTION_BUTTON_CLASSES}
               >
                 <svg
                   width="14"
@@ -154,8 +157,23 @@ export function ProjectBannerCard({
               <button
                 type="button"
                 onClick={onEditBranding}
-                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-white/90 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className={PROJECT_ACTION_BUTTON_CLASSES}
               >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <circle cx="8.5" cy="10" r="1.5" />
+                  <path d="m5 17 4.5-4.5 3 3 2-2L19 17" />
+                </svg>
                 {intl.formatMessage(messages.reportBranding)}
               </button>
             )}
@@ -170,7 +188,7 @@ export function ProjectBannerCard({
               <button
                 type="button"
                 onClick={onDelete}
-                className="inline-flex items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-error/30 px-3 py-1.5 text-sm font-medium text-error hover:bg-error/10 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-error"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-error/30 px-3 py-1.5 text-sm font-medium text-error hover:bg-error/10 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-error"
               >
                 <svg
                   width="14"

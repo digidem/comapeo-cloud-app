@@ -11,7 +11,7 @@ This QA validates project-scoped report branding added by issue #270:
 - local IndexedDB persistence for both local and remote-backed project records
 - preservation of local report branding during normal remote project reconciliation
 - immutable report-branding snapshots with exact logo bytes, version id, SHA-256, MIME type, and dimensions
-- Home-screen access, keyboard-accessible controls, and responsive behavior at 1440×900 and 375×812
+- Home-screen access, project-action visual consistency, keyboard-accessible controls, and responsive behavior at 1440×900 and 375×812
 - offline edit/save/reopen behavior for local project branding
 - English, Portuguese, and Spanish message coverage
 
@@ -71,6 +71,7 @@ Use the exact Cloudflare Pages preview deployment produced for the candidate PR/
 
 Expected:
 
+- the Home **Report branding** action matches the neighboring project-action treatment (height, border/background, typography, hover/focus behavior) and includes a small branding/image icon
 - the dialog title is `Report branding`
 - Organization name defaults to `QA Branding Project`
 - the copy clearly states that report branding is separate from the project icon
@@ -92,16 +93,16 @@ Expected:
 ### 3. Valid logo lifecycle
 
 1. Upload a small valid PNG.
-2. Confirm the UI changes to `Report logo configured` and offers Replace logo / Remove logo.
+2. Confirm the UI changes to `Report logo configured`, displays the actual image in a compact contained preview, and offers Replace logo / Remove logo.
 3. Save and close.
-4. Reopen the editor.
+4. Reopen the editor and confirm the same logo preview is rendered from persisted branding bytes.
 5. Replace the PNG with a valid JPEG or WebP and save again.
 6. Reopen and select Remove logo, then save.
 
 Expected:
 
-- each valid image is accepted
-- logo state survives close/reopen
+- each valid image is accepted and visibly previewed without exposing a file path or public asset URL
+- logo state and preview survive close/reopen
 - removing the logo leaves the organization name intact
 - no unrelated local files or file paths are exposed by the UI
 
