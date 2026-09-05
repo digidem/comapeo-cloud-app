@@ -22,7 +22,10 @@ QA_346 = ROOT / "docs" / "qa" / "346.md"
 ROOT_AGENTS = ROOT / "AGENTS.md"
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 
-SESSION_LESSON_RE = re.compile(r"pr\d+-session-lessons\.md$", re.IGNORECASE)
+CHRONOLOGICAL_MEMORY_RE = re.compile(
+    r"^(?:session-(?:memory|lessons)|pr\d+-(?:session-)?(?:memory|lessons))\.md$",
+    re.IGNORECASE,
+)
 
 MIGRATION_HEADINGS = (
     "Exact-revision truth is the unit of readiness",
@@ -79,7 +82,7 @@ def _session_lesson_files() -> list[Path]:
             "--others",
             "--exclude-standard",
             "--",
-            ".agents/skills",
+            ".",
         ],
         cwd=ROOT,
         check=True,
@@ -89,7 +92,7 @@ def _session_lesson_files() -> list[Path]:
     return [
         ROOT / raw
         for raw in result.stdout.splitlines()
-        if raw.endswith(".md") and SESSION_LESSON_RE.search(Path(raw).name)
+        if raw.endswith(".md") and CHRONOLOGICAL_MEMORY_RE.search(Path(raw).name)
     ]
 
 
@@ -99,9 +102,17 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_chronological_session_scan_uses_git_visible_files_only(self) -> None:
-        tracked_note = ".agents/skills/pr-cycle/references/pr999-session-lessons.md"
+        tracked_notes = [
+            "docs/pr999-session-lessons.md",
+            "docs/session-memory.md",
+            "docs/pr350-lessons.md",
+        ]
+        ordinary_doc = "docs/reference-notes.md"
         completed = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout=f"{tracked_note}\n", stderr=""
+            args=[],
+            returncode=0,
+            stdout="\n".join([*tracked_notes, ordinary_doc]) + "\n",
+            stderr="",
         )
         with patch("subprocess.run", return_value=completed) as run:
             files = _session_lesson_files()
@@ -110,7 +121,8 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         self.assertIn("--cached", command)
         self.assertIn("--others", command)
         self.assertIn("--exclude-standard", command)
-        self.assertEqual(files, [ROOT / tracked_note])
+        self.assertEqual(command[-2:], ["--", "."])
+        self.assertEqual(files, [ROOT / path for path in tracked_notes])
 
     def test_display_path_handles_missing_resource_outside_repository(self) -> None:
         outside = ROOT.parent / "outside-agent-resource.md"
