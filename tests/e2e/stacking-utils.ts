@@ -1,10 +1,10 @@
 import { type Locator, expect } from '@playwright/test';
 
 /**
- * Assert that several interior points of a visible control are browser pointer
- * hit targets. This catches overlays that are technically visible but partly or
- * fully covered by a higher stacking-context descendant (for example MapLibre's
- * cooperative-gesture layer).
+ * Assert that a visible control meets the 44×44 touch-target minimum and that
+ * several interior points are browser pointer hit targets. This catches controls
+ * that are undersized or partly/fully covered by a higher stacking-context
+ * descendant (for example MapLibre's cooperative-gesture layer).
  */
 export async function expectControlUnobscured(control: Locator): Promise<void> {
   await expect(control).toBeVisible();
@@ -78,9 +78,11 @@ export async function expectOverlayCoversControlCenter(
 
   const overlayBox = await overlay.boundingBox();
   const controlBox = await control.boundingBox();
-  expect(overlayBox).not.toBeNull();
-  expect(controlBox).not.toBeNull();
-  if (!overlayBox || !controlBox) return;
+  if (!overlayBox || !controlBox) {
+    throw new Error(
+      'Expected visible overlay and control to have bounding boxes',
+    );
+  }
 
   const centerX = controlBox.x + controlBox.width / 2;
   const centerY = controlBox.y + controlBox.height / 2;

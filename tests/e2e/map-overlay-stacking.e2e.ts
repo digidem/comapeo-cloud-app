@@ -86,7 +86,7 @@ test.describe('Mobile map authoring overlay stacking', () => {
     // it geometrically covers both cancel controls, then make it pointer-active
     // so browser hit-testing proves those controls paint above the scrim rather
     // than clicks merely falling through it.
-    const frameOverlay = drawFrame.locator('..');
+    const frameOverlay = page.getByTestId('draw-frame-overlay');
     await expectOverlayCoversControlCenter(frameOverlay, cancelDrawBounds);
     await expectOverlayCoversControlCenter(frameOverlay, cancelDrawing);
     await frameOverlay.evaluate((element) => {
