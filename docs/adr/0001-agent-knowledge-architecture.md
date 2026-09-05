@@ -50,7 +50,7 @@ This table is the one-time non-loss audit for the two chronological lesson sourc
 
 | Source | Source heading | Disposition | Canonical home / rationale |
 | --- | --- | --- | --- |
-| PR #287 | Exact-revision truth is the unit of readiness | already canonical | `.agents/skills/pr-cycle/SKILL.md` and `references/github-runbook.md` already require readiness/review on one exact head + live-base-tip pair and invalidate stale evidence. |
+| PR #287 | Exact-revision truth is the unit of readiness | already canonical | `.agents/skills/pr-cycle/SKILL.md` and `references/github-runbook.md` already require readiness/review on one exact head + live-base-tip pair, invalidate stale evidence, and when synchronization is required merge the verified target tip into the PR branch without rebasing or force-pushing reviewed history. |
 | PR #287 | Review findings are hypotheses, not commands | promoted to workflow reference | `.agents/skills/pr-cycle/references/review-evidence.md` owns finding adjudication, invariant-based rejection, and RED regression evidence. |
 | PR #287 | Tool and provider failure is not a verdict | already canonical | `pr-cycle/SKILL.md` plus the Claude/Kimi/Qwen references already distinguish unavailable review transport from approval or code failure; `review-evidence.md` cross-links the concept. |
 | PR #287 | Local browser limits must be separated from product failures | promoted to workflow reference | `references/qa-evidence.md` owns environment-vs-product evidence; `tests/e2e/AGENTS.md` provides the path-local execution reminder. |

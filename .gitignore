@@ -47,6 +47,8 @@ _verify_translations.py
 .agents/skills/pr-cycle/**/*.pyc
 .agents/skills/issue-to-spec/**/__pycache__/
 .agents/skills/issue-to-spec/**/*.pyc
+.agents/skills/maintaining-agent-knowledge/**/__pycache__/
+.agents/skills/maintaining-agent-knowledge/**/*.pyc
 .contrabass/
 .opencode/
 .sortie.db

@@ -18,6 +18,7 @@ ADR_0001 = ROOT / "docs" / "adr" / "0001-agent-knowledge-architecture.md"
 INVITE_API = ROOT / "docs" / "invite-api-spec.md"
 REMOTE_ARCHIVE_API = ROOT / "docs" / "remote-archive-api-spec.md"
 SPEC = ROOT / "docs" / "superpowers" / "specs" / "2026-09-04-agent-knowledge-architecture.md"
+QA_346 = ROOT / "docs" / "qa" / "346.md"
 ROOT_AGENTS = ROOT / "AGENTS.md"
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 
@@ -149,6 +150,8 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         gitignore = (ROOT / ".gitignore").read_text()
         self.assertIn("!.agents/skills/maintaining-agent-knowledge/", gitignore)
         self.assertIn("!.agents/skills/maintaining-agent-knowledge/**", gitignore)
+        self.assertIn(".agents/skills/maintaining-agent-knowledge/**/__pycache__/", gitignore)
+        self.assertIn(".agents/skills/maintaining-agent-knowledge/**/*.pyc", gitignore)
 
     def test_affected_skill_resource_links_resolve(self) -> None:
         skill_paths = [PR_CYCLE_SKILL]
@@ -170,7 +173,11 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
                 matching_rows = [line for line in text.splitlines() if heading in line]
                 self.assertTrue(matching_rows, f"missing migration row for {heading}")
                 self.assertTrue(
-                    any(disposition in matching_rows[0] for disposition in ALLOWED_DISPOSITIONS),
+                    any(
+                        disposition in row
+                        for row in matching_rows
+                        for disposition in ALLOWED_DISPOSITIONS
+                    ),
                     f"missing allowed disposition for {heading}",
                 )
 
@@ -211,6 +218,8 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         map_text = MAP_AGENTS.read_text()
         adr_text = ADR_0001.read_text()
         spec_text = SPEC.read_text()
+        qa_text = QA_346.read_text()
+        pr_cycle_text = PR_CYCLE_SKILL.read_text()
 
         self.assertIn("docs/invite-api-spec.md", root_agents)
         self.assertIn("DESIGN_OVERVIEW.md", root_agents)
@@ -230,6 +239,10 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         self.assertIn("setupMockServer", e2e_text)
         self.assertIn("chromium only", e2e_text.lower())
         self.assertIn("src/lib/schemas/authored-layer.ts", map_text)
+        self.assertIn("without rebasing or force-pushing reviewed history", pr_cycle_text)
+        self.assertIn("without rebasing or force-pushing reviewed history", adr_text)
+        self.assertIn("npx prettier --check .github/workflows/ci.yml", qa_text)
+        self.assertIn("Markdown files are ignored by the repository Prettier configuration", qa_text)
         self.assertIn("- Status: Accepted", adr_text)
         self.assertNotIn("Accepted (effective when this PR lands)", adr_text)
         self.assertIn("Status: accepted", spec_text)
