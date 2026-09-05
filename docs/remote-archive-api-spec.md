@@ -36,6 +36,21 @@ Returns HTTP 200 (empty body).
 
 `name` is optional (may be absent).
 
+### `GET /projects/:id` — Project details (optional server capability)
+
+When supported, returns one project object:
+
+```json
+{
+  "data": {
+    "projectId": "base32-string",
+    "name": "Project Name"
+  }
+}
+```
+
+`name` is optional. Older/archive server versions may not implement this route and can return a route-shaped 404 even for projects returned by `GET /projects`. The app therefore treats the project list as authoritative and falls back to its basic project data when this detail endpoint is unsupported.
+
 ---
 
 ### `GET /projects/:id/observations` — List observations

@@ -19,6 +19,14 @@ CoMapeo Cloud App is a web dashboard for the [comapeo-cloud](https://github.com/
 - **Testing**: Vitest + Testing Library + MSW (unit), Playwright (E2E)
 - **Deployment**: Cloudflare Pages
 
+## Repository Knowledge Routing
+
+- Root `AGENTS.md` contains cross-cutting repository rules. When a nearer `AGENTS.md` exists for the files you are changing, read it too and treat it as path-specific additions rather than a replacement for root safety policy.
+- Use `.agents/skills/issue-to-spec/SKILL.md` for implementation-ready issue specifications and `.agents/skills/pr-cycle/SKILL.md` for PR review/readiness/authorized merge workflows.
+- Use `.agents/skills/maintaining-agent-knowledge/SKILL.md` when preserving or consolidating durable session learnings. Do not create chronological session-memory files; promote each durable lesson into its canonical skill, scoped instruction, ADR, QA artifact, code/test, or normal documentation home.
+- Accepted architecture decisions live in `docs/adr/`; pending architecture remains in issues/specs until it lands.
+- `docs/qa/` is issue/PR-specific verification evidence, not a substitute for durable architecture or workflow policy.
+
 ## AI Coding Workflow (Zenith Default)
 
 For long-running implementation, multi-agent missions, or work where premature completion is a risk, use Zenith as the default harness for both Claude Code and Codex.
@@ -165,33 +173,14 @@ Changes that touch browser persistence or full local-data reset MUST preserve th
 - API responses validated with Valibot schemas at the boundary
 - MSW mocks in `tests/mocks/handlers.ts` match real API shapes from comapeo-cloud
 
-### Key API Endpoints (from comapeo-cloud)
+### API references
 
-| Method | Path | Auth | Response Shape |
-|--------|------|------|----------------|
-| GET | `/info` | No | `{ data: { deviceId, name } }` |
-| GET | `/healthcheck` | No | 200 empty |
-| GET | `/projects` | Bearer | `{ data: [{ projectId, name? }] }` |
-| GET | `/projects/:id` | Bearer | `{ data: { projectId, name? } }` |
-| GET | `/projects/:id/observations` | Bearer | `{ data: [{ docId, createdAt, updatedAt, deleted, lat?, lon?, attachments, tags }] }` |
-| GET | `/projects/:id/remoteDetectionAlerts` | Bearer | `{ data: [{ docId, createdAt, updatedAt, deleted, detectionDateStart, detectionDateEnd, sourceId, metadata, geometry }] }` |
-| POST | `/projects/:id/remoteDetectionAlerts` | Bearer | Body: `{ detectionDateStart, detectionDateEnd, sourceId, metadata, geometry }` (all required; dates are ISO date-time, sourceId non-empty, metadata may be `{}`) -> 201 empty |
-| POST | `/api/invites/encrypt` | None (first-party) | Body: `{ url, token, ttlHours? }` -> `{ code }`; uses Cloudflare Pages Function with `INVITE_KEY` |
-| POST | `/api/invites/decrypt` | None (first-party) | Body: `{ code }` -> `{ url, token }`; 410 if expired |
+- Treat `docs/remote-archive-api-spec.md` as the detailed remote `comapeo-cloud` API reference; do not duplicate endpoint schemas here.
+- Treat `docs/invite-api-spec.md` as the canonical first-party `/api/invites/{encrypt,decrypt}` request/response/error contract. Those routes are Cloudflare Pages Functions and remain governed by the `INVITE_KEY`/rotation contract in the Cloudflare Deployment section below.
 
 ## Design System
 
-Follow `DESIGN_OVERVIEW.md` for all visual decisions:
-
-- Font: **Inter** (not Rubik)
-- Primary: Confident Bright Blue `#1F6FFF`
-- Navy: Institutional Navy `#04145C`
-- Background: Pale Cool Gray `#F4F6FA`
-- Text: Deep Ink Navy `#172033` (never pure black)
-- Borders: Soft Silver-Blue `#D9DEE8` (ghost borders at 15% opacity when needed)
-- Card radius: 18px, Button radius: 12px, Pill radius: 999px
-- Shadows: whisper-soft `0 8px 24px rgba(9, 30, 66, 0.08)`
-- No solid borders for sectioning — use tonal nesting
+Use `DESIGN_OVERVIEW.md` for prototype/product visual intent and screen-level design language. Treat `src/app/styles.css` as the canonical shipped theme/token implementation for colors, typography, radii, borders, shadows, and tonal nesting. Do not copy token values into agent instructions; update the appropriate design source of truth instead.
 
 ## Guardrails Summary
 
@@ -227,25 +216,9 @@ Every screen that loads async data MUST show a Skeleton placeholder while data i
 - A title skeleton (h24, w200)
 - 1-2 card skeletons (h100-200)
 
-## Visual Screenshot Testing
+## E2E and Visual Testing
 
-Screenshots are generated at two viewports for vision LLM review:
-
-- **Desktop**: 1440x900 (`tests/e2e/screenshots/desktop/`)
-- **Mobile**: 375x812 (`tests/e2e/screenshots/mobile/`)
-
-Pattern for adding new screen screenshots:
-
-1. Create `tests/e2e/{screen}.screenshots.ts`
-2. Import `VIEWPORTS`, `takeScreenshot` from `./screenshot-utils`
-3. Import `setupMockServer` from `./mock-server` for API mocking
-4. Use `browser.newContext()` + `try/finally` pattern (see `app.screenshots.ts`)
-5. Run `npm run test:screenshots` to generate PNGs
-6. Run `npm run review:mobile` (or `npm run pipeline:mobile-review`) for LLM-based visual review
-
-The review artifacts under `tests/e2e/screenshots/` are generated and gitignored. Separately, `takeScreenshot()` uses Argos and may write tracked artifacts under `screenshots/screenshot/` (`*.png` and `*.argos.json`). Local E2E or screenshot verification can therefore dirty those tracked files; restore incidental changes after exploratory runs unless the task intentionally updates visual baselines. Each Playwright project that runs E2E tests uses all 3 browsers; the `screenshot` project uses chromium only for deterministic rendering.
-
-Treat tracked Storybook visual baselines as **CI-environment artifacts**, not as whatever a local browser happens to render. Use `npm run storybook:screenshots:check` to compare against the tracked baselines, and use `npm run storybook:screenshots:baseline` only when the intended visual change itself requires a baseline update. If local baseline generation rewrites many unrelated files under `tests/e2e/storybook-screenshots-baseline/`, do not commit that churn. Restore pre-existing baselines, isolate only the intentionally new/changed stories, and inspect whether differences are caused by browser/font/platform metrics. The blocking GitHub job is `visual-regression-check`; when it fails, inspect its `visual-regression-diff` artifact and the CI-rendered screenshots before changing baselines. When GitHub's Linux runner is authoritative and new/intentional baselines differ from local rendering, prefer the CI-produced screenshots as the canonical source for those specific baselines, preserving all unrelated baseline files byte-for-byte. Re-run `visual-regression-check` afterward; never relax thresholds merely to hide cross-platform drift.
+For Playwright, responsive, browser-engine, screenshot, Argos, and visual-baseline work, read `tests/e2e/AGENTS.md`. It owns the path-specific harness and evidence rules; the commands above remain the root entry points.
 
 ## Commit Messages
 

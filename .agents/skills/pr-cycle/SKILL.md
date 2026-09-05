@@ -137,19 +137,15 @@ Clean only resources belonging to the merged PR. Use the exact isolated worktree
 
 Avoid broad repository cleanup operations unless the user explicitly requests them.
 
-## 8. Session lessons and documentation checkpoint
+## 8. Durable knowledge checkpoint
 
-Before concluding every PR cycle, review the session for durable, reusable lessons exposed by the work: recurring tool limits, CI or reviewer blind spots, cleanup hazards, repository-wide conventions, or contributor-workflow gotchas. Do not document transient provider outages, one-off command noise, or feature-specific details that belong in the issue, spec, or ADR.
+Before concluding every PR cycle, identify candidate lessons that may matter beyond the current task: recurring tool limits, CI/reviewer blind spots, cleanup hazards, repository conventions, QA evidence rules, or contributor-workflow gotchas.
 
-When a durable lesson exists, document it in the canonical home:
+When durable candidates exist—or the user explicitly asks to preserve/consolidate learnings—apply the repository `maintaining-agent-knowledge` skill. That skill owns classification, search-before-write, canonical placement, deduplication, progressive disclosure, migration of old session notes, and disposition reporting. Do not create a second placement taxonomy here.
 
-- `.agents/skills/pr-cycle/` for reusable PR-cycle mechanics, safeguards, helper behavior, and execution-surface workarounds.
-- `AGENTS.md` for project-specific agent, coding, validation, architecture, or repository conventions.
-- `README.md` only when human contributors or users need the setup, command, or workflow information without reading agent instructions.
+If promoting process knowledge would materially widen an already-reviewed application PR, use a focused docs/process follow-up rather than invalidating unrelated implementation evidence. The follow-up runs through this PR-cycle gate and does not inherit merge authorization from the originating task.
 
-Avoid duplicating the same policy across files; keep one canonical statement and cross-link when useful. If documenting a lesson would materially widen an application PR, create a focused follow-up docs/process PR instead of mixing unrelated process changes into the implementation. Run that follow-up through the normal PR-cycle gate, but do not merge it without explicit merge authorization. A lessons-only follow-up should not recursively create another lessons PR unless it uncovers a new material reusable gap.
-
-If lesson documentation is added to the current PR, any push invalidates prior exact-SHA review and CI evidence; rerun the gate on the new head. The final report must state what durable lessons were documented and where, or that no durable documentation change was warranted.
+If knowledge documentation is pushed to the current PR, the new head invalidates prior exact-SHA review and CI evidence; rerun the gate. The final report states where durable knowledge was promoted or that no durable repository change was warranted.
 
 ## Status reporting
 
@@ -169,4 +165,6 @@ A final merged report should additionally include the merge commit SHA and confi
 - `references/claude-code-review.md` — subscription-safe Claude Code background review architecture, verdict contract, and foreground fallback.
 - `references/kimi-k3-review.md` — Kimi K3 via OpenCode Go / Oh My Pi fallback policy, read-only invocation patterns, and timeout/verdict rules.
 - `references/claude-qwen-review.md` — Qwen 3.8 via `claude-qwen` last-resort reviewer, live usage/quota preflight, exact-revision contract, and 429 cooldown rules.
-- `references/pr287-session-lessons.md` — concrete lessons from a long-running exact-SHA PR cycle: reviewer adjudication, browser/CI evidence, production-path QA, determinism, resource bounds, archive parsing, and documentation placement.
+- `references/qa-evidence.md` — durable browser, deployed-preview, production-boundary, cross-engine, and human-QA evidence rules.
+- `references/review-evidence.md` — durable reviewer-adjudication and exact-diff evidence rules independent of provider transport.
+- `../maintaining-agent-knowledge/SKILL.md` — canonical promotion workflow for durable session learnings and agent memory.
