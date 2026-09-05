@@ -704,7 +704,17 @@ describe('buildSavedMapAuthoringWrite', () => {
     void unbranded;
   });
 
-  it('defensively refuses imported snapshots even if handed a forged brand', () => {
+  it('rejects a forged snapshot object that has a row but lacks the private runtime brand', () => {
+    const forged = {
+      row: packagedRow(),
+    } as unknown as ValidatedSavedMapStorageSnapshot;
+
+    expect(() =>
+      buildSavedMapAuthoringWrite(forged, baseDraft(), [vectorLayer()], NOW),
+    ).toThrow(/snapshot/i);
+  });
+
+  it('rejects a forged imported snapshot before it can reach the defensive origin guard', () => {
     const importedRow = {
       ...packagedRow(),
       type: 'style' as const,
@@ -712,8 +722,8 @@ describe('buildSavedMapAuthoringWrite', () => {
       scheme: undefined,
       origin: 'imported' as const,
     };
-    // Forge the full snapshot shape so the runtime brand guard passes and the
-    // origin check is what has to catch the forged input.
+    // External callers cannot mint the private runtime brand, even if they
+    // reproduce the public row-shaped portion of the snapshot.
     const forged = {
       row: importedRow,
     } as unknown as ValidatedSavedMapStorageSnapshot;
@@ -728,7 +738,7 @@ describe('buildSavedMapAuthoringWrite', () => {
         [],
         NOW,
       ),
-    ).toThrow(/imported/i);
+    ).toThrow(/snapshot/i);
   });
 
   it('rejects extra draft keys smuggled through a cast', () => {

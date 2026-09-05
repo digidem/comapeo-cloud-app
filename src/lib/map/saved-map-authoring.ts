@@ -15,6 +15,7 @@ import {
   SAVED_MAP_AUTHORING_OWNED_KEYS,
   SAVED_MAP_IMMUTABLE_KEYS,
   SAVED_MAP_PACKAGE_LIFECYCLE_KEYS,
+  isValidatedSavedMapStorageSnapshot,
   savedMapAuthoringDraftFieldsSchema,
   savedMapSchema,
 } from '@/lib/schemas/saved-map';
@@ -98,7 +99,7 @@ function structurallyEqual(left: unknown, right: unknown): boolean {
   );
 }
 
-function packageRelevantConfigChanged(
+export function hasPackageRelevantMapConfigChanged(
   row: SavedMapStorageRow,
   next: PackageRelevantMapConfig,
 ): boolean {
@@ -329,13 +330,7 @@ export function buildSavedMapAuthoringWrite(
   // Runtime mirror of the type-level brand: only parseSavedMapForAuthoring
   // mints snapshots, so anything else (e.g. a bare row pushed through a cast)
   // must stop here instead of producing an unvalidated write.
-  if (
-    typeof snapshot !== 'object' ||
-    snapshot === null ||
-    !Object.hasOwn(snapshot, 'row') ||
-    typeof snapshot.row !== 'object' ||
-    snapshot.row === null
-  ) {
+  if (!isValidatedSavedMapStorageSnapshot(snapshot)) {
     throw new Error(
       'snapshot must be a ValidatedSavedMapStorageSnapshot minted by parseSavedMapForAuthoring',
     );
@@ -403,7 +398,7 @@ export function buildSavedMapAuthoringWrite(
   }
   setValue('layers', layers);
 
-  const packageChanged = packageRelevantConfigChanged(row, {
+  const packageChanged = hasPackageRelevantMapConfigChanged(row, {
     type: draftFields.type,
     styleUrl: draftFields.styleUrl,
     bbox: draftFields.bbox,

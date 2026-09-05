@@ -28,7 +28,6 @@ import {
   spansAntimeridian,
 } from '@/lib/map/bbox-utils';
 import {
-  type GeoJsonOverlay,
   GeoJsonOverlayError,
   MAX_GEOJSON_OVERLAY_MEGABYTES,
   readGeoJsonOverlayFile,
@@ -670,21 +669,11 @@ export function MapScreen() {
   );
   useShellSlot(shellSlot);
 
-  const authoredGeoJsonOverlays = useMemo<GeoJsonOverlay[]>(
+  const authoredLayersForCanvas = useMemo(
     () =>
-      authoredLayerEntries.flatMap((entry) => {
-        if (entry.kind !== 'valid' || entry.layer.source.type !== 'geojson') {
-          return [];
-        }
-        return [
-          {
-            id: entry.layer.id,
-            name: entry.layer.name,
-            data: entry.layer.source.data,
-            visible: entry.layer.visible,
-          },
-        ];
-      }),
+      authoredLayerEntries.flatMap((entry) =>
+        entry.kind === 'valid' ? [entry.layer] : [],
+      ),
     [authoredLayerEntries],
   );
   const authoringDraftFields = currentDraftFields(
@@ -1014,7 +1003,7 @@ export function MapScreen() {
             onDrawCreate={handleDrawCreate}
             onDrawModeChange={handleDrawModeChange}
             fitBounds={autoFitBbox}
-            overlays={authoredGeoJsonOverlays}
+            authoredLayers={authoredLayersForCanvas}
             onOverlayFilesDrop={(files) =>
               handleReferenceOverlayFiles(files, 'map')
             }

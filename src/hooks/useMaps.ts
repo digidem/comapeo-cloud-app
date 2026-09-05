@@ -8,12 +8,18 @@ import {
 import type { SavedMap } from '@/lib/db';
 import { addSavedMapWithPackage, getDb } from '@/lib/db';
 import type { AuthoredLayer } from '@/lib/map/authored-layers';
-import { buildSavedMapAuthoringWrite } from '@/lib/map/saved-map-authoring';
+import {
+  buildSavedMapAuthoringWrite,
+  getPackageRelevantMapConfig,
+  hasPackageRelevantMapConfigChanged,
+} from '@/lib/map/saved-map-authoring';
 import { recoverCancelledMapDownload } from '@/lib/map/saved-map-lifecycle';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
+import { parseSavedMapForAuthoring } from '@/lib/schemas/saved-map';
 import type {
+  CanonicalSavedMapStorageRow,
   SavedMapAuthoringDraftFields,
   ValidatedSavedMapStorageSnapshot,
 } from '@/lib/schemas/saved-map';
@@ -142,27 +148,48 @@ export function useSaveAuthoredMap() {
       layers: AuthoredLayer[];
       updatedAt: number;
     }) => {
-      const row = buildSavedMapAuthoringWrite(
-        snapshot,
-        draftFields,
-        layers,
-        updatedAt,
-      );
       const db = getDb();
+      let row: CanonicalSavedMapStorageRow | undefined;
       await db.transaction(
         'rw',
         [db.maps, db.mapPackages, db.mapPackageChunks],
         async () => {
+          const current = await db.maps.get(snapshot.row.id);
+          if (!current) {
+            throw new Error('Saved map no longer exists');
+          }
+          const parsedCurrent = parseSavedMapForAuthoring(current as unknown);
+          if (
+            !parsedCurrent.ok ||
+            parsedCurrent.snapshot.row.updatedAt !== snapshot.row.updatedAt
+          ) {
+            throw new Error(
+              'Saved map changed while it was being edited. Reopen it before saving.',
+            );
+          }
+
+          row = buildSavedMapAuthoringWrite(
+            parsedCurrent.snapshot,
+            draftFields,
+            layers,
+            updatedAt,
+          );
+          const packageChanged = hasPackageRelevantMapConfigChanged(
+            parsedCurrent.snapshot.row,
+            getPackageRelevantMapConfig(row),
+          );
           await db.maps.put(row as SavedMap);
-          // A draft row must never retain package bytes from a previous
-          // package-relevant configuration. Name-only edits of ready maps keep
-          // status=ready and therefore preserve the existing package.
-          if (row.status === 'draft') {
+          if (packageChanged) {
             await db.mapPackages.delete(row.id);
             await db.mapPackageChunks.where('mapId').equals(row.id).delete();
           }
         },
       );
+      if (!row) {
+        throw new Error(
+          'Saved map authoring transaction did not produce a row',
+        );
+      }
       return row;
     },
     onSuccess: (row) => {

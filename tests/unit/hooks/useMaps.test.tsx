@@ -306,6 +306,94 @@ describe('useSaveAuthoredMap', () => {
       await getDb().mapPackageChunks.where('mapId').equals(map.id).count(),
     ).toBe(0);
   });
+
+  it('preserves package tables for a name-only save even when the row status is draft', async () => {
+    const map = createMap({ status: 'draft', smpSize: 7 });
+    await getDb().maps.add(map);
+    await getDb().mapPackages.add({
+      mapId: map.id,
+      contentType: 'application/zip',
+      size: 7,
+      chunkSize: 7,
+      chunkCount: 1,
+      updatedAt: map.updatedAt,
+    });
+    await getDb().mapPackageChunks.add({
+      id: `${map.id}:0`,
+      mapId: map.id,
+      index: 0,
+      data: new TextEncoder().encode('package').buffer,
+    });
+    const parsed = parseSavedMapForAuthoring(map);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const { result } = renderHook(() => useSaveAuthoredMap(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({
+        snapshot: parsed.snapshot,
+        draftFields: {
+          name: 'Renamed only',
+          type: map.type,
+          styleUrl: map.styleUrl,
+          bbox: map.bbox,
+          minZoom: map.minZoom,
+          maxZoom: map.maxZoom,
+          scheme: map.scheme,
+        },
+        layers: [],
+        updatedAt: Date.parse('2026-09-04T12:00:00.000Z'),
+      });
+    });
+
+    expect(await getDb().mapPackages.get(map.id)).toBeDefined();
+    expect(
+      await getDb().mapPackageChunks.where('mapId').equals(map.id).count(),
+    ).toBe(1);
+  });
+
+  it('rejects a stale editor snapshot without overwriting a newer map revision', async () => {
+    const map = createMap({ status: 'ready', smpSize: 7 });
+    await getDb().maps.add(map);
+    const parsed = parseSavedMapForAuthoring(map);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const concurrentUpdatedAt = '2026-09-04T11:30:00.000Z';
+    await getDb().maps.update(map.id, {
+      name: 'Concurrent change',
+      status: 'downloading',
+      updatedAt: concurrentUpdatedAt,
+    });
+
+    const { result } = renderHook(() => useSaveAuthoredMap(), { wrapper });
+    await act(async () => {
+      await expect(
+        result.current.mutateAsync({
+          snapshot: parsed.snapshot,
+          draftFields: {
+            name: 'Stale editor save',
+            type: map.type,
+            styleUrl: map.styleUrl,
+            bbox: map.bbox,
+            minZoom: map.minZoom,
+            maxZoom: map.maxZoom,
+            scheme: map.scheme,
+          },
+          layers: [],
+          updatedAt: Date.parse('2026-09-04T12:00:00.000Z'),
+        }),
+      ).rejects.toThrow(/changed while it was being edited/i);
+    });
+
+    expect(await getDb().maps.get(map.id)).toEqual(
+      expect.objectContaining({
+        name: 'Concurrent change',
+        status: 'downloading',
+        updatedAt: concurrentUpdatedAt,
+      }),
+    );
+  });
 });
 
 describe('useDeleteMap', () => {

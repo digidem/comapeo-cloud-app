@@ -301,6 +301,20 @@ export type ValidatedSavedMapStorageSnapshot = {
   readonly row: SavedMapStorageRow;
 };
 
+export function isValidatedSavedMapStorageSnapshot(
+  value: unknown,
+): value is ValidatedSavedMapStorageSnapshot {
+  if (typeof value !== 'object' || value === null) return false;
+  const snapshot = value as Record<PropertyKey, unknown>;
+  return (
+    snapshot[validatedSavedMapStorageSnapshotBrand] === true &&
+    Object.hasOwn(snapshot, validatedSavedMapStorageSnapshotBrand) &&
+    Object.hasOwn(snapshot, 'row') &&
+    typeof snapshot.row === 'object' &&
+    snapshot.row !== null
+  );
+}
+
 export type SavedMapReadSuccess = {
   ok: true;
   snapshot: ValidatedSavedMapStorageSnapshot;

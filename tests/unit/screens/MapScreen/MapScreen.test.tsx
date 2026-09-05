@@ -1,4 +1,7 @@
-import { AUTHORED_VECTOR_LAYER_FIXTURE } from '@tests/fixtures/authored-layers';
+import {
+  AUTHORED_RASTER_LAYER_FIXTURE,
+  AUTHORED_VECTOR_LAYER_FIXTURE,
+} from '@tests/fixtures/authored-layers';
 import {
   act,
   fireEvent,
@@ -156,14 +159,14 @@ describe('MapScreen', () => {
     expect(await screen.findByText('point.geojson')).toBeInTheDocument();
     expect(screen.getByText('route.geojson')).toBeInTheDocument();
     expect(
-      screen.getAllByTestId(/mock-source-reference-overlay-.*/),
+      screen.getAllByTestId(/mock-source-comapeo-authored:.*/),
     ).toHaveLength(2);
 
     await user.click(
       screen.getByRole('button', { name: 'Hide point.geojson' }),
     );
     expect(
-      screen.getAllByTestId(/mock-source-reference-overlay-.*/),
+      screen.getAllByTestId(/mock-source-comapeo-authored:.*/),
     ).toHaveLength(2);
 
     await user.click(
@@ -223,6 +226,45 @@ describe('MapScreen', () => {
       screen.getByRole('button', { name: 'Cancel editing' }),
     ).toBeEnabled();
     expect(await getDb().maps.toArray()).toEqual(storedBefore);
+  });
+
+  it('restores persisted vector and raster authored layers into the authoring canvas', async () => {
+    const user = userEvent.setup();
+    await getDb().maps.add({
+      id: 'mixed-authored-map',
+      projectLocalId: 'project-1',
+      name: 'Mixed authored map',
+      type: 'raster',
+      origin: 'authored',
+      styleUrl: 'https://tiles.example.com/{z}/{x}/{y}.png',
+      scheme: 'xyz',
+      bbox: [-75, -12, -45, 8],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'draft',
+      createdAt: '2026-09-05T10:00:00.000Z',
+      updatedAt: '2026-09-05T10:00:00.000Z',
+      layers: [
+        structuredClone(AUTHORED_VECTOR_LAYER_FIXTURE),
+        structuredClone(AUTHORED_RASTER_LAYER_FIXTURE),
+      ],
+    });
+
+    render(<MapScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit layers' }),
+    );
+
+    expect(
+      await screen.findByTestId(
+        'mock-source-comapeo-authored:11111111-1111-4111-8111-111111111111:source',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId(
+        'mock-source-comapeo-authored:22222222-2222-4222-8222-222222222222:source',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('restores the pre-edit authoring state when cancelling a saved-map edit', async () => {
@@ -402,7 +444,7 @@ describe('MapScreen', () => {
     );
     await waitFor(() => {
       expect(
-        screen.getAllByTestId(/mock-source-reference-overlay-/),
+        screen.getAllByTestId(/mock-source-comapeo-authored:/),
       ).toHaveLength(10);
     });
     expect(
@@ -647,7 +689,7 @@ describe('MapScreen', () => {
     );
     expect(screen.queryByText('valid.geojson')).not.toBeInTheDocument();
     expect(
-      screen.queryByTestId(/mock-source-reference-overlay-/),
+      screen.queryByTestId(/mock-source-comapeo-authored:/),
     ).not.toBeInTheDocument();
   });
 
@@ -768,7 +810,7 @@ describe('MapScreen', () => {
     await user.upload(input, files);
     await waitFor(() => {
       expect(
-        screen.getAllByTestId(/mock-source-reference-overlay-/),
+        screen.getAllByTestId(/mock-source-comapeo-authored:/),
       ).toHaveLength(10);
     });
 
@@ -783,9 +825,9 @@ describe('MapScreen', () => {
       'You can keep up to 10 reference files on the map. Remove one before adding more.',
     );
     expect(screen.queryByTitle('extra.geojson')).not.toBeInTheDocument();
-    expect(
-      screen.getAllByTestId(/mock-source-reference-overlay-/),
-    ).toHaveLength(10);
+    expect(screen.getAllByTestId(/mock-source-comapeo-authored:/)).toHaveLength(
+      10,
+    );
 
     await user.click(
       screen.getByRole('button', { name: 'Remove reference-0.geojson' }),
@@ -801,9 +843,9 @@ describe('MapScreen', () => {
       ),
     );
     expect(await screen.findByText('replacement.geojson')).toBeInTheDocument();
-    expect(
-      screen.getAllByTestId(/mock-source-reference-overlay-/),
-    ).toHaveLength(10);
+    expect(screen.getAllByTestId(/mock-source-comapeo-authored:/)).toHaveLength(
+      10,
+    );
   });
 
   it('clears transient reference overlays when the selected project changes', async () => {
@@ -839,7 +881,7 @@ describe('MapScreen', () => {
       expect(screen.queryByText('project-1.geojson')).not.toBeInTheDocument();
     });
     expect(
-      screen.queryByTestId(/mock-source-reference-overlay-.*/),
+      screen.queryByTestId(/mock-source-comapeo-authored:.*/),
     ).not.toBeInTheDocument();
   });
 

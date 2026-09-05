@@ -37,6 +37,7 @@ npm test -- --run \
   tests/unit/lib/map/smp-download.test.ts \
   tests/unit/hooks/useMaps.test.tsx \
   tests/unit/screens/MapScreen/AuthoredLayersControl.test.tsx \
+  tests/unit/screens/MapScreen/MapAuthoringCanvas.test.tsx \
   tests/unit/screens/MapScreen/MapScreen.test.tsx \
   tests/unit/screens/MapScreen/DownloadPanel.test.tsx \
   tests/unit/screens/MapScreen/SavedMapsList.test.tsx \
