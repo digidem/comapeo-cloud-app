@@ -29,6 +29,7 @@ import type { CalculationParams } from '@/lib/area-calculator/types';
 import type { AreaUnit } from '@/lib/area-format';
 import { convertArea } from '@/lib/area-format';
 import { syncRemoteArchive } from '@/lib/data-layer';
+import type { Project } from '@/lib/db';
 import { exportFeatureCollection } from '@/lib/geojson-export';
 import { resolveObservationListItemName } from '@/lib/observation-list-item';
 import { useAuthStore } from '@/stores/auth-store';
@@ -46,6 +47,7 @@ import { IntroPage } from './IntroPage';
 import { MethodSelector } from './MethodSelector';
 import { ProjectBannerCard } from './ProjectBannerCard';
 import { type ActivityItem, RecentActivityList } from './RecentActivityList';
+import { ReportBrandingDialog } from './ReportBrandingDialog';
 import { StatCard } from './StatCard';
 
 // ---- Helpers ----
@@ -366,6 +368,9 @@ function HomeScreen() {
   const { openAddServerDialog } = useAddServerDialog();
   const intl = useIntl();
   const [now, setNow] = useState(() => Date.now());
+  const [brandingProjectId, setBrandingProjectId] = useState<string | null>(
+    null,
+  );
 
   // Refresh relative timestamps every minute
   useEffect(() => {
@@ -374,6 +379,18 @@ function HomeScreen() {
   }, []);
 
   const queryClient = useQueryClient();
+  const handleReportBrandingSaved = useCallback(
+    async (savedProject: Project) => {
+      queryClient.setQueryData<Project[]>(['projects'], (currentProjects) =>
+        currentProjects?.map((project) =>
+          project.localId === savedProject.localId ? savedProject : project,
+        ),
+      );
+      await queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setBrandingProjectId(null);
+    },
+    [queryClient],
+  );
   const projectsQuery = useProjects();
   const coverage = useProjectCoverage(
     state.selectedProjectId,
@@ -395,6 +412,7 @@ function HomeScreen() {
   const selectedProject = projects.find(
     (p) => p.localId === state.selectedProjectId,
   );
+  const brandingProject = projects.find((p) => p.localId === brandingProjectId);
   const { archives: allArchives, selectedArchiveId } = useRemoteArchives();
   const archiveServerUrl = useMemo(
     () =>
@@ -751,6 +769,15 @@ function HomeScreen() {
           }}
         />
 
+        {brandingProject && (
+          <ReportBrandingDialog
+            isOpen={brandingProjectId !== null}
+            project={brandingProject}
+            onClose={() => setBrandingProjectId(null)}
+            onSaved={handleReportBrandingSaved}
+          />
+        )}
+
         <DeleteProjectDialog
           isOpen={state.deletingProjectId !== null}
           projectLocalId={state.deletingProjectId ?? ''}
@@ -805,6 +832,15 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_EDITED' });
           }}
         />
+
+        {brandingProject && (
+          <ReportBrandingDialog
+            isOpen={brandingProjectId !== null}
+            project={brandingProject}
+            onClose={() => setBrandingProjectId(null)}
+            onSaved={handleReportBrandingSaved}
+          />
+        )}
 
         <DeleteProjectDialog
           isOpen={state.deletingProjectId !== null}
@@ -870,6 +906,15 @@ function HomeScreen() {
           }}
         />
 
+        {brandingProject && (
+          <ReportBrandingDialog
+            isOpen={brandingProjectId !== null}
+            project={brandingProject}
+            onClose={() => setBrandingProjectId(null)}
+            onSaved={handleReportBrandingSaved}
+          />
+        )}
+
         <DeleteProjectDialog
           isOpen={state.deletingProjectId !== null}
           projectLocalId={state.deletingProjectId ?? ''}
@@ -906,6 +951,9 @@ function HomeScreen() {
                   type: 'OPEN_EDIT_DIALOG',
                   id: state.selectedProjectId!,
                 })
+              }
+              onEditBranding={() =>
+                setBrandingProjectId(selectedProject.localId)
               }
               onDelete={() =>
                 dispatch({
@@ -950,6 +998,15 @@ function HomeScreen() {
             dispatch({ type: 'PROJECT_EDITED' });
           }}
         />
+
+        {brandingProject && (
+          <ReportBrandingDialog
+            isOpen={brandingProjectId !== null}
+            project={brandingProject}
+            onClose={() => setBrandingProjectId(null)}
+            onSaved={handleReportBrandingSaved}
+          />
+        )}
 
         <DeleteProjectDialog
           isOpen={state.deletingProjectId !== null}
@@ -1073,6 +1130,7 @@ function HomeScreen() {
                 id: state.selectedProjectId!,
               })
             }
+            onEditBranding={() => setBrandingProjectId(selectedProject.localId)}
             onDelete={() =>
               dispatch({
                 type: 'OPEN_DELETE_DIALOG',
@@ -1169,6 +1227,15 @@ function HomeScreen() {
           dispatch({ type: 'PROJECT_EDITED' });
         }}
       />
+
+      {brandingProject && (
+        <ReportBrandingDialog
+          isOpen={brandingProjectId !== null}
+          project={brandingProject}
+          onClose={() => setBrandingProjectId(null)}
+          onSaved={handleReportBrandingSaved}
+        />
+      )}
 
       <DeleteProjectDialog
         isOpen={state.deletingProjectId !== null}

@@ -1232,6 +1232,44 @@ describe('HomeScreen', () => {
     ).toBeInTheDocument();
   });
 
+  it('opens project-scoped report branding from the Home banner', async () => {
+    const user = userEvent.setup();
+    mockUseProjects.mockReturnValue({
+      data: [
+        {
+          localId: 'p1',
+          sourceType: 'local',
+          sourceId: 'local',
+          name: 'Forest Guardians',
+          createdAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+          dirtyLocal: true,
+          deleted: false,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      status: 'success',
+    } as unknown as ReturnType<typeof useProjects>);
+    mockUseProjectCoverage.mockReturnValue({
+      results: [makeResult('observed', 50000)],
+      isCalculating: false,
+      error: null,
+    });
+
+    renderWithShell(<HomeScreen />);
+    await waitForWorkspace('Forest Guardians');
+    await user.click(screen.getByRole('button', { name: /report branding/i }));
+
+    expect(
+      screen.getByRole('dialog', { name: /report branding/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: /organization name/i }),
+    ).toHaveValue('Forest Guardians');
+  });
+
   it('shows "Local" mode stat when project has no serverUrl', async () => {
     mockUseProjects.mockReturnValue({
       data: [

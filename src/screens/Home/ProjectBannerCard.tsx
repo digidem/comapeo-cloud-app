@@ -14,6 +14,7 @@ interface ProjectBannerCardProps {
   lastSync?: string | null;
   teamMembersCount?: number;
   onEdit?: () => void;
+  onEditBranding?: () => void;
   onDelete?: () => void;
   projectLocalId?: string;
   onImportComplete?: (result: { imported: number; skipped: number }) => void;
@@ -47,6 +48,10 @@ const messages = defineMessages({
     id: 'dashboard.banner.editProject',
     defaultMessage: 'Edit Project',
   },
+  reportBranding: {
+    id: 'dashboard.banner.reportBranding',
+    defaultMessage: 'Report branding',
+  },
   deleteProject: {
     id: 'dashboard.banner.deleteProject',
     defaultMessage: 'Delete Project',
@@ -61,6 +66,7 @@ export function ProjectBannerCard({
   lastSync,
   teamMembersCount = 1,
   onEdit,
+  onEditBranding,
   onDelete,
   projectLocalId,
   onImportComplete,
@@ -120,8 +126,8 @@ export function ProjectBannerCard({
         </div>
 
         {/* Action Bar */}
-        {(onEdit || onDelete || isLocalProject) && (
-          <div className="flex items-center gap-2 mt-4 mb-4">
+        {(onEdit || onEditBranding || onDelete || isLocalProject) && (
+          <div className="flex flex-wrap items-center gap-2 mt-4 mb-4">
             {onEdit && (
               <button
                 type="button"
@@ -142,6 +148,15 @@ export function ProjectBannerCard({
                   <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                 </svg>
                 {intl.formatMessage(messages.editProject)}
+              </button>
+            )}
+            {onEditBranding && (
+              <button
+                type="button"
+                onClick={onEditBranding}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-white/90 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {intl.formatMessage(messages.reportBranding)}
               </button>
             )}
             {isLocalProject && projectLocalId && (

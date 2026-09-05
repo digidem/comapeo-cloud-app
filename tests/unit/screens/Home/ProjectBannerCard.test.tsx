@@ -53,6 +53,24 @@ describe('ProjectBannerCard', () => {
     expect(onEdit).toHaveBeenCalledOnce();
   });
 
+  it('renders Report branding action when onEditBranding is provided', () => {
+    render(<ProjectBannerCard {...defaultProps} onEditBranding={vi.fn()} />);
+    expect(
+      screen.getByRole('button', { name: /report branding/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('calls onEditBranding when Report branding is clicked', async () => {
+    const user = userEvent.setup();
+    const onEditBranding = vi.fn();
+    render(
+      <ProjectBannerCard {...defaultProps} onEditBranding={onEditBranding} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /report branding/i }));
+    expect(onEditBranding).toHaveBeenCalledOnce();
+  });
+
   it('renders Delete button when onDelete is provided', () => {
     render(<ProjectBannerCard {...defaultProps} onDelete={vi.fn()} />);
     expect(
