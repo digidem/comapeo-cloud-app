@@ -42,9 +42,11 @@ export function initSentry(): void {
     integrations: [Sentry.browserTracingIntegration()],
     tracesSampleRate: 0.1,
     sendDefaultPii: false,
-    beforeSend: (event) => sanitizeTelemetry(event),
+    beforeSend: (event) =>
+      sanitizeTelemetry(event, { preserveRootTagKeys: true }),
     beforeBreadcrumb: (breadcrumb) => sanitizeTelemetry(breadcrumb),
-    beforeSendTransaction: (event) => sanitizeTelemetry(event),
+    beforeSendTransaction: (event) =>
+      sanitizeTelemetry(event, { preserveRootTagKeys: true }),
     beforeSendSpan: (span) => sanitizeTelemetry(span),
     // Only capture errors from the app origin. Omit the filter entirely when
     // no origin is configured; an empty array would silently drop everything.

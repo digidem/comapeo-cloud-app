@@ -10,7 +10,7 @@ const MIN_PROPAGATED_NUMERIC_SENSITIVE_VALUE_LENGTH = 6;
 
 export const SECRET_TELEMETRY_KEYS = new Set([
   'authorization',
-  'proxy-authorization',
+  'proxyauthorization',
   'token',
   'accesstoken',
   'authtoken',
@@ -22,6 +22,7 @@ export const SECRET_TELEMETRY_KEYS = new Set([
   'credential',
   'credentials',
   'apikey',
+  'xapikey',
   'cookie',
   'cookies',
 ]);
@@ -120,6 +121,11 @@ function telemetryKeyPriority(key: string): number {
   return 2;
 }
 
+function compareTelemetryKeys(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
 function selectBoundedObjectEntries(
   value: Record<string, unknown>,
 ): Array<[string, unknown]> {
@@ -127,7 +133,7 @@ function selectBoundedObjectEntries(
     .sort(([left], [right]) => {
       const sensitivityOrder =
         telemetryKeyPriority(left) - telemetryKeyPriority(right);
-      return sensitivityOrder || left.localeCompare(right);
+      return sensitivityOrder || compareTelemetryKeys(left, right);
     })
     .slice(0, MAX_SANITIZE_ENTRIES);
 }
@@ -241,7 +247,13 @@ function collectSensitiveValues(
     for (const item of value.slice(0, MAX_SANITIZE_ENTRIES)) {
       collectSensitiveValues(item, depth + 1, forceSensitive, seen, collection);
     }
-    if (value.length > MAX_SANITIZE_ENTRIES) collection.saturated = true;
+    // Only sensitive-container truncation forces blanket primitive redaction.
+    // Non-sensitive tails are omitted by sanitizeValue too, so they cannot be
+    // serialized directly; their omitted values are intentionally not learned
+    // for echo-scrubbing of otherwise retained free-text siblings.
+    if (forceSensitive && value.length > MAX_SANITIZE_ENTRIES) {
+      collection.saturated = true;
+    }
     return;
   }
 
@@ -256,7 +268,36 @@ function collectSensitiveValues(
       collection,
     );
   }
-  if (Object.keys(source).length > entries.length) collection.saturated = true;
+  if (forceSensitive && Object.keys(source).length > entries.length) {
+    collection.saturated = true;
+  }
+}
+
+function sanitizeTagMap(
+  value: unknown,
+  sensitiveValues: ReadonlySet<string>,
+): unknown {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return TELEMETRY_REDACTED;
+  }
+
+  const source = value as Record<string, unknown>;
+  const entries = selectBoundedObjectEntries(source).sort(([left], [right]) =>
+    compareTelemetryKeys(left, right),
+  );
+  const result: Record<string, unknown> = {};
+
+  for (const [key] of entries) {
+    result[sanitizeTelemetryString(key, sensitiveValues)] = TELEMETRY_REDACTED;
+  }
+
+  if (Object.keys(source).length > MAX_SANITIZE_ENTRIES) {
+    let markerKey = '__truncated__';
+    while (Object.hasOwn(result, markerKey)) markerKey += '_';
+    result[markerKey] = TELEMETRY_TRUNCATED;
+  }
+
+  return result;
 }
 
 function sanitizeValue(
@@ -265,6 +306,7 @@ function sanitizeValue(
   seen: WeakSet<object>,
   sensitiveValues: ReadonlySet<string>,
   redactPrimitives: boolean,
+  preserveRootTagKeys: boolean,
 ): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
@@ -304,7 +346,14 @@ function sanitizeValue(
     const result = value
       .slice(0, MAX_SANITIZE_ENTRIES)
       .map((item) =>
-        sanitizeValue(item, depth + 1, seen, sensitiveValues, redactPrimitives),
+        sanitizeValue(
+          item,
+          depth + 1,
+          seen,
+          sensitiveValues,
+          redactPrimitives,
+          preserveRootTagKeys,
+        ),
       );
     if (value.length > MAX_SANITIZE_ENTRIES) {
       result.push(TELEMETRY_TRUNCATED);
@@ -314,20 +363,26 @@ function sanitizeValue(
 
   const source = value as Record<string, unknown>;
   const entries = selectBoundedObjectEntries(source).sort(([left], [right]) =>
-    left.localeCompare(right),
+    compareTelemetryKeys(left, right),
   );
   const result: Record<string, unknown> = {};
 
   for (const [key, entryValue] of entries) {
-    result[key] = isSensitiveTelemetryKey(key)
-      ? TELEMETRY_REDACTED
-      : sanitizeValue(
-          entryValue,
-          depth + 1,
-          seen,
-          sensitiveValues,
-          redactPrimitives,
-        );
+    const normalizedKey = normalizeKey(key);
+    if (normalizedKey === 'tags' && depth === 0 && preserveRootTagKeys) {
+      result[key] = sanitizeTagMap(entryValue, sensitiveValues);
+    } else if (isSensitiveTelemetryKey(key)) {
+      result[key] = TELEMETRY_REDACTED;
+    } else {
+      result[key] = sanitizeValue(
+        entryValue,
+        depth + 1,
+        seen,
+        sensitiveValues,
+        redactPrimitives,
+        preserveRootTagKeys,
+      );
+    }
   }
 
   if (Object.keys(source).length > MAX_SANITIZE_ENTRIES) {
@@ -337,7 +392,10 @@ function sanitizeValue(
   return result;
 }
 
-export function sanitizeTelemetry<T>(value: T): T {
+export function sanitizeTelemetry<T>(
+  value: T,
+  options: { preserveRootTagKeys?: boolean } = {},
+): T {
   const collection: SensitiveValueCollection = {
     values: new Set<string>(),
     saturated: false,
@@ -349,5 +407,6 @@ export function sanitizeTelemetry<T>(value: T): T {
     new WeakSet<object>(),
     collection.values,
     collection.saturated,
+    options.preserveRootTagKeys ?? false,
   ) as T;
 }
