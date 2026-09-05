@@ -800,6 +800,7 @@ export function MapScreen() {
             <>
               <div
                 aria-hidden="true"
+                data-testid="draw-frame-overlay"
                 className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden"
               >
                 <div
