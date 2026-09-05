@@ -39,6 +39,16 @@ vi.mock('@/components/layout/shell-slot', () => ({
   useShellSlot: vi.fn(),
 }));
 
+vi.mock('@/components/shared/CaseEvidenceWorkspace', () => ({
+  CaseEvidenceWorkspace: () => <div data-testid="case-evidence-workspace" />,
+}));
+
+vi.mock('@/components/shared/CaseReportDisclosurePanel', () => ({
+  CaseReportDisclosurePanel: ({ agency }: { agency: string }) => (
+    <div data-testid={`case-disclosure-${agency}`} />
+  ),
+}));
+
 vi.mock('@/stores/project-store', () => ({
   useProjectStore: vi.fn(
     (selector: (s: { selectedProjectId: string | null }) => string | null) =>
@@ -72,6 +82,13 @@ vi.mock('@/hooks/useCaseReportStates', () => ({
   useCaseReportStates: vi.fn(() => ({
     data: mockReportStatesData,
     isPending: mockReportStatesIsPending,
+  })),
+}));
+
+vi.mock('@/hooks/useCaseEvidenceAttachments', () => ({
+  useCaseEvidenceAttachments: vi.fn(() => ({
+    data: [],
+    isPending: false,
   })),
 }));
 
@@ -413,11 +430,9 @@ describe('CaseDetailScreen', () => {
       resetMocks();
     });
 
-    it('renders Report State tab', () => {
+    it('renders Reports tab', () => {
       render(<CaseDetailScreen />);
-      expect(
-        screen.getByRole('tab', { name: 'Report State' }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Reports' })).toBeInTheDocument();
     });
 
     it('shows a loading skeleton instead of an empty-state flash', async () => {
@@ -426,7 +441,7 @@ describe('CaseDetailScreen', () => {
       mockReportStatesIsPending = true;
       render(<CaseDetailScreen />);
 
-      await user.click(screen.getByRole('tab', { name: 'Report State' }));
+      await user.click(screen.getByRole('tab', { name: 'Reports' }));
 
       expect(screen.getByTestId('skeleton')).toBeInTheDocument();
       expect(
@@ -437,8 +452,8 @@ describe('CaseDetailScreen', () => {
     it('renders all four agency statuses independently', async () => {
       const user = userEvent.setup();
       render(<CaseDetailScreen />);
-      // Click the Report State tab
-      await user.click(screen.getByRole('tab', { name: 'Report State' }));
+      // Click the Reports tab
+      await user.click(screen.getByRole('tab', { name: 'Reports' }));
       // All four agencies should be present
       expect(
         screen.getByRole('heading', { level: 3, name: 'FUNAI' }),
@@ -459,6 +474,16 @@ describe('CaseDetailScreen', () => {
       );
     });
 
+    it('shows agency pending states without a contradictory empty message when no report rows exist', async () => {
+      const user = userEvent.setup();
+      mockReportStatesData = [];
+      render(<CaseDetailScreen />);
+      await user.click(screen.getByRole('tab', { name: 'Reports' }));
+
+      expect(screen.queryByText('No report state recorded yet')).toBeNull();
+      expect(screen.getAllByText('Pending')).toHaveLength(4);
+    });
+
     it('shows "Pending" for agencies without a report state row', async () => {
       const user = userEvent.setup();
       resetMocks();
@@ -475,7 +500,7 @@ describe('CaseDetailScreen', () => {
         },
       ];
       render(<CaseDetailScreen />);
-      await user.click(screen.getByRole('tab', { name: 'Report State' }));
+      await user.click(screen.getByRole('tab', { name: 'Reports' }));
       expect(screen.getAllByText('Pending').length).toBeGreaterThanOrEqual(3);
     });
   });

@@ -285,6 +285,63 @@ export interface SavedMapPackageSource {
  */
 export type CaseStatus = 'draft' | 'active' | 'closed';
 
+export type CaseEvidenceSourceType = 'observation' | 'alert' | 'track';
+export type CaseEvidenceAvailability = 'available' | 'deleted' | 'unavailable';
+export type CaseEvidenceFreshness = 'current' | 'changed';
+export type CaseEvidenceSyncState = 'synced' | 'unsynced' | 'unknown';
+
+/**
+ * Provenance-only link from a Case to an underlying CoMapeo record. Raw source
+ * facts, geometry, tags, and media bytes remain in the existing project tables.
+ */
+export interface CaseEvidenceReference {
+  localId: string;
+  caseLocalId: string;
+  projectLocalId: string;
+  sourceType: CaseEvidenceSourceType;
+  sourceLocalId: string;
+  sourceRemoteId?: string;
+  sourceVersionId?: string;
+  sourceUpdatedAt: string;
+  addedAt: string;
+  updatedAt: string;
+}
+
+/** A selected photo/audio reference. Row existence means selected for the Case. */
+export interface CaseEvidenceAttachment {
+  localId: string;
+  caseLocalId: string;
+  projectLocalId: string;
+  evidenceLocalId: string;
+  attachmentLocalId: string;
+  sourceRemoteId?: string;
+  originalHash?: string;
+  mediaType: 'photo' | 'audio';
+  sourceUpdatedAt: string;
+  selectedAt: string;
+}
+
+export interface CaseDisclosureDecision {
+  id: string;
+  include: boolean;
+}
+
+/** Per-agency disclosure choices. Defaults are synthesized fail-closed. */
+export interface CaseReportDisclosureRecord {
+  localId: string;
+  caseLocalId: string;
+  projectLocalId: string;
+  agency: CaseAgency;
+  reporterIdentity: 'include' | 'omit';
+  locationMode: 'exact' | 'area' | 'omit';
+  people: CaseDisclosureDecision[];
+  media: CaseDisclosureDecision[];
+  sensitiveFields: CaseDisclosureDecision[];
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type CaseType =
   | 'invasion_occupation'
   | 'territorial_encroachment'
@@ -323,6 +380,10 @@ export type CaseActivityEvent =
   | 'created'
   | 'status_changed'
   | 'reopened'
+  | 'evidence_added'
+  | 'evidence_removed'
+  | 'media_inclusion_changed'
+  | 'disclosure_changed'
   | 'report_state_changed'
   | 'deleted';
 
@@ -384,6 +445,9 @@ class AppDatabase extends Dexie {
   cases!: EntityTable<Case, 'localId'>;
   caseActivity!: EntityTable<CaseActivity, 'localId'>;
   caseReportState!: EntityTable<CaseReportState, 'localId'>;
+  caseEvidence!: EntityTable<CaseEvidenceReference, 'localId'>;
+  caseEvidenceAttachments!: EntityTable<CaseEvidenceAttachment, 'localId'>;
+  caseReportDisclosure!: EntityTable<CaseReportDisclosureRecord, 'localId'>;
 
   constructor() {
     super('comapeo-cloud-app');
@@ -684,6 +748,18 @@ class AppDatabase extends Dexie {
         .modify((server: Record<string, unknown>) => {
           if ('token' in server) delete server.token;
         });
+    });
+
+    // v17: Case evidence/disclosure foundation (#269). Evidence rows contain
+    // provenance references only; raw facts/media remain in the existing project
+    // tables. The compound source index prevents duplicate Case/source links.
+    this.version(17).stores({
+      caseEvidence:
+        '&localId, caseLocalId, projectLocalId, &[caseLocalId+sourceType+sourceLocalId], [projectLocalId+caseLocalId]',
+      caseEvidenceAttachments:
+        '&localId, caseLocalId, projectLocalId, evidenceLocalId, &[caseLocalId+attachmentLocalId], [projectLocalId+caseLocalId]',
+      caseReportDisclosure:
+        '&localId, caseLocalId, projectLocalId, agency, &[caseLocalId+agency], [projectLocalId+caseLocalId]',
     });
   }
 }

@@ -3,16 +3,19 @@ import JSZip from 'jszip';
 
 import { apiClient } from '@/lib/api-client';
 import { extractPoints } from '@/lib/area-calculator/calculator';
+import type { CaseReportDisclosure } from '@/lib/case-disclosure';
 import { isValidCoord } from '@/lib/coords';
 import type {
   Case,
   CaseActivity,
   CaseAgency,
+  CaseEvidenceSourceType,
   CaseReportState,
   CaseStatus,
 } from '@/lib/db';
 import type { CaseUpdates } from '@/lib/local-repositories';
 import {
+  addCaseEvidence as repoAddCaseEvidence,
   createAlert as repoCreateAlert,
   createAttachment as repoCreateAttachment,
   createCase as repoCreateCase,
@@ -24,6 +27,10 @@ import {
   getAttachmentsForProject as repoGetAttachmentsForProject,
   getCase as repoGetCase,
   getCaseActivity as repoGetCaseActivity,
+  getCaseEvidence as repoGetCaseEvidence,
+  getCaseEvidenceAttachments as repoGetCaseEvidenceAttachments,
+  getCaseEvidenceCounts as repoGetCaseEvidenceCounts,
+  getCaseReportDisclosure as repoGetCaseReportDisclosure,
   getCaseReportState as repoGetCaseReportState,
   getCaseReportStates as repoGetCaseReportStates,
   getCases as repoGetCases,
@@ -34,8 +41,11 @@ import {
   getProjects as repoGetProjects,
   getTracks as repoGetTracks,
   recordCaseActivity as repoRecordCaseActivity,
+  removeCaseEvidence as repoRemoveCaseEvidence,
+  setCaseEvidenceAttachmentSelected as repoSetCaseEvidenceAttachmentSelected,
   updateCase as repoUpdateCase,
   updateProject as repoUpdateProject,
+  upsertCaseReportDisclosure as repoUpsertCaseReportDisclosure,
   upsertCaseReportState as repoUpsertCaseReportState,
 } from '@/lib/local-repositories';
 import {
@@ -54,6 +64,10 @@ export type {
   Case,
   CaseActivity,
   CaseAgency,
+  CaseEvidenceAttachment,
+  CaseEvidenceReference,
+  CaseEvidenceSourceType,
+  CaseReportDisclosureRecord,
   CaseReportState,
   CaseStatus,
   Field,
@@ -531,6 +545,72 @@ export async function deleteCase(
   localId: string,
 ): Promise<boolean> {
   return repoDeleteCase(projectLocalId, localId);
+}
+
+// ---------------------------------------------------------------------------
+// Case evidence + disclosure foundation (#269)
+// ---------------------------------------------------------------------------
+
+export async function addCaseEvidence(input: {
+  projectLocalId: string;
+  caseLocalId: string;
+  sourceType: CaseEvidenceSourceType;
+  sourceLocalId: string;
+}) {
+  return repoAddCaseEvidence(input);
+}
+
+export async function getCaseEvidence(
+  projectLocalId: string,
+  caseLocalId: string,
+) {
+  return repoGetCaseEvidence(projectLocalId, caseLocalId);
+}
+
+export async function getCaseEvidenceCounts(projectLocalId: string) {
+  return repoGetCaseEvidenceCounts(projectLocalId);
+}
+
+export async function removeCaseEvidence(input: {
+  projectLocalId: string;
+  caseLocalId: string;
+  evidenceLocalId: string;
+}) {
+  return repoRemoveCaseEvidence(input);
+}
+
+export async function getCaseEvidenceAttachments(
+  projectLocalId: string,
+  caseLocalId: string,
+) {
+  return repoGetCaseEvidenceAttachments(projectLocalId, caseLocalId);
+}
+
+export async function setCaseEvidenceAttachmentSelected(input: {
+  projectLocalId: string;
+  caseLocalId: string;
+  evidenceLocalId: string;
+  attachmentLocalId: string;
+  selected: boolean;
+}) {
+  return repoSetCaseEvidenceAttachmentSelected(input);
+}
+
+export async function getCaseReportDisclosure(
+  projectLocalId: string,
+  caseLocalId: string,
+  agency: CaseAgency,
+) {
+  return repoGetCaseReportDisclosure(projectLocalId, caseLocalId, agency);
+}
+
+export async function upsertCaseReportDisclosure(input: {
+  projectLocalId: string;
+  caseLocalId: string;
+  agency: CaseAgency;
+  disclosure: CaseReportDisclosure;
+}) {
+  return repoUpsertCaseReportDisclosure(input);
 }
 
 // ---------------------------------------------------------------------------

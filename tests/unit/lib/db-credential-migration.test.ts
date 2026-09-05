@@ -283,12 +283,12 @@ afterEach(async () => {
 });
 
 describe('credential purge migration', () => {
-  it('upgrades v14 through v15 to v16, removes every legacy token shape, and preserves all other data', async () => {
+  it('upgrades v14 through the credential-purge v16 path to current v17, removes every legacy token shape, and preserves all other data', async () => {
     await seedV14Database();
 
     const db = await openCurrentDatabase();
 
-    expect(db.verno).toBe(16);
+    expect(db.verno).toBe(17);
     const servers = (await db.remoteServers.toArray()) as unknown as Array<
       Record<string, unknown>
     >;
@@ -355,7 +355,7 @@ describe('credential purge migration', () => {
 
     const db = await openCurrentDatabase();
 
-    expect(db.verno).toBe(16);
+    expect(db.verno).toBe(17);
     const server = (await db.remoteServers.get('archive-v4')) as unknown as
       Record<string, unknown> | undefined;
     expect(server).toMatchObject({
@@ -380,7 +380,7 @@ describe('credential purge migration', () => {
     db.close();
   });
 
-  it('is idempotent when a v16 database is opened again', async () => {
+  it('is idempotent when the current v17 database is opened again', async () => {
     await seedV14Database();
     const first = await openCurrentDatabase();
     const firstSnapshot = await serializeAllTables(first);
@@ -388,7 +388,7 @@ describe('credential purge migration', () => {
 
     vi.resetModules();
     const second = await openCurrentDatabase();
-    expect(second.verno).toBe(16);
+    expect(second.verno).toBe(17);
     expect(await serializeAllTables(second)).toBe(firstSnapshot);
     expect(await serializeAllTables(second)).not.toContain(CANARY);
     second.close();
