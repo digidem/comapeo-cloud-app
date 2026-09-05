@@ -413,6 +413,14 @@ function HomeScreen() {
     (p) => p.localId === state.selectedProjectId,
   );
   const brandingProject = projects.find((p) => p.localId === brandingProjectId);
+  const reportBrandingDialog = brandingProject ? (
+    <ReportBrandingDialog
+      isOpen={brandingProjectId !== null}
+      project={brandingProject}
+      onClose={() => setBrandingProjectId(null)}
+      onSaved={handleReportBrandingSaved}
+    />
+  ) : null;
   const { archives: allArchives, selectedArchiveId } = useRemoteArchives();
   const archiveServerUrl = useMemo(
     () =>
@@ -769,14 +777,7 @@ function HomeScreen() {
           }}
         />
 
-        {brandingProject && (
-          <ReportBrandingDialog
-            isOpen={brandingProjectId !== null}
-            project={brandingProject}
-            onClose={() => setBrandingProjectId(null)}
-            onSaved={handleReportBrandingSaved}
-          />
-        )}
+        {reportBrandingDialog}
 
         <DeleteProjectDialog
           isOpen={state.deletingProjectId !== null}
@@ -833,14 +834,7 @@ function HomeScreen() {
           }}
         />
 
-        {brandingProject && (
-          <ReportBrandingDialog
-            isOpen={brandingProjectId !== null}
-            project={brandingProject}
-            onClose={() => setBrandingProjectId(null)}
-            onSaved={handleReportBrandingSaved}
-          />
-        )}
+        {reportBrandingDialog}
 
         <DeleteProjectDialog
           isOpen={state.deletingProjectId !== null}
@@ -906,14 +900,7 @@ function HomeScreen() {
           }}
         />
 
-        {brandingProject && (
-          <ReportBrandingDialog
-            isOpen={brandingProjectId !== null}
-            project={brandingProject}
-            onClose={() => setBrandingProjectId(null)}
-            onSaved={handleReportBrandingSaved}
-          />
-        )}
+        {reportBrandingDialog}
 
         <DeleteProjectDialog
           isOpen={state.deletingProjectId !== null}
@@ -999,14 +986,7 @@ function HomeScreen() {
           }}
         />
 
-        {brandingProject && (
-          <ReportBrandingDialog
-            isOpen={brandingProjectId !== null}
-            project={brandingProject}
-            onClose={() => setBrandingProjectId(null)}
-            onSaved={handleReportBrandingSaved}
-          />
-        )}
+        {reportBrandingDialog}
 
         <DeleteProjectDialog
           isOpen={state.deletingProjectId !== null}
@@ -1228,14 +1208,7 @@ function HomeScreen() {
         }}
       />
 
-      {brandingProject && (
-        <ReportBrandingDialog
-          isOpen={brandingProjectId !== null}
-          project={brandingProject}
-          onClose={() => setBrandingProjectId(null)}
-          onSaved={handleReportBrandingSaved}
-        />
-      )}
+      {reportBrandingDialog}
 
       <DeleteProjectDialog
         isOpen={state.deletingProjectId !== null}

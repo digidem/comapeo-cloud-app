@@ -53,6 +53,13 @@ describe('report branding contract', () => {
     });
   });
 
+  it('falls back to Untitled Project when the project name is blank', () => {
+    expect(
+      resolveProjectReportBranding(makeProject({ name: '   ' }))
+        .organizationName,
+    ).toBe('Untitled Project');
+  });
+
   it('never reuses the project icon as the report logo', () => {
     const project = makeProject({
       iconRef: {

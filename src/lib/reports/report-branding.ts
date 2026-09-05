@@ -91,11 +91,11 @@ export function resolveProjectReportBranding(project: Project): ReportBranding {
     };
   }
 
+  const projectName = project.name?.trim() ? project.name : 'Untitled Project';
+
   return {
     schemaVersion: 1,
-    organizationName: normalizeOrganizationName(
-      project.name ?? 'Untitled Project',
-    ),
+    organizationName: normalizeOrganizationName(projectName),
     revision: 0,
     updatedAt: undefined,
     logo: undefined,
