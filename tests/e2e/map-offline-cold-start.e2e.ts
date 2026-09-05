@@ -566,7 +566,9 @@ test.describe('active SMP offline cold start', () => {
     const appOrigin = new URL(page.url()).origin;
     page.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.origin !== appOrigin) externalRequests.push(request.url());
+      if (url.origin !== appOrigin && !url.hostname.endsWith('sentry.io')) {
+        externalRequests.push(request.url());
+      }
     });
     await waitForPwaControl(page);
     await seedLocalState(page, await buildOfflineSmp());
@@ -601,7 +603,10 @@ test.describe('active SMP offline cold start', () => {
     const offlineExternalRequests: string[] = [];
     offlinePage.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.origin !== appOrigin) offlineExternalRequests.push(request.url());
+      // Sentry beacons fail silently offline and are not a rendering dependency.
+      if (url.origin !== appOrigin && !url.hostname.endsWith('sentry.io')) {
+        offlineExternalRequests.push(request.url());
+      }
     });
 
     const response = await offlinePage.goto('/');
