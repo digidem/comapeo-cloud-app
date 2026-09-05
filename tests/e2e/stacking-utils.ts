@@ -1,9 +1,10 @@
 import { type Locator, expect } from '@playwright/test';
 
 /**
- * Assert that the center of a visible control is the browser's pointer hit target.
- * This catches overlays that are technically visible but covered by a higher
- * stacking-context descendant (for example MapLibre's cooperative-gesture layer).
+ * Assert that several interior points of a visible control are browser pointer
+ * hit targets. This catches overlays that are technically visible but partly or
+ * fully covered by a higher stacking-context descendant (for example MapLibre's
+ * cooperative-gesture layer).
  */
 export async function expectControlUnobscured(control: Locator): Promise<void> {
   await expect(control).toBeVisible();
@@ -13,16 +14,26 @@ export async function expectControlUnobscured(control: Locator): Promise<void> {
   expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
 
-  const isHitTarget = await control.evaluate((element) => {
+  const allPointsHitControl = await control.evaluate((element) => {
     const rect = element.getBoundingClientRect();
-    const hit = document.elementFromPoint(
-      rect.left + rect.width / 2,
-      rect.top + rect.height / 2,
-    );
-    return hit === element || (hit !== null && element.contains(hit));
+    const points = [
+      [0.5, 0.5],
+      [0.25, 0.5],
+      [0.75, 0.5],
+      [0.5, 0.25],
+      [0.5, 0.75],
+    ] as const;
+
+    return points.every(([xRatio, yRatio]) => {
+      const hit = document.elementFromPoint(
+        rect.left + rect.width * xRatio,
+        rect.top + rect.height * yRatio,
+      );
+      return hit === element || (hit !== null && element.contains(hit));
+    });
   });
 
-  expect(isHitTarget).toBe(true);
+  expect(allPointsHitControl).toBe(true);
 }
 
 /**
@@ -55,4 +66,26 @@ export async function removeHighZMapBlocker(
       .querySelector<HTMLElement>('[data-testid="synthetic-maplibre-high-z"]')
       ?.remove();
   });
+}
+
+/** Prove an overlay geometrically covers the center used by hit-target checks. */
+export async function expectOverlayCoversControlCenter(
+  overlay: Locator,
+  control: Locator,
+): Promise<void> {
+  await expect(overlay).toBeVisible();
+  await expect(control).toBeVisible();
+
+  const overlayBox = await overlay.boundingBox();
+  const controlBox = await control.boundingBox();
+  expect(overlayBox).not.toBeNull();
+  expect(controlBox).not.toBeNull();
+  if (!overlayBox || !controlBox) return;
+
+  const centerX = controlBox.x + controlBox.width / 2;
+  const centerY = controlBox.y + controlBox.height / 2;
+  expect(centerX).toBeGreaterThanOrEqual(overlayBox.x);
+  expect(centerX).toBeLessThanOrEqual(overlayBox.x + overlayBox.width);
+  expect(centerY).toBeGreaterThanOrEqual(overlayBox.y);
+  expect(centerY).toBeLessThanOrEqual(overlayBox.y + overlayBox.height);
 }

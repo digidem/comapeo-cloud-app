@@ -5,6 +5,7 @@ import { seedAlertMapState } from './seed-alert-map';
 import {
   expectControlUnobscured,
   installHighZMapBlocker,
+  removeHighZMapBlocker,
 } from './stacking-utils';
 
 test.describe('Alerts map and grid', () => {
@@ -78,9 +79,7 @@ test.describe('Alerts map and grid', () => {
       page.getByRole('button', { name: 'Back to form' }),
     );
 
-    await page.getByTestId('synthetic-maplibre-high-z').evaluate((blocker) => {
-      blocker.remove();
-    });
+    await removeHighZMapBlocker(page.getByTestId('map-container'));
 
     const mapCanvas = page.locator('.maplibregl-canvas').first();
     await expect(mapCanvas).toBeVisible();

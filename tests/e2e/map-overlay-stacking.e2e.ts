@@ -4,6 +4,7 @@ import { seedAppDatabase } from './app-db';
 import { setupMockServer } from './mock-server';
 import {
   expectControlUnobscured,
+  expectOverlayCoversControlCenter,
   installHighZMapBlocker,
   removeHighZMapBlocker,
 } from './stacking-utils';
@@ -57,6 +58,7 @@ test.describe('Mobile map authoring overlay stacking', () => {
       browserName !== 'chromium',
       'MapLibre mobile hit-testing requires WebGL in this Playwright environment.',
     );
+    test.setTimeout(60_000);
 
     await prepareMobileMapAuthoring(page);
 
@@ -80,11 +82,13 @@ test.describe('Mobile map authoring overlay stacking', () => {
       name: 'Cancel drawing',
     });
 
-    // The frame scrim is intentionally pointer-transparent in production. Make
-    // it pointer-active temporarily so browser hit-testing also proves the
-    // instruction and cancel controls paint above the scrim, not merely that
-    // clicks fall through it.
+    // The frame scrim is intentionally pointer-transparent in production. Prove
+    // it geometrically covers both cancel controls, then make it pointer-active
+    // so browser hit-testing proves those controls paint above the scrim rather
+    // than clicks merely falling through it.
     const frameOverlay = drawFrame.locator('..');
+    await expectOverlayCoversControlCenter(frameOverlay, cancelDrawBounds);
+    await expectOverlayCoversControlCenter(frameOverlay, cancelDrawing);
     await frameOverlay.evaluate((element) => {
       element.style.pointerEvents = 'auto';
     });
@@ -108,7 +112,9 @@ test.describe('Mobile map authoring overlay stacking', () => {
       .filter({ hasText: 'Map area updated' });
     await expect(areaUpdatedStatus).toBeVisible();
     const undo = page.getByRole('button', { name: 'Undo' });
+    await installHighZMapBlocker(mapAuthoringCanvas);
     await expectControlUnobscured(undo);
+    await removeHighZMapBlocker(mapAuthoringCanvas);
     await undo.click();
     // A short timeout prevents the 6-second auto-hide timer from satisfying
     // this assertion if Undo stops updating state.
