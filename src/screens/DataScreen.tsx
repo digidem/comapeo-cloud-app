@@ -4,6 +4,7 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Link, useNavigate } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { AddToCaseDialog } from '@/components/shared/AddToCaseDialog';
 import { CompactObservationFilterBar } from '@/components/shared/CompactObservationFilterBar';
 import { ExportObservationsButton } from '@/components/shared/ExportObservationsButton';
 import { FilterSheet } from '@/components/shared/FilterSheet';
@@ -90,7 +91,22 @@ const messages = defineMessages({
     id: 'data.filterButton',
     defaultMessage: 'Filters',
   },
+  addToCase: {
+    id: 'cases.addEvidence.action',
+    defaultMessage: 'Add to case',
+  },
+  selectObservation: {
+    id: 'cases.addEvidence.selectObservation',
+    defaultMessage: 'Select observation {name}',
+  },
 });
+
+function toggleSelectionId(ids: ReadonlySet<string>, id: string): Set<string> {
+  const nextIds = new Set(ids);
+  if (nextIds.has(id)) nextIds.delete(id);
+  else nextIds.add(id);
+  return nextIds;
+}
 
 export function DataScreen() {
   const intl = useIntl();
@@ -128,6 +144,46 @@ export function DataScreen() {
   );
 
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [addToCaseOpen, setAddToCaseOpen] = useState(false);
+  const [observationSelection, setObservationSelection] = useState<{
+    projectLocalId: string | null;
+    ids: Set<string>;
+  }>({ projectLocalId: null, ids: new Set() });
+  const selectedObservationIds = useMemo(
+    () =>
+      observationSelection.projectLocalId === selectedProjectId
+        ? observationSelection.ids
+        : new Set<string>(),
+    [observationSelection, selectedProjectId],
+  );
+  const selectedObservationSources = useMemo(
+    () =>
+      Array.from(selectedObservationIds, (sourceLocalId) => ({
+        sourceType: 'observation' as const,
+        sourceLocalId,
+      })),
+    [selectedObservationIds],
+  );
+  const toggleObservationSelection = useCallback(
+    (observationId: string) => {
+      setObservationSelection((current) => ({
+        projectLocalId: selectedProjectId,
+        ids: toggleSelectionId(
+          current.projectLocalId === selectedProjectId
+            ? current.ids
+            : new Set<string>(),
+          observationId,
+        ),
+      }));
+    },
+    [selectedProjectId],
+  );
+  const clearObservationSelection = useCallback(() => {
+    setObservationSelection({
+      projectLocalId: selectedProjectId,
+      ids: new Set(),
+    });
+  }, [selectedProjectId]);
 
   // Desktop map view is md-scoped (48rem) to match the `md:block`/`md:hidden`
   // wrappers — NOT the lg-scoped useIsDesktop hook.
@@ -243,29 +299,47 @@ export function DataScreen() {
     return (
       <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-          {displayObs.map((obs) => (
-            <Link
-              key={obs.localId}
-              to="/data/observations/$observationId"
-              params={{ observationId: obs.localId }}
-              className="no-underline"
-            >
-              <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
-                <ObservationListItem
-                  observationLocalId={obs.localId}
-                  category={categoryByObservationId.get(obs.localId)}
-                  displayName={resolveObservationListItemName({
-                    resolvedDisplayName: displayNames.get(obs.localId),
-                    categoryTag: obs.tags?.category,
-                    fallback: intl.formatMessage(messages.observationFallback),
-                  })}
-                  createdAt={obs.createdAt}
-                  tags={obs.tags}
-                  attachments={attachmentsByObservationId.get(obs.localId)}
-                />
-              </Card>
-            </Link>
-          ))}
+          {displayObs.map((obs) => {
+            const displayName = resolveObservationListItemName({
+              resolvedDisplayName: displayNames.get(obs.localId),
+              categoryTag: obs.tags?.category,
+              fallback: intl.formatMessage(messages.observationFallback),
+            });
+            const selected = selectedObservationIds.has(obs.localId);
+            return (
+              <div key={obs.localId} className="relative min-w-0">
+                <label className="absolute right-2 top-2 z-10 inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-full bg-surface-card shadow-card">
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => toggleObservationSelection(obs.localId)}
+                    aria-label={intl.formatMessage(messages.selectObservation, {
+                      name: displayName,
+                    })}
+                    className="h-5 w-5 cursor-pointer accent-primary"
+                  />
+                </label>
+                <Link
+                  to="/data/observations/$observationId"
+                  params={{ observationId: obs.localId }}
+                  className="no-underline"
+                >
+                  <Card
+                    className={`h-full cursor-pointer p-4 pr-14 transition-shadow hover:shadow-elevated ${selected ? 'ring-2 ring-primary' : ''}`}
+                  >
+                    <ObservationListItem
+                      observationLocalId={obs.localId}
+                      category={categoryByObservationId.get(obs.localId)}
+                      displayName={displayName}
+                      createdAt={obs.createdAt}
+                      tags={obs.tags}
+                      attachments={attachmentsByObservationId.get(obs.localId)}
+                    />
+                  </Card>
+                </Link>
+              </div>
+            );
+          })}
         </div>
         <PaginationControls
           showingStart={showingStart}
@@ -288,6 +362,8 @@ export function DataScreen() {
     displayNames,
     categoryByObservationId,
     attachmentsByObservationId,
+    selectedObservationIds,
+    toggleObservationSelection,
   ]);
 
   // No project selected
@@ -352,140 +428,160 @@ export function DataScreen() {
       ) : null;
 
     return (
-      <MapScreenLayout
-        topLeftPositionClassName="top-10 left-3 right-[4.25rem] items-start"
-        topRightPositionClassName="top-10 right-3 z-30 items-center"
-        topLeft={
-          <div className="hidden w-full md:block">
-            <CompactObservationFilterBar
-              className="w-full rounded-card bg-surface-card p-2 shadow-card"
-              filters={obsFilters.filters}
-              resultCount={filteredObs.length}
-              isFiltering={obsFilters.isFiltering}
-              activeFilterCount={activeFilterCount}
-              onOpenFilters={() => setFilterDrawerOpen(true)}
-              onSearchClear={() => obsFilters.setSearch('')}
-              onStartDateClear={() => obsFilters.setStartDate(null)}
-              onEndDateClear={() => obsFilters.setEndDate(null)}
-              onCategoryRemove={obsFilters.toggleCategory}
-            />
-          </div>
-        }
-        topRight={
-          <button
-            type="button"
-            onClick={() => setViewMode('grid')}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-button bg-surface-card text-text-muted hover:bg-surface-container-low hover:text-text transition-colors min-h-[44px] shadow-card"
-            aria-label={intl.formatMessage(messages.switchToGridView)}
-            title={intl.formatMessage(messages.viewGrid)}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+      <>
+        <MapScreenLayout
+          topLeftPositionClassName="top-10 left-3 right-[4.25rem] items-start"
+          topRightPositionClassName="top-10 right-3 z-30 items-center"
+          topLeft={
+            <div className="hidden w-full md:block">
+              <CompactObservationFilterBar
+                className="w-full rounded-card bg-surface-card p-2 shadow-card"
+                filters={obsFilters.filters}
+                resultCount={filteredObs.length}
+                isFiltering={obsFilters.isFiltering}
+                activeFilterCount={activeFilterCount}
+                onOpenFilters={() => setFilterDrawerOpen(true)}
+                onSearchClear={() => obsFilters.setSearch('')}
+                onStartDateClear={() => obsFilters.setStartDate(null)}
+                onEndDateClear={() => obsFilters.setEndDate(null)}
+                onCategoryRemove={obsFilters.toggleCategory}
+              />
+            </div>
+          }
+          topRight={
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-button bg-surface-card text-text-muted hover:bg-surface-container-low hover:text-text transition-colors min-h-[44px] shadow-card"
+              aria-label={intl.formatMessage(messages.switchToGridView)}
+              title={intl.formatMessage(messages.viewGrid)}
             >
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-            </svg>
-          </button>
-        }
-        bottomLeft={
-          <>
-            <div className="md:hidden">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+              </svg>
+            </button>
+          }
+          bottomLeft={
+            <>
+              <div className="md:hidden">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setFilterDrawerOpen(true)}
+                  className="relative shadow-card"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    className="mr-1.5"
+                  >
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                  </svg>
+                  {intl.formatMessage(messages.filterButton)}
+                  {obsFilters.isFiltering && (
+                    <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                      {filteredObs.length}
+                    </span>
+                  )}
+                </Button>
+              </div>
+
+              {/* One sheet for both breakpoints — its Radix portal escapes the
+                hidden wrappers above, so the variant is JS-gated instead. */}
+              <FilterSheet
+                open={filterDrawerOpen}
+                onOpenChange={setFilterDrawerOpen}
+                variant={isDrawerDesktop ? 'right' : 'bottom'}
+                categoriesLoading={categoryMetadata.isLoading}
+                filters={obsFilters.filters}
+                availableCategories={obsFilters.availableCategories}
+                resultCount={filteredObs.length}
+                isFiltering={obsFilters.isFiltering}
+                onSearchChange={obsFilters.setSearch}
+                onStartDateChange={obsFilters.setStartDate}
+                onEndDateChange={obsFilters.setEndDate}
+                onCategoryToggle={obsFilters.toggleCategory}
+                onCategoriesClear={() => obsFilters.setCategories([])}
+                onCategoriesSelectAll={() =>
+                  obsFilters.setCategories(obsFilters.availableCategories)
+                }
+                onSortChange={obsFilters.setSort}
+                showSort={false}
+                onClear={obsFilters.reset}
+              />
+            </>
+          }
+          bottomRight={
+            <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setFilterDrawerOpen(true)}
-                className="relative shadow-card"
+                disabled={selectedObservationIds.size === 0}
+                onClick={() => setAddToCaseOpen(true)}
+                className="shadow-card"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                  className="mr-1.5"
-                >
-                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-                </svg>
-                {intl.formatMessage(messages.filterButton)}
-                {obsFilters.isFiltering && (
-                  <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
-                    {filteredObs.length}
-                  </span>
-                )}
+                {intl.formatMessage(messages.addToCase)}
               </Button>
+              <ExportObservationsButton
+                observations={observations}
+                projectName={selectedProject?.name}
+                disabled={observations.length === 0}
+                attachmentsByObservationId={attachmentsByObservationId}
+                displayNamesByObservationId={displayNames}
+                fieldsByKey={fieldsByKey}
+              />
             </div>
-
-            {/* One sheet for both breakpoints — its Radix portal escapes the
-                hidden wrappers above, so the variant is JS-gated instead. */}
-            <FilterSheet
-              open={filterDrawerOpen}
-              onOpenChange={setFilterDrawerOpen}
-              variant={isDrawerDesktop ? 'right' : 'bottom'}
-              categoriesLoading={categoryMetadata.isLoading}
-              filters={obsFilters.filters}
-              availableCategories={obsFilters.availableCategories}
-              resultCount={filteredObs.length}
-              isFiltering={obsFilters.isFiltering}
-              onSearchChange={obsFilters.setSearch}
-              onStartDateChange={obsFilters.setStartDate}
-              onEndDateChange={obsFilters.setEndDate}
-              onCategoryToggle={obsFilters.toggleCategory}
-              onCategoriesClear={() => obsFilters.setCategories([])}
-              onCategoriesSelectAll={() =>
-                obsFilters.setCategories(obsFilters.availableCategories)
+          }
+        >
+          <div className="relative h-full">
+            <ObservationsMap
+              observations={filteredObs}
+              categoryByObservationId={categoryByObservationId}
+              onMarkerClick={(observationId) =>
+                navigate({
+                  to: '/data/observations/$observationId',
+                  params: { observationId },
+                })
               }
-              onSortChange={obsFilters.setSort}
-              showSort={false}
-              onClear={obsFilters.reset}
+              height="h-full"
+              basemapSwitcherPositionClassName="top-[5.75rem] right-3"
+              showEmptyState={
+                !observationsQuery.isPending && !observationsQuery.isError
+              }
             />
-          </>
-        }
-        bottomRight={
-          <ExportObservationsButton
-            observations={observations}
-            projectName={selectedProject?.name}
-            disabled={observations.length === 0}
-            attachmentsByObservationId={attachmentsByObservationId}
-            displayNamesByObservationId={displayNames}
-            fieldsByKey={fieldsByKey}
-          />
-        }
-      >
-        <div className="relative h-full">
-          <ObservationsMap
-            observations={filteredObs}
-            categoryByObservationId={categoryByObservationId}
-            onMarkerClick={(observationId) =>
-              navigate({
-                to: '/data/observations/$observationId',
-                params: { observationId },
-              })
-            }
-            height="h-full"
-            basemapSwitcherPositionClassName="top-[5.75rem] right-3"
-            showEmptyState={
-              !observationsQuery.isPending && !observationsQuery.isError
-            }
-          />
 
-          {mapErrorOverlay}
-          {mapLoadingOverlay}
-        </div>
-      </MapScreenLayout>
+            {mapErrorOverlay}
+            {mapLoadingOverlay}
+          </div>
+        </MapScreenLayout>
+        <AddToCaseDialog
+          open={addToCaseOpen}
+          onOpenChange={setAddToCaseOpen}
+          projectLocalId={selectedProjectId}
+          sources={selectedObservationSources}
+          onAdded={clearObservationSelection}
+        />
+      </>
     );
   }
 
@@ -497,7 +593,14 @@ export function DataScreen() {
       </h1>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          disabled={selectedObservationIds.size === 0}
+          onClick={() => setAddToCaseOpen(true)}
+        >
+          {intl.formatMessage(messages.addToCase)}
+        </Button>
         <ExportObservationsButton
           observations={observations}
           projectName={selectedProject?.name}
@@ -634,6 +737,13 @@ export function DataScreen() {
           </>
         );
       })()}
+      <AddToCaseDialog
+        open={addToCaseOpen}
+        onOpenChange={setAddToCaseOpen}
+        projectLocalId={selectedProjectId}
+        sources={selectedObservationSources}
+        onAdded={clearObservationSelection}
+      />
     </div>
   );
 }

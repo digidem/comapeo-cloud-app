@@ -4,12 +4,15 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Link, useParams } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { CaseEvidenceWorkspace } from '@/components/shared/CaseEvidenceWorkspace';
+import { CaseReportDisclosurePanel } from '@/components/shared/CaseReportDisclosurePanel';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs } from '@/components/ui/tabs';
 import { useCase } from '@/hooks/useCase';
 import { useCaseActivity } from '@/hooks/useCaseActivity';
+import { useCaseEvidenceAttachments } from '@/hooks/useCaseEvidenceAttachments';
 import { useCaseReportStates } from '@/hooks/useCaseReportStates';
 import { useProjects } from '@/hooks/useProjects';
 import { useUpdateCase } from '@/hooks/useUpdateCase';
@@ -41,10 +44,11 @@ const messages = defineMessages({
     defaultMessage: 'Failed to load case',
   },
   overview: { id: 'cases.detail.overview', defaultMessage: 'Overview' },
+  evidence: { id: 'cases.detail.evidence', defaultMessage: 'Evidence' },
   activity: { id: 'cases.detail.activity', defaultMessage: 'Activity' },
   reportState: {
     id: 'cases.detail.reportState',
-    defaultMessage: 'Report State',
+    defaultMessage: 'Reports',
   },
   created: { id: 'cases.detail.created', defaultMessage: 'Created' },
   recordDetails: {
@@ -199,6 +203,22 @@ const messages = defineMessages({
     id: 'cases.activity.reopened',
     defaultMessage: 'Reopened',
   },
+  activityEvidenceAdded: {
+    id: 'cases.activity.evidence_added',
+    defaultMessage: 'Evidence Added',
+  },
+  activityEvidenceRemoved: {
+    id: 'cases.activity.evidence_removed',
+    defaultMessage: 'Evidence Removed',
+  },
+  activityMediaInclusionChanged: {
+    id: 'cases.activity.media_inclusion_changed',
+    defaultMessage: 'Media Inclusion Changed',
+  },
+  activityDisclosureChanged: {
+    id: 'cases.activity.disclosure_changed',
+    defaultMessage: 'Disclosure Changed',
+  },
   activityReportStateChanged: {
     id: 'cases.activity.report_state_changed',
     defaultMessage: 'Report State Changed',
@@ -276,6 +296,10 @@ const ACTIVITY_EVENT_LABEL_DESCRIPTORS: Record<
   created: messages.activityCreated,
   ['status_changed']: messages.activityStatusChanged,
   reopened: messages.activityReopened,
+  ['evidence_added']: messages.activityEvidenceAdded,
+  ['evidence_removed']: messages.activityEvidenceRemoved,
+  ['media_inclusion_changed']: messages.activityMediaInclusionChanged,
+  ['disclosure_changed']: messages.activityDisclosureChanged,
   ['report_state_changed']: messages.activityReportStateChanged,
   deleted: messages.activityDeleted,
 };
@@ -429,6 +453,23 @@ function OverviewTab({
   );
 }
 
+function EvidenceTab({
+  projectLocalId,
+  caseLocalId,
+}: {
+  projectLocalId: string;
+  caseLocalId: string;
+}) {
+  return (
+    <Tabs.Content value="evidence">
+      <CaseEvidenceWorkspace
+        projectLocalId={projectLocalId}
+        caseLocalId={caseLocalId}
+      />
+    </Tabs.Content>
+  );
+}
+
 interface ActivityTabProps {
   activity: CaseActivity[] | undefined;
   isPending: boolean;
@@ -491,11 +532,20 @@ function ActivityTab({ activity, isPending }: ActivityTabProps) {
 }
 
 interface ReportStateTabProps {
+  projectLocalId: string;
+  caseLocalId: string;
   reportStates: CaseReportState[] | undefined;
+  mediaCandidates: Array<{ id: string; label: string }>;
   isPending: boolean;
 }
 
-function ReportStateTab({ reportStates, isPending }: ReportStateTabProps) {
+function ReportStateTab({
+  projectLocalId,
+  caseLocalId,
+  reportStates,
+  mediaCandidates,
+  isPending,
+}: ReportStateTabProps) {
   const intl = useIntl();
 
   return (
@@ -505,11 +555,16 @@ function ReportStateTab({ reportStates, isPending }: ReportStateTabProps) {
           {intl.formatMessage(messages.reportState)}
         </h2>
         {isPending && <Skeleton height={80} className="rounded-card" />}
-        {!isPending && reportStates && reportStates.length > 0 && (
-          <div className="flex flex-col gap-3">
+        {!isPending && (!reportStates || reportStates.length === 0) && (
+          <span className="text-text-muted text-sm">
+            {intl.formatMessage(messages.noReportState)}
+          </span>
+        )}
+        {!isPending && (
+          <div className="flex flex-col gap-4">
             {AGENCIES.map((agency) => {
               const state =
-                reportStates.find(
+                reportStates?.find(
                   (reportState) => reportState.agency === agency,
                 ) ?? null;
               const reportBadgeVariant =
@@ -520,40 +575,43 @@ function ReportStateTab({ reportStates, isPending }: ReportStateTabProps) {
                   REPORT_STATUS_LABEL_DESCRIPTORS.incomplete);
 
               return (
-                <Card key={agency} className="p-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-text">
-                      {intl.formatMessage(AGENCY_LABEL_DESCRIPTORS[agency])}
-                    </h3>
-                    {state ? (
-                      <Badge variant={reportBadgeVariant ?? 'low'}>
-                        {intl.formatMessage(
-                          reportBadgeLabelDescriptor ??
-                            REPORT_STATUS_LABEL_DESCRIPTORS.incomplete,
-                        )}
-                      </Badge>
-                    ) : (
-                      <Badge variant="neutral">
-                        {intl.formatMessage(REPORT_STATUS_PENDING_DESCRIPTOR)}
-                      </Badge>
-                    )}
-                  </div>
-                  {state && (
-                    <div className="mt-2 text-xs text-text-muted">
-                      {intl.formatMessage(messages.revision, {
-                        revision: state.revision,
-                      })}
+                <div key={agency} className="space-y-2">
+                  <Card className="p-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-text">
+                        {intl.formatMessage(AGENCY_LABEL_DESCRIPTORS[agency])}
+                      </h3>
+                      {state ? (
+                        <Badge variant={reportBadgeVariant ?? 'low'}>
+                          {intl.formatMessage(
+                            reportBadgeLabelDescriptor ??
+                              REPORT_STATUS_LABEL_DESCRIPTORS.incomplete,
+                          )}
+                        </Badge>
+                      ) : (
+                        <Badge variant="neutral">
+                          {intl.formatMessage(REPORT_STATUS_PENDING_DESCRIPTOR)}
+                        </Badge>
+                      )}
                     </div>
-                  )}
-                </Card>
+                    {state && (
+                      <div className="mt-2 text-xs text-text-muted">
+                        {intl.formatMessage(messages.revision, {
+                          revision: state.revision,
+                        })}
+                      </div>
+                    )}
+                  </Card>
+                  <CaseReportDisclosurePanel
+                    projectLocalId={projectLocalId}
+                    caseLocalId={caseLocalId}
+                    agency={agency}
+                    media={mediaCandidates}
+                  />
+                </div>
               );
             })}
           </div>
-        )}
-        {!isPending && (!reportStates || reportStates.length === 0) && (
-          <span className="text-text-muted text-sm">
-            {intl.formatMessage(messages.noReportState)}
-          </span>
         )}
       </div>
     </Tabs.Content>
@@ -569,11 +627,23 @@ export function CaseDetailScreen() {
   const caseQuery = useCase(selectedProjectId, caseId);
   const activityQuery = useCaseActivity(selectedProjectId, caseId);
   const reportStatesQuery = useCaseReportStates(selectedProjectId, caseId);
+  const evidenceAttachmentsQuery = useCaseEvidenceAttachments(
+    selectedProjectId,
+    caseId,
+  );
   const updateCase = useUpdateCase();
   const projectsQuery = useProjects();
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
+  const disclosureMediaCandidates = useMemo(
+    () =>
+      (evidenceAttachmentsQuery.data ?? []).map((attachment) => ({
+        id: attachment.attachmentLocalId,
+        label: attachment.name ?? attachment.attachmentLocalId,
+      })),
+    [evidenceAttachmentsQuery.data],
+  );
 
   const topbarWorkspaceName =
     selectedProject?.name ?? intl.formatMessage(messages.untitledProject);
@@ -685,11 +755,14 @@ export function CaseDetailScreen() {
           <Tabs.Trigger value="overview">
             {intl.formatMessage(messages.overview)}
           </Tabs.Trigger>
-          <Tabs.Trigger value="activity">
-            {intl.formatMessage(messages.activity)}
+          <Tabs.Trigger value="evidence">
+            {intl.formatMessage(messages.evidence)}
           </Tabs.Trigger>
           <Tabs.Trigger value="report-state">
             {intl.formatMessage(messages.reportState)}
+          </Tabs.Trigger>
+          <Tabs.Trigger value="activity">
+            {intl.formatMessage(messages.activity)}
           </Tabs.Trigger>
         </Tabs.List>
 
@@ -708,14 +781,19 @@ export function CaseDetailScreen() {
           }}
         />
 
+        <EvidenceTab projectLocalId={selectedProjectId} caseLocalId={caseId} />
+
+        <ReportStateTab
+          projectLocalId={selectedProjectId}
+          caseLocalId={caseId}
+          reportStates={reportStatesQuery.data}
+          mediaCandidates={disclosureMediaCandidates}
+          isPending={reportStatesQuery.isPending}
+        />
+
         <ActivityTab
           activity={activityQuery.data}
           isPending={activityQuery.isPending}
-        />
-
-        <ReportStateTab
-          reportStates={reportStatesQuery.data}
-          isPending={reportStatesQuery.isPending}
         />
       </Tabs>
     </div>

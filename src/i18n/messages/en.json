@@ -314,6 +314,18 @@
   "cases.activity.deleted": {
     "defaultMessage": "Deleted"
   },
+  "cases.activity.disclosure_changed": {
+    "defaultMessage": "Disclosure Changed"
+  },
+  "cases.activity.evidence_added": {
+    "defaultMessage": "Evidence Added"
+  },
+  "cases.activity.evidence_removed": {
+    "defaultMessage": "Evidence Removed"
+  },
+  "cases.activity.media_inclusion_changed": {
+    "defaultMessage": "Media Inclusion Changed"
+  },
   "cases.activity.reopened": {
     "defaultMessage": "Reopened"
   },
@@ -322,6 +334,42 @@
   },
   "cases.activity.status_changed": {
     "defaultMessage": "Status Changed"
+  },
+  "cases.addEvidence.action": {
+    "defaultMessage": "Add to case"
+  },
+  "cases.addEvidence.alertFallback": {
+    "defaultMessage": "Alert"
+  },
+  "cases.addEvidence.back": {
+    "defaultMessage": "Back to cases"
+  },
+  "cases.addEvidence.createAndAdd": {
+    "defaultMessage": "Create and add"
+  },
+  "cases.addEvidence.description": {
+    "defaultMessage": "{count, plural, one {Add # selected record to an existing or new case.} other {Add # selected records to an existing or new case.}}"
+  },
+  "cases.addEvidence.existing": {
+    "defaultMessage": "Existing cases"
+  },
+  "cases.addEvidence.failed": {
+    "defaultMessage": "Could not add the selected evidence. Try again."
+  },
+  "cases.addEvidence.newCase": {
+    "defaultMessage": "New case"
+  },
+  "cases.addEvidence.noCases": {
+    "defaultMessage": "No cases yet for this project."
+  },
+  "cases.addEvidence.selectAlert": {
+    "defaultMessage": "Select alert {name}"
+  },
+  "cases.addEvidence.selectObservation": {
+    "defaultMessage": "Select observation {name}"
+  },
+  "cases.addEvidence.title": {
+    "defaultMessage": "Add to case"
   },
   "cases.agency.FUNAI": {
     "defaultMessage": "FUNAI"
@@ -355,6 +403,9 @@
   },
   "cases.detail.errorLoading": {
     "defaultMessage": "Failed to load case"
+  },
+  "cases.detail.evidence": {
+    "defaultMessage": "Evidence"
   },
   "cases.detail.incidentDate": {
     "defaultMessage": "Incident Date"
@@ -396,7 +447,7 @@
     "defaultMessage": "Record details"
   },
   "cases.detail.reportState": {
-    "defaultMessage": "Report State"
+    "defaultMessage": "Reports"
   },
   "cases.detail.revision": {
     "defaultMessage": "Revision {revision}"
@@ -410,8 +461,149 @@
   "cases.detail.urgency": {
     "defaultMessage": "Urgency"
   },
-  "cases.evidenceCountEmpty": {
-    "defaultMessage": "0 evidence"
+  "cases.disclosure.includeCandidate": {
+    "defaultMessage": "Include {label}"
+  },
+  "cases.disclosure.includeReporterIdentity": {
+    "defaultMessage": "Include reporter identity"
+  },
+  "cases.disclosure.loadError": {
+    "defaultMessage": "Could not load disclosure settings."
+  },
+  "cases.disclosure.location": {
+    "defaultMessage": "Location disclosure"
+  },
+  "cases.disclosure.location.area": {
+    "defaultMessage": "Area only"
+  },
+  "cases.disclosure.location.areaHint": {
+    "defaultMessage": "Area only never derives or rounds hidden coordinates. It uses only a separately approved area summary or generalized boundary."
+  },
+  "cases.disclosure.location.exact": {
+    "defaultMessage": "Exact location"
+  },
+  "cases.disclosure.location.omit": {
+    "defaultMessage": "Omit location"
+  },
+  "cases.disclosure.media": {
+    "defaultMessage": "Media"
+  },
+  "cases.disclosure.omitReporterIdentity": {
+    "defaultMessage": "Omit reporter identity"
+  },
+  "cases.disclosure.people": {
+    "defaultMessage": "People and witness names"
+  },
+  "cases.disclosure.reporterIdentity": {
+    "defaultMessage": "Reporter identity"
+  },
+  "cases.disclosure.save": {
+    "defaultMessage": "Save disclosure for {agency}"
+  },
+  "cases.disclosure.savedRevision": {
+    "defaultMessage": "Saved disclosure revision {revision}"
+  },
+  "cases.disclosure.sensitiveFields": {
+    "defaultMessage": "Other sensitive fields"
+  },
+  "cases.disclosure.title": {
+    "defaultMessage": "Disclosure for {agency}"
+  },
+  "cases.evidence.add": {
+    "defaultMessage": "Add"
+  },
+  "cases.evidence.addSource": {
+    "defaultMessage": "Add {type} {name}"
+  },
+  "cases.evidence.alert": {
+    "defaultMessage": "Alert"
+  },
+  "cases.evidence.attachments": {
+    "defaultMessage": "Photo & audio evidence"
+  },
+  "cases.evidence.browseTitle": {
+    "defaultMessage": "Browse project evidence"
+  },
+  "cases.evidence.filter.alerts": {
+    "defaultMessage": "Alerts"
+  },
+  "cases.evidence.filter.all": {
+    "defaultMessage": "All"
+  },
+  "cases.evidence.filter.observations": {
+    "defaultMessage": "Observations"
+  },
+  "cases.evidence.filter.tracks": {
+    "defaultMessage": "Tracks"
+  },
+  "cases.evidence.includeAttachment": {
+    "defaultMessage": "Include {name}"
+  },
+  "cases.evidence.loadError": {
+    "defaultMessage": "Could not load Case evidence."
+  },
+  "cases.evidence.loading": {
+    "defaultMessage": "Loading evidence"
+  },
+  "cases.evidence.media.changed": {
+    "defaultMessage": "Media changed since selected"
+  },
+  "cases.evidence.media.deleted": {
+    "defaultMessage": "Media deleted at source"
+  },
+  "cases.evidence.media.remoteOnly": {
+    "defaultMessage": "Not available locally"
+  },
+  "cases.evidence.media.unavailable": {
+    "defaultMessage": "Media unavailable"
+  },
+  "cases.evidence.noProjectEvidence": {
+    "defaultMessage": "No project evidence matches your search."
+  },
+  "cases.evidence.noSelected": {
+    "defaultMessage": "No evidence has been added to this case yet."
+  },
+  "cases.evidence.observation": {
+    "defaultMessage": "Observation"
+  },
+  "cases.evidence.remove": {
+    "defaultMessage": "Remove"
+  },
+  "cases.evidence.removeSource": {
+    "defaultMessage": "Remove {type} {name}"
+  },
+  "cases.evidence.search": {
+    "defaultMessage": "Search evidence"
+  },
+  "cases.evidence.selectedTitle": {
+    "defaultMessage": "Selected evidence"
+  },
+  "cases.evidence.state.changed": {
+    "defaultMessage": "Changed since added"
+  },
+  "cases.evidence.state.deleted": {
+    "defaultMessage": "Deleted at source"
+  },
+  "cases.evidence.state.unavailable": {
+    "defaultMessage": "Source unavailable"
+  },
+  "cases.evidence.state.unsynced": {
+    "defaultMessage": "Not project-synced"
+  },
+  "cases.evidence.track": {
+    "defaultMessage": "Track"
+  },
+  "cases.evidence.view.list": {
+    "defaultMessage": "List"
+  },
+  "cases.evidence.view.map": {
+    "defaultMessage": "Map"
+  },
+  "cases.evidence.view.timeline": {
+    "defaultMessage": "Timeline"
+  },
+  "cases.evidenceCount": {
+    "defaultMessage": "{count, plural, one {# evidence item} other {# evidence items}}"
   },
   "cases.form.create": {
     "defaultMessage": "Create Case"
@@ -646,6 +838,9 @@
   },
   "categories.untitledProject": {
     "defaultMessage": "Untitled Project"
+  },
+  "common.close": {
+    "defaultMessage": "Close"
   },
   "common.createProject": {
     "defaultMessage": "Create Project"
