@@ -1,3 +1,4 @@
+import { AUTHORED_VECTOR_LAYER_FIXTURE } from '@tests/fixtures/authored-layers';
 import {
   act,
   fireEvent,
@@ -126,7 +127,7 @@ describe('MapScreen', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Base map')).toBeInTheDocument();
     expect(screen.getByText('Bounds')).toBeInTheDocument();
-    expect(screen.getByText('Reference data')).toBeInTheDocument();
+    expect(screen.getByText('Map layers')).toBeInTheDocument();
     expect(screen.getByText('Zoom range')).toBeInTheDocument();
     expect(screen.getByText('Saved maps')).toBeInTheDocument();
     expect(
@@ -138,7 +139,7 @@ describe('MapScreen', () => {
     const user = userEvent.setup();
     render(<MapScreen />);
 
-    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const input = await screen.findByLabelText('Add GeoJSON layer');
     const pointFile = new File(
       ['{"type":"Point","coordinates":[-60,-3]}'],
       'point.geojson',
@@ -171,6 +172,175 @@ describe('MapScreen', () => {
     expect(screen.queryByText('route.geojson')).not.toBeInTheDocument();
   });
 
+  it('persists an added GeoJSON layer and reopens it for editing without rewriting storage', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+
+    await user.upload(
+      await screen.findByLabelText('Add GeoJSON layer'),
+      new File(
+        ['{"type":"Point","coordinates":[-60,-3]}'],
+        'territory.geojson',
+        { type: 'application/geo+json' },
+      ),
+    );
+    expect(await screen.findByText('territory.geojson')).toBeInTheDocument();
+
+    await user.click(
+      screen.getAllByRole('button', { name: 'Save Map' }).at(-1)!,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Save map' });
+    await user.type(within(dialog).getByLabelText('Map name'), 'Layered map');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Save draft' }),
+    );
+
+    await waitFor(async () => {
+      const maps = await getDb().maps.toArray();
+      expect(maps).toHaveLength(1);
+      expect(maps[0]?.layers).toHaveLength(1);
+      expect(maps[0]?.layers?.[0]).toEqual(
+        expect.objectContaining({
+          name: 'territory.geojson',
+          visible: true,
+          source: expect.objectContaining({ type: 'geojson' }),
+        }),
+      );
+    });
+    const storedBefore = structuredClone(await getDb().maps.toArray());
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit layers' }),
+    );
+    expect(await screen.findByText('territory.geojson')).toBeInTheDocument();
+    expect(screen.getByText(/stored in this browser/i)).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('button', { name: 'Save changes' })
+        .every((button) => !button.hasAttribute('disabled')),
+    ).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Cancel editing' }),
+    ).toBeEnabled();
+    expect(await getDb().maps.toArray()).toEqual(storedBefore);
+  });
+
+  it('keeps invalid stored layers in recovery mode until explicitly removed', async () => {
+    const user = userEvent.setup();
+    const rawMap = {
+      id: 'recover-map',
+      projectLocalId: 'project-1',
+      name: 'Recovery map',
+      type: 'raster' as const,
+      origin: 'authored' as const,
+      styleUrl: 'https://tiles.example.com/{z}/{x}/{y}.png',
+      scheme: 'xyz' as const,
+      bbox: [-75, -12, -45, 8] as [number, number, number, number],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'draft' as const,
+      createdAt: '2026-09-04T10:00:00.000Z',
+      updatedAt: '2026-09-04T10:00:00.000Z',
+      layers: [
+        structuredClone(AUTHORED_VECTOR_LAYER_FIXTURE),
+        { schemaVersion: 99, id: 'future-layer', name: 'Future layer' },
+      ],
+    };
+    await getDb().maps.add(rawMap as never);
+    render(<MapScreen />);
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit layers' }),
+    );
+    expect(await screen.findByText('Future layer')).toBeInTheDocument();
+    expect(screen.getByText('Territory boundary')).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('button', { name: 'Save changes' })
+        .every((button) => button.hasAttribute('disabled')),
+    ).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: 'Cancel editing' }));
+    expect(
+      (
+        (await getDb().maps.get('recover-map')) as unknown as {
+          layers: unknown[];
+        }
+      ).layers,
+    ).toEqual(rawMap.layers);
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit layers' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Remove invalid layer' }),
+    );
+    expect(
+      screen
+        .getAllByRole('button', { name: 'Save changes' })
+        .every((button) => !button.hasAttribute('disabled')),
+    ).toBe(true);
+    await user.click(
+      screen.getAllByRole('button', { name: 'Save changes' }).at(-1)!,
+    );
+
+    await waitFor(async () => {
+      const stored = await getDb().maps.get('recover-map');
+      expect(stored?.layers).toEqual([AUTHORED_VECTOR_LAYER_FIXTURE]);
+    });
+  });
+
+  it('keeps a colliding multi-file add atomic, including retained capacity', async () => {
+    const user = userEvent.setup();
+    const ids = [
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      ...Array.from(
+        { length: 10 },
+        (_, index) =>
+          `bbbbbbbb-bbbb-4bbb-8bbb-${String(index).padStart(12, '0')}`,
+      ),
+    ];
+    const randomUuid = vi
+      .spyOn(crypto, 'randomUUID')
+      .mockImplementation(
+        () =>
+          ids.shift()! as `${string}-${string}-${string}-${string}-${string}`,
+      );
+    render(<MapScreen />);
+    const input = await screen.findByLabelText('Add GeoJSON layer');
+    const file = (name: string, x: number) =>
+      new File([`{"type":"Point","coordinates":[${x},-3]}`], name, {
+        type: 'application/geo+json',
+      });
+
+    await user.upload(input, [
+      file('first.geojson', -60),
+      file('collision.geojson', -59),
+    ]);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /collid|existing|reserved/i,
+    );
+    expect(screen.queryByText('first.geojson')).not.toBeInTheDocument();
+    expect(screen.queryByText('collision.geojson')).not.toBeInTheDocument();
+
+    await user.upload(
+      input,
+      Array.from({ length: 10 }, (_, index) =>
+        file(`valid-${index}.geojson`, -60 + index / 10),
+      ),
+    );
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId(/mock-source-reference-overlay-/),
+      ).toHaveLength(10);
+    });
+    expect(
+      screen.queryByText(/keep up to 10 reference files/i),
+    ).not.toBeInTheDocument();
+    randomUuid.mockRestore();
+  });
+
   it('keeps import loading active until overlapping picker and drop imports both finish', async () => {
     const user = userEvent.setup();
     render(<MapScreen />);
@@ -197,10 +367,12 @@ describe('MapScreen', () => {
     });
 
     await user.upload(
-      await screen.findByLabelText('Add GeoJSON reference'),
+      await screen.findByLabelText('Add GeoJSON layer'),
       firstFile,
     );
-    expect(await screen.findByText('Adding GeoJSON…')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Adding GeoJSON layer…'),
+    ).toBeInTheDocument();
 
     fireEvent.drop(
       screen.getByRole('region', { name: 'Map authoring canvas' }),
@@ -214,7 +386,7 @@ describe('MapScreen', () => {
       await firstRead;
     });
     expect(await screen.findByText('first.geojson')).toBeInTheDocument();
-    expect(screen.getByText('Adding GeoJSON…')).toBeInTheDocument();
+    expect(screen.getByText('Adding GeoJSON layer…')).toBeInTheDocument();
 
     await act(async () => {
       resolveSecond('{"type":"Point","coordinates":[-59,-2]}');
@@ -222,7 +394,9 @@ describe('MapScreen', () => {
     });
     expect(await screen.findByText('second.geojson')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByText('Adding GeoJSON…')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Adding GeoJSON layer…'),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -252,7 +426,7 @@ describe('MapScreen', () => {
     });
 
     await user.upload(
-      await screen.findByLabelText('Add GeoJSON reference'),
+      await screen.findByLabelText('Add GeoJSON layer'),
       firstFile,
     );
     fireEvent.drop(
@@ -302,7 +476,7 @@ describe('MapScreen', () => {
 
     const { rerender } = render(<MapScreen />);
     await user.upload(
-      await screen.findByLabelText('Add GeoJSON reference'),
+      await screen.findByLabelText('Add GeoJSON layer'),
       firstFile,
     );
     fireEvent.drop(
@@ -352,7 +526,7 @@ describe('MapScreen', () => {
     });
 
     await user.upload(
-      await screen.findByLabelText('Add GeoJSON reference'),
+      await screen.findByLabelText('Add GeoJSON layer'),
       firstFile,
     );
     fireEvent.drop(
@@ -382,7 +556,7 @@ describe('MapScreen', () => {
     const user = userEvent.setup();
     render(<MapScreen />);
 
-    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const input = await screen.findByLabelText('Add GeoJSON layer');
     const validFile = new File(
       ['{"type":"Point","coordinates":[-60,-3]}'],
       'valid.geojson',
@@ -412,7 +586,7 @@ describe('MapScreen', () => {
     render(<MapScreen />);
 
     await user.upload(
-      await screen.findByLabelText('Add GeoJSON reference'),
+      await screen.findByLabelText('Add GeoJSON layer'),
       new File(
         [
           JSON.stringify({
@@ -441,7 +615,7 @@ describe('MapScreen', () => {
     const user = userEvent.setup();
     render(<MapScreen />);
 
-    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const input = await screen.findByLabelText('Add GeoJSON layer');
     await user.upload(
       input,
       new File(
@@ -511,7 +685,7 @@ describe('MapScreen', () => {
     const user = userEvent.setup();
     render(<MapScreen />);
 
-    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const input = await screen.findByLabelText('Add GeoJSON layer');
     const files = Array.from(
       { length: 10 },
       (_, index) =>
@@ -576,7 +750,7 @@ describe('MapScreen', () => {
     });
     render(<MapScreen />);
 
-    const input = await screen.findByLabelText('Add GeoJSON reference');
+    const input = await screen.findByLabelText('Add GeoJSON layer');
     await user.upload(
       input,
       new File(
@@ -661,7 +835,7 @@ describe('MapScreen', () => {
       await user.click(
         await screen.findByRole('button', { name: 'Map settings' }),
       );
-      const input = screen.getByLabelText('Add GeoJSON reference');
+      const input = screen.getByLabelText('Add GeoJSON layer');
       await user.upload(
         input,
         new File(
@@ -714,7 +888,7 @@ describe('MapScreen', () => {
         name: 'Map settings',
       });
       await user.upload(
-        within(settingsDialog).getByLabelText('Add GeoJSON reference'),
+        within(settingsDialog).getByLabelText('Add GeoJSON layer'),
         file,
       );
       await user.click(
@@ -772,7 +946,7 @@ describe('MapScreen', () => {
         name: 'Map settings',
       });
       await user.upload(
-        within(settingsDialog).getByLabelText('Add GeoJSON reference'),
+        within(settingsDialog).getByLabelText('Add GeoJSON layer'),
         firstFile,
       );
       await user.click(
@@ -835,7 +1009,7 @@ describe('MapScreen', () => {
         name: 'Map settings',
       });
       await user.upload(
-        within(settingsDialog).getByLabelText('Add GeoJSON reference'),
+        within(settingsDialog).getByLabelText('Add GeoJSON layer'),
         file,
       );
       await user.click(

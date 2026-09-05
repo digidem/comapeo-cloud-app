@@ -1,6 +1,13 @@
-import { expect, test } from '@playwright/test';
+import {
+  type BrowserContext,
+  type Locator,
+  type Page,
+  expect,
+  test,
+} from '@playwright/test';
 import sharp from 'sharp';
 
+import type { AuthoredLayer } from '../../src/lib/map/authored-layers';
 import { buildSmpBlob } from '../../src/lib/map/smp-download';
 import {
   AUTHORED_RASTER_LAYER_FIXTURE,
@@ -23,7 +30,14 @@ const PROJECT_WITHOUT_MAP = 'offline-project-without-map';
 const ACTIVE_MAP_ID = 'offline-cold-start-map';
 const ACTIVE_MAP_NAME = 'Offline Cold Start Map';
 
-async function buildOfflineSmp(): Promise<Uint8Array> {
+interface FixtureSmpConfig {
+  authoredLayers: readonly AuthoredLayer[];
+  bbox: [number, number, number, number];
+  minZoom: number;
+  maxZoom: number;
+}
+
+async function buildFixtureSmp(config: FixtureSmpConfig): Promise<Uint8Array> {
   const authoredRasterPng = await sharp({
     create: {
       width: 1,
@@ -60,6 +74,7 @@ async function buildOfflineSmp(): Promise<Uint8Array> {
       const response = new Response(method === 'HEAD' ? null : style, {
         status: 200,
         headers: {
+          'Access-Control-Allow-Origin': '*',
           'Content-Type': 'application/json',
           'Content-Length': String(Buffer.byteLength(style)),
         },
@@ -76,6 +91,7 @@ async function buildOfflineSmp(): Promise<Uint8Array> {
     const response = new Response(method === 'HEAD' ? null : bytes, {
       status: 200,
       headers: {
+        'Access-Control-Allow-Origin': '*',
         'Content-Type': 'image/png',
         'Content-Length': String(bytes.byteLength),
       },
@@ -89,18 +105,12 @@ async function buildOfflineSmp(): Promise<Uint8Array> {
       map: {
         type: 'style',
         styleUrl: 'https://style.example.com/style.json',
-        bbox: [-62, -5, -54, 1],
-        minZoom: 0,
-        maxZoom: 0,
+        bbox: config.bbox,
+        minZoom: config.minZoom,
+        maxZoom: config.maxZoom,
         scheme: 'xyz',
       },
-      // The canonical fixtures are intentionally hidden. This browser render
-      // canary flips only the outer visibility value so actual package output
-      // can prove the same canonical geometry/style payloads render offline.
-      authoredLayers: [
-        { ...AUTHORED_RASTER_LAYER_FIXTURE, visible: true },
-        { ...AUTHORED_VECTOR_LAYER_FIXTURE, visible: true },
-      ],
+      authoredLayers: config.authoredLayers,
       bufferTiles: 0,
       includeGlobalOverview: false,
     });
@@ -108,6 +118,20 @@ async function buildOfflineSmp(): Promise<Uint8Array> {
   } finally {
     globalThis.fetch = originalFetch;
   }
+}
+
+async function buildOfflineSmp(): Promise<Uint8Array> {
+  // The canonical fixtures are intentionally hidden. This browser render canary
+  // flips only outer visibility so the same geometry/style payloads render.
+  return buildFixtureSmp({
+    authoredLayers: [
+      { ...AUTHORED_RASTER_LAYER_FIXTURE, visible: true },
+      { ...AUTHORED_VECTOR_LAYER_FIXTURE, visible: true },
+    ],
+    bbox: [-62, -5, -54, 1],
+    minZoom: 0,
+    maxZoom: 0,
+  });
 }
 
 async function seedLocalState(
@@ -212,6 +236,105 @@ async function seedLocalState(
   }, PROJECT_WITH_MAP);
 }
 
+async function seedAuthoredFixtureState(
+  page: import('@playwright/test').Page,
+  config: {
+    projectId: string;
+    mapId: string;
+    mapName: string;
+    bbox: [number, number, number, number];
+    minZoom: number;
+    maxZoom: number;
+    layers: readonly AuthoredLayer[];
+    smpBytes: Uint8Array;
+  },
+): Promise<void> {
+  const now = new Date().toISOString();
+  const [west, south, east, north] = config.bbox;
+  const observationCoordinates: Array<[number, number]> = [
+    [west, south],
+    [(west + east) / 2, (south + north) / 2],
+    [east, north],
+  ];
+  await seedAppDatabase(page, {
+    projects: [
+      {
+        localId: config.projectId,
+        sourceType: 'local',
+        sourceId: `local:${config.projectId}`,
+        name: `${config.mapName} Project`,
+        activeMapId: null,
+        createdAt: now,
+        updatedAt: now,
+        dirtyLocal: false,
+        deleted: false,
+      },
+    ],
+    observations: observationCoordinates.map(([lon, lat], index) => ({
+      localId: `${config.projectId}-point-${index}`,
+      projectLocalId: config.projectId,
+      sourceType: 'local' as const,
+      sourceId: `local:${config.projectId}:point:${index}`,
+      lat,
+      lon,
+      createdAt: now,
+      updatedAt: now,
+      dirtyLocal: false,
+      deleted: false,
+    })),
+    maps: [
+      {
+        id: config.mapId,
+        projectLocalId: config.projectId,
+        name: config.mapName,
+        type: 'style',
+        origin: 'authored',
+        styleUrl: 'https://style.example.com/style.json',
+        bbox: config.bbox,
+        minZoom: config.minZoom,
+        maxZoom: config.maxZoom,
+        layers: structuredClone(config.layers),
+        status: 'ready',
+        smpSize: config.smpBytes.length,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    mapPackages: [
+      {
+        mapId: config.mapId,
+        contentType: 'application/zip',
+        size: config.smpBytes.length,
+        chunkSize: config.smpBytes.length,
+        chunkCount: 1,
+        updatedAt: now,
+      },
+    ],
+    mapPackageChunks: [
+      {
+        id: `${config.mapId}:0`,
+        mapId: config.mapId,
+        index: 0,
+        data: e2eArrayBuffer(config.smpBytes),
+      },
+    ],
+  });
+
+  await page.evaluate((projectId) => {
+    localStorage.setItem(
+      'comapeo-project',
+      JSON.stringify({
+        state: { selectedProjectId: projectId, selectedServerId: null },
+        version: 0,
+      }),
+    );
+    localStorage.setItem(
+      'comapeo-map',
+      JSON.stringify({ state: { basemapId: 'carto-positron' }, version: 1 }),
+    );
+  }, config.projectId);
+}
+
 async function waitForPwaControl(page: import('@playwright/test').Page) {
   await page.evaluate(async () => {
     if (!('serviceWorker' in navigator)) {
@@ -242,10 +365,9 @@ async function readProjectActiveMapId(
   return project?.activeMapId;
 }
 
-async function countCanonicalAuthoredColors(
-  page: import('@playwright/test').Page,
+async function countCanvasAuthoredColors(
+  canvas: Locator,
 ): Promise<{ blue: number; navy: number; orange: number; green: number }> {
-  const canvas = page.locator('canvas.maplibregl-canvas').first();
   if (!(await canvas.isVisible())) {
     return { blue: 0, navy: 0, orange: 0, green: 0 };
   }
@@ -275,6 +397,155 @@ async function countCanonicalAuthoredColors(
   return { blue, navy, orange, green };
 }
 
+async function countCanonicalAuthoredColors(
+  page: import('@playwright/test').Page,
+): Promise<{ blue: number; navy: number; orange: number; green: number }> {
+  return countCanvasAuthoredColors(
+    page.locator('canvas.maplibregl-canvas').first(),
+  );
+}
+
+async function exerciseAuthoredFixtureOffline(config: {
+  browserName: string;
+  context: BrowserContext;
+  page: Page;
+  projectId: string;
+  mapId: string;
+  mapName: string;
+  bbox: [number, number, number, number];
+  minZoom: number;
+  maxZoom: number;
+  layers: readonly AuthoredLayer[];
+  expectedPixels: 'vector' | 'raster';
+}): Promise<void> {
+  const renderedLayers = config.layers.map((layer) => ({
+    ...structuredClone(layer),
+    visible: true,
+  }));
+  const smpBytes = await buildFixtureSmp({
+    authoredLayers: renderedLayers,
+    bbox: config.bbox,
+    minZoom: config.minZoom,
+    maxZoom: config.maxZoom,
+  });
+
+  await config.page.goto('/map');
+  await config.page.waitForLoadState('domcontentloaded');
+  await waitForPwaControl(config.page);
+  await seedAuthoredFixtureState(config.page, {
+    projectId: config.projectId,
+    mapId: config.mapId,
+    mapName: config.mapName,
+    bbox: config.bbox,
+    minZoom: config.minZoom,
+    maxZoom: config.maxZoom,
+    layers: renderedLayers,
+    smpBytes,
+  });
+  await config.page.goto('/map');
+  await config.page.waitForLoadState('domcontentloaded');
+  const appOrigin = new URL(config.page.url()).origin;
+  const warmRow = config.page
+    .getByTestId('saved-map-row')
+    .filter({ hasText: config.mapName });
+  await expect(warmRow).toBeVisible({ timeout: 15_000 });
+  await expect(warmRow).toContainText('Ready');
+  const persisted = await getAppDatabaseRecord<{ layers?: AuthoredLayer[] }>(
+    config.page,
+    'maps',
+    config.mapId,
+  );
+  expect(persisted?.layers).toEqual(renderedLayers);
+
+  await config.page.close();
+  await config.context.setOffline(true);
+  const offlinePage = await config.context.newPage();
+
+  const response = await offlinePage.goto('/map');
+  expect(response?.ok()).toBe(true);
+  const offlineRow = offlinePage
+    .getByTestId('saved-map-row')
+    .filter({ hasText: config.mapName });
+  await expect(offlineRow).toBeVisible({ timeout: 15_000 });
+
+  // The browser is fully offline before Preview starts. The authoring screen
+  // behind the dialog may still *attempt* its normal online basemap requests,
+  // but the package preview must render from persisted SMP bytes alone.
+  await offlineRow.getByRole('button', { name: 'Preview' }).click();
+  const preview = offlinePage.getByTestId('smp-preview-map');
+  await expect(preview).toBeVisible({ timeout: 15_000 });
+  await expect(
+    offlinePage.getByText('Could not preview this SMP.'),
+  ).toHaveCount(0);
+
+  // The raster preview has a stable pixel oracle in headless Chromium. Vector
+  // preview rendering is proven by a loaded MapLibre canvas here and by the
+  // stronger pixel assertion on the active MapContainer below; dialog canvas
+  // antialiasing/fit timing is not stable enough to be a reliable color oracle.
+  if (config.browserName === 'chromium') {
+    const previewCanvas = preview.locator('canvas.maplibregl-canvas');
+    await expect(previewCanvas).toBeVisible();
+    if (config.expectedPixels === 'raster') {
+      await expect
+        .poll(
+          async () => {
+            const colors = await countCanvasAuthoredColors(previewCanvas);
+            return colors.green > 50;
+          },
+          {
+            timeout: 15_000,
+            message:
+              'raster authored fixture should render in offline SMP preview',
+          },
+        )
+        .toBe(true);
+    }
+  }
+  const previewDialog = offlinePage.getByRole('dialog');
+  await previewDialog.getByRole('button', { name: 'Close' }).click();
+  await offlineRow.getByRole('button', { name: 'Set active' }).click();
+  expect(await readProjectActiveMapId(offlinePage, config.projectId)).toBe(
+    config.mapId,
+  );
+
+  // Use a fresh page for active-map verification so any observed request belongs
+  // to MapContainer itself, not to the authoring canvas that was mounted behind
+  // Preview. The browser context remains fully offline throughout.
+  await offlinePage.close();
+  const activePage = await config.context.newPage();
+  const activeExternalRequests: string[] = [];
+  activePage.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.origin !== appOrigin) activeExternalRequests.push(request.url());
+  });
+  const activeResponse = await activePage.goto('/');
+  expect(activeResponse?.ok()).toBe(true);
+  await expect(activePage.getByTestId('map-container')).toBeVisible();
+  await expect(activePage.getByTestId('map-active-map-badge')).toContainText(
+    config.mapName,
+    { timeout: 15_000 },
+  );
+  await expect(activePage.getByTestId('map-active-map-error')).toHaveCount(0);
+
+  if (config.browserName === 'chromium') {
+    await expect
+      .poll(
+        async () => {
+          const colors = await countCanonicalAuthoredColors(activePage);
+          return config.expectedPixels === 'vector'
+            ? colors.blue > 5 && colors.navy > 5 && colors.orange > 5
+            : colors.green > 50;
+        },
+        {
+          timeout: 15_000,
+          message: `${config.expectedPixels} authored fixture should render in active offline MapContainer`,
+        },
+      )
+      .toBe(true);
+  }
+  expect(activeExternalRequests).toEqual([]);
+}
+
 test.describe('active SMP offline cold start', () => {
   test.skip(
     !process.env.VITE_PREVIEW,
@@ -289,14 +560,14 @@ test.describe('active SMP offline cold start', () => {
     test.setTimeout(90_000);
 
     const externalRequests: string[] = [];
-    page.on('request', (request) => {
-      const url = new URL(request.url());
-      if (url.origin !== 'http://localhost:5173')
-        externalRequests.push(request.url());
-    });
 
     await page.goto('/map');
     await page.waitForLoadState('domcontentloaded');
+    const appOrigin = new URL(page.url()).origin;
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.origin !== appOrigin) externalRequests.push(request.url());
+    });
     await waitForPwaControl(page);
     await seedLocalState(page, await buildOfflineSmp());
 
@@ -330,8 +601,7 @@ test.describe('active SMP offline cold start', () => {
     const offlineExternalRequests: string[] = [];
     offlinePage.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.origin !== 'http://localhost:5173')
-        offlineExternalRequests.push(request.url());
+      if (url.origin !== appOrigin) offlineExternalRequests.push(request.url());
     });
 
     const response = await offlinePage.goto('/');
@@ -444,5 +714,54 @@ test.describe('active SMP offline cold start', () => {
     // The warm online phase must not have depended on a remote resource either;
     // all style/tile/glyph/sprite URLs in this fixture are smp:// package URLs.
     expect(externalRequests).toEqual([]);
+  });
+});
+
+test.describe('authored SavedMap offline fixtures', () => {
+  test.skip(
+    !process.env.VITE_PREVIEW,
+    'requires a built PWA served by vite preview',
+  );
+
+  test('previews and activates the canonical vector fixture with all network disabled', async ({
+    browserName,
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await exerciseAuthoredFixtureOffline({
+      browserName,
+      context,
+      page,
+      projectId: 'authored-vector-offline-project',
+      mapId: 'authored-vector-offline-map',
+      mapName: 'Authored Vector Offline',
+      bbox: [-62, -5, -54, 1],
+      minZoom: 0,
+      maxZoom: 1,
+      layers: [AUTHORED_VECTOR_LAYER_FIXTURE],
+      expectedPixels: 'vector',
+    });
+  });
+
+  test('previews and activates the canonical raster fixture with all network disabled', async ({
+    browserName,
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await exerciseAuthoredFixtureOffline({
+      browserName,
+      context,
+      page,
+      projectId: 'authored-raster-offline-project',
+      mapId: 'authored-raster-offline-map',
+      mapName: 'Authored Raster Offline',
+      bbox: [-1, -1, 1, 1],
+      minZoom: 0,
+      maxZoom: 1,
+      layers: [AUTHORED_RASTER_LAYER_FIXTURE],
+      expectedPixels: 'raster',
+    });
   });
 });

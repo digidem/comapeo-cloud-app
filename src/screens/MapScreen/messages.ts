@@ -588,4 +588,85 @@ export const mapMessages = defineMessages({
     defaultMessage:
       'Could not read {name}. No files from this selection were added.',
   },
+  authoredLayersTitle: {
+    id: 'map.authoredLayers.title',
+    defaultMessage: 'Map layers',
+  },
+  authoredLayersHelp: {
+    id: 'map.authoredLayers.help',
+    defaultMessage:
+      'GeoJSON layers are saved with this map and included in its offline package.',
+  },
+  authoredLayersAdd: {
+    id: 'map.authoredLayers.add',
+    defaultMessage: 'Add GeoJSON layer',
+  },
+  authoredLayersLoading: {
+    id: 'map.authoredLayers.loading',
+    defaultMessage: 'Adding GeoJSON layer…',
+  },
+  authoredLayerInvalid: {
+    id: 'map.authoredLayers.invalid',
+    defaultMessage: 'Invalid layer',
+  },
+  authoredLayerInvalidGuidance: {
+    id: 'map.authoredLayers.invalidGuidance',
+    defaultMessage:
+      'Remove this invalid layer before saving or downloading. Other valid layers remain available.',
+  },
+  authoredLayerRemoveInvalid: {
+    id: 'map.authoredLayers.removeInvalid',
+    defaultMessage: 'Remove invalid layer',
+  },
+  authoredLayerHide: {
+    id: 'map.authoredLayers.hide',
+    defaultMessage: 'Hide {name}',
+  },
+  authoredLayerShow: {
+    id: 'map.authoredLayers.show',
+    defaultMessage: 'Show {name}',
+  },
+  authoredLayerMoveUp: {
+    id: 'map.authoredLayers.moveUp',
+    defaultMessage: 'Move {name} up',
+  },
+  authoredLayerMoveDown: {
+    id: 'map.authoredLayers.moveDown',
+    defaultMessage: 'Move {name} down',
+  },
+  authoredLayerRemove: {
+    id: 'map.authoredLayers.remove',
+    defaultMessage: 'Remove {name}',
+  },
+  authoredMapEdit: {
+    id: 'map.authoredLayers.editMap',
+    defaultMessage: 'Edit layers',
+  },
+  authoredMapCancelEdit: {
+    id: 'map.authoredLayers.cancelEdit',
+    defaultMessage: 'Cancel editing',
+  },
+  authoredMapSaveChanges: {
+    id: 'map.authoredLayers.saveChanges',
+    defaultMessage: 'Save changes',
+  },
+  authoredMapOpenError: {
+    id: 'map.authoredLayers.openError',
+    defaultMessage: 'Map data could not be opened',
+  },
+  authoredMapRecoveryBlocked: {
+    id: 'map.authoredLayers.recoveryBlocked',
+    defaultMessage:
+      'Remove every invalid layer before saving or downloading this map.',
+  },
+  authoredRasterZoomError: {
+    id: 'map.authoredLayers.rasterZoomError',
+    defaultMessage:
+      'This raster layer has no usable zoom levels inside the current map zoom range.',
+  },
+  authoredPackagePrivacy: {
+    id: 'map.authoredLayers.packagePrivacy',
+    defaultMessage:
+      'Authored layer data is stored in this browser and included in the offline map package you create.',
+  },
 });
