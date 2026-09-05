@@ -52,7 +52,6 @@ export async function installHighZMapBlocker(
       position: 'absolute',
       inset: '0',
       zIndex: '999999',
-      pointerEvents: 'auto',
     });
     wrapper.appendChild(blocker);
   });
