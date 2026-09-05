@@ -399,7 +399,9 @@ describe('ReportBrandingDialog', () => {
         configurable: true,
         value: 'data:image/png;base64,iVBORw0KGgo=',
       });
-      queueMicrotask(() => this.onload?.(new ProgressEvent('load')));
+      queueMicrotask(() =>
+        this.onload?.(new ProgressEvent<FileReader>('load')),
+      );
     });
     class MockFileReader {
       result: string | ArrayBuffer | null = null;
