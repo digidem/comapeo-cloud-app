@@ -260,6 +260,33 @@
   "app.title": {
     "defaultMessage": "CoMapeo Cloud"
   },
+  "archive.sync.toast.authRequired": {
+    "defaultMessage": "Session expired — reconnect {name} to continue"
+  },
+  "archive.sync.toast.connectionError": {
+    "defaultMessage": "Couldn't reach {name} — check your connection"
+  },
+  "archive.sync.toast.credentialsRequired": {
+    "defaultMessage": "Token missing — reconnect {name}"
+  },
+  "archive.sync.toast.errorTitle": {
+    "defaultMessage": "Couldn't sync {name}"
+  },
+  "archive.sync.toast.partialTitle": {
+    "defaultMessage": "Some data synced for {name}"
+  },
+  "archive.sync.toast.reconnectAction": {
+    "defaultMessage": "Reconnect"
+  },
+  "archive.sync.toast.storageCleanupRequired": {
+    "defaultMessage": "Sync paused: storage cleanup needed for {name}"
+  },
+  "archive.sync.toast.successTitle": {
+    "defaultMessage": "Archive synced"
+  },
+  "archive.sync.toast.workerTransitionRequired": {
+    "defaultMessage": "Sync paused: app update in progress — try again shortly"
+  },
   "archiveOverflow.closeSheet": {
     "defaultMessage": "Close"
   },
@@ -2317,6 +2344,39 @@
   },
   "settings.title": {
     "defaultMessage": "Settings"
+  },
+  "sync.toast.openSettingsAction": {
+    "defaultMessage": "Open Settings"
+  },
+  "syncAll.button.ariaLabel": {
+    "defaultMessage": "Sync all archives now"
+  },
+  "syncAll.button.label": {
+    "defaultMessage": "Sync all"
+  },
+  "syncAll.button.syncing": {
+    "defaultMessage": "Syncing…"
+  },
+  "syncAll.toast.errorDescription": {
+    "defaultMessage": "{synced} of {total} archives synced. Check the archives listed in Home."
+  },
+  "syncAll.toast.errorTitle": {
+    "defaultMessage": "Sync failed"
+  },
+  "syncAll.toast.partialDescription": {
+    "defaultMessage": "{synced} of {total} archives synced. Some resources failed — try again."
+  },
+  "syncAll.toast.partialTitle": {
+    "defaultMessage": "Some data synced"
+  },
+  "syncAll.toast.storageCleanupTitle": {
+    "defaultMessage": "Sync paused: storage cleanup needed"
+  },
+  "syncAll.toast.successTitle": {
+    "defaultMessage": "All archives synced"
+  },
+  "syncAll.toast.workerTransitionTitle": {
+    "defaultMessage": "Sync paused: app update in progress"
   },
   "theme.ariaSetDark": {
     "defaultMessage": "Use dark theme"

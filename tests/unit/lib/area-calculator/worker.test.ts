@@ -206,4 +206,48 @@ describe('handleWorkerMessage', () => {
     expect(oldMessages.some((msg) => msg.type === 'done')).toBe(false);
     expect(posted.at(-1)).toEqual({ type: 'done', requestId: 'req-new' });
   });
+
+  it('yields to message tasks so a queued newer request cancels stale work', async () => {
+    const state = createWorkerRequestState();
+    const posted: WorkerOutMessage[] = [];
+
+    const newerRequest = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        void handleWorkerMessage(
+          makeEvent({
+            type: 'calculate',
+            requestId: 'req-new-task',
+            points: testPoints,
+            params: DEFAULTS,
+          }),
+          (msg) => posted.push(msg as WorkerOutMessage),
+          state,
+        ).then(resolve);
+      }, 0);
+    });
+
+    await handleWorkerMessage(
+      makeEvent({
+        type: 'calculate',
+        requestId: 'req-old-task',
+        points: testPoints,
+        params: DEFAULTS,
+      }),
+      (msg) => posted.push(msg as WorkerOutMessage),
+      state,
+    );
+    await newerRequest;
+
+    const oldMessages = posted.filter(
+      (msg) => msg.requestId === 'req-old-task',
+    );
+    expect(oldMessages.some((msg) => msg.type === 'done')).toBe(false);
+    expect(
+      oldMessages.filter((msg) => msg.type === 'result').length,
+    ).toBeLessThan(5);
+    expect(posted.at(-1)).toEqual({
+      type: 'done',
+      requestId: 'req-new-task',
+    });
+  });
 });
