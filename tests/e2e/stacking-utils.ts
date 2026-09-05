@@ -45,6 +45,11 @@ export async function expectControlUnobscured(control: Locator): Promise<void> {
 export async function installHighZMapBlocker(
   mapWrapper: Locator,
 ): Promise<void> {
+  const wrapperPosition = await mapWrapper.evaluate(
+    (wrapper) => getComputedStyle(wrapper).position,
+  );
+  expect(wrapperPosition).not.toBe('static');
+
   await mapWrapper.evaluate((wrapper) => {
     const blocker = document.createElement('div');
     blocker.dataset.testid = 'synthetic-maplibre-high-z';
@@ -67,8 +72,8 @@ export async function removeHighZMapBlocker(
   });
 }
 
-/** Prove an overlay geometrically covers the center used by hit-target checks. */
-export async function expectOverlayCoversControlCenter(
+/** Prove an overlay geometrically covers every point used by hit-target checks. */
+export async function expectOverlayCoversControlHitPoints(
   overlay: Locator,
   control: Locator,
 ): Promise<void> {
@@ -83,10 +88,20 @@ export async function expectOverlayCoversControlCenter(
     );
   }
 
-  const centerX = controlBox.x + controlBox.width / 2;
-  const centerY = controlBox.y + controlBox.height / 2;
-  expect(centerX).toBeGreaterThanOrEqual(overlayBox.x);
-  expect(centerX).toBeLessThanOrEqual(overlayBox.x + overlayBox.width);
-  expect(centerY).toBeGreaterThanOrEqual(overlayBox.y);
-  expect(centerY).toBeLessThanOrEqual(overlayBox.y + overlayBox.height);
+  const points = [
+    [0.5, 0.5],
+    [0.25, 0.5],
+    [0.75, 0.5],
+    [0.5, 0.25],
+    [0.5, 0.75],
+  ] as const;
+
+  for (const [xRatio, yRatio] of points) {
+    const x = controlBox.x + controlBox.width * xRatio;
+    const y = controlBox.y + controlBox.height * yRatio;
+    expect(x).toBeGreaterThanOrEqual(overlayBox.x);
+    expect(x).toBeLessThanOrEqual(overlayBox.x + overlayBox.width);
+    expect(y).toBeGreaterThanOrEqual(overlayBox.y);
+    expect(y).toBeLessThanOrEqual(overlayBox.y + overlayBox.height);
+  }
 }
