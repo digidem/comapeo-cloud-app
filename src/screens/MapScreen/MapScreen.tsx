@@ -588,13 +588,13 @@ export function MapScreen() {
   }
 
   function handleAuthoredLayerRemove(key: AuthoredLayerDraftEntry['key']) {
-    setAuthoredLayerEntries((current) => {
-      const removed = current.find((entry) => entry.key === key);
-      if (removed?.kind === 'valid') {
-        referenceOverlayIdsRef.current.delete(removed.layer.id);
-      }
-      return current.filter((entry) => entry.key !== key);
-    });
+    const removed = authoredLayerEntries.find((entry) => entry.key === key);
+    if (removed?.kind === 'valid') {
+      referenceOverlayIdsRef.current.delete(removed.layer.id);
+    }
+    setAuthoredLayerEntries((current) =>
+      current.filter((entry) => entry.key !== key),
+    );
   }
 
   function handleAuthoredLayerMove(

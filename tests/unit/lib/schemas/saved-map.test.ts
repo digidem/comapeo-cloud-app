@@ -950,10 +950,7 @@ describe('buildSavedMapAuthoringWrite', () => {
       layers,
       NOW,
     );
-    // JSON equality proves no absent/null key oscillation between writes.
-    expect(JSON.parse(JSON.stringify(second))).toEqual(
-      JSON.parse(JSON.stringify(first)),
-    );
+    expect(second).toEqual(first);
     expect(Object.keys(second)).toEqual(Object.keys(first));
   });
 });
