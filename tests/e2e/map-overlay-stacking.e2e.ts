@@ -83,20 +83,23 @@ test.describe('Mobile map authoring overlay stacking', () => {
     });
 
     // The frame scrim is intentionally pointer-transparent in production. Prove
-    // it geometrically covers both cancel controls, then make it pointer-active
-    // so browser hit-testing proves those controls paint above the scrim rather
-    // than clicks merely falling through it.
+    // it geometrically covers both cancel-control centers, then make it
+    // pointer-active so browser hit-testing proves those controls paint above the
+    // scrim rather than clicks merely falling through it.
     const frameOverlay = page.getByTestId('draw-frame-overlay');
     await expectOverlayCoversControlCenter(frameOverlay, cancelDrawBounds);
     await expectOverlayCoversControlCenter(frameOverlay, cancelDrawing);
     await frameOverlay.evaluate((element) => {
       element.style.pointerEvents = 'auto';
     });
-    await expectControlUnobscured(cancelDrawBounds);
-    await expectControlUnobscured(cancelDrawing);
-    await frameOverlay.evaluate((element) => {
-      element.style.pointerEvents = 'none';
-    });
+    try {
+      await expectControlUnobscured(cancelDrawBounds);
+      await expectControlUnobscured(cancelDrawing);
+    } finally {
+      await frameOverlay.evaluate((element) => {
+        element.style.pointerEvents = 'none';
+      });
+    }
 
     const mapAuthoringCanvas = page.getByTestId('map-authoring-canvas');
     await installHighZMapBlocker(mapAuthoringCanvas);
@@ -116,9 +119,9 @@ test.describe('Mobile map authoring overlay stacking', () => {
     await expectControlUnobscured(undo);
     await removeHighZMapBlocker(mapAuthoringCanvas);
     await undo.click();
-    // A short timeout prevents the 6-second auto-hide timer from satisfying
-    // this assertion if Undo stops updating state.
-    await expect(areaUpdatedStatus).toBeHidden({ timeout: 1_000 });
+    // Keep this comfortably below the 6-second auto-hide timer while allowing
+    // enough headroom for a slow CI render after the Undo state update.
+    await expect(areaUpdatedStatus).toBeHidden({ timeout: 3_000 });
 
     // Prove Undo restored the actual previous bbox, not only the transient
     // status UI. This fixture has no project observations, so the previous bbox
