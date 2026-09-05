@@ -154,6 +154,24 @@ export function selectIsAuthenticated(
   return Boolean(selectActiveToken(state) && selectActiveBaseUrl(state));
 }
 
+/**
+ * Servers that can be synced right now: reachable (baseUrl), credentialed
+ * (token), and not abandoned during onboarding. Single source of truth for
+ * manual sync triggers (`useSyncAll`, `SyncAllButton`).
+ */
+export function selectSyncableServers(
+  state: Pick<AuthState, 'servers'>,
+): Array<RemoteArchiveServer & { token: string }> {
+  return state.servers.filter(
+    (server): server is RemoteArchiveServer & { token: string } =>
+      Boolean(
+        server.baseUrl &&
+        server.token &&
+        server.onboardingStatus !== 'cancelled',
+      ),
+  );
+}
+
 // Helpers
 // ---------------------------------------------------------------------------
 

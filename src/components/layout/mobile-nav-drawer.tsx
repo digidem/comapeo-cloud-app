@@ -123,6 +123,8 @@ interface MobileNavDrawerProps {
   onSelectServer?: (id: string) => void;
   onSelectProject?: (id: string) => void;
   onArchiveSettings?: (id: string) => void;
+  /** Manually sync this archive server */
+  onSyncServer?: (id: string) => void;
 }
 
 function MobileNavDrawer({
@@ -141,6 +143,7 @@ function MobileNavDrawer({
   onSelectServer,
   onSelectProject,
   onArchiveSettings,
+  onSyncServer,
 }: MobileNavDrawerProps) {
   const intl = useIntl();
   const locale = useLocaleStore((s) => s.locale);
@@ -358,7 +361,7 @@ function MobileNavDrawer({
                           </button>
 
                           {/* Overflow actions button */}
-                          {onArchiveSettings && (
+                          {(onArchiveSettings || onSyncServer) && (
                             <button
                               type="button"
                               onClick={(e) => {
@@ -586,7 +589,9 @@ function MobileNavDrawer({
           }
         }}
         onSync={() => {
-          // no-op for now
+          if (overflowArchive) {
+            onSyncServer?.(overflowArchive.id);
+          }
         }}
         onCopyUrl={() => {
           if (overflowArchive?.baseUrl) {

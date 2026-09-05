@@ -19,6 +19,8 @@ interface ToastData {
   title: string;
   description?: string;
   duration?: number;
+  /** Recovery affordance (e.g. "Reconnect") rendered alongside Close. */
+  action?: { label: string; onClick: () => void };
 }
 
 interface ToastContextValue {
@@ -72,7 +74,9 @@ function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((toast) => (
           <ToastPrimitive.Root
             key={toast.id}
-            duration={toast.duration ?? 5000}
+            // An actionable toast needs longer than the default 5s to be
+            // tappable at all; an explicit duration still wins.
+            duration={toast.duration ?? (toast.action ? 10_000 : 5000)}
             onOpenChange={(open) => {
               if (!open) dismissToast(toast.id);
             }}
@@ -87,6 +91,16 @@ function ToastProvider({ children }: { children: ReactNode }) {
                 <ToastPrimitive.Description className="text-sm mt-1 opacity-80">
                   {toast.description}
                 </ToastPrimitive.Description>
+              )}
+              {toast.action && (
+                <ToastPrimitive.Action
+                  altText={toast.action.label}
+                  aria-label={toast.action.label}
+                  onClick={toast.action.onClick}
+                  className="mt-2 inline-flex min-h-[44px] cursor-pointer items-center rounded-btn px-3 text-sm font-semibold text-text transition-colors hover:bg-black/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {toast.action.label}
+                </ToastPrimitive.Action>
               )}
             </div>
             <ToastPrimitive.Close

@@ -1,4 +1,5 @@
 import { renderHook } from '@testing-library/react';
+import { createQueryWrapper } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ReactNode } from 'react';
@@ -335,5 +336,287 @@ describe('useSyncAll', () => {
     });
 
     expect(mockSyncRemoteArchive).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SyncAllSummary — the promise result consumed by SyncAllButton
+// ---------------------------------------------------------------------------
+
+describe('useSyncAll summary', () => {
+  it('resolves an all-ready summary with one entry per eligible server', async () => {
+    mockSyncRemoteArchive.mockImplementation(async (serverId: string) =>
+      readyResult(serverId),
+    );
+
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-1',
+          label: 'Server 1',
+          baseUrl: 'https://archive1.example.com',
+          token: 'token-1',
+          status: 'idle',
+        },
+        {
+          id: 'server-2',
+          label: 'Server 2',
+          baseUrl: 'https://archive2.example.com',
+          token: 'token-2',
+          status: 'idle',
+        },
+      ],
+    });
+
+    const { useSyncAll } = await import('@/hooks/useSyncAll');
+    const { result } = renderHook(() => useSyncAll(), { wrapper });
+
+    let summary!: Awaited<ReturnType<typeof result.current.sync>>;
+    await act(async () => {
+      summary = await result.current.sync();
+    });
+
+    expect(summary).toEqual({
+      total: 2,
+      results: [
+        {
+          serverId: 'server-1',
+          label: 'Server 1',
+          success: true,
+          status: 'ready',
+        },
+        {
+          serverId: 'server-2',
+          label: 'Server 2',
+          success: true,
+          status: 'ready',
+        },
+      ],
+    });
+    for (const entry of summary.results) {
+      expect(Object.prototype.hasOwnProperty.call(entry, 'errorCode')).toBe(
+        false,
+      );
+    }
+  });
+
+  it('maps a fulfilled partial result through verbatim', async () => {
+    mockSyncRemoteArchive.mockResolvedValue({
+      ...readyResult(),
+      success: false,
+      status: 'partial',
+      errorCode: 'partial',
+    });
+
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-1',
+          label: 'Server 1',
+          baseUrl: 'https://archive1.example.com',
+          token: 'token-1',
+          status: 'idle',
+        },
+      ],
+    });
+
+    const { useSyncAll } = await import('@/hooks/useSyncAll');
+    const { result } = renderHook(() => useSyncAll(), { wrapper });
+
+    let summary!: Awaited<ReturnType<typeof result.current.sync>>;
+    await act(async () => {
+      summary = await result.current.sync();
+    });
+
+    expect(summary).toEqual({
+      total: 1,
+      results: [
+        {
+          serverId: 'server-1',
+          label: 'Server 1',
+          success: false,
+          status: 'partial',
+          errorCode: 'partial',
+        },
+      ],
+    });
+  });
+
+  it('normalizes a rejected server promise to status error without an errorCode', async () => {
+    mockSyncRemoteArchive.mockImplementation(async (serverId: string) => {
+      if (serverId === 'server-2') throw new Error('Network down');
+      return readyResult(serverId);
+    });
+
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-1',
+          label: 'Server 1',
+          baseUrl: 'https://archive1.example.com',
+          token: 'token-1',
+          status: 'idle',
+        },
+        {
+          id: 'server-2',
+          label: 'Server 2',
+          baseUrl: 'https://archive2.example.com',
+          token: 'token-2',
+          status: 'idle',
+        },
+      ],
+    });
+
+    const { useSyncAll } = await import('@/hooks/useSyncAll');
+    const { result } = renderHook(() => useSyncAll(), { wrapper });
+
+    let summary!: Awaited<ReturnType<typeof result.current.sync>>;
+    await act(async () => {
+      summary = await result.current.sync();
+    });
+
+    expect(summary.total).toBe(2);
+    expect(summary.results).toHaveLength(2);
+    const failed = summary.results.find((r) => r.serverId === 'server-2');
+    expect(failed).toEqual({
+      serverId: 'server-2',
+      label: 'Server 2',
+      success: false,
+      status: 'error',
+    });
+    expect(Object.prototype.hasOwnProperty.call(failed, 'errorCode')).toBe(
+      false,
+    );
+    // The other server still reports its real outcome.
+    expect(
+      summary.results.find((r) => r.serverId === 'server-1'),
+    ).toMatchObject({ success: true, status: 'ready' });
+  });
+
+  it('returns an error summary when the sync call throws before settling', async () => {
+    mockSyncRemoteArchive.mockImplementation(() => {
+      throw new Error('boom');
+    });
+
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-1',
+          label: 'Server 1',
+          baseUrl: 'https://archive1.example.com',
+          token: 'token-1',
+          status: 'idle',
+        },
+        {
+          id: 'server-2',
+          label: 'Server 2',
+          baseUrl: 'https://archive2.example.com',
+          token: 'token-2',
+          status: 'idle',
+        },
+      ],
+    });
+
+    const { useSyncAll } = await import('@/hooks/useSyncAll');
+    const { result } = renderHook(() => useSyncAll(), { wrapper });
+
+    let summary!: Awaited<ReturnType<typeof result.current.sync>>;
+    await act(async () => {
+      summary = await result.current.sync();
+    });
+
+    expect(summary).toEqual({
+      total: 2,
+      results: [
+        {
+          serverId: 'server-1',
+          label: 'Server 1',
+          success: false,
+          status: 'error',
+        },
+        {
+          serverId: 'server-2',
+          label: 'Server 2',
+          success: false,
+          status: 'error',
+        },
+      ],
+    });
+  });
+
+  it('resolves an empty summary without calling the data layer when nothing is eligible', async () => {
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-1',
+          label: 'No token',
+          baseUrl: 'https://archive1.example.com',
+          token: null,
+          status: 'idle',
+        },
+      ],
+    });
+
+    const { useSyncAll } = await import('@/hooks/useSyncAll');
+    const { result } = renderHook(() => useSyncAll(), { wrapper });
+
+    let summary!: Awaited<ReturnType<typeof result.current.sync>>;
+    await act(async () => {
+      summary = await result.current.sync();
+    });
+
+    expect(summary).toEqual({ total: 0, results: [] });
+    expect(mockSyncRemoteArchive).not.toHaveBeenCalled();
+    expect(result.current.isSyncing).toBe(false);
+  });
+
+  it('resolves an empty summary without toasting on a re-entrant call', async () => {
+    let resolveSync!: (value: SyncResult) => void;
+    mockSyncRemoteArchive.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSync = resolve;
+      }),
+    );
+
+    useAuthStore.setState({
+      servers: [
+        {
+          id: 'server-1',
+          label: 'Server 1',
+          baseUrl: 'https://archive1.example.com',
+          token: 'token-1',
+          status: 'idle',
+        },
+      ],
+    });
+
+    const { useSyncAll } = await import('@/hooks/useSyncAll');
+    const { result } = renderHook(() => useSyncAll(), {
+      wrapper: createQueryWrapper(),
+    });
+
+    let first!: Awaited<ReturnType<typeof result.current.sync>>;
+    let second!: Awaited<ReturnType<typeof result.current.sync>>;
+    await act(async () => {
+      const pending = result.current.sync();
+      second = await result.current.sync();
+      resolveSync(readyResult());
+      first = await pending;
+    });
+
+    expect(first).toEqual({
+      total: 1,
+      results: [
+        {
+          serverId: 'server-1',
+          label: 'Server 1',
+          success: true,
+          status: 'ready',
+        },
+      ],
+    });
+    // Re-entry resolves empty rather than reporting a "0 of 0" outcome.
+    expect(second).toEqual({ total: 0, results: [] });
+    expect(mockSyncRemoteArchive).toHaveBeenCalledTimes(1);
   });
 });
