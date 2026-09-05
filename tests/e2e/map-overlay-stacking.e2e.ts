@@ -106,9 +106,24 @@ test.describe('Mobile map authoring overlay stacking', () => {
 
     const mapAuthoringCanvas = page.getByTestId('map-authoring-canvas');
     await installHighZMapBlocker(mapAuthoringCanvas);
-    await expectControlUnobscured(cancelDrawing);
-    await expectControlUnobscured(setThisArea);
-    await removeHighZMapBlocker(mapAuthoringCanvas);
+    try {
+      await expectControlUnobscured(cancelDrawing);
+      await expectControlUnobscured(setThisArea);
+    } finally {
+      await removeHighZMapBlocker(mapAuthoringCanvas);
+    }
+
+    // Move the real map before confirming so the test does not depend on the
+    // initial viewport differing from DEFAULT_BBOX.
+    const mapCanvas = page.locator('.maplibregl-canvas').first();
+    const mapBox = await mapCanvas.boundingBox();
+    if (!mapBox) throw new Error('Expected visible map canvas to have bounds');
+    const centerX = mapBox.x + mapBox.width / 2;
+    const centerY = mapBox.y + mapBox.height / 2;
+    await page.mouse.move(centerX, centerY);
+    await page.mouse.down();
+    await page.mouse.move(centerX + 70, centerY + 35, { steps: 5 });
+    await page.mouse.up();
 
     // Keep the app's 6-second Undo auto-hide timer from racing the intentionally
     // adversarial hit-testing below. This patch is scoped to this disposable page
@@ -156,8 +171,11 @@ test.describe('Mobile map authoring overlay stacking', () => {
 
     const undo = page.getByRole('button', { name: 'Undo' });
     await installHighZMapBlocker(mapAuthoringCanvas);
-    await expectControlUnobscured(undo);
-    await removeHighZMapBlocker(mapAuthoringCanvas);
+    try {
+      await expectControlUnobscured(undo);
+    } finally {
+      await removeHighZMapBlocker(mapAuthoringCanvas);
+    }
     await undo.click();
     await expect(areaUpdatedStatus).toBeHidden({ timeout: 3_000 });
 

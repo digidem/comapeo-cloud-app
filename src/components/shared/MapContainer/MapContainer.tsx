@@ -352,6 +352,8 @@ function MapContainer({
     ...style,
   };
 
+  // Keep MapLibre's internal high z-index descendants inside this map boundary so
+  // app-owned sibling overlays can establish their own predictable paint order.
   const containerClassName = className
     ? `relative isolate overflow-hidden ${className}`
     : 'relative isolate overflow-hidden';

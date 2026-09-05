@@ -402,6 +402,8 @@ export function MapAuthoringCanvas({
   }, [fitBounds, mapReady, mapRef]);
 
   return (
+    // Isolate the authoring surface itself so its z-indexed controls cannot leak
+    // into surrounding app chrome if the map/control DOM is restructured later.
     <section
       ref={sectionRef}
       role="region"
