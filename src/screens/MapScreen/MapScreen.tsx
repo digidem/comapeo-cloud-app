@@ -46,6 +46,7 @@ import { SavedMapsList } from './SavedMapsList';
 import { StylePicker } from './StylePicker';
 import { ZoomSelector } from './ZoomSelector';
 import type { ZoomRange } from './ZoomSelector';
+import { MAP_AREA_UNDO_AUTO_HIDE_MS } from './constants';
 import { mapMessages } from './messages';
 
 interface SettingsSheetProps {
@@ -326,7 +327,10 @@ export function MapScreen() {
     setShowUndo(true);
     setFrameError(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    undoTimerRef.current = setTimeout(() => setShowUndo(false), 6000);
+    undoTimerRef.current = setTimeout(
+      () => setShowUndo(false),
+      MAP_AREA_UNDO_AUTO_HIDE_MS,
+    );
   }
 
   function handleUndoDraw() {
@@ -818,7 +822,7 @@ export function MapScreen() {
           {showUndo ? (
             <div
               role="status"
-              className="absolute bottom-16 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-btn bg-black/80 px-4 py-2 shadow-card"
+              className="absolute bottom-16 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-btn bg-black/80 px-4 py-2 shadow-card"
             >
               <span className="text-sm text-white">
                 {intl.formatMessage(mapMessages.areaUpdated)}

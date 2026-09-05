@@ -264,6 +264,7 @@ describe('MapContainer', () => {
     render(<MapContainer className="custom-container" />);
     const container = screen.getByTestId('map-container');
     expect(container.classList.contains('custom-container')).toBe(true);
+    expect(container).toHaveClass('isolate');
   });
 
   it('does not have trailing space in className when no custom class', () => {

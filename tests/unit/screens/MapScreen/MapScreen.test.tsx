@@ -1296,8 +1296,13 @@ describe('MapScreen frame drawing (mobile)', () => {
       await screen.findByRole('button', { name: 'Set this area' }),
     );
 
-    // Draw mode resets and the undo banner appears
+    // Draw mode resets and the undo banner appears above the map layer.
     expect(await screen.findByText('Map area updated')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveClass('z-20');
+    expect(screen.getByRole('button', { name: 'Undo' })).toHaveClass(
+      'min-h-[44px]',
+      'min-w-[44px]',
+    );
 
     // Clicking Undo reverts to the previous bbox
     await user.click(await screen.findByRole('button', { name: 'Undo' }));

@@ -130,6 +130,9 @@ export interface MapContainerProps extends MapPassthroughProps {
   /** Container height (default: '100%') */
   height?: string | number;
 
+  /** App-owned overlay rendered above the isolated map surface but below built-in controls. */
+  mapContentOverlay?: ReactNode;
+
   /** Children (Source, Layer, Marker, Popup, etc.) */
   children?: ReactNode;
 }
@@ -164,6 +167,7 @@ function MapContainer({
   className,
   style,
   height = '100%',
+  mapContentOverlay,
   children,
   ...mapPassthrough
 }: MapContainerProps) {
@@ -379,24 +383,30 @@ function MapContainer({
       className={containerClassName}
       style={containerStyle}
     >
-      <Map
-        ref={mapRef}
-        initialViewState={{
-          longitude: initialViewState?.longitude ?? 0,
-          latitude: initialViewState?.latitude ?? 0,
-          zoom: initialViewState?.zoom ?? 1,
-          pitch: initialViewState?.pitch ?? 0,
-          bearing: initialViewState?.bearing ?? 0,
-        }}
-        mapStyle={mapStyle}
-        interactive={interactive}
-        onLoad={handleMapLoad}
-        attributionControl={false}
-        {...mapPassthrough}
-      >
-        <AttributionControl position="top-left" compact />
-        {children}
-      </Map>
+      <div className="absolute inset-0 isolate">
+        <Map
+          ref={mapRef}
+          initialViewState={{
+            longitude: initialViewState?.longitude ?? 0,
+            latitude: initialViewState?.latitude ?? 0,
+            zoom: initialViewState?.zoom ?? 1,
+            pitch: initialViewState?.pitch ?? 0,
+            bearing: initialViewState?.bearing ?? 0,
+          }}
+          mapStyle={mapStyle}
+          interactive={interactive}
+          onLoad={handleMapLoad}
+          attributionControl={false}
+          {...mapPassthrough}
+        >
+          <AttributionControl position="top-left" compact />
+          {children}
+        </Map>
+      </div>
+
+      {mapContentOverlay ? (
+        <div className="absolute inset-0 z-[5]">{mapContentOverlay}</div>
+      ) : null}
 
       {/* View-only affordance for the non-interactive state. Without this the
           difference between interactive and non-interactive maps is behavior

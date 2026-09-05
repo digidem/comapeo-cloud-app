@@ -12,12 +12,14 @@ const mockNavigate = vi.fn();
 vi.mock('@/components/shared/MapContainer', () => ({
   MapContainer: ({
     children,
+    mapContentOverlay,
     onLoad,
     onClick,
     mapRef,
     cursor,
   }: {
     children: ReactNode;
+    mapContentOverlay?: ReactNode;
     onLoad?: () => void;
     onClick: (event: {
       features: Array<{ properties: { alertId: string } }>;
@@ -30,6 +32,7 @@ vi.mock('@/components/shared/MapContainer', () => ({
     return (
       <div data-testid="map-container" data-cursor={cursor}>
         {children}
+        {mapContentOverlay}
         <button type="button" data-testid="load-map" onClick={onLoad}>
           load
         </button>
@@ -356,9 +359,11 @@ describe('AlertsMap', () => {
       />,
     );
 
-    expect(
-      screen.getByText('No alerts with location to show on the map'),
-    ).toBeInTheDocument();
+    const emptyState = screen.getByText(
+      'No alerts with location to show on the map',
+    );
+    expect(emptyState).toBeInTheDocument();
+    expect(screen.getByTestId('map-container')).toContainElement(emptyState);
     expect(screen.queryByTestId('alerts-source')).not.toBeInTheDocument();
   });
 });

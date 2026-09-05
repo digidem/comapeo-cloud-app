@@ -146,6 +146,15 @@ export function ObservationsMap({
         }}
         className="h-full w-full"
         basemapSwitcherPositionClassName={basemapSwitcherPositionClassName}
+        mapContentOverlay={
+          showEmptyState && geoObservations.length === 0 ? (
+            <div className="flex h-full w-full items-center justify-center bg-surface-card/80 backdrop-blur-sm">
+              <p className="text-text-muted text-sm">
+                {intl.formatMessage(messages.empty)}
+              </p>
+            </div>
+          ) : null
+        }
       >
         {geoObservations.map((o) => (
           <Marker
@@ -187,14 +196,6 @@ export function ObservationsMap({
           </Marker>
         ))}
       </MapContainer>
-
-      {showEmptyState && geoObservations.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center bg-surface-card/80 backdrop-blur-sm">
-          <p className="text-text-muted text-sm">
-            {intl.formatMessage(messages.empty)}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
