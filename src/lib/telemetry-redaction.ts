@@ -276,8 +276,14 @@ function collectSensitiveValues(
 function sanitizeTagMap(
   value: unknown,
   sensitiveValues: ReadonlySet<string>,
+  redactPrimitives: boolean,
 ): unknown {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (
+    redactPrimitives ||
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value)
+  ) {
     return TELEMETRY_REDACTED;
   }
 
@@ -370,7 +376,11 @@ function sanitizeValue(
   for (const [key, entryValue] of entries) {
     const normalizedKey = normalizeKey(key);
     if (normalizedKey === 'tags' && depth === 0 && preserveRootTagKeys) {
-      result[key] = sanitizeTagMap(entryValue, sensitiveValues);
+      result[key] = sanitizeTagMap(
+        entryValue,
+        sensitiveValues,
+        redactPrimitives,
+      );
     } else if (isSensitiveTelemetryKey(key)) {
       result[key] = TELEMETRY_REDACTED;
     } else {

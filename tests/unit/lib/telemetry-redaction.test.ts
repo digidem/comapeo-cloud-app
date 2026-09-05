@@ -265,15 +265,31 @@ describe('telemetry redaction', () => {
     );
   });
 
-  it('preserves a literal truncation-like tag key when adding the map truncation marker', () => {
+  it('fails closed for preserved root tags when collection saturates', () => {
+    const marker = ['tail', 'marker', '325'].join('-');
+    const tags: Record<string, unknown> = {
+      ['a-phase-' + marker]: 'safe-value',
+    };
+    for (let index = 0; index < MAX_SANITIZE_ENTRIES - 1; index += 1) {
+      tags['m-tag-' + String(index).padStart(3, '0')] = 'safe-' + index;
+    }
+    tags['z-omitted-value'] = marker;
+
+    const result = sanitizeTelemetry({ tags }, { preserveRootTagKeys: true });
+
+    expect(result.tags).toBe(TELEMETRY_REDACTED);
+  });
+
+  it('preserves a literal truncation-like tag key at the collection bound', () => {
     const tags: Record<string, unknown> = { __truncated__: 'user-value' };
-    for (let index = 0; index < MAX_SANITIZE_ENTRIES; index += 1) {
+    for (let index = 0; index < MAX_SANITIZE_ENTRIES - 1; index += 1) {
       tags['tag-' + String(index).padStart(3, '0')] = index;
     }
     const result = sanitizeTelemetry({ tags }, { preserveRootTagKeys: true });
 
     expect(result.tags.__truncated__).toBe(TELEMETRY_REDACTED);
-    expect(Object.values(result.tags)).toContain(TELEMETRY_TRUNCATED);
+    expect(Object.keys(result.tags)).toHaveLength(MAX_SANITIZE_ENTRIES);
+    expect(Object.values(result.tags)).not.toContain(TELEMETRY_TRUNCATED);
   });
 
   it('preserves only root event tag keys and redacts nested domain tag maps as a container', () => {
@@ -293,7 +309,7 @@ describe('telemetry redaction', () => {
     expect(result.contexts.payload.tags).toBe(TELEMETRY_REDACTED);
   });
 
-  it('fails closed for non-object root tags and bounds large root tag maps', () => {
+  it('fails closed for non-object and oversized root tag maps', () => {
     const scalar = sanitizeTelemetry({ tags: 'staging' });
     expect(scalar.tags).toBe(TELEMETRY_REDACTED);
 
@@ -308,15 +324,7 @@ describe('telemetry redaction', () => {
       { preserveRootTagKeys: true },
     );
 
-    expect(bounded.tags.__truncated__).toBe(TELEMETRY_TRUNCATED);
-    expect(Object.keys(bounded.tags)).toHaveLength(MAX_SANITIZE_ENTRIES + 1);
-    expect(
-      Object.entries(bounded.tags).every(
-        ([key, value]) =>
-          (key === '__truncated__' && value === TELEMETRY_TRUNCATED) ||
-          value === TELEMETRY_REDACTED,
-      ),
-    ).toBe(true);
+    expect(bounded.tags).toBe(TELEMETRY_REDACTED);
   });
 
   it('omits non-sensitive array tails without learning their values for sibling echo-scrubbing', () => {
