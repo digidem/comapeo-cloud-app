@@ -1,7 +1,7 @@
 # Agent Knowledge Architecture
 
 Date: 2026-09-04
-Status: proposed
+Status: accepted
 Scope: repository-wide agent instructions, skills, references, architecture records, QA records, and session-learning promotion for `digidem/comapeo-cloud-app`
 
 ## 1. Problem

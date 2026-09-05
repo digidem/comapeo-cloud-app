@@ -3,6 +3,7 @@ from pathlib import Path
 import re
 import subprocess
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[4]
 PR_CYCLE_DIR = ROOT / ".agents" / "skills" / "pr-cycle"
@@ -16,6 +17,7 @@ ADR_README = ROOT / "docs" / "adr" / "README.md"
 ADR_0001 = ROOT / "docs" / "adr" / "0001-agent-knowledge-architecture.md"
 INVITE_API = ROOT / "docs" / "invite-api-spec.md"
 REMOTE_ARCHIVE_API = ROOT / "docs" / "remote-archive-api-spec.md"
+SPEC = ROOT / "docs" / "superpowers" / "specs" / "2026-09-04-agent-knowledge-architecture.md"
 ROOT_AGENTS = ROOT / "AGENTS.md"
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 
@@ -95,16 +97,19 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         offenders = [_display_path(path) for path in _session_lesson_files()]
         self.assertEqual(offenders, [])
 
-    def test_chronological_session_scan_ignores_gitignored_local_skills(self) -> None:
-        local_dir = ROOT / ".agents" / "skills" / "local-policy-test"
-        local_note = local_dir / "pr999-session-lessons.md"
-        local_dir.mkdir(parents=True, exist_ok=True)
-        local_note.write_text("local ignored scratch\n")
-        try:
-            self.assertNotIn(local_note, _session_lesson_files())
-        finally:
-            local_note.unlink(missing_ok=True)
-            local_dir.rmdir()
+    def test_chronological_session_scan_uses_git_visible_files_only(self) -> None:
+        tracked_note = ".agents/skills/pr-cycle/references/pr999-session-lessons.md"
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=f"{tracked_note}\n", stderr=""
+        )
+        with patch("subprocess.run", return_value=completed) as run:
+            files = _session_lesson_files()
+
+        command = run.call_args.args[0]
+        self.assertIn("--cached", command)
+        self.assertIn("--others", command)
+        self.assertIn("--exclude-standard", command)
+        self.assertEqual(files, [ROOT / tracked_note])
 
     def test_display_path_handles_missing_resource_outside_repository(self) -> None:
         outside = ROOT.parent / "outside-agent-resource.md"
@@ -184,8 +189,11 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         self.assertIn("Findings are hypotheses, not commands", review_text)
         self.assertIn("RED regression test", review_text)
         self.assertIn("unavailable review transport", review_text)
-        self.assertIn("desktop-only element", e2e_text)
-        self.assertIn("continue-on-error", e2e_text)
+        self.assertIn("desktop-only control", qa_text)
+        self.assertIn("continue-on-error", qa_text)
+        self.assertIn("qa-evidence.md", e2e_text)
+        self.assertNotIn("desktop-only element", e2e_text)
+        self.assertNotIn("continue-on-error", e2e_text)
         self.assertIn("must not execute accessors/getters", map_text)
         self.assertIn("UTC-based metadata/timestamps", map_text)
         self.assertIn("compatibility exceptions must be exact, narrow", map_text)
@@ -202,8 +210,11 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         remote_text = REMOTE_ARCHIVE_API.read_text()
         map_text = MAP_AGENTS.read_text()
         adr_text = ADR_0001.read_text()
+        spec_text = SPEC.read_text()
 
         self.assertIn("docs/invite-api-spec.md", root_agents)
+        self.assertIn("DESIGN_OVERVIEW.md", root_agents)
+        self.assertIn("src/app/styles.css", root_agents)
         self.assertIn("GET /projects/:id", remote_text)
         self.assertIn("POST /api/invites/encrypt", invite_text)
         self.assertIn("ttlHours", invite_text)
@@ -221,6 +232,8 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         self.assertIn("src/lib/schemas/authored-layer.ts", map_text)
         self.assertIn("- Status: Accepted", adr_text)
         self.assertNotIn("Accepted (effective when this PR lands)", adr_text)
+        self.assertIn("Status: accepted", spec_text)
+        self.assertNotIn("Status: proposed", spec_text)
 
     def test_ci_runs_agent_knowledge_policy_under_existing_context(self) -> None:
         ci_text = CI.read_text()

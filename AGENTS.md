@@ -180,7 +180,7 @@ Changes that touch browser persistence or full local-data reset MUST preserve th
 
 ## Design System
 
-Follow `DESIGN_OVERVIEW.md` as the canonical source for visual tokens, typography, spacing, component shape, borders, shadows, and sectioning. Do not copy token values into agent instructions; update the design source of truth instead.
+Use `DESIGN_OVERVIEW.md` for prototype/product visual intent and screen-level design language. Treat `src/app/styles.css` as the canonical shipped theme/token implementation for colors, typography, radii, borders, shadows, and tonal nesting. Do not copy token values into agent instructions; update the appropriate design source of truth instead.
 
 ## Guardrails Summary
 
