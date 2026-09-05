@@ -7,6 +7,29 @@ import type { AuthoredLayer } from '@/lib/map/authored-layers';
 // Types
 // ---------------------------------------------------------------------------
 
+export type ReportBrandingLogoContentType =
+  'image/png' | 'image/jpeg' | 'image/webp';
+
+export interface ReportBrandingLogoAsset {
+  /** Stable immutable identity for this exact logo version. */
+  versionId: string;
+  /** Local-first logo bytes. Remote R2 lifecycle is owned by the reporting sync scope. */
+  data: ArrayBuffer;
+  contentType: ReportBrandingLogoContentType;
+  width: number;
+  height: number;
+  byteLength: number;
+  sha256: string;
+}
+
+export interface ReportBranding {
+  schemaVersion: 1;
+  organizationName: string;
+  revision: number;
+  updatedAt?: string;
+  logo?: ReportBrandingLogoAsset;
+}
+
 export interface Project {
   localId: string;
   sourceType: string;
@@ -20,6 +43,8 @@ export interface Project {
     name?: string;
     contentType?: string;
   };
+  /** Project-scoped issuing-organization branding for reports. Never derived from iconRef. */
+  reportBranding?: ReportBranding;
   /**
    * The currently active saved map for this project, or `null` when cleared.
    * Not indexed (schemaless field), so adding it does not require a Dexie
