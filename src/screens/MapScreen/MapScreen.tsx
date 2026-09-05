@@ -808,7 +808,7 @@ export function MapScreen() {
                   className="h-3/5 w-4/5 rounded-sm border-2 border-dashed border-primary shadow-[0_0_0_9999px_rgba(4,20,92,0.35)]"
                 />
               </div>
-              <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+              <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
                 <Button onClick={handleConfirmFrame}>
                   {intl.formatMessage(mapMessages.setThisArea)}
                 </Button>
