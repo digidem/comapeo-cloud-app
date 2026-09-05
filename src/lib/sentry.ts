@@ -16,10 +16,12 @@ const APP_ORIGIN = import.meta.env.VITE_PUBLIC_APP_ORIGIN as string | undefined;
 const RELEASE = import.meta.env.VITE_APP_RELEASE as string | undefined;
 const APP_ENV = import.meta.env.VITE_APP_ENV as string | undefined;
 // Cloudflare Pages serves PR previews and branch deploys on *.pages.dev; the
-// production origin alone would silently drop those users' events.
-const PAGES_DEV_ORIGIN =
-  (import.meta.env.VITE_CF_PAGES_ORIGIN as string | undefined) ??
-  'https://comapeo-cloud-app.pages.dev';
+// production origin alone would silently drop those users' events. A custom
+// origin (e.g. a PAGES_DOMAIN preview host) is ADDITIVE — the default Pages
+// origin is always allowed.
+const PAGES_DEV_ORIGIN = 'https://comapeo-cloud-app.pages.dev';
+const EXTRA_PAGES_ORIGIN = import.meta.env.VITE_CF_PAGES_ORIGIN as
+  string | undefined;
 
 const isEnabled = Boolean(SENTRY_DSN);
 
@@ -35,8 +37,8 @@ function resolveEnvironment(): string {
 function resolveAllowUrls(): string[] | null {
   const origins = [
     ...new Set(
-      [APP_ORIGIN, PAGES_DEV_ORIGIN].filter((origin): origin is string =>
-        Boolean(origin),
+      [APP_ORIGIN, PAGES_DEV_ORIGIN, EXTRA_PAGES_ORIGIN].filter(
+        (origin): origin is string => Boolean(origin),
       ),
     ),
   ];

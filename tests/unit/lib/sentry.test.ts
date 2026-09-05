@@ -160,7 +160,7 @@ describe('sentry module', () => {
       );
     });
 
-    it('lets VITE_CF_PAGES_ORIGIN override the default Pages origin', async () => {
+    it('treats VITE_CF_PAGES_ORIGIN as additive to the default Pages origin', async () => {
       vi.stubEnv('VITE_CF_PAGES_ORIGIN', 'https://custom-preview.pages.dev');
       const sentry = await import('@sentry/react');
       const { initSentry } = await import('@/lib/sentry');
@@ -169,13 +169,14 @@ describe('sentry module', () => {
         expect.objectContaining({
           allowUrls: [
             'https://app.example.com',
+            'https://comapeo-cloud-app.pages.dev',
             'https://custom-preview.pages.dev',
           ],
         }),
       );
     });
 
-    it('keeps allowUrls with only the Pages origin when APP_ORIGIN is empty', async () => {
+    it('always keeps the default Pages origin even when APP_ORIGIN is empty', async () => {
       vi.stubEnv('VITE_PUBLIC_APP_ORIGIN', '');
       const sentry = await import('@sentry/react');
       const { initSentry } = await import('@/lib/sentry');
@@ -187,15 +188,17 @@ describe('sentry module', () => {
       ]);
     });
 
-    it('omits allowUrls entirely when both origins are absent', async () => {
+    it('deduplicates allowUrls when every configured origin resolves to the same host', async () => {
       vi.stubEnv('VITE_PUBLIC_APP_ORIGIN', '');
-      vi.stubEnv('VITE_CF_PAGES_ORIGIN', '');
+      vi.stubEnv('VITE_CF_PAGES_ORIGIN', 'https://comapeo-cloud-app.pages.dev');
       const sentry = await import('@sentry/react');
       const { initSentry } = await import('@/lib/sentry');
       initSentry();
       const callArgs = (sentry.init as ReturnType<typeof vi.fn>).mock
         .calls[0]?.[0] as Record<string, unknown> | undefined;
-      expect(callArgs).not.toHaveProperty('allowUrls');
+      expect(callArgs).toHaveProperty('allowUrls', [
+        'https://comapeo-cloud-app.pages.dev',
+      ]);
     });
 
     it('skips Sentry.init in automated browsers even when the DSN is set', async () => {
