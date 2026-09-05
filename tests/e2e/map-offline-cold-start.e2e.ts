@@ -291,7 +291,12 @@ test.describe('active SMP offline cold start', () => {
     const externalRequests: string[] = [];
     page.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.origin !== 'http://localhost:5173')
+      // Sentry envelope beacons may be attempted but are not a rendering
+      // dependency; they fail silently offline, so exclude them here.
+      if (
+        url.origin !== 'http://localhost:5173' &&
+        !url.hostname.endsWith('sentry.io')
+      )
         externalRequests.push(request.url());
     });
 
@@ -330,7 +335,11 @@ test.describe('active SMP offline cold start', () => {
     const offlineExternalRequests: string[] = [];
     offlinePage.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.origin !== 'http://localhost:5173')
+      // Same Sentry exclusion: offline beacons fail silently and are not a dependency.
+      if (
+        url.origin !== 'http://localhost:5173' &&
+        !url.hostname.endsWith('sentry.io')
+      )
         offlineExternalRequests.push(request.url());
     });
 
