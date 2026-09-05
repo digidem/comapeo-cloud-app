@@ -58,18 +58,29 @@ async function readImageDimensions(
     }
   }
 
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+      } else {
+        reject(new Error('Unable to read logo image'));
+      }
+    };
+    reader.onerror = () =>
+      reject(reader.error ?? new Error('Unable to read logo image'));
+    reader.readAsDataURL(file);
+  });
+
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
     const image = new Image();
     image.onload = () => {
-      URL.revokeObjectURL(url);
       resolve({ width: image.naturalWidth, height: image.naturalHeight });
     };
     image.onerror = () => {
-      URL.revokeObjectURL(url);
       reject(new Error('Unable to decode logo image'));
     };
-    image.src = url;
+    image.src = dataUrl;
   });
 }
 

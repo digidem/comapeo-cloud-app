@@ -392,6 +392,58 @@ describe('ReportBrandingDialog', () => {
     );
   });
 
+  it('decodes with a data URL fallback when createImageBitmap is unavailable', async () => {
+    vi.stubGlobal('createImageBitmap', undefined);
+    const readAsDataURL = vi.fn(function (this: FileReader) {
+      Object.defineProperty(this, 'result', {
+        configurable: true,
+        value: 'data:image/png;base64,iVBORw0KGgo=',
+      });
+      queueMicrotask(() => this.onload?.(new ProgressEvent('load')));
+    });
+    class MockFileReader {
+      result: string | ArrayBuffer | null = null;
+      error: DOMException | null = null;
+      onload: FileReader['onload'] = null;
+      onerror: FileReader['onerror'] = null;
+      readAsDataURL = readAsDataURL;
+    }
+    class MockImage {
+      naturalWidth = 320;
+      naturalHeight = 160;
+      onload: ((this: GlobalEventHandlers, ev: Event) => unknown) | null = null;
+      onerror: OnErrorEventHandler = null;
+      set src(_value: string) {
+        queueMicrotask(() =>
+          this.onload?.call(this as never, new Event('load')),
+        );
+      }
+    }
+    vi.stubGlobal('FileReader', MockFileReader);
+    vi.stubGlobal('Image', MockImage);
+    const user = userEvent.setup();
+    const bytes = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+    const file = new File([bytes], 'fallback.png', { type: 'image/png' });
+
+    render(
+      <ReportBrandingDialog
+        isOpen
+        project={makeProject()}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    await user.upload(screen.getByLabelText(/upload logo/i), file);
+
+    expect(
+      await screen.findByText(/report logo configured/i),
+    ).toBeInTheDocument();
+    expect(readAsDataURL).toHaveBeenCalledOnce();
+  });
+
   it('shows a processing error when browser image decoding fails', async () => {
     vi.stubGlobal(
       'createImageBitmap',
