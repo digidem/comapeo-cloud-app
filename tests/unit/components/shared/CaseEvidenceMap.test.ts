@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCaseEvidenceFeatureCollection,
   getCaseEvidenceInitialViewState,
-} from '@/components/shared/CaseEvidenceMap';
+} from '@/components/shared/case-evidence-map-geometry';
 import type { Alert, Observation, Track } from '@/lib/data-layer';
 import type { CaseEvidenceReference } from '@/lib/db';
 
