@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import re
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -13,6 +14,9 @@ E2E_AGENTS = ROOT / "tests" / "e2e" / "AGENTS.md"
 MAP_AGENTS = ROOT / "src" / "lib" / "map" / "AGENTS.md"
 ADR_README = ROOT / "docs" / "adr" / "README.md"
 ADR_0001 = ROOT / "docs" / "adr" / "0001-agent-knowledge-architecture.md"
+INVITE_API = ROOT / "docs" / "invite-api-spec.md"
+REMOTE_ARCHIVE_API = ROOT / "docs" / "remote-archive-api-spec.md"
+ROOT_AGENTS = ROOT / "AGENTS.md"
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 
 SESSION_LESSON_RE = re.compile(r"pr\d+-session-lessons\.md$", re.IGNORECASE)
@@ -56,14 +60,59 @@ def _resource_paths(skill_path: Path) -> list[Path]:
     return paths
 
 
+def _display_path(path: Path) -> str:
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _session_lesson_files() -> list[Path]:
+    result = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            ".agents/skills",
+        ],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [
+        ROOT / raw
+        for raw in result.stdout.splitlines()
+        if raw.endswith(".md") and SESSION_LESSON_RE.search(Path(raw).name)
+    ]
+
+
 class AgentKnowledgePolicyTests(unittest.TestCase):
     def test_chronological_session_memory_files_are_not_permanent(self) -> None:
-        offenders = [
-            path.relative_to(ROOT).as_posix()
-            for path in (ROOT / ".agents" / "skills").rglob("*.md")
-            if SESSION_LESSON_RE.search(path.name)
-        ]
+        offenders = [_display_path(path) for path in _session_lesson_files()]
         self.assertEqual(offenders, [])
+
+    def test_chronological_session_scan_ignores_gitignored_local_skills(self) -> None:
+        local_dir = ROOT / ".agents" / "skills" / "local-policy-test"
+        local_note = local_dir / "pr999-session-lessons.md"
+        local_dir.mkdir(parents=True, exist_ok=True)
+        local_note.write_text("local ignored scratch\n")
+        try:
+            self.assertNotIn(local_note, _session_lesson_files())
+        finally:
+            local_note.unlink(missing_ok=True)
+            local_dir.rmdir()
+
+    def test_display_path_handles_missing_resource_outside_repository(self) -> None:
+        outside = ROOT.parent / "outside-agent-resource.md"
+        try:
+            displayed = _display_path(outside)
+        except ValueError:
+            displayed = "<raised ValueError>"
+        self.assertEqual(displayed, str(outside))
 
     def test_required_progressive_disclosure_structure_exists(self) -> None:
         required = (
@@ -74,6 +123,7 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
             MAP_AGENTS,
             ADR_README,
             ADR_0001,
+            INVITE_API,
         )
         missing = [path.relative_to(ROOT).as_posix() for path in required if not path.is_file()]
         self.assertEqual(missing, [])
@@ -103,7 +153,7 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         for skill_path in skill_paths:
             for resource_path in _resource_paths(skill_path):
                 if not resource_path.exists():
-                    missing.append(str(resource_path.relative_to(ROOT)))
+                    missing.append(_display_path(resource_path))
         self.assertEqual(missing, [])
 
     def test_migration_manifest_accounts_for_every_source_heading(self) -> None:
@@ -143,6 +193,34 @@ class AgentKnowledgePolicyTests(unittest.TestCase):
         self.assertIn("terminal/finalization waits", map_text)
         self.assertIn("One normative rule should have one canonical home", knowledge_text)
         self.assertIn("Never create permanent files named like", knowledge_text)
+
+    def test_moved_root_guidance_has_canonical_destinations(self) -> None:
+        self.assertTrue(INVITE_API.is_file(), "invite API contract needs a canonical doc")
+        root_agents = ROOT_AGENTS.read_text()
+        e2e_text = E2E_AGENTS.read_text()
+        invite_text = INVITE_API.read_text()
+        remote_text = REMOTE_ARCHIVE_API.read_text()
+        map_text = MAP_AGENTS.read_text()
+        adr_text = ADR_0001.read_text()
+
+        self.assertIn("docs/invite-api-spec.md", root_agents)
+        self.assertIn("GET /projects/:id", remote_text)
+        self.assertIn("POST /api/invites/encrypt", invite_text)
+        self.assertIn("ttlHours", invite_text)
+        self.assertIn("POST /api/invites/decrypt", invite_text)
+        self.assertIn("410", invite_text)
+        self.assertIn("INVITE_EXPIRED", invite_text)
+        self.assertIn("`npm run storybook:screenshots:baseline`", e2e_text)
+        self.assertIn("tests/e2e/storybook-screenshots-baseline/", e2e_text)
+        self.assertIn("`visual-regression-check`", e2e_text)
+        self.assertIn("`npm run pipeline:mobile-review`", e2e_text)
+        self.assertIn("browser.newContext()", e2e_text)
+        self.assertIn("VIEWPORTS", e2e_text)
+        self.assertIn("setupMockServer", e2e_text)
+        self.assertIn("chromium only", e2e_text.lower())
+        self.assertIn("src/lib/schemas/authored-layer.ts", map_text)
+        self.assertIn("- Status: Accepted", adr_text)
+        self.assertNotIn("Accepted (effective when this PR lands)", adr_text)
 
     def test_ci_runs_agent_knowledge_policy_under_existing_context(self) -> None:
         ci_text = CI.read_text()

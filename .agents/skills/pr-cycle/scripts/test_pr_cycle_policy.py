@@ -314,10 +314,8 @@ def assert_policy_contract(
     skill_text: str,
     agents_text: str,
     ci_text: str,
-    e2e_agents_text: str | None = None,
+    e2e_agents_text: str,
 ) -> None:
-    if e2e_agents_text is None:
-        e2e_agents_text = E2E_AGENTS.read_text()
     test.assertIn("verify the claim against the exact current head", skill_text)
     test.assertIn("false positive, stale, duplicate, or already satisfied", skill_text)
     test.assertIn("reply with precise evidence", skill_text)
@@ -420,6 +418,7 @@ class PrCyclePolicyTests(unittest.TestCase):
             skill_text=SKILL.read_text(),
             agents_text=AGENTS.read_text(),
             ci_text=CI.read_text(),
+            e2e_agents_text=E2E_AGENTS.read_text(),
         )
 
     def test_section_reports_missing_boundaries_as_assertions(self) -> None:
@@ -954,6 +953,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_bot_finding_verification_policy_is_required(self) -> None:
@@ -969,6 +969,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_merge_authorization_must_be_execution_local(self) -> None:
@@ -984,6 +985,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_concurrent_writer_does_not_grant_merge_authority(self) -> None:
@@ -999,6 +1001,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_readiness_request_is_not_merge_authorization(self) -> None:
@@ -1014,6 +1017,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_authorization_provenance_checkpoint_is_required(self) -> None:
@@ -1027,6 +1031,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_external_merge_must_not_be_claimed_by_current_execution(self) -> None:
@@ -1042,6 +1047,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_cleanup_identity_guard_is_required(self) -> None:
@@ -1057,6 +1063,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_soft_fail_ci_adjudication_policy_is_required(self) -> None:
@@ -1070,6 +1077,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_cleanup_branch_delete_hook_bypass_is_required(self) -> None:
@@ -1085,6 +1093,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_durable_knowledge_checkpoint_is_required(self) -> None:
@@ -1100,6 +1109,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_human_qa_handoff_policy_is_required(self) -> None:
@@ -1113,6 +1123,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_argos_artifact_guidance_is_required(self) -> None:
@@ -1160,6 +1171,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=SKILL.read_text(),
                 agents_text=agents_text,
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_scope_continuity_policy_is_required(self) -> None:
@@ -1175,6 +1187,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=SKILL.read_text(),
                 agents_text=agents_text,
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_ci_invocation_must_be_active_in_pr_cycle_job(self) -> None:
@@ -1189,6 +1202,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=SKILL.read_text(),
                 agents_text=AGENTS.read_text(),
                 ci_text=ci_text,
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
 

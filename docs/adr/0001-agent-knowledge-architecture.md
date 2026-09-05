@@ -1,6 +1,6 @@
 # ADR 0001: Promote agent knowledge into canonical scoped homes
 
-- Status: Accepted (effective when this PR lands)
+- Status: Accepted
 - Date: 2026-09-04
 
 ## Context

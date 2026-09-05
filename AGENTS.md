@@ -176,7 +176,7 @@ Changes that touch browser persistence or full local-data reset MUST preserve th
 ### API references
 
 - Treat `docs/remote-archive-api-spec.md` as the detailed remote `comapeo-cloud` API reference; do not duplicate endpoint schemas here.
-- The first-party `/api/invites/{encrypt,decrypt}` routes are Cloudflare Pages Functions and remain governed by the `INVITE_KEY`/rotation contract in the Cloudflare Deployment section below.
+- Treat `docs/invite-api-spec.md` as the canonical first-party `/api/invites/{encrypt,decrypt}` request/response/error contract. Those routes are Cloudflare Pages Functions and remain governed by the `INVITE_KEY`/rotation contract in the Cloudflare Deployment section below.
 
 ## Design System
 
