@@ -67,6 +67,17 @@ interface SettingsSheetProps {
   children: ReactNode;
 }
 
+interface PreEditAuthoringState {
+  selectedStyle: ImageryBasemap;
+  bbox: [number, number, number, number];
+  autoFitBbox: [number, number, number, number] | null;
+  zoomRange: ZoomRange;
+  mapName: string;
+  authoredLayerEntries: AuthoredLayerDraftEntry[];
+  referenceOverlayIds: string[];
+  hasUserModifiedBbox: boolean;
+}
+
 const DEFAULT_BBOX: [number, number, number, number] = [-75, -12, -45, 8];
 const DEFAULT_ZOOM: ZoomRange = { minZoom: 0, maxZoom: 14 };
 const MAX_REFERENCE_OVERLAYS = 10;
@@ -164,6 +175,7 @@ export function MapScreen() {
   >([]);
   const [editingSnapshot, setEditingSnapshot] =
     useState<ValidatedSavedMapStorageSnapshot | null>(null);
+  const preEditAuthoringStateRef = useRef<PreEditAuthoringState | null>(null);
   const [authoredMapError, setAuthoredMapError] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<ImageryBasemap>(() =>
     findBasemap(DEFAULT_BASEMAP_ID),
@@ -224,6 +236,7 @@ export function MapScreen() {
     referenceOverlayReservedSlotsRef.current = 0;
     referenceOverlayImportSequenceRef.current = 0;
     referenceOverlayLatestUiOutcomeRef.current = 0;
+    preEditAuthoringStateRef.current = null;
     if (referenceOverlayToastRef.current) {
       dismissToastRef.current(referenceOverlayToastRef.current.id);
       referenceOverlayToastRef.current = null;
@@ -742,6 +755,18 @@ export function MapScreen() {
       setAuthoredMapError(intl.formatMessage(mapMessages.authoredMapOpenError));
       return;
     }
+    if (!editingSnapshot) {
+      preEditAuthoringStateRef.current = {
+        selectedStyle,
+        bbox: [...bbox],
+        autoFitBbox: autoFitBbox ? [...autoFitBbox] : null,
+        zoomRange: { ...zoomRange },
+        mapName,
+        authoredLayerEntries,
+        referenceOverlayIds: Array.from(referenceOverlayIdsRef.current),
+        hasUserModifiedBbox: hasUserModifiedBboxRef.current,
+      };
+    }
     setEditingSnapshot(parsed.snapshot);
     setAuthoredLayerEntries(parsed.draftEntries);
     referenceOverlayIdsRef.current = new Set(
@@ -760,10 +785,25 @@ export function MapScreen() {
   }
 
   function handleCancelAuthoredEdit() {
+    const preEditState = preEditAuthoringStateRef.current;
     setEditingSnapshot(null);
-    setAuthoredLayerEntries([]);
-    referenceOverlayIdsRef.current.clear();
-    setMapName('');
+    if (preEditState) {
+      setSelectedStyle(preEditState.selectedStyle);
+      setBbox(preEditState.bbox);
+      setAutoFitBbox(preEditState.autoFitBbox);
+      setZoomRange(preEditState.zoomRange);
+      setMapName(preEditState.mapName);
+      setAuthoredLayerEntries(preEditState.authoredLayerEntries);
+      referenceOverlayIdsRef.current = new Set(
+        preEditState.referenceOverlayIds,
+      );
+      hasUserModifiedBboxRef.current = preEditState.hasUserModifiedBbox;
+    } else {
+      setAuthoredLayerEntries([]);
+      referenceOverlayIdsRef.current.clear();
+      setMapName('');
+    }
+    preEditAuthoringStateRef.current = null;
     setAuthoredMapError(null);
   }
 
@@ -782,6 +822,7 @@ export function MapScreen() {
         updatedAt: Date.now(),
       });
       setEditingSnapshot(null);
+      preEditAuthoringStateRef.current = null;
       setAuthoredLayerEntries([]);
       referenceOverlayIdsRef.current.clear();
       setMapName('');

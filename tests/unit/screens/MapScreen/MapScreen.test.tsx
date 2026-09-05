@@ -225,6 +225,76 @@ describe('MapScreen', () => {
     expect(await getDb().maps.toArray()).toEqual(storedBefore);
   });
 
+  it('restores the pre-edit authoring state when cancelling a saved-map edit', async () => {
+    const user = userEvent.setup();
+    await getDb().maps.add({
+      id: 'saved-edit-map',
+      projectLocalId: 'project-1',
+      name: 'Saved edit map',
+      type: 'raster',
+      origin: 'authored',
+      styleUrl: 'https://tiles.example.com/{z}/{x}/{y}.png',
+      scheme: 'xyz',
+      bbox: [-80, -20, -40, 10],
+      minZoom: 2,
+      maxZoom: 7,
+      status: 'draft',
+      createdAt: '2026-09-05T10:00:00.000Z',
+      updatedAt: '2026-09-05T10:00:00.000Z',
+      layers: [structuredClone(AUTHORED_VECTOR_LAYER_FIXTURE)],
+    });
+    render(<MapScreen />);
+
+    const westInput = await screen.findByLabelText('West');
+    await waitFor(() => expect(westInput).toHaveValue(-75));
+    await user.click(screen.getByRole('button', { name: 'OpenStreetMap' }));
+    await user.clear(westInput);
+    await user.type(westInput, '-70');
+    const maxZoomInput = screen.getByLabelText('Maximum zoom');
+    await user.clear(maxZoomInput);
+    await user.type(maxZoomInput, '12');
+    await user.upload(
+      screen.getByLabelText('Add GeoJSON layer'),
+      new File(
+        ['{"type":"Point","coordinates":[-61,-4]}'],
+        'draft-before-edit.geojson',
+        { type: 'application/geo+json' },
+      ),
+    );
+    expect(
+      await screen.findByText('draft-before-edit.geojson'),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(westInput).toHaveValue(-70);
+      expect(maxZoomInput).toHaveValue(12);
+      expect(
+        screen.getByRole('button', { name: 'OpenStreetMap' }),
+      ).toHaveAttribute('aria-pressed', 'true');
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 200));
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit layers' }),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText('West')).toHaveValue(-80);
+      expect(screen.getByLabelText('Maximum zoom')).toHaveValue(7);
+      expect(screen.getByText('Territory boundary')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel editing' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('West')).toHaveValue(-70);
+      expect(screen.getByLabelText('Maximum zoom')).toHaveValue(12);
+      expect(
+        screen.getByRole('button', { name: 'OpenStreetMap' }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByText('draft-before-edit.geojson')).toBeInTheDocument();
+      expect(screen.queryByText('Territory boundary')).not.toBeInTheDocument();
+    });
+  }, 10_000);
+
   it('keeps invalid stored layers in recovery mode until explicitly removed', async () => {
     const user = userEvent.setup();
     const rawMap = {
