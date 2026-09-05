@@ -1556,6 +1556,63 @@
   "map.activeMap.onlineBadge": {
     "defaultMessage": "Active map (online): {name}"
   },
+  "map.authoredLayers.add": {
+    "defaultMessage": "Add GeoJSON layer"
+  },
+  "map.authoredLayers.cancelEdit": {
+    "defaultMessage": "Cancel editing"
+  },
+  "map.authoredLayers.editMap": {
+    "defaultMessage": "Edit layers"
+  },
+  "map.authoredLayers.help": {
+    "defaultMessage": "GeoJSON layers are saved with this map and included in its offline package."
+  },
+  "map.authoredLayers.hide": {
+    "defaultMessage": "Hide {name}"
+  },
+  "map.authoredLayers.invalid": {
+    "defaultMessage": "Invalid layer"
+  },
+  "map.authoredLayers.invalidGuidance": {
+    "defaultMessage": "Remove this invalid layer before saving or downloading. Other valid layers remain available."
+  },
+  "map.authoredLayers.loading": {
+    "defaultMessage": "Adding GeoJSON layer…"
+  },
+  "map.authoredLayers.moveDown": {
+    "defaultMessage": "Move {name} down"
+  },
+  "map.authoredLayers.moveUp": {
+    "defaultMessage": "Move {name} up"
+  },
+  "map.authoredLayers.openError": {
+    "defaultMessage": "Map data could not be opened"
+  },
+  "map.authoredLayers.packagePrivacy": {
+    "defaultMessage": "Authored layer data is stored in this browser and included in the offline map package you create."
+  },
+  "map.authoredLayers.rasterZoomError": {
+    "defaultMessage": "This raster layer has no usable zoom levels inside the current map zoom range."
+  },
+  "map.authoredLayers.recoveryBlocked": {
+    "defaultMessage": "Remove every invalid layer before saving or downloading this map."
+  },
+  "map.authoredLayers.remove": {
+    "defaultMessage": "Remove {name}"
+  },
+  "map.authoredLayers.removeInvalid": {
+    "defaultMessage": "Remove invalid layer"
+  },
+  "map.authoredLayers.saveChanges": {
+    "defaultMessage": "Save changes"
+  },
+  "map.authoredLayers.show": {
+    "defaultMessage": "Show {name}"
+  },
+  "map.authoredLayers.title": {
+    "defaultMessage": "Map layers"
+  },
   "map.basemap.label": {
     "defaultMessage": "Basemap"
   },

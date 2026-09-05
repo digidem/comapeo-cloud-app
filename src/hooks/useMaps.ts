@@ -7,10 +7,16 @@ import {
 
 import type { SavedMap } from '@/lib/db';
 import { addSavedMapWithPackage, getDb } from '@/lib/db';
+import type { AuthoredLayer } from '@/lib/map/authored-layers';
+import { buildSavedMapAuthoringWrite } from '@/lib/map/saved-map-authoring';
 import { recoverCancelledMapDownload } from '@/lib/map/saved-map-lifecycle';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import type { DownloadProgress } from '@/lib/map/smp-download';
 import { downloadSmp } from '@/lib/map/smp-download';
+import type {
+  SavedMapAuthoringDraftFields,
+  ValidatedSavedMapStorageSnapshot,
+} from '@/lib/schemas/saved-map';
 import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
@@ -115,6 +121,54 @@ export function useRenameMap() {
       void queryClient.invalidateQueries({ queryKey: ['maps'] });
       void queryClient.invalidateQueries({
         queryKey: ['map', mapId],
+        exact: true,
+      });
+    },
+  });
+}
+
+export function useSaveAuthoredMap() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      snapshot,
+      draftFields,
+      layers,
+      updatedAt,
+    }: {
+      snapshot: ValidatedSavedMapStorageSnapshot;
+      draftFields: SavedMapAuthoringDraftFields;
+      layers: AuthoredLayer[];
+      updatedAt: number;
+    }) => {
+      const row = buildSavedMapAuthoringWrite(
+        snapshot,
+        draftFields,
+        layers,
+        updatedAt,
+      );
+      const db = getDb();
+      await db.transaction(
+        'rw',
+        [db.maps, db.mapPackages, db.mapPackageChunks],
+        async () => {
+          await db.maps.put(row as SavedMap);
+          // A draft row must never retain package bytes from a previous
+          // package-relevant configuration. Name-only edits of ready maps keep
+          // status=ready and therefore preserve the existing package.
+          if (row.status === 'draft') {
+            await db.mapPackages.delete(row.id);
+            await db.mapPackageChunks.where('mapId').equals(row.id).delete();
+          }
+        },
+      );
+      return row;
+    },
+    onSuccess: (row) => {
+      void queryClient.invalidateQueries({ queryKey: ['maps'] });
+      void queryClient.invalidateQueries({
+        queryKey: ['map', row.id],
         exact: true,
       });
     },

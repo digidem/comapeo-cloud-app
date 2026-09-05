@@ -27,6 +27,7 @@ interface SavedMapRowProps {
   hasPendingAction: boolean;
   onActiveToggle: () => void;
   onPreview: () => void;
+  onEdit: () => void;
   onRename: () => void;
   onDelete: () => void;
 }
@@ -40,6 +41,7 @@ export function SavedMapRow({
   hasPendingAction,
   onActiveToggle,
   onPreview,
+  onEdit,
   onRename,
   onDelete,
 }: SavedMapRowProps) {
@@ -95,6 +97,16 @@ export function SavedMapRow({
             disabled={hasPendingAction}
           >
             {intl.formatMessage(mapMessages.previewAction)}
+          </Button>
+        ) : null}
+        {map.origin !== 'imported' ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onEdit}
+            disabled={hasPendingAction}
+          >
+            {intl.formatMessage(mapMessages.authoredMapEdit)}
           </Button>
         ) : null}
         <Button

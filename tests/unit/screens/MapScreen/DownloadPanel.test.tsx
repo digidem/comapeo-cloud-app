@@ -102,6 +102,28 @@ describe('DownloadPanel', () => {
     expect(screen.getByText(/Network failure/)).toBeInTheDocument();
   });
 
+  it('blocks download when an authored map retains an invalid layer', () => {
+    const map = createMockMap({
+      origin: 'authored',
+      layers: [
+        {
+          schemaVersion: 99,
+          id: 'future-layer',
+        } as never,
+      ],
+    });
+
+    render(<DownloadPanel map={map} />);
+
+    expect(screen.getByTestId('download-authoring-blocked')).toHaveTextContent(
+      'Remove every invalid layer before saving or downloading this map.',
+    );
+    expect(
+      screen.getByRole('button', { name: /download map/i }),
+    ).toBeDisabled();
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
   it('renders download button and estimated size for draft maps', () => {
     const map = createMockMap({ status: 'draft' });
     render(<DownloadPanel map={map} />);

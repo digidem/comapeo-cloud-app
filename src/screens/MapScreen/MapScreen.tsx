@@ -15,10 +15,11 @@ import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
-import { useCreateMap, useMaps } from '@/hooks/useMaps';
+import { useCreateMap, useMaps, useSaveAuthoredMap } from '@/hooks/useMaps';
 import { useProjects } from '@/hooks/useProjects';
 import { getProjectPoints } from '@/lib/data-layer';
 import type { SavedMap } from '@/lib/db';
+import { createAuthoredLayerFromGeoJsonOverlay } from '@/lib/map/authored-layer-factory';
 import { DEFAULT_BASEMAP_ID, findBasemap } from '@/lib/map/basemaps';
 import {
   clampBboxLatitude,
@@ -32,14 +33,26 @@ import {
   MAX_GEOJSON_OVERLAY_MEGABYTES,
   readGeoJsonOverlayFile,
 } from '@/lib/map/geojson-overlays';
+import {
+  buildAuthoredLayerCommitContext,
+  extractCanonicalAuthoredLayers,
+  getAdvancedEditorRecoveryEligibility,
+  validateAuthoredLayerDraftContext,
+} from '@/lib/map/saved-map-authoring';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
+import {
+  type AuthoredLayerDraftEntry,
+  type SavedMapAuthoringDraftFields,
+  type ValidatedSavedMapStorageSnapshot,
+  parseSavedMapForAuthoring,
+} from '@/lib/schemas/saved-map';
 import { uuid } from '@/lib/uuid';
 import { useProjectStore } from '@/stores/project-store';
 
+import { AuthoredLayersControl } from './AuthoredLayersControl';
 import { BoundsEditor } from './BoundsEditor';
 import { DownloadPanel } from './DownloadPanel';
 import { DrawBoundsControl } from './DrawBoundsControl';
-import { GeoJsonOverlayControl } from './GeoJsonOverlayControl';
 import { ImportSmpButton } from './ImportSmpButton';
 import { MapAuthoringCanvas } from './MapAuthoringCanvas';
 import { SavedMapsList } from './SavedMapsList';
@@ -54,9 +67,39 @@ interface SettingsSheetProps {
   children: ReactNode;
 }
 
+interface PreEditAuthoringState {
+  selectedStyle: ImageryBasemap;
+  bbox: [number, number, number, number];
+  autoFitBbox: [number, number, number, number] | null;
+  zoomRange: ZoomRange;
+  mapName: string;
+  authoredLayerEntries: AuthoredLayerDraftEntry[];
+  referenceOverlayIds: string[];
+  hasUserModifiedBbox: boolean;
+}
+
 const DEFAULT_BBOX: [number, number, number, number] = [-75, -12, -45, 8];
 const DEFAULT_ZOOM: ZoomRange = { minZoom: 0, maxZoom: 14 };
 const MAX_REFERENCE_OVERLAYS = 10;
+
+function savedMapToBasemap(map: SavedMap): ImageryBasemap {
+  const common = {
+    id: `saved:${map.id}`,
+    name: map.name,
+    category: 'street' as const,
+    attribution: map.attribution,
+    minZoom: map.minZoom,
+    maxZoom: map.maxZoom,
+  };
+  return map.type === 'raster'
+    ? {
+        ...common,
+        type: 'raster',
+        url: map.styleUrl,
+        scheme: map.scheme ?? 'xyz',
+      }
+    : { ...common, type: 'style', url: map.styleUrl };
+}
 
 // Frame overlay geometry for the mobile "pan-under-frame" draw pattern
 const FRAME_LEFT = 0.1; // 10% from left
@@ -124,8 +167,16 @@ export function MapScreen() {
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const projectsQuery = useProjects();
   const createMap = useCreateMap();
+  const saveAuthoredMap = useSaveAuthoredMap();
   const mapsQuery = useMaps(selectedProjectId);
   const mapRef = useRef<MapRef | null>(null);
+  const [authoredLayerEntries, setAuthoredLayerEntries] = useState<
+    AuthoredLayerDraftEntry[]
+  >([]);
+  const [editingSnapshot, setEditingSnapshot] =
+    useState<ValidatedSavedMapStorageSnapshot | null>(null);
+  const preEditAuthoringStateRef = useRef<PreEditAuthoringState | null>(null);
+  const [authoredMapError, setAuthoredMapError] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<ImageryBasemap>(() =>
     findBasemap(DEFAULT_BASEMAP_ID),
   );
@@ -145,9 +196,6 @@ export function MapScreen() {
   const isMountedRef = useRef(false);
   const [showUndo, setShowUndo] = useState(false);
   const [frameError, setFrameError] = useState<string | null>(null);
-  const [referenceOverlays, setReferenceOverlays] = useState<GeoJsonOverlay[]>(
-    [],
-  );
   const [referenceOverlayError, setReferenceOverlayError] = useState<
     string | null
   >(null);
@@ -169,10 +217,12 @@ export function MapScreen() {
     useState(selectedProjectId);
   if (referenceOverlayProjectId !== selectedProjectId) {
     setReferenceOverlayProjectId(selectedProjectId);
-    setReferenceOverlays([]);
     setReferenceOverlayError(null);
     setReferenceOverlayErrorSurface(null);
     setReferenceOverlayLoading(false);
+    setAuthoredLayerEntries([]);
+    setEditingSnapshot(null);
+    setAuthoredMapError(null);
   }
 
   useEffect(() => {
@@ -186,6 +236,7 @@ export function MapScreen() {
     referenceOverlayReservedSlotsRef.current = 0;
     referenceOverlayImportSequenceRef.current = 0;
     referenceOverlayLatestUiOutcomeRef.current = 0;
+    preEditAuthoringStateRef.current = null;
     if (referenceOverlayToastRef.current) {
       dismissToastRef.current(referenceOverlayToastRef.current.id);
       referenceOverlayToastRef.current = null;
@@ -334,6 +385,21 @@ export function MapScreen() {
     setShowUndo(false);
   }
 
+  function currentDraftFields(name: string): SavedMapAuthoringDraftFields {
+    return {
+      name,
+      type: selectedStyle.type,
+      styleUrl: selectedStyle.url,
+      bbox,
+      minZoom: zoomRange.minZoom,
+      maxZoom: zoomRange.maxZoom,
+      attribution: selectedStyle.attribution,
+      ...(selectedStyle.type === 'raster'
+        ? { scheme: selectedStyle.scheme ?? 'xyz' }
+        : {}),
+    };
+  }
+
   function dismissReferenceOverlayToastThrough(sequence: number) {
     const currentToast = referenceOverlayToastRef.current;
     if (!currentToast || currentToast.sequence > sequence) return;
@@ -450,22 +516,44 @@ export function MapScreen() {
         return;
       }
 
-      const additions: GeoJsonOverlay[] = results.flatMap((result) =>
-        result.ok
-          ? [
-              {
-                id: uuid(),
+      const nextEntries = [...authoredLayerEntries];
+      const additions: AuthoredLayerDraftEntry[] = [];
+      for (const result of results) {
+        if (!result.ok) continue;
+        const context = buildAuthoredLayerCommitContext(
+          currentDraftFields(mapName.trim() || 'Map draft'),
+          nextEntries,
+          { kind: 'append' },
+        );
+        const created = createAuthoredLayerFromGeoJsonOverlay(
+          result.data,
+          context,
+          { name: result.file.name, visible: true },
+        );
+        if (!created.ok) {
+          setReferenceOverlayError(
+            created.error.issues[0]?.message ??
+              intl.formatMessage(mapMessages.referenceOverlaysInvalid, {
                 name: result.file.name,
-                data: result.data,
-                visible: true,
-              },
-            ]
-          : [],
-      );
-      for (const addition of additions) {
-        referenceOverlayIdsRef.current.add(addition.id);
+              }),
+          );
+          setReferenceOverlayErrorSurface(errorSurface);
+          return;
+        }
+        const entry: AuthoredLayerDraftEntry = {
+          kind: 'valid',
+          key: `layer:${created.layer.id}`,
+          layer: created.layer,
+        };
+        nextEntries.push(entry);
+        additions.push(entry);
       }
-      setReferenceOverlays((current) => [...current, ...additions]);
+      for (const addition of additions) {
+        if (addition.kind === 'valid') {
+          referenceOverlayIdsRef.current.add(addition.layer.id);
+        }
+      }
+      setAuthoredLayerEntries((current) => [...current, ...additions]);
       if (importSequence >= referenceOverlayLatestUiOutcomeRef.current) {
         referenceOverlayLatestUiOutcomeRef.current = importSequence;
         dismissReferenceOverlayToastThrough(importSequence);
@@ -486,19 +574,43 @@ export function MapScreen() {
     }
   }
 
-  function handleReferenceOverlayToggle(id: string) {
-    setReferenceOverlays((current) =>
-      current.map((overlay) =>
-        overlay.id === id ? { ...overlay, visible: !overlay.visible } : overlay,
+  function handleAuthoredLayerToggle(key: AuthoredLayerDraftEntry['key']) {
+    setAuthoredLayerEntries((current) =>
+      current.map((entry) =>
+        entry.key === key && entry.kind === 'valid'
+          ? {
+              ...entry,
+              layer: { ...entry.layer, visible: !entry.layer.visible },
+            }
+          : entry,
       ),
     );
   }
 
-  function handleReferenceOverlayRemove(id: string) {
-    if (!referenceOverlayIdsRef.current.delete(id)) return;
-    setReferenceOverlays((current) =>
-      current.filter((overlay) => overlay.id !== id),
+  function handleAuthoredLayerRemove(key: AuthoredLayerDraftEntry['key']) {
+    const removed = authoredLayerEntries.find((entry) => entry.key === key);
+    if (removed?.kind === 'valid') {
+      referenceOverlayIdsRef.current.delete(removed.layer.id);
+    }
+    setAuthoredLayerEntries((current) =>
+      current.filter((entry) => entry.key !== key),
     );
+  }
+
+  function handleAuthoredLayerMove(
+    key: AuthoredLayerDraftEntry['key'],
+    delta: -1 | 1,
+  ) {
+    setAuthoredLayerEntries((current) => {
+      const index = current.findIndex((entry) => entry.key === key);
+      const target = index + delta;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      const [entry] = next.splice(index, 1);
+      if (!entry) return current;
+      next.splice(target, 0, entry);
+      return next;
+    });
   }
 
   function handleConfirmFrame() {
@@ -558,6 +670,46 @@ export function MapScreen() {
   );
   useShellSlot(shellSlot);
 
+  const authoredGeoJsonOverlays = useMemo<GeoJsonOverlay[]>(
+    () =>
+      authoredLayerEntries.flatMap((entry) => {
+        if (entry.kind !== 'valid' || entry.layer.source.type !== 'geojson') {
+          return [];
+        }
+        return [
+          {
+            id: entry.layer.id,
+            name: entry.layer.name,
+            data: entry.layer.source.data,
+            visible: entry.layer.visible,
+          },
+        ];
+      }),
+    [authoredLayerEntries],
+  );
+  const authoringDraftFields = currentDraftFields(
+    mapName.trim() || (editingSnapshot ? 'Saved map' : 'Map draft'),
+  );
+  const extractionContext = buildAuthoredLayerCommitContext(
+    authoringDraftFields,
+    authoredLayerEntries,
+    { kind: 'extract' },
+  );
+  const recoveryEligibility =
+    getAdvancedEditorRecoveryEligibility(authoredLayerEntries);
+  const authoredContextErrors = validateAuthoredLayerDraftContext(
+    authoredLayerEntries,
+    extractionContext,
+  );
+  const authoringBlocked =
+    !recoveryEligibility.allowed || authoredContextErrors.size > 0;
+  const hasRasterZoomError = Array.from(authoredContextErrors.values()).some(
+    (error) =>
+      error.issues.some(
+        (issue) => issue.code === 'EMPTY_RASTER_EFFECTIVE_ZOOM_RANGE',
+      ),
+  );
+
   const hasConfigChanges = useMemo(() => {
     const baseline = projectBbox ?? DEFAULT_BBOX;
     return (
@@ -567,9 +719,18 @@ export function MapScreen() {
       bbox[3] !== baseline[3] ||
       zoomRange.minZoom !== DEFAULT_ZOOM.minZoom ||
       zoomRange.maxZoom !== DEFAULT_ZOOM.maxZoom ||
-      selectedStyle.id !== DEFAULT_BASEMAP_ID
+      selectedStyle.id !== DEFAULT_BASEMAP_ID ||
+      authoredLayerEntries.length > 0 ||
+      editingSnapshot !== null
     );
-  }, [bbox, zoomRange, selectedStyle, projectBbox]);
+  }, [
+    bbox,
+    zoomRange,
+    selectedStyle,
+    projectBbox,
+    authoredLayerEntries.length,
+    editingSnapshot,
+  ]);
 
   function handleSettingsOpenChange(open: boolean) {
     settingsOpenRef.current = open;
@@ -582,8 +743,93 @@ export function MapScreen() {
 
   function openNameDialog() {
     setNameError(null);
+    setAuthoredMapError(null);
     handleSettingsOpenChange(false);
     setNameDialogOpen(true);
+  }
+
+  function handleEditMap(map: SavedMap) {
+    setAuthoredMapError(null);
+    const parsed = parseSavedMapForAuthoring(map as unknown);
+    if (!parsed.ok) {
+      setAuthoredMapError(intl.formatMessage(mapMessages.authoredMapOpenError));
+      return;
+    }
+    if (!editingSnapshot) {
+      preEditAuthoringStateRef.current = {
+        selectedStyle,
+        bbox: [...bbox],
+        autoFitBbox: autoFitBbox ? [...autoFitBbox] : null,
+        zoomRange: { ...zoomRange },
+        mapName,
+        authoredLayerEntries,
+        referenceOverlayIds: Array.from(referenceOverlayIdsRef.current),
+        hasUserModifiedBbox: hasUserModifiedBboxRef.current,
+      };
+    }
+    setEditingSnapshot(parsed.snapshot);
+    setAuthoredLayerEntries(parsed.draftEntries);
+    referenceOverlayIdsRef.current = new Set(
+      parsed.draftEntries.flatMap((entry) =>
+        entry.kind === 'valid' ? [entry.layer.id] : [],
+      ),
+    );
+    setSelectedStyle(savedMapToBasemap(parsed.map));
+    setBbox(parsed.map.bbox);
+    setZoomRange({
+      minZoom: parsed.map.minZoom,
+      maxZoom: parsed.map.maxZoom,
+    });
+    setMapName(parsed.map.name);
+    hasUserModifiedBboxRef.current = true;
+  }
+
+  function handleCancelAuthoredEdit() {
+    const preEditState = preEditAuthoringStateRef.current;
+    setEditingSnapshot(null);
+    if (preEditState) {
+      setSelectedStyle(preEditState.selectedStyle);
+      setBbox(preEditState.bbox);
+      setAutoFitBbox(preEditState.autoFitBbox);
+      setZoomRange(preEditState.zoomRange);
+      setMapName(preEditState.mapName);
+      setAuthoredLayerEntries(preEditState.authoredLayerEntries);
+      referenceOverlayIdsRef.current = new Set(
+        preEditState.referenceOverlayIds,
+      );
+      hasUserModifiedBboxRef.current = preEditState.hasUserModifiedBbox;
+    } else {
+      setAuthoredLayerEntries([]);
+      referenceOverlayIdsRef.current.clear();
+      setMapName('');
+    }
+    preEditAuthoringStateRef.current = null;
+    setAuthoredMapError(null);
+  }
+
+  async function handleSaveAuthoredChanges() {
+    if (!editingSnapshot || authoringBlocked) return;
+    const extracted = extractCanonicalAuthoredLayers(
+      authoredLayerEntries,
+      extractionContext,
+    );
+    if (!extracted.ok) return;
+    try {
+      await saveAuthoredMap.mutateAsync({
+        snapshot: editingSnapshot,
+        draftFields: authoringDraftFields,
+        layers: extracted.layers,
+        updatedAt: Date.now(),
+      });
+      setEditingSnapshot(null);
+      preEditAuthoringStateRef.current = null;
+      setAuthoredLayerEntries([]);
+      referenceOverlayIdsRef.current.clear();
+      setMapName('');
+      setAuthoredMapError(null);
+    } catch {
+      setAuthoredMapError(intl.formatMessage(mapMessages.saveError));
+    }
   }
 
   async function handleSaveMap() {
@@ -593,6 +839,18 @@ export function MapScreen() {
       return;
     }
     if (!selectedProjectId) return;
+    if (authoringBlocked) {
+      setNameError(intl.formatMessage(mapMessages.authoredMapRecoveryBlocked));
+      return;
+    }
+    const extracted = extractCanonicalAuthoredLayers(
+      authoredLayerEntries,
+      extractionContext,
+    );
+    if (!extracted.ok) {
+      setNameError(intl.formatMessage(mapMessages.authoredMapRecoveryBlocked));
+      return;
+    }
 
     const now = new Date().toISOString();
     const map: SavedMap = {
@@ -609,6 +867,7 @@ export function MapScreen() {
       ...(selectedStyle.type === 'raster'
         ? { scheme: selectedStyle.scheme ?? 'xyz' }
         : {}),
+      layers: extracted.layers,
       status: 'draft',
       createdAt: now,
       updatedAt: now,
@@ -662,27 +921,43 @@ export function MapScreen() {
           projectLocalId={selectedProjectId}
           mapRef={mapRef}
         />
-        <GeoJsonOverlayControl
-          overlays={referenceOverlays}
+        <AuthoredLayersControl
+          entries={authoredLayerEntries}
+          draftIssues={authoredContextErrors}
           onFilesSelected={handleReferenceOverlayFiles}
-          onToggle={handleReferenceOverlayToggle}
-          onRemove={handleReferenceOverlayRemove}
+          onToggle={handleAuthoredLayerToggle}
+          onRemove={handleAuthoredLayerRemove}
+          onMove={handleAuthoredLayerMove}
           error={
             referenceOverlayErrorSurface === 'controls'
               ? referenceOverlayError
               : null
           }
-          onDismissError={() => {
-            setReferenceOverlayError(null);
-            setReferenceOverlayErrorSurface(null);
-          }}
           loading={referenceOverlayLoading}
         />
+        {authoredLayerEntries.length > 0 ? (
+          <p className="text-xs text-text-muted">
+            {intl.formatMessage(mapMessages.authoredPackagePrivacy)}
+          </p>
+        ) : null}
         <ZoomSelector value={zoomRange} onChange={setZoomRange} />
+        {hasRasterZoomError ? (
+          <p role="alert" className="text-sm text-error">
+            {intl.formatMessage(mapMessages.authoredRasterZoomError)}
+          </p>
+        ) : null}
         <p className="text-xs text-text-muted">
           {intl.formatMessage(mapMessages.zoomDownloadNote)}
         </p>
-        <SavedMapsList projectLocalId={selectedProjectId} />
+        <SavedMapsList
+          projectLocalId={selectedProjectId}
+          onEditMap={handleEditMap}
+        />
+        {authoredMapError ? (
+          <p role="alert" className="text-sm text-error">
+            {authoredMapError}
+          </p>
+        ) : null}
         <ImportSmpButton projectLocalId={selectedProjectId} />
         {(() => {
           const maps = mapsQuery.data ?? [];
@@ -697,13 +972,32 @@ export function MapScreen() {
             <DownloadPanel key={m.id} map={m} />
           ));
         })()}
-        <Button
-          onClick={openNameDialog}
-          className="w-full"
-          disabled={createMap.isPending || !hasConfigChanges}
-        >
-          {intl.formatMessage(mapMessages.saveMap)}
-        </Button>
+        {editingSnapshot ? (
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="secondary"
+              onClick={handleCancelAuthoredEdit}
+              disabled={saveAuthoredMap.isPending}
+            >
+              {intl.formatMessage(mapMessages.authoredMapCancelEdit)}
+            </Button>
+            <Button
+              onClick={() => void handleSaveAuthoredChanges()}
+              disabled={authoringBlocked || saveAuthoredMap.isPending}
+              loading={saveAuthoredMap.isPending}
+            >
+              {intl.formatMessage(mapMessages.authoredMapSaveChanges)}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            onClick={openNameDialog}
+            className="w-full"
+            disabled={createMap.isPending || !hasConfigChanges}
+          >
+            {intl.formatMessage(mapMessages.saveMap)}
+          </Button>
+        )}
       </div>
     );
   }
@@ -720,7 +1014,7 @@ export function MapScreen() {
             onDrawCreate={handleDrawCreate}
             onDrawModeChange={handleDrawModeChange}
             fitBounds={autoFitBbox}
-            overlays={referenceOverlays}
+            overlays={authoredGeoJsonOverlays}
             onOverlayFilesDrop={(files) =>
               handleReferenceOverlayFiles(files, 'map')
             }
@@ -834,16 +1128,24 @@ export function MapScreen() {
           ) : null}
           {drawMode !== 'draw_rectangle' && (
             <div className="absolute bottom-4 right-4 lg:hidden">
-              {/* Intentionally no !hasConfigChanges guard: this quick action
-                  may save the current/default map view at any time.
-                  Only pending-disable is needed here. */}
-              <Button
-                size="sm"
-                onClick={openNameDialog}
-                disabled={createMap.isPending}
-              >
-                {intl.formatMessage(mapMessages.saveMap)}
-              </Button>
+              {editingSnapshot ? (
+                <Button
+                  size="sm"
+                  onClick={() => void handleSaveAuthoredChanges()}
+                  disabled={authoringBlocked || saveAuthoredMap.isPending}
+                  loading={saveAuthoredMap.isPending}
+                >
+                  {intl.formatMessage(mapMessages.authoredMapSaveChanges)}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={openNameDialog}
+                  disabled={createMap.isPending}
+                >
+                  {intl.formatMessage(mapMessages.saveMap)}
+                </Button>
+              )}
             </div>
           )}
         </div>

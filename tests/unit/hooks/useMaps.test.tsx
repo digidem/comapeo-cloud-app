@@ -15,10 +15,12 @@ import {
   useDeleteMap,
   useMaps,
   useRenameMap,
+  useSaveAuthoredMap,
   useSetActiveMapMutation,
 } from '@/hooks/useMaps';
 import type { SavedMap } from '@/lib/db';
 import { getDb, resetDb } from '@/lib/db';
+import { parseSavedMapForAuthoring } from '@/lib/schemas/saved-map';
 import { useMapDownloadStore } from '@/stores/map-download-store';
 import { useMapStore } from '@/stores/map-store';
 
@@ -238,6 +240,71 @@ describe('useCreateMap', () => {
     expect(
       await getDb().mapPackageChunks.where('mapId').equals(map.id).count(),
     ).toBe(1);
+  });
+});
+
+describe('useSaveAuthoredMap', () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it('persists an authored edit and removes stale package bytes when package config changes', async () => {
+    const map = createMap({
+      status: 'ready',
+      smpSize: 7,
+      errorMessage: 'old package error',
+    });
+    await getDb().maps.add(map);
+    await getDb().mapPackages.add({
+      mapId: map.id,
+      contentType: 'application/zip',
+      size: 7,
+      chunkSize: 7,
+      chunkCount: 1,
+      updatedAt: map.updatedAt,
+    });
+    await getDb().mapPackageChunks.add({
+      id: `${map.id}:0`,
+      mapId: map.id,
+      index: 0,
+      data: new TextEncoder().encode('package').buffer,
+    });
+    const parsed = parseSavedMapForAuthoring(map);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const { result } = renderHook(() => useSaveAuthoredMap(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({
+        snapshot: parsed.snapshot,
+        draftFields: {
+          name: map.name,
+          type: map.type,
+          styleUrl: map.styleUrl,
+          bbox: map.bbox,
+          minZoom: map.minZoom,
+          maxZoom: 13,
+          scheme: map.scheme,
+        },
+        layers: [],
+        updatedAt: Date.parse('2026-09-04T12:00:00.000Z'),
+      });
+    });
+
+    expect(await getDb().maps.get(map.id)).toEqual(
+      expect.objectContaining({
+        id: map.id,
+        maxZoom: 13,
+        status: 'draft',
+        updatedAt: '2026-09-04T12:00:00.000Z',
+      }),
+    );
+    expect((await getDb().maps.get(map.id))?.smpSize).toBeUndefined();
+    expect((await getDb().maps.get(map.id))?.errorMessage).toBeUndefined();
+    expect(await getDb().mapPackages.get(map.id)).toBeUndefined();
+    expect(
+      await getDb().mapPackageChunks.where('mapId').equals(map.id).count(),
+    ).toBe(0);
   });
 });
 

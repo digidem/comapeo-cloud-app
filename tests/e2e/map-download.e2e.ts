@@ -1,7 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { Buffer } from 'node:buffer';
 
-import { seedAppDatabase } from './app-db';
+import {
+  getAppDatabaseRecordsByIndex,
+  getAppDatabaseTableNames,
+  seedAppDatabase,
+} from './app-db';
 import { setupMockServer } from './mock-server';
 
 // ---------------------------------------------------------------------------
@@ -110,8 +114,13 @@ async function prepareMapAuthoring(
   page: import('@playwright/test').Page,
 ): Promise<void> {
   await setupMockServer(page);
-  await page.goto('/map');
+  // Warm the app at its root so the app-owned Dexie schema is created before
+  // the deterministic test seed is written. Navigating straight to /map can
+  // race Vite/app initialization in a fresh browser context.
+  await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
+  await expect(page.locator('main')).toBeVisible({ timeout: 30_000 });
+  await expect(getAppDatabaseTableNames(page)).resolves.toContain('maps');
   await seedMapDownloadTest(page, {
     id: crypto.randomUUID(),
     projectLocalId: 'geojson-e2e-project',
@@ -119,12 +128,12 @@ async function prepareMapAuthoring(
     bbox: [-61, -4, -59, -2],
     maxZoom: 0,
   });
-  await page.reload();
+  await page.goto('/map');
   await page.waitForLoadState('domcontentloaded');
   await expect(
     page.getByRole('region', { name: 'Map authoring canvas' }),
   ).toBeVisible({
-    timeout: 10_000,
+    timeout: 30_000,
   });
 }
 
@@ -165,26 +174,27 @@ const MIXED_GEOJSON = JSON.stringify({
   ],
 });
 
-test.describe('GeoJSON reference overlays (E2E)', () => {
-  test('desktop file picker adds, hides, shows, and removes a reference overlay', async ({
+test.describe('persisted authored GeoJSON layers (E2E)', () => {
+  test('desktop file picker adds, hides, shows, and removes an authored layer', async ({
     page,
   }) => {
+    test.setTimeout(60_000);
     await prepareMapAuthoring(page);
 
-    const input = page.getByLabel('Add GeoJSON reference');
+    const input = page.getByLabel('Add GeoJSON layer');
     await input.setInputFiles({
       name: 'mixed-reference.geojson',
       mimeType: 'application/geo+json',
       buffer: Buffer.from(MIXED_GEOJSON),
     });
 
-    await expect(page.getByTitle('mixed-reference.geojson')).toBeVisible();
-    const hideButton = page.getByRole('button', {
+    const layerList = page.getByTestId('authored-layer-list');
+    await expect(layerList.getByText('mixed-reference.geojson')).toBeVisible();
+    const hideButton = layerList.getByRole('button', {
       name: 'Hide mixed-reference.geojson',
     });
-    await expect(hideButton).toBeVisible();
     await hideButton.press('Enter');
-    const showButton = page.getByRole('button', {
+    const showButton = layerList.getByRole('button', {
       name: 'Show mixed-reference.geojson',
     });
     await expect(showButton).toBeVisible();
@@ -194,22 +204,196 @@ test.describe('GeoJSON reference overlays (E2E)', () => {
     await showButton.press('Enter');
     await expect(hideButton).toBeVisible();
 
-    const removeButton = page.getByRole('button', {
+    const removeButton = layerList.getByRole('button', {
       name: 'Remove mixed-reference.geojson',
     });
-    await expect(removeButton).toBeVisible();
     await removeButton.press('Enter');
-    await expect(page.getByTitle('mixed-reference.geojson')).toHaveCount(0);
+    await expect(layerList.getByText('mixed-reference.geojson')).toHaveCount(0);
+  });
+
+  test('saves, edits, and reopens geometry, style, visibility, order, and stable ids', async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await prepareMapAuthoring(page);
+
+    const input = page.getByLabel('Add GeoJSON layer');
+    await input.setInputFiles([
+      {
+        name: 'territory.geojson',
+        mimeType: 'application/geo+json',
+        buffer: Buffer.from(MIXED_GEOJSON),
+      },
+      {
+        name: 'checkpoint.geojson',
+        mimeType: 'application/geo+json',
+        buffer: Buffer.from('{"type":"Point","coordinates":[-58,-1]}'),
+      },
+    ]);
+
+    const layerList = page.getByTestId('authored-layer-list');
+    await expect(layerList.getByText('territory.geojson')).toBeVisible();
+    await expect(layerList.getByText('checkpoint.geojson')).toBeVisible();
+    await expect(page.getByText(/stored in this browser/i)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Save Map' }).click();
+    const saveDialog = page.getByRole('dialog', { name: 'Save map' });
+    await saveDialog.getByLabel('Map name').fill('Persisted authored layers');
+    await saveDialog.getByRole('button', { name: 'Save draft' }).click();
+
+    const savedRow = page
+      .getByTestId('saved-map-row')
+      .filter({ hasText: 'Persisted authored layers' });
+    await expect(savedRow).toBeVisible();
+
+    type StoredLayer = {
+      id: string;
+      name: string;
+      visible: boolean;
+      source: { type: string; data?: unknown };
+      render: {
+        layers: Array<{ type: string; paint?: Record<string, unknown> }>;
+      };
+    };
+    type StoredMap = {
+      id: string;
+      name: string;
+      createdAt: string;
+      updatedAt: string;
+      layers?: StoredLayer[];
+    };
+    const mapsAfterCreate = await getAppDatabaseRecordsByIndex<StoredMap>(
+      page,
+      'maps',
+      'projectLocalId',
+      'geojson-e2e-project',
+    );
+    const created = mapsAfterCreate.find(
+      (map) => map.name === 'Persisted authored layers',
+    );
+    expect(created).toBeDefined();
+    expect(created?.layers?.map((layer) => layer.name)).toEqual([
+      'territory.geojson',
+      'checkpoint.geojson',
+    ]);
+    const territoryBefore = created?.layers?.[0];
+    const checkpointBefore = created?.layers?.[1];
+    expect(territoryBefore?.source).toMatchObject({
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: expect.arrayContaining([
+          expect.objectContaining({
+            geometry: expect.objectContaining({ type: 'Polygon' }),
+          }),
+          expect.objectContaining({
+            geometry: expect.objectContaining({ type: 'LineString' }),
+          }),
+          expect.objectContaining({
+            geometry: expect.objectContaining({ type: 'Point' }),
+          }),
+        ]),
+      },
+    });
+    expect(territoryBefore?.render.layers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'fill',
+          paint: expect.objectContaining({
+            'fill-color': '#E45D2A',
+            'fill-opacity': 0.16,
+          }),
+        }),
+        expect.objectContaining({
+          type: 'line',
+          paint: expect.objectContaining({
+            'line-color': '#E45D2A',
+            'line-width': 3,
+            'line-opacity': 0.9,
+          }),
+        }),
+        expect.objectContaining({
+          type: 'circle',
+          paint: expect.objectContaining({
+            'circle-color': '#E45D2A',
+            'circle-radius': 5,
+            'circle-stroke-color': '#FFFFFF',
+            'circle-stroke-width': 1.5,
+          }),
+        }),
+      ]),
+    );
+
+    await savedRow.getByRole('button', { name: 'Edit layers' }).click();
+    await expect(layerList.getByText('territory.geojson')).toBeVisible();
+    await expect(layerList.getByText('checkpoint.geojson')).toBeVisible();
+    await layerList
+      .getByRole('button', { name: 'Hide territory.geojson' })
+      .press('Enter');
+    await layerList
+      .getByRole('button', { name: 'Move checkpoint.geojson up' })
+      .press('Enter');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    await expect(
+      page.getByRole('button', { name: 'Save changes' }),
+    ).toHaveCount(0);
+    const mapsAfterEdit = await getAppDatabaseRecordsByIndex<StoredMap>(
+      page,
+      'maps',
+      'projectLocalId',
+      'geojson-e2e-project',
+    );
+    const edited = mapsAfterEdit.find((map) => map.id === created?.id);
+    expect(edited?.id).toBe(created?.id);
+    expect(edited?.createdAt).toBe(created?.createdAt);
+    expect(edited?.layers?.map((layer) => layer.name)).toEqual([
+      'checkpoint.geojson',
+      'territory.geojson',
+    ]);
+    expect(edited?.layers?.[0]?.id).toBe(checkpointBefore?.id);
+    expect(edited?.layers?.[1]?.id).toBe(territoryBefore?.id);
+    expect(edited?.layers?.[1]?.visible).toBe(false);
+
+    await savedRow.getByRole('button', { name: 'Edit layers' }).click();
+    const reopenedRows = layerList.locator(':scope > li');
+    await expect(reopenedRows).toHaveCount(2);
+    await expect(reopenedRows.nth(0)).toContainText('checkpoint.geojson');
+    await expect(reopenedRows.nth(1)).toContainText('territory.geojson');
+    await expect(
+      layerList.getByRole('button', { name: 'Show territory.geojson' }),
+    ).toBeVisible();
+
+    const beforeCancel = (
+      await getAppDatabaseRecordsByIndex<StoredMap>(
+        page,
+        'maps',
+        'projectLocalId',
+        'geojson-e2e-project',
+      )
+    ).find((map) => map.id === created?.id);
+    await page.getByRole('button', { name: 'Cancel editing' }).click();
+    const afterCancel = (
+      await getAppDatabaseRecordsByIndex<StoredMap>(
+        page,
+        'maps',
+        'projectLocalId',
+        'geojson-e2e-project',
+      )
+    ).find((map) => map.id === created?.id);
+    expect(afterCancel).toEqual(beforeCancel);
   });
 
   test('mobile file picker remains available through map settings', async ({
     page,
   }) => {
+    test.setTimeout(60_000);
     await page.setViewportSize({ width: 375, height: 812 });
     await prepareMapAuthoring(page);
 
     await page.getByRole('button', { name: 'Map settings' }).click();
-    const input = page.getByLabel('Add GeoJSON reference');
+    const settingsDialog = page.getByRole('dialog', { name: 'Map settings' });
+    const input = settingsDialog.getByLabel('Add GeoJSON layer');
     await expect(input).toBeAttached();
     await input.setInputFiles({
       name: 'mobile-reference.geojson',
@@ -217,14 +401,18 @@ test.describe('GeoJSON reference overlays (E2E)', () => {
       buffer: Buffer.from('{"type":"Point","coordinates":[-60,-3]}'),
     });
 
-    await expect(page.getByTitle('mobile-reference.geojson')).toBeVisible();
+    await expect(
+      settingsDialog.getByText('mobile-reference.geojson'),
+    ).toBeVisible();
+    await expect(
+      settingsDialog.getByText(/stored in this browser/i),
+    ).toBeVisible();
 
     await input.setInputFiles({
       name: 'broken.geojson',
       mimeType: 'application/geo+json',
       buffer: Buffer.from('{"type":"Point","coordinates":["bad",0]}'),
     });
-    const settingsDialog = page.getByRole('dialog', { name: 'Map settings' });
     await expect(settingsDialog.getByRole('alert')).toContainText(
       'broken.geojson is not valid GeoJSON.',
     );

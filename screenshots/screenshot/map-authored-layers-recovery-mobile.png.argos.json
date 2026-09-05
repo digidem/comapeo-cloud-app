@@ -1,0 +1,28 @@
+{
+  "url": "http://127.0.0.1:52780/map",
+  "colorScheme": "light",
+  "mediaType": "screen",
+  "test": {
+    "id": "aa5915a4ceafe77ca3b6-5240942fcba8a8298bba",
+    "title": "375x812 controls, privacy copy, and invalid-layer recovery",
+    "titlePath": [
+      "map-authored-layers.screenshots.ts",
+      "authored layer recovery visual QA",
+      "375x812 controls, privacy copy, and invalid-layer recovery"
+    ],
+    "retry": 0,
+    "retries": 2,
+    "repeat": 0,
+    "location": {
+      "file": "tests/e2e/map-authored-layers.screenshots.ts",
+      "line": 106,
+      "column": 3
+    },
+    "annotations": []
+  },
+  "browser": { "name": "chromium", "version": "148.0.7778.96" },
+  "automationLibrary": { "version": "1.60.0", "name": "@playwright/test" },
+  "sdk": { "name": "@argos-ci/playwright", "version": "7.0.5" },
+  "viewport": { "width": 375, "height": 812 },
+  "transient": {}
+}

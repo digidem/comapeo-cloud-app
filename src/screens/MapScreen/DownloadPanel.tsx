@@ -11,12 +11,18 @@ import {
   getSavedMapWithSmpBlob,
   hasSavedMapSmpPackage,
 } from '@/lib/db';
+import {
+  buildAuthoredLayerCommitContext,
+  getAdvancedEditorRecoveryEligibility,
+  validateAuthoredLayerDraftContext,
+} from '@/lib/map/saved-map-authoring';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import {
   checkStorageQuota,
   estimateDownloadSize,
   formatBytes,
 } from '@/lib/map/smp-download';
+import { parseSavedMapForAuthoring } from '@/lib/schemas/saved-map';
 import { useMapDownloadStore } from '@/stores/map-download-store';
 
 import { mapMessages } from './messages';
@@ -44,6 +50,48 @@ const MAX_RETRIES = 3;
 // user already set, instead of silently resetting to the default.
 const GLOBAL_OVERVIEW_STORAGE_KEY = 'comapeo:downloadIncludeGlobalOverview';
 
+function getAuthoredDownloadBlockReason(
+  map: SavedMap,
+): 'invalid' | 'raster-zoom' | null {
+  if (isImportedSmpRecord(map) || map.layers === undefined) return null;
+
+  const parsed = parseSavedMapForAuthoring(map as unknown);
+  if (!parsed.ok) return 'invalid';
+  const eligibility = getAdvancedEditorRecoveryEligibility(parsed.draftEntries);
+  if (!eligibility.allowed) return 'invalid';
+
+  const draftFields = {
+    name: map.name,
+    type: map.type,
+    styleUrl: map.styleUrl,
+    bbox: map.bbox,
+    minZoom: map.minZoom,
+    maxZoom: map.maxZoom,
+    attribution: map.attribution,
+    ...(map.type === 'raster' ? { scheme: map.scheme ?? 'xyz' } : {}),
+  };
+  const context = buildAuthoredLayerCommitContext(
+    draftFields,
+    parsed.draftEntries,
+    { kind: 'extract' },
+  );
+  const errors = validateAuthoredLayerDraftContext(
+    parsed.draftEntries,
+    context,
+  );
+  if (errors.size === 0) return null;
+  for (const error of errors.values()) {
+    if (
+      error.issues.some(
+        (issue) => issue.code === 'EMPTY_RASTER_EFFECTIVE_ZOOM_RANGE',
+      )
+    ) {
+      return 'raster-zoom';
+    }
+  }
+  return 'invalid';
+}
+
 function readStoredIncludeGlobalOverview(): boolean {
   try {
     const stored = localStorage.getItem(GLOBAL_OVERVIEW_STORAGE_KEY);
@@ -64,6 +112,7 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
   const clearDownload = useMapDownloadStore((state) => state.clear);
   const activeForMap = activeDownload?.mapId === map.id ? activeDownload : null;
   const isImportedRecord = isImportedSmpRecord(map);
+  const authoringBlockReason = getAuthoredDownloadBlockReason(map);
   const progress = activeForMap?.progress ?? null;
   const abortRef = useRef<AbortController | null>(null);
   const pendingRef = useRef(false); // Guards against React-batched double-clicks
@@ -253,6 +302,27 @@ export function DownloadPanel({ map, mapboxAccessToken }: DownloadPanelProps) {
     downloadMap.reset();
     void handleDownload();
   }, [downloadMap, handleDownload, retryCount]);
+
+  if (authoringBlockReason !== null) {
+    return (
+      <div
+        className="flex flex-col gap-3 rounded-card border border-error/30 bg-error/5 p-3"
+        data-testid="download-authoring-blocked"
+      >
+        <span className="text-sm text-text-muted">{map.name}</span>
+        <p className="text-sm text-error">
+          {intl.formatMessage(
+            authoringBlockReason === 'raster-zoom'
+              ? mapMessages.authoredRasterZoomError
+              : mapMessages.authoredMapRecoveryBlocked,
+          )}
+        </p>
+        <Button size="sm" className="w-full" disabled>
+          {intl.formatMessage(mapMessages.downloadButton)}
+        </Button>
+      </div>
+    );
+  }
 
   // ---- Stuck downloading state (recovery after refresh/crash) ----
   if (
