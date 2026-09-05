@@ -396,12 +396,14 @@ export function MapAuthoringCanvas({
   }, [fitBounds, mapReady, mapRef]);
 
   return (
+    // Isolate the authoring surface itself so its z-indexed controls cannot leak
+    // into surrounding app chrome if the map/control DOM is restructured later.
     <section
       ref={sectionRef}
       role="region"
       aria-label={intl.formatMessage(mapMessages.canvasAria)}
       data-testid="map-authoring-canvas"
-      className="relative h-full min-h-0 overflow-hidden"
+      className="relative isolate h-full min-h-0 overflow-hidden"
       onDragEnter={(event) => {
         if (!Array.from(event.dataTransfer.types).includes('Files')) return;
         event.preventDefault();

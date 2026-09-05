@@ -46,6 +46,7 @@ import { SavedMapsList } from './SavedMapsList';
 import { StylePicker } from './StylePicker';
 import { ZoomSelector } from './ZoomSelector';
 import type { ZoomRange } from './ZoomSelector';
+import { MAP_AREA_UNDO_AUTO_HIDE_MS } from './constants';
 import { mapMessages } from './messages';
 
 interface SettingsSheetProps {
@@ -326,7 +327,10 @@ export function MapScreen() {
     setShowUndo(true);
     setFrameError(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    undoTimerRef.current = setTimeout(() => setShowUndo(false), 6000);
+    undoTimerRef.current = setTimeout(
+      () => setShowUndo(false),
+      MAP_AREA_UNDO_AUTO_HIDE_MS,
+    );
   }
 
   function handleUndoDraw() {
@@ -760,7 +764,7 @@ export function MapScreen() {
               </Button>
             </div>
           )}
-          <div className="absolute top-4 right-3 z-10">
+          <div className="absolute top-4 right-3 z-20">
             <DrawBoundsControl
               drawMode={drawMode}
               onDrawModeChange={handleDrawModeChange}
@@ -768,7 +772,7 @@ export function MapScreen() {
           </div>
           {drawMode === 'draw_rectangle' ? (
             <div
-              className="pointer-events-none absolute left-3 right-16 top-4 z-10 flex items-center gap-2 rounded-btn bg-black/70 px-3 py-2 shadow-card"
+              className="pointer-events-none absolute left-3 right-16 top-4 z-20 flex items-center gap-2 rounded-btn bg-black/70 px-3 py-2 shadow-card"
               style={{ touchAction: 'manipulation' }}
             >
               <p className="flex-1 text-sm text-white">
@@ -791,7 +795,7 @@ export function MapScreen() {
           {frameError ? (
             <p
               role="alert"
-              className="pointer-events-none absolute left-3 right-16 top-16 z-10 rounded-btn bg-error px-3 py-2 text-sm text-white shadow-card"
+              className="pointer-events-none absolute left-3 right-16 top-16 z-20 rounded-btn bg-error px-3 py-2 text-sm text-white shadow-card"
             >
               {frameError}
             </p>
@@ -800,6 +804,7 @@ export function MapScreen() {
             <>
               <div
                 aria-hidden="true"
+                data-testid="draw-frame-overlay"
                 className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden"
               >
                 <div
@@ -807,7 +812,7 @@ export function MapScreen() {
                   className="h-3/5 w-4/5 rounded-sm border-2 border-dashed border-primary shadow-[0_0_0_9999px_rgba(4,20,92,0.35)]"
                 />
               </div>
-              <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+              <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
                 <Button onClick={handleConfirmFrame}>
                   {intl.formatMessage(mapMessages.setThisArea)}
                 </Button>
@@ -817,7 +822,7 @@ export function MapScreen() {
           {showUndo ? (
             <div
               role="status"
-              className="absolute bottom-16 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-btn bg-black/80 px-4 py-2 shadow-card"
+              className="absolute bottom-16 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-btn bg-black/80 px-4 py-2 shadow-card"
             >
               <span className="text-sm text-white">
                 {intl.formatMessage(mapMessages.areaUpdated)}
@@ -825,7 +830,7 @@ export function MapScreen() {
               <button
                 type="button"
                 onClick={handleUndoDraw}
-                className="min-h-[44px] text-sm font-semibold text-white underline"
+                className="min-h-[44px] min-w-[44px] text-sm font-semibold text-white underline"
                 style={{ touchAction: 'manipulation' }}
               >
                 {intl.formatMessage(mapMessages.undo)}

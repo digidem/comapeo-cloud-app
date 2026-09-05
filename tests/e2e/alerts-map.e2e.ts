@@ -2,6 +2,12 @@ import { expect, test } from '@playwright/test';
 
 import { setupMockServer } from './mock-server';
 import { seedAlertMapState } from './seed-alert-map';
+import {
+  expectControlUnobscured,
+  expectOverlayCoversControlHitPoints,
+  installHighZMapBlocker,
+  removeHighZMapBlocker,
+} from './stacking-utils';
 
 test.describe('Alerts map and grid', () => {
   test('defaults to map and preserves map/grid preference independently', async ({
@@ -60,6 +66,26 @@ test.describe('Alerts map and grid', () => {
     await expect(
       page.getByText('Tap the map to place the alert point', { exact: true }),
     ).toBeVisible();
+
+    const mapContainer = page.getByTestId('map-container');
+    await installHighZMapBlocker(mapContainer);
+    try {
+      const backToForm = page.getByRole('button', { name: 'Back to form' });
+      const blocker = page.getByTestId('synthetic-maplibre-high-z');
+      await expectOverlayCoversControlHitPoints(blocker, backToForm);
+      await expectControlUnobscured(backToForm);
+      await backToForm.click();
+      await expect(dialog).toBeVisible();
+
+      await dialog.getByRole('button', { name: 'Select on map' }).click();
+      await expect(dialog).toBeHidden();
+      await expectControlUnobscured(
+        page.getByRole('button', { name: 'Back to form' }),
+      );
+    } finally {
+      // Remove the synthetic blocker before exercising the real map canvas.
+      await removeHighZMapBlocker(mapContainer);
+    }
 
     const mapCanvas = page.locator('.maplibregl-canvas').first();
     await expect(mapCanvas).toBeVisible();

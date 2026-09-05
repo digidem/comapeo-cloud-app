@@ -192,6 +192,7 @@ describe('MapAuthoringCanvas reference overlays', () => {
       { type: 'application/geo+json' },
     );
     const region = screen.getByRole('region', { name: 'Map authoring canvas' });
+    expect(region).toHaveClass('isolate');
 
     fireEvent.dragOver(region, {
       dataTransfer: { types: ['Files'], files: [file], dropEffect: 'none' },
