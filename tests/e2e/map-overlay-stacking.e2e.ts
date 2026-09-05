@@ -81,20 +81,23 @@ test.describe('Mobile map authoring overlay stacking', () => {
     const cancelDrawBounds = page.getByRole('button', {
       name: 'Cancel drawing',
     });
+    const setThisArea = page.getByRole('button', { name: 'Set this area' });
 
     // The frame scrim is intentionally pointer-transparent in production. Prove
-    // it geometrically covers both cancel-control centers, then make it
-    // pointer-active so browser hit-testing proves those controls paint above the
-    // scrim rather than clicks merely falling through it.
+    // it geometrically covers the app-control centers, then make it pointer-active
+    // so browser hit-testing proves those controls paint above the scrim rather
+    // than clicks merely falling through it.
     const frameOverlay = page.getByTestId('draw-frame-overlay');
     await expectOverlayCoversControlCenter(frameOverlay, cancelDrawBounds);
     await expectOverlayCoversControlCenter(frameOverlay, cancelDrawing);
+    await expectOverlayCoversControlCenter(frameOverlay, setThisArea);
     await frameOverlay.evaluate((element) => {
       element.style.pointerEvents = 'auto';
     });
     try {
       await expectControlUnobscured(cancelDrawBounds);
       await expectControlUnobscured(cancelDrawing);
+      await expectControlUnobscured(setThisArea);
     } finally {
       await frameOverlay.evaluate((element) => {
         element.style.pointerEvents = 'none';
@@ -104,10 +107,20 @@ test.describe('Mobile map authoring overlay stacking', () => {
     const mapAuthoringCanvas = page.getByTestId('map-authoring-canvas');
     await installHighZMapBlocker(mapAuthoringCanvas);
     await expectControlUnobscured(cancelDrawing);
-
-    const setThisArea = page.getByRole('button', { name: 'Set this area' });
     await expectControlUnobscured(setThisArea);
     await removeHighZMapBlocker(mapAuthoringCanvas);
+
+    // Keep the app's 6-second Undo auto-hide timer from racing the intentionally
+    // adversarial hit-testing below. This patch is scoped to this disposable page.
+    await page.evaluate(() => {
+      const nativeSetTimeout = window.setTimeout.bind(window);
+      window.setTimeout = ((handler, timeout, ...args) =>
+        nativeSetTimeout(
+          handler,
+          timeout === 6000 ? 60_000 : timeout,
+          ...args,
+        )) as typeof window.setTimeout;
+    });
     await setThisArea.click();
 
     const areaUpdatedStatus = page
