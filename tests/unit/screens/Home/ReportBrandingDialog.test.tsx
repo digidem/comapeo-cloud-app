@@ -400,7 +400,7 @@ describe('ReportBrandingDialog', () => {
         value: 'data:image/png;base64,iVBORw0KGgo=',
       });
       queueMicrotask(() =>
-        this.onload?.(new ProgressEvent<FileReader>('load')),
+        this.onload?.(new ProgressEvent('load') as ProgressEvent<FileReader>),
       );
     });
     class MockFileReader {
