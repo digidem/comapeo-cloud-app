@@ -383,6 +383,9 @@
   "cases.addEvidence.failed": {
     "defaultMessage": "Could not add the selected evidence. Try again."
   },
+  "cases.addEvidence.loadError": {
+    "defaultMessage": "Could not load cases. Try again."
+  },
   "cases.addEvidence.newCase": {
     "defaultMessage": "New case"
   },
@@ -527,6 +530,9 @@
   "cases.disclosure.save": {
     "defaultMessage": "Save disclosure for {agency}"
   },
+  "cases.disclosure.saveError": {
+    "defaultMessage": "Could not save disclosure settings. Try again."
+  },
   "cases.disclosure.savedRevision": {
     "defaultMessage": "Saved disclosure revision {revision}"
   },
@@ -583,6 +589,9 @@
   },
   "cases.evidence.media.unavailable": {
     "defaultMessage": "Media unavailable"
+  },
+  "cases.evidence.mutationError": {
+    "defaultMessage": "Could not update Case evidence. Try again."
   },
   "cases.evidence.noProjectEvidence": {
     "defaultMessage": "No project evidence matches your search."

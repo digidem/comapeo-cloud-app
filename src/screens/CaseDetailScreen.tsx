@@ -555,11 +555,6 @@ function ReportStateTab({
           {intl.formatMessage(messages.reportState)}
         </h2>
         {isPending && <Skeleton height={80} className="rounded-card" />}
-        {!isPending && (!reportStates || reportStates.length === 0) && (
-          <span className="text-text-muted text-sm">
-            {intl.formatMessage(messages.noReportState)}
-          </span>
-        )}
         {!isPending && (
           <div className="flex flex-col gap-4">
             {AGENCIES.map((agency) => {

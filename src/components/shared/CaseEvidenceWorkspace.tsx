@@ -109,6 +109,10 @@ const messages = defineMessages({
     id: 'cases.evidence.loadError',
     defaultMessage: 'Could not load Case evidence.',
   },
+  mutationError: {
+    id: 'cases.evidence.mutationError',
+    defaultMessage: 'Could not update Case evidence. Try again.',
+  },
 });
 
 type BrowserFilter = 'all' | CaseEvidenceSourceType;
@@ -182,6 +186,11 @@ export function CaseEvidenceWorkspace({
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<BrowserFilter>('all');
   const [selectedView, setSelectedView] = useState<SelectedView>('list');
+  const [mutationError, setMutationError] = useState(false);
+  const mutationCallbacks = {
+    onSuccess: () => setMutationError(false),
+    onError: () => setMutationError(true),
+  };
 
   const typeLabels = useMemo<Record<CaseEvidenceSourceType, string>>(
     () => ({
@@ -428,13 +437,16 @@ export function CaseEvidenceWorkspace({
                   type="checkbox"
                   checked={selected}
                   onChange={(event) =>
-                    setAttachmentSelected.mutate({
-                      projectLocalId,
-                      caseLocalId,
-                      evidenceLocalId: evidence.localId,
-                      attachmentLocalId: attachment.attachmentLocalId,
-                      selected: event.currentTarget.checked,
-                    })
+                    setAttachmentSelected.mutate(
+                      {
+                        projectLocalId,
+                        caseLocalId,
+                        evidenceLocalId: evidence.localId,
+                        attachmentLocalId: attachment.attachmentLocalId,
+                        selected: event.currentTarget.checked,
+                      },
+                      mutationCallbacks,
+                    )
                   }
                   aria-label={intl.formatMessage(messages.includeAttachment, {
                     name: attachment.name,
@@ -533,11 +545,14 @@ export function CaseEvidenceWorkspace({
               variant="secondary"
               size="sm"
               onClick={() =>
-                removeEvidence.mutate({
-                  projectLocalId,
-                  caseLocalId,
-                  evidenceLocalId: evidence.localId,
-                })
+                removeEvidence.mutate(
+                  {
+                    projectLocalId,
+                    caseLocalId,
+                    evidenceLocalId: evidence.localId,
+                  },
+                  mutationCallbacks,
+                )
               }
               aria-label={intl.formatMessage(messages.removeSource, {
                 type: typeLabels[evidence.sourceType],
@@ -568,7 +583,6 @@ export function CaseEvidenceWorkspace({
           observations={observationsQuery.data ?? []}
           alerts={alertsQuery.data ?? []}
           tracks={tracksQuery.data ?? []}
-          evidenceCount={selectedEvidence.length}
         />
       );
     }
@@ -583,6 +597,11 @@ export function CaseEvidenceWorkspace({
 
   return (
     <div className="space-y-6">
+      {mutationError ? (
+        <p role="alert" className="text-sm text-error">
+          {intl.formatMessage(messages.mutationError)}
+        </p>
+      ) : null}
       <section
         aria-labelledby="case-evidence-browse-heading"
         className="space-y-4"
@@ -668,11 +687,14 @@ export function CaseEvidenceWorkspace({
                         variant="secondary"
                         size="sm"
                         onClick={() =>
-                          removeEvidence.mutate({
-                            projectLocalId,
-                            caseLocalId,
-                            evidenceLocalId: evidence.localId,
-                          })
+                          removeEvidence.mutate(
+                            {
+                              projectLocalId,
+                              caseLocalId,
+                              evidenceLocalId: evidence.localId,
+                            },
+                            mutationCallbacks,
+                          )
                         }
                         aria-label={intl.formatMessage(messages.removeSource, {
                           type,
@@ -686,12 +708,15 @@ export function CaseEvidenceWorkspace({
                         variant="secondary"
                         size="sm"
                         onClick={() =>
-                          addEvidence.mutate({
-                            projectLocalId,
-                            caseLocalId,
-                            sourceType: item.sourceType,
-                            sourceLocalId: item.source.localId,
-                          })
+                          addEvidence.mutate(
+                            {
+                              projectLocalId,
+                              caseLocalId,
+                              sourceType: item.sourceType,
+                              sourceLocalId: item.source.localId,
+                            },
+                            mutationCallbacks,
+                          )
                         }
                         aria-label={intl.formatMessage(messages.addSource, {
                           type,

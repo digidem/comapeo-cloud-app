@@ -20,6 +20,7 @@ export function useRemoveCaseEvidence() {
           variables.caseLocalId,
         ],
         ['caseActivity', variables.projectLocalId, variables.caseLocalId],
+        ['case-evidence-counts', variables.projectLocalId],
       ]) {
         void queryClient.invalidateQueries({ queryKey });
       }

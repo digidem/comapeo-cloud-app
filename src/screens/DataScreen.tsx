@@ -533,15 +533,16 @@ export function DataScreen() {
           }
           bottomRight={
             <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={selectedObservationIds.size === 0}
-                onClick={() => setAddToCaseOpen(true)}
-                className="shadow-card"
-              >
-                {intl.formatMessage(messages.addToCase)}
-              </Button>
+              {selectedObservationIds.size > 0 ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setAddToCaseOpen(true)}
+                  className="shadow-card"
+                >
+                  {intl.formatMessage(messages.addToCase)}
+                </Button>
+              ) : null}
               <ExportObservationsButton
                 observations={observations}
                 projectName={selectedProject?.name}

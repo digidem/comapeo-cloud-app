@@ -17,12 +17,16 @@ npm run test:unit -- \
   tests/unit/lib/case-evidence-derivative.test.ts \
   tests/unit/hooks/useUpsertCaseReportDisclosure.test.tsx \
   tests/unit/components/shared/AddToCaseDialog.test.tsx \
+  tests/unit/components/shared/CaseEvidenceMap.test.ts \
   tests/unit/components/shared/CaseEvidenceWorkspace.test.tsx \
   tests/unit/components/shared/CaseReportDisclosurePanel.test.tsx \
   tests/unit/screens/DataScreen.test.tsx \
   tests/unit/screens/AlertsScreen.test.tsx \
   tests/unit/screens/CasesScreen.test.tsx \
   tests/unit/screens/CaseDetailScreen.test.tsx \
+  tests/unit/screens/CaseDetailScreen.privacy.test.tsx \
+  tests/unit/i18n/locale-messages.test.ts \
+  tests/unit/i18n/load-messages.test.ts \
   tests/unit/lib/db.test.ts
 
 printf '\n[269] 3/7 i18n extraction integrity\n'

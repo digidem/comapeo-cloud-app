@@ -91,18 +91,26 @@ const messages = defineMessages({
     id: 'cases.disclosure.loadError',
     defaultMessage: 'Could not load disclosure settings.',
   },
+  saveError: {
+    id: 'cases.disclosure.saveError',
+    defaultMessage: 'Could not save disclosure settings. Try again.',
+  },
 });
 
 function decisionsForCandidates(
   candidates: readonly DisclosureCandidate[],
   existing: readonly { id: string; include: boolean }[],
 ): Array<{ id: string; include: boolean }> {
-  return candidates.map((candidate) => ({
-    id: candidate.id,
-    include:
-      existing.find((decision) => decision.id === candidate.id)?.include ===
-      true,
-  }));
+  const candidateIds = new Set(candidates.map((candidate) => candidate.id));
+  return [
+    ...existing.filter((decision) => !candidateIds.has(decision.id)),
+    ...candidates.map((candidate) => ({
+      id: candidate.id,
+      include:
+        existing.find((decision) => decision.id === candidate.id)?.include ===
+        true,
+    })),
+  ];
 }
 
 function decisionMap(
@@ -154,6 +162,7 @@ export function CaseReportDisclosurePanel({
     key: string;
     value: CaseReportDisclosure;
   } | null>(null);
+  const [saveError, setSaveError] = useState(false);
   const draft =
     draftOverride?.key === hydrationKey ? draftOverride.value : persistedDraft;
 
@@ -373,18 +382,29 @@ export function CaseReportDisclosurePanel({
           'sensitiveFields',
         )}
 
+        {saveError ? (
+          <p role="alert" className="text-sm text-error">
+            {intl.formatMessage(messages.saveError)}
+          </p>
+        ) : null}
         <Button
           variant="primary"
           loading={upsert.isPending}
           disabled={upsert.isPending}
-          onClick={() =>
-            upsert.mutate({
-              projectLocalId,
-              caseLocalId,
-              agency,
-              disclosure: draft,
-            })
-          }
+          onClick={() => {
+            setSaveError(false);
+            upsert.mutate(
+              {
+                projectLocalId,
+                caseLocalId,
+                agency,
+                disclosure: draft,
+              },
+              {
+                onError: () => setSaveError(true),
+              },
+            );
+          }}
           aria-label={intl.formatMessage(messages.save, { agency })}
         >
           {intl.formatMessage(messages.save, { agency })}

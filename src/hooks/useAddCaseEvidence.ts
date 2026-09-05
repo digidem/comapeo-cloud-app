@@ -28,6 +28,9 @@ export function useAddCaseEvidence() {
           variables.caseLocalId,
         ],
       });
+      void queryClient.invalidateQueries({
+        queryKey: ['case-evidence-counts', variables.projectLocalId],
+      });
     },
   });
 }

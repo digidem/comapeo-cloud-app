@@ -474,6 +474,16 @@ describe('CaseDetailScreen', () => {
       );
     });
 
+    it('shows agency pending states without a contradictory empty message when no report rows exist', async () => {
+      const user = userEvent.setup();
+      mockReportStatesData = [];
+      render(<CaseDetailScreen />);
+      await user.click(screen.getByRole('tab', { name: 'Reports' }));
+
+      expect(screen.queryByText('No report state recorded yet')).toBeNull();
+      expect(screen.getAllByText('Pending')).toHaveLength(4);
+    });
+
     it('shows "Pending" for agencies without a report state row', async () => {
       const user = userEvent.setup();
       resetMocks();

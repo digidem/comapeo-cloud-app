@@ -3,6 +3,7 @@ import { render, screen } from '@tests/mocks/test-utils';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AddToCaseDialog } from '@/components/shared/AddToCaseDialog';
+import { useCases } from '@/hooks/useCases';
 
 const addMutateAsync = vi.fn();
 const createMutateAsync = vi.fn();
@@ -49,6 +50,24 @@ vi.mock('@/hooks/useCreateCase', () => ({
 describe('AddToCaseDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useCases).mockReturnValue({
+      data: [
+        {
+          localId: 'case-1',
+          projectLocalId: 'project-1',
+          title: 'Existing case',
+          caseType: 'fire',
+          status: 'draft',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+          revision: 1,
+          createdBy: 'local',
+          deleted: false,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    } as ReturnType<typeof useCases>);
     addMutateAsync.mockResolvedValue({ localId: 'evidence-1' });
     createMutateAsync.mockResolvedValue({ localId: 'case-new' });
   });
@@ -84,6 +103,28 @@ describe('AddToCaseDialog', () => {
       sourceLocalId: 'obs-2',
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('shows a load error instead of an empty state when cases fail to load', async () => {
+    vi.mocked(useCases).mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+    } as ReturnType<typeof useCases>);
+
+    render(
+      <AddToCaseDialog
+        open
+        onOpenChange={vi.fn()}
+        projectLocalId="project-1"
+        sources={[{ sourceType: 'alert', sourceLocalId: 'alert-1' }]}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not load cases. Try again.',
+    );
+    expect(screen.queryByText('No cases yet for this project.')).toBeNull();
   });
 
   it('can create the minimal new Case then attach the selected evidence', async () => {

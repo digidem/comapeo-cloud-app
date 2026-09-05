@@ -241,6 +241,9 @@ describe('AlertsScreen', () => {
       expect(
         screen.queryByRole('link', { name: 'Add Alert' }),
       ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Add to case' }),
+      ).not.toBeInTheDocument();
     });
 
     it('opens the canonical alert form in point-only inline mode', async () => {

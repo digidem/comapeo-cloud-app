@@ -209,13 +209,14 @@ vi.mock('@/hooks/useSetCaseEvidenceAttachmentSelected', () => ({
   })),
 }));
 vi.mock('@/components/shared/CaseEvidenceMap', () => ({
-  CaseEvidenceMap: ({ evidenceCount }: { evidenceCount: number }) => (
-    <div data-testid="case-evidence-map" data-count={evidenceCount} />
-  ),
+  CaseEvidenceMap: () => <div data-testid="case-evidence-map" />,
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  addMutate.mockReset();
+  removeMutate.mockReset();
+  attachmentMutate.mockReset();
 });
 
 describe('CaseEvidenceWorkspace', () => {
@@ -234,12 +235,18 @@ describe('CaseEvidenceWorkspace', () => {
     await user.click(
       screen.getByRole('button', { name: 'Add track River patrol' }),
     );
-    expect(addMutate).toHaveBeenCalledWith({
-      projectLocalId: 'project-1',
-      caseLocalId: 'case-1',
-      sourceType: 'track',
-      sourceLocalId: 'track-1',
-    });
+    expect(addMutate).toHaveBeenCalledWith(
+      {
+        projectLocalId: 'project-1',
+        caseLocalId: 'case-1',
+        sourceType: 'track',
+        sourceLocalId: 'track-1',
+      },
+      expect.objectContaining({
+        onError: expect.any(Function),
+        onSuccess: expect.any(Function),
+      }),
+    );
   });
 
   it('shows changed and unsynced state and selects attachments independently', async () => {
@@ -263,13 +270,19 @@ describe('CaseEvidenceWorkspace', () => {
     await user.click(
       screen.getByRole('checkbox', { name: 'Include evidence.mp3' }),
     );
-    expect(attachmentMutate).toHaveBeenCalledWith({
-      projectLocalId: 'project-1',
-      caseLocalId: 'case-1',
-      evidenceLocalId: 'evidence-obs',
-      attachmentLocalId: 'audio-1',
-      selected: true,
-    });
+    expect(attachmentMutate).toHaveBeenCalledWith(
+      {
+        projectLocalId: 'project-1',
+        caseLocalId: 'case-1',
+        evidenceLocalId: 'evidence-obs',
+        attachmentLocalId: 'audio-1',
+        selected: true,
+      },
+      expect.objectContaining({
+        onError: expect.any(Function),
+        onSuccess: expect.any(Function),
+      }),
+    );
   });
 
   it('shows last-known local metadata for deleted selected evidence', () => {
@@ -297,13 +310,19 @@ describe('CaseEvidenceWorkspace', () => {
     ).toBeInTheDocument();
 
     await user.click(deletedMedia);
-    expect(attachmentMutate).toHaveBeenCalledWith({
-      projectLocalId: 'project-1',
-      caseLocalId: 'case-1',
-      evidenceLocalId: 'evidence-obs',
-      attachmentLocalId: 'photo-deleted',
-      selected: false,
-    });
+    expect(attachmentMutate).toHaveBeenCalledWith(
+      {
+        projectLocalId: 'project-1',
+        caseLocalId: 'case-1',
+        evidenceLocalId: 'evidence-obs',
+        attachmentLocalId: 'photo-deleted',
+        selected: false,
+      },
+      expect.objectContaining({
+        onError: expect.any(Function),
+        onSuccess: expect.any(Function),
+      }),
+    );
   });
 
   it('supports chronological timeline and map views for selected evidence', async () => {
@@ -315,9 +334,26 @@ describe('CaseEvidenceWorkspace', () => {
     await user.click(screen.getByRole('button', { name: 'Timeline' }));
     expect(screen.getAllByText('Sep 1, 2026').length).toBeGreaterThanOrEqual(1);
     await user.click(screen.getByRole('button', { name: 'Map' }));
-    expect(screen.getByTestId('case-evidence-map')).toHaveAttribute(
-      'data-count',
-      '2',
+    expect(screen.getByTestId('case-evidence-map')).toBeInTheDocument();
+  });
+
+  it('shows an explicit error when an evidence mutation fails', async () => {
+    addMutate.mockImplementationOnce(
+      (_variables: unknown, options?: { onError?: (error: Error) => void }) => {
+        options?.onError?.(new Error('write failed'));
+      },
+    );
+    const user = userEvent.setup();
+    render(
+      <CaseEvidenceWorkspace projectLocalId="project-1" caseLocalId="case-1" />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Add track River patrol' }),
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update Case evidence. Try again.',
     );
   });
 });

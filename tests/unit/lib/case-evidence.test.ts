@@ -5,6 +5,7 @@ import {
   addCaseEvidence,
   getCaseEvidence,
   getCaseEvidenceAttachments,
+  getCaseEvidenceCounts,
   removeCaseEvidence,
   setCaseEvidenceAttachmentSelected,
 } from '@/lib/local-repositories';
@@ -157,6 +158,50 @@ describe('Case evidence references', () => {
     });
     expect(second.localId).toBe(first.localId);
     expect(await getCaseEvidence('project-1', caseLocalId)).toHaveLength(1);
+  });
+
+  it('counts evidence per Case without resolving source records', async () => {
+    await seedProject('project-1');
+    await seedCase('project-1', 'case-1');
+    await seedCase('project-1', 'case-2');
+    const db = getDb();
+    await db.caseEvidence.bulkAdd([
+      {
+        localId: 'evidence-1',
+        caseLocalId: 'case-1',
+        projectLocalId: 'project-1',
+        sourceType: 'observation',
+        sourceLocalId: 'missing-observation-1',
+        sourceUpdatedAt: '2026-09-01T00:00:00.000Z',
+        addedAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
+      {
+        localId: 'evidence-2',
+        caseLocalId: 'case-1',
+        projectLocalId: 'project-1',
+        sourceType: 'alert',
+        sourceLocalId: 'missing-alert-1',
+        sourceUpdatedAt: '2026-09-01T00:00:00.000Z',
+        addedAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
+      {
+        localId: 'evidence-3',
+        caseLocalId: 'case-2',
+        projectLocalId: 'project-1',
+        sourceType: 'track',
+        sourceLocalId: 'missing-track-1',
+        sourceUpdatedAt: '2026-09-01T00:00:00.000Z',
+        addedAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
+    ]);
+
+    await expect(getCaseEvidenceCounts('project-1')).resolves.toEqual({
+      'case-1': 2,
+      'case-2': 1,
+    });
   });
 
   it('selects photo/audio attachments separately from their parent observation and cascades removal', async () => {

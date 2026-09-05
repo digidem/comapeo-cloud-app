@@ -81,6 +81,26 @@ describe('createDisclosureSafeMediaDerivative', () => {
     );
   });
 
+  it('drops bytes appended after the JPEG end marker so hidden trailer metadata cannot survive', async () => {
+    const trailerSentinel = 'Exif GPSLatitude=-3.2 Device=TRAILER_SECRET';
+    const jpeg = concat(
+      Uint8Array.of(0xff, 0xd8),
+      jpegSegment(0xe0, encoder.encode('JFIF\0SAFE')),
+      Uint8Array.of(0xff, 0xda, 0x00, 0x02, 0x11, 0xff, 0x00, 0x22, 0xff, 0xd9),
+      encoder.encode(trailerSentinel),
+    );
+
+    const result = await createDisclosureSafeMediaDerivative({
+      bytes: jpeg,
+      contentType: 'image/jpeg',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(decoder.decode(result.bytes)).not.toContain(trailerSentinel);
+    expect(Array.from(result.bytes.slice(-2))).toEqual([0xff, 0xd9]);
+  });
+
   it('removes PNG textual/EXIF metadata while preserving critical image chunks', async () => {
     const png = concat(
       Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10),

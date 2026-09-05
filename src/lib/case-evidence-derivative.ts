@@ -88,13 +88,40 @@ function scrubJpeg(bytes: Uint8Array): Uint8Array | null {
     const marker = bytes[offset]!;
     offset += 1;
 
-    // Start of scan: everything after this belongs to the encoded image stream.
+    // Start of scan: keep encoded image bytes only through the first real EOI
+    // marker. Bytes after EOI are not part of the JPEG and may contain a second
+    // image or arbitrary metadata. Ignore byte-stuffed FF 00 pairs while
+    // searching the entropy-coded stream.
     if (marker === 0xda) {
       if (offset + 2 > bytes.byteLength) return null;
       const length = (bytes[offset]! << 8) | bytes[offset + 1]!;
       if (length < 2 || offset + length > bytes.byteLength) return null;
-      parts.push(bytes.slice(markerStart));
-      return concatBytes(parts);
+      let scanOffset = offset + length;
+      while (scanOffset + 1 < bytes.byteLength) {
+        if (bytes[scanOffset] !== 0xff) {
+          scanOffset += 1;
+          continue;
+        }
+        let markerOffset = scanOffset + 1;
+        while (
+          markerOffset < bytes.byteLength &&
+          bytes[markerOffset] === 0xff
+        ) {
+          markerOffset += 1;
+        }
+        if (markerOffset >= bytes.byteLength) return null;
+        const scanMarker = bytes[markerOffset]!;
+        if (scanMarker === 0x00) {
+          scanOffset = markerOffset + 1;
+          continue;
+        }
+        if (scanMarker === 0xd9) {
+          parts.push(bytes.slice(markerStart, markerOffset + 1));
+          return concatBytes(parts);
+        }
+        scanOffset = markerOffset + 1;
+      }
+      return null;
     }
 
     // Stand-alone markers carry no length field.

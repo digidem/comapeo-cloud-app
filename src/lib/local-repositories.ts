@@ -981,6 +981,22 @@ export async function addCaseEvidence(
   });
 }
 
+export async function getCaseEvidenceCounts(
+  projectLocalId: string,
+): Promise<Record<string, number>> {
+  return wrapDb(async () => {
+    const refs = await getDb()
+      .caseEvidence.where('projectLocalId')
+      .equals(projectLocalId)
+      .toArray();
+    const counts: Record<string, number> = {};
+    for (const reference of refs) {
+      counts[reference.caseLocalId] = (counts[reference.caseLocalId] ?? 0) + 1;
+    }
+    return counts;
+  });
+}
+
 /** Resolve current source state while retaining unavailable/deleted references. */
 export async function getCaseEvidence(
   projectLocalId: string,

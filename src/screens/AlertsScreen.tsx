@@ -262,15 +262,17 @@ export function AlertsScreen() {
           topRightPositionClassName="top-4 right-3 z-30 items-center"
           topRight={
             <>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={selectedAlertIds.size === 0 || isCreatingInline}
-                onClick={() => setAddToCaseOpen(true)}
-                className="shadow-card"
-              >
-                {intl.formatMessage(messages.addToCase)}
-              </Button>
+              {selectedAlertIds.size > 0 ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={isCreatingInline}
+                  onClick={() => setAddToCaseOpen(true)}
+                  className="shadow-card"
+                >
+                  {intl.formatMessage(messages.addToCase)}
+                </Button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {

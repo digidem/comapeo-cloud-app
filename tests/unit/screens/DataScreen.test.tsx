@@ -605,6 +605,9 @@ describe('DataScreen', () => {
           'data-category-count',
           '1',
         );
+        expect(
+          screen.queryByRole('button', { name: 'Add to case' }),
+        ).not.toBeInTheDocument();
         // Grid cards should be hidden in map mode — no observation card links
         const obsLinks = screen
           .queryAllByRole('link')

@@ -17,7 +17,6 @@ interface CaseEvidenceMapProps {
   observations: readonly Observation[];
   alerts: readonly Alert[];
   tracks: readonly Track[];
-  evidenceCount?: number;
 }
 
 function isFiniteCoordinate(value: unknown): value is number {
@@ -120,6 +119,56 @@ function firstCoordinate(geometry: Geometry): [number, number] | null {
   }
 }
 
+export function buildCaseEvidenceFeatureCollection(input: {
+  evidence: readonly CaseEvidenceReference[];
+  observations: readonly Observation[];
+  alerts: readonly Alert[];
+  tracks: readonly Track[];
+}): FeatureCollection<Geometry, GeoJsonProperties> {
+  const observationById = new Map(
+    input.observations.map((observation) => [observation.localId, observation]),
+  );
+  const alertById = new Map(
+    input.alerts.map((alert) => [alert.localId, alert]),
+  );
+  const trackById = new Map(
+    input.tracks.map((track) => [track.localId, track]),
+  );
+  const features: Feature[] = [];
+
+  for (const reference of input.evidence) {
+    const feature = (() => {
+      if (reference.sourceType === 'observation') {
+        const observation = observationById.get(reference.sourceLocalId);
+        return observation ? observationFeature(observation) : null;
+      }
+      if (reference.sourceType === 'alert') {
+        const alert = alertById.get(reference.sourceLocalId);
+        return alert ? alertFeature(alert) : null;
+      }
+      const track = trackById.get(reference.sourceLocalId);
+      return track ? trackFeature(track) : null;
+    })();
+    if (feature) features.push(feature);
+  }
+
+  return { type: 'FeatureCollection', features };
+}
+
+export function getCaseEvidenceInitialViewState(
+  featureCollection: FeatureCollection<Geometry, GeoJsonProperties>,
+) {
+  for (const feature of featureCollection.features) {
+    const coordinate = feature.geometry
+      ? firstCoordinate(feature.geometry)
+      : null;
+    if (coordinate) {
+      return { longitude: coordinate[0], latitude: coordinate[1], zoom: 10 };
+    }
+  }
+  return { longitude: -60, latitude: -3, zoom: 4 };
+}
+
 export function CaseEvidenceMap({
   evidence,
   observations,
@@ -128,44 +177,18 @@ export function CaseEvidenceMap({
 }: CaseEvidenceMapProps) {
   const featureCollection = useMemo<
     FeatureCollection<Geometry, GeoJsonProperties>
-  >(() => {
-    const observationById = new Map(
-      observations.map((observation) => [observation.localId, observation]),
-    );
-    const alertById = new Map(alerts.map((alert) => [alert.localId, alert]));
-    const trackById = new Map(tracks.map((track) => [track.localId, track]));
-    const features: Feature[] = [];
+  >(
+    () =>
+      buildCaseEvidenceFeatureCollection({
+        evidence,
+        observations,
+        alerts,
+        tracks,
+      }),
+    [alerts, evidence, observations, tracks],
+  );
 
-    for (const reference of evidence) {
-      const feature = (() => {
-        if (reference.sourceType === 'observation') {
-          const observation = observationById.get(reference.sourceLocalId);
-          return observation ? observationFeature(observation) : null;
-        }
-        if (reference.sourceType === 'alert') {
-          const alert = alertById.get(reference.sourceLocalId);
-          return alert ? alertFeature(alert) : null;
-        }
-        const track = trackById.get(reference.sourceLocalId);
-        return track ? trackFeature(track) : null;
-      })();
-      if (feature) features.push(feature);
-    }
-
-    return { type: 'FeatureCollection', features };
-  }, [alerts, evidence, observations, tracks]);
-
-  const initialViewState = (() => {
-    for (const feature of featureCollection.features) {
-      const coordinate = feature.geometry
-        ? firstCoordinate(feature.geometry)
-        : null;
-      if (coordinate) {
-        return { longitude: coordinate[0], latitude: coordinate[1], zoom: 10 };
-      }
-    }
-    return { longitude: -60, latitude: -3, zoom: 4 };
-  })();
+  const initialViewState = getCaseEvidenceInitialViewState(featureCollection);
 
   return (
     <div className="relative h-[360px] min-h-[280px] overflow-hidden rounded-card border border-border">

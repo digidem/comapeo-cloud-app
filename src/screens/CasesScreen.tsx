@@ -6,7 +6,7 @@ import { Link } from '@tanstack/react-router';
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCaseEvidence } from '@/hooks/useCaseEvidence';
+import { useCaseEvidenceCounts } from '@/hooks/useCaseEvidenceCounts';
 import { useCases } from '@/hooks/useCases';
 import { useProjects } from '@/hooks/useProjects';
 import { useStoragePersist } from '@/hooks/useStoragePersist';
@@ -125,29 +125,12 @@ function getCaseTypeLabelDescriptor(caseType: Case['caseType']) {
   }
 }
 
-function CaseEvidenceCount({
-  projectLocalId,
-  caseLocalId,
-}: {
-  projectLocalId: string;
-  caseLocalId: string;
-}) {
-  const intl = useIntl();
-  const evidenceQuery = useCaseEvidence(projectLocalId, caseLocalId);
-  const count = evidenceQuery.data?.length ?? 0;
-
-  return (
-    <span data-testid="evidence-count">
-      {intl.formatMessage(messages.evidenceCount, { count })}
-    </span>
-  );
-}
-
 export function CasesScreen() {
   const intl = useIntl();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projectsQuery = useProjects();
   const casesQuery = useCases(selectedProjectId);
+  const evidenceCountsQuery = useCaseEvidenceCounts(selectedProjectId);
   const storagePersist = useStoragePersist();
 
   const projects = projectsQuery.data ?? [];
@@ -307,10 +290,11 @@ export function CasesScreen() {
                           minute: '2-digit',
                         })}
                       </span>
-                      <CaseEvidenceCount
-                        projectLocalId={selectedProjectId}
-                        caseLocalId={caze.localId}
-                      />
+                      <span data-testid="evidence-count">
+                        {intl.formatMessage(messages.evidenceCount, {
+                          count: evidenceCountsQuery.data?.[caze.localId] ?? 0,
+                        })}
+                      </span>
                       <span>
                         {intl.formatMessage(messages.revision, {
                           revision: caze.revision,

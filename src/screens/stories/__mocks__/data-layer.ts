@@ -116,6 +116,12 @@ export async function getCaseEvidence(
   return [];
 }
 
+export async function getCaseEvidenceCounts(
+  _projectLocalId: string,
+): Promise<Record<string, number>> {
+  return {};
+}
+
 export async function removeCaseEvidence(_input: unknown): Promise<boolean> {
   return true;
 }

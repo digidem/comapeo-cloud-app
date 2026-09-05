@@ -33,6 +33,7 @@ vi.mock('@/hooks/useUpsertCaseReportDisclosure', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mutate.mockReset();
 });
 
 describe('CaseReportDisclosurePanel', () => {
@@ -80,17 +81,90 @@ describe('CaseReportDisclosurePanel', () => {
       screen.getByRole('button', { name: 'Save disclosure for FUNAI' }),
     );
 
-    expect(mutate).toHaveBeenCalledWith({
-      projectLocalId: 'project-1',
-      caseLocalId: 'case-1',
-      agency: 'FUNAI',
-      disclosure: {
-        reporterIdentity: 'include',
-        locationMode: 'area',
-        people: [{ id: 'person-1', include: true }],
-        media: [{ id: 'media-1', include: true }],
-        sensitiveFields: [{ id: 'field-1', include: true }],
+    expect(mutate).toHaveBeenCalledWith(
+      {
+        projectLocalId: 'project-1',
+        caseLocalId: 'case-1',
+        agency: 'FUNAI',
+        disclosure: {
+          reporterIdentity: 'include',
+          locationMode: 'area',
+          people: [{ id: 'person-1', include: true }],
+          media: [{ id: 'media-1', include: true }],
+          sensitiveFields: [{ id: 'field-1', include: true }],
+        },
       },
-    });
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
+  });
+
+  it('preserves persisted decisions that are not currently rendered as candidates', async () => {
+    const { useCaseReportDisclosure } =
+      await import('@/hooks/useCaseReportDisclosure');
+    vi.mocked(useCaseReportDisclosure).mockReturnValueOnce({
+      data: {
+        projectLocalId: 'project-1',
+        caseLocalId: 'case-1',
+        agency: 'FUNAI',
+        reporterIdentity: 'omit',
+        locationMode: 'omit',
+        people: [{ id: 'person-existing', include: true }],
+        media: [],
+        sensitiveFields: [{ id: 'field-existing', include: true }],
+        revision: 3,
+      },
+      isPending: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useCaseReportDisclosure>);
+    const user = userEvent.setup();
+
+    render(
+      <CaseReportDisclosurePanel
+        projectLocalId="project-1"
+        caseLocalId="case-1"
+        agency="FUNAI"
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Save disclosure for FUNAI' }),
+    );
+
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        disclosure: expect.objectContaining({
+          people: [{ id: 'person-existing', include: true }],
+          sensitiveFields: [{ id: 'field-existing', include: true }],
+        }),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('shows an explicit error when disclosure persistence fails', async () => {
+    mutate.mockImplementationOnce(
+      (_variables: unknown, options?: { onError?: (error: Error) => void }) => {
+        options?.onError?.(new Error('write failed'));
+      },
+    );
+    const user = userEvent.setup();
+
+    render(
+      <CaseReportDisclosurePanel
+        projectLocalId="project-1"
+        caseLocalId="case-1"
+        agency="FUNAI"
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Save disclosure for FUNAI' }),
+    );
+
+    expect(
+      screen.getByRole('alert', {
+        name: '',
+      }),
+    ).toHaveTextContent('Could not save disclosure settings. Try again.');
   });
 });

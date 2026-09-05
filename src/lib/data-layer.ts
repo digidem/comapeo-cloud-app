@@ -29,6 +29,7 @@ import {
   getCaseActivity as repoGetCaseActivity,
   getCaseEvidence as repoGetCaseEvidence,
   getCaseEvidenceAttachments as repoGetCaseEvidenceAttachments,
+  getCaseEvidenceCounts as repoGetCaseEvidenceCounts,
   getCaseReportDisclosure as repoGetCaseReportDisclosure,
   getCaseReportState as repoGetCaseReportState,
   getCaseReportStates as repoGetCaseReportStates,
@@ -564,6 +565,10 @@ export async function getCaseEvidence(
   caseLocalId: string,
 ) {
   return repoGetCaseEvidence(projectLocalId, caseLocalId);
+}
+
+export async function getCaseEvidenceCounts(projectLocalId: string) {
+  return repoGetCaseEvidenceCounts(projectLocalId);
 }
 
 export async function removeCaseEvidence(input: {

@@ -77,17 +77,12 @@ vi.mock('@/hooks/useCases', () => ({
   useCases: vi.fn(() => mockCasesQuery),
 }));
 
-vi.mock('@/hooks/useCaseEvidence', () => ({
-  useCaseEvidence: vi.fn(
-    (_projectLocalId: string | null, caseLocalId: string) => ({
-      data:
-        caseLocalId === 'case-1'
-          ? [{ localId: 'evidence-1' }, { localId: 'evidence-2' }]
-          : [{ localId: 'evidence-3' }],
-      isPending: false,
-      isError: false,
-    }),
-  ),
+vi.mock('@/hooks/useCaseEvidenceCounts', () => ({
+  useCaseEvidenceCounts: vi.fn(() => ({
+    data: { 'case-1': 2, 'case-2': 1 },
+    isPending: false,
+    isError: false,
+  })),
 }));
 
 vi.mock('@/hooks/useStoragePersist', () => ({

@@ -50,6 +50,10 @@ const messages = defineMessages({
     id: 'cases.addEvidence.noCases',
     defaultMessage: 'No cases yet for this project.',
   },
+  loadError: {
+    id: 'cases.addEvidence.loadError',
+    defaultMessage: 'Could not load cases. Try again.',
+  },
   newCase: { id: 'cases.addEvidence.newCase', defaultMessage: 'New case' },
   back: { id: 'cases.addEvidence.back', defaultMessage: 'Back to cases' },
   createAndAdd: {
@@ -267,7 +271,14 @@ export function AddToCaseDialog({
                   <Skeleton height={56} className="rounded-card" />
                 </div>
               ) : null}
-              {!casesQuery.isPending && (casesQuery.data?.length ?? 0) === 0 ? (
+              {casesQuery.isError ? (
+                <p role="alert" className="text-sm text-error">
+                  {intl.formatMessage(messages.loadError)}
+                </p>
+              ) : null}
+              {!casesQuery.isPending &&
+              !casesQuery.isError &&
+              (casesQuery.data?.length ?? 0) === 0 ? (
                 <p className="text-sm text-text-muted">
                   {intl.formatMessage(messages.noCases)}
                 </p>
