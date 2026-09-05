@@ -180,6 +180,54 @@ describe('telemetry redaction', () => {
     expect(result.message).toBe(TELEMETRY_REDACTED);
   });
 
+  it('keeps sibling text readable when one subtree saturates the array bound', () => {
+    const secret = ['synthetic', 'bulk', 'credential', '238'].join('-');
+    const oversized = Array.from(
+      { length: MAX_SANITIZE_ENTRIES + 50 },
+      (_, index) => `item-${String(index).padStart(3, '0')}-${secret}`,
+    );
+    const result = sanitizeTelemetry({
+      message: 'request failed for one oversized batch',
+      extra: { big: oversized },
+    });
+
+    expect(result.message).toBe('request failed for one oversized batch');
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain(secret);
+    expect(result.extra.big).toHaveLength(MAX_SANITIZE_ENTRIES + 1);
+    expect(result.extra.big.at(-1)).toBe(TELEMETRY_TRUNCATED);
+  });
+
+  it('keeps sibling text readable when one subtree saturates the object bound', () => {
+    const secret = ['synthetic', 'wide', 'credential', '238'].join('-');
+    const result = sanitizeTelemetry({
+      message: 'request failed for one oversized record',
+      extra: Object.fromEntries(
+        Array.from({ length: MAX_SANITIZE_ENTRIES + 50 }, (_, index) => [
+          `key-${String(index).padStart(3, '0')}`,
+          `${secret}-${index}`,
+        ]),
+      ),
+    });
+
+    expect(result.message).toBe('request failed for one oversized record');
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain(secret);
+    expect(result.extra.__truncated__).toBe(TELEMETRY_TRUNCATED);
+  });
+
+  it('redacts oversized subtree primitives even when the container key is not sensitive', () => {
+    const canary = ['synthetic', 'deep', 'value', '238'].join('-');
+    const result = sanitizeTelemetry({
+      extra: {
+        big: Array.from({ length: MAX_SANITIZE_ENTRIES + 1 }, () => canary),
+      },
+    });
+
+    expect(JSON.stringify(result)).not.toContain(canary);
+    expect(result.extra.big[0]).toBe(TELEMETRY_REDACTED);
+  });
+
   it('bounds objects and arrays to at most 100 entries before a truncation marker', () => {
     const object = Object.fromEntries(
       Array.from({ length: 120 }, (_, index) => [`key-${index}`, index]),

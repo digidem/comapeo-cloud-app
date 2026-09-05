@@ -6,21 +6,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ComponentType, ReactNode } from 'react';
-
 vi.mock('@sentry/react', () => ({
   init: vi.fn(),
   captureException: vi.fn(),
   addBreadcrumb: vi.fn(),
   browserTracingIntegration: vi.fn(() => ({ name: 'BrowserTracing' })),
-  ErrorBoundary: function MockErrorBoundary({
-    children,
-  }: {
-    children: ReactNode;
-    fallback?: ReactNode;
-  }) {
-    return children;
-  },
 }));
 
 describe('sentry module', () => {
@@ -60,68 +50,6 @@ describe('sentry module', () => {
       const { addBreadcrumb } = await import('@/lib/sentry');
       addBreadcrumb({ category: 'test', message: 'hello' });
       expect(sentry.addBreadcrumb).not.toHaveBeenCalled();
-    });
-
-    it('exports FallbackErrorBoundary when disabled', async () => {
-      const { ErrorBoundary } = await import('@/lib/sentry');
-      expect(ErrorBoundary).toBeInstanceOf(Function);
-      // When disabled, ErrorBoundary is the FallbackErrorBoundary class
-      // (not the Sentry.ErrorBoundary mock)
-      expect(ErrorBoundary.name).toBe('FallbackErrorBoundary');
-    });
-
-    it('FallbackErrorBoundary renders children when no error', async () => {
-      const React = await import('react');
-      const { render, screen } = await import('@testing-library/react');
-      const { ErrorBoundary } = await import('@/lib/sentry');
-
-      render(
-        React.createElement(
-          ErrorBoundary as ComponentType<Record<string, unknown>>,
-          {},
-          'child-content',
-        ),
-      );
-      expect(screen.getByText('child-content')).toBeTruthy();
-    });
-
-    it('FallbackErrorBoundary renders fallback on error', async () => {
-      const React = await import('react');
-      const { render, screen } = await import('@testing-library/react');
-      const { ErrorBoundary } = await import('@/lib/sentry');
-
-      const Throw = (): React.ReactElement => {
-        throw new Error('test error');
-      };
-
-      render(
-        React.createElement(
-          ErrorBoundary as ComponentType<Record<string, unknown>>,
-          { fallback: 'fallback-content' },
-          React.createElement(Throw),
-        ),
-      );
-      expect(screen.getByText('fallback-content')).toBeTruthy();
-    });
-
-    it('FallbackErrorBoundary renders null on error without fallback', async () => {
-      const React = await import('react');
-      const { render } = await import('@testing-library/react');
-      const { ErrorBoundary } = await import('@/lib/sentry');
-
-      const Throw = (): React.ReactElement => {
-        throw new Error('test error');
-      };
-
-      // Should not throw — renders null instead of children
-      const { container } = render(
-        React.createElement(
-          ErrorBoundary as ComponentType<Record<string, unknown>>,
-          {},
-          React.createElement(Throw),
-        ),
-      );
-      expect(container.innerHTML).toBe('');
     });
   });
 
@@ -209,19 +137,87 @@ describe('sentry module', () => {
       initSentry();
       expect(sentry.init).toHaveBeenCalledWith(
         expect.objectContaining({
-          allowUrls: ['https://app.example.com'],
+          allowUrls: [
+            'https://app.example.com',
+            'https://comapeo-cloud-app.pages.dev',
+          ],
         }),
       );
     });
 
-    it('omits allowUrls when APP_ORIGIN is empty', async () => {
+    it('deduplicates allowUrls when APP_ORIGIN equals the Pages origin', async () => {
+      vi.stubEnv(
+        'VITE_PUBLIC_APP_ORIGIN',
+        'https://comapeo-cloud-app.pages.dev',
+      );
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+      expect(sentry.init).toHaveBeenCalledWith(
+        expect.objectContaining({
+          allowUrls: ['https://comapeo-cloud-app.pages.dev'],
+        }),
+      );
+    });
+
+    it('lets VITE_CF_PAGES_ORIGIN override the default Pages origin', async () => {
+      vi.stubEnv('VITE_CF_PAGES_ORIGIN', 'https://custom-preview.pages.dev');
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+      expect(sentry.init).toHaveBeenCalledWith(
+        expect.objectContaining({
+          allowUrls: [
+            'https://app.example.com',
+            'https://custom-preview.pages.dev',
+          ],
+        }),
+      );
+    });
+
+    it('keeps allowUrls with only the Pages origin when APP_ORIGIN is empty', async () => {
       vi.stubEnv('VITE_PUBLIC_APP_ORIGIN', '');
       const sentry = await import('@sentry/react');
       const { initSentry } = await import('@/lib/sentry');
       initSentry();
       const callArgs = (sentry.init as ReturnType<typeof vi.fn>).mock
         .calls[0]?.[0] as Record<string, unknown> | undefined;
+      expect(callArgs).toHaveProperty('allowUrls', [
+        'https://comapeo-cloud-app.pages.dev',
+      ]);
+    });
+
+    it('omits allowUrls entirely when both origins are absent', async () => {
+      vi.stubEnv('VITE_PUBLIC_APP_ORIGIN', '');
+      vi.stubEnv('VITE_CF_PAGES_ORIGIN', '');
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+      const callArgs = (sentry.init as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0] as Record<string, unknown> | undefined;
       expect(callArgs).not.toHaveProperty('allowUrls');
+    });
+
+    it('skips Sentry.init in automated browsers even when the DSN is set', async () => {
+      Object.defineProperty(window.navigator, 'webdriver', {
+        value: true,
+        configurable: true,
+      });
+      try {
+        const sentry = await import('@sentry/react');
+        const { initSentry } = await import('@/lib/sentry');
+        initSentry();
+        expect(sentry.init).not.toHaveBeenCalled();
+      } finally {
+        delete (window.navigator as { webdriver?: boolean }).webdriver;
+      }
+    });
+
+    it('initializes Sentry for non-automated browsers', async () => {
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+      expect(sentry.init).toHaveBeenCalledTimes(1);
     });
 
     it('forwards captureException to Sentry', async () => {
@@ -360,11 +356,6 @@ describe('sentry module', () => {
       expect(firstJson).not.toContain(String(238099));
       expect(firstJson.length).toBeLessThan(10_000);
       expect(firstJson).toContain('[Circular]');
-    });
-
-    it('exports Sentry.ErrorBoundary when enabled', async () => {
-      const { ErrorBoundary } = await import('@/lib/sentry');
-      expect(ErrorBoundary).toBeInstanceOf(Function);
     });
   });
 });

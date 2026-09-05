@@ -63,6 +63,21 @@ describe('startup source contracts', () => {
     expect(source('vite.config.ts')).toMatch(/injectRegister:\s*null/);
   });
 
+  it('initializes Sentry in both startup branches', () => {
+    const main = source('src/main.tsx');
+    const occurrences = main.match(/initSentry\(\)/g) ?? [];
+    expect(occurrences).toHaveLength(2);
+
+    // The worker-transition branch is the reload-loop/cache-cleanup path that
+    // is most likely to fail in the field; it must be telemetered too.
+    const transitionIndex = main.indexOf('worker-transition-required');
+    const firstCall = main.indexOf('initSentry()');
+    const secondCall = main.indexOf('initSentry()', firstCall + 1);
+    expect(transitionIndex).toBeGreaterThan(0);
+    expect(secondCall).toBeGreaterThan(transitionIndex);
+    expect(firstCall).toBeLessThan(transitionIndex);
+  });
+
   it('keeps the invite bootstrap handoff private instead of installing credential globals', () => {
     const preflight = source('src/preflight.ts');
     const bootstrap = source('src/lib/invite-bootstrap-runtime.ts');
