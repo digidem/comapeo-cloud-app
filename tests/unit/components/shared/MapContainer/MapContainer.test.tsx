@@ -273,6 +273,22 @@ describe('MapContainer', () => {
     expect(container.className).not.toMatch(/\s$/);
   });
 
+  it('renders map content overlays below the built-in basemap switcher', () => {
+    render(
+      <MapContainer
+        mapContentOverlay={<div data-testid="map-content-overlay">empty</div>}
+      />,
+    );
+
+    const overlay = screen.getByTestId('map-content-overlay');
+    const overlayLayer = overlay.parentElement;
+    const switcherLayer = screen.getByTestId('basemap-switcher').parentElement;
+
+    expect(screen.getByTestId('map-container')).toContainElement(overlay);
+    expect(overlayLayer).toHaveClass('absolute', 'inset-0', 'z-[5]');
+    expect(switcherLayer).toHaveClass('absolute', 'z-10');
+  });
+
   it('applies custom height style', () => {
     render(<MapContainer height={400} />);
     const container = screen.getByTestId('map-container');

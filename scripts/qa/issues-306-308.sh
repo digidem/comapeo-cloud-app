@@ -19,7 +19,7 @@ npx vitest run --project=unit \
 echo "==> QA #306: mobile Alerts map stacking"
 CI= npx playwright test tests/e2e/alerts-map.e2e.ts \
   --project=chromium \
-  --grep "mobile sheet exposes map selection and returns to the form after a map tap" \
+  --grep "mobile sheet exposes map selection" \
   --retries=0 \
   --reporter=list
 
