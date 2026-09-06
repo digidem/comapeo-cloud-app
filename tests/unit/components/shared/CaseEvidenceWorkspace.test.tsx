@@ -169,7 +169,7 @@ vi.mock('@/hooks/useCaseEvidenceAttachments', () => ({
         selectedAt: '2026-09-01T12:00:00.000Z',
         availability: 'available',
         freshness: 'current',
-        syncState: 'synced',
+        syncState: 'unsynced',
         downloadStatus: 'available',
         name: 'evidence.jpg',
       },
@@ -266,6 +266,7 @@ describe('CaseEvidenceWorkspace', () => {
       screen.getByRole('checkbox', { name: 'Include evidence.mp3' }),
     ).not.toBeChecked();
     expect(screen.getByText('Not available locally')).toBeInTheDocument();
+    expect(screen.getByText('Media not project-synced')).toBeInTheDocument();
 
     await user.click(
       screen.getByRole('checkbox', { name: 'Include evidence.mp3' }),

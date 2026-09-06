@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 
 import { normalizeArchiveBaseUrl } from '@/lib/archive-proxy';
+import type { CaseApprovedAreaDisclosure } from '@/lib/case-disclosure';
 import type { AuthoredLayer } from '@/lib/map/authored-layers';
 
 // ---------------------------------------------------------------------------
@@ -334,6 +335,8 @@ export interface CaseReportDisclosureRecord {
   agency: CaseAgency;
   reporterIdentity: 'include' | 'omit';
   locationMode: 'exact' | 'area' | 'omit';
+  /** Explicit independent user-approved area material, if one has been approved. */
+  approvedArea?: CaseApprovedAreaDisclosure;
   people: CaseDisclosureDecision[];
   media: CaseDisclosureDecision[];
   sensitiveFields: CaseDisclosureDecision[];

@@ -104,6 +104,10 @@ const messages = defineMessages({
     id: 'cases.evidence.media.changed',
     defaultMessage: 'Media changed since selected',
   },
+  mediaUnsynced: {
+    id: 'cases.evidence.media.unsynced',
+    defaultMessage: 'Media not project-synced',
+  },
   loading: { id: 'cases.evidence.loading', defaultMessage: 'Loading evidence' },
   loadError: {
     id: 'cases.evidence.loadError',
@@ -473,6 +477,11 @@ export function CaseEvidenceWorkspace({
                 {attachment.selectedReference?.freshness === 'changed' ? (
                   <span className="text-xs font-medium text-warning">
                     {intl.formatMessage(messages.mediaChanged)}
+                  </span>
+                ) : null}
+                {attachment.selectedReference?.syncState === 'unsynced' ? (
+                  <span className="text-xs font-medium text-warning">
+                    {intl.formatMessage(messages.mediaUnsynced)}
                   </span>
                 ) : null}
                 {attachment.downloadStatus !== 'available' ? (

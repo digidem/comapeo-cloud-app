@@ -58,6 +58,27 @@ describe('Case report disclosure persistence', () => {
       disclosure: {
         reporterIdentity: 'include',
         locationMode: 'area',
+        approvedArea: {
+          kind: 'geometry',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-61, -4],
+                [-59, -4],
+                [-59, -2],
+                [-61, -2],
+                [-61, -4],
+              ],
+            ],
+          },
+          provenance: {
+            origin: 'independent-user-approved',
+            sourceId: 'community-boundary-1',
+            sourceVersionId: 'v3',
+            approvedAt: '2026-09-05T12:00:00.000Z',
+          },
+        },
         people: [{ id: 'person-a', include: true }],
         media: [{ id: 'attachment-a', include: true }],
         sensitiveFields: [{ id: 'field-a', include: false }],
@@ -65,6 +86,19 @@ describe('Case report disclosure persistence', () => {
     });
     expect(funai.revision).toBe(1);
     expect(funai.locationMode).toBe('area');
+    expect(funai.approvedArea).toMatchObject({
+      kind: 'geometry',
+      provenance: {
+        origin: 'independent-user-approved',
+        sourceId: 'community-boundary-1',
+        sourceVersionId: 'v3',
+        approvedAt: '2026-09-05T12:00:00.000Z',
+      },
+    });
+    expect(
+      (await getCaseReportDisclosure('project-1', 'case-1', 'FUNAI'))
+        .approvedArea,
+    ).toEqual(funai.approvedArea);
 
     expect(
       await getCaseReportDisclosure('project-1', 'case-1', 'IBAMA'),

@@ -2,6 +2,7 @@ import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 
 import {
+  type DisclosureCandidateFact,
   applyCaseDisclosure,
   buildDisclosureSafeMapGeometry,
   caseReportDisclosureSchema,
@@ -49,7 +50,16 @@ describe('Case report disclosure', () => {
       buildDisclosureSafeMapGeometry({
         mode: 'omit',
         exactGeometry: exact,
-        approvedGeneralizedGeometry: approvedBoundary,
+        approvedArea: {
+          kind: 'geometry',
+          geometry: approvedBoundary,
+          provenance: {
+            origin: 'independent-user-approved',
+            sourceId: 'community-boundary-1',
+            sourceVersionId: 'v3',
+            approvedAt: '2026-09-05T12:00:00.000Z',
+          },
+        },
       }),
     ).toBeUndefined();
     expect(
@@ -59,7 +69,16 @@ describe('Case report disclosure', () => {
       buildDisclosureSafeMapGeometry({
         mode: 'area',
         exactGeometry: exact,
-        approvedGeneralizedGeometry: approvedBoundary,
+        approvedArea: {
+          kind: 'geometry',
+          geometry: approvedBoundary,
+          provenance: {
+            origin: 'independent-user-approved',
+            sourceId: 'community-boundary-1',
+            sourceVersionId: 'v3',
+            approvedAt: '2026-09-05T12:00:00.000Z',
+          },
+        },
       }),
     ).toEqual(approvedBoundary);
     expect(
@@ -119,6 +138,7 @@ describe('Case report disclosure', () => {
           value: { kind: 'text', value: 'Approved case title' },
           source: { type: 'case-context', id: 'title' },
         } satisfies ApprovedCaseFactInput,
+        disclosure: { kind: 'public' as const },
       },
     ];
 
@@ -128,6 +148,15 @@ describe('Case report disclosure', () => {
       people: [{ id: 'witness-a', include: false }],
       media: [{ id: 'media-1', include: false }],
       sensitiveFields: [{ id: 'detail-a', include: false }],
+      approvedArea: {
+        kind: 'summary',
+        summary: 'Approved area summary',
+        provenance: {
+          origin: 'independent-user-approved',
+          sourceId: 'area-summary',
+          approvedAt: '2026-09-05T12:00:00.000Z',
+        },
+      },
     });
 
     expect(output.map((fact) => fact.key)).toEqual([
@@ -145,6 +174,29 @@ describe('Case report disclosure', () => {
     });
   });
 
+  it('fails closed when any candidate is missing an explicit disclosure classification', () => {
+    const unclassified = {
+      fact: {
+        key: 'case.context',
+        value: { kind: 'text', value: 'Reporter name' },
+        source: { type: 'case-context', id: 'reporter' },
+      } satisfies ApprovedCaseFactInput,
+    };
+
+    expect(() =>
+      applyCaseDisclosure(
+        [unclassified as unknown as DisclosureCandidateFact],
+        {
+          reporterIdentity: 'omit',
+          locationMode: 'omit',
+          people: [],
+          media: [],
+          sensitiveFields: [],
+        },
+      ),
+    ).toThrow(/classification/i);
+  });
+
   it('fails closed when location facts are not explicitly tagged', () => {
     const untaggedLocation = {
       fact: {
@@ -158,13 +210,16 @@ describe('Case report disclosure', () => {
     };
 
     expect(() =>
-      applyCaseDisclosure([untaggedLocation], {
-        reporterIdentity: 'include',
-        locationMode: 'exact',
-        people: [],
-        media: [],
-        sensitiveFields: [],
-      }),
+      applyCaseDisclosure(
+        [untaggedLocation as unknown as DisclosureCandidateFact],
+        {
+          reporterIdentity: 'include',
+          locationMode: 'exact',
+          people: [],
+          media: [],
+          sensitiveFields: [],
+        },
+      ),
     ).toThrow(/location disclosure/i);
   });
 });

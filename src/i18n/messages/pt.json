@@ -159,6 +159,7 @@
   "cases.evidence.media.deleted": "Mídia excluída na origem",
   "cases.evidence.media.remoteOnly": "Não disponível localmente",
   "cases.evidence.media.unavailable": "Mídia indisponível",
+  "cases.evidence.media.unsynced": "Mídia não sincronizada com o projeto",
   "cases.evidence.mutationError": "N\u00e3o foi poss\u00edvel atualizar as evid\u00eancias do caso. Tente novamente.",
   "cases.evidence.noProjectEvidence": "Nenhuma evidência do projeto corresponde à sua busca.",
   "cases.evidence.noSelected": "Nenhuma evidência foi adicionada a este caso ainda.",

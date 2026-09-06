@@ -590,6 +590,9 @@
   "cases.evidence.media.unavailable": {
     "defaultMessage": "Media unavailable"
   },
+  "cases.evidence.media.unsynced": {
+    "defaultMessage": "Media not project-synced"
+  },
   "cases.evidence.mutationError": {
     "defaultMessage": "Could not update Case evidence. Try again."
   },

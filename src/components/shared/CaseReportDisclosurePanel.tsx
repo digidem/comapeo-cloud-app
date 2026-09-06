@@ -151,6 +151,7 @@ export function CaseReportDisclosurePanel({
   const persistedDraft: CaseReportDisclosure = {
     reporterIdentity: disclosureQuery.data?.reporterIdentity ?? 'omit',
     locationMode: disclosureQuery.data?.locationMode ?? 'omit',
+    approvedArea: disclosureQuery.data?.approvedArea,
     people: decisionsForCandidates(people, disclosureQuery.data?.people ?? []),
     media: decisionsForCandidates(media, disclosureQuery.data?.media ?? []),
     sensitiveFields: decisionsForCandidates(

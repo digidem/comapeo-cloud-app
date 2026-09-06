@@ -7,6 +7,7 @@ import { useCases } from '@/hooks/useCases';
 
 const addMutateAsync = vi.fn();
 const createMutateAsync = vi.fn();
+const deleteMutateAsync = vi.fn();
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -47,6 +48,13 @@ vi.mock('@/hooks/useCreateCase', () => ({
   })),
 }));
 
+vi.mock('@/hooks/useDeleteCase', () => ({
+  useDeleteCase: vi.fn(() => ({
+    mutateAsync: deleteMutateAsync,
+    isPending: false,
+  })),
+}));
+
 describe('AddToCaseDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -70,6 +78,7 @@ describe('AddToCaseDialog', () => {
     } as ReturnType<typeof useCases>);
     addMutateAsync.mockResolvedValue({ localId: 'evidence-1' });
     createMutateAsync.mockResolvedValue({ localId: 'case-new' });
+    deleteMutateAsync.mockResolvedValue(true);
   });
 
   it('adds every selected source to an existing Case and closes', async () => {
@@ -125,6 +134,41 @@ describe('AddToCaseDialog', () => {
       'Could not load cases. Try again.',
     );
     expect(screen.queryByText('No cases yet for this project.')).toBeNull();
+  });
+
+  it('rolls back a newly created Case when adding selected evidence fails', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    addMutateAsync
+      .mockResolvedValueOnce({ localId: 'evidence-1' })
+      .mockRejectedValueOnce(new Error('write failed'));
+
+    render(
+      <AddToCaseDialog
+        open
+        onOpenChange={onOpenChange}
+        projectLocalId="project-1"
+        sources={[
+          { sourceType: 'observation', sourceLocalId: 'obs-1' },
+          { sourceType: 'observation', sourceLocalId: 'obs-2' },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'New case' }));
+    await user.type(screen.getByLabelText('Title'), 'Incident report');
+    await user.click(screen.getByRole('combobox', { name: /Primary type/i }));
+    await user.click(screen.getByRole('option', { name: 'Fire' }));
+    await user.click(screen.getByRole('button', { name: 'Create and add' }));
+
+    expect(deleteMutateAsync).toHaveBeenCalledWith({
+      projectLocalId: 'project-1',
+      localId: 'case-new',
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not add the selected evidence. Try again.',
+    );
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it('can create the minimal new Case then attach the selected evidence', async () => {

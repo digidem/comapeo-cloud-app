@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAddCaseEvidence } from '@/hooks/useAddCaseEvidence';
 import { useCases } from '@/hooks/useCases';
 import { useCreateCase } from '@/hooks/useCreateCase';
+import { useDeleteCase } from '@/hooks/useDeleteCase';
 import type { CaseEvidenceSourceType, CaseType } from '@/lib/db';
 
 const CASE_TYPES = [
@@ -166,6 +167,7 @@ export function AddToCaseDialog({
   const intl = useIntl();
   const casesQuery = useCases(projectLocalId);
   const createCase = useCreateCase();
+  const deleteCase = useDeleteCase();
   const addEvidence = useAddCaseEvidence();
   const [mode, setMode] = useState<'choose' | 'create'>('choose');
   const [submitError, setSubmitError] = useState(false);
@@ -183,7 +185,8 @@ export function AddToCaseDialog({
     defaultValues: { title: '', caseType: undefined },
   });
 
-  const busy = createCase.isPending || addEvidence.isPending;
+  const busy =
+    createCase.isPending || deleteCase.isPending || addEvidence.isPending;
 
   function resetDialogState() {
     setMode('choose');
@@ -196,7 +199,7 @@ export function AddToCaseDialog({
     onOpenChange(nextOpen);
   }
 
-  async function addSourcesToCase(caseLocalId: string) {
+  async function addSourcesToCase(caseLocalId: string): Promise<boolean> {
     setSubmitError(false);
     try {
       for (const source of sources) {
@@ -208,8 +211,10 @@ export function AddToCaseDialog({
       }
       onAdded?.(caseLocalId);
       updateOpen(false);
+      return true;
     } catch {
       setSubmitError(true);
+      return false;
     }
   }
 
@@ -221,7 +226,13 @@ export function AddToCaseDialog({
         title: data.title,
         caseType: data.caseType,
       });
-      await addSourcesToCase(created.localId);
+      const added = await addSourcesToCase(created.localId);
+      if (!added) {
+        await deleteCase.mutateAsync({
+          projectLocalId,
+          localId: created.localId,
+        });
+      }
     } catch {
       setSubmitError(true);
     }
