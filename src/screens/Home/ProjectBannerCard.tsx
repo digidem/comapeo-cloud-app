@@ -14,12 +14,16 @@ interface ProjectBannerCardProps {
   lastSync?: string | null;
   teamMembersCount?: number;
   onEdit?: () => void;
+  onEditBranding?: () => void;
   onDelete?: () => void;
   projectLocalId?: string;
   onImportComplete?: (result: { imported: number; skipped: number }) => void;
   isLocalProject?: boolean;
   isAreaLoading?: boolean;
 }
+
+const PROJECT_ACTION_BUTTON_CLASSES =
+  'inline-flex min-h-[44px] items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-white/90 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
 
 const messages = defineMessages({
   territoryArea: {
@@ -47,6 +51,10 @@ const messages = defineMessages({
     id: 'dashboard.banner.editProject',
     defaultMessage: 'Edit Project',
   },
+  reportBranding: {
+    id: 'dashboard.banner.reportBranding',
+    defaultMessage: 'Report branding',
+  },
   deleteProject: {
     id: 'dashboard.banner.deleteProject',
     defaultMessage: 'Delete Project',
@@ -61,6 +69,7 @@ export function ProjectBannerCard({
   lastSync,
   teamMembersCount = 1,
   onEdit,
+  onEditBranding,
   onDelete,
   projectLocalId,
   onImportComplete,
@@ -120,13 +129,13 @@ export function ProjectBannerCard({
         </div>
 
         {/* Action Bar */}
-        {(onEdit || onDelete || isLocalProject) && (
-          <div className="flex items-center gap-2 mt-4 mb-4">
+        {(onEdit || onEditBranding || onDelete || isLocalProject) && (
+          <div className="flex flex-wrap items-center gap-2 mt-4 mb-4">
             {onEdit && (
               <button
                 type="button"
                 onClick={onEdit}
-                className="inline-flex items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-white/90 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className={PROJECT_ACTION_BUTTON_CLASSES}
               >
                 <svg
                   width="14"
@@ -144,6 +153,30 @@ export function ProjectBannerCard({
                 {intl.formatMessage(messages.editProject)}
               </button>
             )}
+            {onEditBranding && (
+              <button
+                type="button"
+                onClick={onEditBranding}
+                className={PROJECT_ACTION_BUTTON_CLASSES}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <circle cx="8.5" cy="10" r="1.5" />
+                  <path d="m5 17 4.5-4.5 3 3 2-2L19 17" />
+                </svg>
+                {intl.formatMessage(messages.reportBranding)}
+              </button>
+            )}
             {isLocalProject && projectLocalId && (
               <ImportDataButton
                 projectLocalId={projectLocalId}
@@ -155,7 +188,7 @@ export function ProjectBannerCard({
               <button
                 type="button"
                 onClick={onDelete}
-                className="inline-flex items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-error/30 px-3 py-1.5 text-sm font-medium text-error hover:bg-error/10 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-error"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-btn bg-white/80 backdrop-blur-sm border border-error/30 px-3 py-1.5 text-sm font-medium text-error hover:bg-error/10 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-error"
               >
                 <svg
                   width="14"
