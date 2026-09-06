@@ -134,7 +134,17 @@ function selectBoundedObjectEntries(
 
 interface SensitiveValueCollection {
   values: Set<string>;
+  /**
+   * Fail-closed signal: the value bound was hit, so some sensitive values were
+   * never collected and cannot be matched inside arbitrary strings. This is the
+   * only condition that justifies redacting primitives across the whole event.
+   */
   saturated: boolean;
+  /**
+   * Containers that exceeded the entry bound. Redaction is scoped to these
+   * subtrees so one oversized branch cannot flatten an entire event.
+   */
+  saturatedNodes: Set<object>;
 }
 
 function addSensitiveValue(
@@ -241,7 +251,9 @@ function collectSensitiveValues(
     for (const item of value.slice(0, MAX_SANITIZE_ENTRIES)) {
       collectSensitiveValues(item, depth + 1, forceSensitive, seen, collection);
     }
-    if (value.length > MAX_SANITIZE_ENTRIES) collection.saturated = true;
+    if (value.length > MAX_SANITIZE_ENTRIES) {
+      collection.saturatedNodes.add(value);
+    }
     return;
   }
 
@@ -256,7 +268,9 @@ function collectSensitiveValues(
       collection,
     );
   }
-  if (Object.keys(source).length > entries.length) collection.saturated = true;
+  if (Object.keys(source).length > entries.length) {
+    collection.saturatedNodes.add(value);
+  }
 }
 
 function sanitizeValue(
@@ -265,6 +279,7 @@ function sanitizeValue(
   seen: WeakSet<object>,
   sensitiveValues: ReadonlySet<string>,
   redactPrimitives: boolean,
+  saturatedNodes: ReadonlySet<object>,
 ): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
@@ -301,10 +316,19 @@ function sanitizeValue(
   }
 
   if (Array.isArray(value)) {
+    // Saturation is scoped: only this subtree redacts its primitives.
+    const redactItems = redactPrimitives || saturatedNodes.has(value);
     const result = value
       .slice(0, MAX_SANITIZE_ENTRIES)
       .map((item) =>
-        sanitizeValue(item, depth + 1, seen, sensitiveValues, redactPrimitives),
+        sanitizeValue(
+          item,
+          depth + 1,
+          seen,
+          sensitiveValues,
+          redactItems,
+          saturatedNodes,
+        ),
       );
     if (value.length > MAX_SANITIZE_ENTRIES) {
       result.push(TELEMETRY_TRUNCATED);
@@ -317,6 +341,7 @@ function sanitizeValue(
     left.localeCompare(right),
   );
   const result: Record<string, unknown> = {};
+  const redactEntries = redactPrimitives || saturatedNodes.has(value);
 
   for (const [key, entryValue] of entries) {
     result[key] = isSensitiveTelemetryKey(key)
@@ -326,7 +351,8 @@ function sanitizeValue(
           depth + 1,
           seen,
           sensitiveValues,
-          redactPrimitives,
+          redactEntries,
+          saturatedNodes,
         );
   }
 
@@ -341,6 +367,7 @@ export function sanitizeTelemetry<T>(value: T): T {
   const collection: SensitiveValueCollection = {
     values: new Set<string>(),
     saturated: false,
+    saturatedNodes: new Set<object>(),
   };
   collectSensitiveValues(value, 0, false, new WeakSet<object>(), collection);
   return sanitizeValue(
@@ -349,5 +376,6 @@ export function sanitizeTelemetry<T>(value: T): T {
     new WeakSet<object>(),
     collection.values,
     collection.saturated,
+    collection.saturatedNodes,
   ) as T;
 }
