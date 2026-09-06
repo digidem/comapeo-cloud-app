@@ -34,15 +34,24 @@ function resolveEnvironment(): string {
   return 'production';
 }
 
-function resolveAllowUrls(): string[] | null {
-  const origins = [
+function resolveOrigins(): string[] {
+  return [
     ...new Set(
       [APP_ORIGIN, PAGES_DEV_ORIGIN, EXTRA_PAGES_ORIGIN].filter(
         (origin): origin is string => Boolean(origin),
       ),
     ),
   ];
+}
+
+function resolveAllowUrls(): string[] | null {
+  const origins = resolveOrigins();
   return origins.length > 0 ? origins : null;
+}
+
+function resolveTracePropagationTargets(): string[] {
+  // Same origin set as allowUrls, plus localhost so local dev keeps working.
+  return [...resolveOrigins(), 'localhost'];
 }
 
 function isAutomatedBrowser(): boolean {
@@ -72,6 +81,7 @@ export function initSentry(): void {
     release: RELEASE,
     integrations: [Sentry.browserTracingIntegration()],
     tracesSampleRate: 0.1,
+    tracePropagationTargets: resolveTracePropagationTargets(),
     sendDefaultPii: false,
     beforeSend: (event) => sanitizeTelemetry(event),
     beforeBreadcrumb: (breadcrumb) => sanitizeTelemetry(breadcrumb),
