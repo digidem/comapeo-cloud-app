@@ -10,6 +10,7 @@ import type {
   CaseAgency,
   CaseReportState,
   CaseStatus,
+  ReportBranding,
 } from '@/lib/db';
 import type { CaseUpdates } from '@/lib/local-repositories';
 import {
@@ -81,7 +82,12 @@ export async function getProjects() {
 
 export async function updateProject(
   localId: string,
-  updates: { name?: string; description?: string; serverUrl?: string | null },
+  updates: {
+    name?: string;
+    description?: string;
+    serverUrl?: string | null;
+    reportBranding?: ReportBranding;
+  },
 ) {
   const { serverUrl, ...rest } = updates;
   return repoUpdateProject(localId, {
