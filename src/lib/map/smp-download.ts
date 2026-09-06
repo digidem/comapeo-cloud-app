@@ -101,7 +101,7 @@ export interface AuthoredPayloadEstimate {
 export interface DownloadConfig {
   /** Map configuration to download tiles for. */
   map: SavedMap;
-  /** Canonical authored layers to package; defaults to [] until #280 wires persistence. */
+  /** Canonical authored layers to package; defaults to the persisted map layers. */
   authoredLayers?: readonly AuthoredLayer[];
   /** Callback fired on every progress update. */
   onProgress?: (progress: DownloadProgress) => void;
@@ -1058,13 +1058,14 @@ export async function estimateAuthoredPayload(config: {
 export async function downloadSmp(config: DownloadConfig): Promise<string> {
   const {
     map,
-    authoredLayers = [],
+    authoredLayers: authoredLayersOverride,
     onProgress,
     signal,
     mapboxAccessToken,
     bufferTiles = 1,
     includeGlobalOverview = true,
   } = config;
+  const authoredLayers = authoredLayersOverride ?? map.layers ?? [];
   const db = getDb();
 
   await db.maps.update(map.id, {
