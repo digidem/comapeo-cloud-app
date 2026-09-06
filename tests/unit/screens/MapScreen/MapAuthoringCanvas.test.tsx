@@ -1,3 +1,7 @@
+import {
+  AUTHORED_RASTER_LAYER_FIXTURE,
+  AUTHORED_VECTOR_LAYER_FIXTURE,
+} from '@tests/fixtures/authored-layers';
 import { fireEvent, render, screen } from '@tests/mocks/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +17,7 @@ vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}));
 
 const mapCanvas = document.createElement('canvas');
 const layerProps: Array<Record<string, unknown>> = [];
+const sourceProps: Array<Record<string, unknown>> = [];
 const mapHandle = {
   getMap: () => ({
     getCanvas: () => mapCanvas,
@@ -34,11 +39,14 @@ vi.mock('react-map-gl/maplibre', () => ({
       <div data-testid="mock-map">{props.children as React.ReactNode}</div>
     );
   }),
-  Source: (props: Record<string, unknown>) => (
-    <div data-testid={`mock-source-${String(props.id)}`}>
-      {props.children as React.ReactNode}
-    </div>
-  ),
+  Source: (props: Record<string, unknown>) => {
+    sourceProps.push(props);
+    return (
+      <div data-testid={`mock-source-${String(props.id)}`}>
+        {props.children as React.ReactNode}
+      </div>
+    );
+  },
   Layer: (props: Record<string, unknown>) => {
     layerProps.push(props);
     return (
@@ -119,6 +127,7 @@ function renderCanvas(overlays: GeoJsonOverlay[] = [mixedOverlay]) {
 describe('MapAuthoringCanvas reference overlays', () => {
   beforeEach(() => {
     layerProps.length = 0;
+    sourceProps.length = 0;
   });
 
   it('renders mixed geometry from one source with filtered family layers', () => {
@@ -182,6 +191,87 @@ describe('MapAuthoringCanvas reference overlays', () => {
     for (const layer of overlayLayers) {
       expect(layer.layout).toEqual({ visibility: 'none' });
     }
+  });
+
+  it('renders canonical authored vector fragments with their persisted style and visibility', () => {
+    const mapRef = { current: null } as RefObject<MapRef | null>;
+    render(
+      <MapAuthoringCanvas
+        basemap={findBasemap('carto-positron')}
+        bbox={null}
+        mapRef={mapRef}
+        authoredLayers={[AUTHORED_VECTOR_LAYER_FIXTURE]}
+      />,
+    );
+
+    const sourceId =
+      'comapeo-authored:11111111-1111-4111-8111-111111111111:source';
+    expect(screen.getByTestId(`mock-source-${sourceId}`)).toBeInTheDocument();
+    const vectorSource = AUTHORED_VECTOR_LAYER_FIXTURE.source;
+    expect(vectorSource.type).toBe('geojson');
+    if (vectorSource.type !== 'geojson')
+      throw new Error('vector fixture mismatch');
+    expect(sourceProps.find((props) => props.id === sourceId)).toEqual(
+      expect.objectContaining({
+        type: 'geojson',
+        data: vectorSource.data,
+      }),
+    );
+
+    const polygonFill = layerProps.find(
+      (props) =>
+        props.id ===
+        'comapeo-authored:11111111-1111-4111-8111-111111111111:layer:0',
+    );
+    expect(polygonFill).toEqual(
+      expect.objectContaining({
+        type: 'fill',
+        filter: ['in', '$type', 'Polygon'],
+        paint: { 'fill-color': '#1F6FFF', 'fill-opacity': 0.35 },
+        layout: { visibility: 'none' },
+      }),
+    );
+    expect(
+      layerProps.filter((props) =>
+        String(props.id).startsWith('comapeo-authored:'),
+      ),
+    ).toHaveLength(4);
+  });
+
+  it('renders canonical authored raster sources and persisted raster paint', () => {
+    const mapRef = { current: null } as RefObject<MapRef | null>;
+    render(
+      <MapAuthoringCanvas
+        basemap={findBasemap('carto-positron')}
+        bbox={null}
+        mapRef={mapRef}
+        authoredLayers={[AUTHORED_RASTER_LAYER_FIXTURE]}
+      />,
+    );
+
+    const sourceId =
+      'comapeo-authored:22222222-2222-4222-8222-222222222222:source';
+    expect(sourceProps.find((props) => props.id === sourceId)).toEqual(
+      expect.objectContaining({
+        type: 'raster',
+        tiles: ['https://tiles.example.com/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        scheme: 'xyz',
+      }),
+    );
+    expect(
+      layerProps.find(
+        (props) =>
+          props.id ===
+          'comapeo-authored:22222222-2222-4222-8222-222222222222:layer:0',
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        type: 'raster',
+        paint: { 'raster-opacity': 0.7, 'raster-saturation': 0 },
+        layout: { visibility: 'none' },
+      }),
+    );
   });
 
   it('accepts GeoJSON files dropped on the map without changing normal pointer gestures', () => {
