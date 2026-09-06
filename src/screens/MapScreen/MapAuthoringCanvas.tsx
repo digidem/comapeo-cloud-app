@@ -12,11 +12,13 @@ import Map, {
   Source,
 } from 'react-map-gl/maplibre';
 
+import type { AuthoredLayer } from '@/lib/map/authored-layers';
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { crossesAntimeridian } from '@/lib/map/bbox-utils';
 import type { GeoJsonOverlay } from '@/lib/map/geojson-overlays';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 
+import { AuthoredLayerCanvasLayers } from './AuthoredLayerCanvasLayers';
 import { ReferenceOverlayLayers } from './ReferenceOverlayLayers';
 import { mapMessages } from './messages';
 
@@ -31,7 +33,9 @@ interface MapAuthoringCanvasProps {
   onDrawModeChange?: (mode: 'draw_rectangle' | 'simple_select' | null) => void;
   /** Bounds to fit after the map is ready. */
   fitBounds?: [number, number, number, number] | null;
-  /** Transient GeoJSON authoring references. */
+  /** Canonical persisted authored layers shown in the authoring canvas. */
+  authoredLayers?: readonly AuthoredLayer[];
+  /** Legacy transient GeoJSON references retained for direct component callers. */
   overlays?: GeoJsonOverlay[];
   /** Called when files are dropped directly onto the authoring map. */
   onOverlayFilesDrop?: (files: File[]) => void | Promise<void>;
@@ -118,6 +122,7 @@ const EMPTY_FEATURE: Feature<Polygon> = {
   geometry: { type: 'Polygon', coordinates: [[]] },
 };
 
+const EMPTY_AUTHORED_LAYERS: readonly AuthoredLayer[] = [];
 const EMPTY_REFERENCE_OVERLAYS: GeoJsonOverlay[] = [];
 
 export function MapAuthoringCanvas({
@@ -128,6 +133,7 @@ export function MapAuthoringCanvas({
   onDrawCreate,
   onDrawModeChange,
   fitBounds,
+  authoredLayers = EMPTY_AUTHORED_LAYERS,
   overlays = EMPTY_REFERENCE_OVERLAYS,
   onOverlayFilesDrop,
 }: MapAuthoringCanvasProps) {
@@ -455,6 +461,10 @@ export function MapAuthoringCanvas({
             />
           </Source>
         )}
+
+        {authoredLayers.map((layer) => (
+          <AuthoredLayerCanvasLayers key={layer.id} layer={layer} />
+        ))}
 
         {overlays.map((overlay) => (
           <ReferenceOverlayLayers key={overlay.id} overlay={overlay} />

@@ -10,6 +10,7 @@ RUNBOOK = SKILL_DIR / "references" / "github-runbook.md"
 TIMEOUT_STRATEGY = SKILL_DIR / "references" / "timeout-strategy.md"
 CLAUDE_QWEN_REVIEW = SKILL_DIR / "references" / "claude-qwen-review.md"
 AGENTS = SKILL_DIR.parents[2] / "AGENTS.md"
+E2E_AGENTS = SKILL_DIR.parents[2] / "tests" / "e2e" / "AGENTS.md"
 CI = SKILL_DIR.parents[2] / ".github" / "workflows" / "ci.yml"
 
 
@@ -308,7 +309,12 @@ def assert_ordered_merge_contract(test: unittest.TestCase, runbook_text: str) ->
 
 
 def assert_policy_contract(
-    test: unittest.TestCase, *, skill_text: str, agents_text: str, ci_text: str
+    test: unittest.TestCase,
+    *,
+    skill_text: str,
+    agents_text: str,
+    ci_text: str,
+    e2e_agents_text: str,
 ) -> None:
     test.assertIn("verify the claim against the exact current head", skill_text)
     test.assertIn("false positive, stale, duplicate, or already satisfied", skill_text)
@@ -370,12 +376,13 @@ def assert_policy_contract(
     test.assertIn("linked from the PR body", skill_text)
     test.assertIn("QA script path or link", skill_text)
 
-    test.assertIn("## 8. Session lessons and documentation checkpoint", skill_text)
+    test.assertIn("## 8. Durable knowledge checkpoint", skill_text)
     test.assertIn("Before concluding every PR cycle", skill_text)
-    test.assertIn("`.agents/skills/pr-cycle/` for reusable PR-cycle mechanics", skill_text)
-    test.assertIn("`README.md` only when human contributors or users need", skill_text)
-    test.assertIn("create a focused follow-up docs/process PR", skill_text)
-    test.assertIn("final report must state what durable lessons were documented", skill_text)
+    test.assertIn("maintaining-agent-knowledge", skill_text)
+    test.assertIn("Do not create a second placement taxonomy here", skill_text)
+    test.assertIn("use a focused docs/process follow-up", skill_text)
+    test.assertIn("does not inherit merge authorization from the originating task", skill_text)
+    test.assertIn("The final report states where durable knowledge was promoted", skill_text)
 
     test.assertIn("## PR Merge Authorization Invariant", agents_text)
     test.assertIn("explicit merge authorization from a user message in its own current task", agents_text)
@@ -389,11 +396,12 @@ def assert_policy_contract(
     test.assertIn("search the existing GitHub backlog", agents_text)
     test.assertIn("reuse the canonical implementation, data model, or integration path", agents_text)
     test.assertIn("Do not promote proposed or unmerged follow-up designs", agents_text)
-    test.assertIn("tracked artifacts under `screenshots/screenshot/`", agents_text)
-    test.assertIn("restore incidental changes after exploratory runs", agents_text)
-    test.assertIn("`npm run storybook:screenshots:check`", agents_text)
-    test.assertIn("`visual-regression-check`", agents_text)
-    test.assertIn("`visual-regression-diff`", agents_text)
+    test.assertIn("read `tests/e2e/AGENTS.md`", agents_text)
+    test.assertIn("tracked Argos artifacts under `screenshots/screenshot/`", e2e_agents_text)
+    test.assertIn("restore incidental changes after exploratory runs", e2e_agents_text)
+    test.assertIn("`npm run storybook:screenshots:check`", e2e_agents_text)
+    test.assertIn("`visual-regression-diff`", e2e_agents_text)
+    test.assertIn("never relax thresholds", e2e_agents_text)
 
     pr_cycle_commands = _active_ci_commands(_ci_job_block(ci_text, "pr-cycle-skill-tests"))
     test.assertIn("sudo apt-get install -y zsh", pr_cycle_commands)
@@ -410,6 +418,7 @@ class PrCyclePolicyTests(unittest.TestCase):
             skill_text=SKILL.read_text(),
             agents_text=AGENTS.read_text(),
             ci_text=CI.read_text(),
+            e2e_agents_text=E2E_AGENTS.read_text(),
         )
 
     def test_section_reports_missing_boundaries_as_assertions(self) -> None:
@@ -944,6 +953,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_bot_finding_verification_policy_is_required(self) -> None:
@@ -959,6 +969,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_merge_authorization_must_be_execution_local(self) -> None:
@@ -974,6 +985,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_concurrent_writer_does_not_grant_merge_authority(self) -> None:
@@ -989,6 +1001,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_readiness_request_is_not_merge_authorization(self) -> None:
@@ -1004,6 +1017,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_authorization_provenance_checkpoint_is_required(self) -> None:
@@ -1017,6 +1031,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_external_merge_must_not_be_claimed_by_current_execution(self) -> None:
@@ -1032,6 +1047,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_cleanup_identity_guard_is_required(self) -> None:
@@ -1047,6 +1063,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_soft_fail_ci_adjudication_policy_is_required(self) -> None:
@@ -1060,6 +1077,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_cleanup_branch_delete_hook_bypass_is_required(self) -> None:
@@ -1075,21 +1093,23 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
-    def test_session_lessons_checkpoint_is_required(self) -> None:
+    def test_durable_knowledge_checkpoint_is_required(self) -> None:
         skill_text = SKILL.read_text().replace(
-            "## 8. Session lessons and documentation checkpoint",
+            "## 8. Durable knowledge checkpoint",
             "## 8. Optional session notes",
         )
         with self.assertRaisesRegex(
-            AssertionError, "## 8. Session lessons and documentation checkpoint"
+            AssertionError, "## 8. Durable knowledge checkpoint"
         ):
             assert_policy_contract(
                 self,
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_human_qa_handoff_policy_is_required(self) -> None:
@@ -1103,25 +1123,27 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=skill_text,
                 agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_argos_artifact_guidance_is_required(self) -> None:
-        agents_text = AGENTS.read_text().replace(
-            "tracked artifacts under `screenshots/screenshot/`",
-            "ignored artifacts under `screenshots/screenshot/`",
+        e2e_agents_text = E2E_AGENTS.read_text().replace(
+            "tracked Argos artifacts under `screenshots/screenshot/`",
+            "ignored Argos artifacts under `screenshots/screenshot/`",
         )
         with self.assertRaisesRegex(
-            AssertionError, "tracked artifacts under `screenshots/screenshot/`"
+            AssertionError, "tracked Argos artifacts under `screenshots/screenshot/`"
         ):
             assert_policy_contract(
                 self,
                 skill_text=SKILL.read_text(),
-                agents_text=agents_text,
+                agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=e2e_agents_text,
             )
 
     def test_storybook_ci_baseline_guidance_is_required(self) -> None:
-        agents_text = AGENTS.read_text().replace(
+        e2e_agents_text = E2E_AGENTS.read_text().replace(
             "`npm run storybook:screenshots:check`",
             "`npm run storybook:screenshots`",
         )
@@ -1131,8 +1153,9 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
             assert_policy_contract(
                 self,
                 skill_text=SKILL.read_text(),
-                agents_text=agents_text,
+                agents_text=AGENTS.read_text(),
                 ci_text=CI.read_text(),
+                e2e_agents_text=e2e_agents_text,
             )
 
     def test_agents_merge_authorization_fallback_is_required(self) -> None:
@@ -1148,6 +1171,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=SKILL.read_text(),
                 agents_text=agents_text,
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_scope_continuity_policy_is_required(self) -> None:
@@ -1163,6 +1187,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=SKILL.read_text(),
                 agents_text=agents_text,
                 ci_text=CI.read_text(),
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
     def test_ci_invocation_must_be_active_in_pr_cycle_job(self) -> None:
@@ -1177,6 +1202,7 @@ gh pr merge <pr> --repo <owner/repo> --squash --match-head-commit <reviewed-sha>
                 skill_text=SKILL.read_text(),
                 agents_text=AGENTS.read_text(),
                 ci_text=ci_text,
+                e2e_agents_text=E2E_AGENTS.read_text(),
             )
 
 
