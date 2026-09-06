@@ -5,10 +5,14 @@ import unittest
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SKILL = SKILL_DIR / "SKILL.md"
-REFERENCE = SKILL_DIR / "references" / "kimi-k3-review.md"
+KIMI_REFERENCE = SKILL_DIR / "references" / "kimi-k3-review.md"
 CLAUDE_REFERENCE = SKILL_DIR / "references" / "claude-code-review.md"
+ASTRA_REFERENCE = SKILL_DIR / "references" / "gpt-6-astra-review.md"
+QWEN_REFERENCE = SKILL_DIR / "references" / "claude-qwen-review.md"
 TIMEOUT = SKILL_DIR / "references" / "timeout-strategy.md"
 CI = SKILL_DIR.parents[2] / ".github" / "workflows" / "ci.yml"
+AGENTS = SKILL_DIR.parents[2] / "AGENTS.md"
+ISSUE_TO_SPEC = SKILL_DIR.parent / "issue-to-spec" / "SKILL.md"
 
 
 def _paragraph_containing(text: str, needle: str) -> str:
@@ -22,14 +26,28 @@ def assert_policy_contract(
     test: unittest.TestCase,
     *,
     skill_text: str,
-    reference_text: str,
+    kimi_reference_text: str,
     claude_reference_text: str,
+    astra_reference_text: str,
+    qwen_reference_text: str,
     timeout_text: str,
     ci_text: str,
+    agents_text: str,
+    issue_to_spec_text: str,
 ) -> None:
-    fallback = _paragraph_containing(skill_text, "When Opus 5 is unavailable")
+    primary = _paragraph_containing(skill_text, "Default to **GPT-6 Astra via Codex**")
+    test.assertIn("`gpt-6-astra`", primary)
+    test.assertIn("exact head/base-tip pair", primary)
+    test.assertIn("read-only", primary)
+    test.assertIn("references/gpt-6-astra-review.md", primary)
+
+    fallback = _paragraph_containing(skill_text, "If GPT-6 Astra via Codex is unavailable")
     test.assertIn(
-        "and the user did **not** explicitly require Opus, fall back first to **Kimi K3 via OpenCode Go**",
+        "fall back first to **Claude Opus 5**, then **Kimi K3 via OpenCode Go**",
+        fallback,
+    )
+    test.assertIn(
+        "fall back to **Qwen 3.8 via `claude-qwen`** as a final independent-review option",
         fallback,
     )
     test.assertIn(
@@ -41,25 +59,29 @@ def assert_policy_contract(
         fallback,
     )
     test.assertIn("references/kimi-k3-review.md", fallback)
-    test.assertIn(
-        "If Kimi is unavailable, use another configured strong reviewer whose live quota is available, including GPT-5.6 Sol through Codex when usable.",
-        fallback,
-    )
-    test.assertIn(
-        "fall back to **Qwen 3.8 via `claude-qwen`** as a final independent-review option",
-        fallback,
-    )
-    kimi_index = fallback.index("fall back first to **Kimi K3 via OpenCode Go**")
-    codex_index = fallback.index("including GPT-5.6 Sol through Codex when usable")
+    opus_index = fallback.index("fall back first to **Claude Opus 5**")
+    kimi_index = fallback.index("then **Kimi K3 via OpenCode Go**")
     qwen_index = fallback.index("Qwen 3.8 via `claude-qwen`")
-    test.assertLess(kimi_index, codex_index)
-    test.assertLess(codex_index, qwen_index)
-    test.assertNotIn("Use Qwen first", fallback)
-    test.assertNotRegex(
-        fallback,
-        re.compile(r"(?:prefer|use|try) Qwen .*before .*Kimi", re.I),
-    )
+    test.assertLess(opus_index, kimi_index)
+    test.assertLess(kimi_index, qwen_index)
+    test.assertNotIn("GPT-5.6 Sol", skill_text)
+    test.assertNotRegex(fallback, re.compile(r"(?:prefer|use|try) Qwen .*before .*Kimi", re.I))
     test.assertIn("same exact requested Opus model", fallback)
+
+    test.assertIn("GPT-6 Astra", agents_text)
+    test.assertIn("`gpt-6-astra`", agents_text)
+    test.assertIn(
+        "planning, implementation, specification, debugging, and independent review",
+        agents_text,
+    )
+    test.assertIn("GPT-6 Astra via Codex", issue_to_spec_text)
+    test.assertNotIn("use Claude Opus 5", issue_to_spec_text)
+
+    test.assertIn("# GPT-6 Astra via Codex reviewer", astra_reference_text)
+    test.assertIn("`codex exec -m gpt-6-astra`", astra_reference_text)
+    test.assertIn("exact head/base-tip pair", astra_reference_text)
+    test.assertIn("terminal verdict", astra_reference_text)
+    test.assertNotIn("GPT-5.6 Sol", astra_reference_text)
 
     alternate = _paragraph_containing(
         claude_reference_text, "If the user explicitly requires a named Opus model"
@@ -78,11 +100,14 @@ def assert_policy_contract(
         "`pwd`, `git rev-parse HEAD`, and the live base-tip SHA", alternate_contract
     )
 
-    contract = _paragraph_containing(reference_text, "Ask Kimi to review a fresh exact diff")
+    contract = _paragraph_containing(
+        kimi_reference_text, "Ask Kimi to review a fresh exact diff"
+    )
     test.assertIn("**exact head/base-tip pair**", contract)
     test.assertIn("return a terminal verdict", contract)
-
-    invalid = _paragraph_containing(reference_text, "A Kimi result **must not count**")
+    invalid = _paragraph_containing(
+        kimi_reference_text, "A Kimi result **must not count**"
+    )
     test.assertRegex(
         invalid,
         re.compile(
@@ -90,16 +115,20 @@ def assert_policy_contract(
         ),
     )
     test.assertIn(
-        "An explicitly requested Opus 5 review must not be silently replaced by Kimi.",
-        reference_text,
+        "An explicitly requested GPT-6 Astra review must not be silently replaced by Kimi.",
+        kimi_reference_text,
     )
-    test.assertIn("opencode-go/kimi-k3", reference_text)
-    test.assertIn("Oh My Pi", reference_text)
+    test.assertIn("GPT-6 Astra via Codex", kimi_reference_text)
+    test.assertIn("opencode-go/kimi-k3", kimi_reference_text)
+    test.assertIn("Oh My Pi", kimi_reference_text)
 
-    timeout = _paragraph_containing(timeout_text, "For the Kimi K3 fallback")
-    test.assertIn("persistent ACP session", timeout)
-    test.assertIn("timed-out foreground command", timeout)
-    test.assertIn("must not count as approval", timeout)
+    test.assertIn("GPT-6 Astra", qwen_reference_text)
+    test.assertNotIn("GPT-5.6 Sol", qwen_reference_text)
+
+    timeout = _paragraph_containing(timeout_text, "For GPT-6 Astra via Codex")
+    test.assertIn("`gpt-6-astra`", timeout)
+    test.assertIn("resume", timeout)
+    test.assertIn("terminal verdict", timeout)
 
     ci_commands = {
         line.strip()
@@ -113,15 +142,23 @@ def assert_policy_contract(
 
 
 class ReviewerFallbackPolicyTests(unittest.TestCase):
+    def _assert(self, **overrides: str) -> None:
+        values = {
+            "skill_text": SKILL.read_text(),
+            "kimi_reference_text": KIMI_REFERENCE.read_text(),
+            "claude_reference_text": CLAUDE_REFERENCE.read_text(),
+            "astra_reference_text": ASTRA_REFERENCE.read_text() if ASTRA_REFERENCE.exists() else "",
+            "qwen_reference_text": QWEN_REFERENCE.read_text(),
+            "timeout_text": TIMEOUT.read_text(),
+            "ci_text": CI.read_text(),
+            "agents_text": AGENTS.read_text(),
+            "issue_to_spec_text": ISSUE_TO_SPEC.read_text(),
+        }
+        values.update(overrides)
+        assert_policy_contract(self, **values)
+
     def test_policy_contract(self) -> None:
-        assert_policy_contract(
-            self,
-            skill_text=SKILL.read_text(),
-            reference_text=REFERENCE.read_text(),
-            claude_reference_text=CLAUDE_REFERENCE.read_text(),
-            timeout_text=TIMEOUT.read_text(),
-            ci_text=CI.read_text(),
-        )
+        self._assert()
 
     def test_named_reviewer_substitution_blocked(self) -> None:
         skill_text = SKILL.read_text().replace(
@@ -129,59 +166,23 @@ class ReviewerFallbackPolicyTests(unittest.TestCase):
             "If the user explicitly required a named reviewer, silently substitute another model.",
         )
         with self.assertRaises(AssertionError):
-            assert_policy_contract(
-                self,
-                skill_text=skill_text,
-                reference_text=REFERENCE.read_text(),
-                claude_reference_text=CLAUDE_REFERENCE.read_text(),
-                timeout_text=TIMEOUT.read_text(),
-                ci_text=CI.read_text(),
-            )
+            self._assert(skill_text=skill_text)
 
     def test_fallback_ordering_is_required(self) -> None:
         skill_text = SKILL.read_text().replace(
-            "If Kimi is unavailable, use another configured strong reviewer whose live quota is available, including GPT-5.6 Sol through Codex when usable. If those preferred paths are exhausted or unavailable, fall back to **Qwen 3.8 via `claude-qwen`** as a final independent-review option.",
-            "Use Qwen first, then try other reviewers later.",
+            "fall back first to **Claude Opus 5**, then **Kimi K3 via OpenCode Go**",
+            "Use Qwen first, then try other reviewers later",
         )
         with self.assertRaises(AssertionError):
-            assert_policy_contract(
-                self,
-                skill_text=skill_text,
-                reference_text=REFERENCE.read_text(),
-                claude_reference_text=CLAUDE_REFERENCE.read_text(),
-                timeout_text=TIMEOUT.read_text(),
-                ci_text=CI.read_text(),
-            )
-
-    def test_appended_qwen_before_kimi_contradiction_is_rejected(self) -> None:
-        skill_text = SKILL.read_text().replace(
-            "Keep every fallback read-only, bind it to the exact head/base-tip pair, require a terminal verdict",
-            "Prefer Qwen before Kimi when convenient. Keep every fallback read-only, bind it to the exact head/base-tip pair, require a terminal verdict",
-        )
-        with self.assertRaises(AssertionError):
-            assert_policy_contract(
-                self,
-                skill_text=skill_text,
-                reference_text=REFERENCE.read_text(),
-                claude_reference_text=CLAUDE_REFERENCE.read_text(),
-                timeout_text=TIMEOUT.read_text(),
-                ci_text=CI.read_text(),
-            )
+            self._assert(skill_text=skill_text)
 
     def test_nonterminal_rejected(self) -> None:
-        reference_text = REFERENCE.read_text().replace(
+        kimi_reference_text = KIMI_REFERENCE.read_text().replace(
             "A Kimi result **must not count** when it is partial reasoning",
             "A Kimi result **may count** when it is partial reasoning",
         )
         with self.assertRaises(AssertionError):
-            assert_policy_contract(
-                self,
-                skill_text=SKILL.read_text(),
-                reference_text=reference_text,
-                claude_reference_text=CLAUDE_REFERENCE.read_text(),
-                timeout_text=TIMEOUT.read_text(),
-                ci_text=CI.read_text(),
-            )
+            self._assert(kimi_reference_text=kimi_reference_text)
 
     def test_exact_model_alternate_provider_contract_is_required(self) -> None:
         claude_reference_text = CLAUDE_REFERENCE.read_text().replace(
@@ -189,14 +190,7 @@ class ReviewerFallbackPolicyTests(unittest.TestCase):
             "normal shell access",
         )
         with self.assertRaisesRegex(AssertionError, "read-only shell access"):
-            assert_policy_contract(
-                self,
-                skill_text=SKILL.read_text(),
-                reference_text=REFERENCE.read_text(),
-                claude_reference_text=claude_reference_text,
-                timeout_text=TIMEOUT.read_text(),
-                ci_text=CI.read_text(),
-            )
+            self._assert(claude_reference_text=claude_reference_text)
 
 
 if __name__ == "__main__":

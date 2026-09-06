@@ -148,6 +148,6 @@ The full review is also hard-bounded: `timeout --kill-after=15s 300s` sends TERM
 
 ## Fallback semantics
 
-Qwen is a substitute reviewer, not a relaxed gate. Use it after the preferred reviewer paths and other strong configured reviewers are unavailable or exhausted. Check Qwen quota before review dispatch; do not spend a full frozen-diff review merely to discover a known exhausted token-plan. Do not silently substitute Qwen when the user explicitly required Opus, Kimi, GPT-5.6 Sol, or another named reviewer.
+Qwen is a substitute reviewer, not a relaxed gate. Use it after the preferred reviewer paths and other strong configured reviewers are unavailable or exhausted. Check Qwen quota before review dispatch; do not spend a full frozen-diff review merely to discover a known exhausted token-plan. Do not silently substitute Qwen when the user explicitly required GPT-6 Astra, Opus, Kimi, or another named reviewer.
 
 A Qwen `READY` verdict is static-review evidence only. CI, mergeability, GitHub review state, unresolved threads, worktree cleanliness, and live revision coordinates still require independent verification. Any push or live base-tip movement invalidates the Qwen verdict and requires a fresh exact-revision review.
