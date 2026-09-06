@@ -1,10 +1,12 @@
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
+import { AUTHORED_VECTOR_LAYER_FIXTURE } from '@tests/fixtures/authored-layers';
 import JSZip from 'jszip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SavedMap } from '@/lib/db';
 import { getDb, getSavedMapSmpBlob, resetDb } from '@/lib/db';
+import { sourceLayerIdForAuthoredLayer } from '@/lib/map/authored-layers';
 import {
   buildRasterStyleUrl,
   downloadSmp,
@@ -266,6 +268,45 @@ describe('downloadSmp', () => {
       updatedAt: expect.any(String),
     });
     expect(await getPersistedPackageData()).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  it('packages persisted authored layers when callers do not pass an override', async () => {
+    vi.spyOn(getDb().maps, 'update').mockResolvedValue(1);
+    mockDownload.mockReturnValue(streamOf(await buildRegionalZipBytes()));
+    const map = createMockMap({
+      origin: 'authored',
+      layers: [structuredClone(AUTHORED_VECTOR_LAYER_FIXTURE)],
+      maxZoom: 4,
+    });
+
+    await downloadSmp({ map, includeGlobalOverview: false });
+
+    const packaged = await JSZip.loadAsync(await getPersistedPackageData());
+    const style = JSON.parse(
+      (await packaged.file('style.json')?.async('string')) ?? '{}',
+    ) as { sources: Record<string, unknown> };
+    expect(
+      style.sources[
+        sourceLayerIdForAuthoredLayer(AUTHORED_VECTOR_LAYER_FIXTURE.id)
+      ],
+    ).toBeDefined();
+  });
+
+  it('rejects corrupt persisted authored layers instead of silently dropping them', async () => {
+    const map = createMockMap({
+      origin: 'authored',
+      layers: [
+        {
+          ...structuredClone(AUTHORED_VECTOR_LAYER_FIXTURE),
+          schemaVersion: 99,
+        } as never,
+      ],
+    });
+
+    await expect(
+      downloadSmp({ map, includeGlobalOverview: false }),
+    ).rejects.toThrow();
+    expect(mockDownload).not.toHaveBeenCalled();
   });
 
   it('merges global zoom 0-3 tiles into the regional SMP by default', async () => {
