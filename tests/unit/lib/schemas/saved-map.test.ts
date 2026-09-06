@@ -678,18 +678,23 @@ describe('buildSavedMapAuthoringWrite', () => {
     return parsed.snapshot;
   };
 
-  const write = (args?: {
+  type WriteArgs = {
     row?: ReturnType<typeof packagedRow>;
     draft?: SavedMapAuthoringDraftFields;
     layers?: AuthoredLayer[];
     updatedAt?: number;
-  }) =>
+  };
+
+  const writeFull = (args?: WriteArgs) =>
     buildSavedMapAuthoringWrite(
       snapshotFor(args?.row ?? packagedRow()),
       args?.draft ?? baseDraft(),
       args?.layers ?? [vectorLayer()],
       args?.updatedAt ?? NOW,
     );
+
+  /** Row-only view, for the many tests that assert on persisted fields. */
+  const write = (args?: WriteArgs) => writeFull(args).row;
 
   it('refuses plain unbranded rows (runtime guard and type-level brand)', () => {
     const plainRow =
@@ -770,6 +775,21 @@ describe('buildSavedMapAuthoringWrite', () => {
     expect(() =>
       write({ updatedAt: '2026-07-01' as unknown as number }),
     ).toThrow();
+  });
+
+  it('reports the internal package-relevance verdict alongside the row', () => {
+    // The single computation inside the write is the source of truth: callers
+    // (e.g. the save mutation) must not re-derive it from the built row.
+    const unchanged = writeFull({
+      draft: { ...baseDraft(), name: 'Renamed Basemap' },
+    });
+    expect(unchanged.packageChanged).toBe(false);
+
+    const changed = writeFull({
+      draft: { ...baseDraft(), bbox: [-72, -3.5, -70, -1] },
+    });
+    expect(changed.packageChanged).toBe(true);
+    expect(changed.row.status).toBe('draft');
   });
 
   it('preserves package lifecycle on a name-only change', () => {
@@ -959,7 +979,7 @@ describe('buildSavedMapAuthoringWrite', () => {
       draft,
       layers,
       NOW,
-    );
+    ).row;
     expect(second).toEqual(first);
     expect(Object.keys(second)).toEqual(Object.keys(first));
   });

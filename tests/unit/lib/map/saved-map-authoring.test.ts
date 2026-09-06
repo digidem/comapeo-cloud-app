@@ -9,11 +9,14 @@ import {
   buildAuthoredLayerCommitContext,
   extractCanonicalAuthoredLayers,
   getAdvancedEditorRecoveryEligibility,
+  storedRowDraftFields,
   validateAuthoredLayerDraftContext,
+  validateAuthoredLayersForExtract,
 } from '@/lib/map/saved-map-authoring';
 import type {
   AuthoredLayerDraftEntry,
   SavedMapAuthoringDraftFields,
+  SavedMapStorageRow,
 } from '@/lib/schemas/saved-map';
 
 describe('saved-map authoring draft helpers', () => {
@@ -259,6 +262,111 @@ describe('saved-map authoring draft helpers', () => {
           AUTHORED_VECTOR_LAYER_FIXTURE.id,
         ]);
       }
+    });
+  });
+
+  describe('storedRowDraftFields', () => {
+    const row = (
+      overrides: Partial<SavedMapStorageRow> = {},
+    ): SavedMapStorageRow => ({
+      id: 'map-001',
+      projectLocalId: 'proj-1',
+      name: 'Territory Basemap',
+      type: 'raster',
+      origin: 'authored',
+      styleUrl: 'https://tiles.example.com/{z}/{x}/{y}.png',
+      bbox: [-73.0, -3.5, -70.0, -1.0],
+      minZoom: 0,
+      maxZoom: 14,
+      status: 'ready',
+      createdAt: '2026-06-28T00:00:00Z',
+      updatedAt: '2026-06-28T00:00:00Z',
+      ...overrides,
+    });
+
+    it('passes attribution and an explicit scheme through for a raster row', () => {
+      expect(
+        storedRowDraftFields(
+          row({ attribution: '© Contributors', scheme: 'tms' }),
+        ),
+      ).toEqual({
+        name: 'Territory Basemap',
+        type: 'raster',
+        styleUrl: 'https://tiles.example.com/{z}/{x}/{y}.png',
+        bbox: [-73.0, -3.5, -70.0, -1.0],
+        minZoom: 0,
+        maxZoom: 14,
+        attribution: '© Contributors',
+        scheme: 'tms',
+      });
+    });
+
+    it('defaults a missing raster scheme to xyz and keeps absent attribution undefined', () => {
+      const fields = storedRowDraftFields(row());
+      expect(fields.scheme).toBe('xyz');
+      expect(fields.attribution).toBeUndefined();
+    });
+
+    it('omits the scheme key for style rows even when the row carries one', () => {
+      const fields = storedRowDraftFields(
+        row({
+          type: 'style',
+          styleUrl: 'https://example.com/style.json',
+          scheme: 'tms',
+        }),
+      );
+      expect('scheme' in fields).toBe(false);
+    });
+
+    it('ignores unknown passthrough keys on the stored row', () => {
+      const fields = storedRowDraftFields(
+        row({ futureField: { x: 1 } } as Partial<SavedMapStorageRow>),
+      );
+      expect('futureField' in fields).toBe(false);
+    });
+  });
+
+  describe('validateAuthoredLayersForExtract', () => {
+    it('agrees with the manual context-build-and-validate sequence', () => {
+      const conflicted = zoomConflictedRaster();
+      const fields = { ...draftFields(), minZoom: 10, maxZoom: 14 };
+      const expected = validateAuthoredLayerDraftContext(
+        [validEntry(conflicted)],
+        buildAuthoredLayerCommitContext(fields, [validEntry(conflicted)], {
+          kind: 'extract',
+        }),
+      );
+      expect([
+        ...validateAuthoredLayersForExtract(fields, [validEntry(conflicted)]),
+      ]).toEqual([...expected]);
+    });
+
+    it('returns an empty map when every entry commits cleanly', () => {
+      expect(
+        validateAuthoredLayersForExtract(draftFields(), [
+          validEntry(vectorLayer()),
+          validEntry(rasterLayer()),
+        ]).size,
+      ).toBe(0);
+    });
+
+    it('keys failures by draft entry key without reserving sibling ids', () => {
+      const conflicted = zoomConflictedRaster();
+      // 10..14 does not overlap the conflicted raster's source zooms, while
+      // the sibling vector entry still validates without error.
+      const fields = { ...draftFields(), minZoom: 10, maxZoom: 14 };
+      const errors = validateAuthoredLayersForExtract(fields, [
+        validEntry(vectorLayer()),
+        validEntry(conflicted),
+      ]);
+      expect([...errors.keys()]).toEqual([`layer:${conflicted.id}`]);
+      expect(
+        errors
+          .get(`layer:${conflicted.id}`)
+          ?.issues.some(
+            (issue) => issue.code === 'EMPTY_RASTER_EFFECTIVE_ZOOM_RANGE',
+          ),
+      ).toBe(true);
     });
   });
 

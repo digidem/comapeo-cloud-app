@@ -12,9 +12,9 @@ import {
   hasSavedMapSmpPackage,
 } from '@/lib/db';
 import {
-  buildAuthoredLayerCommitContext,
   getAdvancedEditorRecoveryEligibility,
-  validateAuthoredLayerDraftContext,
+  storedRowDraftFields,
+  validateAuthoredLayersForExtract,
 } from '@/lib/map/saved-map-authoring';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import {
@@ -60,24 +60,9 @@ function getAuthoredDownloadBlockReason(
   const eligibility = getAdvancedEditorRecoveryEligibility(parsed.draftEntries);
   if (!eligibility.allowed) return 'invalid';
 
-  const draftFields = {
-    name: map.name,
-    type: map.type,
-    styleUrl: map.styleUrl,
-    bbox: map.bbox,
-    minZoom: map.minZoom,
-    maxZoom: map.maxZoom,
-    attribution: map.attribution,
-    ...(map.type === 'raster' ? { scheme: map.scheme ?? 'xyz' } : {}),
-  };
-  const context = buildAuthoredLayerCommitContext(
-    draftFields,
+  const errors = validateAuthoredLayersForExtract(
+    storedRowDraftFields(parsed.snapshot.row),
     parsed.draftEntries,
-    { kind: 'extract' },
-  );
-  const errors = validateAuthoredLayerDraftContext(
-    parsed.draftEntries,
-    context,
   );
   if (errors.size === 0) return null;
   for (const error of errors.values()) {

@@ -36,7 +36,7 @@ import {
   buildAuthoredLayerCommitContext,
   extractCanonicalAuthoredLayers,
   getAdvancedEditorRecoveryEligibility,
-  validateAuthoredLayerDraftContext,
+  validateAuthoredLayersForExtract,
 } from '@/lib/map/saved-map-authoring';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 import {
@@ -686,9 +686,9 @@ export function MapScreen() {
   );
   const recoveryEligibility =
     getAdvancedEditorRecoveryEligibility(authoredLayerEntries);
-  const authoredContextErrors = validateAuthoredLayerDraftContext(
+  const authoredContextErrors = validateAuthoredLayersForExtract(
+    authoringDraftFields,
     authoredLayerEntries,
-    extractionContext,
   );
   const authoringBlocked =
     !recoveryEligibility.allowed || authoredContextErrors.size > 0;

@@ -195,6 +195,42 @@ export function validateAuthoredLayerDraftContext(
   return errors;
 }
 
+/**
+ * Draft fields reconstructed from a stored row instead of a live editor
+ * draft. Scheme is only meaningful for raster maps and defaults to `xyz`,
+ * matching what the editor sends for a raster draft.
+ */
+export function storedRowDraftFields(
+  row: SavedMapStorageRow,
+): SavedMapAuthoringDraftFields {
+  return {
+    name: row.name,
+    type: row.type,
+    styleUrl: row.styleUrl,
+    bbox: row.bbox,
+    minZoom: row.minZoom,
+    maxZoom: row.maxZoom,
+    attribution: row.attribution,
+    ...(row.type === 'raster' ? { scheme: row.scheme ?? 'xyz' } : {}),
+  };
+}
+
+/**
+ * Contextual validation of a draft as it would be extracted: the whole
+ * collection is canonicalized as one batch, so no id is reserved against
+ * another. Shared by the editor (block the save) and the download panel
+ * (explain why the download is blocked) so both judge identically.
+ */
+export function validateAuthoredLayersForExtract(
+  draftFields: SavedMapAuthoringDraftFields,
+  draftEntries: readonly AuthoredLayerDraftEntry[],
+): ReadonlyMap<AuthoredLayerDraftEntry['key'], AuthoredLayerValidationError> {
+  const context = buildAuthoredLayerCommitContext(draftFields, draftEntries, {
+    kind: 'extract',
+  });
+  return validateAuthoredLayerDraftContext(draftEntries, context);
+}
+
 export type ExtractCanonicalAuthoredLayersResult =
   | { ok: true; layers: AuthoredLayer[] }
   | {
@@ -310,6 +346,12 @@ export function getAdvancedEditorRecoveryEligibility(
     : { allowed: true };
 }
 
+/** The canonical row plus the package-relevance verdict that shaped it. */
+export type SavedMapAuthoringWrite = {
+  row: CanonicalSavedMapStorageRow;
+  packageChanged: boolean;
+};
+
 /**
  * Canonical authoring write: rebuilds a storage row from a validated snapshot
  * plus the current editor draft.
@@ -318,15 +360,16 @@ export function getAdvancedEditorRecoveryEligibility(
  * immutable identity always comes from the snapshot row, and package
  * lifecycle (`status`/`errorMessage`/`smpBlob`/`smpSize`) is preserved only
  * while the package-relevant config is structurally unchanged — otherwise the
- * stale package bytes are dropped and the row returns to `draft`. Throws on
- * anything that cannot produce a canonical, schema-valid row.
+ * stale package bytes are dropped and the row returns to `draft`. Returns that
+ * verdict alongside the row so callers never re-derive it. Throws on anything
+ * that cannot produce a canonical, schema-valid row.
  */
 export function buildSavedMapAuthoringWrite(
   snapshot: ValidatedSavedMapStorageSnapshot,
   draftFields: SavedMapAuthoringDraftFields,
   layers: AuthoredLayer[],
   updatedAt: number,
-): CanonicalSavedMapStorageRow {
+): SavedMapAuthoringWrite {
   // Runtime mirror of the type-level brand: only parseSavedMapForAuthoring
   // mints snapshots, so anything else (e.g. a bare row pushed through a cast)
   // must stop here instead of producing an unvalidated write.
@@ -434,5 +477,5 @@ export function buildSavedMapAuthoringWrite(
         .join('; ')}`,
     );
   }
-  return writeRow as CanonicalSavedMapStorageRow;
+  return { row: writeRow as CanonicalSavedMapStorageRow, packageChanged };
 }

@@ -8,11 +8,7 @@ import {
 import type { SavedMap } from '@/lib/db';
 import { addSavedMapWithPackage, getDb } from '@/lib/db';
 import type { AuthoredLayer } from '@/lib/map/authored-layers';
-import {
-  buildSavedMapAuthoringWrite,
-  getPackageRelevantMapConfig,
-  hasPackageRelevantMapConfigChanged,
-} from '@/lib/map/saved-map-authoring';
+import { buildSavedMapAuthoringWrite } from '@/lib/map/saved-map-authoring';
 import { recoverCancelledMapDownload } from '@/lib/map/saved-map-lifecycle';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import type { DownloadProgress } from '@/lib/map/smp-download';
@@ -168,18 +164,15 @@ export function useSaveAuthoredMap() {
             );
           }
 
-          row = buildSavedMapAuthoringWrite(
+          const write = buildSavedMapAuthoringWrite(
             parsedCurrent.snapshot,
             draftFields,
             layers,
             updatedAt,
           );
-          const packageChanged = hasPackageRelevantMapConfigChanged(
-            parsedCurrent.snapshot.row,
-            getPackageRelevantMapConfig(row),
-          );
+          row = write.row;
           await db.maps.put(row as SavedMap);
-          if (packageChanged) {
+          if (write.packageChanged) {
             await db.mapPackages.delete(row.id);
             await db.mapPackageChunks.where('mapId').equals(row.id).delete();
           }
