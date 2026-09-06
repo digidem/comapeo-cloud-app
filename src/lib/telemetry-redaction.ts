@@ -140,7 +140,13 @@ function selectBoundedObjectEntries(
 
 interface SensitiveValueCollection {
   values: Set<string>;
+  /**
+   * Fail-closed signal: the sensitive-value bound was hit, so some sensitive
+   * values were never collected and cannot be matched inside arbitrary text.
+   */
   saturated: boolean;
+  /** Containers that exceeded the entry bound and must redact their subtree. */
+  saturatedNodes: Set<object>;
 }
 
 function addSensitiveValue(
@@ -247,12 +253,8 @@ function collectSensitiveValues(
     for (const item of value.slice(0, MAX_SANITIZE_ENTRIES)) {
       collectSensitiveValues(item, depth + 1, forceSensitive, seen, collection);
     }
-    // Only sensitive-container truncation forces blanket primitive redaction.
-    // Non-sensitive tails are omitted by sanitizeValue too, so they cannot be
-    // serialized directly; their omitted values are intentionally not learned
-    // for echo-scrubbing of otherwise retained free-text siblings.
-    if (forceSensitive && value.length > MAX_SANITIZE_ENTRIES) {
-      collection.saturated = true;
+    if (value.length > MAX_SANITIZE_ENTRIES) {
+      collection.saturatedNodes.add(value);
     }
     return;
   }
@@ -268,8 +270,8 @@ function collectSensitiveValues(
       collection,
     );
   }
-  if (forceSensitive && Object.keys(source).length > entries.length) {
-    collection.saturated = true;
+  if (Object.keys(source).length > entries.length) {
+    collection.saturatedNodes.add(value);
   }
 }
 
@@ -277,6 +279,7 @@ function sanitizeTagMap(
   value: unknown,
   sensitiveValues: ReadonlySet<string>,
   redactPrimitives: boolean,
+  saturatedNodes: ReadonlySet<object>,
 ): unknown {
   if (
     redactPrimitives ||
@@ -286,6 +289,7 @@ function sanitizeTagMap(
   ) {
     return TELEMETRY_REDACTED;
   }
+  if (saturatedNodes.has(value)) return TELEMETRY_REDACTED;
 
   const source = value as Record<string, unknown>;
   const entries = selectBoundedObjectEntries(source).sort(([left], [right]) =>
@@ -312,6 +316,7 @@ function sanitizeValue(
   seen: WeakSet<object>,
   sensitiveValues: ReadonlySet<string>,
   redactPrimitives: boolean,
+  saturatedNodes: ReadonlySet<object>,
   preserveRootTagKeys: boolean,
 ): unknown {
   if (value === null || value === undefined) return value;
@@ -349,6 +354,8 @@ function sanitizeValue(
   }
 
   if (Array.isArray(value)) {
+    const redactItems =
+      redactPrimitives || (depth > 0 && saturatedNodes.has(value));
     const result = value
       .slice(0, MAX_SANITIZE_ENTRIES)
       .map((item) =>
@@ -357,7 +364,8 @@ function sanitizeValue(
           depth + 1,
           seen,
           sensitiveValues,
-          redactPrimitives,
+          redactItems,
+          saturatedNodes,
           preserveRootTagKeys,
         ),
       );
@@ -372,6 +380,8 @@ function sanitizeValue(
     compareTelemetryKeys(left, right),
   );
   const result: Record<string, unknown> = {};
+  const redactEntries =
+    redactPrimitives || (depth > 0 && saturatedNodes.has(value));
 
   for (const [key, entryValue] of entries) {
     const normalizedKey = normalizeKey(key);
@@ -379,7 +389,8 @@ function sanitizeValue(
       result[key] = sanitizeTagMap(
         entryValue,
         sensitiveValues,
-        redactPrimitives,
+        redactEntries,
+        saturatedNodes,
       );
     } else if (isSensitiveTelemetryKey(key)) {
       result[key] = TELEMETRY_REDACTED;
@@ -389,7 +400,8 @@ function sanitizeValue(
         depth + 1,
         seen,
         sensitiveValues,
-        redactPrimitives,
+        redactEntries,
+        saturatedNodes,
         preserveRootTagKeys,
       );
     }
@@ -409,6 +421,7 @@ export function sanitizeTelemetry<T>(
   const collection: SensitiveValueCollection = {
     values: new Set<string>(),
     saturated: false,
+    saturatedNodes: new Set<object>(),
   };
   collectSensitiveValues(value, 0, false, new WeakSet<object>(), collection);
   return sanitizeValue(
@@ -417,6 +430,7 @@ export function sanitizeTelemetry<T>(
     new WeakSet<object>(),
     collection.values,
     collection.saturated,
+    collection.saturatedNodes,
     options.preserveRootTagKeys ?? false,
   ) as T;
 }
