@@ -12,6 +12,8 @@ QWEN_REFERENCE = SKILL_DIR / "references" / "claude-qwen-review.md"
 TIMEOUT = SKILL_DIR / "references" / "timeout-strategy.md"
 CI = SKILL_DIR.parents[2] / ".github" / "workflows" / "ci.yml"
 AGENTS = SKILL_DIR.parents[2] / "AGENTS.md"
+WORKFLOW = SKILL_DIR.parents[2] / "WORKFLOW.md"
+VISUAL_REVIEW = SKILL_DIR.parents[2] / "scripts" / "review-mobile-visuals.ts"
 ISSUE_TO_SPEC = SKILL_DIR.parent / "issue-to-spec" / "SKILL.md"
 
 
@@ -33,6 +35,8 @@ def assert_policy_contract(
     timeout_text: str,
     ci_text: str,
     agents_text: str,
+    workflow_text: str,
+    visual_review_text: str,
     issue_to_spec_text: str,
 ) -> None:
     primary = _paragraph_containing(skill_text, "Default to **GPT-6 Astra via Codex**")
@@ -74,6 +78,10 @@ def assert_policy_contract(
         "planning, implementation, specification, debugging, and independent review",
         agents_text,
     )
+    test.assertIn('model="gpt-6-astra"', workflow_text)
+    test.assertNotIn('model="gpt-5.5"', workflow_text)
+    test.assertIn("const MODEL = 'gpt-6-astra';", visual_review_text)
+    test.assertNotIn("gpt-5.4-mini", visual_review_text)
     test.assertIn("GPT-6 Astra via Codex", issue_to_spec_text)
     test.assertNotIn("use Claude Opus 5", issue_to_spec_text)
 
@@ -152,6 +160,8 @@ class ReviewerFallbackPolicyTests(unittest.TestCase):
             "timeout_text": TIMEOUT.read_text(),
             "ci_text": CI.read_text(),
             "agents_text": AGENTS.read_text(),
+            "workflow_text": WORKFLOW.read_text(),
+            "visual_review_text": VISUAL_REVIEW.read_text(),
             "issue_to_spec_text": ISSUE_TO_SPEC.read_text(),
         }
         values.update(overrides)
