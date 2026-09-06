@@ -2,6 +2,11 @@ import { render, screen } from '@tests/mocks/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DefaultFallback, ErrorBoundary } from '@/components/ui/error-boundary';
+import { captureException } from '@/lib/sentry';
+
+vi.mock('@/lib/sentry', () => ({
+  captureException: vi.fn(),
+}));
 
 function ThrowError({ shouldThrow }: { shouldThrow: boolean }) {
   if (shouldThrow) {
@@ -15,6 +20,7 @@ describe('ErrorBoundary', () => {
   const originalConsoleError = console.error;
   beforeEach(() => {
     console.error = vi.fn();
+    vi.mocked(captureException).mockClear();
   });
   afterEach(() => {
     console.error = originalConsoleError;
@@ -75,6 +81,18 @@ describe('ErrorBoundary', () => {
     // The retry button should be present in the default fallback
     const retryButton = screen.getByRole('button', { name: /try again/i });
     expect(retryButton).toBeInTheDocument();
+  });
+
+  it('reports the error to Sentry when a child throws', () => {
+    render(
+      <ErrorBoundary>
+        <ThrowError shouldThrow={true} />
+      </ErrorBoundary>,
+    );
+    expect(captureException).toHaveBeenCalledTimes(1);
+    const [errorArg] = vi.mocked(captureException).mock.calls[0]!;
+    expect(errorArg).toBeInstanceOf(Error);
+    expect((errorArg as Error).message).toBe('Test error message');
   });
 
   it('does not render error message paragraph when error is null', () => {

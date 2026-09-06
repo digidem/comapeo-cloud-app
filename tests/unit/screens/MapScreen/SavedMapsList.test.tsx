@@ -69,6 +69,50 @@ describe('SavedMapsList', () => {
     expect(await screen.findByText('No saved maps yet')).toBeInTheDocument();
   });
 
+  it('offers layer editing only for authorable saved maps', async () => {
+    const user = userEvent.setup();
+    const onEditMap = vi.fn();
+    await getDb().maps.bulkAdd([
+      createMap({
+        id: 'authored-map',
+        name: 'Editable authored map',
+        origin: 'authored',
+      }),
+      createMap({
+        id: 'imported-map',
+        name: 'Imported package',
+        type: 'style',
+        origin: 'imported',
+        styleUrl: '',
+        scheme: undefined,
+        status: 'ready',
+      }),
+    ]);
+
+    render(<SavedMapsList projectLocalId="project-1" onEditMap={onEditMap} />);
+
+    const rows = await screen.findAllByTestId('saved-map-row');
+    const authoredRow = rows.find((row) =>
+      within(row).queryByText('Editable authored map'),
+    );
+    const importedRow = rows.find((row) =>
+      within(row).queryByText('Imported package'),
+    );
+    expect(authoredRow).toBeDefined();
+    expect(importedRow).toBeDefined();
+    if (!authoredRow || !importedRow) return;
+
+    await user.click(
+      within(authoredRow).getByRole('button', { name: 'Edit layers' }),
+    );
+    expect(onEditMap).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'authored-map' }),
+    );
+    expect(
+      within(importedRow).queryByRole('button', { name: 'Edit layers' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('lists saved maps sorted by most recently updated first', async () => {
     await getDb().maps.bulkAdd([
       createMap({

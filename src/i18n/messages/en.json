@@ -698,6 +698,9 @@
   "dashboard.banner.lastSync": {
     "defaultMessage": "Last Sync"
   },
+  "dashboard.banner.reportBranding": {
+    "defaultMessage": "Report branding"
+  },
   "dashboard.banner.teamMembers": {
     "defaultMessage": "Team Members"
   },
@@ -1412,6 +1415,69 @@
   "home.project.editAria": {
     "defaultMessage": "Edit project"
   },
+  "home.reportBranding.cancel": {
+    "defaultMessage": "Cancel"
+  },
+  "home.reportBranding.description": {
+    "defaultMessage": "Set the issuing organization shown on reports. This is separate from the project icon."
+  },
+  "home.reportBranding.logo": {
+    "defaultMessage": "Organization logo"
+  },
+  "home.reportBranding.logoConfigured": {
+    "defaultMessage": "Report logo configured"
+  },
+  "home.reportBranding.logoDimensionsInvalid": {
+    "defaultMessage": "Logo dimensions must be valid whole pixels"
+  },
+  "home.reportBranding.logoDimensionsTooLarge": {
+    "defaultMessage": "Logo dimensions must not exceed 2048×2048 pixels"
+  },
+  "home.reportBranding.logoMimeMismatch": {
+    "defaultMessage": "The selected file type does not match the image content"
+  },
+  "home.reportBranding.logoProcessingFailed": {
+    "defaultMessage": "Unable to process logo image"
+  },
+  "home.reportBranding.logoRequirements": {
+    "defaultMessage": "PNG, JPEG, or WebP. Maximum 2 MB and 2048×2048 pixels."
+  },
+  "home.reportBranding.logoTooLarge": {
+    "defaultMessage": "Logo must be 2 MB or smaller"
+  },
+  "home.reportBranding.logoTypeUnsupported": {
+    "defaultMessage": "Logo must be PNG, JPEG, or WebP"
+  },
+  "home.reportBranding.noLogo": {
+    "defaultMessage": "No report logo configured"
+  },
+  "home.reportBranding.organizationName": {
+    "defaultMessage": "Organization name"
+  },
+  "home.reportBranding.organizationNamePlaceholder": {
+    "defaultMessage": "Enter organization name"
+  },
+  "home.reportBranding.organizationNameRequired": {
+    "defaultMessage": "Organization name is required"
+  },
+  "home.reportBranding.removeLogo": {
+    "defaultMessage": "Remove logo"
+  },
+  "home.reportBranding.replaceLogo": {
+    "defaultMessage": "Replace logo"
+  },
+  "home.reportBranding.save": {
+    "defaultMessage": "Save branding"
+  },
+  "home.reportBranding.saveFailed": {
+    "defaultMessage": "Failed to save report branding"
+  },
+  "home.reportBranding.title": {
+    "defaultMessage": "Report branding"
+  },
+  "home.reportBranding.uploadLogo": {
+    "defaultMessage": "Upload logo"
+  },
   "home.settings.advanced": {
     "defaultMessage": "Advanced"
   },
@@ -1555,6 +1621,63 @@
   },
   "map.activeMap.onlineBadge": {
     "defaultMessage": "Active map (online): {name}"
+  },
+  "map.authoredLayers.add": {
+    "defaultMessage": "Add GeoJSON layer"
+  },
+  "map.authoredLayers.cancelEdit": {
+    "defaultMessage": "Cancel editing"
+  },
+  "map.authoredLayers.editMap": {
+    "defaultMessage": "Edit layers"
+  },
+  "map.authoredLayers.help": {
+    "defaultMessage": "GeoJSON layers are saved with this map and included in its offline package."
+  },
+  "map.authoredLayers.hide": {
+    "defaultMessage": "Hide {name}"
+  },
+  "map.authoredLayers.invalid": {
+    "defaultMessage": "Invalid layer"
+  },
+  "map.authoredLayers.invalidGuidance": {
+    "defaultMessage": "Remove this invalid layer before saving or downloading. Other valid layers remain available."
+  },
+  "map.authoredLayers.loading": {
+    "defaultMessage": "Adding GeoJSON layer…"
+  },
+  "map.authoredLayers.moveDown": {
+    "defaultMessage": "Move {name} down"
+  },
+  "map.authoredLayers.moveUp": {
+    "defaultMessage": "Move {name} up"
+  },
+  "map.authoredLayers.openError": {
+    "defaultMessage": "Map data could not be opened"
+  },
+  "map.authoredLayers.packagePrivacy": {
+    "defaultMessage": "Authored layer data is stored in this browser and included in the offline map package you create."
+  },
+  "map.authoredLayers.rasterZoomError": {
+    "defaultMessage": "This raster layer has no usable zoom levels inside the current map zoom range."
+  },
+  "map.authoredLayers.recoveryBlocked": {
+    "defaultMessage": "Remove every invalid layer before saving or downloading this map."
+  },
+  "map.authoredLayers.remove": {
+    "defaultMessage": "Remove {name}"
+  },
+  "map.authoredLayers.removeInvalid": {
+    "defaultMessage": "Remove invalid layer"
+  },
+  "map.authoredLayers.saveChanges": {
+    "defaultMessage": "Save changes"
+  },
+  "map.authoredLayers.show": {
+    "defaultMessage": "Show {name}"
+  },
+  "map.authoredLayers.title": {
+    "defaultMessage": "Map layers"
   },
   "map.basemap.label": {
     "defaultMessage": "Basemap"

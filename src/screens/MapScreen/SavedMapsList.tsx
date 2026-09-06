@@ -24,6 +24,7 @@ import { mapMessages } from './messages';
 
 interface SavedMapsListProps {
   projectLocalId: string | null;
+  onEditMap?: (map: SavedMap) => void;
 }
 
 type PendingAction =
@@ -31,7 +32,10 @@ type PendingAction =
   | { type: 'rename'; mapId: string }
   | { type: 'delete'; mapId: string };
 
-export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
+export function SavedMapsList({
+  projectLocalId,
+  onEditMap,
+}: SavedMapsListProps) {
   const intl = useIntl();
   const activeMapId = useMapStore((state) => state.activeMapId);
   const [scope, setScope] = useState<SavedMapsScope>('project');
@@ -189,6 +193,7 @@ export function SavedMapsList({ projectLocalId }: SavedMapsListProps) {
             void handleActiveToggle(map.id, isActive);
           }}
           onPreview={() => setPreviewTargetId(map.id)}
+          onEdit={() => onEditMap?.(map)}
           onRename={() => openRenameDialog(map)}
           onDelete={() => openDeleteDialog(map)}
         />

@@ -78,6 +78,7 @@ if (startupState === 'ready') {
   initSentry();
   registerSW({ immediate: true });
 } else if (startupState === 'worker-transition-required') {
+  initSentry();
   prepareSecureWorkerTransition();
   // The transition page may register only the fixed worker. Credential entry,
   // invite redemption and remote archive traffic remain blocked by the shared

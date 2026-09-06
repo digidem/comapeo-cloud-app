@@ -345,6 +345,15 @@ jobs:
           VITE_PUBLIC_APP_ORIGIN: ${{ github.ref == 'refs/heads/main' && 'https://app.comapeo.cloud' || github.ref == 'refs/heads/staging' && 'https://staging.comapeo.cloud' || format('https://{0}', vars.PAGES_DOMAIN || 'comapeo-cloud-app.pages.dev') }}
           VITE_APP_RELEASE: ${{ github.sha }}
           VITE_APP_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/staging' && 'staging' || 'preview' }}
+          VITE_SENTRY_DSN: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging') && vars.VITE_SENTRY_DSN || '' }}
+
+      # Embeds Sentry debug IDs into the built JS + maps ('hidden' sourcemaps
+      # have no sourceMappingURL comments). Local to dist and needs no auth, so
+      # it runs before the artifact is uploaded: E2E/security verification and
+      # every deploy consume the exact same bytes instead of mutating JS after
+      # verification.
+      - name: Inject Sentry debug IDs
+        run: npx sentry-cli sourcemaps inject dist
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
