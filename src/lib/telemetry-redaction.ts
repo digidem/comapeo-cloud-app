@@ -147,6 +147,8 @@ interface SensitiveValueCollection {
   saturated: boolean;
   /** Containers that exceeded the entry bound and must redact their subtree. */
   saturatedNodes: Set<object>;
+  /** Sensitive root containers whose bounded descendants were truncated. */
+  saturatedSensitiveRoots: Set<object>;
 }
 
 function addSensitiveValue(
@@ -210,6 +212,7 @@ function collectSensitiveValues(
   value: unknown,
   depth: number,
   forceSensitive: boolean,
+  sensitiveRoot: object | null,
   seen: WeakSet<object>,
   collection: SensitiveValueCollection,
 ): void {
@@ -249,12 +252,25 @@ function collectSensitiveValues(
   if (seen.has(value)) return;
   seen.add(value);
 
+  const activeSensitiveRoot =
+    forceSensitive && sensitiveRoot === null ? value : sensitiveRoot;
+
   if (Array.isArray(value)) {
     for (const item of value.slice(0, MAX_SANITIZE_ENTRIES)) {
-      collectSensitiveValues(item, depth + 1, forceSensitive, seen, collection);
+      collectSensitiveValues(
+        item,
+        depth + 1,
+        forceSensitive,
+        activeSensitiveRoot,
+        seen,
+        collection,
+      );
     }
     if (value.length > MAX_SANITIZE_ENTRIES) {
       collection.saturatedNodes.add(value);
+      if (activeSensitiveRoot) {
+        collection.saturatedSensitiveRoots.add(activeSensitiveRoot);
+      }
     }
     return;
   }
@@ -266,12 +282,16 @@ function collectSensitiveValues(
       entryValue,
       depth + 1,
       forceSensitive || isSensitiveTelemetryKey(key),
+      activeSensitiveRoot,
       seen,
       collection,
     );
   }
   if (Object.keys(source).length > entries.length) {
     collection.saturatedNodes.add(value);
+    if (activeSensitiveRoot) {
+      collection.saturatedSensitiveRoots.add(activeSensitiveRoot);
+    }
   }
 }
 
@@ -279,7 +299,7 @@ function sanitizeTagMap(
   value: unknown,
   sensitiveValues: ReadonlySet<string>,
   redactPrimitives: boolean,
-  saturatedNodes: ReadonlySet<object>,
+  saturatedSensitiveRoots: ReadonlySet<object>,
 ): unknown {
   if (
     redactPrimitives ||
@@ -289,7 +309,7 @@ function sanitizeTagMap(
   ) {
     return TELEMETRY_REDACTED;
   }
-  if (saturatedNodes.has(value)) return TELEMETRY_REDACTED;
+  if (saturatedSensitiveRoots.has(value)) return TELEMETRY_REDACTED;
 
   const source = value as Record<string, unknown>;
   const entries = selectBoundedObjectEntries(source).sort(([left], [right]) =>
@@ -317,6 +337,7 @@ function sanitizeValue(
   sensitiveValues: ReadonlySet<string>,
   redactPrimitives: boolean,
   saturatedNodes: ReadonlySet<object>,
+  saturatedSensitiveRoots: ReadonlySet<object>,
   preserveRootTagKeys: boolean,
 ): unknown {
   if (value === null || value === undefined) return value;
@@ -366,6 +387,7 @@ function sanitizeValue(
           sensitiveValues,
           redactItems,
           saturatedNodes,
+          saturatedSensitiveRoots,
           preserveRootTagKeys,
         ),
       );
@@ -390,7 +412,7 @@ function sanitizeValue(
         entryValue,
         sensitiveValues,
         redactEntries,
-        saturatedNodes,
+        saturatedSensitiveRoots,
       );
     } else if (isSensitiveTelemetryKey(key)) {
       result[key] = TELEMETRY_REDACTED;
@@ -402,6 +424,7 @@ function sanitizeValue(
         sensitiveValues,
         redactEntries,
         saturatedNodes,
+        saturatedSensitiveRoots,
         preserveRootTagKeys,
       );
     }
@@ -422,8 +445,16 @@ export function sanitizeTelemetry<T>(
     values: new Set<string>(),
     saturated: false,
     saturatedNodes: new Set<object>(),
+    saturatedSensitiveRoots: new Set<object>(),
   };
-  collectSensitiveValues(value, 0, false, new WeakSet<object>(), collection);
+  collectSensitiveValues(
+    value,
+    0,
+    false,
+    null,
+    new WeakSet<object>(),
+    collection,
+  );
   return sanitizeValue(
     value,
     0,
@@ -431,6 +462,7 @@ export function sanitizeTelemetry<T>(
     collection.values,
     collection.saturated,
     collection.saturatedNodes,
+    collection.saturatedSensitiveRoots,
     options.preserveRootTagKeys ?? false,
   ) as T;
 }

@@ -265,6 +265,20 @@ describe('telemetry redaction', () => {
     );
   });
 
+  it('fails closed for preserved root tags when a nested subtree saturates', () => {
+    const marker = ['nested', 'tail', '325'].join('-');
+    const nested = Array.from(
+      { length: MAX_SANITIZE_ENTRIES + 1 },
+      (_, index) => (index === MAX_SANITIZE_ENTRIES ? marker : 'safe-value'),
+    );
+    const result = sanitizeTelemetry(
+      { tags: { ['phase-' + marker]: 'safe-value', nested } },
+      { preserveRootTagKeys: true },
+    );
+
+    expect(result.tags).toBe(TELEMETRY_REDACTED);
+  });
+
   it('fails closed for preserved root tags when collection saturates', () => {
     const marker = ['tail', 'marker', '325'].join('-');
     const tags: Record<string, unknown> = {
