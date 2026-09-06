@@ -176,6 +176,50 @@ describe('sentry module', () => {
       );
     });
 
+    it('includes tracePropagationTargets with the app origin, Pages origin, and localhost', async () => {
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+      expect(sentry.init).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tracePropagationTargets: [
+            'https://app.example.com',
+            'https://comapeo-cloud-app.pages.dev',
+            'localhost',
+          ],
+        }),
+      );
+    });
+
+    it('treats VITE_CF_PAGES_ORIGIN as additive to tracePropagationTargets', async () => {
+      vi.stubEnv('VITE_CF_PAGES_ORIGIN', 'https://custom-preview.pages.dev');
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+      const callArgs = (sentry.init as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0] as Record<string, unknown> | undefined;
+      expect(callArgs).toHaveProperty('tracePropagationTargets', [
+        'https://app.example.com',
+        'https://comapeo-cloud-app.pages.dev',
+        'https://custom-preview.pages.dev',
+        'localhost',
+      ]);
+    });
+
+    it('keeps localhost in tracePropagationTargets when every configured origin deduplicates to one host', async () => {
+      vi.stubEnv('VITE_PUBLIC_APP_ORIGIN', '');
+      vi.stubEnv('VITE_CF_PAGES_ORIGIN', 'https://comapeo-cloud-app.pages.dev');
+      const sentry = await import('@sentry/react');
+      const { initSentry } = await import('@/lib/sentry');
+      initSentry();
+      const callArgs = (sentry.init as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0] as Record<string, unknown> | undefined;
+      expect(callArgs).toHaveProperty('tracePropagationTargets', [
+        'https://comapeo-cloud-app.pages.dev',
+        'localhost',
+      ]);
+    });
+
     it('always keeps the default Pages origin even when APP_ORIGIN is empty', async () => {
       vi.stubEnv('VITE_PUBLIC_APP_ORIGIN', '');
       const sentry = await import('@sentry/react');
