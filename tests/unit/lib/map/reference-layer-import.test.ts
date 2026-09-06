@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MAX_GEOJSON_OVERLAY_BYTES } from '@/lib/map/geojson-overlays';
 import {
@@ -208,6 +208,10 @@ describe('GeoJSON reference import batch', () => {
 describe('XML reference imports', () => {
   const context = { minZoom: 0, maxZoom: 22 } as const;
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('converts a local KML placemark and preserves ordinary properties', async () => {
     const file = new File(
       [
@@ -311,6 +315,88 @@ describe('XML reference imports', () => {
         error: { code: 'xml-invalid' },
       });
     }
+  });
+
+  it('rejects invalid UTF-8 and explicit non-UTF-8 declarations', async () => {
+    const invalidUtf8 = await prepareReferenceImportBatch(
+      [new File([new Uint8Array([195, 40])], 'invalid.kml')],
+      context,
+    );
+    const nonUtf8Declaration = await prepareReferenceImportBatch(
+      [
+        new File(
+          ['<?xml version="1.0" encoding="ISO-8859-1"?><kml/>'],
+          'latin1.kml',
+        ),
+      ],
+      context,
+    );
+
+    for (const result of [invalidUtf8, nonUtf8Declaration]) {
+      expect(result.ok).toBe(false);
+      if (result.ok) continue;
+      expect(result.errors[0]).toMatchObject({
+        kind: 'conversion',
+        error: { code: 'xml-invalid' },
+      });
+    }
+  });
+
+  it('rejects XML beyond the markup-token and nesting-depth limits before conversion', async () => {
+    const tooManyTokens =
+      '<kml>' + '<'.repeat(MAX_REFERENCE_XML_MARKUP_TOKENS) + '</kml>';
+    const deep =
+      '<kml>' +
+      '<Folder>'.repeat(MAX_REFERENCE_XML_DEPTH) +
+      '</Folder>'.repeat(MAX_REFERENCE_XML_DEPTH) +
+      '</kml>';
+
+    const tokenResult = await prepareReferenceImportBatch(
+      [new File([tooManyTokens], 'tokens.kml')],
+      context,
+    );
+    const depthResult = await prepareReferenceImportBatch(
+      [new File([deep], 'deep.kml')],
+      context,
+    );
+
+    for (const result of [tokenResult, depthResult]) {
+      expect(result.ok).toBe(false);
+      if (result.ok) continue;
+      expect(result.errors[0]).toMatchObject({
+        kind: 'conversion',
+        error: { code: 'xml-too-complex' },
+      });
+    }
+  });
+
+  it('rejects a parsed document beyond the element-count limit before converter work', async () => {
+    const leaf = {
+      localName: 'Folder',
+      children: { length: 0, item: () => null },
+    } as unknown as Element;
+    const children = {
+      length: MAX_REFERENCE_XML_ELEMENTS,
+      item: (index: number) =>
+        index < MAX_REFERENCE_XML_ELEMENTS ? leaf : null,
+    };
+    const root = { localName: 'kml', children } as unknown as Element;
+    vi.spyOn(DOMParser.prototype, 'parseFromString').mockReturnValue({
+      documentElement: root,
+      getElementsByTagName: () => [] as unknown as HTMLCollectionOf<Element>,
+    } as unknown as Document);
+
+    const result = await prepareReferenceImportBatch(
+      [new File(['<kml/>'], 'elements.kml')],
+      context,
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors[0]).toMatchObject({
+      kind: 'conversion',
+      error: { code: 'xml-too-complex' },
+    });
   });
 });
 
@@ -582,4 +668,49 @@ describe('zipped Shapefile reference imports', () => {
       error: { code: 'shapefile-unsupported-crs' },
     });
   });
+
+  it.each([
+    [
+      'Web Mercator',
+      -5191196.100565891,
+      -2698731.8848331273,
+      'PROJCS["WGS_1984_Web_Mercator_Auxiliary_Sphere",GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["Degree",0.0174532925199433]],PROJECTION["Mercator_Auxiliary_Sphere"],PARAMETER["False_Easting",0],PARAMETER["False_Northing",0],PARAMETER["Central_Meridian",0],PARAMETER["Standard_Parallel_1",0],PARAMETER["Auxiliary_Sphere_Type",0],UNIT["Meter",1]]',
+    ],
+    [
+      'WGS84 / UTM zone 23S',
+      333287.12361776334,
+      7394586.094486862,
+      'PROJCS["WGS 84 / UTM zone 23S",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",-45],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",10000000],UNIT["metre",1]]',
+    ],
+    [
+      'SIRGAS 2000 / UTM zone 23S',
+      333287.1236173264,
+      7394586.094565781,
+      'PROJCS["SIRGAS 2000 / UTM zone 23S",GEOGCS["SIRGAS 2000",DATUM["Sistema_de_Referencia_Geocentrico_para_las_AmericaS_2000",SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",-45],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",10000000],UNIT["metre",1]]',
+    ],
+  ])(
+    'reprojects %s control coordinates to WGS84 within 1e-5 degrees',
+    async (_label, x, y, prj) => {
+      const expected = [-46.633308, -23.55052] as const;
+      const file = await shapefileZip([
+        ['control.shp', pointShp(x, y)],
+        ['control.dbf', oneRecordDbf('control')],
+        ['control.prj', prj],
+      ]);
+
+      const result = await prepareReferenceImportBatch([file], context);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok || result.layers[0]?.source.type !== 'geojson') return;
+      const geometry = result.layers[0].source.data.features[0]?.geometry;
+      expect(geometry?.type).toBe('Point');
+      if (geometry?.type !== 'Point') return;
+      expect(
+        Math.abs(geometry.coordinates[0] - expected[0]),
+      ).toBeLessThanOrEqual(1e-5);
+      expect(
+        Math.abs(geometry.coordinates[1] - expected[1]),
+      ).toBeLessThanOrEqual(1e-5);
+    },
+  );
 });
