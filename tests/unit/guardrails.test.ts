@@ -68,7 +68,7 @@ describe('repository guardrails', () => {
     // Report-branding network-blocked coverage must run in the intended
     // cross-browser PR step, not merely somewhere later in the workflow.
     const crossBrowserStep = ci.match(
-      /      - name: Cross-browser[^\n]*E2E on PRs\n[\s\S]*?(?=\n      - name:)/,
+      / {6}- name: Cross-browser[^\n]*E2E on PRs\n[\s\S]*?(?=\n {6}- name:)/,
     )?.[0];
     expect(crossBrowserStep).toMatch(
       /npx playwright test [^\n]*tests\/e2e\/report-branding\.e2e\.ts[^\n]*--project=firefox --project=webkit/,
