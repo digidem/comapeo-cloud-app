@@ -4,13 +4,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-PLAYWRIGHT_VERSION="$(node -p "require('./node_modules/@playwright/test/package.json').version")"
-PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
-
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required so WebKit runs with the same Playwright system dependencies as CI." >&2
   exit 1
 fi
+
+PLAYWRIGHT_VERSION="$(node -p "require('./node_modules/@playwright/test/package.json').version")"
+PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
 
 echo "==> QA #359: focused unit and CI guardrail coverage"
 npx vitest run \
@@ -29,6 +29,7 @@ npm run build:ci
 echo "==> QA #359: Chromium + Firefox report-branding paths, retries disabled"
 docker run --rm --ipc=host \
   --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp \
   -e VITE_PREVIEW=1 \
   -v "$ROOT_DIR:/work" \
   -w /work \
@@ -44,6 +45,7 @@ docker run --rm --ipc=host \
 echo "==> QA #359: representative WebKit PR ordering, retries disabled"
 docker run --rm --ipc=host \
   --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp \
   -e VITE_PREVIEW=1 \
   -v "$ROOT_DIR:/work" \
   -w /work \

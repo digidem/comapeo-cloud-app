@@ -70,6 +70,7 @@ describe('repository guardrails', () => {
     const crossBrowserStep = ci.match(
       / {6}- name: Cross-browser[^\n]*E2E on PRs\n[\s\S]*?(?=\n {6}- name:)/,
     )?.[0];
+    expect(crossBrowserStep).toBeDefined();
     expect(crossBrowserStep).toMatch(
       /npx playwright test [^\n]*tests\/e2e\/report-branding\.e2e\.ts[^\n]*--project=firefox --project=webkit/,
     );
