@@ -77,6 +77,14 @@ vi.mock('@/hooks/useCases', () => ({
   useCases: vi.fn(() => mockCasesQuery),
 }));
 
+vi.mock('@/hooks/useCaseEvidenceCounts', () => ({
+  useCaseEvidenceCounts: vi.fn(() => ({
+    data: { 'case-1': 2, 'case-2': 1 },
+    isPending: false,
+    isError: false,
+  })),
+}));
+
 vi.mock('@/hooks/useStoragePersist', () => ({
   useStoragePersist: vi.fn(() => mockStoragePersist),
 }));
@@ -180,10 +188,10 @@ describe('CasesScreen', () => {
       expect(screen.getByText('Case Two')).toBeInTheDocument();
     });
 
-    it('renders evidence-count placeholder for each case', () => {
+    it('renders the current evidence count for each case', () => {
       render(<CasesScreen />);
-      const evidenceElements = screen.getAllByText('0 evidence');
-      expect(evidenceElements.length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText('2 evidence items')).toBeInTheDocument();
+      expect(screen.getByText('1 evidence item')).toBeInTheDocument();
     });
 
     it('links each case to its detail route', () => {

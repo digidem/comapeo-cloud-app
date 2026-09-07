@@ -6,6 +6,7 @@ import { Link } from '@tanstack/react-router';
 import { useShellSlot } from '@/components/layout/shell-slot';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useCaseEvidenceCounts } from '@/hooks/useCaseEvidenceCounts';
 import { useCases } from '@/hooks/useCases';
 import { useProjects } from '@/hooks/useProjects';
 import { useStoragePersist } from '@/hooks/useStoragePersist';
@@ -44,9 +45,10 @@ const messages = defineMessages({
     id: 'cases.casesError',
     defaultMessage: 'Failed to load cases. Please try again.',
   },
-  evidenceCountEmpty: {
-    id: 'cases.evidenceCountEmpty',
-    defaultMessage: '0 evidence',
+  evidenceCount: {
+    id: 'cases.evidenceCount',
+    defaultMessage:
+      '{count, plural, one {# evidence item} other {# evidence items}}',
   },
   revision: { id: 'cases.revision', defaultMessage: 'Revision {revision}' },
   caseTypeInvasionOccupation: {
@@ -128,6 +130,7 @@ export function CasesScreen() {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projectsQuery = useProjects();
   const casesQuery = useCases(selectedProjectId);
+  const evidenceCountsQuery = useCaseEvidenceCounts(selectedProjectId);
   const storagePersist = useStoragePersist();
 
   const projects = projectsQuery.data ?? [];
@@ -288,7 +291,9 @@ export function CasesScreen() {
                         })}
                       </span>
                       <span data-testid="evidence-count">
-                        {intl.formatMessage(messages.evidenceCountEmpty)}
+                        {intl.formatMessage(messages.evidenceCount, {
+                          count: evidenceCountsQuery.data?.[caze.localId] ?? 0,
+                        })}
                       </span>
                       <span>
                         {intl.formatMessage(messages.revision, {

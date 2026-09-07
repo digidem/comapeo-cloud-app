@@ -4,10 +4,12 @@ import { defineMessages, useIntl } from 'react-intl';
 import { Link } from '@tanstack/react-router';
 
 import { useShellSlot } from '@/components/layout/shell-slot';
+import { AddToCaseDialog } from '@/components/shared/AddToCaseDialog';
 import { AlertCard } from '@/components/shared/AlertCard';
 import { AlertsMap } from '@/components/shared/AlertsMap';
 import { InlineAlertCreationPanel } from '@/components/shared/InlineAlertCreationPanel';
 import { MapScreenLayout } from '@/components/shared/MapScreenLayout';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAlerts } from '@/hooks/useAlerts';
@@ -65,6 +67,18 @@ const messages = defineMessages({
     id: 'alerts.switchToGridView',
     defaultMessage: 'Switch to grid view',
   },
+  addToCase: {
+    id: 'cases.addEvidence.action',
+    defaultMessage: 'Add to case',
+  },
+  selectAlert: {
+    id: 'cases.addEvidence.selectAlert',
+    defaultMessage: 'Select alert {name}',
+  },
+  alertFallback: {
+    id: 'cases.addEvidence.alertFallback',
+    defaultMessage: 'Alert',
+  },
 });
 
 function MapIcon() {
@@ -85,6 +99,13 @@ function MapIcon() {
       <line x1="16" y1="6" x2="16" y2="22" />
     </svg>
   );
+}
+
+function toggleSelectionId(ids: ReadonlySet<string>, id: string): Set<string> {
+  const nextIds = new Set(ids);
+  if (nextIds.has(id)) nextIds.delete(id);
+  else nextIds.add(id);
+  return nextIds;
 }
 
 function GridIcon() {
@@ -119,6 +140,26 @@ export function AlertsScreen() {
   const [isSelectingMapOnMobile, setIsSelectingMapOnMobile] = useState(false);
   const [mapSelectedPoint, setMapSelectedPoint] = useState<[number, number]>();
   const [draftPoint, setDraftPoint] = useState<[number, number]>();
+  const [addToCaseOpen, setAddToCaseOpen] = useState(false);
+  const [alertSelection, setAlertSelection] = useState<{
+    projectLocalId: string | null;
+    ids: Set<string>;
+  }>({ projectLocalId: null, ids: new Set() });
+  const selectedAlertIds = useMemo(
+    () =>
+      alertSelection.projectLocalId === selectedProjectId
+        ? alertSelection.ids
+        : new Set<string>(),
+    [alertSelection, selectedProjectId],
+  );
+  const selectedAlertSources = useMemo(
+    () =>
+      Array.from(selectedAlertIds, (sourceLocalId) => ({
+        sourceType: 'alert' as const,
+        sourceLocalId,
+      })),
+    [selectedAlertIds],
+  );
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.localId === selectedProjectId);
@@ -164,6 +205,22 @@ export function AlertsScreen() {
 
   const alerts = alertsQuery.data ?? [];
 
+  function toggleAlertSelection(alertId: string) {
+    setAlertSelection((current) => ({
+      projectLocalId: selectedProjectId,
+      ids: toggleSelectionId(
+        current.projectLocalId === selectedProjectId
+          ? current.ids
+          : new Set<string>(),
+        alertId,
+      ),
+    }));
+  }
+
+  function clearAlertSelection() {
+    setAlertSelection({ projectLocalId: selectedProjectId, ids: new Set() });
+  }
+
   function closeInlineCreation() {
     setIsCreatingInline(false);
     setIsSelectingMapOnMobile(false);
@@ -195,115 +252,135 @@ export function AlertsScreen() {
 
   if (viewMode === 'map') {
     return (
-      <MapScreenLayout
-        topLeft={
-          <h1 className="rounded-button bg-surface-card px-3 py-2 text-xl font-bold text-text shadow-card">
-            {intl.formatMessage(messages.title)}
-          </h1>
-        }
-        topRightPositionClassName="top-4 right-3 z-30 items-center"
-        topRight={
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                setMapSelectedPoint(undefined);
-                setDraftPoint(undefined);
+      <>
+        <MapScreenLayout
+          topLeft={
+            <h1 className="rounded-button bg-surface-card px-3 py-2 text-xl font-bold text-text shadow-card">
+              {intl.formatMessage(messages.title)}
+            </h1>
+          }
+          topRightPositionClassName="top-4 right-3 z-30 items-center"
+          topRight={
+            <>
+              {selectedAlertIds.size > 0 ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={isCreatingInline}
+                  onClick={() => setAddToCaseOpen(true)}
+                  className="shadow-card"
+                >
+                  {intl.formatMessage(messages.addToCase)}
+                </Button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  setMapSelectedPoint(undefined);
+                  setDraftPoint(undefined);
+                  setIsSelectingMapOnMobile(false);
+                  setIsCreatingInline(true);
+                }}
+                disabled={isCreatingInline}
+                className="inline-flex min-h-[44px] items-center rounded-button bg-primary px-3 py-2 text-center text-xs font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {intl.formatMessage(messages.addAlert)}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  closeInlineCreation();
+                  setViewMode('grid');
+                }}
+                className="inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-button bg-surface-card text-text-muted shadow-card transition-colors hover:bg-surface-container-low hover:text-text"
+                aria-label={intl.formatMessage(messages.switchToGridView)}
+                title={intl.formatMessage(messages.viewGrid)}
+              >
+                <GridIcon />
+              </button>
+            </>
+          }
+        >
+          <div className="relative h-full">
+            <AlertsMap
+              alerts={alerts}
+              height="h-full"
+              basemapSwitcherPositionClassName="top-[4.25rem] right-3"
+              interactionMode={isCreatingInline ? 'create-point' : 'browse'}
+              onMapPointSelect={(point) => {
+                setMapSelectedPoint(point);
+                setDraftPoint(point);
                 setIsSelectingMapOnMobile(false);
-                setIsCreatingInline(true);
               }}
-              disabled={isCreatingInline}
-              className="inline-flex min-h-[44px] items-center rounded-button bg-primary px-3 py-2 text-center text-xs font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {intl.formatMessage(messages.addAlert)}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                closeInlineCreation();
-                setViewMode('grid');
-              }}
-              className="inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-button bg-surface-card text-text-muted shadow-card transition-colors hover:bg-surface-container-low hover:text-text"
-              aria-label={intl.formatMessage(messages.switchToGridView)}
-              title={intl.formatMessage(messages.viewGrid)}
-            >
-              <GridIcon />
-            </button>
-          </>
-        }
-      >
-        <div className="relative h-full">
-          <AlertsMap
-            alerts={alerts}
-            height="h-full"
-            basemapSwitcherPositionClassName="top-[4.25rem] right-3"
-            interactionMode={isCreatingInline ? 'create-point' : 'browse'}
-            onMapPointSelect={(point) => {
-              setMapSelectedPoint(point);
-              setDraftPoint(point);
-              setIsSelectingMapOnMobile(false);
-            }}
-            draftPoint={draftPoint}
-            showEmptyState={
-              !alertsQuery.isPending &&
-              !alertsQuery.isError &&
-              alerts.length > 0
-            }
-          />
-
-          {isCreatingInline ? (
-            <InlineAlertCreationPanel
-              projectLocalId={selectedProjectId}
-              mapSelectedPoint={mapSelectedPoint}
-              isSelectingMapOnMobile={isSelectingMapOnMobile}
-              onSelectMapMobile={() => setIsSelectingMapOnMobile(true)}
-              onBackToForm={() => setIsSelectingMapOnMobile(false)}
-              onGeometryChange={updateDraftPoint}
-              onClose={closeInlineCreation}
+              draftPoint={draftPoint}
+              showEmptyState={
+                !alertsQuery.isPending &&
+                !alertsQuery.isError &&
+                alerts.length > 0
+              }
             />
-          ) : null}
 
-          {!isCreatingInline && alertsQuery.isError ? (
-            <div
-              role="alert"
-              className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
-            >
-              <span className="text-error text-sm">
-                {intl.formatMessage(messages.alertsError)}
-              </span>
-            </div>
-          ) : null}
+            {isCreatingInline ? (
+              <InlineAlertCreationPanel
+                projectLocalId={selectedProjectId}
+                mapSelectedPoint={mapSelectedPoint}
+                isSelectingMapOnMobile={isSelectingMapOnMobile}
+                onSelectMapMobile={() => setIsSelectingMapOnMobile(true)}
+                onBackToForm={() => setIsSelectingMapOnMobile(false)}
+                onGeometryChange={updateDraftPoint}
+                onClose={closeInlineCreation}
+              />
+            ) : null}
 
-          {!isCreatingInline &&
-          alertsQuery.isPending &&
-          !alertsQuery.isError ? (
-            <div
-              role="status"
-              className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
-            >
-              <span className="sr-only">
-                {intl.formatMessage(messages.loading)}
-              </span>
-              <div className="w-full max-w-sm space-y-3" aria-hidden="true">
-                <Skeleton className="h-6 w-1/2" />
-                <Skeleton className="h-32 w-full rounded-card" />
-                <Skeleton className="h-20 w-full rounded-card" />
+            {!isCreatingInline && alertsQuery.isError ? (
+              <div
+                role="alert"
+                className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
+              >
+                <span className="text-error text-sm">
+                  {intl.formatMessage(messages.alertsError)}
+                </span>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {!isCreatingInline &&
-          !alertsQuery.isPending &&
-          !alertsQuery.isError &&
-          alerts.length === 0 ? (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm">
-              <span className="text-text-muted text-sm">
-                {intl.formatMessage(messages.noAlerts)}
-              </span>
-            </div>
-          ) : null}
-        </div>
-      </MapScreenLayout>
+            {!isCreatingInline &&
+            alertsQuery.isPending &&
+            !alertsQuery.isError ? (
+              <div
+                role="status"
+                className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm"
+              >
+                <span className="sr-only">
+                  {intl.formatMessage(messages.loading)}
+                </span>
+                <div className="w-full max-w-sm space-y-3" aria-hidden="true">
+                  <Skeleton className="h-6 w-1/2" />
+                  <Skeleton className="h-32 w-full rounded-card" />
+                  <Skeleton className="h-20 w-full rounded-card" />
+                </div>
+              </div>
+            ) : null}
+
+            {!isCreatingInline &&
+            !alertsQuery.isPending &&
+            !alertsQuery.isError &&
+            alerts.length === 0 ? (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface-card/80 p-8 text-center backdrop-blur-sm">
+                <span className="text-text-muted text-sm">
+                  {intl.formatMessage(messages.noAlerts)}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        </MapScreenLayout>
+        <AddToCaseDialog
+          open={addToCaseOpen}
+          onOpenChange={setAddToCaseOpen}
+          projectLocalId={selectedProjectId}
+          sources={selectedAlertSources}
+          onAdded={clearAlertSelection}
+        />
+      </>
     );
   }
 
@@ -315,7 +392,14 @@ export function AlertsScreen() {
           {intl.formatMessage(messages.title)}
         </h1>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            disabled={selectedAlertIds.size === 0}
+            onClick={() => setAddToCaseOpen(true)}
+          >
+            {intl.formatMessage(messages.addToCase)}
+          </Button>
           {addAlertLink}
           <button
             type="button"
@@ -362,21 +446,49 @@ export function AlertsScreen() {
         }
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {alerts.map((alert) => (
-              <Link
-                key={alert.localId}
-                to="/alerts/$alertId"
-                params={{ alertId: alert.localId }}
-                className="no-underline"
-              >
-                <Card className="p-4 hover:shadow-elevated transition-shadow cursor-pointer h-full">
-                  <AlertCard alert={alert} />
-                </Card>
-              </Link>
-            ))}
+            {alerts.map((alert) => {
+              const alertName =
+                typeof alert.metadata?.alert_type === 'string'
+                  ? alert.metadata.alert_type
+                  : intl.formatMessage(messages.alertFallback);
+              const selected = selectedAlertIds.has(alert.localId);
+              return (
+                <div key={alert.localId} className="relative min-w-0">
+                  <label className="absolute right-2 top-2 z-10 inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-full bg-surface-card shadow-card">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleAlertSelection(alert.localId)}
+                      aria-label={intl.formatMessage(messages.selectAlert, {
+                        name: alertName,
+                      })}
+                      className="h-5 w-5 cursor-pointer accent-primary"
+                    />
+                  </label>
+                  <Link
+                    to="/alerts/$alertId"
+                    params={{ alertId: alert.localId }}
+                    className="no-underline"
+                  >
+                    <Card
+                      className={`h-full cursor-pointer p-4 pr-14 transition-shadow hover:shadow-elevated ${selected ? 'ring-2 ring-primary' : ''}`}
+                    >
+                      <AlertCard alert={alert} />
+                    </Card>
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         );
       })()}
+      <AddToCaseDialog
+        open={addToCaseOpen}
+        onOpenChange={setAddToCaseOpen}
+        projectLocalId={selectedProjectId}
+        sources={selectedAlertSources}
+        onAdded={clearAlertSelection}
+      />
     </div>
   );
 }

@@ -115,6 +115,22 @@ vi.mock('@/components/shared/auth-img', () => ({
   ),
 }));
 
+vi.mock('@/components/shared/AddToCaseDialog', () => ({
+  AddToCaseDialog: ({
+    open,
+    sources,
+  }: {
+    open: boolean;
+    sources: Array<{ sourceLocalId: string }>;
+  }) => (
+    <div
+      data-testid="add-to-case-dialog"
+      data-open={String(open)}
+      data-source-ids={sources.map((source) => source.sourceLocalId).join(',')}
+    />
+  ),
+}));
+
 // Mock ExportObservationsButton to avoid real downloads
 vi.mock('@/components/shared/ExportObservationsButton', () => ({
   ExportObservationsButton: ({
@@ -242,6 +258,30 @@ describe('DataScreen', () => {
 
       render(<DataScreen />);
       expect(screen.getAllByText('forest').length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('lets users select multiple observations and add them to a Case', () => {
+      mockObservationsQuery = { data: defaultObservations, isPending: false };
+
+      render(<DataScreen />);
+      const addButton = screen.getByRole('button', { name: 'Add to case' });
+      expect(addButton).toBeDisabled();
+
+      const checkboxes = screen.getAllByRole('checkbox');
+      expect(checkboxes).toHaveLength(2);
+      fireEvent.click(checkboxes[0]!);
+      fireEvent.click(checkboxes[1]!);
+      expect(addButton).toBeEnabled();
+
+      fireEvent.click(addButton);
+      expect(screen.getByTestId('add-to-case-dialog')).toHaveAttribute(
+        'data-open',
+        'true',
+      );
+      expect(screen.getByTestId('add-to-case-dialog')).toHaveAttribute(
+        'data-source-ids',
+        'obs-1,obs-2',
+      );
     });
 
     it('wraps long observation names instead of truncating', () => {
@@ -565,6 +605,9 @@ describe('DataScreen', () => {
           'data-category-count',
           '1',
         );
+        expect(
+          screen.queryByRole('button', { name: 'Add to case' }),
+        ).not.toBeInTheDocument();
         // Grid cards should be hidden in map mode — no observation card links
         const obsLinks = screen
           .queryAllByRole('link')
