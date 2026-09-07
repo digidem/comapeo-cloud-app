@@ -49,7 +49,7 @@
   --theme-primary-soft: #eaf2ff;
 
   /* Typography */
-  --theme-text: #172033;
+  --theme-text: #172033; /* Deep Ink Navy — never pure black (#000000) */
   --theme-text-muted: #667085;
   --theme-text-heading: #172033;
   --theme-font-family-sans:
