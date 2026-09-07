@@ -6,8 +6,10 @@ import {
   getCaseEvidence,
   getCaseEvidenceAttachments,
   getCaseEvidenceCounts,
+  getCaseReportDisclosure,
   removeCaseEvidence,
   setCaseEvidenceAttachmentSelected,
+  upsertCaseReportDisclosure,
 } from '@/lib/local-repositories';
 
 beforeEach(async () => {
@@ -326,6 +328,157 @@ describe('Case evidence references', () => {
     expect(await getCaseEvidenceAttachments('project-1', caseLocalId)).toEqual(
       [],
     );
+  });
+
+  it('revokes persisted media disclosure when selected media is removed from the Case', async () => {
+    await seedProject('project-1');
+    const caseLocalId = await seedCase('project-1');
+    const db = getDb();
+    await db.observations.add({
+      localId: 'observation-disclosure',
+      projectLocalId: 'project-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'https://archive.example',
+      remoteId: 'obs-remote-disclosure',
+      versionId: 'v1',
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-01T10:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    await db.attachments.add({
+      localId: 'photo-disclosure',
+      projectLocalId: 'project-1',
+      observationLocalId: 'observation-disclosure',
+      sourceType: 'remoteArchive',
+      sourceId: 'https://archive.example',
+      remoteId: 'media-disclosure',
+      hash: 'original-disclosure-hash',
+      mediaType: 'photo',
+      contentType: 'image/jpeg',
+      downloadStatus: 'available',
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-01T10:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    const evidence = await addCaseEvidence({
+      projectLocalId: 'project-1',
+      caseLocalId,
+      sourceType: 'observation',
+      sourceLocalId: 'observation-disclosure',
+    });
+    await setCaseEvidenceAttachmentSelected({
+      projectLocalId: 'project-1',
+      caseLocalId,
+      evidenceLocalId: evidence.localId,
+      attachmentLocalId: 'photo-disclosure',
+      selected: true,
+    });
+    await upsertCaseReportDisclosure({
+      projectLocalId: 'project-1',
+      caseLocalId,
+      agency: 'FUNAI',
+      disclosure: {
+        reporterIdentity: 'omit',
+        locationMode: 'omit',
+        people: [],
+        media: [{ id: 'photo-disclosure', include: true }],
+        sensitiveFields: [],
+      },
+    });
+
+    await setCaseEvidenceAttachmentSelected({
+      projectLocalId: 'project-1',
+      caseLocalId,
+      evidenceLocalId: evidence.localId,
+      attachmentLocalId: 'photo-disclosure',
+      selected: false,
+    });
+
+    expect(
+      (await getCaseReportDisclosure('project-1', caseLocalId, 'FUNAI')).media,
+    ).toEqual([]);
+
+    await setCaseEvidenceAttachmentSelected({
+      projectLocalId: 'project-1',
+      caseLocalId,
+      evidenceLocalId: evidence.localId,
+      attachmentLocalId: 'photo-disclosure',
+      selected: true,
+    });
+    expect(
+      (await getCaseReportDisclosure('project-1', caseLocalId, 'FUNAI')).media,
+    ).toEqual([]);
+  });
+
+  it('revokes persisted media disclosure when parent evidence is removed', async () => {
+    await seedProject('project-1');
+    const caseLocalId = await seedCase('project-1');
+    const db = getDb();
+    await db.observations.add({
+      localId: 'observation-remove-disclosure',
+      projectLocalId: 'project-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'https://archive.example',
+      remoteId: 'obs-remote-remove-disclosure',
+      versionId: 'v1',
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-01T10:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    await db.attachments.add({
+      localId: 'photo-remove-disclosure',
+      projectLocalId: 'project-1',
+      observationLocalId: 'observation-remove-disclosure',
+      sourceType: 'remoteArchive',
+      sourceId: 'https://archive.example',
+      remoteId: 'media-remove-disclosure',
+      hash: 'original-remove-disclosure-hash',
+      mediaType: 'photo',
+      contentType: 'image/jpeg',
+      downloadStatus: 'available',
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-01T10:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    const evidence = await addCaseEvidence({
+      projectLocalId: 'project-1',
+      caseLocalId,
+      sourceType: 'observation',
+      sourceLocalId: 'observation-remove-disclosure',
+    });
+    await setCaseEvidenceAttachmentSelected({
+      projectLocalId: 'project-1',
+      caseLocalId,
+      evidenceLocalId: evidence.localId,
+      attachmentLocalId: 'photo-remove-disclosure',
+      selected: true,
+    });
+    await upsertCaseReportDisclosure({
+      projectLocalId: 'project-1',
+      caseLocalId,
+      agency: 'IBAMA',
+      disclosure: {
+        reporterIdentity: 'omit',
+        locationMode: 'omit',
+        people: [],
+        media: [{ id: 'photo-remove-disclosure', include: true }],
+        sensitiveFields: [],
+      },
+    });
+
+    await removeCaseEvidence({
+      projectLocalId: 'project-1',
+      caseLocalId,
+      evidenceLocalId: evidence.localId,
+    });
+
+    expect(
+      (await getCaseReportDisclosure('project-1', caseLocalId, 'IBAMA')).media,
+    ).toEqual([]);
   });
 
   it('deduplicates concurrent selection of the same attachment', async () => {

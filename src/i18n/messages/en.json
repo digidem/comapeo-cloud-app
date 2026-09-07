@@ -560,6 +560,9 @@
   "cases.evidence.filter.all": {
     "defaultMessage": "All"
   },
+  "cases.evidence.filter.groupLabel": {
+    "defaultMessage": "Evidence type"
+  },
   "cases.evidence.filter.observations": {
     "defaultMessage": "Observations"
   },
@@ -628,6 +631,9 @@
   },
   "cases.evidence.track": {
     "defaultMessage": "Track"
+  },
+  "cases.evidence.view.groupLabel": {
+    "defaultMessage": "Evidence view"
   },
   "cases.evidence.view.list": {
     "defaultMessage": "List"

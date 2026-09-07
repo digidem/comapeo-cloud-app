@@ -174,19 +174,18 @@ export async function deleteProject(localId: string): Promise<string[]> {
             .where('caseLocalId')
             .anyOf(caseLocalIds)
             .delete();
-          await db.caseEvidenceAttachments
-            .where('caseLocalId')
-            .anyOf(caseLocalIds)
-            .delete();
-          await db.caseEvidence
-            .where('caseLocalId')
-            .anyOf(caseLocalIds)
-            .delete();
-          await db.caseReportDisclosure
-            .where('caseLocalId')
-            .anyOf(caseLocalIds)
-            .delete();
         }
+        // The #269 rows all carry projectLocalId, so delete by that index
+        // directly instead of depending on the parent Case row still existing.
+        await db.caseEvidenceAttachments
+          .where('projectLocalId')
+          .equals(localId)
+          .delete();
+        await db.caseEvidence.where('projectLocalId').equals(localId).delete();
+        await db.caseReportDisclosure
+          .where('projectLocalId')
+          .equals(localId)
+          .delete();
         await db.cases.where('projectLocalId').equals(localId).delete();
 
         if (removedMapIdSet.size > 0) {
@@ -1035,6 +1034,48 @@ export async function getCaseEvidence(
   });
 }
 
+async function revokeCaseMediaDisclosureApprovals(
+  db: ReturnType<typeof getDb>,
+  projectLocalId: string,
+  caseLocalId: string,
+  attachmentLocalIds: readonly string[],
+): Promise<void> {
+  if (attachmentLocalIds.length === 0) return;
+  const revokedIds = new Set(attachmentLocalIds);
+  const disclosures = await db.caseReportDisclosure
+    .where('[projectLocalId+caseLocalId]')
+    .equals([projectLocalId, caseLocalId])
+    .toArray();
+  const now = timestamp();
+  const changed = disclosures.flatMap((disclosure) => {
+    const media = disclosure.media.filter(
+      (decision) => !revokedIds.has(decision.id),
+    );
+    if (media.length === disclosure.media.length) return [];
+    return [
+      {
+        ...disclosure,
+        media,
+        revision: disclosure.revision + 1,
+        updatedAt: now,
+      },
+    ];
+  });
+  if (changed.length === 0) return;
+
+  await db.caseReportDisclosure.bulkPut(changed);
+  await db.caseActivity.bulkAdd(
+    changed.map((disclosure) => ({
+      localId: uuid(),
+      caseLocalId,
+      projectLocalId,
+      event: 'disclosure_changed' as const,
+      agency: disclosure.agency,
+      createdAt: now,
+    })),
+  );
+}
+
 export async function removeCaseEvidence(input: {
   projectLocalId: string;
   caseLocalId: string;
@@ -1042,20 +1083,35 @@ export async function removeCaseEvidence(input: {
 }): Promise<boolean> {
   return wrapDb(async () => {
     const db = getDb();
-    await requireCaseForEvidence(input.projectLocalId, input.caseLocalId);
-    const evidence = await db.caseEvidence.get(input.evidenceLocalId);
-    if (
-      !evidence ||
-      evidence.caseLocalId !== input.caseLocalId ||
-      evidence.projectLocalId !== input.projectLocalId
-    ) {
-      return false;
-    }
-    const now = timestamp();
-    await db.transaction(
+    return db.transaction(
       'rw',
-      [db.caseEvidence, db.caseEvidenceAttachments, db.caseActivity],
+      [
+        db.cases,
+        db.caseEvidence,
+        db.caseEvidenceAttachments,
+        db.caseReportDisclosure,
+        db.caseActivity,
+      ],
       async () => {
+        await requireCaseForEvidence(input.projectLocalId, input.caseLocalId);
+        const evidence = await db.caseEvidence.get(input.evidenceLocalId);
+        if (
+          !evidence ||
+          evidence.caseLocalId !== input.caseLocalId ||
+          evidence.projectLocalId !== input.projectLocalId
+        ) {
+          return false;
+        }
+        const selectedAttachments = await db.caseEvidenceAttachments
+          .where('evidenceLocalId')
+          .equals(input.evidenceLocalId)
+          .toArray();
+        await revokeCaseMediaDisclosureApprovals(
+          db,
+          input.projectLocalId,
+          input.caseLocalId,
+          selectedAttachments.map((attachment) => attachment.attachmentLocalId),
+        );
         await db.caseEvidenceAttachments
           .where('evidenceLocalId')
           .equals(input.evidenceLocalId)
@@ -1067,11 +1123,11 @@ export async function removeCaseEvidence(input: {
           projectLocalId: input.projectLocalId,
           event: 'evidence_removed',
           count: 1,
-          createdAt: now,
+          createdAt: timestamp(),
         });
+        return true;
       },
     );
-    return true;
   });
 }
 
@@ -1087,6 +1143,7 @@ export async function setCaseEvidenceAttachmentSelected(
         db.caseEvidence,
         db.caseEvidenceAttachments,
         db.attachments,
+        db.caseReportDisclosure,
         db.caseActivity,
       ],
       async () => {
@@ -1111,6 +1168,12 @@ export async function setCaseEvidenceAttachmentSelected(
         if (!input.selected) {
           if (existing) {
             const now = timestamp();
+            await revokeCaseMediaDisclosureApprovals(
+              db,
+              input.projectLocalId,
+              input.caseLocalId,
+              [input.attachmentLocalId],
+            );
             await db.caseEvidenceAttachments.delete(existing.localId);
             await db.caseActivity.add({
               localId: uuid(),
@@ -1289,6 +1352,7 @@ export async function upsertCaseReportDisclosure(
           ? {
               ...existing,
               ...disclosure,
+              approvedArea: disclosure.approvedArea,
               revision: existing.revision + 1,
               updatedAt: now,
             }

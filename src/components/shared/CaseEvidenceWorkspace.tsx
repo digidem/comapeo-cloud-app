@@ -37,6 +37,10 @@ const messages = defineMessages({
   },
   alerts: { id: 'cases.evidence.filter.alerts', defaultMessage: 'Alerts' },
   tracks: { id: 'cases.evidence.filter.tracks', defaultMessage: 'Tracks' },
+  filterGroupLabel: {
+    id: 'cases.evidence.filter.groupLabel',
+    defaultMessage: 'Evidence type',
+  },
   add: { id: 'cases.evidence.add', defaultMessage: 'Add' },
   remove: { id: 'cases.evidence.remove', defaultMessage: 'Remove' },
   addSource: {
@@ -56,6 +60,10 @@ const messages = defineMessages({
   list: { id: 'cases.evidence.view.list', defaultMessage: 'List' },
   timeline: { id: 'cases.evidence.view.timeline', defaultMessage: 'Timeline' },
   map: { id: 'cases.evidence.view.map', defaultMessage: 'Map' },
+  viewGroupLabel: {
+    id: 'cases.evidence.view.groupLabel',
+    defaultMessage: 'Evidence view',
+  },
   noProjectEvidence: {
     id: 'cases.evidence.noProjectEvidence',
     defaultMessage: 'No project evidence matches your search.',
@@ -631,7 +639,7 @@ export function CaseEvidenceWorkspace({
             <div
               className="flex flex-wrap gap-2"
               role="group"
-              aria-label="Evidence type"
+              aria-label={intl.formatMessage(messages.filterGroupLabel)}
             >
               {(
                 [
@@ -758,7 +766,7 @@ export function CaseEvidenceWorkspace({
           <div
             className="flex flex-wrap gap-2"
             role="group"
-            aria-label="Evidence view"
+            aria-label={intl.formatMessage(messages.viewGroupLabel)}
           >
             {(
               [

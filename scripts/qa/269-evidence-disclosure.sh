@@ -27,6 +27,7 @@ npm run test:unit -- \
   tests/unit/screens/CaseDetailScreen.privacy.test.tsx \
   tests/unit/i18n/locale-messages.test.ts \
   tests/unit/i18n/load-messages.test.ts \
+  tests/unit/lib/cases.test.ts \
   tests/unit/lib/db.test.ts
 
 printf '\n[269] 3/7 i18n extraction integrity\n'

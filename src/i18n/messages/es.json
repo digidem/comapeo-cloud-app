@@ -147,7 +147,7 @@
   "cases.detail.overview": "Visión General",
   "cases.detail.peopleCommunity": "Personas & Comunidad",
   "cases.detail.recordDetails": "Detalles del registro",
-  "cases.detail.reportState": "Estado del Informe",
+  "cases.detail.reportState": "Informes",
   "cases.detail.revision": "Revisión {revision}",
   "cases.detail.title": "Caso",
   "cases.detail.updatedAt": "Última actualización",
@@ -874,5 +874,7 @@
   "theme.ariaSetSystem": "Usar tema del sistema",
   "theme.dark": "Oscuro",
   "theme.light": "Claro",
-  "theme.system": "Sistema"
+  "theme.system": "Sistema",
+  "cases.evidence.filter.groupLabel": "Tipo de evidencia",
+  "cases.evidence.view.groupLabel": "Vista de evidencia"
 }
