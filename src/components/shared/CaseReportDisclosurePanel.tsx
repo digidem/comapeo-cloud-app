@@ -126,6 +126,23 @@ function decisionMap(
   );
 }
 
+function hydrateDraftCandidates(
+  draft: CaseReportDisclosure,
+  people: readonly DisclosureCandidate[],
+  media: readonly DisclosureCandidate[],
+  sensitiveFields: readonly DisclosureCandidate[],
+): CaseReportDisclosure {
+  return {
+    ...draft,
+    people: decisionsForCandidates(people, draft.people),
+    media: decisionsForCandidates(media, draft.media),
+    sensitiveFields: decisionsForCandidates(
+      sensitiveFields,
+      draft.sensitiveFields,
+    ),
+  };
+}
+
 export function CaseReportDisclosurePanel({
   projectLocalId,
   caseLocalId,
@@ -141,13 +158,7 @@ export function CaseReportDisclosurePanel({
     agency,
   );
   const upsert = useUpsertCaseReportDisclosure();
-  const hydrationKey = `${disclosureQuery.data?.revision ?? 'none'}:${people
-    .map((candidate) => candidate.id)
-    .join(
-      ',',
-    )}:${media.map((candidate) => candidate.id).join(',')}:${sensitiveFields
-    .map((candidate) => candidate.id)
-    .join(',')}`;
+  const hydrationKey = `${projectLocalId}:${caseLocalId}:${agency}:${disclosureQuery.data?.revision ?? 'none'}`;
   const persistedDraft: CaseReportDisclosure = {
     reporterIdentity: disclosureQuery.data?.reporterIdentity ?? 'omit',
     locationMode: disclosureQuery.data?.locationMode ?? 'omit',
@@ -164,15 +175,23 @@ export function CaseReportDisclosurePanel({
     value: CaseReportDisclosure;
   } | null>(null);
   const [saveError, setSaveError] = useState(false);
-  const draft =
-    draftOverride?.key === hydrationKey ? draftOverride.value : persistedDraft;
+  const draft = hydrateDraftCandidates(
+    draftOverride?.key === hydrationKey ? draftOverride.value : persistedDraft,
+    people,
+    media,
+    sensitiveFields,
+  );
 
   function updateDraft(
     updater: (current: CaseReportDisclosure) => CaseReportDisclosure,
   ) {
     setDraftOverride((current) => {
-      const base =
-        current?.key === hydrationKey ? current.value : persistedDraft;
+      const base = hydrateDraftCandidates(
+        current?.key === hydrationKey ? current.value : persistedDraft,
+        people,
+        media,
+        sensitiveFields,
+      );
       return { key: hydrationKey, value: updater(base) };
     });
   }

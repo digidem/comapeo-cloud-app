@@ -141,6 +141,39 @@ describe('CaseReportDisclosurePanel', () => {
     );
   });
 
+  it('preserves unsaved disclosure choices when candidates hydrate after editing', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <CaseReportDisclosurePanel
+        projectLocalId="project-1"
+        caseLocalId="case-1"
+        agency="FUNAI"
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('radio', { name: 'Include reporter identity' }),
+    );
+    await user.click(screen.getByRole('radio', { name: 'Exact location' }));
+
+    rerender(
+      <CaseReportDisclosurePanel
+        projectLocalId="project-1"
+        caseLocalId="case-1"
+        agency="FUNAI"
+        media={[{ id: 'media-late', label: 'late-evidence.jpg' }]}
+      />,
+    );
+
+    expect(
+      screen.getByRole('radio', { name: 'Include reporter identity' }),
+    ).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Exact location' })).toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: 'Include late-evidence.jpg' }),
+    ).not.toBeChecked();
+  });
+
   it('shows an explicit error when disclosure persistence fails', async () => {
     mutate.mockImplementationOnce(
       (_variables: unknown, options?: { onError?: (error: Error) => void }) => {

@@ -108,10 +108,6 @@ const messages = defineMessages({
     id: 'cases.detail.noActivity',
     defaultMessage: 'No activity yet',
   },
-  noReportState: {
-    id: 'cases.detail.noReportState',
-    defaultMessage: 'No report state recorded yet',
-  },
   // Case type labels
   typeInvasionOccupation: {
     id: 'cases.type.invasion_occupation',

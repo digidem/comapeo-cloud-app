@@ -935,49 +935,60 @@ export async function addCaseEvidence(
 ): Promise<CaseEvidenceReference> {
   return wrapDb(async () => {
     const db = getDb();
-    await requireCaseForEvidence(input.projectLocalId, input.caseLocalId);
-    const source = await getEvidenceSource(
-      input.sourceType,
-      input.sourceLocalId,
+    return db.transaction(
+      'rw',
+      [
+        db.cases,
+        db.caseEvidence,
+        db.caseActivity,
+        db.observations,
+        db.alerts,
+        db.tracks,
+      ],
+      async () => {
+        await requireCaseForEvidence(input.projectLocalId, input.caseLocalId);
+        const source = await getEvidenceSource(
+          input.sourceType,
+          input.sourceLocalId,
+        );
+        if (!source || source.projectLocalId !== input.projectLocalId) {
+          throw new DbError(
+            'FK_VIOLATION',
+            `Evidence source does not exist in project "${input.projectLocalId}"`,
+          );
+        }
+
+        const existing = await db.caseEvidence
+          .where('[caseLocalId+sourceType+sourceLocalId]')
+          .equals([input.caseLocalId, input.sourceType, input.sourceLocalId])
+          .first();
+        if (existing) return existing;
+
+        const now = timestamp();
+        const reference: CaseEvidenceReference = {
+          localId: uuid(),
+          caseLocalId: input.caseLocalId,
+          projectLocalId: input.projectLocalId,
+          sourceType: input.sourceType,
+          sourceLocalId: input.sourceLocalId,
+          sourceRemoteId: source.remoteId,
+          sourceVersionId: getEvidenceVersion(source),
+          sourceUpdatedAt: source.updatedAt,
+          addedAt: now,
+          updatedAt: now,
+        };
+        await db.caseEvidence.add(reference);
+        await db.caseActivity.add({
+          localId: uuid(),
+          caseLocalId: input.caseLocalId,
+          projectLocalId: input.projectLocalId,
+          event: 'evidence_added',
+          count: 1,
+          createdAt: now,
+        });
+        return reference;
+      },
     );
-    if (!source || source.projectLocalId !== input.projectLocalId) {
-      throw new DbError(
-        'FK_VIOLATION',
-        `Evidence source does not exist in project "${input.projectLocalId}"`,
-      );
-    }
-
-    const existing = await db.caseEvidence
-      .where('[caseLocalId+sourceType+sourceLocalId]')
-      .equals([input.caseLocalId, input.sourceType, input.sourceLocalId])
-      .first();
-    if (existing) return existing;
-
-    const now = timestamp();
-    const reference: CaseEvidenceReference = {
-      localId: uuid(),
-      caseLocalId: input.caseLocalId,
-      projectLocalId: input.projectLocalId,
-      sourceType: input.sourceType,
-      sourceLocalId: input.sourceLocalId,
-      sourceRemoteId: source.remoteId,
-      sourceVersionId: getEvidenceVersion(source),
-      sourceUpdatedAt: source.updatedAt,
-      addedAt: now,
-      updatedAt: now,
-    };
-    await db.transaction('rw', [db.caseEvidence, db.caseActivity], async () => {
-      await db.caseEvidence.add(reference);
-      await db.caseActivity.add({
-        localId: uuid(),
-        caseLocalId: input.caseLocalId,
-        projectLocalId: input.projectLocalId,
-        event: 'evidence_added',
-        count: 1,
-        createdAt: now,
-      });
-    });
-    return reference;
   });
 }
 
@@ -1069,30 +1080,37 @@ export async function setCaseEvidenceAttachmentSelected(
 ): Promise<CaseEvidenceAttachment | undefined> {
   return wrapDb(async () => {
     const db = getDb();
-    await requireCaseForEvidence(input.projectLocalId, input.caseLocalId);
-    const evidence = await db.caseEvidence.get(input.evidenceLocalId);
-    if (
-      !evidence ||
-      evidence.caseLocalId !== input.caseLocalId ||
-      evidence.projectLocalId !== input.projectLocalId ||
-      evidence.sourceType !== 'observation'
-    ) {
-      throw new DbError(
-        'FK_VIOLATION',
-        'Attachment parent evidence is invalid',
-      );
-    }
+    return db.transaction(
+      'rw',
+      [
+        db.cases,
+        db.caseEvidence,
+        db.caseEvidenceAttachments,
+        db.attachments,
+        db.caseActivity,
+      ],
+      async () => {
+        await requireCaseForEvidence(input.projectLocalId, input.caseLocalId);
+        const evidence = await db.caseEvidence.get(input.evidenceLocalId);
+        if (
+          !evidence ||
+          evidence.caseLocalId !== input.caseLocalId ||
+          evidence.projectLocalId !== input.projectLocalId ||
+          evidence.sourceType !== 'observation'
+        ) {
+          throw new DbError(
+            'FK_VIOLATION',
+            'Attachment parent evidence is invalid',
+          );
+        }
 
-    const existing = await db.caseEvidenceAttachments
-      .where('[caseLocalId+attachmentLocalId]')
-      .equals([input.caseLocalId, input.attachmentLocalId])
-      .first();
-    if (!input.selected) {
-      if (existing) {
-        await db.transaction(
-          'rw',
-          [db.caseEvidenceAttachments, db.caseActivity],
-          async () => {
+        const existing = await db.caseEvidenceAttachments
+          .where('[caseLocalId+attachmentLocalId]')
+          .equals([input.caseLocalId, input.attachmentLocalId])
+          .first();
+        if (!input.selected) {
+          if (existing) {
+            const now = timestamp();
             await db.caseEvidenceAttachments.delete(existing.localId);
             await db.caseActivity.add({
               localId: uuid(),
@@ -1100,43 +1118,38 @@ export async function setCaseEvidenceAttachmentSelected(
               projectLocalId: input.projectLocalId,
               event: 'media_inclusion_changed',
               count: 0,
-              createdAt: timestamp(),
+              createdAt: now,
             });
-          },
-        );
-      }
-      return undefined;
-    }
-    if (existing) return existing;
+          }
+          return undefined;
+        }
+        if (existing) return existing;
 
-    const attachment = await db.attachments.get(input.attachmentLocalId);
-    if (
-      !attachment ||
-      attachment.projectLocalId !== input.projectLocalId ||
-      attachment.observationLocalId !== evidence.sourceLocalId ||
-      (attachment.mediaType !== 'photo' && attachment.mediaType !== 'audio')
-    ) {
-      throw new DbError(
-        'FK_VIOLATION',
-        'Selected attachment does not belong to the Case observation evidence',
-      );
-    }
-    const selected: CaseEvidenceAttachment = {
-      localId: uuid(),
-      caseLocalId: input.caseLocalId,
-      projectLocalId: input.projectLocalId,
-      evidenceLocalId: evidence.localId,
-      attachmentLocalId: attachment.localId,
-      sourceRemoteId: attachment.remoteId,
-      originalHash: attachment.hash,
-      mediaType: attachment.mediaType,
-      sourceUpdatedAt: attachment.updatedAt,
-      selectedAt: timestamp(),
-    };
-    await db.transaction(
-      'rw',
-      [db.caseEvidenceAttachments, db.caseActivity],
-      async () => {
+        const attachment = await db.attachments.get(input.attachmentLocalId);
+        if (
+          !attachment ||
+          attachment.projectLocalId !== input.projectLocalId ||
+          attachment.observationLocalId !== evidence.sourceLocalId ||
+          (attachment.mediaType !== 'photo' && attachment.mediaType !== 'audio')
+        ) {
+          throw new DbError(
+            'FK_VIOLATION',
+            'Selected attachment does not belong to the Case observation evidence',
+          );
+        }
+        const now = timestamp();
+        const selected: CaseEvidenceAttachment = {
+          localId: uuid(),
+          caseLocalId: input.caseLocalId,
+          projectLocalId: input.projectLocalId,
+          evidenceLocalId: evidence.localId,
+          attachmentLocalId: attachment.localId,
+          sourceRemoteId: attachment.remoteId,
+          originalHash: attachment.hash,
+          mediaType: attachment.mediaType,
+          sourceUpdatedAt: attachment.updatedAt,
+          selectedAt: now,
+        };
         await db.caseEvidenceAttachments.add(selected);
         await db.caseActivity.add({
           localId: uuid(),
@@ -1144,11 +1157,11 @@ export async function setCaseEvidenceAttachmentSelected(
           projectLocalId: input.projectLocalId,
           event: 'media_inclusion_changed',
           count: 1,
-          createdAt: timestamp(),
+          createdAt: now,
         });
+        return selected;
       },
     );
-    return selected;
   });
 }
 
@@ -1261,35 +1274,35 @@ export async function upsertCaseReportDisclosure(
 ): Promise<CaseReportDisclosureRecord> {
   return wrapDb(async () => {
     const db = getDb();
-    await requireCaseForEvidence(input.projectLocalId, input.caseLocalId);
     const disclosure = v.parse(caseReportDisclosureSchema, input.disclosure);
-    const existing = await db.caseReportDisclosure
-      .where('[caseLocalId+agency]')
-      .equals([input.caseLocalId, input.agency])
-      .first();
-    const now = timestamp();
-    const record: CaseReportDisclosureRecord = existing
-      ? {
-          ...existing,
-          ...disclosure,
-          revision: existing.revision + 1,
-          updatedAt: now,
-        }
-      : {
-          localId: uuid(),
-          caseLocalId: input.caseLocalId,
-          projectLocalId: input.projectLocalId,
-          agency: input.agency,
-          ...disclosure,
-          revision: 1,
-          createdAt: now,
-          updatedAt: now,
-        };
-
-    await db.transaction(
+    return db.transaction(
       'rw',
-      [db.caseReportDisclosure, db.caseActivity],
+      [db.cases, db.caseReportDisclosure, db.caseActivity],
       async () => {
+        await requireCaseForEvidence(input.projectLocalId, input.caseLocalId);
+        const existing = await db.caseReportDisclosure
+          .where('[caseLocalId+agency]')
+          .equals([input.caseLocalId, input.agency])
+          .first();
+        const now = timestamp();
+        const record: CaseReportDisclosureRecord = existing
+          ? {
+              ...existing,
+              ...disclosure,
+              revision: existing.revision + 1,
+              updatedAt: now,
+            }
+          : {
+              localId: uuid(),
+              caseLocalId: input.caseLocalId,
+              projectLocalId: input.projectLocalId,
+              agency: input.agency,
+              ...disclosure,
+              revision: 1,
+              createdAt: now,
+              updatedAt: now,
+            };
+
         await db.caseReportDisclosure.put(record);
         await db.caseActivity.add({
           localId: uuid(),
@@ -1299,9 +1312,9 @@ export async function upsertCaseReportDisclosure(
           agency: input.agency,
           createdAt: now,
         });
+        return record;
       },
     );
-    return record;
   });
 }
 

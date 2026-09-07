@@ -458,9 +458,6 @@
   "cases.detail.noPeople": {
     "defaultMessage": "No people/community info specified"
   },
-  "cases.detail.noReportState": {
-    "defaultMessage": "No report state recorded yet"
-  },
   "cases.detail.noUrgency": {
     "defaultMessage": "No urgency info specified"
   },

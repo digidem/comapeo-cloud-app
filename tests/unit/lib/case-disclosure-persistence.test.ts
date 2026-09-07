@@ -160,4 +160,37 @@ describe('Case report disclosure persistence', () => {
     expect(disclosureActivity).not.toHaveProperty('people');
     expect(JSON.stringify(disclosureActivity)).not.toContain('person-secret');
   });
+
+  it('serializes concurrent disclosure updates so revisions cannot be lost', async () => {
+    await seed();
+    const base = {
+      projectLocalId: 'project-1',
+      caseLocalId: 'case-1',
+      agency: 'FUNAI' as const,
+      disclosure: {
+        reporterIdentity: 'omit' as const,
+        locationMode: 'omit' as const,
+        people: [],
+        media: [],
+        sensitiveFields: [],
+      },
+    };
+    await upsertCaseReportDisclosure(base);
+
+    const [first, second] = await Promise.all([
+      upsertCaseReportDisclosure({
+        ...base,
+        disclosure: { ...base.disclosure, reporterIdentity: 'include' },
+      }),
+      upsertCaseReportDisclosure({
+        ...base,
+        disclosure: { ...base.disclosure, locationMode: 'exact' },
+      }),
+    ]);
+
+    expect([first.revision, second.revision].sort()).toEqual([2, 3]);
+    expect(
+      (await getCaseReportDisclosure('project-1', 'case-1', 'FUNAI')).revision,
+    ).toBe(3);
+  });
 });

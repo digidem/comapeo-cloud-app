@@ -160,6 +160,43 @@ describe('Case evidence references', () => {
     expect(await getCaseEvidence('project-1', caseLocalId)).toHaveLength(1);
   });
 
+  it('deduplicates concurrent adds of the same source without surfacing a constraint error', async () => {
+    await seedProject('project-1');
+    const caseLocalId = await seedCase('project-1');
+    await getDb().alerts.add({
+      localId: 'alert-concurrent',
+      projectLocalId: 'project-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'https://archive.example',
+      remoteId: 'alert-remote-concurrent',
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-01T10:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+
+    const input = {
+      projectLocalId: 'project-1',
+      caseLocalId,
+      sourceType: 'alert' as const,
+      sourceLocalId: 'alert-concurrent',
+    };
+    const [first, second] = await Promise.all([
+      addCaseEvidence(input),
+      addCaseEvidence(input),
+    ]);
+
+    expect(second.localId).toBe(first.localId);
+    expect(await getCaseEvidence('project-1', caseLocalId)).toHaveLength(1);
+    expect(
+      await getDb()
+        .caseActivity.where('caseLocalId')
+        .equals(caseLocalId)
+        .filter((activity) => activity.event === 'evidence_added')
+        .count(),
+    ).toBe(1);
+  });
+
   it('counts evidence per Case without resolving source records', async () => {
     await seedProject('project-1');
     await seedCase('project-1', 'case-1');
@@ -289,5 +326,69 @@ describe('Case evidence references', () => {
     expect(await getCaseEvidenceAttachments('project-1', caseLocalId)).toEqual(
       [],
     );
+  });
+
+  it('deduplicates concurrent selection of the same attachment', async () => {
+    await seedProject('project-1');
+    const caseLocalId = await seedCase('project-1');
+    const db = getDb();
+    await db.observations.add({
+      localId: 'observation-concurrent',
+      projectLocalId: 'project-1',
+      sourceType: 'remoteArchive',
+      sourceId: 'https://archive.example',
+      remoteId: 'obs-remote-concurrent',
+      versionId: 'v1',
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-01T10:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    await db.attachments.add({
+      localId: 'photo-concurrent',
+      projectLocalId: 'project-1',
+      observationLocalId: 'observation-concurrent',
+      sourceType: 'remoteArchive',
+      sourceId: 'https://archive.example',
+      remoteId: 'media-concurrent',
+      hash: 'original-photo-hash',
+      mediaType: 'photo',
+      contentType: 'image/jpeg',
+      downloadStatus: 'available',
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-01T10:00:00.000Z',
+      dirtyLocal: false,
+      deleted: false,
+    });
+    const evidence = await addCaseEvidence({
+      projectLocalId: 'project-1',
+      caseLocalId,
+      sourceType: 'observation',
+      sourceLocalId: 'observation-concurrent',
+    });
+    const input = {
+      projectLocalId: 'project-1',
+      caseLocalId,
+      evidenceLocalId: evidence.localId,
+      attachmentLocalId: 'photo-concurrent',
+      selected: true,
+    };
+
+    const [first, second] = await Promise.all([
+      setCaseEvidenceAttachmentSelected(input),
+      setCaseEvidenceAttachmentSelected(input),
+    ]);
+
+    expect(second?.localId).toBe(first?.localId);
+    expect(
+      await getCaseEvidenceAttachments('project-1', caseLocalId),
+    ).toHaveLength(1);
+    expect(
+      await db.caseActivity
+        .where('caseLocalId')
+        .equals(caseLocalId)
+        .filter((activity) => activity.event === 'media_inclusion_changed')
+        .count(),
+    ).toBe(1);
   });
 });
