@@ -191,7 +191,6 @@ export function useAuthenticatedImageUrl(
   const servers = useAuthStore((store) => store.servers);
   const token = useAuthStore(selectActiveToken);
   const baseUrl = useAuthStore(selectActiveBaseUrl);
-  const tier = useAuthStore((store) => store.tier);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -261,7 +260,10 @@ export function useAuthenticatedImageUrl(
     const matchingServer = isUnlockedArchiveServer(matchingCandidate)
       ? matchingCandidate
       : null;
-    const localToken = tier === 'local' ? token : null;
+    const activeBaseUrlIsArchive = Boolean(
+      baseUrl && servers.some((server) => server.baseUrl === baseUrl),
+    );
+    const localToken = activeBaseUrlIsArchive ? null : token;
     const cacheKey = buildImageCacheKey(url, matchingServer, localToken);
 
     let fetchUrl: string;
@@ -552,7 +554,7 @@ export function useAuthenticatedImageUrl(
       // attached, the fetch continues uninterrupted.
       blobCache.unref(cacheKey);
     };
-  }, [url, servers, token, baseUrl, tier, cache]);
+  }, [url, servers, token, baseUrl, cache]);
 
   return state;
 }

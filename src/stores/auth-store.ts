@@ -67,7 +67,8 @@ export interface AuthIdentity {
 }
 
 export interface AuthState extends ActiveArchiveState {
-  // Tier
+  // Legacy compatibility only. Do not use this field for credential scoping.
+  /** @deprecated Derive archive behavior from activeServerId/servers/baseUrl. */
   tier: AuthTier;
 
   // Compatibility fields for non-archive callers. When an archive is active,
@@ -76,6 +77,7 @@ export interface AuthState extends ActiveArchiveState {
   hasHydratedServers: boolean;
 
   // Actions
+  /** @deprecated Legacy compatibility only; do not use for credential scoping. */
   setTier: (tier: AuthTier) => void;
   addServer: (config: {
     label: string;

@@ -83,9 +83,11 @@ export function initSentry(): void {
     tracesSampleRate: 0.1,
     tracePropagationTargets: resolveTracePropagationTargets(),
     sendDefaultPii: false,
-    beforeSend: (event) => sanitizeTelemetry(event),
+    beforeSend: (event) =>
+      sanitizeTelemetry(event, { preserveRootTagKeys: true }),
     beforeBreadcrumb: (breadcrumb) => sanitizeTelemetry(breadcrumb),
-    beforeSendTransaction: (event) => sanitizeTelemetry(event),
+    beforeSendTransaction: (event) =>
+      sanitizeTelemetry(event, { preserveRootTagKeys: true }),
     beforeSendSpan: (span) => sanitizeTelemetry(span),
     // Only capture errors from known deploy origins. Omit the filter entirely
     // when none is configured; an empty array would silently drop everything.
