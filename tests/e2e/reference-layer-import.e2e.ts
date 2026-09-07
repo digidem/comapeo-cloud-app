@@ -11,6 +11,10 @@ test.describe('GIS reference import browser primitives', () => {
   test('converts all Child A formats through native browser APIs', async ({
     page,
   }) => {
+    test.skip(
+      Boolean(process.env.BASE_URL || process.env.VITE_PREVIEW),
+      'Requires the Vite dev server so the browser can import the source module directly',
+    );
     const kml = `<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>Village</name><Point><coordinates>-48.5,-1.45</coordinates></Point></Placemark></Document></kml>`;
     const gpx = `<gpx version="1.1" creator="browser"><wpt lat="-1.45" lon="-48.5"><name>Camp</name></wpt></gpx>`;
     const kmzBytes = await makeArchiveBytes([['doc.kml', kml]]);

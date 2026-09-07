@@ -1246,10 +1246,35 @@ describe('zipped Shapefile reference imports', () => {
     });
   });
 
-  it('coerces DBF date fields to canonical YYYY-MM-DD strings', async () => {
+  it('coerces DBF date fields to canonical YYYY-MM-DD strings without timezone drift', async () => {
+    const previousTimezone = process.env.TZ;
+    process.env.TZ = 'Pacific/Auckland';
+    try {
+      const file = await shapefileZip([
+        ['territory.shp', pointShp(-48.5, -1.45)],
+        ['territory.dbf', oneDateDbf()],
+        ['territory.prj', WGS84_PRJ],
+      ]);
+
+      const result = await prepareReferenceImportBatch([file], context);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok || result.layers[0]?.source.type !== 'geojson') return;
+      expect(
+        result.layers[0].source.data.features[0]?.properties,
+      ).toMatchObject({
+        surveyed: '2026-09-06',
+      });
+    } finally {
+      if (previousTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimezone;
+    }
+  });
+
+  it('preserves blank DBF date fields as null instead of throwing outside the structured boundary', async () => {
     const file = await shapefileZip([
       ['territory.shp', pointShp(-48.5, -1.45)],
-      ['territory.dbf', oneDateDbf()],
+      ['territory.dbf', oneDateDbf('')],
       ['territory.prj', WGS84_PRJ],
     ]);
 
@@ -1258,7 +1283,7 @@ describe('zipped Shapefile reference imports', () => {
     expect(result.ok).toBe(true);
     if (!result.ok || result.layers[0]?.source.type !== 'geojson') return;
     expect(result.layers[0].source.data.features[0]?.properties).toMatchObject({
-      surveyed: '2026-09-06',
+      surveyed: null,
     });
   });
 
