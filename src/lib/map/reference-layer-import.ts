@@ -45,6 +45,8 @@ export const MAX_REFERENCE_XML_ELEMENTS = 100_000;
 export const MAX_REFERENCE_XML_DEPTH = 64;
 export const MAX_REFERENCE_TEXT_METADATA_BYTES = 64 * 1024;
 
+const REFERENCE_ARCHIVE_CANCEL_TIMEOUT_MS = 100;
+
 export type ReferenceLayerImportErrorCode =
   | 'unsupported-format'
   | 'source-too-large'
@@ -353,9 +355,26 @@ async function inspectSafeArchive(
     }
     return { zip, entries };
   } catch (error) {
+    if (signal?.aborted) abortIfRequested(signal);
     if (error instanceof ReferenceLayerImportError) throw error;
     throw importError('archive-invalid', file, format, error);
   }
+}
+
+async function cancelArchiveReaderBounded(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  reason: unknown,
+): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const timeoutId = setTimeout(resolve, REFERENCE_ARCHIVE_CANCEL_TIMEOUT_MS);
+    void reader
+      .cancel(reason)
+      .catch(() => undefined)
+      .finally(() => {
+        clearTimeout(timeoutId);
+        resolve();
+      });
+  });
 }
 
 async function readSafeArchiveEntry(
@@ -390,7 +409,7 @@ async function readSafeArchiveEntry(
           chunks.push(value);
         }
       } catch (error) {
-        await reader.cancel(error).catch(() => undefined);
+        await cancelArchiveReaderBounded(reader, error);
         throw error;
       } finally {
         reader.releaseLock();
@@ -405,6 +424,7 @@ async function readSafeArchiveEntry(
     }
     throw importError('archive-invalid', file, format);
   } catch (error) {
+    if (signal?.aborted) abortIfRequested(signal);
     if (error instanceof ReferenceLayerImportError) throw error;
     throw importError('archive-invalid', file, format, error);
   }
@@ -579,6 +599,8 @@ function normalizeShapefileProperties(value: unknown): unknown {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   if (Array.isArray(value)) return value.map(normalizeShapefileProperties);
   if (value === null || typeof value !== 'object') return value;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
   const output: Record<string, unknown> = {};
   for (const [key, nested] of Object.entries(
     value as Record<string, unknown>,
