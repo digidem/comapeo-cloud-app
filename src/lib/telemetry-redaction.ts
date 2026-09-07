@@ -216,7 +216,13 @@ function collectSensitiveValues(
   seen: WeakSet<object>,
   collection: SensitiveValueCollection,
 ): void {
-  if (depth > MAX_SANITIZE_DEPTH || collection.saturated) return;
+  if (collection.saturated) return;
+  if (depth > MAX_SANITIZE_DEPTH) {
+    if (forceSensitive && sensitiveRoot) {
+      collection.saturatedSensitiveRoots.add(sensitiveRoot);
+    }
+    return;
+  }
   if (value === null || value === undefined) return;
 
   if (typeof value === 'string') {
