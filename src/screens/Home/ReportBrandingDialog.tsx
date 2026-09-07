@@ -1,7 +1,7 @@
 import { valibotResolver } from '@hookform/resolvers/valibot';
 import * as v from 'valibot';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { defineMessages, useIntl } from 'react-intl';
 
@@ -46,15 +46,8 @@ function isAllowedLogoContentType(
   );
 }
 
-function logoDataUrl(logo: ReportBrandingLogoAsset): string {
-  const bytes = new Uint8Array(logo.data);
-  let binary = '';
-
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-  }
-
-  return `data:${logo.contentType};base64,${globalThis.btoa(binary)}`;
+function createLogoPreviewUrl(logo: ReportBrandingLogoAsset): string {
+  return URL.createObjectURL(new Blob([logo.data], { type: logo.contentType }));
 }
 
 async function readImageDimensions(
@@ -213,8 +206,15 @@ export function ReportBrandingDialog({
   const [logo, setLogo] = useState<ReportBrandingLogoAsset | undefined>(
     current.logo,
   );
-  const logoPreviewUrl = useMemo(
-    () => (logo ? logoDataUrl(logo) : undefined),
+  const logoPreviewRef = useCallback(
+    (image: HTMLImageElement | null) => {
+      if (!image || !logo) return;
+
+      const url = createLogoPreviewUrl(logo);
+      image.src = url;
+
+      return () => URL.revokeObjectURL(url);
+    },
     [logo],
   );
   const [isSaving, setIsSaving] = useState(false);
@@ -358,10 +358,10 @@ export function ReportBrandingDialog({
           </span>
           <div className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-card bg-surface-muted px-3 py-3">
             <div className="flex min-w-[160px] flex-1 items-center gap-3">
-              {logoPreviewUrl && (
+              {logo && (
                 <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-input border border-border bg-white p-2">
                   <img
-                    src={logoPreviewUrl}
+                    ref={logoPreviewRef}
                     alt={intl.formatMessage(messages.logo)}
                     className="max-h-full max-w-full object-contain"
                   />
