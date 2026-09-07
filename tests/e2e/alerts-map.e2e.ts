@@ -2,6 +2,12 @@ import { expect, test } from '@playwright/test';
 
 import { setupMockServer } from './mock-server';
 import { seedAlertMapState } from './seed-alert-map';
+import {
+  expectControlUnobscured,
+  expectOverlayCoversControlHitPoints,
+  installHighZMapBlocker,
+  removeHighZMapBlocker,
+} from './stacking-utils';
 
 test.describe('Alerts map and grid', () => {
   test('defaults to map and preserves map/grid preference independently', async ({
@@ -61,6 +67,26 @@ test.describe('Alerts map and grid', () => {
       page.getByText('Tap the map to place the alert point', { exact: true }),
     ).toBeVisible();
 
+    const mapContainer = page.getByTestId('map-container');
+    await installHighZMapBlocker(mapContainer);
+    try {
+      const backToForm = page.getByRole('button', { name: 'Back to form' });
+      const blocker = page.getByTestId('synthetic-maplibre-high-z');
+      await expectOverlayCoversControlHitPoints(blocker, backToForm);
+      await expectControlUnobscured(backToForm);
+      await backToForm.click();
+      await expect(dialog).toBeVisible();
+
+      await dialog.getByRole('button', { name: 'Select on map' }).click();
+      await expect(dialog).toBeHidden();
+      await expectControlUnobscured(
+        page.getByRole('button', { name: 'Back to form' }),
+      );
+    } finally {
+      // Remove the synthetic blocker before exercising the real map canvas.
+      await removeHighZMapBlocker(mapContainer);
+    }
+
     const mapCanvas = page.locator('.maplibregl-canvas').first();
     await expect(mapCanvas).toBeVisible();
     await mapCanvas.click({ position: { x: 120, y: 140 } });
@@ -69,6 +95,31 @@ test.describe('Alerts map and grid', () => {
     await expect(
       dialog.getByRole('button', { name: 'Change location on map' }),
     ).toBeVisible();
+  });
+
+  test('desktop point-entry controls stay inside the Create Alert sheet', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setupMockServer(page);
+    await seedAlertMapState(page);
+    await page.goto('/alerts');
+
+    await page.getByRole('button', { name: /Add Alert/i }).click();
+    const dialog = page.getByRole('dialog', { name: /Create Alert/i });
+    const addPoint = dialog.getByRole('button', { name: 'Add point' });
+    await expect(addPoint).toBeVisible();
+
+    const dialogBox = await dialog.boundingBox();
+    const addPointBox = await addPoint.boundingBox();
+    if (!dialogBox || !addPointBox) {
+      throw new Error('Expected Create Alert dialog and Add point bounds');
+    }
+
+    expect(addPointBox.x + addPointBox.width).toBeLessThanOrEqual(
+      dialogBox.x + dialogBox.width,
+    );
+    expect(addPointBox.x + addPointBox.width).toBeLessThanOrEqual(1440);
   });
 
   test('creates a point alert inline from the map and keeps the Alerts view', async ({

@@ -138,6 +138,17 @@ export function AlertsMap({
         cursor={mapCursor}
         className="h-full w-full"
         basemapSwitcherPositionClassName={basemapSwitcherPositionClassName}
+        mapContentOverlay={
+          showEmptyState &&
+          interactionMode === 'browse' &&
+          featureCollection.features.length === 0 ? (
+            <div className="flex h-full w-full items-center justify-center bg-surface-card/80 p-6 text-center backdrop-blur-sm">
+              <p className="text-text-muted text-sm">
+                {intl.formatMessage(messages.empty)}
+              </p>
+            </div>
+          ) : null
+        }
       >
         {featureCollection.features.length > 0 ? (
           <Source id="alerts" type="geojson" data={featureCollection}>
@@ -187,16 +198,6 @@ export function AlertsMap({
           </Marker>
         ) : null}
       </MapContainer>
-
-      {showEmptyState &&
-      interactionMode === 'browse' &&
-      featureCollection.features.length === 0 ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-surface-card/80 p-6 text-center backdrop-blur-sm">
-          <p className="text-text-muted text-sm">
-            {intl.formatMessage(messages.empty)}
-          </p>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -130,6 +130,9 @@ export interface MapContainerProps extends MapPassthroughProps {
   /** Container height (default: '100%') */
   height?: string | number;
 
+  /** Full-surface, pointer-active app overlay rendered above the isolated map surface but below built-in z-10/z-20 controls. */
+  mapContentOverlay?: ReactNode;
+
   /** Children (Source, Layer, Marker, Popup, etc.) */
   children?: ReactNode;
 }
@@ -164,6 +167,7 @@ function MapContainer({
   className,
   style,
   height = '100%',
+  mapContentOverlay,
   children,
   ...mapPassthrough
 }: MapContainerProps) {
@@ -352,9 +356,11 @@ function MapContainer({
     ...style,
   };
 
+  // Keep MapLibre's internal high z-index descendants inside this map boundary so
+  // app-owned sibling overlays can establish their own predictable paint order.
   const containerClassName = className
-    ? `relative overflow-hidden ${className}`
-    : 'relative overflow-hidden';
+    ? `relative isolate overflow-hidden ${className}`
+    : 'relative isolate overflow-hidden';
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -377,24 +383,32 @@ function MapContainer({
       className={containerClassName}
       style={containerStyle}
     >
-      <Map
-        ref={mapRef}
-        initialViewState={{
-          longitude: initialViewState?.longitude ?? 0,
-          latitude: initialViewState?.latitude ?? 0,
-          zoom: initialViewState?.zoom ?? 1,
-          pitch: initialViewState?.pitch ?? 0,
-          bearing: initialViewState?.bearing ?? 0,
-        }}
-        mapStyle={mapStyle}
-        interactive={interactive}
-        onLoad={handleMapLoad}
-        attributionControl={false}
-        {...mapPassthrough}
-      >
-        <AttributionControl position="top-left" compact />
-        {children}
-      </Map>
+      <div className="absolute inset-0 isolate">
+        <Map
+          ref={mapRef}
+          initialViewState={{
+            longitude: initialViewState?.longitude ?? 0,
+            latitude: initialViewState?.latitude ?? 0,
+            zoom: initialViewState?.zoom ?? 1,
+            pitch: initialViewState?.pitch ?? 0,
+            bearing: initialViewState?.bearing ?? 0,
+          }}
+          mapStyle={mapStyle}
+          interactive={interactive}
+          onLoad={handleMapLoad}
+          attributionControl={false}
+          {...mapPassthrough}
+        >
+          <AttributionControl position="top-left" compact />
+          {children}
+        </Map>
+      </div>
+
+      {/* z-[5] is intentionally between the isolated map surface and built-in
+          z-10/z-20 controls so blocking empty-state scrims never bury them. */}
+      {mapContentOverlay ? (
+        <div className="absolute inset-0 z-[5]">{mapContentOverlay}</div>
+      ) : null}
 
       {/* View-only affordance for the non-interactive state. Without this the
           difference between interactive and non-interactive maps is behavior

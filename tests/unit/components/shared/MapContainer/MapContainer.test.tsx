@@ -264,12 +264,29 @@ describe('MapContainer', () => {
     render(<MapContainer className="custom-container" />);
     const container = screen.getByTestId('map-container');
     expect(container.classList.contains('custom-container')).toBe(true);
+    expect(container).toHaveClass('isolate');
   });
 
   it('does not have trailing space in className when no custom class', () => {
     render(<MapContainer />);
     const container = screen.getByTestId('map-container');
     expect(container.className).not.toMatch(/\s$/);
+  });
+
+  it('renders map content overlays below the built-in basemap switcher', () => {
+    render(
+      <MapContainer
+        mapContentOverlay={<div data-testid="map-content-overlay">empty</div>}
+      />,
+    );
+
+    const overlay = screen.getByTestId('map-content-overlay');
+    const overlayLayer = overlay.parentElement;
+    const switcherLayer = screen.getByTestId('basemap-switcher').parentElement;
+
+    expect(screen.getByTestId('map-container')).toContainElement(overlay);
+    expect(overlayLayer).toHaveClass('absolute', 'inset-0', 'z-[5]');
+    expect(switcherLayer).toHaveClass('absolute', 'z-10');
   });
 
   it('applies custom height style', () => {

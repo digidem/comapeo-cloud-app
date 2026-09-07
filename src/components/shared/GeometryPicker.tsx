@@ -171,7 +171,7 @@ function CoordinateEntry({
 }) {
   const intl = useIntl();
   return (
-    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
       <label className="flex flex-col gap-1 text-sm font-medium text-text">
         {intl.formatMessage(messages.longitude)}
         <input
