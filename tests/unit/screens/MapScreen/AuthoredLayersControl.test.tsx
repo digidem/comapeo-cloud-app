@@ -10,6 +10,7 @@ import { AuthoredLayersControl } from '@/screens/MapScreen/AuthoredLayersControl
 function renderControl(
   entries: AuthoredLayerDraftEntry[],
   draftIssues = new Map(),
+  overrides: Record<string, unknown> = {},
 ) {
   const props = {
     entries,
@@ -18,6 +19,7 @@ function renderControl(
     onToggle: vi.fn(),
     onRemove: vi.fn(),
     onMove: vi.fn(),
+    ...overrides,
   };
   render(
     <IntlProvider locale="en">
@@ -164,6 +166,33 @@ describe('AuthoredLayersControl', () => {
         'This raster layer has no usable zoom levels inside the current map zoom range.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('renders import errors as a dismissible alert', () => {
+    const onDismissError = vi.fn();
+    renderControl([], new Map(), {
+      error: 'That GeoJSON file could not be read.',
+      onDismissError,
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'That GeoJSON file could not be read.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss error' }));
+    expect(onDismissError).toHaveBeenCalledOnce();
+  });
+
+  it('announces loading state to assistive technology', () => {
+    renderControl([], new Map(), { loading: true });
+
+    expect(screen.getByLabelText('Add GeoJSON layer')).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+    expect(screen.getByText('Adding GeoJSON layer…')).toHaveAttribute(
+      'aria-live',
+      'polite',
+    );
   });
 
   it('forwards selected GeoJSON files without converting them itself', () => {
