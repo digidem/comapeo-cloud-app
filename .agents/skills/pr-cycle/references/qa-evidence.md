@@ -32,6 +32,18 @@ The probe proves the narrow invariant; it does not replace integration, renderin
 - Exact-SHA CI may substitute for an unavailable local browser engine only when the relevant engine actually ran the relevant test suite on the same integrated revision.
 - If the workflow masks failures with `continue-on-error` or similar behavior, inspect the underlying command outcome before counting the browser signal as passing. See `github-runbook.md` for the canonical inspection mechanics.
 
+## Record QA outcomes precisely
+
+For every required QA item, record the actual evidence state instead of collapsing non-execution into `PASS`:
+
+- **PASS** — the stated check or workflow actually ran against the intended revision/target and met its acceptance criteria.
+- **FAIL** — the stated check actually ran and did not meet its acceptance criteria.
+- **NOT RUN — ENVIRONMENT UNAVAILABLE** — the check could not reach the product behavior because the execution environment lacked a required browser, host library, credential, service, device, or equivalent prerequisite. Preserve the reason; this is not a product verdict.
+- **NOT APPLICABLE / UNREACHABLE** — the current shipped product or scoped change does not expose the requested workflow. State why and identify the evidence that covers the reachable behavior when relevant.
+- **BASELINE / HARNESS FAILURE** — the same failure is reproducible on the current base revision, or the harness fails before exercising the changed behavior. Preserve the comparison evidence; do not count the result as a pass or silently attribute it to the PR.
+
+Substitute evidence keeps its own label. For example, exact-SHA CI may satisfy a QA contract that explicitly permits CI substitution for an unavailable local browser, but record that as **CI EXACT-SHA PASS**, not as a local/manual pass. Never claim a human or manual acceptance step was performed when only automated, direct-probe, unit, or integration evidence exists.
+
 ## Keep assertions as strong as each engine supports
 
 Cross-browser coverage does not require identical low-level assertions when an engine or renderer makes one oracle unreliable.
