@@ -65,9 +65,13 @@ describe('repository guardrails', () => {
     expect(ci).toContain('bun install --frozen-lockfile');
     // i18n check blocks CI
     expect(ci).toContain('run: npm run check:i18n');
-    // Report-branding offline coverage must run cross-browser before merge.
-    expect(ci).toMatch(
-      /Cross-browser[^\n]*E2E on PRs[\s\S]*?npx playwright test [^\n]*tests\/e2e\/report-branding\.e2e\.ts[^\n]*--project=firefox --project=webkit/,
+    // Report-branding network-blocked coverage must run in the intended
+    // cross-browser PR step, not merely somewhere later in the workflow.
+    const crossBrowserStep = ci.match(
+      /      - name: Cross-browser[^\n]*E2E on PRs\n[\s\S]*?(?=\n      - name:)/,
+    )?.[0];
+    expect(crossBrowserStep).toMatch(
+      /npx playwright test [^\n]*tests\/e2e\/report-branding\.e2e\.ts[^\n]*--project=firefox --project=webkit/,
     );
     // Screenshots job should not silently pass on failure
     // (the separate screenshots job uses continue-on-error, which is
