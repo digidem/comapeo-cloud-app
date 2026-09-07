@@ -97,6 +97,31 @@ test.describe('Alerts map and grid', () => {
     ).toBeVisible();
   });
 
+  test('desktop point-entry controls stay inside the Create Alert sheet', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setupMockServer(page);
+    await seedAlertMapState(page);
+    await page.goto('/alerts');
+
+    await page.getByRole('button', { name: /Add Alert/i }).click();
+    const dialog = page.getByRole('dialog', { name: /Create Alert/i });
+    const addPoint = dialog.getByRole('button', { name: 'Add point' });
+    await expect(addPoint).toBeVisible();
+
+    const dialogBox = await dialog.boundingBox();
+    const addPointBox = await addPoint.boundingBox();
+    if (!dialogBox || !addPointBox) {
+      throw new Error('Expected Create Alert dialog and Add point bounds');
+    }
+
+    expect(addPointBox.x + addPointBox.width).toBeLessThanOrEqual(
+      dialogBox.x + dialogBox.width,
+    );
+    expect(addPointBox.x + addPointBox.width).toBeLessThanOrEqual(1440);
+  });
+
   test('creates a point alert inline from the map and keeps the Alerts view', async ({
     page,
   }) => {

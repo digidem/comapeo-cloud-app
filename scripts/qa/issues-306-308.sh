@@ -16,10 +16,10 @@ npx vitest run --project=unit \
   tests/unit/components/shared/AlertsMap.test.tsx \
   tests/unit/components/shared/ObservationsMap.test.tsx
 
-echo "==> QA #306: mobile Alerts map stacking"
+echo "==> QA #306 + visual regression: Alerts map stacking and desktop sheet containment"
 CI= npx playwright test tests/e2e/alerts-map.e2e.ts \
   --project=chromium \
-  --grep "mobile sheet exposes map selection" \
+  --grep "mobile sheet exposes map selection|desktop point-entry controls stay inside" \
   --retries=0 \
   --reporter=list
 
