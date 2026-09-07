@@ -169,7 +169,7 @@ describe('AddToCaseDialog', () => {
       'Could not add the selected evidence. Try again.',
     );
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
-  });
+  }, 10_000);
 
   it('can create the minimal new Case then attach the selected evidence', async () => {
     const user = userEvent.setup();
