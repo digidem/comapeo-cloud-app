@@ -31,7 +31,8 @@ body and this file disagree, this file wins.
 Make the basemap list scannable by grouping it under provider headings, and grow it
 with additional free, no-key, live-verified imagery sources — without widening the
 `/api/tiles` proxy trust surface and without shipping any entry that requires an API
-key or breaches a provider's terms.
+key or breaches a provider's terms (barring the accepted Google ToS risk documented
+in the Decision log).
 
 ## Product model (DECIDED)
 
@@ -82,7 +83,7 @@ key or breaches a provider's terms.
 | `src/lib/map/tile-hostname-allowlist.ts:13-41` | Shared by the client and `functions/api/tiles/index.ts:229`. `*.arcgisonline.com` and `*.openstreetmap.fr` patterns already cover several candidates. |
 | `src/lib/map/smp-download.ts:145-152` | Every raster entry is bulk-fetched through `/api/tiles` during offline packaging. A catalog entry is therefore also a **server-side** fetch of that provider, under our origin. For Google entries, normal map display fetches are browser-direct (the `mt` endpoints return `access-control-allow-origin: *`, verified 2026-09-08); the proxy path applies to SMP offline packaging. |
 | `src/lib/map/basemap-utils.ts:84-101` | `normalizeTileUrl` supports `{z} {x} {y} {zoom} {switch:…} {-y}` only. `{quadkey}`, `{bbox-epsg-3857}`, `{apikey}`, `{key}` are unsupported. |
-| `functions/api/tiles/index.ts:263-276` | Proxy MIME allowlist: `image/png`, `image/jpeg`, `image/webp`, `application/octet-stream`, `application/vnd.mapbox-vector-tile`. A raster entry serving anything else 502s during SMP download even if the hostname is allowed. |
+| `functions/api/tiles/index.ts:263-269` | Proxy MIME allowlist: `image/png`, `image/jpeg`, `image/webp`, `application/octet-stream`, `application/vnd.mapbox-vector-tile`. A raster entry serving anything else 502s during SMP download even if the hostname is allowed. |
 
 ## Ownership boundary
 
@@ -372,7 +373,9 @@ Stop and report rather than improvising if any of these occur:
 - fewer than 4 candidates pass the verification gate — the grouping UI is not worth
   shipping over a catalog that did not grow;
 - a candidate requires a proxy MIME type outside
-  `functions/api/tiles/index.ts:263-269` — that is a proxy change, out of scope;
+  `functions/api/tiles/index.ts:263-269` (verified 2026-09-08: allowlist block spans
+  :263-269, `application/octet-stream` also appears at :311 for a different surface) —
+  that is a proxy change, out of scope;
 - a candidate needs a placeholder `normalizeTileUrl` does not support — out of scope;
 - a candidate needs an allowlist pattern broader than one tile-serving zone — do not
   widen the allowlist; narrow or drop the candidate (allowlist invariant in
