@@ -5,7 +5,7 @@
 **Base:** `origin/main` at `4080319` (2026-09-08; reviewed at `798846e`, delta re-verified — only `smp-download.ts` changed, unrelated to this spec's constraint table), inspected 2026-09-08
 **Supersedes:** none
 **Superseded-by:** none
-**Status:** draft — reviewed by Opus 5 (NEEDS_REWRITE → all P1/P2 fixes incorporated); **rev2 2026-09-08 — Google added per product-owner decision (see Decision log)**; not implementation-ready until this file is merged
+**Status:** draft — reviewed by Opus 5 (NEEDS_REWRITE → all P1/P2 fixes incorporated); **rev2 2026-09-08 — Google added per product-owner decision (see Decision log); rev3 2026-09-08 — Gemini 3.8 Flash pre-merge review fixes (OpenFreeMap fully specified, StylePicker AC added, popover width pinned)**; not implementation-ready until this file is merged
 **Split:** none. One independently mergeable unit — no PR1/PR2 gate, one ownership
 boundary (the basemap catalog and its presentation), one coherent reviewable objective.
 
@@ -104,6 +104,7 @@ export const basemapProviderSchema = v.picklist([
   'esri',
   'google',
   'openstreetmap',
+  'openfreemap',
   'opentopomap',
   'usgs',
   'custom',
@@ -134,7 +135,7 @@ are never rendered in a provider group.
 
 ```ts
 export const PROVIDER_ORDER: readonly Exclude<BasemapProvider, 'custom'>[] = [
-  'carto', 'esri', 'google', 'openstreetmap', 'opentopomap', 'usgs',
+  'carto', 'esri', 'google', 'openstreetmap', 'openfreemap', 'opentopomap', 'usgs',
 ];
 
 export function groupBasemapsByProvider(
@@ -169,7 +170,7 @@ as working):
 | Google Streets | `mt0-3.google.com` | same pattern | `lyrs=m` — live-verified 200 `image/png` 2026-09-08 |
 | Google Hybrid | `mt0-3.google.com` | same pattern | `lyrs=y` — live-verified 200 `image/jpeg` 2026-09-08 |
 | Google Terrain | `mt0-3.google.com` | same pattern | `lyrs=p` — live-verified 200 `image/jpeg` 2026-09-08 |
-| OpenFreeMap (Liberty/Bright) | `tiles.openfreemap.org` | **new entry required** | vector style; verify no-key status and terms from openfreemap.org before adding |
+| OpenFreeMap Liberty + Bright | `tiles.openfreemap.org` | **new entry required** (exact host) | vector style (`GET …/styles/{liberty,bright}`); live-verified 2026-09-08: HTTP 200, MapLibre style JSON `version: 8`, no key; free hosting per openfreemap.org terms |
 
 Explicitly **excluded**, with reason recorded in `docs/qa/376.md`: Bing (free tier
 ended 2025-06-30; quadkey unsupported), Mapbox / HERE / Thunderforest / Stadia-Stamen
@@ -214,11 +215,11 @@ touching PR because that is when a bad entry is being introduced.
   visible `<div id={headerId}>` header showing the localized provider name.
 - Header style per `DESIGN_OVERVIEW.md`: `text-xs font-medium text-text-muted`,
   matching the existing "Basemap" label (`BasemapSwitcher.tsx:90-92`). Items indent
-  one step. No solid borders between groups — tonal separation only.
+  one step (`pl-4` on group items). No solid borders between groups — tonal separation only.
 - **Unchanged:** `data-testid="basemap-switcher"`, `data-testid="basemap-switcher-trigger"`,
   `role="menuitemradio"`, `aria-checked`, the selected-radio dot, `onChange` signature,
   the empty-catalog `return null` (`:64-66`), the absence of `role="menu"`.
-- Popover width grows from `w-56`; add `max-h-[70vh] overflow-y-auto` so ~16 entries
+- Popover width grows from `w-56` to `w-72`; add `max-h-[70vh] overflow-y-auto` so ~16 entries
   remain reachable at the 375×812 mobile viewport.
 
 ### 7. UI — `StylePicker.tsx`
@@ -235,6 +236,7 @@ map.basemap.provider.carto
 map.basemap.provider.esri
 map.basemap.provider.google
 map.basemap.provider.openstreetmap
+map.basemap.provider.openfreemap
 map.basemap.provider.opentopomap
 map.basemap.provider.usgs
 ```
@@ -271,15 +273,21 @@ convention differs. Run `npm run extract-messages`; the i18n CI check must pass.
     length equals the group count; `queryByRole('menu')` is still null.
 11. Selecting an item still calls `onChange` with that entry's id; `aria-checked` is
     true on exactly one item.
-12. Every non-`custom` `PROVIDER_ORDER` slug has a `map.basemap.provider.<slug>` key
-    present in **all three** of `en.json`, `pt.json`, `es.json` (asserted by iterating
-    the picklist, not by a hardcoded list).
+12. The `basemapProviderSchema` options (excluding `'custom'`) and `PROVIDER_ORDER`
+    are the same set, and every slug in that set has a `map.basemap.provider.<slug>`
+    key present in **all three** of `en.json`, `pt.json`, `es.json` (asserted by
+    iterating the schema picklist and cross-checking the order constant — no
+    hardcoded list).
 13. `node scripts/qa/verify-basemaps.mjs` exits 0 against the merged catalog.
 14. `npm run lint:types`, `npm run lint:eslint`, `npm run lint:prettier`, `npm test`
     pass; `npm run test:coverage` holds ≥80% on all four metrics.
 15. `visual-regression-check` is green with intentionally-updated baselines for the
     BasemapSwitcher stories, and **no** other baseline file changed byte-for-byte.
 16. `docs/qa/376.md` exists and is linked from the PR body.
+17. `StylePicker` renders the same provider grouping: one `role="group"` per
+    non-empty provider with an accessible name equal to the localized provider label,
+    and the custom-URL flow constructs a schema-valid basemap with
+    `provider: 'custom'` that appears in no provider group.
 
 ## Required tests
 
@@ -351,6 +359,12 @@ a threshold to hide cross-platform drift.
   `khms`/`kh` endpoint 404 (excluded). Bing, Stamen, Mapbox, HERE, Thunderforest and
   Wikimedia remain excluded. SMP offline packaging treats Google entries like any
   other raster entry; OSMF-policy concerns are tracked in #378.
+- **2026-09-08 — rev3** from an independent pre-merge review (Google Antigravity CLI,
+  `gemini-3.8-flash-high`): OpenFreeMap fully specified as `'openfreemap'` across
+  schema, order, i18n and candidate table (style JSON live-verified 2026-09-08);
+  StylePicker acceptance criterion added (AC 17); popover width pinned (`w-72`);
+  AC 12 rewritten as a set-equality assertion; indent pinned (`pl-4`); stale
+  cross-review reference removed from Hard-stop conditions.
 
 ## Hard-stop conditions
 
@@ -360,8 +374,9 @@ Stop and report rather than improvising if any of these occur:
 - a candidate requires a proxy MIME type outside
   `functions/api/tiles/index.ts:263-269` — that is a proxy change, out of scope;
 - a candidate needs a placeholder `normalizeTileUrl` does not support — out of scope;
-- a candidate needs an allowlist pattern broader than one tile-serving zone — refer
-  back to P1-8, do not widen;
+- a candidate needs an allowlist pattern broader than one tile-serving zone — do not
+  widen the allowlist; narrow or drop the candidate (allowlist invariant in
+  Current-code constraints and `functions/api/tiles/index.ts`);
 - grouping cannot be added without changing `role="menuitemradio"` — stop and raise the
   a11y question rather than silently changing roles the tests pin.
 
