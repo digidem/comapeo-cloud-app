@@ -5,7 +5,7 @@
 **Base:** `origin/main` at `4080319` (2026-09-08; reviewed at `798846e`, delta re-verified — only `smp-download.ts` changed, unrelated to this spec's constraint table), inspected 2026-09-08
 **Supersedes:** none
 **Superseded-by:** none
-**Status:** draft — reviewed by Opus 5 (verdict: NEEDS_REWRITE → this spec incorporates all P1/P2 fixes); not implementation-ready until this file is merged
+**Status:** draft — reviewed by Opus 5 (NEEDS_REWRITE → all P1/P2 fixes incorporated); **rev2 2026-09-08 — Google added per product-owner decision (see Decision log)**; not implementation-ready until this file is merged
 **Split:** none. One independently mergeable unit — no PR1/PR2 gate, one ownership
 boundary (the basemap catalog and its presentation), one coherent reviewable objective.
 
@@ -13,13 +13,16 @@ This spec is the canonical single source of truth for issue #376. Where the issu
 body and this file disagree, this file wins.
 
 > **Scope correction.** The originating issue proposed sourcing ~30 basemaps across
-> ~8 providers from `nextgis/quickmapservices`, including Google, Bing, Mapbox,
-> Stamen, HERE, Thunderforest ("Cyclo"/"Transport") and Wikimedia. Every one of those
-> is either contractually prohibited, key-gated, retired, or unrenderable by MapLibre;
-> the cited upstream licence (CC-BY-SA 3.0) is also wrong (GPL-2.0-or-later), and
-> upstream self-declares its data unvalidated and possibly licence-violating. See the
-> spec review on the issue for the per-provider evidence. This spec ships the safe
-> subset: a **curated, no-key, verified** catalog with **provider-grouped** UI.
+> ~8 providers from `nextgis/quickmapservices`. Review found most of those unusable:
+> Bing (free tier shut down 2025-06-30; quadkey unsupported), Stamen (tiles dead since
+> 2023-10-31; Stadia-hosted requires keys), Mapbox / HERE / Thunderforest (API key),
+> Wikimedia (third-party use prohibited). The cited upstream licence (CC-BY-SA 3.0)
+> is also wrong (GPL-2.0-or-later), and upstream self-declares its data unvalidated
+> and possibly licence-violating. **Google is INCLUDED by explicit product-owner
+> decision (2026-09-08): the app follows the QuickMapServices access model — Google's
+> keyless `mt{0-3}.google.com/vt` raster endpoints, live-verified 2026-09-08 (HTTP 200,
+> `image/jpeg`/`image/png`, `access-control-allow-origin: *`).** This spec ships a
+> curated, keyless, verified catalog with **provider-grouped** UI; see Decision log.
 
 ---
 
@@ -35,6 +38,11 @@ key or breaches a provider's terms.
 - **Every catalog entry is anonymously fetchable.** No API key, no token, no
   registration, no per-domain allowlisting at the provider. An entry that cannot be
   fetched with a bare unauthenticated GET does not go in the catalog.
+- **Google follows the QuickMapServices access model (product-owner decision, 2026-09-08).**
+  Keyless `mt{0-3}.google.com/vt/lyrs={s,m,y,p}` endpoints; no key, no Google SDK, no
+  Google billing. The spec review's recorded position — that these endpoints fall under
+  Google Maps Platform ToS §3.2.3(a) ("No Scraping") — is acknowledged and the risk
+  explicitly accepted by the product owner. Recorded in `docs/qa/376.md`.
 - **Provider is a closed set.** Grouping is total: every entry belongs to exactly one
   known provider, enforced by the schema, not by convention.
 - **Liveness is a merge gate, not a review opinion.** The catalog is whatever passes
@@ -45,8 +53,10 @@ key or breaches a provider's terms.
 
 ## Non-goals
 
-- API-key-gated or paid providers (Google, Bing/Azure Maps, Mapbox, HERE,
-  Thunderforest, Stadia/Stamen). Tracked as a separate follow-up issue.
+- API-key-gated or paid providers (Bing/Azure Maps, Mapbox, HERE,
+  Thunderforest, Stadia/Stamen). Tracked in #377. Google Maps Platform's official
+  APIs/SDKs are equally out of scope — Google ships via the keyless endpoints above,
+  not via Google billing.
 - Wikimedia tiles (third-party use prohibited by their Maps Terms of Use).
 - Copying data from `nextgis/quickmapservices` or `_contrib`. It may be consulted as a
   lead list; entries are hand-authored from each provider's own documentation.
@@ -70,7 +80,7 @@ key or breaches a provider's terms.
 | `src/components/shared/MapContainer/BasemapSwitcher.tsx:93-129` | Flat `basemaps.map`. `data-testid="basemap-switcher"`, `data-testid="basemap-switcher-trigger"`, `role="menuitemradio"` + `aria-checked` must all survive. |
 | `src/screens/MapScreen/StylePicker.tsx:94-122` | Second consumer of `BASEMAP_CATALOG`; also constructs a custom-URL basemap object that will now need a `provider`. |
 | `src/lib/map/tile-hostname-allowlist.ts:13-41` | Shared by the client and `functions/api/tiles/index.ts:229`. `*.arcgisonline.com` and `*.openstreetmap.fr` patterns already cover several candidates. |
-| `src/lib/map/smp-download.ts:145-152` | Every raster entry is bulk-fetched through `/api/tiles` during offline packaging. A catalog entry is therefore also a **server-side** fetch of that provider, under our origin. |
+| `src/lib/map/smp-download.ts:145-152` | Every raster entry is bulk-fetched through `/api/tiles` during offline packaging. A catalog entry is therefore also a **server-side** fetch of that provider, under our origin. For Google entries, normal map display fetches are browser-direct (the `mt` endpoints return `access-control-allow-origin: *`, verified 2026-09-08); the proxy path applies to SMP offline packaging. |
 | `src/lib/map/basemap-utils.ts:84-101` | `normalizeTileUrl` supports `{z} {x} {y} {zoom} {switch:…} {-y}` only. `{quadkey}`, `{bbox-epsg-3857}`, `{apikey}`, `{key}` are unsupported. |
 | `functions/api/tiles/index.ts:263-276` | Proxy MIME allowlist: `image/png`, `image/jpeg`, `image/webp`, `application/octet-stream`, `application/vnd.mapbox-vector-tile`. A raster entry serving anything else 502s during SMP download even if the hostname is allowed. |
 
@@ -91,8 +101,9 @@ Add a **required** provider slug to `commonBasemapFields`:
 ```ts
 export const basemapProviderSchema = v.picklist([
   'carto',
-  'openstreetmap',
   'esri',
+  'google',
+  'openstreetmap',
   'opentopomap',
   'usgs',
   'custom',
@@ -123,7 +134,7 @@ are never rendered in a provider group.
 
 ```ts
 export const PROVIDER_ORDER: readonly Exclude<BasemapProvider, 'custom'>[] = [
-  'carto', 'openstreetmap', 'esri', 'opentopomap', 'usgs',
+  'carto', 'esri', 'google', 'openstreetmap', 'opentopomap', 'usgs',
 ];
 
 export function groupBasemapsByProvider(
@@ -154,13 +165,18 @@ as working):
 | OSM Humanitarian (HOT) | `*.tile.openstreetmap.fr` | covered by `*.openstreetmap.fr` | free, no key |
 | CyclOSM | `*.tile-cyclosm.openstreetmap.fr` | covered by `*.openstreetmap.fr` | free, no key — **not** Thunderforest OpenCycleMap |
 | OSM Germany | `*.tile.openstreetmap.de` | already exact-listed `:26-28` | listed but currently unused by the catalog |
+| Google Satellite | `mt0.google.com` … `mt3.google.com` | **new pattern required**: `^mt\d\.google\.com$` | `/vt/lyrs=s&x={x}&y={y}&z={z}` — live-verified 200 `image/jpeg`, `access-control-allow-origin: *`, 2026-09-08 |
+| Google Streets | `mt0-3.google.com` | same pattern | `lyrs=m` — live-verified 200 `image/png` 2026-09-08 |
+| Google Hybrid | `mt0-3.google.com` | same pattern | `lyrs=y` — live-verified 200 `image/jpeg` 2026-09-08 |
+| Google Terrain | `mt0-3.google.com` | same pattern | `lyrs=p` — live-verified 200 `image/jpeg` 2026-09-08 |
 | OpenFreeMap (Liberty/Bright) | `tiles.openfreemap.org` | **new entry required** | vector style; verify no-key status and terms from openfreemap.org before adding |
 
-Explicitly **excluded**, with reason recorded in `docs/qa/376.md`: Google (ToS
-§3.2.3(a) No Scraping), Bing (free tier ended 2025-06-30; quadkey unsupported),
-Mapbox / HERE / Thunderforest / Stadia-Stamen (API key), Wikimedia (third-party use
-prohibited), Esri NatGeo World Map and USA Topo Maps (Esri-deprecated legacy
-basemaps; USA Topo in mature support since 2021-06, retiring 2029-12).
+Explicitly **excluded**, with reason recorded in `docs/qa/376.md`: Bing (free tier
+ended 2025-06-30; quadkey unsupported), Mapbox / HERE / Thunderforest / Stadia-Stamen
+(API key), Wikimedia (third-party use prohibited), Esri NatGeo World Map and USA Topo
+Maps (Esri-deprecated legacy basemaps; USA Topo in mature support since 2021-06,
+retiring 2029-12). Google is **included** per the Decision log (keyless `mt` endpoints;
+the legacy `khms`/`kh` endpoint returned 404 on 2026-09-08 and is not used).
 
 Each entry's `attribution` is copied verbatim from the provider's own attribution
 requirement, matching the existing file's stated convention (`basemaps.ts:7`).
@@ -216,8 +232,9 @@ One key per non-`custom` provider slug, in `en.json`, `pt.json`, `es.json`:
 
 ```
 map.basemap.provider.carto
-map.basemap.provider.openstreetmap
 map.basemap.provider.esri
+map.basemap.provider.google
+map.basemap.provider.openstreetmap
 map.basemap.provider.opentopomap
 map.basemap.provider.usgs
 ```
@@ -236,10 +253,11 @@ convention differs. Run `npm run extract-messages`; the i18n CI check must pass.
 4. **Zero key-gated entries.** No catalog `url` matches
    `/\{apikey\}|\{key\}|api[_-]?key|access[_-]?token|\bsubscription-key\b/i`.
 5. **Zero prohibited hosts.** No catalog URL hostname matches any of:
-   `google.com`, `googleapis.com`, `ggpht.com`, `virtualearth.net`, `bing.com`,
-   `mapbox.com`, `here.com`, `thunderforest.com`, `stadiamaps.com`,
-   `wikimedia.org`. (Regression guard for the removals this spec makes — this test
-   is the reason a future agent cannot silently re-add them.)
+   `virtualearth.net`, `bing.com`, `mapbox.com`, `here.com`, `thunderforest.com`,
+   `stadiamaps.com`, `wikimedia.org`, `googleapis.com`, `ggpht.com` (these last two:
+   non-tile Google surfaces — tile entries use `mt{0-3}.google.com` only).
+   (Regression guard for the removals this spec makes — this test is the reason a
+   future agent cannot silently re-add them.)
 6. **Zero unsupported placeholders.** No catalog URL contains `{quadkey}` or
    `{bbox-epsg-3857}`.
 7. Every `raster` entry's hostname satisfies `isHostnameAllowed()`.
@@ -300,8 +318,10 @@ must not run in the unit suite.
 Must contain: scope validated; prerequisites (`npm ci`, Node ≥22); how to run
 `scripts/qa/verify-basemaps.mjs` and how to read its output; per-provider entry list
 with attribution string and licence/terms link; **the explicit exclusion table with
-the reason and evidence date for each rejected provider** (Google, Bing, Mapbox,
-HERE, Thunderforest, Stadia/Stamen, Wikimedia, Esri legacy layers); a statement that
+the reason and evidence date for each rejected provider** (Bing, Mapbox, HERE,
+Thunderforest, Stadia/Stamen, Wikimedia, Esri legacy layers) **plus the Google
+decision-log entry** (decision date, decision-maker, endpoints, live-verification
+evidence, and the acknowledged ToS position); a statement that
 the count of key-requiring providers is zero and which test enforces it; manual steps
 at 1440×900 and 375×812 for opening the switcher, reading group headers, keyboard
 traversal, and selecting an entry from a non-first group; expected results; explicit
@@ -319,6 +339,18 @@ CI-rendered screenshots as canonical for the new/changed BasemapSwitcher stories
 Preserve every unrelated file under `tests/e2e/storybook-screenshots-baseline/`
 byte-for-byte; if a local run rewrites unrelated baselines, restore them. Never relax
 a threshold to hide cross-platform drift.
+
+## Decision log
+
+- **2026-09-08 — Google included** via keyless `mt{0-3}.google.com/vt` endpoints
+  (QuickMapServices access model), by product-owner directive ("let's take the same
+  direction as QuickMapServices"). The spec review had excluded Google citing Google
+  Maps Platform ToS §3.2.3(a) ("No Scraping"); that position is recorded and the risk
+  explicitly accepted by the product owner. Live verification 2026-09-08: `lyrs=s|m|y|p`
+  all HTTP 200, `image/jpeg`/`image/png`, `access-control-allow-origin: *`; legacy
+  `khms`/`kh` endpoint 404 (excluded). Bing, Stamen, Mapbox, HERE, Thunderforest and
+  Wikimedia remain excluded. SMP offline packaging treats Google entries like any
+  other raster entry; OSMF-policy concerns are tracked in #378.
 
 ## Hard-stop conditions
 
