@@ -15,8 +15,8 @@ Produce implementation-ready GitHub issues without drifting into implementation.
 - Resolve product decisions before finalizing architecture. Ask only the smallest material set of user questions; prefer a clear recommendation when repository/upstream evidence supports one.
 - Ground technical decisions in the current codebase and current upstream primary documentation. Re-check unstable upstream APIs/versions before publishing a spec that depends on them.
 - A reviewer timeout, provider error, empty output, stale artifact, or partial review is **not approval**. Count only a terminal verdict on the exact current spec.
-- If the user explicitly requires a reviewer/model (for example Claude Opus 5), do not silently substitute another model. Alternate provider routes for the **same exact model** are acceptable when the named model is available through them. If every configured route for that exact model is genuinely unavailable after bounded retries/provider checks, mark the review gate **blocked** and report that limitation; do not wait forever and do not manufacture approval from a different model.
-- When this skill itself calls for Opus 5 because a spec is high-risk but the user did **not** explicitly require Opus, use the workspace `pr-cycle` reviewer-fallback policy after bounded Opus/provider checks (currently Kimi K3 via OpenCode Go/Oh My Pi when available). The fallback must remain read-only and terminal; never treat unavailable Opus as implicit approval. An explicit user requirement for Opus still follows the stricter blocked rule above.
+- If the user explicitly requires a reviewer/model (for example GPT-6 Astra or Claude Opus 5), do not silently substitute another model. Alternate provider routes for the **same exact model** are acceptable when the named model is available through them. If every configured route for that exact model is genuinely unavailable after bounded retries/provider checks, mark the review gate **blocked** and report that limitation; do not wait forever and do not manufacture approval from a different model.
+- For skill-selected high-risk spec review, default to **GPT-6 Astra via Codex** (`gpt-6-astra`). If GPT-6 Astra is unavailable and the user did **not** explicitly require it, use the workspace `pr-cycle` reviewer-fallback policy. The fallback must remain read-only and terminal; never treat an unavailable preferred reviewer as implicit approval. An explicit user requirement for any named model still follows the stricter blocked rule above.
 
 ## 1. Establish current truth
 
@@ -119,7 +119,7 @@ For a third-party embedded app/library:
 
 ## 5. Review loop
 
-Review **each executable child independently** before publication. For high-risk architecture/security/data/release work, or whenever the user requests it, use Claude Opus 5.
+Review **each executable child independently** before publication. For high-risk architecture/security/data/release work, default to **GPT-6 Astra via Codex** (`gpt-6-astra`) unless the user explicitly requests another named reviewer/model.
 
 For each child:
 

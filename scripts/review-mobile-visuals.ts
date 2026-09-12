@@ -2,7 +2,7 @@
  * Visual Review Pipeline (Mobile + Desktop)
  *
  * Collects screenshots (E2E + Storybook) from mobile and/or desktop
- * directories, sends each to gpt-5.4-mini via the Codex CLI
+ * directories, sends each to GPT-6 Astra (`gpt-6-astra`) via the Codex CLI
  * (`codex exec`) for structured UX review, and outputs a JSON report.
  *
  * Usage:
@@ -33,7 +33,7 @@ const ROOT = resolve(__dirname, '..');
 const SCREENSHOT_DIR = resolve(ROOT, 'tests/e2e/screenshots');
 const TMP_DIR = resolve(ROOT, 'tests/e2e/screenshots/.review-tmp');
 
-const MODEL = 'gpt-5.4-mini';
+const MODEL = 'gpt-6-astra';
 const CONCURRENCY = 3;
 
 type ViewportName = 'mobile' | 'desktop';
