@@ -30,6 +30,7 @@ const {
 
 vi.mock('maplibre-gl', () => ({
   default: { addProtocol: mockAddProtocol },
+  addProtocol: mockAddProtocol,
 }));
 
 vi.mock('styled-map-package-api/reader', () => ({ Reader: MockReader }));

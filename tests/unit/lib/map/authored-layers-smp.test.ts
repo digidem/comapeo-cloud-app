@@ -42,6 +42,7 @@ vi.mock('@/lib/db', async (importOriginal) => {
 vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}));
 vi.mock('maplibre-gl', () => ({
   default: { addProtocol: vi.fn() },
+  addProtocol: vi.fn(),
 }));
 vi.mock('react-map-gl/maplibre', () => ({
   default: (props: Record<string, unknown>) => {

@@ -1,6 +1,6 @@
 import { ZipReader } from '@gmaclennan/zip-reader';
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import maplibregl from 'maplibre-gl';
+import { addProtocol } from 'maplibre-gl';
 import { Reader } from 'styled-map-package-api/reader';
 import { createServer } from 'styled-map-package-api/server';
 
@@ -238,7 +238,7 @@ export function registerSmpProtocol(): void {
   if (registered) return;
   registered = true;
 
-  maplibregl.addProtocol('smp', async (request) => {
+  addProtocol('smp', async (request: { url: string }) => {
     let glyphRequest = false;
     try {
       const url = new URL(request.url);
