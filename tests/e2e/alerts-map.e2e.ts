@@ -73,7 +73,13 @@ test.describe('Alerts map and grid', () => {
 
   test('creates a point alert inline from the map and keeps the Alerts view', async ({
     page,
+    browserName,
   }) => {
+    test.skip(
+      browserName !== 'chromium',
+      'MapLibre canvas requires WebGL (unavailable in Playwright firefox/webkit).',
+    );
+
     await setupMockServer(page);
     await seedAlertMapState(page);
     await page.goto('/alerts');
