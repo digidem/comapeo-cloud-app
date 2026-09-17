@@ -206,6 +206,18 @@ async function readXmlDocument(
     0,
     Math.min(prologEnd === -1 ? 1024 : prologEnd + 2, 1024),
   );
+  // A real XML declaration is tiny. One the bounded prolog scan cannot fully
+  // capture (terminator beyond 1024 chars) or terminate (no terminator past
+  // 1024 chars) is malformed or hostile, so fail closed instead of silently
+  // skipping the encoding check on a truncated declaration.
+  if (/^\uFEFF?\s*<\?xml\b/.test(text)) {
+    if (
+      (prologEnd === -1 && text.length > 1024) ||
+      (prologEnd !== -1 && prologEnd + 2 > 1024)
+    ) {
+      throw importError('xml-invalid', file, format);
+    }
+  }
   const declaration = prolog.match(
     /^\uFEFF?\s*<\?xml\b[^>]*\bencoding\s*=\s*["']([^"']+)["'][^>]*\?>/i,
   );

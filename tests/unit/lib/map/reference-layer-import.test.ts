@@ -457,6 +457,31 @@ describe('XML reference imports', () => {
     }
   });
 
+  it('rejects an XML declaration truncated by the bounded prolog scan instead of skipping the encoding check', async () => {
+    const file = new File(
+      [
+        '<?xml version="1.0" ' +
+          ' '.repeat(1100) +
+          `encoding="ISO-8859-1"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark>
+          <name>Village</name>
+          <Point><coordinates>-48.5,-1.45,0</coordinates></Point>
+        </Placemark></Document></kml>`,
+      ],
+      'truncated-declaration.kml',
+      { type: 'application/vnd.google-earth.kml+xml' },
+    );
+
+    const result = await prepareReferenceImportBatch([file], context);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors[0]).toMatchObject({
+      kind: 'conversion',
+      error: { code: 'xml-invalid' },
+    });
+  });
+
   it('rejects a hostile unterminated XML declaration without quadratic scanning', async () => {
     const hostile = '<?xml ' + 'encoding="a" '.repeat(74_000);
     const file = new File([hostile], 'hostile.kml');
