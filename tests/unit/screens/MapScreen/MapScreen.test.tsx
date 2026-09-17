@@ -741,6 +741,8 @@ describe('MapScreen', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'empty.geojson has no supported geometry to display.',
     );
+    await user.click(screen.getByRole('button', { name: 'Dismiss error' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
     const oversized = new File(
       ['{"type":"Point","coordinates":[-60,-3]}'],

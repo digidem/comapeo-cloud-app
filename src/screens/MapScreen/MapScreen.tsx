@@ -79,7 +79,7 @@ interface PreEditAuthoringState {
 
 const DEFAULT_BBOX: [number, number, number, number] = [-75, -12, -45, 8];
 const DEFAULT_ZOOM: ZoomRange = { minZoom: 0, maxZoom: 14 };
-const MAX_REFERENCE_OVERLAYS = 10;
+const MAX_AUTHORED_LAYER_UI_COUNT = 10;
 
 function savedMapToBasemap(map: SavedMap): ImageryBasemap {
   const common = {
@@ -419,12 +419,12 @@ export function MapScreen() {
       referenceOverlayIdsRef.current.size +
       referenceOverlayReservedSlotsRef.current +
       files.length;
-    if (nextOverlayCount > MAX_REFERENCE_OVERLAYS) {
+    if (nextOverlayCount > MAX_AUTHORED_LAYER_UI_COUNT) {
       referenceOverlayLatestUiOutcomeRef.current = importSequence;
       dismissReferenceOverlayToastThrough(importSequence);
       setReferenceOverlayError(
         intl.formatMessage(mapMessages.referenceOverlaysLimit, {
-          max: MAX_REFERENCE_OVERLAYS,
+          max: MAX_AUTHORED_LAYER_UI_COUNT,
         }),
       );
       setReferenceOverlayErrorSurface(errorSurface);
@@ -721,6 +721,11 @@ export function MapScreen() {
     editingSnapshot,
   ]);
 
+  function dismissAuthoredLayerImportError() {
+    setReferenceOverlayError(null);
+    setReferenceOverlayErrorSurface(null);
+  }
+
   function handleSettingsOpenChange(open: boolean) {
     settingsOpenRef.current = open;
     setSettingsOpen(open);
@@ -922,6 +927,7 @@ export function MapScreen() {
               ? referenceOverlayError
               : null
           }
+          onDismissError={dismissAuthoredLayerImportError}
           loading={referenceOverlayLoading}
         />
         {authoredLayerEntries.length > 0 ? (
@@ -1018,10 +1024,7 @@ export function MapScreen() {
               <span className="min-w-0 flex-1">{referenceOverlayError}</span>
               <button
                 type="button"
-                onClick={() => {
-                  setReferenceOverlayError(null);
-                  setReferenceOverlayErrorSurface(null);
-                }}
+                onClick={dismissAuthoredLayerImportError}
                 aria-label={intl.formatMessage(
                   mapMessages.referenceOverlaysDismiss,
                 )}

@@ -8,6 +8,7 @@ import Map from 'react-map-gl/maplibre';
 
 import { Button } from '@/components/ui/button';
 import type { SavedMap } from '@/lib/db';
+import '@/lib/map/maplibre-worker';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import {
   closeSmpReader,

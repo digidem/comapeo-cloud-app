@@ -1,10 +1,18 @@
 import { ZipReader } from '@gmaclennan/zip-reader';
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import maplibregl from 'maplibre-gl';
+import { addProtocol } from 'maplibre-gl';
 import { Reader } from 'styled-map-package-api/reader';
 import { createServer } from 'styled-map-package-api/server';
 
 import { type SavedMap, getSavedMapPackageSource } from '@/lib/db';
+
+// Side effect: point MapLibre at the Vite-emitted worker bundle before any map
+// constructs. MapContainer, SmpPreviewDialog, and MapAuthoringCanvas each also
+// import this module directly since they render a Map without going through
+// smp-serve first; keep the import here too since this module is still a
+// maplibre entry point (e.g. via ImportSmpButton) and can be reached before
+// those direct imports run.
+import './maplibre-worker';
 
 const readerCache = new Map<string, Reader>();
 
@@ -238,7 +246,7 @@ export function registerSmpProtocol(): void {
   if (registered) return;
   registered = true;
 
-  maplibregl.addProtocol('smp', async (request) => {
+  addProtocol('smp', async (request: { url: string }) => {
     let glyphRequest = false;
     try {
       const url = new URL(request.url);
