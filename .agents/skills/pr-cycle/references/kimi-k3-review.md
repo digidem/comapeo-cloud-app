@@ -1,6 +1,6 @@
 # Kimi K3 fallback reviewer
 
-Use this path when Opus 5 is unavailable because of quota, subscription limits, provider outage, or local Claude tooling failure **and the user did not explicitly require Opus**. The fallback is **Kimi K3 via OpenCode Go**. It is a substitute reviewer, not a relaxation of the PR-cycle gate.
+Use this path only after **GPT-6 Astra via Codex** is unavailable and the higher-priority Opus 5 fallback is also unavailable, provided the user did not explicitly require either exact model. The fallback is **Kimi K3 via OpenCode Go**. It is a substitute reviewer, not a relaxation of the PR-cycle gate.
 
 ## Preconditions
 
@@ -18,7 +18,7 @@ If Oh My Pi's ACP adapter is installed but the underlying `pi` executable is mis
 2. **OpenCode Go direct** with model `opencode-go/kimi-k3` when Pi is unavailable or unhealthy.
 3. Another strong independent reviewer only when neither Kimi path is available and the user did not request a specific reviewer.
 
-An explicitly requested Opus 5 review must not be silently replaced by Kimi. Report the Opus limitation instead.
+An explicitly requested GPT-6 Astra review must not be silently replaced by Kimi. The same rule applies to an explicitly requested Opus 5 review; report the named-model limitation instead.
 
 ## Review contract
 

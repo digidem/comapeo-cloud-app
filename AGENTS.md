@@ -49,6 +49,10 @@ If a project-scoped .claude/orchestrator_prompt.md or .codex/orchestrator_prompt
 
 Use raw one-shot `claude` / `codex exec` only for small bounded jobs or read-only reviews where Zenith would be unnecessary overhead.
 
+### Codex model default
+
+Use **GPT-6 Astra** (`gpt-6-astra`) whenever Codex is used for planning, implementation, specification, debugging, and independent review. Explicit user requests for another named model override this default. Do not silently fall back to an older GPT model; if GPT-6 Astra is unavailable, use the task-specific fallback policy, and if the user explicitly required GPT-6 Astra, report the block instead of substituting another model.
+
 ## PR Merge Authorization Invariant
 
 For any PR merge, follow the workspace `pr-cycle` skill. The execution that issues the merge command must have explicit merge authorization from a user message in its own current task; authorization never transfers across chats, sessions, agents, automations, readiness reports, or shared GitHub credentials. Without that current-task authorization, stop at merge-ready.
@@ -154,6 +158,14 @@ Managed by Prettier via `@trivago/prettier-plugin-sort-imports`:
 - Use React Hook Form with Valibot resolver for all forms
 - Use `@/` path alias for src imports, `@tests/` for test imports
 - Use `tests/mocks/test-utils.tsx` `render` in all component tests (wraps providers)
+
+### TanStack Query + local-first writes
+
+When a mutation persists a canonical local record and the UI must reflect that write immediately while offline, do not rely on `invalidateQueries()` alone. Invalidation is an eventual reconciliation signal and may not produce an immediate refetch without network access.
+
+- Update the affected TanStack Query cache synchronously from the canonical record returned by the persistence layer (`setQueryData` or the equivalent keyed update), then invalidate for later reconciliation.
+- Preserve one source of truth: cache the persisted record itself rather than reconstructing a second UI-only representation.
+- Add a regression for the offline read-after-write path when relevant, e.g. save locally while offline and immediately reopen/re-read the same entity without a network round trip.
 
 ### Storage reset safety invariants
 
