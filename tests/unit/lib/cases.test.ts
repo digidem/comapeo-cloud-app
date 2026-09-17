@@ -426,6 +426,79 @@ describe('Case delete cascade (local-only)', () => {
     expect(bActivity).toHaveLength(2);
   });
 
+  it('deleting a project removes orphaned evidence/disclosure rows by project id', async () => {
+    const projA = await makeProject();
+    const projB = await makeProject();
+    const db = getDb();
+
+    await db.caseEvidence.add({
+      localId: 'orphan-evidence-a',
+      caseLocalId: 'missing-case-a',
+      projectLocalId: projA,
+      sourceType: 'observation',
+      sourceLocalId: 'missing-observation-a',
+      sourceUpdatedAt: '2026-01-01T00:00:00Z',
+      addedAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    });
+    await db.caseEvidenceAttachments.add({
+      localId: 'orphan-attachment-a',
+      caseLocalId: 'missing-case-a',
+      projectLocalId: projA,
+      evidenceLocalId: 'orphan-evidence-a',
+      attachmentLocalId: 'missing-attachment-a',
+      mediaType: 'photo',
+      sourceUpdatedAt: '2026-01-01T00:00:00Z',
+      selectedAt: '2026-01-01T00:00:00Z',
+    });
+    await db.caseReportDisclosure.add({
+      localId: 'orphan-disclosure-a',
+      caseLocalId: 'missing-case-a',
+      projectLocalId: projA,
+      agency: 'FUNAI',
+      reporterIdentity: 'omit',
+      locationMode: 'omit',
+      people: [],
+      media: [],
+      sensitiveFields: [],
+      revision: 1,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    });
+    await db.caseEvidence.add({
+      localId: 'orphan-evidence-b',
+      caseLocalId: 'missing-case-b',
+      projectLocalId: projB,
+      sourceType: 'track',
+      sourceLocalId: 'missing-track-b',
+      sourceUpdatedAt: '2026-01-01T00:00:00Z',
+      addedAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    });
+
+    const { deleteProject } = await import('@/lib/local-repositories');
+    await deleteProject(projA);
+
+    expect(
+      await db.caseEvidence.where('projectLocalId').equals(projA).count(),
+    ).toBe(0);
+    expect(
+      await db.caseEvidenceAttachments
+        .where('projectLocalId')
+        .equals(projA)
+        .count(),
+    ).toBe(0);
+    expect(
+      await db.caseReportDisclosure
+        .where('projectLocalId')
+        .equals(projA)
+        .count(),
+    ).toBe(0);
+    expect(
+      await db.caseEvidence.where('projectLocalId').equals(projB).count(),
+    ).toBe(1);
+  });
+
   it('Delete Project does not create remote/sync table rows for cases', async () => {
     const projA = await makeProject();
     const c1 = await createCase({

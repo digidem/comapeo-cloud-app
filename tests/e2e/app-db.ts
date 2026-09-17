@@ -20,6 +20,9 @@ export const APP_DB_TABLES = [
   'cases',
   'caseActivity',
   'caseReportState',
+  'caseEvidence',
+  'caseEvidenceAttachments',
+  'caseReportDisclosure',
 ] as const;
 
 export type AppDbTableName = (typeof APP_DB_TABLES)[number];

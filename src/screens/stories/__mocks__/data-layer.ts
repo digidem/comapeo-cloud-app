@@ -52,6 +52,10 @@ export type CaseActivityEvent =
   | 'status_changed'
   | 'reopened'
   | 'report_state_changed'
+  | 'evidence_added'
+  | 'evidence_removed'
+  | 'media_inclusion_changed'
+  | 'disclosure_changed'
   | 'deleted';
 export type CaseActivity = {
   localId: string;
@@ -99,6 +103,80 @@ export async function getObservations(
   _projectLocalId: string,
 ): Promise<never[]> {
   return [];
+}
+
+export async function addCaseEvidence(_input: unknown) {
+  return { localId: 'storybook-case-evidence' };
+}
+
+export async function getCaseEvidence(
+  _projectLocalId: string,
+  _caseLocalId: string,
+): Promise<never[]> {
+  return [];
+}
+
+export async function getCaseEvidenceCounts(
+  _projectLocalId: string,
+): Promise<Record<string, number>> {
+  return {};
+}
+
+export async function removeCaseEvidence(_input: unknown): Promise<boolean> {
+  return true;
+}
+
+export async function getCaseEvidenceAttachments(
+  _projectLocalId: string,
+  _caseLocalId: string,
+): Promise<never[]> {
+  return [];
+}
+
+export async function setCaseEvidenceAttachmentSelected(_input: unknown) {
+  return null;
+}
+
+export async function getCaseReportDisclosure(
+  projectLocalId: string,
+  caseLocalId: string,
+  agency: CaseAgency,
+) {
+  return {
+    caseLocalId,
+    projectLocalId,
+    agency,
+    reporterIdentity: 'omit' as const,
+    locationMode: 'omit' as const,
+    people: [],
+    media: [],
+    sensitiveFields: [],
+    revision: 0,
+  };
+}
+
+export async function upsertCaseReportDisclosure(input: {
+  projectLocalId: string;
+  caseLocalId: string;
+  agency: CaseAgency;
+  disclosure: {
+    reporterIdentity: 'include' | 'omit';
+    locationMode: 'exact' | 'area' | 'omit';
+    people: unknown[];
+    media: unknown[];
+    sensitiveFields: unknown[];
+  };
+}) {
+  return {
+    localId: 'storybook-case-disclosure',
+    caseLocalId: input.caseLocalId,
+    projectLocalId: input.projectLocalId,
+    agency: input.agency,
+    ...input.disclosure,
+    revision: 1,
+    createdAt: '2025-01-15T10:30:00Z',
+    updatedAt: '2025-01-15T10:30:00Z',
+  };
 }
 
 export async function getProjectPoints(_projectLocalId: string) {

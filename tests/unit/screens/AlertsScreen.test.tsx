@@ -46,6 +46,22 @@ vi.mock('@/components/layout/shell-slot', () => ({
   useShellSlot: vi.fn(),
 }));
 
+vi.mock('@/components/shared/AddToCaseDialog', () => ({
+  AddToCaseDialog: ({
+    open,
+    sources,
+  }: {
+    open: boolean;
+    sources: Array<{ sourceLocalId: string }>;
+  }) => (
+    <div
+      data-testid="add-to-case-dialog"
+      data-open={String(open)}
+      data-source-ids={sources.map((source) => source.sourceLocalId).join(',')}
+    />
+  ),
+}));
+
 vi.mock('@/stores/project-store', () => ({
   useProjectStore: vi.fn(
     (selector: (s: { selectedProjectId: string | null }) => string | null) =>
@@ -225,6 +241,9 @@ describe('AlertsScreen', () => {
       expect(
         screen.queryByRole('link', { name: 'Add Alert' }),
       ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Add to case' }),
+      ).not.toBeInTheDocument();
     });
 
     it('opens the canonical alert form in point-only inline mode', async () => {
@@ -397,6 +416,29 @@ describe('AlertsScreen', () => {
       render(<AlertsScreen />);
       // The alert card renders the alert_type badge
       expect(screen.getByText('deforestation')).toBeInTheDocument();
+    });
+
+    it('lets users select alerts and add them to a Case', async () => {
+      const user = userEvent.setup();
+      useAlertViewModeStore.setState({ viewMode: 'grid' });
+      mockAlertsQuery = { data: defaultAlerts, isPending: false };
+
+      render(<AlertsScreen />);
+      const addToCase = screen.getByRole('button', { name: 'Add to case' });
+      expect(addToCase).toBeDisabled();
+      await user.click(
+        screen.getByRole('checkbox', { name: /Select alert deforestation/i }),
+      );
+      expect(addToCase).toBeEnabled();
+      await user.click(addToCase);
+      expect(screen.getByTestId('add-to-case-dialog')).toHaveAttribute(
+        'data-open',
+        'true',
+      );
+      expect(screen.getByTestId('add-to-case-dialog')).toHaveAttribute(
+        'data-source-ids',
+        'alert-1',
+      );
     });
 
     it('keeps /alerts/new as the grid-view Add Alert path', () => {

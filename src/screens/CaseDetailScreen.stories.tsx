@@ -76,7 +76,7 @@ export const ReportState: Story = {
     const page = within(canvasElement.ownerDocument.body);
     const reportStateTab = await page.findByRole(
       'tab',
-      { name: 'Report State' },
+      { name: 'Reports' },
       { timeout: 5_000 },
     );
     await userEvent.click(reportStateTab);
