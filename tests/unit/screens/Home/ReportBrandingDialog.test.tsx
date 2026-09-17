@@ -38,9 +38,12 @@ function makeLogo(): ReportBrandingLogoAsset {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report-branding-logo');
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -100,8 +103,11 @@ describe('ReportBrandingDialog', () => {
     });
   });
 
-  it('renders a preview for an existing report logo', () => {
-    render(
+  it('renders an existing logo through a local object URL and revokes it on unmount', () => {
+    const createObjectURL = vi.mocked(URL.createObjectURL);
+    const revokeObjectURL = vi.mocked(URL.revokeObjectURL);
+
+    const { unmount } = render(
       <ReportBrandingDialog
         isOpen
         project={makeProject({
@@ -120,7 +126,11 @@ describe('ReportBrandingDialog', () => {
 
     expect(
       screen.getByRole('img', { name: /organization logo/i }),
-    ).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=');
+    ).toHaveAttribute('src', 'blob:report-branding-logo');
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+
+    unmount();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:report-branding-logo');
   });
 
   it('removes an existing report logo without changing the project icon', async () => {
@@ -218,7 +228,7 @@ describe('ReportBrandingDialog', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('img', { name: /organization logo/i }),
-    ).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=');
+    ).toHaveAttribute('src', 'blob:report-branding-logo');
     await user.click(screen.getByRole('button', { name: /save branding/i }));
 
     await waitFor(() => {
