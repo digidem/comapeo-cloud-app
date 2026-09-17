@@ -201,7 +201,12 @@ async function readXmlDocument(
     throw importError('xml-invalid', file, format, error);
   }
 
-  const declaration = text.match(
+  const prologEnd = text.indexOf('?>');
+  const prolog = text.slice(
+    0,
+    prologEnd === -1 ? Math.min(text.length, 1024) : prologEnd + 2,
+  );
+  const declaration = prolog.match(
     /^\uFEFF?\s*<\?xml\b[^>]*\bencoding\s*=\s*["']([^"']+)["'][^>]*\?>/i,
   );
   if (declaration?.[1]?.toLowerCase() !== undefined) {
