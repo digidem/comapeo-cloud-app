@@ -795,6 +795,34 @@ describe('MapScreen', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('returns focus to the map panel after dismissing a map-surface import error', async () => {
+    const user = userEvent.setup();
+    render(<MapScreen />);
+    const brokenFile = new File(
+      ['{"type":"Point","coordinates":["bad",0]}'],
+      'dropped-broken.geojson',
+      { type: 'application/geo+json' },
+    );
+
+    fireEvent.drop(
+      await screen.findByRole('region', { name: 'Map authoring canvas' }),
+      { dataTransfer: { types: ['Files'], files: [brokenFile] } },
+    );
+
+    const mapAlert = await screen.findByTestId('reference-overlay-map-error');
+    await user.click(
+      within(mapAlert).getByRole('button', { name: 'Dismiss error' }),
+    );
+    expect(
+      screen.queryByTestId('reference-overlay-map-error'),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body);
+    });
+    expect(document.activeElement).toHaveAttribute('data-testid', 'map-panel');
+  });
+
   it('caps retained reference overlays to protect mobile memory', async () => {
     const user = userEvent.setup();
     render(<MapScreen />);
