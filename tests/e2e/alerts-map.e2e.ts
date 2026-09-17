@@ -75,11 +75,6 @@ test.describe('Alerts map and grid', () => {
     page,
     browserName,
   }) => {
-    test.skip(
-      browserName !== 'chromium',
-      'MapLibre canvas requires WebGL (unavailable in Playwright firefox/webkit).',
-    );
-
     await setupMockServer(page);
     await seedAlertMapState(page);
     await page.goto('/alerts');
@@ -88,7 +83,11 @@ test.describe('Alerts map and grid', () => {
     const dialog = page.getByRole('dialog', { name: /Create Alert/i });
     await expect(dialog).toBeVisible();
 
-    await expect(page.locator('.maplibregl-canvas').first()).toBeVisible();
+    // MapLibre v6 never appends the canvas without WebGL (absent in Playwright
+    // firefox/webkit), so only assert it where GL exists (commit cd4a283 precedent).
+    if (browserName === 'chromium') {
+      await expect(page.locator('.maplibregl-canvas').first()).toBeVisible();
+    }
 
     const longitude = dialog.getByLabel('Longitude');
     const latitude = dialog.getByLabel('Latitude');
