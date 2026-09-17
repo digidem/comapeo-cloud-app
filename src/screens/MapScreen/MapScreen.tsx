@@ -200,6 +200,10 @@ export function MapScreen() {
   >(null);
   const [referenceOverlayErrorSurface, setReferenceOverlayErrorSurface] =
     useState<'controls' | 'map' | null>(null);
+  // Stable focus-return target when the map-surface reference-overlay
+  // error is dismissed (the MapLibre canvas is re-created by the map
+  // engine, so it is not a reliable programmatic focus target).
+  const mapPanelRef = useRef<HTMLDivElement>(null);
   const [referenceOverlayLoading, setReferenceOverlayLoading] = useState(false);
   const referenceOverlayImportsRef = useRef(new Set<symbol>());
   const referenceOverlayIdsRef = useRef(new Set<string>());
@@ -1000,7 +1004,12 @@ export function MapScreen() {
   return (
     <>
       <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-hidden lg:flex-row">
-        <div className="relative flex-1 min-h-0 overflow-hidden rounded-card bg-surface-card shadow-card">
+        <div
+          ref={mapPanelRef}
+          data-testid="map-panel"
+          tabIndex={-1}
+          className="relative flex-1 min-h-0 overflow-hidden rounded-card bg-surface-card shadow-card"
+        >
           <MapAuthoringCanvas
             basemap={selectedStyle}
             bbox={drawMode === 'draw_rectangle' ? null : bbox}
@@ -1024,7 +1033,10 @@ export function MapScreen() {
               <span className="min-w-0 flex-1">{referenceOverlayError}</span>
               <button
                 type="button"
-                onClick={dismissAuthoredLayerImportError}
+                onClick={() => {
+                  dismissAuthoredLayerImportError();
+                  requestAnimationFrame(() => mapPanelRef.current?.focus());
+                }}
                 aria-label={intl.formatMessage(
                   mapMessages.referenceOverlaysDismiss,
                 )}
