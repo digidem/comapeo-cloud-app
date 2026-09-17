@@ -11,11 +11,13 @@ const mockMapRef = { current: { fitBounds: mockFitBounds } };
 vi.mock('@/components/shared/MapContainer', () => ({
   MapContainer: ({
     children,
+    mapContentOverlay,
     onLoad,
     mapRef,
     basemapSwitcherPositionClassName,
   }: {
     children: React.ReactNode;
+    mapContentOverlay?: React.ReactNode;
     onLoad?: () => void;
     mapRef?: React.RefObject<{ fitBounds: typeof mockFitBounds } | null>;
     initialViewState?: Record<string, unknown>;
@@ -37,6 +39,7 @@ vi.mock('@/components/shared/MapContainer', () => ({
         data-basemap-switcher-position={basemapSwitcherPositionClassName}
       >
         {children}
+        {mapContentOverlay}
         <button data-testid="map-load-trigger" onClick={onLoad}>
           load
         </button>
@@ -188,9 +191,11 @@ describe('ObservationsMap', () => {
 
     render(<ObservationsMap observations={observations} />);
 
-    expect(
-      screen.getByText('No observations with location to show on the map'),
-    ).toBeInTheDocument();
+    const emptyState = screen.getByText(
+      'No observations with location to show on the map',
+    );
+    expect(emptyState).toBeInTheDocument();
+    expect(screen.getByTestId('map-container')).toContainElement(emptyState);
     expect(screen.queryByTestId('obs-marker')).not.toBeInTheDocument();
   });
 
