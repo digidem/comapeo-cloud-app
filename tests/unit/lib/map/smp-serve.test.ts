@@ -31,6 +31,8 @@ const {
 vi.mock('maplibre-gl', () => ({
   default: { addProtocol: mockAddProtocol },
   addProtocol: mockAddProtocol,
+  // smp-serve registers the MapLibre worker URL as an import side effect.
+  setWorkerUrl: vi.fn(),
 }));
 
 vi.mock('styled-map-package-api/reader', () => ({ Reader: MockReader }));

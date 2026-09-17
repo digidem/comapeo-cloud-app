@@ -6,6 +6,12 @@ import { createServer } from 'styled-map-package-api/server';
 
 import { type SavedMap, getSavedMapPackageSource } from '@/lib/db';
 
+// Side effect: point MapLibre at the Vite-emitted worker bundle before any map
+// constructs. Every map path shares this module — MapContainer-based views and
+// SmpPreviewDialog import it directly, and MapAuthoringCanvas reaches it via
+// MapScreen -> ImportSmpButton.
+import './maplibre-worker';
+
 const readerCache = new Map<string, Reader>();
 
 let registered = false;
