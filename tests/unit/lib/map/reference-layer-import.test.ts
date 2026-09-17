@@ -474,6 +474,23 @@ describe('XML reference imports', () => {
     });
   });
 
+  it('rejects a hostile XML declaration whose distant ?> terminator stays within the bounded prolog scan', async () => {
+    const hostile = '<?xml ' + 'encoding="a" '.repeat(16_000) + '>?>';
+    const file = new File([hostile], 'hostile-terminator.kml');
+
+    const startedAt = performance.now();
+    const result = await prepareReferenceImportBatch([file], context);
+    const elapsedMs = performance.now() - startedAt;
+
+    expect(elapsedMs).toBeLessThan(1000);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors[0]).toMatchObject({
+      kind: 'conversion',
+      error: { code: 'xml-invalid' },
+    });
+  });
+
   it('rejects XML beyond the markup-token and nesting-depth limits before conversion', async () => {
     const tooManyTokens =
       '<kml>' + '<'.repeat(MAX_REFERENCE_XML_MARKUP_TOKENS) + '</kml>';

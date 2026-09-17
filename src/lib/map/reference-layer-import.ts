@@ -204,7 +204,7 @@ async function readXmlDocument(
   const prologEnd = text.indexOf('?>');
   const prolog = text.slice(
     0,
-    prologEnd === -1 ? Math.min(text.length, 1024) : prologEnd + 2,
+    Math.min(prologEnd === -1 ? 1024 : prologEnd + 2, 1024),
   );
   const declaration = prolog.match(
     /^\uFEFF?\s*<\?xml\b[^>]*\bencoding\s*=\s*["']([^"']+)["'][^>]*\?>/i,
