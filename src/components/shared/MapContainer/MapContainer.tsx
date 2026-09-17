@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { type SavedMap, getDb } from '@/lib/db';
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { BASEMAP_CATALOG, findBasemap } from '@/lib/map/basemaps';
+import '@/lib/map/maplibre-worker';
 import { isImportedSmpRecord } from '@/lib/map/saved-map-utils';
 import {
   closeSmpReader,

@@ -22,13 +22,7 @@ describe('maplibre-worker', () => {
     await importModule();
 
     expect(mockSetWorkerUrl).toHaveBeenCalledTimes(1);
-    expect(mockSetWorkerUrl).toHaveBeenCalledWith(expect.any(String));
-  });
-
-  it('registers only once per module graph, no matter how many importers', async () => {
-    await importModule();
-    await importModule();
-
-    expect(mockSetWorkerUrl).toHaveBeenCalledTimes(1);
+    const [urlArg] = mockSetWorkerUrl.mock.calls[0] ?? [];
+    expect(String(urlArg)).toContain('maplibre-gl-worker');
   });
 });

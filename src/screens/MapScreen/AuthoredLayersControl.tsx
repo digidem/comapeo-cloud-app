@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 import { useIntl } from 'react-intl';
 
 import type { AuthoredLayerValidationError } from '@/lib/map/authored-layers';
@@ -66,6 +66,7 @@ export function AuthoredLayersControl({
 }: AuthoredLayersControlProps) {
   const intl = useIntl();
   const titleId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <section className="flex flex-col gap-3" aria-labelledby={titleId}>
@@ -87,6 +88,7 @@ export function AuthoredLayersControl({
           )}
         </span>
         <input
+          ref={fileInputRef}
           type="file"
           className="sr-only"
           accept=".geojson,.json,application/geo+json,application/json"
@@ -116,7 +118,10 @@ export function AuthoredLayersControl({
           {onDismissError ? (
             <button
               type="button"
-              onClick={onDismissError}
+              onClick={() => {
+                onDismissError();
+                requestAnimationFrame(() => fileInputRef.current?.focus());
+              }}
               aria-label={intl.formatMessage(
                 mapMessages.referenceOverlaysDismiss,
               )}

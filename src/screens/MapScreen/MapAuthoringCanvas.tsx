@@ -16,6 +16,7 @@ import type { AuthoredLayer } from '@/lib/map/authored-layers';
 import { basemapToMapStyle } from '@/lib/map/basemap-utils';
 import { crossesAntimeridian } from '@/lib/map/bbox-utils';
 import type { GeoJsonOverlay } from '@/lib/map/geojson-overlays';
+import '@/lib/map/maplibre-worker';
 import type { ImageryBasemap } from '@/lib/schemas/imagery-source';
 
 import { AuthoredLayerCanvasLayers } from './AuthoredLayerCanvasLayers';
