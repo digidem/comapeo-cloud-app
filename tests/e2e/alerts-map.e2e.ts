@@ -83,9 +83,11 @@ test.describe('Alerts map and grid', () => {
     const dialog = page.getByRole('dialog', { name: /Create Alert/i });
     await expect(dialog).toBeVisible();
 
-    // MapLibre v6 never appends the canvas without WebGL (absent in Playwright
-    // firefox/webkit), so only assert it where GL exists (commit cd4a283 precedent).
-    if (browserName === 'chromium') {
+    // MapLibre v6 removes the canvas when WebGL2 initialization fails.
+    // Firefox lacks usable WebGL2 in our CI environment; WebKit passed
+    // this assertion in CI job 105051526137.
+    // Precedent for guarding the assertion instead of the test: commit cd4a283.
+    if (browserName !== 'firefox') {
       await expect(page.locator('.maplibregl-canvas').first()).toBeVisible();
     }
 
