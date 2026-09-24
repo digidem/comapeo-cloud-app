@@ -166,6 +166,42 @@ If a required spike proves the specified architecture infeasible or a requested 
 - update dependent child shells and the parent tracker to show the blocked dependency so an implementation agent cannot start them accidentally;
 - if a new architecture supersedes the split, close or explicitly mark superseded child shells after the replacement issues exist—never silently delete or leave ambiguous executable-looking shells behind.
 
+### Publication sequence for the canonical spec file
+
+Validated end-to-end on #283 / PR #310. The durable checkpoint section above owns WHAT the
+canonical structure is; this sequence owns the ORDER of operations:
+
+1. **Review the spec file** (piped briefing: strategy questions + full spec text; require
+   P1/P2/P3 counts + a verdict line). Follow the review loop above for re-rounds.
+2. **Verify reviewer file:line claims against source before applying fixes** — check each cited
+   claim (`sed -n`, grep) before editing; do not apply a fix on the strength of the citation alone.
+3. **Apply all P1/P2 + cheap P3s to the spec file**, then re-review the new head (round-2
+   briefing lists each fix, quotes the edited regions, requires a final verdict line). Never
+   publish on "fixes applied" alone — loop-closure applies to specs exactly as to PRs.
+4. **Commit the spec as one PR from a fresh branch off `origin/main`** — not whatever stale
+   branch the shared worktree has checked out. `git status --short` before checkout; stash
+   untracked dirs or the checkout carries them onto the wrong branch.
+5. **After the spec PR merges**, sync the issue body to the stub per the durable-checkpoint
+   rules: one-paragraph summary, acceptance-criteria checklist, the tiebreak sentence, and the
+   spec permalink pinned to the **merge SHA** (`blob/<merge-SHA>/...`) — before merge the spec
+   file does not exist on `main`, so there is no valid earlier link to pin. Include ONE
+   review-evidence comment naming reviewer/model, session id, finding counts, and one-line
+   summaries of key fixes.
+6. **Label hold while an implementation-start-gate dependency is unmerged:** keep the issue in
+   the spec lane (`agent:spec-in-progress` + `lane:spec`; if it had reached
+   `agent:ready-for-spec`, revert to `agent:spec-in-progress`) and post a comment naming the
+   exact merge gate. Apply the full section-6 implementation-ready transition
+   (`agent:ready-for-implementation` + `lane:implementation`, removing the spec-lane labels)
+   only after the spec PR AND every gate dependency have merged (step 4 of the durable
+   checkpoint).
+7. **Verify the pinned permalink resolves at the merge SHA** BEFORE applying the
+   implementation-ready labels — resolve the link first; if it does not resolve, hold the issue
+   in the spec lane and report `blocked: labels` instead of applying the section-6 transition.
+
+Known invocation pitfall: an Opus probe with `--max-budget-usd 0.05` always fails — fixed cache
+overhead (~$0.22 of cache-creation/read tokens) exceeds the cap before the first token generates.
+Re-probe with 0.50 or send the real briefing directly.
+
 ## 6. Publish atomically and label correctly
 
 Do not mark child shells implementation-ready before their exact bodies pass the review loop.
